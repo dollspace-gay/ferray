@@ -1,6 +1,12 @@
 {
   "version": 1,
   "locks": {
+    "2": {
+      "agent_id": "driver--build-ferrum-phase-0-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-05T21:38:08.012308043Z",
+      "signed_by": "driver--build-ferrum-phase-0-coordinator"
+    },
     "1": {
       "agent_id": "driver--build-ferrum-phase-0-coordinator",
       "branch": null,
