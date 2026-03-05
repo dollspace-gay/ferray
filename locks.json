@@ -1,6 +1,13 @@
 {
   "version": 1,
-  "locks": {},
+  "locks": {
+    "1": {
+      "agent_id": "driver--build-ferrum-phase-0-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-05T21:12:15.379294579Z",
+      "signed_by": "driver--build-ferrum-phase-0-coordinator"
+    }
+  },
   "settings": {
     "stale_lock_timeout_minutes": 60
   }
