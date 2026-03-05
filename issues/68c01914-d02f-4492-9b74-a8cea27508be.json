@@ -1,0 +1,10 @@
+{
+  "uuid": "68c01914-d02f-4492-9b74-a8cea27508be",
+  "display_id": 7,
+  "title": "Implement ferrum-stats: statistical reductions, sorting, histograms, and set operations",
+  "status": "open",
+  "priority": "high",
+  "created_by": "driver--build-ferrum-phase-0-coordinator",
+  "created_at": "2026-03-05T21:40:28.822185486Z",
+  "updated_at": "2026-03-05T21:40:28.822185486Z"
+}
