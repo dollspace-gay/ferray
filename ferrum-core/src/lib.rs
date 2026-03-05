@@ -8,11 +8,15 @@
 
 pub mod array;
 pub mod buffer;
+pub mod constants;
+pub mod creation;
 pub mod dimension;
 pub mod dtype;
 pub mod dynarray;
 pub mod error;
+pub mod indexing;
 pub mod layout;
+pub mod manipulation;
 pub mod prelude;
 pub mod record;
 

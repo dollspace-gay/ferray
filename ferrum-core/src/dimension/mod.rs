@@ -3,6 +3,8 @@
 // These types mirror ndarray's Ix1..Ix6 and IxDyn but live in ferrum-core's
 // namespace so that ndarray never appears in the public API.
 
+pub mod broadcast;
+
 use std::fmt;
 
 // We need ndarray's Dimension trait in scope for `as_array_view()` etc.
