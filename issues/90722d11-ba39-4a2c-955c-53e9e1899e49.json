@@ -6,5 +6,8 @@
   "priority": "critical",
   "created_by": "driver--build-ferrum-phase-0-coordinator",
   "created_at": "2026-03-05T21:38:51.893137980Z",
-  "updated_at": "2026-03-05T21:38:51.893137980Z"
+  "updated_at": "2026-03-05T21:38:53.823199729Z",
+  "labels": [
+    "feature"
+  ]
 }
