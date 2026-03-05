@@ -2,11 +2,12 @@
   "uuid": "c13b72cd-0fee-4472-b836-e1143d4f2e8f",
   "display_id": 2,
   "title": "Implement ferrum-core-types: NdArray, ownership model, Element trait, DType, FerrumError, introspection, iterators, Display",
-  "status": "open",
+  "status": "closed",
   "priority": "critical",
   "created_by": "driver--build-ferrum-phase-0-coordinator",
   "created_at": "2026-03-05T21:20:52.666602758Z",
-  "updated_at": "2026-03-05T21:37:10.920521022Z",
+  "updated_at": "2026-03-05T21:37:12.665080749Z",
+  "closed_at": "2026-03-05T21:37:12.665080749Z",
   "labels": [
     "feature"
   ],
