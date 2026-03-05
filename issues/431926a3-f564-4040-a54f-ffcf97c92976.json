@@ -6,7 +6,7 @@
   "priority": "high",
   "created_by": "driver--build-ferrum-phase-0-coordinator",
   "created_at": "2026-03-05T21:12:06.916622164Z",
-  "updated_at": "2026-03-05T21:18:28.480730283Z",
+  "updated_at": "2026-03-05T21:20:25.684293160Z",
   "labels": [
     "feature"
   ],
@@ -24,6 +24,13 @@
       "content": "Decision: Workspace scaffold created with all 15 crates compiling clean. Using workspace.dependencies for version pinning per design spec. ferrum-core-macros is a proc-macro crate. ferrum-numpy-interop features are all optional. ferrum re-export crate uses feature flags for optional submodules.",
       "created_at": "2026-03-05T21:18:28.480729847Z",
       "kind": "decision"
+    },
+    {
+      "id": 3,
+      "author": "driver--build-ferrum-phase-0-coordinator",
+      "content": "Committed: Add workspace scaffold with 15 crates, design docs, and project conventions [CL-1] | Files: 84 files changed, 9582 insertions(+)",
+      "created_at": "2026-03-05T21:20:25.684292826Z",
+      "kind": "result"
     }
   ]
 }
