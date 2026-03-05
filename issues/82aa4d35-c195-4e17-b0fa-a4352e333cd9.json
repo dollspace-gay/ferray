@@ -1,0 +1,10 @@
+{
+  "uuid": "82aa4d35-c195-4e17-b0fa-a4352e333cd9",
+  "display_id": 6,
+  "title": "Implement ferrum-ufunc: SIMD-accelerated universal functions with pulp dispatch",
+  "status": "open",
+  "priority": "high",
+  "created_by": "driver--build-ferrum-phase-0-coordinator",
+  "created_at": "2026-03-05T21:40:25.759030348Z",
+  "updated_at": "2026-03-05T21:40:25.759030348Z"
+}
