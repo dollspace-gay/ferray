@@ -1,0 +1,10 @@
+{
+  "uuid": "90722d11-ba39-4a2c-955c-53e9e1899e49",
+  "display_id": 4,
+  "title": "Implement ferrum-core-creation-manipulation: array creation, shape manipulation, constants, finfo",
+  "status": "open",
+  "priority": "critical",
+  "created_by": "driver--build-ferrum-phase-0-coordinator",
+  "created_at": "2026-03-05T21:38:51.893137980Z",
+  "updated_at": "2026-03-05T21:38:51.893137980Z"
+}
