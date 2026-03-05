@@ -6,6 +6,12 @@
       "branch": null,
       "claimed_at": "2026-03-05T21:12:15.379294579Z",
       "signed_by": "driver--build-ferrum-phase-0-coordinator"
+    },
+    "3": {
+      "agent_id": "driver--build-ferrum-phase-0-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-05T21:40:27.915515058Z",
+      "signed_by": "driver--build-ferrum-phase-0-coordinator"
     }
   },
   "settings": {
