@@ -1,0 +1,163 @@
+// ferrum-ma: MaskedArray<T, D> type (REQ-1, REQ-2, REQ-3)
+
+use ferrum_core::dimension::Dimension;
+use ferrum_core::dtype::Element;
+use ferrum_core::error::{FerrumError, FerrumResult};
+use ferrum_core::Array;
+
+/// A masked array that pairs data with a boolean mask.
+///
+/// Each element position has a corresponding mask bit:
+/// - `true` means the element is **masked** (invalid / missing)
+/// - `false` means the element is valid
+///
+/// All operations (arithmetic, reductions, ufuncs) respect the mask by
+/// skipping masked elements.
+#[derive(Debug, Clone)]
+pub struct MaskedArray<T: Element, D: Dimension> {
+    /// The underlying data array.
+    data: Array<T, D>,
+    /// Boolean mask (`true` = masked/invalid).
+    mask: Array<bool, D>,
+    /// Whether the mask is hardened (cannot be cleared by assignment).
+    pub(crate) hard_mask: bool,
+}
+
+impl<T: Element, D: Dimension> MaskedArray<T, D> {
+    /// Create a new masked array from data and mask arrays.
+    ///
+    /// # Errors
+    /// Returns `FerrumError::ShapeMismatch` if data and mask shapes differ.
+    pub fn new(data: Array<T, D>, mask: Array<bool, D>) -> FerrumResult<Self> {
+        if data.shape() != mask.shape() {
+            return Err(FerrumError::shape_mismatch(format!(
+                "MaskedArray::new: data shape {:?} does not match mask shape {:?}",
+                data.shape(),
+                mask.shape()
+            )));
+        }
+        Ok(Self {
+            data,
+            mask,
+            hard_mask: false,
+        })
+    }
+
+    /// Create a masked array with no masked elements (all-false mask).
+    ///
+    /// # Errors
+    /// Returns an error if the mask array cannot be created.
+    pub fn from_data(data: Array<T, D>) -> FerrumResult<Self> {
+        let mask = Array::<bool, D>::from_elem(data.dim().clone(), false)?;
+        Ok(Self {
+            data,
+            mask,
+            hard_mask: false,
+        })
+    }
+
+    /// Return a reference to the underlying data array.
+    #[inline]
+    pub fn data(&self) -> &Array<T, D> {
+        &self.data
+    }
+
+    /// Return a reference to the mask array.
+    #[inline]
+    pub fn mask(&self) -> &Array<bool, D> {
+        &self.mask
+    }
+
+    /// Return a mutable reference to the underlying data array.
+    #[inline]
+    pub fn data_mut(&mut self) -> &mut Array<T, D> {
+        &mut self.data
+    }
+
+    /// Return the shape of the masked array.
+    #[inline]
+    pub fn shape(&self) -> &[usize] {
+        self.data.shape()
+    }
+
+    /// Return the number of dimensions.
+    #[inline]
+    pub fn ndim(&self) -> usize {
+        self.data.ndim()
+    }
+
+    /// Return the total number of elements (including masked).
+    #[inline]
+    pub fn size(&self) -> usize {
+        self.data.size()
+    }
+
+    /// Return the dimension descriptor.
+    #[inline]
+    pub fn dim(&self) -> &D {
+        self.data.dim()
+    }
+
+    /// Return whether the mask is hardened.
+    #[inline]
+    pub fn is_hard_mask(&self) -> bool {
+        self.hard_mask
+    }
+
+    /// Set a mask value at a flat index.
+    ///
+    /// If the mask is hardened, only `true` (masking) is allowed; attempts to
+    /// clear a mask bit are silently ignored.
+    ///
+    /// # Errors
+    /// Returns `FerrumError::IndexOutOfBounds` if `flat_idx >= size`.
+    pub fn set_mask_flat(&mut self, flat_idx: usize, value: bool) -> FerrumResult<()> {
+        let size = self.size();
+        if flat_idx >= size {
+            return Err(FerrumError::index_out_of_bounds(
+                flat_idx as isize,
+                0,
+                size,
+            ));
+        }
+        if self.hard_mask && !value {
+            // Hard mask: cannot clear mask bits
+            return Ok(());
+        }
+        // Set via iter_mut at the flat index
+        if let Some(m) = self.mask.iter_mut().nth(flat_idx) {
+            *m = value;
+        }
+        Ok(())
+    }
+
+    /// Replace the mask with a new one.
+    ///
+    /// If the mask is hardened, only bits that are `true` in both the old and
+    /// new masks (or newly set to `true`) are allowed; cleared bits are ignored.
+    ///
+    /// # Errors
+    /// Returns `FerrumError::ShapeMismatch` if shapes differ.
+    pub fn set_mask(&mut self, new_mask: Array<bool, D>) -> FerrumResult<()> {
+        if self.mask.shape() != new_mask.shape() {
+            return Err(FerrumError::shape_mismatch(format!(
+                "set_mask: mask shape {:?} does not match array shape {:?}",
+                new_mask.shape(),
+                self.mask.shape()
+            )));
+        }
+        if self.hard_mask {
+            // Union: keep old trues, add new trues, but never clear
+            let merged: Vec<bool> = self
+                .mask
+                .iter()
+                .zip(new_mask.iter())
+                .map(|(old, new)| *old || *new)
+                .collect();
+            self.mask = Array::from_vec(self.mask.dim().clone(), merged)?;
+        } else {
+            self.mask = new_mask;
+        }
+        Ok(())
+    }
+}

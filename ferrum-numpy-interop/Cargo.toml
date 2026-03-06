@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Python/NumPy interop via PyO3 and Arrow for ferrum"
+description = "Python/NumPy interop via PyO3 and Arrow/Polars for ferrum"
 
 [dependencies]
 ferrum-core = { workspace = true }
@@ -21,10 +21,17 @@ optional = true
 workspace = true
 optional = true
 
+[dependencies.polars]
+version = "0.46"
+optional = true
+default-features = false
+features = ["dtype-i8", "dtype-i16", "dtype-u8", "dtype-u16"]
+
 [features]
 default = []
 python = ["dep:pyo3", "dep:numpy"]
 arrow = ["dep:arrow"]
+polars = ["dep:polars"]
 
 [dev-dependencies]
 proptest = { workspace = true }

@@ -1,5 +1,7 @@
 // ferrum-core: Immutable array view — ArrayView<'a, T, D> (REQ-3)
 
+use ndarray::ShapeBuilder;
+
 use crate::dimension::Dimension;
 use crate::dtype::Element;
 use crate::layout::MemoryLayout;
@@ -95,6 +97,41 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
             owndata: false,
             writeable: false,
         }
+    }
+}
+
+use crate::dimension::IxDyn;
+
+impl<'a, T: Element> ArrayView<'a, T, IxDyn> {
+    /// Construct a dynamic-rank view from a raw pointer, shape, and strides.
+    ///
+    /// This is the primary escape hatch for crates that need to build views
+    /// with custom stride patterns (e.g., `ferrum-stride-tricks`).
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure:
+    /// - `ptr` is valid for reads for the entire region described by `shape`
+    ///   and `strides`.
+    /// - The lifetime `'a` does not outlive the allocation that `ptr` points
+    ///   into.
+    /// - No mutable reference to the same memory region exists for the
+    ///   duration of `'a`.
+    /// - `strides` are given in units of elements (not bytes).
+    pub unsafe fn from_shape_ptr(
+        ptr: *const T,
+        shape: &[usize],
+        strides: &[usize],
+    ) -> Self {
+        let nd_shape = ndarray::IxDyn(shape);
+        let nd_strides = ndarray::IxDyn(strides);
+        let nd_view = unsafe {
+            ndarray::ArrayView::from_shape_ptr(
+                nd_shape.strides(nd_strides),
+                ptr,
+            )
+        };
+        Self::from_ndarray(nd_view)
     }
 }
 
