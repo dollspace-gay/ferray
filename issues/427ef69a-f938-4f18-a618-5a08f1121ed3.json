@@ -6,8 +6,19 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-06T21:28:42.431570002Z",
-  "updated_at": "2026-03-06T21:28:44.408528202Z",
+  "updated_at": "2026-03-06T23:03:28.712634795Z",
   "labels": [
     "accuracy"
+  ],
+  "comments": [
+    {
+      "id": 35,
+      "author": "phase-4-coordinator",
+      "content": "[auto] Session resumed after context compression.",
+      "created_at": "2026-03-06T23:03:28.712634433Z",
+      "kind": "note",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAkfqyUTQdFPy0xndtFXCkgNGvBqpwWV+CDuAirwczPdPLW9g5sss5dWNS1kW7ApMQCzp8rdWibJTDc3rSTp8FCg=="
+    }
   ]
 }
