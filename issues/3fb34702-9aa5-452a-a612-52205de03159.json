@@ -6,8 +6,17 @@
   "priority": "high",
   "created_by": "driver--build-ferrum-phase-0-coordinator",
   "created_at": "2026-03-06T03:01:36.753582372Z",
-  "updated_at": "2026-03-06T03:01:38.677999955Z",
+  "updated_at": "2026-03-06T03:01:46.216523263Z",
   "labels": [
     "enhancement"
+  ],
+  "comments": [
+    {
+      "id": 10,
+      "author": "driver--build-ferrum-phase-0-coordinator",
+      "content": "Phase 1 is NOT complete. Only ferrum-core sub-agents (1a-1d) were executed. Agents 2-5 (ufunc, stats, io, workspace+reexport) are empty stubs.",
+      "created_at": "2026-03-06T03:01:46.216522868Z",
+      "kind": "observation"
+    }
   ]
 }
