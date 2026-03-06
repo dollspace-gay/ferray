@@ -1,0 +1,10 @@
+{
+  "uuid": "5f15d5e8-294b-42cb-9618-a3d20f36aa53",
+  "display_id": 18,
+  "title": "Implement ferrum-linalg crate - fix compilation errors and warnings",
+  "status": "open",
+  "priority": "high",
+  "created_by": "driver--build-ferrum-phase-0-coordinator",
+  "created_at": "2026-03-06T19:49:21.648355819Z",
+  "updated_at": "2026-03-06T19:49:21.648355819Z"
+}
