@@ -26,18 +26,22 @@ pub mod products;
 /// Linear solvers: solve, lstsq, inv, pinv, matrix_power, tensorsolve, tensorinv.
 pub mod solve;
 
+/// f16 (half-precision) linalg operations with f64 promotion.
+#[cfg(feature = "f16")]
+pub mod f16_support;
+
 // Re-export key types and functions at the crate root for ergonomic access
 
 // Matrix products (Section 8.1)
 pub use products::{
-    dot, einsum, inner, kron, matmul, multi_dot, outer, tensordot, vdot, vecdot, TensordotAxes,
+    TensordotAxes, dot, einsum, inner, kron, matmul, multi_dot, outer, tensordot, vdot, vecdot,
 };
 
 // Decompositions (Section 8.2)
-pub use decomp::{cholesky, eig, eigh, eigvals, eigvalsh, lu, qr, svd, QrMode};
+pub use decomp::{QrMode, cholesky, eig, eigh, eigvals, eigvalsh, lu, qr, svd};
 
 // Solving and inversion (Section 8.3)
 pub use solve::{inv, lstsq, matrix_power, pinv, solve, tensorinv, tensorsolve};
 
 // Norms and measures (Section 8.4)
-pub use norms::{cond, det, det_batched, matrix_rank, norm, slogdet, trace, NormOrder};
+pub use norms::{NormOrder, cond, det, det_batched, matrix_rank, norm, slogdet, trace};

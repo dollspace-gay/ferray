@@ -14,5 +14,13 @@ rayon = { workspace = true }
 num-traits = { workspace = true }
 num-complex = { workspace = true }
 
+[dependencies.half]
+workspace = true
+optional = true
+
+[features]
+default = []
+f16 = ["dep:half", "ferrum-core/f16"]
+
 [dev-dependencies]
 proptest = { workspace = true }
