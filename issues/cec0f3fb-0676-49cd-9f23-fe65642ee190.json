@@ -1,0 +1,11 @@
+{
+  "uuid": "cec0f3fb-0676-49cd-9f23-fe65642ee190",
+  "display_id": 21,
+  "title": "Implement ferrum-ma: MaskedArray type, mask propagation, masked reductions and sorting",
+  "status": "open",
+  "priority": "high",
+  "parent_uuid": "dbf0100e-f29e-4f13-b4d5-2b1eb9963d0e",
+  "created_by": "driver--build-ferrum-phase-0-coordinator",
+  "created_at": "2026-03-06T20:11:18.800733489Z",
+  "updated_at": "2026-03-06T20:11:18.800733489Z"
+}
