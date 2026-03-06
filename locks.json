@@ -1,16 +1,22 @@
 {
   "version": 1,
   "locks": {
+    "1": {
+      "agent_id": "driver--build-ferrum-phase-0-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-05T21:12:15.379294579Z",
+      "signed_by": "driver--build-ferrum-phase-0-coordinator"
+    },
     "10": {
       "agent_id": "driver--build-ferrum-phase-0-coordinator",
       "branch": null,
       "claimed_at": "2026-03-06T03:01:41.030176978Z",
       "signed_by": "driver--build-ferrum-phase-0-coordinator"
     },
-    "1": {
+    "4": {
       "agent_id": "driver--build-ferrum-phase-0-coordinator",
       "branch": null,
-      "claimed_at": "2026-03-05T21:12:15.379294579Z",
+      "claimed_at": "2026-03-05T21:40:59.887113607Z",
       "signed_by": "driver--build-ferrum-phase-0-coordinator"
     },
     "3": {
@@ -19,10 +25,10 @@
       "claimed_at": "2026-03-05T21:40:27.915515058Z",
       "signed_by": "driver--build-ferrum-phase-0-coordinator"
     },
-    "4": {
+    "6": {
       "agent_id": "driver--build-ferrum-phase-0-coordinator",
       "branch": null,
-      "claimed_at": "2026-03-05T21:40:59.887113607Z",
+      "claimed_at": "2026-03-06T03:05:49.887226788Z",
       "signed_by": "driver--build-ferrum-phase-0-coordinator"
     }
   },
