@@ -50,7 +50,7 @@ num-traits = "0.2"
 half = "2.4"
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"] }
-pulp = "0.22"
+pulp = { version = "0.22", features = ["x86-v3"] }
 rayon = "1.11"
 faer = "0.24"
 rustfft = "6.4"

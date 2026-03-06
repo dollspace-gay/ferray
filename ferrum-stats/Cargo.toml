@@ -11,6 +11,7 @@ ferrum-core = { workspace = true }
 ferrum-ufunc = { workspace = true }
 rayon = { workspace = true }
 num-traits = { workspace = true }
+pulp = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

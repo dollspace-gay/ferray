@@ -4,11 +4,30 @@ pub mod cumulative;
 pub mod nan_aware;
 pub mod quantile;
 
+use std::any::TypeId;
+
 use ferrum_core::error::{FerrumError, FerrumResult};
 use ferrum_core::{Array, Dimension, Element, IxDyn};
 use num_traits::Float;
 
 use crate::parallel;
+
+/// Try SIMD-accelerated pairwise sum if T is f64.
+/// Returns the sum transmuted back to T, or None if T is not f64.
+#[inline]
+fn try_simd_pairwise_sum<T: Element + Copy + 'static>(data: &[T]) -> Option<T> {
+    if TypeId::of::<T>() == TypeId::of::<f64>() {
+        let f64_slice =
+            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f64, data.len()) };
+        let result = parallel::pairwise_sum_f64(f64_slice);
+        // Safe: we verified T is f64
+        Some(unsafe { *(&result as *const f64 as *const T) })
+    } else {
+        None
+    }
+}
+
+
 
 // ---------------------------------------------------------------------------
 // Internal axis-reduction helper
@@ -180,7 +199,8 @@ where
     let data = borrow_data(a);
     match axis {
         None => {
-            let total = parallel::parallel_sum(&data, <T as Element>::zero());
+            let total = try_simd_pairwise_sum(&data)
+                .unwrap_or_else(|| parallel::parallel_sum(&data, <T as Element>::zero()));
             make_result(&[], vec![total])
         }
         Some(ax) => {
@@ -188,7 +208,8 @@ where
             let shape = a.shape();
             let out_s = output_shape(shape, ax);
             let result = reduce_axis_general(&data, shape, ax, |lane| {
-                parallel::pairwise_sum(lane, <T as Element>::zero())
+                try_simd_pairwise_sum(lane)
+                    .unwrap_or_else(|| parallel::pairwise_sum(lane, <T as Element>::zero()))
             });
             make_result(&out_s, result)
         }
@@ -468,7 +489,8 @@ where
     match axis {
         None => {
             let n = T::from(data.len()).unwrap();
-            let total = parallel::pairwise_sum(&data, <T as Element>::zero());
+            let total = try_simd_pairwise_sum(&data)
+                .unwrap_or_else(|| parallel::pairwise_sum(&data, <T as Element>::zero()));
             make_result(&[], vec![total / n])
         }
         Some(ax) => {
@@ -478,7 +500,8 @@ where
             let axis_len = shape[ax];
             let n = T::from(axis_len).unwrap();
             let result = reduce_axis_general(&data, shape, ax, |lane| {
-                let total = parallel::pairwise_sum(lane, <T as Element>::zero());
+                let total = try_simd_pairwise_sum(lane)
+                    .unwrap_or_else(|| parallel::pairwise_sum(lane, <T as Element>::zero()));
                 total / n
             });
             make_result(&out_s, result)
@@ -514,12 +537,15 @@ where
                 ));
             }
             let nf = T::from(n).unwrap();
-            let mean_val = parallel::pairwise_sum(&data, <T as Element>::zero()) / nf;
+            let mean_val = try_simd_pairwise_sum(&data)
+                .unwrap_or_else(|| parallel::pairwise_sum(&data, <T as Element>::zero()))
+                / nf;
             let sq_diffs: Vec<T> = data.iter().copied().map(|x| {
                 let d = x - mean_val;
                 d * d
             }).collect();
-            let var_val = parallel::pairwise_sum(&sq_diffs, <T as Element>::zero())
+            let var_val = try_simd_pairwise_sum(&sq_diffs)
+                .unwrap_or_else(|| parallel::pairwise_sum(&sq_diffs, <T as Element>::zero()))
                 / T::from(n - ddof).unwrap();
             make_result(&[], vec![var_val])
         }
@@ -536,12 +562,16 @@ where
             let nf = T::from(axis_len).unwrap();
             let denom = T::from(axis_len - ddof).unwrap();
             let result = reduce_axis_general(&data, shape, ax, |lane| {
-                let mean_val = parallel::pairwise_sum(lane, <T as Element>::zero()) / nf;
+                let mean_val = try_simd_pairwise_sum(lane)
+                    .unwrap_or_else(|| parallel::pairwise_sum(lane, <T as Element>::zero()))
+                    / nf;
                 let sq_diffs: Vec<T> = lane.iter().copied().map(|x| {
                     let d = x - mean_val;
                     d * d
                 }).collect();
-                parallel::pairwise_sum(&sq_diffs, <T as Element>::zero()) / denom
+                try_simd_pairwise_sum(&sq_diffs)
+                    .unwrap_or_else(|| parallel::pairwise_sum(&sq_diffs, <T as Element>::zero()))
+                    / denom
             });
             make_result(&out_s, result)
         }

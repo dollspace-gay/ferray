@@ -42,9 +42,8 @@ fn main() {
 
     let input_data: Vec<f64> = serde_json::from_str(&input).expect("Failed to parse input JSON");
 
-    // Dispatch based on function name, with timing
-    let start = Instant::now();
-    let result = match func_name.as_str() {
+    // Dispatch based on function name — each runner returns (json_value, elapsed_ns)
+    let (result, elapsed_ns) = match func_name.as_str() {
         // ---- Ufunc: unary float ops ----
         "sin" => run_unary_ufunc(&input_data, size_str, ferrum_ufunc::sin),
         "cos" => run_unary_ufunc(&input_data, size_str, ferrum_ufunc::cos),
@@ -99,8 +98,6 @@ fn main() {
         }
     };
 
-    let elapsed_ns = start.elapsed().as_nanos() as u64;
-
     // Inject elapsed_ns into the JSON output
     let mut result_map: serde_json::Map<String, serde_json::Value> =
         serde_json::from_value(result).expect("Expected JSON object");
@@ -135,7 +132,8 @@ struct BenchResultComplex {
 }
 
 /// Run a unary ufunc (sin, cos, exp, etc.) on a 1D f64 array.
-fn run_unary_ufunc<F>(input_data: &[f64], _size_str: &str, func: F) -> serde_json::Value
+/// Returns (json_value, elapsed_ns) with timing only around the computation.
+fn run_unary_ufunc<F>(input_data: &[f64], _size_str: &str, func: F) -> (serde_json::Value, u64)
 where
     F: Fn(&Array<f64, Ix1>) -> ferrum_core::FerrumResult<Array<f64, Ix1>>,
 {
@@ -143,22 +141,26 @@ where
     let arr =
         Array::<f64, Ix1>::from_vec(dim, input_data.to_vec()).expect("Failed to create array");
 
+    let start = Instant::now();
     let result = func(&arr).expect("Ufunc failed");
+    let elapsed_ns = start.elapsed().as_nanos() as u64;
 
     let out_data: Vec<f64> = result.iter().copied().collect();
     let shape = result.shape().to_vec();
 
-    serde_json::to_value(BenchResult {
+    let json = serde_json::to_value(BenchResult {
         function: "ufunc".to_string(),
         shape,
         data: out_data,
         dtype: "f64".to_string(),
     })
-    .unwrap()
+    .unwrap();
+    (json, elapsed_ns)
 }
 
 /// Run a stats reduction (mean, var, std, sum) on a 1D f64 array.
-fn run_reduction<F>(input_data: &[f64], _size_str: &str, func: F) -> serde_json::Value
+/// Returns (json_value, elapsed_ns) with timing only around the computation.
+fn run_reduction<F>(input_data: &[f64], _size_str: &str, func: F) -> (serde_json::Value, u64)
 where
     F: Fn(&Array<f64, Ix1>) -> ferrum_core::FerrumResult<Array<f64, IxDyn>>,
 {
@@ -166,28 +168,30 @@ where
     let arr =
         Array::<f64, Ix1>::from_vec(dim, input_data.to_vec()).expect("Failed to create array");
 
+    let start = Instant::now();
     let result = func(&arr).expect("Reduction failed");
+    let elapsed_ns = start.elapsed().as_nanos() as u64;
 
     let out_data: Vec<f64> = result.iter().copied().collect();
     let shape = result.shape().to_vec();
 
-    serde_json::to_value(BenchResult {
+    let json = serde_json::to_value(BenchResult {
         function: "reduction".to_string(),
         shape,
         data: out_data,
         dtype: "f64".to_string(),
     })
-    .unwrap()
+    .unwrap();
+    (json, elapsed_ns)
 }
 
 /// Run matmul on a square matrix. The input is a flat array interpreted as an NxN matrix.
 /// size_str should be something like "10x10" or "100x100".
-fn run_matmul(input_data: &[f64], size_str: &str) -> serde_json::Value {
+fn run_matmul(input_data: &[f64], size_str: &str) -> (serde_json::Value, u64) {
     let parts: Vec<&str> = size_str.split('x').collect();
     let rows: usize = parts[0].parse().expect("Invalid rows in size");
     let cols: usize = parts[1].parse().expect("Invalid cols in size");
 
-    // Split input data into two matrices: A and B, each rows x cols
     let n = rows * cols;
     if input_data.len() < 2 * n {
         eprintln!(
@@ -208,23 +212,25 @@ fn run_matmul(input_data: &[f64], size_str: &str) -> serde_json::Value {
     let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[cols, rows]), b_data)
         .expect("Failed to create matrix B");
 
+    let start = Instant::now();
     let result = ferrum_linalg::matmul(&a, &b).expect("matmul failed");
+    let elapsed_ns = start.elapsed().as_nanos() as u64;
 
     let out_data: Vec<f64> = result.iter().copied().collect();
     let shape = result.shape().to_vec();
 
-    serde_json::to_value(BenchResult {
+    let json = serde_json::to_value(BenchResult {
         function: "matmul".to_string(),
         shape,
         data: out_data,
         dtype: "f64".to_string(),
     })
-    .unwrap()
+    .unwrap();
+    (json, elapsed_ns)
 }
 
 /// Run FFT on real input data, returns complex output.
-fn run_fft(input_data: &[f64], _size_str: &str) -> serde_json::Value {
-    // Convert real input to complex
+fn run_fft(input_data: &[f64], _size_str: &str) -> (serde_json::Value, u64) {
     let complex_data: Vec<Complex<f64>> = input_data
         .iter()
         .map(|&x| Complex::new(x, 0.0))
@@ -234,19 +240,22 @@ fn run_fft(input_data: &[f64], _size_str: &str) -> serde_json::Value {
     let arr = Array::<Complex<f64>, Ix1>::from_vec(dim, complex_data)
         .expect("Failed to create complex array");
 
+    let start = Instant::now();
     let result =
         ferrum_fft::fft(&arr, None, None, ferrum_fft::FftNorm::Backward).expect("FFT failed");
+    let elapsed_ns = start.elapsed().as_nanos() as u64;
 
     let data_real: Vec<f64> = result.iter().map(|c| c.re).collect();
     let data_imag: Vec<f64> = result.iter().map(|c| c.im).collect();
     let shape = result.shape().to_vec();
 
-    serde_json::to_value(BenchResultComplex {
+    let json = serde_json::to_value(BenchResultComplex {
         function: "fft".to_string(),
         shape,
         data_real,
         data_imag,
         dtype: "complex128".to_string(),
     })
-    .unwrap()
+    .unwrap();
+    (json, elapsed_ns)
 }

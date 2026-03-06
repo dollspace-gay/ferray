@@ -1124,6 +1124,7 @@ dependencies = [
  "ferrum-ufunc",
  "num-traits",
  "proptest",
+ "pulp",
  "rayon",
 ]
 
