@@ -1,0 +1,11 @@
+{
+  "uuid": "579d7607-b665-4b76-9ee2-3693f0dceeb6",
+  "display_id": 22,
+  "title": "Implement ferrum-stride-tricks: sliding_window_view, as_strided, overlap checking",
+  "status": "open",
+  "priority": "high",
+  "parent_uuid": "dbf0100e-f29e-4f13-b4d5-2b1eb9963d0e",
+  "created_by": "driver--build-ferrum-phase-0-coordinator",
+  "created_at": "2026-03-06T20:11:20.580873413Z",
+  "updated_at": "2026-03-06T20:11:20.580873413Z"
+}
