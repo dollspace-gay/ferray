@@ -18,6 +18,7 @@ use ferrum_core::dimension::{Ix1, IxDyn};
 use ferrum_core::Array;
 use num_complex::Complex;
 use std::io::Read;
+use std::time::Instant;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -41,7 +42,8 @@ fn main() {
 
     let input_data: Vec<f64> = serde_json::from_str(&input).expect("Failed to parse input JSON");
 
-    // Dispatch based on function name
+    // Dispatch based on function name, with timing
+    let start = Instant::now();
     let result = match func_name.as_str() {
         // ---- Ufunc: unary float ops ----
         "sin" => run_unary_ufunc(&input_data, size_str, ferrum_ufunc::sin),
@@ -97,8 +99,15 @@ fn main() {
         }
     };
 
+    let elapsed_ns = start.elapsed().as_nanos() as u64;
+
+    // Inject elapsed_ns into the JSON output
+    let mut result_map: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_value(result).expect("Expected JSON object");
+    result_map.insert("elapsed_ns".to_string(), serde_json::Value::from(elapsed_ns));
+
     // Output as JSON
-    println!("{}", serde_json::to_string(&result).expect("Failed to serialize result"));
+    println!("{}", serde_json::to_string(&result_map).expect("Failed to serialize result"));
 }
 
 /// Result structure for JSON output.

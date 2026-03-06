@@ -5,7 +5,7 @@ use ferrum_core::error::{FerrumError, FerrumResult};
 use ferrum_core::{Array, Dimension, Element, IxDyn};
 use num_traits::Float;
 
-use super::{collect_data, make_result, output_shape, reduce_axis_general, validate_axis};
+use super::{borrow_data, make_result, output_shape, reduce_axis_general, validate_axis};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,7 +80,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let total = lane_nansum(&data);
@@ -104,7 +104,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let total = lane_nanprod(&data);
@@ -128,7 +128,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let m = lane_nanmean(&data);
@@ -156,7 +156,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let v = lane_nanvar(&data, ddof);
@@ -202,7 +202,7 @@ where
             "cannot compute nanmin of empty array",
         ));
     }
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let m = lane_nanmin(&data);
@@ -231,7 +231,7 @@ where
             "cannot compute nanmax of empty array",
         ));
     }
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let m = lane_nanmax(&data);

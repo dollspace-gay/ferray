@@ -168,11 +168,16 @@ where
 // ---------------------------------------------------------------------------
 
 /// Elementwise absolute value.
+///
+/// Uses hardware SIMD for contiguous f64 arrays.
 pub fn absolute<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
 {
+    if let Some(r) = crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_abs_f64) {
+        return r;
+    }
     unary_float_op(input, T::abs)
 }
 
@@ -205,11 +210,16 @@ where
 }
 
 /// Elementwise negation.
+///
+/// Uses hardware SIMD for contiguous f64 arrays.
 pub fn negative<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
 {
+    if let Some(r) = crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_neg_f64) {
+        return r;
+    }
     unary_float_op(input, |x| -x)
 }
 
@@ -232,11 +242,16 @@ where
 }
 
 /// Elementwise square root.
+///
+/// Uses hardware SIMD (`vsqrtpd`) for contiguous f64 arrays.
 pub fn sqrt<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
 {
+    if let Some(r) = crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_sqrt_f64) {
+        return r;
+    }
     unary_float_op(input, T::sqrt)
 }
 

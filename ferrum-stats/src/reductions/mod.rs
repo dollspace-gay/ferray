@@ -115,6 +115,31 @@ pub(crate) fn collect_data<T: Element + Copy, D: Dimension>(a: &Array<T, D>) -> 
     a.iter().copied().collect()
 }
 
+/// Borrow contiguous data or copy if strided. Avoids allocation for contiguous arrays.
+pub(crate) enum DataRef<'a, T> {
+    Borrowed(&'a [T]),
+    Owned(Vec<T>),
+}
+
+impl<T> std::ops::Deref for DataRef<'_, T> {
+    type Target = [T];
+    fn deref(&self) -> &[T] {
+        match self {
+            DataRef::Borrowed(s) => s,
+            DataRef::Owned(v) => v,
+        }
+    }
+}
+
+/// Get a reference to contiguous data, or copy if strided.
+pub(crate) fn borrow_data<'a, T: Element + Copy, D: Dimension>(a: &'a Array<T, D>) -> DataRef<'a, T> {
+    if let Some(slice) = a.as_slice() {
+        DataRef::Borrowed(slice)
+    } else {
+        DataRef::Owned(a.iter().copied().collect())
+    }
+}
+
 /// Build an IxDyn result array from output shape and data.
 pub(crate) fn make_result<T: Element>(
     out_shape: &[usize],
@@ -152,7 +177,7 @@ where
     T: Element + std::ops::Add<Output = T> + Copy + Send + Sync,
     D: Dimension,
 {
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let total = parallel::parallel_sum(&data, <T as Element>::zero());
@@ -182,7 +207,7 @@ where
     T: Element + std::ops::Mul<Output = T> + Copy + Send + Sync,
     D: Dimension,
 {
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let total = parallel::parallel_prod(&data, <T as Element>::one());
@@ -219,7 +244,7 @@ where
             "cannot compute min of empty array",
         ));
     }
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let m = data
@@ -257,7 +282,7 @@ where
             "cannot compute max of empty array",
         ));
     }
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let m = data
@@ -300,7 +325,7 @@ where
             "cannot compute argmin of empty array",
         ));
     }
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let idx = data
@@ -340,7 +365,7 @@ where
             "cannot compute argmax of empty array",
         ));
     }
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let idx = data
@@ -439,7 +464,7 @@ where
             "cannot compute mean of empty array",
         ));
     }
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let n = T::from(data.len()).unwrap();
@@ -479,7 +504,7 @@ where
             "cannot compute variance of empty array",
         ));
     }
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let n = data.len();

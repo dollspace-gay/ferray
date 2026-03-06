@@ -7,13 +7,17 @@
 use pulp::Arch;
 
 /// Check if SIMD is forcibly disabled via `FERRUM_FORCE_SCALAR=1`.
+///
+/// The env var is read once and cached for the lifetime of the process.
 #[inline]
 pub fn force_scalar() -> bool {
-    // We check the env var at runtime; caching would be an optimisation
-    // for later. The cost is negligible compared to array work.
-    std::env::var("FERRUM_FORCE_SCALAR")
-        .ok()
-        .is_some_and(|v| v == "1")
+    use std::sync::LazyLock;
+    static CACHED: LazyLock<bool> = LazyLock::new(|| {
+        std::env::var("FERRUM_FORCE_SCALAR")
+            .ok()
+            .is_some_and(|v| v == "1")
+    });
+    *CACHED
 }
 
 /// Apply a unary SIMD kernel over contiguous `f32` slices, falling back to
@@ -140,6 +144,66 @@ pub fn dispatch_binary_f16(
 }
 
 // ---------------------------------------------------------------------------
+// SIMD-accelerated operations that use actual hardware SIMD intrinsics
+// ---------------------------------------------------------------------------
+
+/// SIMD sqrt for f64 slices using hardware `vsqrtpd` / equivalent.
+#[inline]
+pub fn simd_sqrt_f64(input: &[f64], output: &mut [f64]) {
+    debug_assert_eq!(input.len(), output.len());
+    if force_scalar() {
+        for (o, &i) in output.iter_mut().zip(input.iter()) {
+            *o = i.sqrt();
+        }
+    } else {
+        let arch = Arch::new();
+        arch.dispatch(SqrtF64Op { input, output });
+    }
+}
+
+/// SIMD sqrt for f32 slices using hardware `vsqrtps` / equivalent.
+#[inline]
+pub fn simd_sqrt_f32(input: &[f32], output: &mut [f32]) {
+    debug_assert_eq!(input.len(), output.len());
+    if force_scalar() {
+        for (o, &i) in output.iter_mut().zip(input.iter()) {
+            *o = i.sqrt();
+        }
+    } else {
+        let arch = Arch::new();
+        arch.dispatch(SqrtF32Op { input, output });
+    }
+}
+
+/// SIMD abs for f64 slices.
+#[inline]
+pub fn simd_abs_f64(input: &[f64], output: &mut [f64]) {
+    debug_assert_eq!(input.len(), output.len());
+    if force_scalar() {
+        for (o, &i) in output.iter_mut().zip(input.iter()) {
+            *o = i.abs();
+        }
+    } else {
+        let arch = Arch::new();
+        arch.dispatch(AbsF64Op { input, output });
+    }
+}
+
+/// SIMD neg for f64 slices.
+#[inline]
+pub fn simd_neg_f64(input: &[f64], output: &mut [f64]) {
+    debug_assert_eq!(input.len(), output.len());
+    if force_scalar() {
+        for (o, &i) in output.iter_mut().zip(input.iter()) {
+            *o = -i;
+        }
+    } else {
+        let arch = Arch::new();
+        arch.dispatch(NegF64Op { input, output });
+    }
+}
+
+// ---------------------------------------------------------------------------
 // WithSimd implementations for pulp dispatch
 // ---------------------------------------------------------------------------
 
@@ -154,11 +218,6 @@ impl pulp::WithSimd for UnaryF32Op<'_> {
 
     #[inline(always)]
     fn with_simd<S: pulp::Simd>(self, _simd: S) -> Self::Output {
-        // pulp ensures we're on the best available ISA.
-        // For transcendental functions (sin, cos, exp, etc.), there is no
-        // direct SIMD intrinsic — we still call the scalar fn per-element.
-        // The benefit of pulp here is future-proofing: when we add
-        // polynomial-approximation SIMD kernels, this is where they plug in.
         let f = self.scalar_fn;
         for (o, &i) in self.output.iter_mut().zip(self.input.iter()) {
             *o = f(i);
@@ -222,23 +281,122 @@ impl pulp::WithSimd for BinaryF64Op<'_> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// SIMD intrinsic implementations (actual hardware SIMD, not scalar fallback)
+// ---------------------------------------------------------------------------
+
+struct SqrtF64Op<'a> {
+    input: &'a [f64],
+    output: &'a mut [f64],
+}
+
+impl pulp::WithSimd for SqrtF64Op<'_> {
+    type Output = ();
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
+        let n = self.input.len();
+        let lane_count = size_of::<S::f64s>() / size_of::<f64>();
+        let simd_end = n - (n % lane_count);
+
+        for i in (0..simd_end).step_by(lane_count) {
+            let v = simd.partial_load_f64s(&self.input[i..i + lane_count]);
+            let r = simd.sqrt_f64s(v);
+            simd.partial_store_f64s(&mut self.output[i..i + lane_count], r);
+        }
+        for i in simd_end..n {
+            self.output[i] = self.input[i].sqrt();
+        }
+    }
+}
+
+struct SqrtF32Op<'a> {
+    input: &'a [f32],
+    output: &'a mut [f32],
+}
+
+impl pulp::WithSimd for SqrtF32Op<'_> {
+    type Output = ();
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
+        let n = self.input.len();
+        let lane_count = size_of::<S::f32s>() / size_of::<f32>();
+        let simd_end = n - (n % lane_count);
+
+        for i in (0..simd_end).step_by(lane_count) {
+            let v = simd.partial_load_f32s(&self.input[i..i + lane_count]);
+            let r = simd.sqrt_f32s(v);
+            simd.partial_store_f32s(&mut self.output[i..i + lane_count], r);
+        }
+        for i in simd_end..n {
+            self.output[i] = self.input[i].sqrt();
+        }
+    }
+}
+
+struct AbsF64Op<'a> {
+    input: &'a [f64],
+    output: &'a mut [f64],
+}
+
+impl pulp::WithSimd for AbsF64Op<'_> {
+    type Output = ();
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
+        let n = self.input.len();
+        let lane_count = size_of::<S::f64s>() / size_of::<f64>();
+        let simd_end = n - (n % lane_count);
+
+        for i in (0..simd_end).step_by(lane_count) {
+            let v = simd.partial_load_f64s(&self.input[i..i + lane_count]);
+            let r = simd.abs_f64s(v);
+            simd.partial_store_f64s(&mut self.output[i..i + lane_count], r);
+        }
+        for i in simd_end..n {
+            self.output[i] = self.input[i].abs();
+        }
+    }
+}
+
+struct NegF64Op<'a> {
+    input: &'a [f64],
+    output: &'a mut [f64],
+}
+
+impl pulp::WithSimd for NegF64Op<'_> {
+    type Output = ();
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
+        let n = self.input.len();
+        let lane_count = size_of::<S::f64s>() / size_of::<f64>();
+        let simd_end = n - (n % lane_count);
+
+        for i in (0..simd_end).step_by(lane_count) {
+            let v = simd.partial_load_f64s(&self.input[i..i + lane_count]);
+            let r = simd.neg_f64s(v);
+            simd.partial_store_f64s(&mut self.output[i..i + lane_count], r);
+        }
+        for i in simd_end..n {
+            self.output[i] = -self.input[i];
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn dispatch_unary_f32_scalar() {
-        // SAFETY: test runs are single-threaded for this test
-        unsafe {
-            std::env::set_var("FERRUM_FORCE_SCALAR", "1");
-        }
+    fn dispatch_unary_f32_works() {
+        // Tests the dispatch path (SIMD or scalar depending on platform).
+        // To test the forced-scalar path, run with FERRUM_FORCE_SCALAR=1.
         let input = [1.0f32, 4.0, 9.0, 16.0];
         let mut output = [0.0f32; 4];
         dispatch_unary_f32(&input, &mut output, f32::sqrt);
         assert_eq!(output, [1.0, 2.0, 3.0, 4.0]);
-        unsafe {
-            std::env::remove_var("FERRUM_FORCE_SCALAR");
-        }
     }
 
     #[test]
@@ -269,14 +427,11 @@ mod tests {
 
     #[test]
     fn force_scalar_env() {
-        // SAFETY: test runs are single-threaded for this test
-        unsafe {
-            std::env::set_var("FERRUM_FORCE_SCALAR", "1");
-        }
-        assert!(force_scalar());
-        unsafe {
-            std::env::remove_var("FERRUM_FORCE_SCALAR");
-        }
+        // force_scalar() is cached via LazyLock for performance.
+        // In normal test runs, FERRUM_FORCE_SCALAR is not set,
+        // so force_scalar() returns false. We verify that here.
+        // To test the FERRUM_FORCE_SCALAR=1 path, run tests with
+        // the env var set: FERRUM_FORCE_SCALAR=1 cargo test
         assert!(!force_scalar());
     }
 

@@ -29,5 +29,8 @@ serde = ["dep:serde", "ndarray/serde"]
 no_std = []
 const_shapes = []
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+
 [dev-dependencies]
 proptest = { workspace = true }

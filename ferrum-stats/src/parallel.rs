@@ -3,7 +3,11 @@
 use rayon::prelude::*;
 
 /// Threshold above which reductions use parallel tree-reduce.
-pub const PARALLEL_REDUCTION_THRESHOLD: usize = 10_000;
+///
+/// Set high to avoid rayon thread-pool startup overhead dominating small workloads.
+/// Rayon's thread pool initialization costs ~1-3ms on first use, which is catastrophic
+/// for arrays under ~1M elements where sequential pairwise sum takes <1ms.
+pub const PARALLEL_REDUCTION_THRESHOLD: usize = 1_000_000;
 
 /// Threshold above which sorting uses parallel merge sort.
 pub const PARALLEL_SORT_THRESHOLD: usize = 100_000;

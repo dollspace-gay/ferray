@@ -370,9 +370,11 @@ def compare_results(numpy_result, ferrum_result, func_name, category="ufunc",
     threshold = get_max_ulp_threshold(category, size_label)
 
     if HAS_SCIPY:
-        if np.all(finite_ulps == 0):
+        if np.all(finite_ulps == finite_ulps[0]):
+            # Constant array (all zeros, or all same value) — zero variance,
+            # t-test is undefined. No statistical test needed.
             t_stat = 0.0
-            p_value = 1.0
+            p_value = 1.0 if finite_ulps[0] == 0 else 0.0
         else:
             t_stat, p_value = scipy_stats.ttest_1samp(
                 finite_ulps, 0, alternative="greater"

@@ -4,7 +4,7 @@ use ferrum_core::error::{FerrumError, FerrumResult};
 use ferrum_core::{Array, Dimension, Element, Ix1, IxDyn};
 
 use crate::reductions::{
-    collect_data, make_result, output_shape, reduce_axis_general_u64, validate_axis,
+    borrow_data, make_result, output_shape, reduce_axis_general_u64, validate_axis,
 };
 
 // ---------------------------------------------------------------------------
@@ -201,7 +201,7 @@ where
     D: Dimension,
 {
     let zero = <T as Element>::zero();
-    let data = collect_data(a);
+    let data = borrow_data(a);
     match axis {
         None => {
             let count = data.iter().filter(|&&x| x != zero).count() as u64;
