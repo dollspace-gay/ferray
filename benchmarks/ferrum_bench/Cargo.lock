@@ -386,6 +386,7 @@ dependencies = [
 name = "ferrum-bench"
 version = "0.1.0"
 dependencies = [
+ "core-math",
  "ferrum-core",
  "ferrum-fft",
  "ferrum-linalg",

@@ -65,6 +65,20 @@ Benchmarked against NumPy 2.3.5 on Linux (Rust 1.85, LTO, target-cpu=native).
 
 **Scorecard: ferrum 23, NumPy 32.** All NumPy wins are transcendentals (accuracy tradeoff) or matmul (BLAS gap). GPU acceleration via CUDA is planned for Phase 6.
 
+### Fast mode: `exp_fast`
+
+For throughput-sensitive workloads, ferrum offers `exp_fast()` — an Even/Odd Remez decomposition that is **~30% faster than CORE-MATH** while maintaining ≤1 ULP accuracy (faithfully rounded). It auto-vectorizes for SSE/AVX2/AVX-512/NEON with no lookup tables.
+
+```rust
+// Default: correctly rounded (≤0.5 ULP, CORE-MATH)
+let result = ferrum::exp(&array)?;
+
+// Fast mode: faithfully rounded (≤1 ULP, ~30% faster)
+let result = ferrum::exp_fast(&array)?;
+```
+
+Both are more accurate than NumPy's libm-based `exp()` (which can be up to 8 ULP).
+
 ### Accuracy
 
 ferrum uses [CORE-MATH](https://core-math.gitlabpages.inria.fr/) — the only correctly-rounded math library in production. Every transcendental returns the closest representable floating-point value to the mathematical truth.

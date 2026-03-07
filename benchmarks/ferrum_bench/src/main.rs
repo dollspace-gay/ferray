@@ -21,6 +21,8 @@
 //!
 //! Batch JSON output: array of `{"function", "size", "times_ns": [t1, t2, ...]}`.
 
+mod bench_exp;
+
 use ferrum_core::dimension::{Ix1, IxDyn};
 use ferrum_core::Array;
 use num_complex::Complex;
@@ -32,7 +34,13 @@ fn main() {
     if args.len() < 2 {
         eprintln!("Usage: ferrum-bench <function> <size> [extra_args...]");
         eprintln!("       ferrum-bench batch  (reads batch JSON from stdin)");
+        eprintln!("       ferrum-bench bench-exp  (run exp() algorithm comparison)");
         std::process::exit(1);
+    }
+
+    if args[1] == "bench-exp" {
+        bench_exp::run();
+        return;
     }
 
     if args[1] == "batch" {

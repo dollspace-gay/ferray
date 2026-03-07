@@ -87,7 +87,7 @@ pub use ferrum_ufunc::{
 };
 
 // Exponential and logarithmic
-pub use ferrum_ufunc::{exp, exp2, expm1, log, log1p, log2, log10, logaddexp, logaddexp2};
+pub use ferrum_ufunc::{exp, exp2, exp_fast, expm1, log, log1p, log2, log10, logaddexp, logaddexp2};
 
 // Rounding
 pub use ferrum_ufunc::{around, ceil, fix, floor, rint, round, trunc};

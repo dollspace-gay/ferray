@@ -984,7 +984,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "ferrum"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrum-core",
  "ferrum-fft",
@@ -1005,7 +1005,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-autodiff"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "num-traits",
  "proptest",
@@ -1013,7 +1013,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrum-core-macros",
  "half",
@@ -1027,7 +1027,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-core-macros"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1036,7 +1036,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-fft"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrum-core",
  "num-complex",
@@ -1047,7 +1047,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-io"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "byteorder",
  "ferrum-core",
@@ -1060,7 +1060,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-linalg"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "faer",
  "ferrum-core",
@@ -1074,7 +1074,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-ma"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrum-core",
  "ferrum-stats",
@@ -1085,7 +1085,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-numpy-interop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arrow",
  "ferrum-core",
@@ -1097,7 +1097,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-polynomial"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrum-core",
  "ferrum-linalg",
@@ -1108,7 +1108,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-random"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrum-core",
  "proptest",
@@ -1118,7 +1118,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-stats"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrum-core",
  "ferrum-ufunc",
@@ -1130,7 +1130,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-stride-tricks"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrum-core",
  "proptest",
@@ -1138,7 +1138,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-strings"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrum-core",
  "proptest",
@@ -1147,7 +1147,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-ufunc"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "core-math",
  "ferrum-core",
@@ -1161,7 +1161,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-window"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ferrum-core",
  "ferrum-ufunc",
