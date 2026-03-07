@@ -6,7 +6,7 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-07T23:05:19.647891889Z",
-  "updated_at": "2026-03-07T23:07:59.984297446Z",
+  "updated_at": "2026-03-07T23:08:46.187972679Z",
   "labels": [
     "fix"
   ],
@@ -55,6 +55,15 @@
       "kind": "decision",
       "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
       "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAan+Re53WvzqdEUeHyDt5BZH9G8BqkAlaivIsp6DyUMtPz7FesxI7/A6dYELwEhXLbkBZD0c3ToHWXvsM1D6dBA=="
+    },
+    {
+      "id": 51,
+      "author": "phase-4-coordinator",
+      "content": "cargo config.toml [env] with relative=true prepends the workspace path to the ENTIRE value, not just the file path portion. This turns '-include compat/signgam_compat.h' into '/abs/path/-include compat/signgam_compat.h' which cc interprets wrong. Need a different approach.",
+      "created_at": "2026-03-07T23:08:46.187972390Z",
+      "kind": "observation",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAwfwmTpNa1Y3gU+t9f02IXnuhFHjb6G0VCUc61tQk0vZ7MzphnAn1mL6YpERfoEc9yVKEVGa0vaF1/n9+UsD1CQ=="
     }
   ]
 }
