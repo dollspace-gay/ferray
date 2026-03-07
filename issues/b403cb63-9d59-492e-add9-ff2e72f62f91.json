@@ -2,11 +2,12 @@
   "uuid": "b403cb63-9d59-492e-add9-ff2e72f62f91",
   "display_id": 24,
   "title": "Implement ferrum-strings crate: StringArray type, case/align/strip/search/split/concat/regex operations",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "driver--build-ferrum-phase-0-coordinator",
   "created_at": "2026-03-06T20:13:26.985821439Z",
-  "updated_at": "2026-03-06T20:13:28.574926128Z",
+  "updated_at": "2026-03-07T01:57:09.861981057Z",
+  "closed_at": "2026-03-07T01:57:09.861981057Z",
   "labels": [
     "feature"
   ]
