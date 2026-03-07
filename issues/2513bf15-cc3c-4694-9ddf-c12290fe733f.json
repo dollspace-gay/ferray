@@ -2,12 +2,13 @@
   "uuid": "2513bf15-cc3c-4694-9ddf-c12290fe733f",
   "display_id": 16,
   "title": "Implement ferrum-window: window functions, vectorize, piecewise, apply_along_axis",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "parent_uuid": "1caa4e1d-937e-4c04-8b1a-fd8ee6820c2a",
   "created_by": "driver--build-ferrum-phase-0-coordinator",
   "created_at": "2026-03-06T19:29:03.691244409Z",
-  "updated_at": "2026-03-06T19:35:48.335869963Z",
+  "updated_at": "2026-03-07T01:56:56.103714514Z",
+  "closed_at": "2026-03-07T01:56:56.103714514Z",
   "comments": [
     {
       "id": 22,
