@@ -6,7 +6,7 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-07T15:05:00.468942213Z",
-  "updated_at": "2026-03-07T15:05:10.812223645Z",
+  "updated_at": "2026-03-07T15:09:19.429931527Z",
   "labels": [
     "enhancement"
   ],
@@ -19,6 +19,15 @@
       "kind": "plan",
       "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
       "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA7G7oK7b4p7visQk4ajYZeLWgGuGCbxOmVSNG0Isi8rUN/UtI+GMCFuXWbNULtw8Ye+UAo0pUt9792XikzZK9AA=="
+    },
+    {
+      "id": 42,
+      "author": "phase-4-coordinator",
+      "content": "Using ripsed to do content replacement: ferrum_  → ferray_, ferrum- → ferray-, ferrum → ferray. Then renaming directories. Ignoring .git and target dirs.",
+      "created_at": "2026-03-07T15:09:19.429931065Z",
+      "kind": "plan",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA6M6o+ru9a/f6ZrJQMIvW8/C5N1/5HsCvFlyaiDpN2WanRSpHAHTSB7alb2ilUzA86m6dj46yk7TYGv+OUzZ6Cw=="
     }
   ]
 }
