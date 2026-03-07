@@ -6,5 +6,8 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-07T23:05:19.647891889Z",
-  "updated_at": "2026-03-07T23:05:19.647891889Z"
+  "updated_at": "2026-03-07T23:05:21.124600255Z",
+  "labels": [
+    "fix"
+  ]
 }
