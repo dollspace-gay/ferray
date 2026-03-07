@@ -4,7 +4,7 @@ Zero-copy conversions between ferray arrays and Python/Arrow/Polars for the [fer
 
 ## What's in this crate
 
-- **NumPy** (feature `python`): `AsFerrum` and `IntoNumPy` traits via PyO3
+- **NumPy** (feature `python`): `AsFerray` and `IntoNumPy` traits via PyO3
 - **Apache Arrow** (feature `arrow`): `FromArrow`, `ToArrow` conversion traits
 - **Polars** (feature `polars`): `FromPolars`, `ToPolars` conversion traits
 - Zero-copy when arrays are C-contiguous, safe copy otherwise
@@ -21,7 +21,7 @@ features = ["python"]  # or "arrow", "polars"
 ```
 
 ```rust
-use ferray_numpy_interop::{AsFerrum, IntoNumPy};
+use ferray_numpy_interop::{AsFerray, IntoNumPy};
 use pyo3::prelude::*;
 use numpy::PyReadonlyArray1;
 

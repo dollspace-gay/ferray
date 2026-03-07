@@ -15,8 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **ferray-core**: Shape manipulation (`reshape`, `transpose`, `concatenate`, `stack`, `split`, `pad`, `tile`, etc.)
 - **ferray-core**: `Element` trait for 17 dtypes (f16, f32, f64, Complex, i8-i128, u8-u128, bool)
 - **ferray-core**: `DType` runtime enum, `finfo`/`iinfo`, type promotion rules
-- **ferray-core**: `FerrumError` hierarchy with diagnostic context, zero panics
-- **ferray-core-macros**: `#[derive(FerrumRecord)]` proc macro, `promoted_type!` macro
+- **ferray-core**: `FerrayError` hierarchy with diagnostic context, zero panics
+- **ferray-core-macros**: `#[derive(FerrayRecord)]` proc macro, `promoted_type!` macro
 - **ferray-ufunc**: 40+ SIMD-accelerated universal functions via `pulp` (sin, cos, exp, log, sqrt, etc.)
 - **ferray-ufunc**: CORE-MATH correctly-rounded transcendentals (< 0.5 ULP from mathematical truth)
 - **ferray-ufunc**: Binary ops (add, sub, mul, div, pow) with broadcasting
@@ -58,7 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - NumPy oracle fixture generation for cross-validation
 - Property-based tests with `proptest` (256 cases per property)
 - Fuzz targets for public function families
-- SIMD vs scalar verification (all tests pass with `FERRUM_FORCE_SCALAR=1`)
+- SIMD vs scalar verification (all tests pass with `FERRAY_FORCE_SCALAR=1`)
 - Kani formal verification harnesses for ferray-core
 - Statistical equivalence benchmarks (47/47 accuracy tests pass)
 

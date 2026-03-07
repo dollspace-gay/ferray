@@ -14,7 +14,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, Ix1, IxDyn};
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
 use crate::helpers::{binary_broadcast_op, binary_float_op, unary_float_op};
@@ -24,13 +24,13 @@ use crate::helpers::{binary_broadcast_op, binary_float_op, unary_float_op};
 // ---------------------------------------------------------------------------
 
 /// Elementwise addition.
-pub fn add<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn add<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "add: shapes {:?} and {:?} do not match",
             a.shape(),
             b.shape()
@@ -41,13 +41,13 @@ where
 }
 
 /// Elementwise subtraction.
-pub fn subtract<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn subtract<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Sub<Output = T> + Copy,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "subtract: shapes {:?} and {:?} do not match",
             a.shape(),
             b.shape()
@@ -58,13 +58,13 @@ where
 }
 
 /// Elementwise multiplication.
-pub fn multiply<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn multiply<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "multiply: shapes {:?} and {:?} do not match",
             a.shape(),
             b.shape()
@@ -75,13 +75,13 @@ where
 }
 
 /// Elementwise division.
-pub fn divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Div<Output = T> + Copy,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "divide: shapes {:?} and {:?} do not match",
             a.shape(),
             b.shape()
@@ -92,7 +92,7 @@ where
 }
 
 /// Alias for [`divide`] — true division (float).
-pub fn true_divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn true_divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -101,7 +101,7 @@ where
 }
 
 /// Floor division: floor(a / b).
-pub fn floor_divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn floor_divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -110,7 +110,7 @@ where
 }
 
 /// Elementwise power: a^b.
-pub fn power<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn power<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -119,7 +119,7 @@ where
 }
 
 /// Elementwise remainder (Python-style modulo).
-pub fn remainder<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn remainder<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -137,7 +137,7 @@ where
 }
 
 /// Alias for [`remainder`].
-pub fn mod_<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn mod_<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -146,7 +146,7 @@ where
 }
 
 /// C-style fmod (remainder has same sign as dividend).
-pub fn fmod<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn fmod<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -155,7 +155,7 @@ where
 }
 
 /// Return (floor_divide, remainder) as a tuple of arrays.
-pub fn divmod<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<(Array<T, D>, Array<T, D>)>
+pub fn divmod<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<(Array<T, D>, Array<T, D>)>
 where
     T: Element + Float,
     D: Dimension,
@@ -170,7 +170,7 @@ where
 /// Elementwise absolute value.
 ///
 /// Uses hardware SIMD for contiguous f64 arrays.
-pub fn absolute<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn absolute<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -182,7 +182,7 @@ where
 }
 
 /// Alias for [`absolute`] — float abs.
-pub fn fabs<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn fabs<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -191,7 +191,7 @@ where
 }
 
 /// Elementwise sign: -1 for negative, 0 for zero, +1 for positive.
-pub fn sign<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn sign<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -212,7 +212,7 @@ where
 /// Elementwise negation.
 ///
 /// Uses hardware SIMD for contiguous f64 arrays.
-pub fn negative<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn negative<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -224,7 +224,7 @@ where
 }
 
 /// Elementwise positive (identity for numeric types).
-pub fn positive<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn positive<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -235,7 +235,7 @@ where
 /// Elementwise reciprocal: 1/x.
 ///
 /// Uses hardware SIMD for contiguous f64 arrays.
-pub fn reciprocal<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn reciprocal<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -250,7 +250,7 @@ where
 /// Elementwise square root.
 ///
 /// Uses hardware SIMD (`vsqrtpd`) for contiguous f64 arrays.
-pub fn sqrt<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn sqrt<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -262,7 +262,7 @@ where
 }
 
 /// Elementwise cube root.
-pub fn cbrt<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn cbrt<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + crate::cr_math::CrMath,
     D: Dimension,
@@ -273,7 +273,7 @@ where
 /// Elementwise square: x^2.
 ///
 /// Uses hardware SIMD for contiguous f64 arrays.
-pub fn square<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn square<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -287,7 +287,7 @@ where
 /// Heaviside step function.
 ///
 /// `heaviside(x, h0)` returns 0 for x < 0, h0 for x == 0, and 1 for x > 0.
-pub fn heaviside<T, D>(x: &Array<T, D>, h0: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn heaviside<T, D>(x: &Array<T, D>, h0: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -304,7 +304,7 @@ where
 }
 
 /// Integer GCD (works on float representations of integers).
-pub fn gcd<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn gcd<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -322,7 +322,7 @@ where
 }
 
 /// Integer LCM (works on float representations of integers).
-pub fn lcm<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn lcm<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -350,7 +350,7 @@ where
 // ---------------------------------------------------------------------------
 
 /// Elementwise addition with broadcasting.
-pub fn add_broadcast<T, D1, D2>(a: &Array<T, D1>, b: &Array<T, D2>) -> FerrumResult<Array<T, IxDyn>>
+pub fn add_broadcast<T, D1, D2>(a: &Array<T, D1>, b: &Array<T, D2>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D1: Dimension,
@@ -363,7 +363,7 @@ where
 pub fn subtract_broadcast<T, D1, D2>(
     a: &Array<T, D1>,
     b: &Array<T, D2>,
-) -> FerrumResult<Array<T, IxDyn>>
+) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Sub<Output = T> + Copy,
     D1: Dimension,
@@ -376,7 +376,7 @@ where
 pub fn multiply_broadcast<T, D1, D2>(
     a: &Array<T, D1>,
     b: &Array<T, D2>,
-) -> FerrumResult<Array<T, IxDyn>>
+) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
     D1: Dimension,
@@ -389,7 +389,7 @@ where
 pub fn divide_broadcast<T, D1, D2>(
     a: &Array<T, D1>,
     b: &Array<T, D2>,
-) -> FerrumResult<Array<T, IxDyn>>
+) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Div<Output = T> + Copy,
     D1: Dimension,
@@ -405,14 +405,14 @@ where
 /// Reduce by addition along an axis (column sums, row sums, etc.).
 ///
 /// AC-2: `add_reduce` computes correct column sums.
-pub fn add_reduce<T, D>(input: &Array<T, D>, axis: usize) -> FerrumResult<Array<T, IxDyn>>
+pub fn add_reduce<T, D>(input: &Array<T, D>, axis: usize) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
 {
     let ndim = input.ndim();
     if axis >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis, ndim));
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
     }
     let shape = input.shape().to_vec();
     let axis_len = shape[axis];
@@ -457,7 +457,7 @@ where
 /// Running (cumulative) addition along an axis.
 ///
 /// AC-2: `add_accumulate` produces running sums.
-pub fn add_accumulate<T, D>(input: &Array<T, D>, axis: usize) -> FerrumResult<Array<T, D>>
+pub fn add_accumulate<T, D>(input: &Array<T, D>, axis: usize) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
@@ -468,7 +468,7 @@ where
 /// Outer product: multiply_outer(a, b)[i, j] = a[i] * b[j].
 ///
 /// AC-3: multiply_outer produces correct outer product.
-pub fn multiply_outer<T>(a: &Array<T, Ix1>, b: &Array<T, Ix1>) -> FerrumResult<Array<T, IxDyn>>
+pub fn multiply_outer<T>(a: &Array<T, Ix1>, b: &Array<T, Ix1>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
 {
@@ -496,14 +496,14 @@ where
 /// Cumulative sum along an axis (or flattened if axis is None).
 ///
 /// AC-11: `cumsum([1,2,3,4]) == [1,3,6,10]`.
-pub fn cumsum<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, D>>
+pub fn cumsum<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
 {
     if let Some(ax) = axis {
         if ax >= input.ndim() {
-            return Err(FerrumError::axis_out_of_bounds(ax, input.ndim()));
+            return Err(FerrayError::axis_out_of_bounds(ax, input.ndim()));
         }
         // Work along the given axis
         let shape = input.shape().to_vec();
@@ -540,14 +540,14 @@ where
 }
 
 /// Cumulative product along an axis (or flattened if axis is None).
-pub fn cumprod<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, D>>
+pub fn cumprod<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
     D: Dimension,
 {
     if let Some(ax) = axis {
         if ax >= input.ndim() {
-            return Err(FerrumError::axis_out_of_bounds(ax, input.ndim()));
+            return Err(FerrayError::axis_out_of_bounds(ax, input.ndim()));
         }
         let shape = input.shape().to_vec();
         let data: Vec<T> = input.iter().copied().collect();
@@ -581,7 +581,7 @@ where
 }
 
 /// Cumulative sum ignoring NaNs.
-pub fn nancumsum<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, D>>
+pub fn nancumsum<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -602,7 +602,7 @@ where
 }
 
 /// Cumulative product ignoring NaNs.
-pub fn nancumprod<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, D>>
+pub fn nancumprod<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -622,7 +622,7 @@ where
 /// Compute the n-th discrete difference along the given axis.
 ///
 /// AC-11: `diff([1,3,6,10], 1) == [2,3,4]`.
-pub fn diff<T>(input: &Array<T, Ix1>, n: usize) -> FerrumResult<Array<T, Ix1>>
+pub fn diff<T>(input: &Array<T, Ix1>, n: usize) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + std::ops::Sub<Output = T> + Copy,
 {
@@ -647,7 +647,7 @@ pub fn ediff1d<T>(
     input: &Array<T, Ix1>,
     to_end: Option<&[T]>,
     to_begin: Option<&[T]>,
-) -> FerrumResult<Array<T, Ix1>>
+) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + std::ops::Sub<Output = T> + Copy,
 {
@@ -672,7 +672,7 @@ where
 /// Compute the gradient of a 1-D array using central differences.
 ///
 /// Edge values use forward/backward differences.
-pub fn gradient<T>(input: &Array<T, Ix1>, spacing: Option<T>) -> FerrumResult<Array<T, Ix1>>
+pub fn gradient<T>(input: &Array<T, Ix1>, spacing: Option<T>) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + Float,
 {
@@ -706,12 +706,12 @@ where
 // ---------------------------------------------------------------------------
 
 /// Cross product of two 3-element 1-D arrays.
-pub fn cross<T>(a: &Array<T, Ix1>, b: &Array<T, Ix1>) -> FerrumResult<Array<T, Ix1>>
+pub fn cross<T>(a: &Array<T, Ix1>, b: &Array<T, Ix1>) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + std::ops::Mul<Output = T> + std::ops::Sub<Output = T> + Copy,
 {
     if a.size() != 3 || b.size() != 3 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cross product requires 3-element vectors",
         ));
     }
@@ -733,7 +733,7 @@ where
 ///
 /// If `dx` is provided, it is the spacing between sample points.
 /// If `x` is provided, it gives the sample point coordinates.
-pub fn trapezoid<T>(y: &Array<T, Ix1>, x: Option<&Array<T, Ix1>>, dx: Option<T>) -> FerrumResult<T>
+pub fn trapezoid<T>(y: &Array<T, Ix1>, x: Option<&Array<T, Ix1>>, dx: Option<T>) -> FerrayResult<T>
 where
     T: Element + Float,
 {
@@ -749,7 +749,7 @@ where
     if let Some(xarr) = x {
         let xdata: Vec<T> = xarr.iter().copied().collect();
         if xdata.len() != n {
-            return Err(FerrumError::shape_mismatch(
+            return Err(FerrayError::shape_mismatch(
                 "x and y must have the same length for trapezoid",
             ));
         }
@@ -772,7 +772,7 @@ where
 
 /// Elementwise absolute value for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn absolute_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn absolute_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -781,7 +781,7 @@ where
 
 /// Elementwise negation for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn negative_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn negative_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -790,7 +790,7 @@ where
 
 /// Elementwise square root for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn sqrt_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn sqrt_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -799,7 +799,7 @@ where
 
 /// Elementwise cube root for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn cbrt_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn cbrt_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -808,7 +808,7 @@ where
 
 /// Elementwise square for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn square_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn square_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -817,7 +817,7 @@ where
 
 /// Elementwise reciprocal for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn reciprocal_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn reciprocal_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -826,7 +826,7 @@ where
 
 /// Elementwise sign for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn sign_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn sign_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -848,7 +848,7 @@ where
 pub fn add_f16<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -860,7 +860,7 @@ where
 pub fn subtract_f16<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -872,7 +872,7 @@ where
 pub fn multiply_f16<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -884,7 +884,7 @@ where
 pub fn divide_f16<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -896,7 +896,7 @@ where
 pub fn power_f16<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -908,7 +908,7 @@ where
 pub fn floor_divide_f16<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -920,7 +920,7 @@ where
 pub fn remainder_f16<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {

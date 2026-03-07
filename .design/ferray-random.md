@@ -4,7 +4,7 @@
 Implements NumPy's modern `numpy.random` Generator/BitGenerator model (not the legacy module-level functions). Provides pluggable BitGenerators (PCG64, Philox, Xoshiro256**), 30+ continuous and discrete distributions, permutation/sampling operations, and deterministic parallel generation via jump-ahead or stream splitting. The most commonly needed and most scattered part of the current Rust numeric ecosystem, unified under a single coherent API.
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, Dimension, Element, FerrumError)
+- **Upstream**: `ferray-core` (NdArray, Dimension, Element, FerrayError)
 - **Downstream**: ferray (re-export)
 - **External crates**: `rayon` (parallel generation), `rand_core` 0.6 (RNG trait compatibility)
 - **Phase**: 2 — Submodules

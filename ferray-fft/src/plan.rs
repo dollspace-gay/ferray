@@ -6,7 +6,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 use num_complex::Complex;
 use rustfft::{Fft, FftPlanner};
 
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Ix1};
 
 use crate::norm::{FftDirection, FftNorm};
@@ -100,10 +100,10 @@ impl FftPlan {
     /// [`execute_inverse`](Self::execute_inverse) are fast.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `size` is 0.
-    pub fn new(size: usize) -> FerrumResult<Self> {
+    /// Returns `FerrayError::InvalidValue` if `size` is 0.
+    pub fn new(size: usize) -> FerrayResult<Self> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("FFT plan size must be > 0"));
+            return Err(FerrayError::invalid_value("FFT plan size must be > 0"));
         }
         let forward = get_cached_plan(size, false);
         let inverse = get_cached_plan(size, true);
@@ -125,27 +125,27 @@ impl FftPlan {
     /// Uses `FftNorm::Backward` (no scaling on forward).
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if the input length
+    /// Returns `FerrayError::ShapeMismatch` if the input length
     /// does not match the plan size.
     pub fn execute(
         &self,
         signal: &Array<Complex<f64>, Ix1>,
-    ) -> FerrumResult<Array<Complex<f64>, Ix1>> {
+    ) -> FerrayResult<Array<Complex<f64>, Ix1>> {
         self.execute_with_norm(signal, FftNorm::Backward)
     }
 
     /// Execute a forward FFT with the specified normalization.
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if the input length
+    /// Returns `FerrayError::ShapeMismatch` if the input length
     /// does not match the plan size.
     pub fn execute_with_norm(
         &self,
         signal: &Array<Complex<f64>, Ix1>,
         norm: FftNorm,
-    ) -> FerrumResult<Array<Complex<f64>, Ix1>> {
+    ) -> FerrayResult<Array<Complex<f64>, Ix1>> {
         if signal.size() != self.size {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "signal length {} does not match plan size {}",
                 signal.size(),
                 self.size,
@@ -170,27 +170,27 @@ impl FftPlan {
     /// Uses `FftNorm::Backward` (divides by `n` on inverse).
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if the input length
+    /// Returns `FerrayError::ShapeMismatch` if the input length
     /// does not match the plan size.
     pub fn execute_inverse(
         &self,
         spectrum: &Array<Complex<f64>, Ix1>,
-    ) -> FerrumResult<Array<Complex<f64>, Ix1>> {
+    ) -> FerrayResult<Array<Complex<f64>, Ix1>> {
         self.execute_inverse_with_norm(spectrum, FftNorm::Backward)
     }
 
     /// Execute an inverse FFT with the specified normalization.
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if the input length
+    /// Returns `FerrayError::ShapeMismatch` if the input length
     /// does not match the plan size.
     pub fn execute_inverse_with_norm(
         &self,
         spectrum: &Array<Complex<f64>, Ix1>,
         norm: FftNorm,
-    ) -> FerrumResult<Array<Complex<f64>, Ix1>> {
+    ) -> FerrayResult<Array<Complex<f64>, Ix1>> {
         if spectrum.size() != self.size {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "spectrum length {} does not match plan size {}",
                 spectrum.size(),
                 self.size,

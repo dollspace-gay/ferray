@@ -3,7 +3,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 /// A masked array that pairs data with a boolean mask.
 ///
@@ -27,10 +27,10 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// Create a new masked array from data and mask arrays.
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if data and mask shapes differ.
-    pub fn new(data: Array<T, D>, mask: Array<bool, D>) -> FerrumResult<Self> {
+    /// Returns `FerrayError::ShapeMismatch` if data and mask shapes differ.
+    pub fn new(data: Array<T, D>, mask: Array<bool, D>) -> FerrayResult<Self> {
         if data.shape() != mask.shape() {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "MaskedArray::new: data shape {:?} does not match mask shape {:?}",
                 data.shape(),
                 mask.shape()
@@ -47,7 +47,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     ///
     /// # Errors
     /// Returns an error if the mask array cannot be created.
-    pub fn from_data(data: Array<T, D>) -> FerrumResult<Self> {
+    pub fn from_data(data: Array<T, D>) -> FerrayResult<Self> {
         let mask = Array::<bool, D>::from_elem(data.dim().clone(), false)?;
         Ok(Self {
             data,
@@ -110,11 +110,11 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// clear a mask bit are silently ignored.
     ///
     /// # Errors
-    /// Returns `FerrumError::IndexOutOfBounds` if `flat_idx >= size`.
-    pub fn set_mask_flat(&mut self, flat_idx: usize, value: bool) -> FerrumResult<()> {
+    /// Returns `FerrayError::IndexOutOfBounds` if `flat_idx >= size`.
+    pub fn set_mask_flat(&mut self, flat_idx: usize, value: bool) -> FerrayResult<()> {
         let size = self.size();
         if flat_idx >= size {
-            return Err(FerrumError::index_out_of_bounds(flat_idx as isize, 0, size));
+            return Err(FerrayError::index_out_of_bounds(flat_idx as isize, 0, size));
         }
         if self.hard_mask && !value {
             // Hard mask: cannot clear mask bits
@@ -133,10 +133,10 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// new masks (or newly set to `true`) are allowed; cleared bits are ignored.
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if shapes differ.
-    pub fn set_mask(&mut self, new_mask: Array<bool, D>) -> FerrumResult<()> {
+    /// Returns `FerrayError::ShapeMismatch` if shapes differ.
+    pub fn set_mask(&mut self, new_mask: Array<bool, D>) -> FerrayResult<()> {
         if self.mask.shape() != new_mask.shape() {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "set_mask: mask shape {:?} does not match array shape {:?}",
                 new_mask.shape(),
                 self.mask.shape()

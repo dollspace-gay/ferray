@@ -1,6 +1,6 @@
 // ferray-stats: Sorting and searching — sort, argsort, searchsorted (REQ-11, REQ-12, REQ-13)
 
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, Ix1};
 
 use crate::parallel;
@@ -41,7 +41,7 @@ pub enum Side {
 /// Returns a new sorted array with the same shape.
 ///
 /// Equivalent to `numpy.sort`.
-pub fn sort<T, D>(a: &Array<T, D>, axis: Option<usize>, kind: SortKind) -> FerrumResult<Array<T, D>>
+pub fn sort<T, D>(a: &Array<T, D>, axis: Option<usize>, kind: SortKind) -> FerrayResult<Array<T, D>>
 where
     T: Element + PartialOrd + Copy + Send + Sync,
     D: Dimension,
@@ -55,7 +55,7 @@ where
         }
         Some(ax) => {
             if ax >= a.ndim() {
-                return Err(FerrumError::axis_out_of_bounds(ax, a.ndim()));
+                return Err(FerrayError::axis_out_of_bounds(ax, a.ndim()));
             }
             let shape = a.shape().to_vec();
             let data: Vec<T> = a.iter().copied().collect();
@@ -139,7 +139,7 @@ fn sort_slice<T: PartialOrd + Copy + Send + Sync>(data: &mut [T], kind: SortKind
 /// Returns u64 indices.
 ///
 /// Equivalent to `numpy.argsort`.
-pub fn argsort<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<u64, D>>
+pub fn argsort<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<u64, D>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
@@ -158,7 +158,7 @@ where
         }
         Some(ax) => {
             if ax >= a.ndim() {
-                return Err(FerrumError::axis_out_of_bounds(ax, a.ndim()));
+                return Err(FerrayError::axis_out_of_bounds(ax, a.ndim()));
             }
             let shape = a.shape().to_vec();
             let data: Vec<T> = a.iter().copied().collect();
@@ -235,7 +235,7 @@ pub fn searchsorted<T>(
     a: &Array<T, Ix1>,
     v: &Array<T, Ix1>,
     side: Side,
-) -> FerrumResult<Array<u64, Ix1>>
+) -> FerrayResult<Array<u64, Ix1>>
 where
     T: Element + PartialOrd + Copy,
 {

@@ -12,7 +12,7 @@ N-dimensional array type and foundational primitives for the [ferray](https://cr
 - Shape manipulation: `reshape`, `transpose`, `concatenate`, `stack`, `split`, `pad`, `tile`
 - `Element` trait for 17 dtypes: f16, f32, f64, Complex, i8-i128, u8-u128, bool
 - `DType` runtime enum, `finfo`/`iinfo`, type promotion rules
-- `FerrumError` hierarchy with diagnostic context — zero panics
+- `FerrayError` hierarchy with diagnostic context — zero panics
 
 ## Usage
 

@@ -4,7 +4,7 @@
 // For a Vandermonde-like matrix V, solves V^T W V c = V^T W y
 // where W is a diagonal weight matrix.
 
-use ferray_core::error::FerrumError;
+use ferray_core::error::FerrayError;
 
 /// Build a Vandermonde matrix for power basis fitting.
 ///
@@ -146,24 +146,24 @@ pub fn hermite_e_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
 /// where W = diag(w) if provided, or identity otherwise.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if dimensions don't match.
-/// Returns `FerrumError::SingularMatrix` if the normal equations matrix is singular.
+/// Returns `FerrayError::InvalidValue` if dimensions don't match.
+/// Returns `FerrayError::SingularMatrix` if the normal equations matrix is singular.
 pub fn least_squares_fit(
     v: &[f64],
     n: usize,
     m: usize,
     y: &[f64],
     w: Option<&[f64]>,
-) -> Result<Vec<f64>, FerrumError> {
+) -> Result<Vec<f64>, FerrayError> {
     if v.len() != n * m {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "Vandermonde matrix has {} elements, expected {}",
             v.len(),
             n * m
         )));
     }
     if y.len() != n {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "y has {} elements, expected {}",
             y.len(),
             n
@@ -171,7 +171,7 @@ pub fn least_squares_fit(
     }
     if let Some(w) = w {
         if w.len() != n {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "weights have {} elements, expected {}",
                 w.len(),
                 n
@@ -212,8 +212,8 @@ pub fn least_squares_fit(
 /// `a` is an m x m matrix in row-major order.
 ///
 /// # Errors
-/// Returns `FerrumError::SingularMatrix` if A is not positive definite.
-fn cholesky_solve(a: &[f64], m: usize, b: &[f64]) -> Result<Vec<f64>, FerrumError> {
+/// Returns `FerrayError::SingularMatrix` if A is not positive definite.
+fn cholesky_solve(a: &[f64], m: usize, b: &[f64]) -> Result<Vec<f64>, FerrayError> {
     // Cholesky decomposition: A = L L^T
     let mut l = vec![0.0; m * m];
 
@@ -276,8 +276,8 @@ fn cholesky_solve(a: &[f64], m: usize, b: &[f64]) -> Result<Vec<f64>, FerrumErro
 /// Fallback for cases where Cholesky fails (ill-conditioned systems).
 ///
 /// # Errors
-/// Returns `FerrumError::SingularMatrix` if A is singular.
-fn lu_solve(a: &[f64], m: usize, b: &[f64]) -> Result<Vec<f64>, FerrumError> {
+/// Returns `FerrayError::SingularMatrix` if A is singular.
+fn lu_solve(a: &[f64], m: usize, b: &[f64]) -> Result<Vec<f64>, FerrayError> {
     let mut lu = a.to_vec();
     let mut perm: Vec<usize> = (0..m).collect();
 
@@ -293,7 +293,7 @@ fn lu_solve(a: &[f64], m: usize, b: &[f64]) -> Result<Vec<f64>, FerrumError> {
             }
         }
         if max_val < f64::EPSILON * 1e6 {
-            return Err(FerrumError::SingularMatrix {
+            return Err(FerrayError::SingularMatrix {
                 message: "normal equations matrix is singular or nearly singular".to_string(),
             });
         }
@@ -329,7 +329,7 @@ fn lu_solve(a: &[f64], m: usize, b: &[f64]) -> Result<Vec<f64>, FerrumError> {
         }
         let diag = lu[perm[i] * m + i];
         if diag.abs() < f64::EPSILON * 1e10 {
-            return Err(FerrumError::SingularMatrix {
+            return Err(FerrayError::SingularMatrix {
                 message: "normal equations matrix is singular".to_string(),
             });
         }

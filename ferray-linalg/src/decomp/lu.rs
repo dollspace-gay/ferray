@@ -4,7 +4,7 @@
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::Ix2;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::faer_bridge;
 
@@ -16,14 +16,14 @@ use crate::faer_bridge;
 /// - `U` is upper triangular (min(m,n) x n)
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if the matrix is not at least 1x1.
+/// - `FerrayError::ShapeMismatch` if the matrix is not at least 1x1.
 pub fn lu(
     a: &Array<f64, Ix2>,
-) -> FerrumResult<(Array<f64, Ix2>, Array<f64, Ix2>, Array<f64, Ix2>)> {
+) -> FerrayResult<(Array<f64, Ix2>, Array<f64, Ix2>, Array<f64, Ix2>)> {
     let shape = a.shape();
     let (m, n) = (shape[0], shape[1]);
     if m == 0 || n == 0 {
-        return Err(FerrumError::shape_mismatch("LU requires non-empty matrix"));
+        return Err(FerrayError::shape_mismatch("LU requires non-empty matrix"));
     }
 
     let mat = faer_bridge::array2_to_faer(a);

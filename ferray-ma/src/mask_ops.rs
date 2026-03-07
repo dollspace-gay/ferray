@@ -5,7 +5,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::MaskedArray;
 
@@ -18,7 +18,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// # Errors
     /// This function does not currently error but returns `Result` for API
     /// consistency.
-    pub fn harden_mask(&mut self) -> FerrumResult<()> {
+    pub fn harden_mask(&mut self) -> FerrayResult<()> {
         self.hard_mask = true;
         Ok(())
     }
@@ -28,7 +28,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// # Errors
     /// This function does not currently error but returns `Result` for API
     /// consistency.
-    pub fn soften_mask(&mut self) -> FerrumResult<()> {
+    pub fn soften_mask(&mut self) -> FerrayResult<()> {
         self.hard_mask = false;
         Ok(())
     }
@@ -42,7 +42,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
 /// # Errors
 /// This function does not currently error but returns `Result` for API
 /// consistency.
-pub fn getmask<T: Element, D: Dimension>(ma: &MaskedArray<T, D>) -> FerrumResult<Array<bool, D>> {
+pub fn getmask<T: Element, D: Dimension>(ma: &MaskedArray<T, D>) -> FerrayResult<Array<bool, D>> {
     Ok(ma.mask().clone())
 }
 
@@ -56,7 +56,7 @@ pub fn getmask<T: Element, D: Dimension>(ma: &MaskedArray<T, D>) -> FerrumResult
 /// consistency.
 pub fn getdata<T: Element + Copy, D: Dimension>(
     ma: &MaskedArray<T, D>,
-) -> FerrumResult<Array<T, D>> {
+) -> FerrayResult<Array<T, D>> {
     Ok(ma.data().clone())
 }
 
@@ -65,7 +65,7 @@ pub fn getdata<T: Element + Copy, D: Dimension>(
 /// # Errors
 /// This function does not currently error but returns `Result` for API
 /// consistency.
-pub fn is_masked<T: Element, D: Dimension>(ma: &MaskedArray<T, D>) -> FerrumResult<bool> {
+pub fn is_masked<T: Element, D: Dimension>(ma: &MaskedArray<T, D>) -> FerrayResult<bool> {
     Ok(ma.mask().iter().any(|m| *m))
 }
 
@@ -82,7 +82,7 @@ pub fn is_masked<T: Element, D: Dimension>(ma: &MaskedArray<T, D>) -> FerrumResu
 pub fn count_masked<T: Element, D: Dimension>(
     ma: &MaskedArray<T, D>,
     _axis: Option<usize>,
-) -> FerrumResult<usize> {
+) -> FerrayResult<usize> {
     let count = ma.mask().iter().filter(|m| **m).count();
     Ok(count)
 }

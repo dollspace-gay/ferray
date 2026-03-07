@@ -1,6 +1,6 @@
-// ferray-core: FerrumRecord support types (REQ-8 prep)
+// ferray-core: FerrayRecord support types (REQ-8 prep)
 //
-// This module defines the traits and types that `#[derive(FerrumRecord)]`
+// This module defines the traits and types that `#[derive(FerrayRecord)]`
 // (implemented by Agent 1d in ferray-core-macros) will generate impls for.
 // The proc macro itself is NOT implemented here.
 
@@ -21,7 +21,7 @@ pub struct FieldDescriptor {
 
 /// Trait implemented by types that can be used as structured array elements.
 ///
-/// `#[derive(FerrumRecord)]` generates this implementation automatically.
+/// `#[derive(FerrayRecord)]` generates this implementation automatically.
 /// It provides the field descriptors needed for zero-copy strided views
 /// of individual fields within an array of structs.
 ///
@@ -30,7 +30,7 @@ pub struct FieldDescriptor {
 /// - The struct is `#[repr(C)]` (no field reordering by the compiler).
 /// - All fields implement [`Element`](crate::dtype::Element).
 /// - `field_descriptors()` accurately reflects the struct layout.
-pub unsafe trait FerrumRecord: Clone + Send + Sync + 'static {
+pub unsafe trait FerrayRecord: Clone + Send + Sync + 'static {
     /// Return descriptors for all fields, in declaration order.
     fn field_descriptors() -> &'static [FieldDescriptor];
 
@@ -56,8 +56,8 @@ mod tests {
         label: i32,
     }
 
-    // In real usage, #[derive(FerrumRecord)] generates this.
-    unsafe impl FerrumRecord for TestRecord {
+    // In real usage, #[derive(FerrayRecord)] generates this.
+    unsafe impl FerrayRecord for TestRecord {
         fn field_descriptors() -> &'static [FieldDescriptor] {
             static FIELDS: [FieldDescriptor; 3] = [
                 FieldDescriptor {

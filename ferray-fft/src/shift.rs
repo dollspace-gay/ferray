@@ -6,7 +6,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 /// Shift the zero-frequency component to the center of the spectrum.
 ///
@@ -26,7 +26,7 @@ use ferray_core::error::{FerrumError, FerrumResult};
 pub fn fftshift<T: Element, D: Dimension>(
     a: &Array<T, D>,
     axes: Option<&[usize]>,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     let ndim = shape.len();
     let axes = resolve_axes(ndim, axes)?;
@@ -54,7 +54,7 @@ pub fn fftshift<T: Element, D: Dimension>(
 pub fn ifftshift<T: Element, D: Dimension>(
     a: &Array<T, D>,
     axes: Option<&[usize]>,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     let ndim = shape.len();
     let axes = resolve_axes(ndim, axes)?;
@@ -69,12 +69,12 @@ pub fn ifftshift<T: Element, D: Dimension>(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-fn resolve_axes(ndim: usize, axes: Option<&[usize]>) -> FerrumResult<Vec<usize>> {
+fn resolve_axes(ndim: usize, axes: Option<&[usize]>) -> FerrayResult<Vec<usize>> {
     match axes {
         Some(ax) => {
             for &a in ax {
                 if a >= ndim {
-                    return Err(FerrumError::axis_out_of_bounds(a, ndim));
+                    return Err(FerrayError::axis_out_of_bounds(a, ndim));
                 }
             }
             Ok(ax.to_vec())
@@ -91,7 +91,7 @@ fn roll_along_axes<T: Element, D: Dimension>(
     a: &Array<T, D>,
     axes: &[usize],
     shifts: &[isize],
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     let ndim = shape.len();
     let total: usize = shape.iter().product();

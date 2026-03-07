@@ -251,7 +251,7 @@ fn dispatch_timed(func_name: &str, size_str: &str, input_data: &[f64]) -> u64 {
 /// Time-only ufunc: creates array once, times only the computation.
 fn time_unary_ufunc<F>(input_data: &[f64], func: F) -> u64
 where
-    F: Fn(&Array<f64, Ix1>) -> ferray_core::FerrumResult<Array<f64, Ix1>>,
+    F: Fn(&Array<f64, Ix1>) -> ferray_core::FerrayResult<Array<f64, Ix1>>,
 {
     let dim = Ix1::new([input_data.len()]);
     let arr =
@@ -264,7 +264,7 @@ where
 /// Time-only reduction.
 fn time_reduction<F>(input_data: &[f64], func: F) -> u64
 where
-    F: Fn(&Array<f64, Ix1>) -> ferray_core::FerrumResult<Array<f64, IxDyn>>,
+    F: Fn(&Array<f64, Ix1>) -> ferray_core::FerrayResult<Array<f64, IxDyn>>,
 {
     let dim = Ix1::new([input_data.len()]);
     let arr =
@@ -338,7 +338,7 @@ struct BenchResultComplex {
 /// Run a unary ufunc (sin, cos, exp, etc.) on a 1D f64 array.
 fn run_unary_ufunc<F>(input_data: &[f64], _size_str: &str, func: F) -> (serde_json::Value, u64)
 where
-    F: Fn(&Array<f64, Ix1>) -> ferray_core::FerrumResult<Array<f64, Ix1>>,
+    F: Fn(&Array<f64, Ix1>) -> ferray_core::FerrayResult<Array<f64, Ix1>>,
 {
     let dim = Ix1::new([input_data.len()]);
     let arr =
@@ -364,7 +364,7 @@ where
 /// Run a stats reduction on a 1D f64 array.
 fn run_reduction<F>(input_data: &[f64], _size_str: &str, func: F) -> (serde_json::Value, u64)
 where
-    F: Fn(&Array<f64, Ix1>) -> ferray_core::FerrumResult<Array<f64, IxDyn>>,
+    F: Fn(&Array<f64, Ix1>) -> ferray_core::FerrayResult<Array<f64, IxDyn>>,
 {
     let dim = Ix1::new([input_data.len()]);
     let arr =

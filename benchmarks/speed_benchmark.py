@@ -20,12 +20,12 @@ SEED = 42
 WARMUP_ITERS = 3
 BENCH_ITERS = 10
 
-FERRUM_BENCH_DIR = Path(__file__).parent / "ferray_bench"
+FERRAY_BENCH_DIR = Path(__file__).parent / "ferray_bench"
 
 
 def find_ferray_bench():
     for profile in ["release", "debug"]:
-        candidate = FERRUM_BENCH_DIR / "target" / profile / "ferray-bench"
+        candidate = FERRAY_BENCH_DIR / "target" / profile / "ferray-bench"
         if candidate.exists():
             return str(candidate)
     return None
@@ -99,7 +99,7 @@ def main():
     bench_bin = find_ferray_bench()
     if bench_bin is None:
         print("ERROR: ferray-bench binary not found. Build with:")
-        print(f"  cd {FERRUM_BENCH_DIR} && cargo build --release")
+        print(f"  cd {FERRAY_BENCH_DIR} && cargo build --release")
         sys.exit(1)
 
     rng = np.random.default_rng(SEED)

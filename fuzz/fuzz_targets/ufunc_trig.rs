@@ -3,7 +3,7 @@
 //! Fuzz target for trigonometric ufuncs: sin, cos, tan, arcsin, arccos, arctan,
 //! sinh, cosh, tanh, arcsinh, arccosh, arctanh.
 //!
-//! Contract: ferray either returns Ok or Err(FerrumError) — never panics.
+//! Contract: ferray either returns Ok or Err(FerrayError) — never panics.
 
 use libfuzzer_sys::fuzz_target;
 

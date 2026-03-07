@@ -13,7 +13,7 @@ use alloc::{string::String, string::ToString, vec::Vec};
 /// in minor releases without breaking downstream code.
 #[derive(Debug, Clone, thiserror::Error)]
 #[non_exhaustive]
-pub enum FerrumError {
+pub enum FerrayError {
     /// Operand shapes are incompatible for the requested operation.
     #[error("shape mismatch: {message}")]
     ShapeMismatch {
@@ -96,9 +96,9 @@ pub enum FerrumError {
 }
 
 /// Convenience alias used throughout ferray.
-pub type FerrumResult<T> = Result<T, FerrumError>;
+pub type FerrayResult<T> = Result<T, FerrayError>;
 
-impl FerrumError {
+impl FerrayError {
     /// Create a `ShapeMismatch` error with a formatted message.
     pub fn shape_mismatch(msg: impl fmt::Display) -> Self {
         Self::ShapeMismatch {
@@ -147,7 +147,7 @@ impl FerrumError {
 }
 
 #[cfg(not(feature = "no_std"))]
-impl From<std::io::Error> for FerrumError {
+impl From<std::io::Error> for FerrayError {
     fn from(e: std::io::Error) -> Self {
         Self::IoError {
             message: e.to_string(),
@@ -161,20 +161,20 @@ mod tests {
 
     #[test]
     fn error_display_shape_mismatch() {
-        let e = FerrumError::shape_mismatch("expected (3,4), got (3,5)");
+        let e = FerrayError::shape_mismatch("expected (3,4), got (3,5)");
         assert!(e.to_string().contains("expected (3,4), got (3,5)"));
     }
 
     #[test]
     fn error_display_axis_out_of_bounds() {
-        let e = FerrumError::axis_out_of_bounds(5, 3);
+        let e = FerrayError::axis_out_of_bounds(5, 3);
         assert!(e.to_string().contains("axis 5"));
         assert!(e.to_string().contains("3 dimensions"));
     }
 
     #[test]
     fn error_display_broadcast_failure() {
-        let e = FerrumError::broadcast_failure(&[4, 3], &[2, 5]);
+        let e = FerrayError::broadcast_failure(&[4, 3], &[2, 5]);
         let s = e.to_string();
         assert!(s.contains("[4, 3]"));
         assert!(s.contains("[2, 5]"));
@@ -185,17 +185,17 @@ mod tests {
         // Verify the enum is non_exhaustive by using a wildcard
         // in a match from an "external" perspective. Inside this crate
         // the compiler knows all variants, so we just verify construction.
-        let e = FerrumError::invalid_value("test");
-        assert!(matches!(e, FerrumError::InvalidValue { .. }));
+        let e = FerrayError::invalid_value("test");
+        assert!(matches!(e, FerrayError::InvalidValue { .. }));
 
-        let e2 = FerrumError::shape_mismatch("bad shape");
-        assert!(matches!(e2, FerrumError::ShapeMismatch { .. }));
+        let e2 = FerrayError::shape_mismatch("bad shape");
+        assert!(matches!(e2, FerrayError::ShapeMismatch { .. }));
     }
 
     #[test]
     fn from_io_error() {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file missing");
-        let ferray_err: FerrumError = io_err.into();
+        let ferray_err: FerrayError = io_err.into();
         assert!(ferray_err.to_string().contains("file missing"));
     }
 }

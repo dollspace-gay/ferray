@@ -12,20 +12,20 @@
 use crate::array::owned::Array;
 use crate::dimension::{Axis, Dimension, IxDyn};
 use crate::dtype::Element;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 /// Normalize a potentially negative index, returning an error on out-of-bounds.
-fn normalize_index(index: isize, size: usize, axis: usize) -> FerrumResult<usize> {
+fn normalize_index(index: isize, size: usize, axis: usize) -> FerrayResult<usize> {
     if index < 0 {
         let pos = size as isize + index;
         if pos < 0 {
-            return Err(FerrumError::index_out_of_bounds(index, axis, size));
+            return Err(FerrayError::index_out_of_bounds(index, axis, size));
         }
         Ok(pos as usize)
     } else {
         let idx = index as usize;
         if idx >= size {
-            return Err(FerrumError::index_out_of_bounds(index, axis, size));
+            return Err(FerrayError::index_out_of_bounds(index, axis, size));
         }
         Ok(idx)
     }
@@ -46,7 +46,7 @@ pub fn take<T: Element, D: Dimension>(
     a: &Array<T, D>,
     indices: &[isize],
     axis: Axis,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     a.index_select(axis, indices)
 }
 
@@ -63,7 +63,7 @@ pub fn take_along_axis<T: Element, D: Dimension>(
     a: &Array<T, D>,
     indices: &[isize],
     axis: Axis,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     a.index_select(axis, indices)
 }
 
@@ -81,15 +81,15 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// # Errors
     /// - `IndexOutOfBounds` if any index is out of range
     /// - `InvalidValue` if values is empty
-    pub fn put(&mut self, indices: &[isize], values: &[T]) -> FerrumResult<()> {
+    pub fn put(&mut self, indices: &[isize], values: &[T]) -> FerrayResult<()> {
         if values.is_empty() {
-            return Err(FerrumError::invalid_value("values must not be empty"));
+            return Err(FerrayError::invalid_value("values must not be empty"));
         }
         let size = self.size();
         let normalized: Vec<usize> = indices
             .iter()
             .map(|&idx| normalize_index(idx, size, 0))
-            .collect::<FerrumResult<Vec<_>>>()?;
+            .collect::<FerrayResult<Vec<_>>>()?;
 
         let mut flat: Vec<&mut T> = self.inner.iter_mut().collect();
 
@@ -113,21 +113,21 @@ impl<T: Element, D: Dimension> Array<T, D> {
         indices: &[isize],
         values: &Array<T, IxDyn>,
         axis: Axis,
-    ) -> FerrumResult<()>
+    ) -> FerrayResult<()>
     where
         D::NdarrayDim: ndarray::RemoveAxis,
     {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
         let axis_size = self.shape()[ax];
 
         let normalized: Vec<usize> = indices
             .iter()
             .map(|&idx| normalize_index(idx, axis_size, ax))
-            .collect::<FerrumResult<Vec<_>>>()?;
+            .collect::<FerrayResult<Vec<_>>>()?;
 
         let nd_axis = ndarray::Axis(ax);
         let mut val_iter = values.inner.iter();
@@ -182,15 +182,15 @@ impl<T: Element, D: Dimension> Array<T, D> {
 pub fn choose<T: Element, D: Dimension>(
     index_arr: &Array<u64, D>,
     choices: &[Array<T, D>],
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     if choices.is_empty() {
-        return Err(FerrumError::invalid_value("choices must not be empty"));
+        return Err(FerrayError::invalid_value("choices must not be empty"));
     }
 
     let shape = index_arr.shape();
     for (i, c) in choices.iter().enumerate() {
         if c.shape() != shape {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "choice[{}] shape {:?} does not match index array shape {:?}",
                 i,
                 c.shape(),
@@ -209,7 +209,7 @@ pub fn choose<T: Element, D: Dimension>(
     for (pos, idx_val) in index_arr.inner.iter().enumerate() {
         let idx = *idx_val as usize;
         if idx >= n_choices {
-            return Err(FerrumError::index_out_of_bounds(idx as isize, 0, n_choices));
+            return Err(FerrayError::index_out_of_bounds(idx as isize, 0, n_choices));
         }
         data.push(choice_iters[idx][pos].clone());
     }
@@ -233,15 +233,15 @@ pub fn compress<T: Element, D: Dimension>(
     condition: &[bool],
     a: &Array<T, D>,
     axis: Axis,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let ndim = a.ndim();
     let ax = axis.index();
     if ax >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+        return Err(FerrayError::axis_out_of_bounds(ax, ndim));
     }
     let axis_size = a.shape()[ax];
     if condition.len() > axis_size {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "condition length {} exceeds axis size {}",
             condition.len(),
             axis_size
@@ -273,16 +273,16 @@ pub fn select<T: Element, D: Dimension>(
     condlist: &[Array<bool, D>],
     choicelist: &[Array<T, D>],
     default: T,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     if condlist.len() != choicelist.len() {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "condlist length {} != choicelist length {}",
             condlist.len(),
             choicelist.len()
         )));
     }
     if condlist.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "condlist and choicelist must not be empty",
         ));
     }
@@ -290,7 +290,7 @@ pub fn select<T: Element, D: Dimension>(
     let shape = condlist[0].shape();
     for (i, (c, ch)) in condlist.iter().zip(choicelist.iter()).enumerate() {
         if c.shape() != shape || ch.shape() != shape {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "condlist[{}]/choicelist[{}] shape mismatch with reference shape {:?}",
                 i, i, shape
             )));
@@ -324,7 +324,7 @@ pub fn select<T: Element, D: Dimension>(
 ///
 /// For example, `indices(&[2, 3])` returns two arrays of shape `[2, 3]`:
 /// the first contains row indices, the second column indices.
-pub fn indices(dimensions: &[usize]) -> FerrumResult<Vec<Array<u64, IxDyn>>> {
+pub fn indices(dimensions: &[usize]) -> FerrayResult<Vec<Array<u64, IxDyn>>> {
     let ndim = dimensions.len();
     let total: usize = dimensions.iter().product();
 
@@ -362,7 +362,7 @@ pub fn indices(dimensions: &[usize]) -> FerrumResult<Vec<Array<u64, IxDyn>>> {
 /// and it appears in the position corresponding to its argument index.
 ///
 /// This is useful for constructing index arrays for cross-indexing.
-pub fn ix_(sequences: &[&[u64]]) -> FerrumResult<Vec<Array<u64, IxDyn>>> {
+pub fn ix_(sequences: &[&[u64]]) -> FerrayResult<Vec<Array<u64, IxDyn>>> {
     let ndim = sequences.len();
     let mut result = Vec::with_capacity(ndim);
 
@@ -400,10 +400,10 @@ pub fn diag_indices(n: usize, ndim: usize) -> Vec<Vec<usize>> {
 /// - `ShapeMismatch` if dimensions are not all equal
 pub fn diag_indices_from<T: Element, D: Dimension>(
     a: &Array<T, D>,
-) -> FerrumResult<Vec<Vec<usize>>> {
+) -> FerrayResult<Vec<Vec<usize>>> {
     let ndim = a.ndim();
     if ndim < 2 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "diag_indices_from requires at least 2 dimensions",
         ));
     }
@@ -411,7 +411,7 @@ pub fn diag_indices_from<T: Element, D: Dimension>(
     let n = shape[0];
     for &s in &shape[1..] {
         if s != n {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "all dimensions must be equal for diag_indices_from, got {:?}",
                 shape
             )));
@@ -473,10 +473,10 @@ pub fn triu_indices(n: usize, k: isize, m: Option<usize>) -> (Vec<usize>, Vec<us
 pub fn tril_indices_from<T: Element, D: Dimension>(
     a: &Array<T, D>,
     k: isize,
-) -> FerrumResult<(Vec<usize>, Vec<usize>)> {
+) -> FerrayResult<(Vec<usize>, Vec<usize>)> {
     let shape = a.shape();
     if shape.len() != 2 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "tril_indices_from requires a 2-D array",
         ));
     }
@@ -490,10 +490,10 @@ pub fn tril_indices_from<T: Element, D: Dimension>(
 pub fn triu_indices_from<T: Element, D: Dimension>(
     a: &Array<T, D>,
     k: isize,
-) -> FerrumResult<(Vec<usize>, Vec<usize>)> {
+) -> FerrayResult<(Vec<usize>, Vec<usize>)> {
     let shape = a.shape();
     if shape.len() != 2 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "triu_indices_from requires a 2-D array",
         ));
     }
@@ -513,9 +513,9 @@ pub fn triu_indices_from<T: Element, D: Dimension>(
 /// - `InvalidValue` if multi_index arrays have different lengths
 /// - `IndexOutOfBounds` if any index is out of range for its dimension
 #[allow(clippy::needless_range_loop)]
-pub fn ravel_multi_index(multi_index: &[&[usize]], dims: &[usize]) -> FerrumResult<Vec<usize>> {
+pub fn ravel_multi_index(multi_index: &[&[usize]], dims: &[usize]) -> FerrayResult<Vec<usize>> {
     if multi_index.len() != dims.len() {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "multi_index has {} components but dims has {} dimensions",
             multi_index.len(),
             dims.len()
@@ -528,7 +528,7 @@ pub fn ravel_multi_index(multi_index: &[&[usize]], dims: &[usize]) -> FerrumResu
     let n = multi_index[0].len();
     for (i, idx_arr) in multi_index.iter().enumerate() {
         if idx_arr.len() != n {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "multi_index[{}] has length {} but expected {}",
                 i,
                 idx_arr.len(),
@@ -551,7 +551,7 @@ pub fn ravel_multi_index(multi_index: &[&[usize]], dims: &[usize]) -> FerrumResu
         for (d, &dim_size) in dims.iter().enumerate() {
             let coord = multi_index[d][pos];
             if coord >= dim_size {
-                return Err(FerrumError::index_out_of_bounds(
+                return Err(FerrayError::index_out_of_bounds(
                     coord as isize,
                     d,
                     dim_size,
@@ -572,7 +572,7 @@ pub fn ravel_multi_index(multi_index: &[&[usize]], dims: &[usize]) -> FerrumResu
 ///
 /// # Errors
 /// - `IndexOutOfBounds` if any flat index >= product(shape)
-pub fn unravel_index(flat_indices: &[usize], shape: &[usize]) -> FerrumResult<Vec<Vec<usize>>> {
+pub fn unravel_index(flat_indices: &[usize], shape: &[usize]) -> FerrayResult<Vec<Vec<usize>>> {
     let total: usize = shape.iter().product();
     let ndim = shape.len();
     let n = flat_indices.len();
@@ -581,7 +581,7 @@ pub fn unravel_index(flat_indices: &[usize], shape: &[usize]) -> FerrumResult<Ve
 
     for &flat_idx in flat_indices {
         if flat_idx >= total {
-            return Err(FerrumError::index_out_of_bounds(
+            return Err(FerrayError::index_out_of_bounds(
                 flat_idx as isize,
                 0,
                 total,

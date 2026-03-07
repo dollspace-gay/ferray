@@ -1,6 +1,6 @@
 // ferray-stats: Searching — unique, nonzero, where_, count_nonzero (REQ-14, REQ-15, REQ-16, REQ-17)
 
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, Ix1, IxDyn};
 
 use crate::reductions::{
@@ -32,7 +32,7 @@ pub fn unique<T, D>(
     a: &Array<T, D>,
     return_index: bool,
     return_counts: bool,
-) -> FerrumResult<UniqueResult<T>>
+) -> FerrayResult<UniqueResult<T>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
@@ -111,7 +111,7 @@ where
 /// returns a single array of indices.
 ///
 /// Equivalent to `numpy.nonzero`.
-pub fn nonzero<T, D>(a: &Array<T, D>) -> FerrumResult<Vec<Array<u64, Ix1>>>
+pub fn nonzero<T, D>(a: &Array<T, D>) -> FerrayResult<Vec<Array<u64, Ix1>>>
 where
     T: Element + PartialEq + Copy,
     D: Dimension,
@@ -164,13 +164,13 @@ pub fn where_<T, D>(
     condition: &Array<bool, D>,
     x: &Array<T, D>,
     y: &Array<T, D>,
-) -> FerrumResult<Array<T, D>>
+) -> FerrayResult<Array<T, D>>
 where
     T: Element + Copy,
     D: Dimension,
 {
     if condition.shape() != x.shape() || condition.shape() != y.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "condition, x, y shapes must match: {:?}, {:?}, {:?}",
             condition.shape(),
             x.shape(),
@@ -195,7 +195,7 @@ where
 /// Count the number of non-zero elements along a given axis.
 ///
 /// Equivalent to `numpy.count_nonzero`.
-pub fn count_nonzero<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<u64, IxDyn>>
+pub fn count_nonzero<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<u64, IxDyn>>
 where
     T: Element + PartialEq + Copy,
     D: Dimension,

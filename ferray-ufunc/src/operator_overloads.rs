@@ -12,13 +12,13 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::ops::bitwise::{BitwiseOps, ShiftOps};
 
 /// Array addition (delegates to `arithmetic::add`).
-pub fn array_add<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn array_add<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
@@ -27,7 +27,7 @@ where
 }
 
 /// Array subtraction (delegates to `arithmetic::subtract`).
-pub fn array_sub<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn array_sub<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Sub<Output = T> + Copy,
     D: Dimension,
@@ -36,7 +36,7 @@ where
 }
 
 /// Array multiplication (delegates to `arithmetic::multiply`).
-pub fn array_mul<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn array_mul<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
     D: Dimension,
@@ -45,7 +45,7 @@ where
 }
 
 /// Array division (delegates to `arithmetic::divide`).
-pub fn array_div<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn array_div<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Div<Output = T> + Copy,
     D: Dimension,
@@ -54,7 +54,7 @@ where
 }
 
 /// Array remainder (delegates to `arithmetic::remainder`).
-pub fn array_rem<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn array_rem<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -63,7 +63,7 @@ where
 }
 
 /// Array negation (delegates to `arithmetic::negative`).
-pub fn array_neg<T, D>(a: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn array_neg<T, D>(a: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -72,7 +72,7 @@ where
 }
 
 /// Array bitwise AND (delegates to `bitwise::bitwise_and`).
-pub fn array_bitand<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn array_bitand<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + BitwiseOps,
     D: Dimension,
@@ -81,7 +81,7 @@ where
 }
 
 /// Array bitwise OR (delegates to `bitwise::bitwise_or`).
-pub fn array_bitor<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn array_bitor<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + BitwiseOps,
     D: Dimension,
@@ -90,7 +90,7 @@ where
 }
 
 /// Array bitwise XOR (delegates to `bitwise::bitwise_xor`).
-pub fn array_bitxor<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn array_bitxor<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + BitwiseOps,
     D: Dimension,
@@ -99,7 +99,7 @@ where
 }
 
 /// Array bitwise NOT (delegates to `bitwise::bitwise_not`).
-pub fn array_bitnot<T, D>(a: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn array_bitnot<T, D>(a: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + BitwiseOps,
     D: Dimension,
@@ -108,7 +108,7 @@ where
 }
 
 /// Array left shift (delegates to `bitwise::left_shift`).
-pub fn array_shl<T, D>(a: &Array<T, D>, b: &Array<u32, D>) -> FerrumResult<Array<T, D>>
+pub fn array_shl<T, D>(a: &Array<T, D>, b: &Array<u32, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + ShiftOps,
     D: Dimension,
@@ -117,7 +117,7 @@ where
 }
 
 /// Array right shift (delegates to `bitwise::right_shift`).
-pub fn array_shr<T, D>(a: &Array<T, D>, b: &Array<u32, D>) -> FerrumResult<Array<T, D>>
+pub fn array_shr<T, D>(a: &Array<T, D>, b: &Array<u32, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + ShiftOps,
     D: Dimension,

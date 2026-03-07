@@ -4,7 +4,7 @@
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix1, Ix2, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::batch;
 use crate::faer_bridge;
@@ -35,8 +35,8 @@ pub enum NormOrder {
 /// For matrices (2D), this computes the matrix norm.
 ///
 /// # Errors
-/// - `FerrumError::InvalidValue` for invalid norm specifications.
-pub fn norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrumResult<f64> {
+/// - `FerrayError::InvalidValue` for invalid norm specifications.
+pub fn norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrayResult<f64> {
     let shape = a.shape();
     match shape.len() {
         1 => vector_norm(a, ord),
@@ -48,7 +48,7 @@ pub fn norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrumResult<f64> {
     }
 }
 
-fn vector_norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrumResult<f64> {
+fn vector_norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrayResult<f64> {
     let data: Vec<f64> = a.iter().copied().collect();
     match ord {
         NormOrder::L2 | NormOrder::Fro => {
@@ -91,7 +91,7 @@ fn vector_norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrumResult<f64> {
     }
 }
 
-fn matrix_norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrumResult<f64> {
+fn matrix_norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrayResult<f64> {
     let shape = a.shape();
     let (m, n) = (shape[0], shape[1]);
     let data: Vec<f64> = a.iter().copied().collect();
@@ -155,11 +155,11 @@ fn matrix_norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrumResult<f64> {
 /// Uses the ratio of the largest to smallest singular value (for L2 norm).
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if not a square matrix.
-pub fn cond(a: &Array<f64, Ix2>, p: NormOrder) -> FerrumResult<f64> {
+/// - `FerrayError::ShapeMismatch` if not a square matrix.
+pub fn cond(a: &Array<f64, Ix2>, p: NormOrder) -> FerrayResult<f64> {
     let shape = a.shape();
     if shape[0] != shape[1] {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "cond requires a square matrix, got {}x{}",
             shape[0], shape[1]
         )));
@@ -199,11 +199,11 @@ pub fn cond(a: &Array<f64, Ix2>, p: NormOrder) -> FerrumResult<f64> {
 /// Compute the determinant of a square matrix.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if the matrix is not square.
-pub fn det(a: &Array<f64, Ix2>) -> FerrumResult<f64> {
+/// - `FerrayError::ShapeMismatch` if the matrix is not square.
+pub fn det(a: &Array<f64, Ix2>) -> FerrayResult<f64> {
     let shape = a.shape();
     if shape[0] != shape[1] {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "det requires a square matrix, got {}x{}",
             shape[0], shape[1]
         )));
@@ -215,7 +215,7 @@ pub fn det(a: &Array<f64, Ix2>) -> FerrumResult<f64> {
 /// Batched determinant for 3D+ arrays.
 ///
 /// Returns a 1D array of determinants, one per batch.
-pub fn det_batched(a: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, Ix1>> {
+pub fn det_batched(a: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, Ix1>> {
     let shape = a.shape();
     if shape.len() == 2 {
         let a2 = Array::<f64, Ix2>::from_vec(
@@ -228,7 +228,7 @@ pub fn det_batched(a: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, Ix1>> {
 
     batch::apply_batched_scalar(a, |m, n, data| {
         if m != n {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "det requires square matrices, got {}x{}",
                 m, n
             )));
@@ -244,8 +244,8 @@ pub fn det_batched(a: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, Ix1>> {
 /// sign is -1.0, 0.0, or 1.0.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if the matrix is not square.
-pub fn slogdet(a: &Array<f64, Ix2>) -> FerrumResult<(f64, f64)> {
+/// - `FerrayError::ShapeMismatch` if the matrix is not square.
+pub fn slogdet(a: &Array<f64, Ix2>) -> FerrayResult<(f64, f64)> {
     let d = det(a)?;
     if d == 0.0 {
         Ok((0.0, f64::NEG_INFINITY))
@@ -262,8 +262,8 @@ pub fn slogdet(a: &Array<f64, Ix2>) -> FerrumResult<(f64, f64)> {
 /// If `tol` is `None`, a default tolerance is used.
 ///
 /// # Errors
-/// - `FerrumError::InvalidValue` if SVD fails.
-pub fn matrix_rank(a: &Array<f64, Ix2>, tol: Option<f64>) -> FerrumResult<usize> {
+/// - `FerrayError::InvalidValue` if SVD fails.
+pub fn matrix_rank(a: &Array<f64, Ix2>, tol: Option<f64>) -> FerrayResult<usize> {
     let (_u, s, _vt) = crate::decomp::svd(a, false)?;
     let svals = s.as_slice().unwrap();
 
@@ -284,7 +284,7 @@ pub fn matrix_rank(a: &Array<f64, Ix2>, tol: Option<f64>) -> FerrumResult<usize>
 ///
 /// # Errors
 /// Returns an error only if the array is malformed (never for valid input).
-pub fn trace(a: &Array<f64, Ix2>) -> FerrumResult<f64> {
+pub fn trace(a: &Array<f64, Ix2>) -> FerrayResult<f64> {
     let shape = a.shape();
     let (m, n) = (shape[0], shape[1]);
     let data: Vec<f64> = a.iter().copied().collect();

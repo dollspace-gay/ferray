@@ -5,7 +5,7 @@
 // by reusing the source array's memory with adjusted strides.
 
 use ferray_core::dimension::{Dimension, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, ArrayView, Element};
 
 /// Create a read-only sliding window view of an array.
@@ -26,7 +26,7 @@ use ferray_core::{Array, ArrayView, Element};
 ///
 /// # Errors
 ///
-/// Returns `FerrumError::InvalidValue` if:
+/// Returns `FerrayError::InvalidValue` if:
 /// - `window_shape` length does not match the array's number of dimensions.
 /// - Any window dimension is 0 or exceeds the corresponding array dimension.
 ///
@@ -45,14 +45,14 @@ use ferray_core::{Array, ArrayView, Element};
 pub fn sliding_window_view<'a, T: Element, D: Dimension>(
     array: &'a Array<T, D>,
     window_shape: &[usize],
-) -> FerrumResult<ArrayView<'a, T, IxDyn>> {
+) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
     let src_shape = array.shape();
     let src_strides = array.strides();
     let ndim = src_shape.len();
 
     // Validate window_shape length.
     if window_shape.len() != ndim {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "window_shape length ({}) must match array ndim ({})",
             window_shape.len(),
             ndim,
@@ -62,13 +62,13 @@ pub fn sliding_window_view<'a, T: Element, D: Dimension>(
     // Validate each window dimension.
     for (i, (&w, &n)) in window_shape.iter().zip(src_shape.iter()).enumerate() {
         if w == 0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "window_shape[{}] must be >= 1, got 0",
                 i,
             )));
         }
         if w > n {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "window_shape[{}] ({}) exceeds array dimension {} ({})",
                 i, w, i, n,
             )));

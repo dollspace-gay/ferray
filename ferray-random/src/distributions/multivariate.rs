@@ -1,6 +1,6 @@
 // ferray-random: Multivariate distributions — multinomial, multivariate_normal, dirichlet
 
-use ferray_core::{Array, FerrumError, Ix2};
+use ferray_core::{Array, FerrayError, Ix2};
 
 use crate::bitgen::BitGenerator;
 use crate::distributions::gamma::standard_gamma_single;
@@ -22,30 +22,30 @@ impl<B: BitGenerator> Generator<B> {
     /// An `Array<i64, Ix2>` with shape `[size, k]`.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` for invalid parameters.
+    /// Returns `FerrayError::InvalidValue` for invalid parameters.
     pub fn multinomial(
         &mut self,
         n: u64,
         pvals: &[f64],
         size: usize,
-    ) -> Result<Array<i64, Ix2>, FerrumError> {
+    ) -> Result<Array<i64, Ix2>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if pvals.is_empty() {
-            return Err(FerrumError::invalid_value(
+            return Err(FerrayError::invalid_value(
                 "pvals must have at least one element",
             ));
         }
         let psum: f64 = pvals.iter().sum();
         if (psum - 1.0).abs() > 1e-6 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "pvals must sum to 1.0, got {psum}"
             )));
         }
         for (i, &p) in pvals.iter().enumerate() {
             if p < 0.0 {
-                return Err(FerrumError::invalid_value(format!(
+                return Err(FerrayError::invalid_value(format!(
                     "pvals[{i}] = {p} is negative"
                 )));
             }
@@ -89,23 +89,23 @@ impl<B: BitGenerator> Generator<B> {
     /// An `Array<f64, Ix2>` with shape `[size, d]`.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` for invalid parameters or if
+    /// Returns `FerrayError::InvalidValue` for invalid parameters or if
     /// the covariance matrix is not positive semi-definite.
     pub fn multivariate_normal(
         &mut self,
         mean: &[f64],
         cov: &[f64],
         size: usize,
-    ) -> Result<Array<f64, Ix2>, FerrumError> {
+    ) -> Result<Array<f64, Ix2>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         let d = mean.len();
         if d == 0 {
-            return Err(FerrumError::invalid_value("mean must be non-empty"));
+            return Err(FerrayError::invalid_value("mean must be non-empty"));
         }
         if cov.len() != d * d {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "cov must have {} elements for mean of length {d}, got {}",
                 d * d,
                 cov.len()
@@ -149,23 +149,23 @@ impl<B: BitGenerator> Generator<B> {
     /// An `Array<f64, Ix2>` with shape `[size, k]` where k = alpha.len().
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` for invalid parameters.
+    /// Returns `FerrayError::InvalidValue` for invalid parameters.
     pub fn dirichlet(
         &mut self,
         alpha: &[f64],
         size: usize,
-    ) -> Result<Array<f64, Ix2>, FerrumError> {
+    ) -> Result<Array<f64, Ix2>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if alpha.is_empty() {
-            return Err(FerrumError::invalid_value(
+            return Err(FerrayError::invalid_value(
                 "alpha must have at least one element",
             ));
         }
         for (i, &a) in alpha.iter().enumerate() {
             if a <= 0.0 {
-                return Err(FerrumError::invalid_value(format!(
+                return Err(FerrayError::invalid_value(format!(
                     "alpha[{i}] = {a} must be positive"
                 )));
             }
@@ -250,7 +250,7 @@ fn binomial_for_multinomial<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> u64 
 /// Cholesky decomposition of a symmetric positive-definite matrix.
 /// Input: flat row-major matrix `a` of size `n x n`.
 /// Output: lower-triangular matrix L such that A = L * L^T.
-fn cholesky_decompose(a: &[f64], n: usize) -> Result<Vec<f64>, FerrumError> {
+fn cholesky_decompose(a: &[f64], n: usize) -> Result<Vec<f64>, FerrayError> {
     let mut l = vec![0.0; n * n];
 
     for i in 0..n {
@@ -262,7 +262,7 @@ fn cholesky_decompose(a: &[f64], n: usize) -> Result<Vec<f64>, FerrumError> {
             if i == j {
                 let diag = a[i * n + i] - sum;
                 if diag < -1e-10 {
-                    return Err(FerrumError::invalid_value(
+                    return Err(FerrayError::invalid_value(
                         "covariance matrix is not positive semi-definite",
                     ));
                 }

@@ -1,7 +1,7 @@
 // ferray-stats: NaN-aware reductions — nansum, nanprod, nanmin, nanmax, nanmean, nanvar, nanstd (REQ-3, REQ-4)
 // Also nancumsum, nancumprod (REQ-2b)
 
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, IxDyn};
 use num_traits::Float;
 
@@ -78,7 +78,7 @@ fn lane_nanmax<T: Float>(lane: &[T]) -> T {
 /// Sum of array elements, treating NaN as zero.
 ///
 /// Equivalent to `numpy.nansum`.
-pub fn nansum<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn nansum<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
@@ -102,7 +102,7 @@ where
 /// Product of array elements, treating NaN as one.
 ///
 /// Equivalent to `numpy.nanprod`.
-pub fn nanprod<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn nanprod<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
@@ -126,7 +126,7 @@ where
 /// Mean of array elements, skipping NaN. Returns NaN for all-NaN slices.
 ///
 /// Equivalent to `numpy.nanmean`.
-pub fn nanmean<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn nanmean<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
@@ -154,7 +154,7 @@ pub fn nanvar<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
     ddof: usize,
-) -> FerrumResult<Array<T, IxDyn>>
+) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
@@ -182,7 +182,7 @@ pub fn nanstd<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
     ddof: usize,
-) -> FerrumResult<Array<T, IxDyn>>
+) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
@@ -195,13 +195,13 @@ where
 /// Minimum of array elements, skipping NaN.
 ///
 /// Equivalent to `numpy.nanmin`.
-pub fn nanmin<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn nanmin<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
 {
     if a.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot compute nanmin of empty array",
         ));
     }
@@ -224,13 +224,13 @@ where
 /// Maximum of array elements, skipping NaN.
 ///
 /// Equivalent to `numpy.nanmax`.
-pub fn nanmax<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn nanmax<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
 {
     if a.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot compute nanmax of empty array",
         ));
     }
@@ -253,7 +253,7 @@ where
 /// Cumulative sum, treating NaN as zero.
 ///
 /// Re-exported from `ferray_ufunc::nancumsum`.
-pub fn nancumsum<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, D>>
+pub fn nancumsum<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -264,7 +264,7 @@ where
 /// Cumulative product, treating NaN as one.
 ///
 /// Re-exported from `ferray_ufunc::nancumprod`.
-pub fn nancumprod<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, D>>
+pub fn nancumprod<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,

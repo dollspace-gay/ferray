@@ -4,7 +4,7 @@
 
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, Ix1};
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::string_array::StringArray;
 
@@ -15,7 +15,7 @@ use crate::string_array::StringArray;
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn find<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrumResult<Array<i64, Ix1>> {
+pub fn find<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<i64, Ix1>> {
     let data: Vec<i64> = a.map_to_vec(|s| {
         match s.find(sub) {
             Some(byte_idx) => {
@@ -35,7 +35,7 @@ pub fn find<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrumResult<Array<i
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn count<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrumResult<Array<u64, Ix1>> {
+pub fn count<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<u64, Ix1>> {
     let data: Vec<u64> = a.map_to_vec(|s| s.matches(sub).count() as u64);
     let dim = Ix1::new([data.len()]);
     Array::from_vec(dim, data)
@@ -50,7 +50,7 @@ pub fn count<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrumResult<Array<
 pub fn startswith<D: Dimension>(
     a: &StringArray<D>,
     prefix: &str,
-) -> FerrumResult<Array<bool, Ix1>> {
+) -> FerrayResult<Array<bool, Ix1>> {
     let data: Vec<bool> = a.map_to_vec(|s| s.starts_with(prefix));
     let dim = Ix1::new([data.len()]);
     Array::from_vec(dim, data)
@@ -62,7 +62,7 @@ pub fn startswith<D: Dimension>(
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn endswith<D: Dimension>(a: &StringArray<D>, suffix: &str) -> FerrumResult<Array<bool, Ix1>> {
+pub fn endswith<D: Dimension>(a: &StringArray<D>, suffix: &str) -> FerrayResult<Array<bool, Ix1>> {
     let data: Vec<bool> = a.map_to_vec(|s| s.ends_with(suffix));
     let dim = Ix1::new([data.len()]);
     Array::from_vec(dim, data)
@@ -80,7 +80,7 @@ pub fn replace<D: Dimension>(
     old: &str,
     new: &str,
     max_count: Option<usize>,
-) -> FerrumResult<StringArray<D>> {
+) -> FerrayResult<StringArray<D>> {
     a.map(|s| match max_count {
         None => s.replace(old, new),
         Some(n) => s.replacen(old, new, n),

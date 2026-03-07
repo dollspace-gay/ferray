@@ -4,7 +4,7 @@
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix2, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::batch::{self, faer_to_vec, slice_to_faer};
 use crate::faer_bridge;
@@ -14,12 +14,12 @@ use crate::faer_bridge;
 /// Returns the lower triangular matrix `L` such that `A = L * L^T`.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if the matrix is not square.
-/// - `FerrumError::SingularMatrix` if the matrix is not positive definite.
-pub fn cholesky(a: &Array<f64, Ix2>) -> FerrumResult<Array<f64, Ix2>> {
+/// - `FerrayError::ShapeMismatch` if the matrix is not square.
+/// - `FerrayError::SingularMatrix` if the matrix is not positive definite.
+pub fn cholesky(a: &Array<f64, Ix2>) -> FerrayResult<Array<f64, Ix2>> {
     let shape = a.shape();
     if shape[0] != shape[1] {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "cholesky requires a square matrix, got {}x{}",
             shape[0], shape[1]
         )));
@@ -28,7 +28,7 @@ pub fn cholesky(a: &Array<f64, Ix2>) -> FerrumResult<Array<f64, Ix2>> {
     let llt = mat
         .as_ref()
         .llt(faer::Side::Lower)
-        .map_err(|_| FerrumError::SingularMatrix {
+        .map_err(|_| FerrayError::SingularMatrix {
             message: "matrix is not positive definite".to_string(),
         })?;
     let l = llt.L();
@@ -38,7 +38,7 @@ pub fn cholesky(a: &Array<f64, Ix2>) -> FerrumResult<Array<f64, Ix2>> {
 /// Batched Cholesky decomposition for 3D+ arrays.
 ///
 /// Applies Cholesky along the last two dimensions, parallelized via Rayon.
-pub fn cholesky_batched(a: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, IxDyn>> {
+pub fn cholesky_batched(a: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
     let shape = a.shape();
     if shape.len() == 2 {
         let a2 = Array::<f64, Ix2>::from_vec(
@@ -51,7 +51,7 @@ pub fn cholesky_batched(a: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, IxDyn>
 
     let results = batch::apply_batched_2d(a, |m, n, data| {
         if m != n {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "cholesky requires square matrices, got {}x{}",
                 m, n
             )));
@@ -60,7 +60,7 @@ pub fn cholesky_batched(a: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, IxDyn>
         let llt = mat
             .as_ref()
             .llt(faer::Side::Lower)
-            .map_err(|_| FerrumError::SingularMatrix {
+            .map_err(|_| FerrayError::SingularMatrix {
                 message: "matrix is not positive definite".to_string(),
             })?;
         Ok(faer_to_vec(&llt.L().to_owned()))

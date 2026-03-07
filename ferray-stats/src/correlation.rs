@@ -1,6 +1,6 @@
 // ferray-stats: Correlation and covariance — correlate, corrcoef, cov (REQ-5, REQ-6, REQ-7)
 
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, Ix1, Ix2};
 use num_traits::Float;
 
@@ -30,7 +30,7 @@ pub fn correlate<T>(
     a: &Array<T, Ix1>,
     v: &Array<T, Ix1>,
     mode: CorrelateMode,
-) -> FerrumResult<Array<T, Ix1>>
+) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + Float,
 {
@@ -40,7 +40,7 @@ where
     let lv = v_data.len();
 
     if la == 0 || lv == 0 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "correlate requires non-empty arrays",
         ));
     }
@@ -94,14 +94,14 @@ where
 /// the number of observations.
 ///
 /// Equivalent to `numpy.cov`.
-pub fn cov<T, D>(m: &Array<T, D>, rowvar: bool, ddof: Option<usize>) -> FerrumResult<Array<T, Ix2>>
+pub fn cov<T, D>(m: &Array<T, D>, rowvar: bool, ddof: Option<usize>) -> FerrayResult<Array<T, Ix2>>
 where
     T: Element + Float,
     D: Dimension,
 {
     let ndim = m.ndim();
     if ndim > 2 {
-        return Err(FerrumError::invalid_value("cov requires 1-D or 2-D input"));
+        return Err(FerrayError::invalid_value("cov requires 1-D or 2-D input"));
     }
 
     // Collect data into a matrix where rows are variables, columns are observations
@@ -132,7 +132,7 @@ where
 
     let ddof_val = ddof.unwrap_or(1);
     if nobs <= ddof_val {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "number of observations must be greater than ddof",
         ));
     }
@@ -172,7 +172,7 @@ where
 /// If 1-D, treated as a single variable.
 ///
 /// Equivalent to `numpy.corrcoef`.
-pub fn corrcoef<T, D>(x: &Array<T, D>, rowvar: bool) -> FerrumResult<Array<T, Ix2>>
+pub fn corrcoef<T, D>(x: &Array<T, D>, rowvar: bool) -> FerrayResult<Array<T, Ix2>>
 where
     T: Element + Float,
     D: Dimension,

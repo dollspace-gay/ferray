@@ -7,7 +7,7 @@ use ferray_core::Array;
 use ferray_core::dimension::broadcast::broadcast_shapes;
 use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 /// Apply a unary function elementwise, preserving dimension.
 /// Works for any `T: Element + Float` (or any Copy type with the given fn).
@@ -15,7 +15,7 @@ use ferray_core::error::{FerrumError, FerrumResult};
 /// When the input is contiguous, operates directly on the underlying slice
 /// for better auto-vectorization and cache locality.
 #[inline]
-pub fn unary_float_op<T, D>(input: &Array<T, D>, f: impl Fn(T) -> T) -> FerrumResult<Array<T, D>>
+pub fn unary_float_op<T, D>(input: &Array<T, D>, f: impl Fn(T) -> T) -> FerrayResult<Array<T, D>>
 where
     T: Element + Copy,
     D: Dimension,
@@ -48,7 +48,7 @@ pub fn unary_slice_op_f64<D>(
     input: &Array<f64, D>,
     kernel: fn(&[f64], &mut [f64]),
     scalar_fallback: fn(f64) -> f64,
-) -> FerrumResult<Array<f64, D>>
+) -> FerrayResult<Array<f64, D>>
 where
     D: Dimension,
 {
@@ -75,7 +75,7 @@ pub fn unary_slice_op_f32<D>(
     input: &Array<f32, D>,
     kernel: fn(&[f32], &mut [f32]),
     scalar_fallback: fn(f32) -> f32,
-) -> FerrumResult<Array<f32, D>>
+) -> FerrayResult<Array<f32, D>>
 where
     D: Dimension,
 {
@@ -102,7 +102,7 @@ where
 pub fn try_simd_f64_unary<T, D>(
     input: &Array<T, D>,
     kernel: fn(&[f64], &mut [f64]),
-) -> Option<FerrumResult<Array<T, D>>>
+) -> Option<FerrayResult<Array<T, D>>>
 where
     T: Element + Copy,
     D: Dimension,
@@ -133,7 +133,7 @@ where
 
 /// Apply a unary function that maps T -> U, preserving dimension.
 #[inline]
-pub fn unary_map_op<T, U, D>(input: &Array<T, D>, f: impl Fn(T) -> U) -> FerrumResult<Array<U, D>>
+pub fn unary_map_op<T, U, D>(input: &Array<T, D>, f: impl Fn(T) -> U) -> FerrayResult<Array<U, D>>
 where
     T: Element + Copy,
     U: Element,
@@ -149,13 +149,13 @@ pub fn binary_float_op<T, D>(
     a: &Array<T, D>,
     b: &Array<T, D>,
     f: impl Fn(T, T) -> T,
-) -> FerrumResult<Array<T, D>>
+) -> FerrayResult<Array<T, D>>
 where
     T: Element + Copy,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "binary op: shapes {:?} and {:?} do not match",
             a.shape(),
             b.shape()
@@ -171,14 +171,14 @@ pub fn binary_map_op<T, U, D>(
     a: &Array<T, D>,
     b: &Array<T, D>,
     f: impl Fn(T, T) -> U,
-) -> FerrumResult<Array<U, D>>
+) -> FerrayResult<Array<U, D>>
 where
     T: Element + Copy,
     U: Element,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "binary op: shapes {:?} and {:?} do not match",
             a.shape(),
             b.shape()
@@ -194,7 +194,7 @@ pub fn binary_broadcast_op<T, D1, D2>(
     a: &Array<T, D1>,
     b: &Array<T, D2>,
     f: impl Fn(T, T) -> T,
-) -> FerrumResult<Array<T, IxDyn>>
+) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Copy,
     D1: Dimension,
@@ -216,7 +216,7 @@ pub fn binary_broadcast_map_op<T, U, D1, D2>(
     a: &Array<T, D1>,
     b: &Array<T, D2>,
     f: impl Fn(T, T) -> U,
-) -> FerrumResult<Array<U, IxDyn>>
+) -> FerrayResult<Array<U, IxDyn>>
 where
     T: Element + Copy,
     U: Element,
@@ -247,7 +247,7 @@ where
 pub fn unary_f16_op<D>(
     input: &Array<half::f16, D>,
     f: impl Fn(f32) -> f32,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -264,7 +264,7 @@ where
 pub fn unary_f16_to_bool_op<D>(
     input: &Array<half::f16, D>,
     f: impl Fn(f32) -> bool,
-) -> FerrumResult<Array<bool, D>>
+) -> FerrayResult<Array<bool, D>>
 where
     D: Dimension,
 {
@@ -279,12 +279,12 @@ pub fn binary_f16_op<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
     f: impl Fn(f32, f32) -> f32,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "binary op: shapes {:?} and {:?} do not match",
             a.shape(),
             b.shape()
@@ -305,12 +305,12 @@ pub fn binary_f16_to_bool_op<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
     f: impl Fn(f32, f32) -> bool,
-) -> FerrumResult<Array<bool, D>>
+) -> FerrayResult<Array<bool, D>>
 where
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "binary op: shapes {:?} and {:?} do not match",
             a.shape(),
             b.shape()

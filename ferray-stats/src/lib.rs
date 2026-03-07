@@ -3,7 +3,7 @@
 //
 // This crate provides NumPy-equivalent statistical functions as free functions
 // operating on ferray-core's `Array<T, D>` type. All public functions return
-// `FerrumResult<T>` and never panic.
+// `FerrayResult<T>` and never panic.
 //
 // # Modules
 // - `reductions`: sum, prod, min, max, argmin, argmax, mean, var, std, median,

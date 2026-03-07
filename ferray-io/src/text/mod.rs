@@ -15,7 +15,7 @@ use std::str::FromStr;
 use ferray_core::Array;
 use ferray_core::dimension::Ix2;
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use self::parser::{TextParseOptions, parse_text_grid, parse_text_grid_with_missing};
 
@@ -50,15 +50,15 @@ impl Default for SaveTxtOptions {
 /// Save a 2D array as delimited text.
 ///
 /// # Errors
-/// Returns `FerrumError::IoError` on file write failures.
-/// Returns `FerrumError::IoError` if the array is not contiguous.
+/// Returns `FerrayError::IoError` on file write failures.
+/// Returns `FerrayError::IoError` if the array is not contiguous.
 pub fn savetxt<T: Element + Display, P: AsRef<Path>>(
     path: P,
     array: &Array<T, Ix2>,
     opts: &SaveTxtOptions,
-) -> FerrumResult<()> {
+) -> FerrayResult<()> {
     let mut file = std::fs::File::create(path.as_ref()).map_err(|e| {
-        FerrumError::io_error(format!(
+        FerrayError::io_error(format!(
             "failed to create file '{}': {e}",
             path.as_ref().display()
         ))
@@ -72,53 +72,53 @@ pub fn savetxt_to_writer<T: Element + Display, W: Write>(
     writer: &mut W,
     array: &Array<T, Ix2>,
     opts: &SaveTxtOptions,
-) -> FerrumResult<()> {
+) -> FerrayResult<()> {
     let shape = array.shape();
     let nrows = shape[0];
     let ncols = shape[1];
 
     if let Some(ref header) = opts.header {
-        write!(writer, "{header}").map_err(|e| FerrumError::io_error(e.to_string()))?;
+        write!(writer, "{header}").map_err(|e| FerrayError::io_error(e.to_string()))?;
         writer
             .write_all(opts.newline.as_bytes())
-            .map_err(|e| FerrumError::io_error(e.to_string()))?;
+            .map_err(|e| FerrayError::io_error(e.to_string()))?;
     }
 
     let slice = array
         .as_slice()
-        .ok_or_else(|| FerrumError::io_error("cannot save non-contiguous array as text"))?;
+        .ok_or_else(|| FerrayError::io_error("cannot save non-contiguous array as text"))?;
 
     for row in 0..nrows {
         for col in 0..ncols {
             if col > 0 {
                 write!(writer, "{}", opts.delimiter)
-                    .map_err(|e| FerrumError::io_error(e.to_string()))?;
+                    .map_err(|e| FerrayError::io_error(e.to_string()))?;
             }
             let val = &slice[row * ncols + col];
             if let Some(ref fmt_str) = opts.fmt {
                 // Use the format string with the value
                 // We support a simple subset: if fmt contains "{}", use it directly
                 let formatted = fmt_str.replace("{}", &val.to_string());
-                write!(writer, "{formatted}").map_err(|e| FerrumError::io_error(e.to_string()))?;
+                write!(writer, "{formatted}").map_err(|e| FerrayError::io_error(e.to_string()))?;
             } else {
-                write!(writer, "{val}").map_err(|e| FerrumError::io_error(e.to_string()))?;
+                write!(writer, "{val}").map_err(|e| FerrayError::io_error(e.to_string()))?;
             }
         }
         writer
             .write_all(opts.newline.as_bytes())
-            .map_err(|e| FerrumError::io_error(e.to_string()))?;
+            .map_err(|e| FerrayError::io_error(e.to_string()))?;
     }
 
     if let Some(ref footer) = opts.footer {
-        write!(writer, "{footer}").map_err(|e| FerrumError::io_error(e.to_string()))?;
+        write!(writer, "{footer}").map_err(|e| FerrayError::io_error(e.to_string()))?;
         writer
             .write_all(opts.newline.as_bytes())
-            .map_err(|e| FerrumError::io_error(e.to_string()))?;
+            .map_err(|e| FerrayError::io_error(e.to_string()))?;
     }
 
     writer
         .flush()
-        .map_err(|e| FerrumError::io_error(e.to_string()))?;
+        .map_err(|e| FerrayError::io_error(e.to_string()))?;
     Ok(())
 }
 
@@ -131,15 +131,15 @@ pub fn savetxt_to_writer<T: Element + Display, W: Write>(
 /// - `T`: Element type to parse each cell into. Must implement `FromStr`.
 ///
 /// # Errors
-/// - Returns `FerrumError::IoError` on file read or parse failures.
-pub fn loadtxt<T, P>(path: P, delimiter: char, skiprows: usize) -> FerrumResult<Array<T, Ix2>>
+/// - Returns `FerrayError::IoError` on file read or parse failures.
+pub fn loadtxt<T, P>(path: P, delimiter: char, skiprows: usize) -> FerrayResult<Array<T, Ix2>>
 where
     T: Element + FromStr,
     T::Err: Display,
     P: AsRef<Path>,
 {
     let content = fs::read_to_string(path.as_ref()).map_err(|e| {
-        FerrumError::io_error(format!(
+        FerrayError::io_error(format!(
             "failed to read file '{}': {e}",
             path.as_ref().display()
         ))
@@ -153,7 +153,7 @@ pub fn loadtxt_from_str<T>(
     content: &str,
     delimiter: char,
     skiprows: usize,
-) -> FerrumResult<Array<T, Ix2>>
+) -> FerrayResult<Array<T, Ix2>>
 where
     T: Element + FromStr,
     T::Err: Display,
@@ -170,14 +170,14 @@ where
         return Array::from_vec(Ix2::new([0, 0]), vec![]);
     }
 
-    let data: FerrumResult<Vec<T>> = cells
+    let data: FerrayResult<Vec<T>> = cells
         .iter()
         .enumerate()
         .map(|(i, cell)| {
             cell.parse::<T>().map_err(|e| {
                 let row = i / ncols;
                 let col = i % ncols;
-                FerrumError::io_error(format!(
+                FerrayError::io_error(format!(
                     "failed to parse value '{cell}' at row {row}, col {col}: {e}"
                 ))
             })
@@ -197,16 +197,16 @@ where
 /// (typically `f64::NAN`).
 ///
 /// # Errors
-/// Returns `FerrumError::IoError` on file read or parse failures.
+/// Returns `FerrayError::IoError` on file read or parse failures.
 pub fn genfromtxt<P: AsRef<Path>>(
     path: P,
     delimiter: char,
     filling_value: f64,
     skiprows: usize,
     missing_values: &[&str],
-) -> FerrumResult<Array<f64, Ix2>> {
+) -> FerrayResult<Array<f64, Ix2>> {
     let content = fs::read_to_string(path.as_ref()).map_err(|e| {
-        FerrumError::io_error(format!(
+        FerrayError::io_error(format!(
             "failed to read file '{}': {e}",
             path.as_ref().display()
         ))
@@ -222,7 +222,7 @@ pub fn genfromtxt_from_str(
     filling_value: f64,
     skiprows: usize,
     missing_values: &[&str],
-) -> FerrumResult<Array<f64, Ix2>> {
+) -> FerrayResult<Array<f64, Ix2>> {
     let opts = TextParseOptions {
         delimiter,
         skiprows,
@@ -243,7 +243,7 @@ pub fn genfromtxt_from_str(
         return Array::from_vec(Ix2::new([0, 0]), vec![]);
     }
 
-    let data: FerrumResult<Vec<f64>> = cells
+    let data: FerrayResult<Vec<f64>> = cells
         .iter()
         .enumerate()
         .map(|(i, cell)| match cell {
@@ -251,7 +251,7 @@ pub fn genfromtxt_from_str(
             Some(s) => s.parse::<f64>().map_err(|e| {
                 let row = i / ncols;
                 let col = i % ncols;
-                FerrumError::io_error(format!(
+                FerrayError::io_error(format!(
                     "failed to parse value '{s}' at row {row}, col {col}: {e}"
                 ))
             }),

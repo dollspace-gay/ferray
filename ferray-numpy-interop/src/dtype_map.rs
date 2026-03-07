@@ -7,7 +7,7 @@
 #[cfg(any(feature = "arrow", feature = "polars"))]
 use ferray_core::DType;
 #[cfg(any(feature = "arrow", feature = "polars"))]
-use ferray_core::FerrumError;
+use ferray_core::FerrayError;
 
 // ---------------------------------------------------------------------------
 // Arrow DataType <-> DType
@@ -17,10 +17,10 @@ use ferray_core::FerrumError;
 ///
 /// # Errors
 ///
-/// Returns [`FerrumError::InvalidDtype`] if the ferray dtype has no Arrow
+/// Returns [`FerrayError::InvalidDtype`] if the ferray dtype has no Arrow
 /// equivalent (e.g. `Complex32`, `Complex64`, `U128`, `I128`).
 #[cfg(feature = "arrow")]
-pub fn dtype_to_arrow(dt: DType) -> Result<arrow::datatypes::DataType, FerrumError> {
+pub fn dtype_to_arrow(dt: DType) -> Result<arrow::datatypes::DataType, FerrayError> {
     use arrow::datatypes::DataType as AD;
     match dt {
         DType::Bool => Ok(AD::Boolean),
@@ -34,7 +34,7 @@ pub fn dtype_to_arrow(dt: DType) -> Result<arrow::datatypes::DataType, FerrumErr
         DType::I64 => Ok(AD::Int64),
         DType::F32 => Ok(AD::Float32),
         DType::F64 => Ok(AD::Float64),
-        other => Err(FerrumError::invalid_dtype(format!(
+        other => Err(FerrayError::invalid_dtype(format!(
             "ferray dtype {other} has no Arrow equivalent"
         ))),
     }
@@ -44,10 +44,10 @@ pub fn dtype_to_arrow(dt: DType) -> Result<arrow::datatypes::DataType, FerrumErr
 ///
 /// # Errors
 ///
-/// Returns [`FerrumError::InvalidDtype`] for Arrow types that ferray does
+/// Returns [`FerrayError::InvalidDtype`] for Arrow types that ferray does
 /// not support (e.g. `Utf8`, `Timestamp`, `Struct`, etc.).
 #[cfg(feature = "arrow")]
-pub fn arrow_to_dtype(ad: &arrow::datatypes::DataType) -> Result<DType, FerrumError> {
+pub fn arrow_to_dtype(ad: &arrow::datatypes::DataType) -> Result<DType, FerrayError> {
     use arrow::datatypes::DataType as AD;
     match ad {
         AD::Boolean => Ok(DType::Bool),
@@ -61,7 +61,7 @@ pub fn arrow_to_dtype(ad: &arrow::datatypes::DataType) -> Result<DType, FerrumEr
         AD::Int64 => Ok(DType::I64),
         AD::Float32 => Ok(DType::F32),
         AD::Float64 => Ok(DType::F64),
-        other => Err(FerrumError::invalid_dtype(format!(
+        other => Err(FerrayError::invalid_dtype(format!(
             "Arrow DataType {other:?} has no ferray equivalent"
         ))),
     }
@@ -75,10 +75,10 @@ pub fn arrow_to_dtype(ad: &arrow::datatypes::DataType) -> Result<DType, FerrumEr
 ///
 /// # Errors
 ///
-/// Returns [`FerrumError::InvalidDtype`] if the ferray dtype has no Polars
+/// Returns [`FerrayError::InvalidDtype`] if the ferray dtype has no Polars
 /// equivalent (e.g. `Complex32`, `Complex64`, `U128`, `I128`, `Bool`-as-bitfield).
 #[cfg(feature = "polars")]
-pub fn dtype_to_polars(dt: DType) -> Result<polars::prelude::DataType, FerrumError> {
+pub fn dtype_to_polars(dt: DType) -> Result<polars::prelude::DataType, FerrayError> {
     use polars::prelude::DataType as PD;
     match dt {
         DType::Bool => Ok(PD::Boolean),
@@ -92,7 +92,7 @@ pub fn dtype_to_polars(dt: DType) -> Result<polars::prelude::DataType, FerrumErr
         DType::I64 => Ok(PD::Int64),
         DType::F32 => Ok(PD::Float32),
         DType::F64 => Ok(PD::Float64),
-        other => Err(FerrumError::invalid_dtype(format!(
+        other => Err(FerrayError::invalid_dtype(format!(
             "ferray dtype {other} has no Polars equivalent"
         ))),
     }
@@ -102,10 +102,10 @@ pub fn dtype_to_polars(dt: DType) -> Result<polars::prelude::DataType, FerrumErr
 ///
 /// # Errors
 ///
-/// Returns [`FerrumError::InvalidDtype`] for Polars types that ferray does
+/// Returns [`FerrayError::InvalidDtype`] for Polars types that ferray does
 /// not support (e.g. `String`, `Date`, `Datetime`, etc.).
 #[cfg(feature = "polars")]
-pub fn polars_to_dtype(pd: &polars::prelude::DataType) -> Result<DType, FerrumError> {
+pub fn polars_to_dtype(pd: &polars::prelude::DataType) -> Result<DType, FerrayError> {
     use polars::prelude::DataType as PD;
     match pd {
         PD::Boolean => Ok(DType::Bool),
@@ -119,7 +119,7 @@ pub fn polars_to_dtype(pd: &polars::prelude::DataType) -> Result<DType, FerrumEr
         PD::Int64 => Ok(DType::I64),
         PD::Float32 => Ok(DType::F32),
         PD::Float64 => Ok(DType::F64),
-        other => Err(FerrumError::invalid_dtype(format!(
+        other => Err(FerrayError::invalid_dtype(format!(
             "Polars DataType {other:?} has no ferray equivalent"
         ))),
     }

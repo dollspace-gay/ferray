@@ -3,7 +3,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, Ix1};
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::MaskedArray;
 
@@ -18,7 +18,7 @@ where
     ///
     /// # Errors
     /// Returns an error only for internal failures.
-    pub fn filled(&self, fill_value: T) -> FerrumResult<Array<T, D>> {
+    pub fn filled(&self, fill_value: T) -> FerrayResult<Array<T, D>> {
         let data: Vec<T> = self
             .data()
             .iter()
@@ -35,7 +35,7 @@ where
     ///
     /// # Errors
     /// Returns an error only for internal failures.
-    pub fn compressed(&self) -> FerrumResult<Array<T, Ix1>> {
+    pub fn compressed(&self) -> FerrayResult<Array<T, Ix1>> {
         let data: Vec<T> = self
             .data()
             .iter()

@@ -4,7 +4,7 @@
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix1, Ix2, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::faer_bridge;
 use faer::linalg::solvers::{DenseSolveCore, Solve, SolveLstsq};
@@ -15,13 +15,13 @@ use faer::linalg::solvers::{DenseSolveCore, Solve, SolveLstsq};
 /// `b` can be a 1D vector or a 2D matrix (multiple right-hand sides).
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if dimensions are incompatible.
-/// - `FerrumError::SingularMatrix` if A is singular.
-pub fn solve(a: &Array<f64, Ix2>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, IxDyn>> {
+/// - `FerrayError::ShapeMismatch` if dimensions are incompatible.
+/// - `FerrayError::SingularMatrix` if A is singular.
+pub fn solve(a: &Array<f64, Ix2>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
     if a_shape[0] != a_shape[1] {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "solve requires a square matrix A, got {}x{}",
             a_shape[0], a_shape[1]
         )));
@@ -34,7 +34,7 @@ pub fn solve(a: &Array<f64, Ix2>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f
     match b_shape.len() {
         1 => {
             if b_shape[0] != n {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "solve: A is {}x{} but b has length {}",
                     n, n, b_shape[0]
                 )));
@@ -50,7 +50,7 @@ pub fn solve(a: &Array<f64, Ix2>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f
         }
         2 => {
             if b_shape[0] != n {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "solve: A is {}x{} but b has {} rows",
                     n, n, b_shape[0]
                 )));
@@ -67,7 +67,7 @@ pub fn solve(a: &Array<f64, Ix2>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f
             }
             Array::from_vec(IxDyn::new(&[n, nrhs]), result)
         }
-        _ => Err(FerrumError::shape_mismatch("solve: b must be 1D or 2D")),
+        _ => Err(FerrayError::shape_mismatch("solve: b must be 1D or 2D")),
     }
 }
 
@@ -80,12 +80,12 @@ pub fn solve(a: &Array<f64, Ix2>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f
 /// - singular_values: singular values of A
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if dimensions are incompatible.
+/// - `FerrayError::ShapeMismatch` if dimensions are incompatible.
 pub fn lstsq(
     a: &Array<f64, Ix2>,
     b: &Array<f64, IxDyn>,
     rcond: Option<f64>,
-) -> FerrumResult<(Array<f64, IxDyn>, Array<f64, Ix1>, usize, Array<f64, Ix1>)> {
+) -> FerrayResult<(Array<f64, IxDyn>, Array<f64, Ix1>, usize, Array<f64, Ix1>)> {
     let a_shape = a.shape();
     let b_shape = b.shape();
     let (m, n) = (a_shape[0], a_shape[1]);
@@ -106,7 +106,7 @@ pub fn lstsq(
     match b_shape.len() {
         1 => {
             if b_shape[0] != m {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "lstsq: A is {}x{} but b has length {}",
                     m, n, b_shape[0]
                 )));
@@ -143,7 +143,7 @@ pub fn lstsq(
         }
         2 => {
             if b_shape[0] != m {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "lstsq: A is {}x{} but b has {} rows",
                     m, n, b_shape[0]
                 )));
@@ -183,19 +183,19 @@ pub fn lstsq(
             let residuals_arr = Array::from_vec(Ix1::new([residuals.len()]), residuals)?;
             Ok((x, residuals_arr, rank, sv))
         }
-        _ => Err(FerrumError::shape_mismatch("lstsq: b must be 1D or 2D")),
+        _ => Err(FerrayError::shape_mismatch("lstsq: b must be 1D or 2D")),
     }
 }
 
 /// Compute the inverse of a square matrix.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if the matrix is not square.
-/// - `FerrumError::SingularMatrix` if the matrix is singular.
-pub fn inv(a: &Array<f64, Ix2>) -> FerrumResult<Array<f64, Ix2>> {
+/// - `FerrayError::ShapeMismatch` if the matrix is not square.
+/// - `FerrayError::SingularMatrix` if the matrix is singular.
+pub fn inv(a: &Array<f64, Ix2>) -> FerrayResult<Array<f64, Ix2>> {
     let shape = a.shape();
     if shape[0] != shape[1] {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "inv requires a square matrix, got {}x{}",
             shape[0], shape[1]
         )));
@@ -209,7 +209,7 @@ pub fn inv(a: &Array<f64, Ix2>) -> FerrumResult<Array<f64, Ix2>> {
     let mat = faer_bridge::array2_to_faer(a);
     let det_val: f64 = mat.as_ref().determinant();
     if det_val.abs() < f64::EPSILON * 100.0 * (n as f64) {
-        return Err(FerrumError::SingularMatrix {
+        return Err(FerrayError::SingularMatrix {
             message: "matrix is singular and cannot be inverted".to_string(),
         });
     }
@@ -224,13 +224,13 @@ pub fn inv(a: &Array<f64, Ix2>) -> FerrumResult<Array<f64, Ix2>> {
 /// Uses SVD: `pinv(A) = V * diag(1/s_i) * U^T` for singular values above `rcond * max(s)`.
 ///
 /// # Errors
-/// - `FerrumError::InvalidValue` if SVD computation fails.
-pub fn pinv(a: &Array<f64, Ix2>, _rcond: Option<f64>) -> FerrumResult<Array<f64, Ix2>> {
+/// - `FerrayError::InvalidValue` if SVD computation fails.
+pub fn pinv(a: &Array<f64, Ix2>, _rcond: Option<f64>) -> FerrayResult<Array<f64, Ix2>> {
     let mat = faer_bridge::array2_to_faer(a);
     let decomp = mat
         .as_ref()
         .thin_svd()
-        .map_err(|e| FerrumError::InvalidValue {
+        .map_err(|e| FerrayError::InvalidValue {
             message: format!("SVD failed in pinv: {e:?}"),
         })?;
 
@@ -245,12 +245,12 @@ pub fn pinv(a: &Array<f64, Ix2>, _rcond: Option<f64>) -> FerrumResult<Array<f64,
 /// - For `n < 0`: compute `inv(A)^|n|`.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if the matrix is not square.
-/// - `FerrumError::SingularMatrix` if `n < 0` and the matrix is singular.
-pub fn matrix_power(a: &Array<f64, Ix2>, n: i64) -> FerrumResult<Array<f64, Ix2>> {
+/// - `FerrayError::ShapeMismatch` if the matrix is not square.
+/// - `FerrayError::SingularMatrix` if `n < 0` and the matrix is singular.
+pub fn matrix_power(a: &Array<f64, Ix2>, n: i64) -> FerrayResult<Array<f64, Ix2>> {
     let shape = a.shape();
     if shape[0] != shape[1] {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "matrix_power requires a square matrix, got {}x{}",
             shape[0], shape[1]
         )));
@@ -309,12 +309,12 @@ fn mat_mul_flat(a: &[f64], b: &[f64], m: usize, k: usize, n: usize) -> Vec<f64> 
 /// This is analogous to `numpy.linalg.tensorsolve`.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if the shapes are incompatible.
+/// - `FerrayError::ShapeMismatch` if the shapes are incompatible.
 pub fn tensorsolve(
     a: &Array<f64, IxDyn>,
     b: &Array<f64, IxDyn>,
     _axes: Option<&[usize]>,
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
 
@@ -322,11 +322,11 @@ pub fn tensorsolve(
     let b_size: usize = b_shape.iter().product();
     let a_size: usize = a_shape.iter().product();
     if b_size == 0 {
-        return Err(FerrumError::shape_mismatch("tensorsolve: b is empty"));
+        return Err(FerrayError::shape_mismatch("tensorsolve: b is empty"));
     }
     let x_size = a_size / b_size;
     if x_size * b_size != a_size {
-        return Err(FerrumError::shape_mismatch(
+        return Err(FerrayError::shape_mismatch(
             "tensorsolve: a and b shapes are not compatible",
         ));
     }
@@ -356,12 +356,12 @@ pub fn tensorsolve(
 /// The array `a` is reshaped to a matrix using `ind` as the split point.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if the shapes are incompatible.
-/// - `FerrumError::SingularMatrix` if the reshaped matrix is singular.
-pub fn tensorinv(a: &Array<f64, IxDyn>, ind: usize) -> FerrumResult<Array<f64, IxDyn>> {
+/// - `FerrayError::ShapeMismatch` if the shapes are incompatible.
+/// - `FerrayError::SingularMatrix` if the reshaped matrix is singular.
+pub fn tensorinv(a: &Array<f64, IxDyn>, ind: usize) -> FerrayResult<Array<f64, IxDyn>> {
     let shape = a.shape();
     if ind == 0 || ind > shape.len() {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "tensorinv: ind={} is invalid for {}D array",
             ind,
             shape.len()
@@ -374,7 +374,7 @@ pub fn tensorinv(a: &Array<f64, IxDyn>, ind: usize) -> FerrumResult<Array<f64, I
     let n: usize = last_dims.iter().product();
 
     if m != n {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "tensorinv: product of first {} dims ({}) != product of remaining dims ({})",
             ind, m, n
         )));

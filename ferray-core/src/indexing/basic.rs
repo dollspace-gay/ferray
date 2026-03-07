@@ -11,24 +11,24 @@ use crate::array::view::ArrayView;
 use crate::array::view_mut::ArrayViewMut;
 use crate::dimension::{Axis, Dimension, IxDyn};
 use crate::dtype::Element;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 /// Normalize a potentially negative index to a positive one.
 ///
 /// Negative indices count from the end: -1 is the last element, -2 is
 /// second-to-last, etc. Returns `Err` if the normalized index is out of
 /// bounds.
-fn normalize_index(index: isize, size: usize, axis: usize) -> FerrumResult<usize> {
+fn normalize_index(index: isize, size: usize, axis: usize) -> FerrayResult<usize> {
     let normalized = if index < 0 {
         let pos = size as isize + index;
         if pos < 0 {
-            return Err(FerrumError::index_out_of_bounds(index, axis, size));
+            return Err(FerrayError::index_out_of_bounds(index, axis, size));
         }
         pos as usize
     } else {
         let idx = index as usize;
         if idx >= size {
-            return Err(FerrumError::index_out_of_bounds(index, axis, size));
+            return Err(FerrayError::index_out_of_bounds(index, axis, size));
         }
         idx
     };
@@ -80,9 +80,9 @@ impl SliceSpec {
     }
 
     /// Validate that the step is not zero.
-    fn validate(&self) -> FerrumResult<()> {
+    fn validate(&self) -> FerrayResult<()> {
         if let Some(0) = self.step {
-            return Err(FerrumError::invalid_value("slice step cannot be zero"));
+            return Err(FerrayError::invalid_value("slice step cannot be zero"));
         }
         Ok(())
     }
@@ -117,14 +117,14 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// # Errors
     /// - `AxisOutOfBounds` if `axis >= ndim`
     /// - `IndexOutOfBounds` if `index` is out of range (supports negative)
-    pub fn index_axis(&self, axis: Axis, index: isize) -> FerrumResult<ArrayView<'_, T, IxDyn>>
+    pub fn index_axis(&self, axis: Axis, index: isize) -> FerrayResult<ArrayView<'_, T, IxDyn>>
     where
         D::NdarrayDim: ndarray::RemoveAxis,
     {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
         let size = self.shape()[ax];
         let idx = normalize_index(index, size, ax)?;
@@ -142,11 +142,11 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// # Errors
     /// - `AxisOutOfBounds` if `axis >= ndim`
     /// - `InvalidValue` if step is zero
-    pub fn slice_axis(&self, axis: Axis, spec: SliceSpec) -> FerrumResult<ArrayView<'_, T, IxDyn>> {
+    pub fn slice_axis(&self, axis: Axis, spec: SliceSpec) -> FerrayResult<ArrayView<'_, T, IxDyn>> {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
         spec.validate()?;
 
@@ -165,11 +165,11 @@ impl<T: Element, D: Dimension> Array<T, D> {
         &mut self,
         axis: Axis,
         spec: SliceSpec,
-    ) -> FerrumResult<ArrayViewMut<'_, T, IxDyn>> {
+    ) -> FerrayResult<ArrayViewMut<'_, T, IxDyn>> {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
         spec.validate()?;
 
@@ -188,10 +188,10 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// # Errors
     /// - `InvalidValue` if `specs.len() != ndim()`
     /// - Any errors from individual axis slicing
-    pub fn slice_multi(&self, specs: &[SliceSpec]) -> FerrumResult<ArrayView<'_, T, IxDyn>> {
+    pub fn slice_multi(&self, specs: &[SliceSpec]) -> FerrayResult<ArrayView<'_, T, IxDyn>> {
         let ndim = self.ndim();
         if specs.len() != ndim {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "expected {} slice specs, got {}",
                 ndim,
                 specs.len()
@@ -219,11 +219,11 @@ impl<T: Element, D: Dimension> Array<T, D> {
     ///
     /// # Errors
     /// - `AxisOutOfBounds` if `axis > ndim`
-    pub fn insert_axis(&self, axis: Axis) -> FerrumResult<ArrayView<'_, T, IxDyn>> {
+    pub fn insert_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'_, T, IxDyn>> {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax > ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim + 1));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim + 1));
         }
 
         let dyn_view = self.inner.view().into_dyn();
@@ -239,14 +239,14 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// # Errors
     /// - `AxisOutOfBounds` if `axis >= ndim`
     /// - `InvalidValue` if the axis has size != 1
-    pub fn remove_axis(&self, axis: Axis) -> FerrumResult<ArrayView<'_, T, IxDyn>> {
+    pub fn remove_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'_, T, IxDyn>> {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
         if self.shape()[ax] != 1 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "cannot remove axis {} with size {} (must be 1)",
                 ax,
                 self.shape()[ax]
@@ -265,13 +265,13 @@ impl<T: Element, D: Dimension> Array<T, D> {
     ///
     /// # Errors
     /// Returns `IndexOutOfBounds` if the index is out of range.
-    pub fn flat_index(&self, index: isize) -> FerrumResult<&T> {
+    pub fn flat_index(&self, index: isize) -> FerrayResult<&T> {
         let size = self.size();
         let idx = normalize_index(index, size, 0)?;
         self.inner
             .iter()
             .nth(idx)
-            .ok_or_else(|| FerrumError::index_out_of_bounds(index, 0, size))
+            .ok_or_else(|| FerrayError::index_out_of_bounds(index, 0, size))
     }
 
     /// Get a reference to a single element by multi-dimensional index.
@@ -281,10 +281,10 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// # Errors
     /// - `InvalidValue` if `indices.len() != ndim()`
     /// - `IndexOutOfBounds` if any index is out of range
-    pub fn get(&self, indices: &[isize]) -> FerrumResult<&T> {
+    pub fn get(&self, indices: &[isize]) -> FerrayResult<&T> {
         let ndim = self.ndim();
         if indices.len() != ndim {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "expected {} indices, got {}",
                 ndim,
                 indices.len()
@@ -311,10 +311,10 @@ impl<T: Element, D: Dimension> Array<T, D> {
     ///
     /// # Errors
     /// Same as [`get`](Self::get).
-    pub fn get_mut(&mut self, indices: &[isize]) -> FerrumResult<&mut T> {
+    pub fn get_mut(&mut self, indices: &[isize]) -> FerrayResult<&mut T> {
         let ndim = self.ndim();
         if indices.len() != ndim {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "expected {} indices, got {}",
                 ndim,
                 indices.len()
@@ -343,14 +343,14 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
 impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
     /// Index into the view along a given axis, removing that axis.
-    pub fn index_axis(&self, axis: Axis, index: isize) -> FerrumResult<ArrayView<'a, T, IxDyn>>
+    pub fn index_axis(&self, axis: Axis, index: isize) -> FerrayResult<ArrayView<'a, T, IxDyn>>
     where
         D::NdarrayDim: ndarray::RemoveAxis,
     {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
         let size = self.shape()[ax];
         let idx = normalize_index(index, size, ax)?;
@@ -363,11 +363,11 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
     }
 
     /// Slice the view along a given axis.
-    pub fn slice_axis(&self, axis: Axis, spec: SliceSpec) -> FerrumResult<ArrayView<'a, T, IxDyn>> {
+    pub fn slice_axis(&self, axis: Axis, spec: SliceSpec) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
         spec.validate()?;
 
@@ -380,11 +380,11 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
     }
 
     /// Insert a new axis of length 1 at the given position.
-    pub fn insert_axis(&self, axis: Axis) -> FerrumResult<ArrayView<'a, T, IxDyn>> {
+    pub fn insert_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax > ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim + 1));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim + 1));
         }
 
         let dyn_view = self.inner.clone().into_dyn();
@@ -393,14 +393,14 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
     }
 
     /// Remove an axis of length 1.
-    pub fn remove_axis(&self, axis: Axis) -> FerrumResult<ArrayView<'a, T, IxDyn>> {
+    pub fn remove_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
         if self.shape()[ax] != 1 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "cannot remove axis {} with size {} (must be 1)",
                 ax,
                 self.shape()[ax]
@@ -413,10 +413,10 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
     }
 
     /// Get a reference to a single element by multi-dimensional index.
-    pub fn get(&self, indices: &[isize]) -> FerrumResult<&'a T> {
+    pub fn get(&self, indices: &[isize]) -> FerrayResult<&'a T> {
         let ndim = self.ndim();
         if indices.len() != ndim {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "expected {} indices, got {}",
                 ndim,
                 indices.len()
@@ -448,11 +448,11 @@ impl<'a, T: Element, D: Dimension> ArrayViewMut<'a, T, D> {
         &mut self,
         axis: Axis,
         spec: SliceSpec,
-    ) -> FerrumResult<ArrayViewMut<'_, T, IxDyn>> {
+    ) -> FerrayResult<ArrayViewMut<'_, T, IxDyn>> {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
         spec.validate()?;
 

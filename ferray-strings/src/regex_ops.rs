@@ -4,7 +4,7 @@
 
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, Ix1};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use regex::Regex;
 
 use crate::string_array::{StringArray, StringArray1};
@@ -15,11 +15,11 @@ use crate::string_array::{StringArray, StringArray1};
 /// corresponding string contains a match for the pattern.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if the regex pattern is invalid.
+/// Returns `FerrayError::InvalidValue` if the regex pattern is invalid.
 /// Returns an error if the internal array construction fails.
-pub fn match_<D: Dimension>(a: &StringArray<D>, pattern: &str) -> FerrumResult<Array<bool, Ix1>> {
+pub fn match_<D: Dimension>(a: &StringArray<D>, pattern: &str) -> FerrayResult<Array<bool, Ix1>> {
     let re = Regex::new(pattern)
-        .map_err(|e| FerrumError::invalid_value(format!("invalid regex pattern: {e}")))?;
+        .map_err(|e| FerrayError::invalid_value(format!("invalid regex pattern: {e}")))?;
 
     let data: Vec<bool> = a.map_to_vec(|s| re.is_match(s));
     let dim = Ix1::new([data.len()]);
@@ -35,11 +35,11 @@ pub fn match_<D: Dimension>(a: &StringArray<D>, pattern: &str) -> FerrumResult<A
 /// The pattern must contain at least one capture group `(...)`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if the regex pattern is invalid.
+/// Returns `FerrayError::InvalidValue` if the regex pattern is invalid.
 /// Returns an error if the internal array construction fails.
-pub fn extract<D: Dimension>(a: &StringArray<D>, pattern: &str) -> FerrumResult<StringArray1> {
+pub fn extract<D: Dimension>(a: &StringArray<D>, pattern: &str) -> FerrayResult<StringArray1> {
     let re = Regex::new(pattern)
-        .map_err(|e| FerrumError::invalid_value(format!("invalid regex pattern: {e}")))?;
+        .map_err(|e| FerrayError::invalid_value(format!("invalid regex pattern: {e}")))?;
 
     let data: Vec<String> = a
         .iter()

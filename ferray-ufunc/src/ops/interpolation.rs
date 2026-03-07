@@ -5,7 +5,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Ix1;
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
 /// 1-D linear interpolation.
@@ -19,7 +19,7 @@ pub fn interp<T>(
     x: &Array<T, Ix1>,
     xp: &Array<T, Ix1>,
     fp: &Array<T, Ix1>,
-) -> FerrumResult<Array<T, Ix1>>
+) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + Float,
 {
@@ -28,10 +28,10 @@ where
     let n = xp_data.len();
 
     if n == 0 {
-        return Err(FerrumError::invalid_value("interp: xp must be non-empty"));
+        return Err(FerrayError::invalid_value("interp: xp must be non-empty"));
     }
     if xp_data.len() != fp_data.len() {
-        return Err(FerrumError::shape_mismatch(
+        return Err(FerrayError::shape_mismatch(
             "interp: xp and fp must have the same length",
         ));
     }
@@ -83,15 +83,15 @@ fn interp_scalar<T: Float>(xi: T, xp: &[T], fp: &[T]) -> T {
 /// Convenience: interpolate a single scalar query point.
 ///
 /// AC-12: `interp_one(2.5, [1,2,3], [3,2,0]) == 1.0`.
-pub fn interp_one<T>(xi: T, xp: &[T], fp: &[T]) -> FerrumResult<T>
+pub fn interp_one<T>(xi: T, xp: &[T], fp: &[T]) -> FerrayResult<T>
 where
     T: Float,
 {
     if xp.is_empty() {
-        return Err(FerrumError::invalid_value("interp: xp must be non-empty"));
+        return Err(FerrayError::invalid_value("interp: xp must be non-empty"));
     }
     if xp.len() != fp.len() {
-        return Err(FerrumError::shape_mismatch(
+        return Err(FerrayError::shape_mismatch(
             "interp: xp and fp must have the same length",
         ));
     }

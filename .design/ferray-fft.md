@@ -4,7 +4,7 @@
 Implements the full `numpy.fft` surface: 1D/2D/ND forward and inverse FFTs, real-input FFTs (rfft family), Hermitian FFTs, frequency generation (fftfreq, rfftfreq), and shift utilities. Internally powered by `rustfft`. Adds plan caching via `FftPlan` for repeated transforms of the same size.
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, Dimension, Element, FerrumError)
+- **Upstream**: `ferray-core` (NdArray, Dimension, Element, FerrayError)
 - **Downstream**: ferray (re-export)
 - **External crates**: `rustfft` (FFT computation), `num-complex` (complex output), `rayon` (parallel multi-dimensional FFTs)
 - **Phase**: 2 — Submodules

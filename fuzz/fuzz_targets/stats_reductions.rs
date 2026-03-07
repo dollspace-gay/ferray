@@ -3,7 +3,7 @@
 //! Fuzz target for stats reductions: sum, prod, min, max, mean, var, std_,
 //! argmin, argmax, median.
 //!
-//! Contract: ferray either returns Ok or Err(FerrumError) — never panics.
+//! Contract: ferray either returns Ok or Err(FerrayError) — never panics.
 
 use libfuzzer_sys::fuzz_target;
 

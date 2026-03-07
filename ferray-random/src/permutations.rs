@@ -1,6 +1,6 @@
 // ferray-random: Permutations and sampling — shuffle, permutation, permuted, choice
 
-use ferray_core::{Array, FerrumError, Ix1};
+use ferray_core::{Array, FerrayError, Ix1};
 
 use crate::bitgen::BitGenerator;
 use crate::generator::Generator;
@@ -9,8 +9,8 @@ impl<B: BitGenerator> Generator<B> {
     /// Shuffle a 1-D array in-place using Fisher-Yates.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if the array is not contiguous.
-    pub fn shuffle<T>(&mut self, arr: &mut Array<T, Ix1>) -> Result<(), FerrumError>
+    /// Returns `FerrayError::InvalidValue` if the array is not contiguous.
+    pub fn shuffle<T>(&mut self, arr: &mut Array<T, Ix1>) -> Result<(), FerrayError>
     where
         T: ferray_core::Element,
     {
@@ -20,7 +20,7 @@ impl<B: BitGenerator> Generator<B> {
         }
         let slice = arr
             .as_slice_mut()
-            .ok_or_else(|| FerrumError::invalid_value("array must be contiguous for shuffle"))?;
+            .ok_or_else(|| FerrayError::invalid_value("array must be contiguous for shuffle"))?;
         // Fisher-Yates
         for i in (1..n).rev() {
             let j = self.bg.next_u64_bounded((i + 1) as u64) as usize;
@@ -35,8 +35,8 @@ impl<B: BitGenerator> Generator<B> {
     /// given (via `permutation_range`), returns a permutation of `0..n`.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if the array is empty.
-    pub fn permutation<T>(&mut self, arr: &Array<T, Ix1>) -> Result<Array<T, Ix1>, FerrumError>
+    /// Returns `FerrayError::InvalidValue` if the array is empty.
+    pub fn permutation<T>(&mut self, arr: &Array<T, Ix1>) -> Result<Array<T, Ix1>, FerrayError>
     where
         T: ferray_core::Element,
     {
@@ -48,10 +48,10 @@ impl<B: BitGenerator> Generator<B> {
     /// Return a permutation of `0..n` as an `Array1<i64>`.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `n` is zero.
-    pub fn permutation_range(&mut self, n: usize) -> Result<Array<i64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `n` is zero.
+    pub fn permutation_range(&mut self, n: usize) -> Result<Array<i64, Ix1>, FerrayError> {
         if n == 0 {
-            return Err(FerrumError::invalid_value("n must be > 0"));
+            return Err(FerrayError::invalid_value("n must be > 0"));
         }
         let mut data: Vec<i64> = (0..n as i64).collect();
         // Fisher-Yates
@@ -68,12 +68,12 @@ impl<B: BitGenerator> Generator<B> {
     /// implementation operates on 1-D arrays along axis 0.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if the array is empty.
+    /// Returns `FerrayError::InvalidValue` if the array is empty.
     pub fn permuted<T>(
         &mut self,
         arr: &Array<T, Ix1>,
         _axis: usize,
-    ) -> Result<Array<T, Ix1>, FerrumError>
+    ) -> Result<Array<T, Ix1>, FerrayError>
     where
         T: ferray_core::Element,
     {
@@ -89,7 +89,7 @@ impl<B: BitGenerator> Generator<B> {
     /// * `p` - Optional probability weights (must sum to 1.0 and have same length as `arr`).
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if parameters are invalid (e.g.,
+    /// Returns `FerrayError::InvalidValue` if parameters are invalid (e.g.,
     /// `size > arr.len()` when `replace=false`, or invalid probability weights).
     pub fn choice<T>(
         &mut self,
@@ -97,39 +97,39 @@ impl<B: BitGenerator> Generator<B> {
         size: usize,
         replace: bool,
         p: Option<&[f64]>,
-    ) -> Result<Array<T, Ix1>, FerrumError>
+    ) -> Result<Array<T, Ix1>, FerrayError>
     where
         T: ferray_core::Element,
     {
         let n = arr.shape()[0];
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if n == 0 {
-            return Err(FerrumError::invalid_value("source array must be non-empty"));
+            return Err(FerrayError::invalid_value("source array must be non-empty"));
         }
         if !replace && size > n {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "cannot choose {size} elements without replacement from array of size {n}"
             )));
         }
 
         if let Some(probs) = p {
             if probs.len() != n {
-                return Err(FerrumError::invalid_value(format!(
+                return Err(FerrayError::invalid_value(format!(
                     "p must have same length as array ({n}), got {}",
                     probs.len()
                 )));
             }
             let psum: f64 = probs.iter().sum();
             if (psum - 1.0).abs() > 1e-6 {
-                return Err(FerrumError::invalid_value(format!(
+                return Err(FerrayError::invalid_value(format!(
                     "p must sum to 1.0, got {psum}"
                 )));
             }
             for (i, &pi) in probs.iter().enumerate() {
                 if pi < 0.0 {
-                    return Err(FerrumError::invalid_value(format!(
+                    return Err(FerrayError::invalid_value(format!(
                         "p[{i}] = {pi} is negative"
                     )));
                 }
@@ -138,7 +138,7 @@ impl<B: BitGenerator> Generator<B> {
 
         let src = arr
             .as_slice()
-            .ok_or_else(|| FerrumError::invalid_value("array must be contiguous"))?;
+            .ok_or_else(|| FerrayError::invalid_value("array must be contiguous"))?;
 
         let indices = if let Some(probs) = p {
             // Weighted sampling
@@ -203,7 +203,7 @@ fn weighted_sample_without_replacement<B: BitGenerator>(
     bg: &mut B,
     probs: &[f64],
     size: usize,
-) -> Result<Vec<usize>, FerrumError> {
+) -> Result<Vec<usize>, FerrayError> {
     let n = probs.len();
     let mut weights: Vec<f64> = probs.to_vec();
     let mut selected = Vec::with_capacity(size);
@@ -211,7 +211,7 @@ fn weighted_sample_without_replacement<B: BitGenerator>(
     for _ in 0..size {
         let total: f64 = weights.iter().sum();
         if total <= 0.0 {
-            return Err(FerrumError::invalid_value(
+            return Err(FerrayError::invalid_value(
                 "insufficient probability mass for sampling without replacement",
             ));
         }

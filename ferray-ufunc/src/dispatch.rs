@@ -6,14 +6,14 @@
 
 use pulp::Arch;
 
-/// Check if SIMD is forcibly disabled via `FERRUM_FORCE_SCALAR=1`.
+/// Check if SIMD is forcibly disabled via `FERRAY_FORCE_SCALAR=1`.
 ///
 /// The env var is read once and cached for the lifetime of the process.
 #[inline]
 pub fn force_scalar() -> bool {
     use std::sync::LazyLock;
     static CACHED: LazyLock<bool> = LazyLock::new(|| {
-        std::env::var("FERRUM_FORCE_SCALAR")
+        std::env::var("FERRAY_FORCE_SCALAR")
             .ok()
             .is_some_and(|v| v == "1")
     });
@@ -491,7 +491,7 @@ mod tests {
     #[test]
     fn dispatch_unary_f32_works() {
         // Tests the dispatch path (SIMD or scalar depending on platform).
-        // To test the forced-scalar path, run with FERRUM_FORCE_SCALAR=1.
+        // To test the forced-scalar path, run with FERRAY_FORCE_SCALAR=1.
         let input = [1.0f32, 4.0, 9.0, 16.0];
         let mut output = [0.0f32; 4];
         dispatch_unary_f32(&input, &mut output, f32::sqrt);
@@ -527,10 +527,10 @@ mod tests {
     #[test]
     fn force_scalar_env() {
         // force_scalar() is cached via LazyLock for performance.
-        // In normal test runs, FERRUM_FORCE_SCALAR is not set,
+        // In normal test runs, FERRAY_FORCE_SCALAR is not set,
         // so force_scalar() returns false. We verify that here.
-        // To test the FERRUM_FORCE_SCALAR=1 path, run tests with
-        // the env var set: FERRUM_FORCE_SCALAR=1 cargo test
+        // To test the FERRAY_FORCE_SCALAR=1 path, run tests with
+        // the env var set: FERRAY_FORCE_SCALAR=1 cargo test
         assert!(!force_scalar());
     }
 

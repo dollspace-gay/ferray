@@ -4,7 +4,7 @@
 // Example: "{'descr': '<f8', 'fortran_order': False, 'shape': (3, 4), }"
 
 use ferray_core::dtype::DType;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use super::dtype_parse::{self, Endianness};
 use crate::format;
@@ -29,15 +29,15 @@ pub struct NpyHeader {
 /// Read and parse a .npy header from a reader.
 ///
 /// After this function returns, the reader is positioned at the start of the data.
-pub fn read_header<R: std::io::Read>(reader: &mut R) -> FerrumResult<NpyHeader> {
+pub fn read_header<R: std::io::Read>(reader: &mut R) -> FerrayResult<NpyHeader> {
     // Read magic
     let mut magic = [0u8; format::NPY_MAGIC_LEN];
     reader
         .read_exact(&mut magic)
-        .map_err(|e| FerrumError::io_error(format!("failed to read .npy magic: {e}")))?;
+        .map_err(|e| FerrayError::io_error(format!("failed to read .npy magic: {e}")))?;
 
     if magic != *format::NPY_MAGIC {
-        return Err(FerrumError::io_error(
+        return Err(FerrayError::io_error(
             "not a valid .npy file: bad magic number",
         ));
     }
@@ -46,13 +46,13 @@ pub fn read_header<R: std::io::Read>(reader: &mut R) -> FerrumResult<NpyHeader> 
     let mut version = [0u8; 2];
     reader
         .read_exact(&mut version)
-        .map_err(|e| FerrumError::io_error(format!("failed to read .npy version: {e}")))?;
+        .map_err(|e| FerrayError::io_error(format!("failed to read .npy version: {e}")))?;
 
     let major = version[0];
     let minor = version[1];
 
     if !matches!((major, minor), (1, 0) | (2, 0) | (3, 0)) {
-        return Err(FerrumError::io_error(format!(
+        return Err(FerrayError::io_error(format!(
             "unsupported .npy format version {major}.{minor}"
         )));
     }
@@ -62,13 +62,13 @@ pub fn read_header<R: std::io::Read>(reader: &mut R) -> FerrumResult<NpyHeader> 
         let mut buf = [0u8; 2];
         reader
             .read_exact(&mut buf)
-            .map_err(|e| FerrumError::io_error(format!("failed to read header length: {e}")))?;
+            .map_err(|e| FerrayError::io_error(format!("failed to read header length: {e}")))?;
         u16::from_le_bytes(buf) as usize
     } else {
         let mut buf = [0u8; 4];
         reader
             .read_exact(&mut buf)
-            .map_err(|e| FerrumError::io_error(format!("failed to read header length: {e}")))?;
+            .map_err(|e| FerrayError::io_error(format!("failed to read header length: {e}")))?;
         u32::from_le_bytes(buf) as usize
     };
 
@@ -76,10 +76,10 @@ pub fn read_header<R: std::io::Read>(reader: &mut R) -> FerrumResult<NpyHeader> 
     let mut header_bytes = vec![0u8; header_len];
     reader
         .read_exact(&mut header_bytes)
-        .map_err(|e| FerrumError::io_error(format!("failed to read header: {e}")))?;
+        .map_err(|e| FerrayError::io_error(format!("failed to read header: {e}")))?;
 
     let header_str = std::str::from_utf8(&header_bytes)
-        .map_err(|e| FerrumError::io_error(format!("header is not valid UTF-8: {e}")))?;
+        .map_err(|e| FerrayError::io_error(format!("header is not valid UTF-8: {e}")))?;
 
     // Parse the header dict
     let (descr, fortran_order, shape) = parse_header_dict(header_str)?;
@@ -101,7 +101,7 @@ pub fn write_header<W: std::io::Write>(
     dtype: DType,
     shape: &[usize],
     fortran_order: bool,
-) -> FerrumResult<()> {
+) -> FerrayResult<()> {
     let descr = dtype_parse::dtype_to_native_descr(dtype)?;
     let fortran_str = if fortran_order { "True" } else { "False" };
 
@@ -158,7 +158,7 @@ fn compute_padding(current_total: usize) -> usize {
     }
 }
 
-fn write_padding<W: std::io::Write>(writer: &mut W, count: usize) -> FerrumResult<()> {
+fn write_padding<W: std::io::Write>(writer: &mut W, count: usize) -> FerrayResult<()> {
     for _ in 0..count {
         writer.write_all(b" ")?;
     }
@@ -180,14 +180,14 @@ fn format_shape(shape: &[usize]) -> String {
 ///
 /// We do simple string parsing here rather than pulling in a full Python parser.
 /// The format is well-defined: `{'descr': '<f8', 'fortran_order': False, 'shape': (3, 4), }`
-fn parse_header_dict(header: &str) -> FerrumResult<(String, bool, Vec<usize>)> {
+fn parse_header_dict(header: &str) -> FerrayResult<(String, bool, Vec<usize>)> {
     let header = header.trim();
 
     // Strip outer braces
     let inner = header
         .strip_prefix('{')
         .and_then(|s| s.strip_suffix('}'))
-        .ok_or_else(|| FerrumError::io_error("header dict missing braces"))?
+        .ok_or_else(|| FerrayError::io_error("header dict missing braces"))?
         .trim();
 
     let descr = extract_string_value(inner, "descr")?;
@@ -198,12 +198,12 @@ fn parse_header_dict(header: &str) -> FerrumResult<(String, bool, Vec<usize>)> {
 }
 
 /// Extract a string value for a given key from the dict body.
-fn extract_string_value(dict_body: &str, key: &str) -> FerrumResult<String> {
+fn extract_string_value(dict_body: &str, key: &str) -> FerrayResult<String> {
     // Look for 'key': 'value'
     let pattern = format!("'{key}':");
     let pos = dict_body
         .find(&pattern)
-        .ok_or_else(|| FerrumError::io_error(format!("header missing key '{key}'")))?;
+        .ok_or_else(|| FerrayError::io_error(format!("header missing key '{key}'")))?;
 
     let after_key = &dict_body[pos + pattern.len()..].trim_start();
 
@@ -211,10 +211,10 @@ fn extract_string_value(dict_body: &str, key: &str) -> FerrumResult<String> {
     let quote_char = after_key
         .as_bytes()
         .first()
-        .ok_or_else(|| FerrumError::io_error(format!("missing value for key '{key}'")))?;
+        .ok_or_else(|| FerrayError::io_error(format!("missing value for key '{key}'")))?;
 
     if *quote_char != b'\'' && *quote_char != b'"' {
-        return Err(FerrumError::io_error(format!(
+        return Err(FerrayError::io_error(format!(
             "expected string value for key '{key}'"
         )));
     }
@@ -223,17 +223,17 @@ fn extract_string_value(dict_body: &str, key: &str) -> FerrumResult<String> {
     let value_start = &after_key[1..];
     let end = value_start
         .find(qc)
-        .ok_or_else(|| FerrumError::io_error(format!("unterminated string for key '{key}'")))?;
+        .ok_or_else(|| FerrayError::io_error(format!("unterminated string for key '{key}'")))?;
 
     Ok(value_start[..end].to_string())
 }
 
 /// Extract a boolean value for a given key from the dict body.
-fn extract_bool_value(dict_body: &str, key: &str) -> FerrumResult<bool> {
+fn extract_bool_value(dict_body: &str, key: &str) -> FerrayResult<bool> {
     let pattern = format!("'{key}':");
     let pos = dict_body
         .find(&pattern)
-        .ok_or_else(|| FerrumError::io_error(format!("header missing key '{key}'")))?;
+        .ok_or_else(|| FerrayError::io_error(format!("header missing key '{key}'")))?;
 
     let after_key = dict_body[pos + pattern.len()..].trim_start();
 
@@ -242,31 +242,31 @@ fn extract_bool_value(dict_body: &str, key: &str) -> FerrumResult<bool> {
     } else if after_key.starts_with("False") {
         Ok(false)
     } else {
-        Err(FerrumError::io_error(format!(
+        Err(FerrayError::io_error(format!(
             "expected True/False for key '{key}'"
         )))
     }
 }
 
 /// Extract a tuple shape value for a given key from the dict body.
-fn extract_shape_value(dict_body: &str, key: &str) -> FerrumResult<Vec<usize>> {
+fn extract_shape_value(dict_body: &str, key: &str) -> FerrayResult<Vec<usize>> {
     let pattern = format!("'{key}':");
     let pos = dict_body
         .find(&pattern)
-        .ok_or_else(|| FerrumError::io_error(format!("header missing key '{key}'")))?;
+        .ok_or_else(|| FerrayError::io_error(format!("header missing key '{key}'")))?;
 
     let after_key = dict_body[pos + pattern.len()..].trim_start();
 
     // Find the opening paren
     if !after_key.starts_with('(') {
-        return Err(FerrumError::io_error(format!(
+        return Err(FerrayError::io_error(format!(
             "expected tuple for key '{key}'"
         )));
     }
 
     let close = after_key
         .find(')')
-        .ok_or_else(|| FerrumError::io_error(format!("unterminated tuple for key '{key}'")))?;
+        .ok_or_else(|| FerrayError::io_error(format!("unterminated tuple for key '{key}'")))?;
 
     let tuple_inner = &after_key[1..close];
     let tuple_inner = tuple_inner.trim();
@@ -275,13 +275,13 @@ fn extract_shape_value(dict_body: &str, key: &str) -> FerrumResult<Vec<usize>> {
         return Ok(vec![]);
     }
 
-    let parts: FerrumResult<Vec<usize>> = tuple_inner
+    let parts: FerrayResult<Vec<usize>> = tuple_inner
         .split(',')
         .filter(|s| !s.trim().is_empty())
         .map(|s| {
             s.trim()
                 .parse::<usize>()
-                .map_err(|e| FerrumError::io_error(format!("invalid shape dimension '{s}': {e}")))
+                .map_err(|e| FerrayError::io_error(format!("invalid shape dimension '{s}': {e}")))
         })
         .collect();
 

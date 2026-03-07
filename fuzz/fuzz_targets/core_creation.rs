@@ -3,7 +3,7 @@
 //! Fuzz target for core array creation: Array::from_vec with various shapes,
 //! Array::zeros, Array::ones, Array::from_elem.
 //!
-//! Contract: ferray either returns Ok or Err(FerrumError) — never panics.
+//! Contract: ferray either returns Ok or Err(FerrayError) — never panics.
 
 use libfuzzer_sys::fuzz_target;
 

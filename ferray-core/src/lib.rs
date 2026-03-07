@@ -2,12 +2,12 @@
 //
 // This is the root crate for the ferray workspace. It provides NdArray<T, D>,
 // the full ownership model (Array, ArrayView, ArrayViewMut, ArcArray, CowArray),
-// the Element trait, DType system, FerrumError, and array introspection/iteration.
+// the Element trait, DType system, FerrayError, and array introspection/iteration.
 //
 // ndarray is used internally but is NOT part of the public API.
 //
 // When the `no_std` feature is enabled, only the subset of functionality that
-// does not depend on `std` or `ndarray` is compiled: DType, Element, FerrumError
+// does not depend on `std` or `ndarray` is compiled: DType, Element, FerrayError
 // (simplified), dimension types (without ndarray conversions), constants, and
 // layout enums. The full Array type and related features require `std`.
 
@@ -68,7 +68,7 @@ pub use dimension::static_shape::{
 
 pub use dtype::{DType, Element, SliceInfoElem};
 
-pub use error::{FerrumError, FerrumResult};
+pub use error::{FerrayError, FerrayResult};
 
 pub use layout::MemoryLayout;
 
@@ -81,10 +81,10 @@ pub use dynarray::DynArray;
 pub use record::FieldDescriptor;
 
 // Re-export proc macros from ferray-core-macros.
-// The derive macro FerrumRecord shares its name with the trait in record::FerrumRecord.
+// The derive macro FerrayRecord shares its name with the trait in record::FerrayRecord.
 // Both are re-exported: the derive macro lives in macro namespace, the trait in type namespace.
-pub use ferray_core_macros::{FerrumRecord, promoted_type, s};
-pub use record::FerrumRecord;
+pub use ferray_core_macros::{FerrayRecord, promoted_type, s};
+pub use record::FerrayRecord;
 
 // Kani formal verification harnesses (only compiled during `cargo kani`)
 #[cfg(kani)]

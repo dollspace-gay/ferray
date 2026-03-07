@@ -4,7 +4,7 @@
 Implements `numpy.strings` (NumPy 2.0+): vectorized elementwise string operations on arrays of strings with broadcasting. Covers case manipulation, alignment/padding, stripping, find/replace, splitting/joining, and regex support. Operates on `StringArray` — a separate array type backed by `Vec<String>`.
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, Array1, broadcasting, FerrumError)
+- **Upstream**: `ferray-core` (NdArray, Array1, broadcasting, FerrayError)
 - **Downstream**: ferray (re-export)
 - **External crates**: `regex` (regex operations)
 - **Phase**: 3 — Completeness

@@ -28,10 +28,10 @@ pub use crate::dtype::casting::{AsType, CastKind};
 pub use crate::dtype::promotion::{PromoteTo, Promoted};
 
 // Proc macros
-pub use ferray_core_macros::{FerrumRecord, promoted_type, s};
+pub use ferray_core_macros::{FerrayRecord, promoted_type, s};
 
 // Error handling
-pub use crate::error::{FerrumError, FerrumResult};
+pub use crate::error::{FerrayError, FerrayResult};
 
 // Memory layout
 pub use crate::layout::MemoryLayout;
@@ -43,7 +43,7 @@ pub use crate::buffer::AsRawBuffer;
 pub use crate::dynarray::DynArray;
 
 // Record types
-pub use crate::record::FerrumRecord;
+pub use crate::record::FerrayRecord;
 
 // Display configuration
 pub use crate::array::display::{get_print_options, set_print_options};

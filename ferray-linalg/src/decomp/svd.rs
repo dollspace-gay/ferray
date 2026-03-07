@@ -4,7 +4,7 @@
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix1, Ix2};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::faer_bridge;
 
@@ -18,11 +18,11 @@ use crate::faer_bridge;
 /// S is always a 1D array of length min(m, n) in nonincreasing order.
 ///
 /// # Errors
-/// - `FerrumError::InvalidValue` if SVD computation fails to converge.
+/// - `FerrayError::InvalidValue` if SVD computation fails to converge.
 pub fn svd(
     a: &Array<f64, Ix2>,
     full_matrices: bool,
-) -> FerrumResult<(Array<f64, Ix2>, Array<f64, Ix1>, Array<f64, Ix2>)> {
+) -> FerrayResult<(Array<f64, Ix2>, Array<f64, Ix1>, Array<f64, Ix2>)> {
     let mat = faer_bridge::array2_to_faer(a);
 
     let decomp = if full_matrices {
@@ -31,7 +31,7 @@ pub fn svd(
         mat.as_ref().thin_svd()
     };
 
-    let decomp = decomp.map_err(|e| FerrumError::InvalidValue {
+    let decomp = decomp.map_err(|e| FerrayError::InvalidValue {
         message: format!("SVD failed to converge: {e:?}"),
     })?;
 

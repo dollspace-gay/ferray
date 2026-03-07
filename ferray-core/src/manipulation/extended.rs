@@ -5,7 +5,7 @@
 use crate::array::owned::Array;
 use crate::dimension::{Dimension, Ix1, IxDyn};
 use crate::dtype::Element;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 // ============================================================================
 // Pad modes
@@ -34,20 +34,20 @@ pub enum PadMode<T: Element> {
 /// Analogous to `numpy.pad()` for 1-D.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if the array is empty and the mode
+/// Returns `FerrayError::InvalidValue` if the array is empty and the mode
 /// requires elements (Edge, Reflect, Symmetric, Wrap).
 pub fn pad_1d<T: Element>(
     a: &Array<T, Ix1>,
     pad_width: (usize, usize),
     mode: &PadMode<T>,
-) -> FerrumResult<Array<T, Ix1>> {
+) -> FerrayResult<Array<T, Ix1>> {
     let n = a.shape()[0];
     let (before, after) = pad_width;
     let new_len = before + n + after;
     let src: Vec<T> = a.iter().cloned().collect();
 
     if n == 0 && !matches!(mode, PadMode::Constant(_)) {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "pad: cannot use Edge/Reflect/Symmetric/Wrap mode on empty array",
         ));
     }
@@ -150,14 +150,14 @@ fn symmetric_index(idx: isize, n: usize) -> usize {
 /// Analogous to `numpy.pad()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `pad_width` is empty.
+/// Returns `FerrayError::InvalidValue` if `pad_width` is empty.
 pub fn pad<T: Element, D: Dimension>(
     a: &Array<T, D>,
     pad_width: &[(usize, usize)],
     mode: &PadMode<T>,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     if pad_width.is_empty() {
-        return Err(FerrumError::invalid_value("pad: pad_width cannot be empty"));
+        return Err(FerrayError::invalid_value("pad: pad_width cannot be empty"));
     }
 
     let shape = a.shape();
@@ -276,13 +276,13 @@ pub fn pad<T: Element, D: Dimension>(
 /// Analogous to `numpy.tile()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `reps` is empty.
+/// Returns `FerrayError::InvalidValue` if `reps` is empty.
 pub fn tile<T: Element, D: Dimension>(
     a: &Array<T, D>,
     reps: &[usize],
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     if reps.is_empty() {
-        return Err(FerrumError::invalid_value("tile: reps cannot be empty"));
+        return Err(FerrayError::invalid_value("tile: reps cannot be empty"));
     }
 
     let src_shape = a.shape();
@@ -351,12 +351,12 @@ pub fn tile<T: Element, D: Dimension>(
 /// Analogous to `numpy.repeat()`.
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if the axis is out of bounds.
+/// Returns `FerrayError::AxisOutOfBounds` if the axis is out of bounds.
 pub fn repeat<T: Element, D: Dimension>(
     a: &Array<T, D>,
     repeats: usize,
     axis: Option<usize>,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     match axis {
         None => {
             // Flatten and repeat each element
@@ -374,7 +374,7 @@ pub fn repeat<T: Element, D: Dimension>(
             let shape = a.shape();
             let ndim = shape.len();
             if ax >= ndim {
-                return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+                return Err(FerrayError::axis_out_of_bounds(ax, ndim));
             }
 
             let mut new_shape = shape.to_vec();
@@ -419,24 +419,24 @@ pub fn repeat<T: Element, D: Dimension>(
 /// Analogous to `numpy.delete()`.
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if axis is out of bounds.
-/// Returns `FerrumError::IndexOutOfBounds` if any index is out of range.
+/// Returns `FerrayError::AxisOutOfBounds` if axis is out of bounds.
+/// Returns `FerrayError::IndexOutOfBounds` if any index is out of range.
 pub fn delete<T: Element, D: Dimension>(
     a: &Array<T, D>,
     indices: &[usize],
     axis: usize,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     let ndim = shape.len();
     if axis >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis, ndim));
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
     }
     let axis_len = shape[axis];
 
     // Validate indices
     for &idx in indices {
         if idx >= axis_len {
-            return Err(FerrumError::IndexOutOfBounds {
+            return Err(FerrayError::IndexOutOfBounds {
                 index: idx as isize,
                 axis,
                 size: axis_len,
@@ -489,22 +489,22 @@ pub fn delete<T: Element, D: Dimension>(
 /// Analogous to `numpy.insert()`.
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if axis is out of bounds.
-/// Returns `FerrumError::IndexOutOfBounds` if `index > axis_len`.
+/// Returns `FerrayError::AxisOutOfBounds` if axis is out of bounds.
+/// Returns `FerrayError::IndexOutOfBounds` if `index > axis_len`.
 pub fn insert<T: Element, D: Dimension>(
     a: &Array<T, D>,
     index: usize,
     values: &Array<T, IxDyn>,
     axis: usize,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     let ndim = shape.len();
     if axis >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis, ndim));
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
     }
     let axis_len = shape[axis];
     if index > axis_len {
-        return Err(FerrumError::IndexOutOfBounds {
+        return Err(FerrayError::IndexOutOfBounds {
             index: index as isize,
             axis,
             size: axis_len + 1,
@@ -578,7 +578,7 @@ pub fn append<T: Element, D: Dimension>(
     a: &Array<T, D>,
     values: &Array<T, IxDyn>,
     axis: Option<usize>,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     match axis {
         None => {
             let mut data: Vec<T> = a.iter().cloned().collect();
@@ -609,7 +609,7 @@ pub fn append<T: Element, D: Dimension>(
 pub fn resize<T: Element, D: Dimension>(
     a: &Array<T, D>,
     new_shape: &[usize],
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let src: Vec<T> = a.iter().cloned().collect();
     let new_size: usize = new_shape.iter().product();
 
@@ -633,11 +633,11 @@ pub fn resize<T: Element, D: Dimension>(
 /// Analogous to `numpy.trim_zeros()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `trim` contains invalid characters.
+/// Returns `FerrayError::InvalidValue` if `trim` contains invalid characters.
 pub fn trim_zeros<T: Element + PartialEq>(
     a: &Array<T, Ix1>,
     trim: &str,
-) -> FerrumResult<Array<T, Ix1>> {
+) -> FerrayResult<Array<T, Ix1>> {
     let data: Vec<T> = a.iter().cloned().collect();
     let zero = T::zero();
 
@@ -645,7 +645,7 @@ pub fn trim_zeros<T: Element + PartialEq>(
     let trim_back = trim.contains('b');
 
     if !trim.chars().all(|c| c == 'f' || c == 'b') {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "trim_zeros: trim must contain only 'f' and/or 'b'",
         ));
     }

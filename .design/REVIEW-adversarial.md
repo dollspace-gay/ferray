@@ -149,10 +149,10 @@ ferray-core has **30 requirements** covering:
 - 20+ array creation functions
 - 15+ shape manipulation functions
 - Full type promotion system with compile-time macros
-- `FerrumError` hierarchy
+- `FerrayError` hierarchy
 - `AsRawBuffer` interop trait
 - `DynArray` runtime-typed enum
-- A proc macro crate (`FerrumRecord`)
+- A proc macro crate (`FerrayRecord`)
 
 This is realistically 3-4 agents' worth of work. A single agent will either produce incomplete output or hit context limits. **Recommend splitting ferray-core into sub-agents**: core-types (NdArray + ownership), core-indexing, core-creation-manipulation, core-macros.
 

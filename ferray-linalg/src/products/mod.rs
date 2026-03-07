@@ -9,7 +9,7 @@ pub mod tensordot;
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix2, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 pub use einsum::einsum;
 pub use tensordot::{TensordotAxes, tensordot};
@@ -22,8 +22,8 @@ pub use tensordot::{TensordotAxes, tensordot};
 /// - ND x MD: sum over last axis of a and second-to-last of b
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if dimensions are incompatible.
-pub fn dot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, IxDyn>> {
+/// - `FerrayError::ShapeMismatch` if dimensions are incompatible.
+pub fn dot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
 
@@ -31,7 +31,7 @@ pub fn dot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f
         (1, 1) => {
             // Inner product
             if a_shape[0] != b_shape[0] {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "dot: vectors have different lengths {} and {}",
                     a_shape[0], b_shape[0]
                 )));
@@ -50,7 +50,7 @@ pub fn dot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f
             // Sum product over last axis of a with b
             let k = a_shape[a_shape.len() - 1];
             if k != b_shape[0] {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "dot: last axis of a ({}) != length of b ({})",
                     k, b_shape[0]
                 )));
@@ -89,12 +89,12 @@ pub fn dot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f
 /// For real arrays, this is the same as `dot` on flattened inputs.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if total element counts differ.
-pub fn vdot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<f64> {
+/// - `FerrayError::ShapeMismatch` if total element counts differ.
+pub fn vdot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<f64> {
     let a_flat: Vec<f64> = a.iter().copied().collect();
     let b_flat: Vec<f64> = b.iter().copied().collect();
     if a_flat.len() != b_flat.len() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "vdot: arrays have different sizes {} and {}",
             a_flat.len(),
             b_flat.len()
@@ -109,8 +109,8 @@ pub fn vdot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<f64> {
 /// For higher dimensions, it sums over the last axis of both arrays.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if the last dimensions don't match.
-pub fn inner(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, IxDyn>> {
+/// - `FerrayError::ShapeMismatch` if the last dimensions don't match.
+pub fn inner(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
 
@@ -122,7 +122,7 @@ pub fn inner(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array
     let last_a = a_shape.last().copied().unwrap_or(1);
     let last_b = b_shape.last().copied().unwrap_or(1);
     if last_a != last_b {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "inner: last dimensions must match ({} != {})",
             last_a, last_b
         )));
@@ -138,8 +138,8 @@ pub fn inner(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array
 /// Computes the outer product of two 1D arrays, producing a 2D array.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if inputs are not 1D.
-pub fn outer(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, IxDyn>> {
+/// - `FerrayError::ShapeMismatch` if inputs are not 1D.
+pub fn outer(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
     let a_flat: Vec<f64> = a.iter().copied().collect();
     let b_flat: Vec<f64> = b.iter().copied().collect();
     let m = a_flat.len();
@@ -164,14 +164,14 @@ pub fn outer(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array
 /// - ND x ND: batched matmul over leading dimensions
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if inner dimensions don't match.
-pub fn matmul(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, IxDyn>> {
+/// - `FerrayError::ShapeMismatch` if inner dimensions don't match.
+pub fn matmul(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
 
     match (a_shape.len(), b_shape.len()) {
         (1, 1) => {
-            return Err(FerrumError::shape_mismatch(
+            return Err(FerrayError::shape_mismatch(
                 "matmul: cannot multiply two 1D arrays (use dot instead)",
             ));
         }
@@ -180,7 +180,7 @@ pub fn matmul(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Arra
             let k = a_shape[0];
             let n = b_shape[1];
             if k != b_shape[0] {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "matmul: shapes ({},) and ({},{}) not aligned",
                     k, b_shape[0], n
                 )));
@@ -199,7 +199,7 @@ pub fn matmul(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Arra
             // Matrix-vector: treat b as (k, 1)
             let (m, k) = (a_shape[0], a_shape[1]);
             if k != b_shape[0] {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "matmul: shapes ({},{}) and ({},) not aligned",
                     m, k, b_shape[0]
                 )));
@@ -232,13 +232,13 @@ const FAER_MATMUL_THRESHOLD: usize = 64;
 /// Above this threshold, use faer with Rayon parallelism.
 const FAER_PARALLEL_THRESHOLD: usize = 256;
 
-fn matmul_2d(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, Ix2>> {
+fn matmul_2d(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, Ix2>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
     let (m, k1) = (a_shape[0], a_shape[1]);
     let (k2, n) = (b_shape[0], b_shape[1]);
     if k1 != k2 {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "matmul: inner dimensions don't match ({}x{} @ {}x{})",
             m, k1, k2, n
         )));
@@ -295,12 +295,12 @@ fn matmul_2d(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array
     Array::from_vec(Ix2::new([m, n]), data)
 }
 
-fn matmul_batched(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, IxDyn>> {
+fn matmul_batched(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
 
     if a_shape.len() < 2 || b_shape.len() < 2 {
-        return Err(FerrumError::shape_mismatch(
+        return Err(FerrayError::shape_mismatch(
             "matmul: need at least 2D arrays for batched matmul",
         ));
     }
@@ -311,7 +311,7 @@ fn matmul_batched(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<
     let b_n = b_shape[b_shape.len() - 1];
 
     if a_k != b_k {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "matmul: inner dimensions don't match ({} != {})",
             a_k, b_k
         )));
@@ -361,7 +361,7 @@ fn matmul_batched(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<
     Array::from_vec(IxDyn::new(&out_shape), result)
 }
 
-fn broadcast_shapes(a: &[usize], b: &[usize]) -> FerrumResult<Vec<usize>> {
+fn broadcast_shapes(a: &[usize], b: &[usize]) -> FerrayResult<Vec<usize>> {
     let max_len = a.len().max(b.len());
     let mut result = Vec::with_capacity(max_len);
     for i in 0..max_len {
@@ -382,7 +382,7 @@ fn broadcast_shapes(a: &[usize], b: &[usize]) -> FerrumResult<Vec<usize>> {
         } else if db == 1 {
             result.push(da);
         } else {
-            return Err(FerrumError::broadcast_failure(a, b));
+            return Err(FerrayError::broadcast_failure(a, b));
         }
     }
     Ok(result)
@@ -393,12 +393,12 @@ fn broadcast_shapes(a: &[usize], b: &[usize]) -> FerrumResult<Vec<usize>> {
 /// The Kronecker product of A (m x n) and B (p x q) is an (m*p x n*q) matrix.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if inputs are not 2D.
-pub fn kron(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<f64, IxDyn>> {
+/// - `FerrayError::ShapeMismatch` if inputs are not 2D.
+pub fn kron(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
     if a_shape.len() != 2 || b_shape.len() != 2 {
-        return Err(FerrumError::shape_mismatch("kron: both arrays must be 2D"));
+        return Err(FerrayError::shape_mismatch("kron: both arrays must be 2D"));
     }
 
     let (m, n) = (a_shape[0], a_shape[1]);
@@ -431,11 +431,11 @@ pub fn kron(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array<
 /// For long chains, this can be 10-100x faster than naive left-to-right chaining.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if adjacent matrix dimensions are incompatible.
-/// - `FerrumError::InvalidValue` if fewer than 2 matrices are provided.
-pub fn multi_dot(arrays: &[&Array<f64, IxDyn>]) -> FerrumResult<Array<f64, IxDyn>> {
+/// - `FerrayError::ShapeMismatch` if adjacent matrix dimensions are incompatible.
+/// - `FerrayError::InvalidValue` if fewer than 2 matrices are provided.
+pub fn multi_dot(arrays: &[&Array<f64, IxDyn>]) -> FerrayResult<Array<f64, IxDyn>> {
     if arrays.len() < 2 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "multi_dot: need at least 2 matrices",
         ));
     }
@@ -462,7 +462,7 @@ pub fn multi_dot(arrays: &[&Array<f64, IxDyn>]) -> FerrumResult<Array<f64, IxDyn
                 }
                 continue;
             }
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "multi_dot: matrix {} has {} dimensions (expected 2)",
                 i,
                 shape.len()
@@ -485,7 +485,7 @@ pub fn multi_dot(arrays: &[&Array<f64, IxDyn>]) -> FerrumResult<Array<f64, IxDyn
             curr_shape[0]
         };
         if prev_cols != curr_rows {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "multi_dot: shapes of matrices {} and {} not aligned ({} != {})",
                 i - 1,
                 i,
@@ -522,7 +522,7 @@ pub fn multi_dot(arrays: &[&Array<f64, IxDyn>]) -> FerrumResult<Array<f64, IxDyn
         split: &[Vec<usize>],
         i: usize,
         j: usize,
-    ) -> FerrumResult<Array<f64, IxDyn>> {
+    ) -> FerrayResult<Array<f64, IxDyn>> {
         if i == j {
             return Ok(arrays[i].clone());
         }
@@ -541,18 +541,18 @@ pub fn multi_dot(arrays: &[&Array<f64, IxDyn>]) -> FerrumResult<Array<f64, IxDyn
 /// This is equivalent to `numpy.vecdot` (new in NumPy 2.0).
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if arrays have incompatible shapes.
-/// - `FerrumError::AxisOutOfBounds` if axis is out of range.
+/// - `FerrayError::ShapeMismatch` if arrays have incompatible shapes.
+/// - `FerrayError::AxisOutOfBounds` if axis is out of range.
 pub fn vecdot(
     a: &Array<f64, IxDyn>,
     b: &Array<f64, IxDyn>,
     axis: Option<isize>,
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
 
     if a_shape != b_shape {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "vecdot: shapes {:?} and {:?} must match",
             a_shape, b_shape
         )));
@@ -562,7 +562,7 @@ pub fn vecdot(
     let ax = match axis {
         None => {
             if ndim == 0 {
-                return Err(FerrumError::shape_mismatch(
+                return Err(FerrayError::shape_mismatch(
                     "vecdot: 0D arrays not supported",
                 ));
             }
@@ -575,7 +575,7 @@ pub fn vecdot(
                 ax as usize
             };
             if ax >= ndim {
-                return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+                return Err(FerrayError::axis_out_of_bounds(ax, ndim));
             }
             ax
         }

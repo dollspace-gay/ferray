@@ -3,7 +3,7 @@
 //! Fuzz target for arithmetic ufuncs: add, subtract, multiply, divide, power,
 //! sqrt, cbrt, absolute, negative, square, reciprocal, sign.
 //!
-//! Contract: ferray either returns Ok or Err(FerrumError) — never panics.
+//! Contract: ferray either returns Ok or Err(FerrayError) — never panics.
 
 use libfuzzer_sys::fuzz_target;
 

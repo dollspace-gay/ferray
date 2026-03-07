@@ -4,7 +4,7 @@ use ndarray::ShapeBuilder;
 
 use crate::dimension::Dimension;
 use crate::dtype::Element;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 use crate::layout::MemoryLayout;
 
 /// An owned, heap-allocated N-dimensional array.
@@ -44,33 +44,33 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// Create a new array filled with the given value.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if the shape has zero dimensions
+    /// Returns `FerrayError::InvalidValue` if the shape has zero dimensions
     /// but `D` is a fixed-rank type with nonzero rank, or vice versa.
-    pub fn from_elem(dim: D, elem: T) -> FerrumResult<Self> {
+    pub fn from_elem(dim: D, elem: T) -> FerrayResult<Self> {
         let nd_dim = dim.to_ndarray_dim();
         let inner = ndarray::Array::from_elem(nd_dim, elem);
         Ok(Self { inner, dim })
     }
 
     /// Create a new array filled with zeros.
-    pub fn zeros(dim: D) -> FerrumResult<Self> {
+    pub fn zeros(dim: D) -> FerrayResult<Self> {
         Self::from_elem(dim, T::zero())
     }
 
     /// Create a new array filled with ones.
-    pub fn ones(dim: D) -> FerrumResult<Self> {
+    pub fn ones(dim: D) -> FerrayResult<Self> {
         Self::from_elem(dim, T::one())
     }
 
     /// Create an array from a flat vector and a shape.
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if `data.len()` does not equal
+    /// Returns `FerrayError::ShapeMismatch` if `data.len()` does not equal
     /// the product of the shape dimensions.
-    pub fn from_vec(dim: D, data: Vec<T>) -> FerrumResult<Self> {
+    pub fn from_vec(dim: D, data: Vec<T>) -> FerrayResult<Self> {
         let expected = dim.size();
         if data.len() != expected {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "data length {} does not match shape {:?} (expected {})",
                 data.len(),
                 dim.as_slice(),
@@ -79,18 +79,18 @@ impl<T: Element, D: Dimension> Array<T, D> {
         }
         let nd_dim = dim.to_ndarray_dim();
         let inner = ndarray::Array::from_shape_vec(nd_dim, data)
-            .map_err(|e| FerrumError::shape_mismatch(format!("ndarray shape error: {e}")))?;
+            .map_err(|e| FerrayError::shape_mismatch(format!("ndarray shape error: {e}")))?;
         Ok(Self { inner, dim })
     }
 
     /// Create an array from a flat vector with Fortran (column-major) layout.
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if lengths don't match.
-    pub fn from_vec_f(dim: D, data: Vec<T>) -> FerrumResult<Self> {
+    /// Returns `FerrayError::ShapeMismatch` if lengths don't match.
+    pub fn from_vec_f(dim: D, data: Vec<T>) -> FerrayResult<Self> {
         let expected = dim.size();
         if data.len() != expected {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "data length {} does not match shape {:?} (expected {})",
                 data.len(),
                 dim.as_slice(),
@@ -99,7 +99,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
         }
         let nd_dim = dim.to_ndarray_dim();
         let inner = ndarray::Array::from_shape_vec(nd_dim.f(), data)
-            .map_err(|e| FerrumError::shape_mismatch(format!("ndarray shape error: {e}")))?;
+            .map_err(|e| FerrayError::shape_mismatch(format!("ndarray shape error: {e}")))?;
         let dim = D::from_ndarray_dim(&inner.raw_dim());
         Ok(Self { inner, dim })
     }
@@ -108,7 +108,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
     ///
     /// This only makes sense for `D = Ix1`; for other dimensions,
     /// collect first and use `from_vec`.
-    pub fn from_iter_1d(iter: impl IntoIterator<Item = T>) -> FerrumResult<Self>
+    pub fn from_iter_1d(iter: impl IntoIterator<Item = T>) -> FerrayResult<Self>
     where
         D: Dimension<NdarrayDim = ndarray::Ix1>,
     {

@@ -4,7 +4,7 @@
 // Recurrence: He_0(x) = 1, He_1(x) = x,
 //   He_{n+1}(x) = x*He_n(x) - n*He_{n-1}(x)
 
-use ferray_core::error::FerrumError;
+use ferray_core::error::FerrayError;
 use num_complex::Complex;
 
 use crate::fitting::{hermite_e_vandermonde, least_squares_fit};
@@ -154,11 +154,11 @@ fn power_to_hermite_e(power_coeffs: &[f64]) -> Vec<f64> {
 }
 
 impl Poly for HermiteE {
-    fn eval(&self, x: f64) -> Result<f64, FerrumError> {
+    fn eval(&self, x: f64) -> Result<f64, FerrayError> {
         Ok(clenshaw_hermite_e(&self.coeffs, x))
     }
 
-    fn deriv(&self, m: usize) -> Result<Self, FerrumError> {
+    fn deriv(&self, m: usize) -> Result<Self, FerrayError> {
         if m == 0 {
             return Ok(self.clone());
         }
@@ -182,7 +182,7 @@ impl Poly for HermiteE {
         })
     }
 
-    fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrumError> {
+    fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrayError> {
         if m == 0 {
             return Ok(self.clone());
         }
@@ -201,7 +201,7 @@ impl Poly for HermiteE {
         })
     }
 
-    fn roots(&self) -> Result<Vec<Complex<f64>>, FerrumError> {
+    fn roots(&self) -> Result<Vec<Complex<f64>>, FerrayError> {
         let power = hermite_e_to_power(&self.coeffs);
         find_roots_from_power_coeffs(&power)
     }
@@ -218,9 +218,9 @@ impl Poly for HermiteE {
         &self.coeffs
     }
 
-    fn trim(&self, tol: f64) -> Result<Self, FerrumError> {
+    fn trim(&self, tol: f64) -> Result<Self, FerrayError> {
         if tol < 0.0 {
-            return Err(FerrumError::invalid_value("tolerance must be non-negative"));
+            return Err(FerrayError::invalid_value("tolerance must be non-negative"));
         }
         let mut last = self.coeffs.len();
         while last > 1 && self.coeffs[last - 1].abs() <= tol {
@@ -231,9 +231,9 @@ impl Poly for HermiteE {
         })
     }
 
-    fn truncate(&self, size: usize) -> Result<Self, FerrumError> {
+    fn truncate(&self, size: usize) -> Result<Self, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value(
+            return Err(FerrayError::invalid_value(
                 "truncation size must be at least 1",
             ));
         }
@@ -243,7 +243,7 @@ impl Poly for HermiteE {
         })
     }
 
-    fn add(&self, other: &Self) -> Result<Self, FerrumError> {
+    fn add(&self, other: &Self) -> Result<Self, FerrayError> {
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -255,7 +255,7 @@ impl Poly for HermiteE {
         Ok(Self { coeffs: result })
     }
 
-    fn sub(&self, other: &Self) -> Result<Self, FerrumError> {
+    fn sub(&self, other: &Self) -> Result<Self, FerrayError> {
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -267,7 +267,7 @@ impl Poly for HermiteE {
         Ok(Self { coeffs: result })
     }
 
-    fn mul(&self, other: &Self) -> Result<Self, FerrumError> {
+    fn mul(&self, other: &Self) -> Result<Self, FerrayError> {
         let a_power = hermite_e_to_power(&self.coeffs);
         let b_power = hermite_e_to_power(&other.coeffs);
 
@@ -284,7 +284,7 @@ impl Poly for HermiteE {
         })
     }
 
-    fn pow(&self, n: usize) -> Result<Self, FerrumError> {
+    fn pow(&self, n: usize) -> Result<Self, FerrayError> {
         if n == 0 {
             return Ok(Self { coeffs: vec![1.0] });
         }
@@ -295,7 +295,7 @@ impl Poly for HermiteE {
         Ok(result)
     }
 
-    fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrumError> {
+    fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrayError> {
         let a_power = hermite_e_to_power(&self.coeffs);
         let b_power = hermite_e_to_power(&other.coeffs);
 
@@ -313,28 +313,28 @@ impl Poly for HermiteE {
         ))
     }
 
-    fn fit(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrumError> {
+    fn fit(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrayError> {
         if x.len() != y.len() {
-            return Err(FerrumError::invalid_value(
+            return Err(FerrayError::invalid_value(
                 "x and y must have the same length",
             ));
         }
         if x.is_empty() {
-            return Err(FerrumError::invalid_value("x and y must not be empty"));
+            return Err(FerrayError::invalid_value("x and y must not be empty"));
         }
         let v = hermite_e_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, None)?;
         Ok(Self { coeffs })
     }
 
-    fn fit_weighted(x: &[f64], y: &[f64], deg: usize, w: &[f64]) -> Result<Self, FerrumError> {
+    fn fit_weighted(x: &[f64], y: &[f64], deg: usize, w: &[f64]) -> Result<Self, FerrayError> {
         if x.len() != y.len() || x.len() != w.len() {
-            return Err(FerrumError::invalid_value(
+            return Err(FerrayError::invalid_value(
                 "x, y, and w must have the same length",
             ));
         }
         if x.is_empty() {
-            return Err(FerrumError::invalid_value("x, y, and w must not be empty"));
+            return Err(FerrayError::invalid_value("x, y, and w must not be empty"));
         }
         let v = hermite_e_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, Some(w))?;
@@ -347,13 +347,13 @@ impl Poly for HermiteE {
 }
 
 impl ToPowerBasis for HermiteE {
-    fn to_power_basis(&self) -> Result<Vec<f64>, FerrumError> {
+    fn to_power_basis(&self) -> Result<Vec<f64>, FerrayError> {
         Ok(hermite_e_to_power(&self.coeffs))
     }
 }
 
 impl FromPowerBasis for HermiteE {
-    fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrumError> {
+    fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrayError> {
         Ok(Self {
             coeffs: power_to_hermite_e(coeffs),
         })

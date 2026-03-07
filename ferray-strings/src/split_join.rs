@@ -3,7 +3,7 @@
 // Implements split and join — elementwise on StringArray.
 
 use ferray_core::dimension::{Dimension, Ix1};
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::string_array::{StringArray, StringArray1};
 
@@ -15,7 +15,7 @@ use crate::string_array::{StringArray, StringArray1};
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn split<D: Dimension>(a: &StringArray<D>, sep: &str) -> FerrumResult<Vec<Vec<String>>> {
+pub fn split<D: Dimension>(a: &StringArray<D>, sep: &str) -> FerrayResult<Vec<Vec<String>>> {
     let result: Vec<Vec<String>> = a
         .iter()
         .map(|s| s.split(sep).map(String::from).collect())
@@ -30,7 +30,7 @@ pub fn split<D: Dimension>(a: &StringArray<D>, sep: &str) -> FerrumResult<Vec<Ve
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn join(sep: &str, items: &[Vec<String>]) -> FerrumResult<StringArray1> {
+pub fn join(sep: &str, items: &[Vec<String>]) -> FerrayResult<StringArray1> {
     let data: Vec<String> = items.iter().map(|parts| parts.join(sep)).collect();
     let dim = Ix1::new([data.len()]);
     StringArray1::from_vec(dim, data)
@@ -43,7 +43,7 @@ pub fn join(sep: &str, items: &[Vec<String>]) -> FerrumResult<StringArray1> {
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn join_array<D: Dimension>(sep: &str, a: &StringArray<D>) -> FerrumResult<StringArray1> {
+pub fn join_array<D: Dimension>(sep: &str, a: &StringArray<D>) -> FerrayResult<StringArray1> {
     let joined: String = a
         .iter()
         .map(|s| s.as_str())

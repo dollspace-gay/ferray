@@ -5,7 +5,7 @@
 
 use ferray_core::Array;
 use ferray_core::dimension::Ix1;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use std::f64::consts::PI;
 
@@ -48,7 +48,7 @@ fn bessel_i0_scalar(x: f64) -> f64 {
 ///
 /// # Errors
 /// Returns an error only if internal array construction fails.
-pub fn bartlett(m: usize) -> FerrumResult<Array<f64, Ix1>> {
+pub fn bartlett(m: usize) -> FerrayResult<Array<f64, Ix1>> {
     if m == 0 {
         return Array::from_vec(Ix1::new([0]), vec![]);
     }
@@ -78,7 +78,7 @@ pub fn bartlett(m: usize) -> FerrumResult<Array<f64, Ix1>> {
 ///
 /// # Errors
 /// Returns an error only if internal array construction fails.
-pub fn blackman(m: usize) -> FerrumResult<Array<f64, Ix1>> {
+pub fn blackman(m: usize) -> FerrayResult<Array<f64, Ix1>> {
     if m == 0 {
         return Array::from_vec(Ix1::new([0]), vec![]);
     }
@@ -109,7 +109,7 @@ pub fn blackman(m: usize) -> FerrumResult<Array<f64, Ix1>> {
 ///
 /// # Errors
 /// Returns an error only if internal array construction fails.
-pub fn hamming(m: usize) -> FerrumResult<Array<f64, Ix1>> {
+pub fn hamming(m: usize) -> FerrayResult<Array<f64, Ix1>> {
     if m == 0 {
         return Array::from_vec(Ix1::new([0]), vec![]);
     }
@@ -139,7 +139,7 @@ pub fn hamming(m: usize) -> FerrumResult<Array<f64, Ix1>> {
 ///
 /// # Errors
 /// Returns an error only if internal array construction fails.
-pub fn hanning(m: usize) -> FerrumResult<Array<f64, Ix1>> {
+pub fn hanning(m: usize) -> FerrayResult<Array<f64, Ix1>> {
     if m == 0 {
         return Array::from_vec(Ix1::new([0]), vec![]);
     }
@@ -170,10 +170,10 @@ pub fn hanning(m: usize) -> FerrumResult<Array<f64, Ix1>> {
 /// - `m == 1`: returns `[1.0]`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `beta` is negative or NaN.
-pub fn kaiser(m: usize, beta: f64) -> FerrumResult<Array<f64, Ix1>> {
+/// Returns `FerrayError::InvalidValue` if `beta` is negative or NaN.
+pub fn kaiser(m: usize, beta: f64) -> FerrayResult<Array<f64, Ix1>> {
     if beta.is_nan() || beta < 0.0 {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "kaiser: beta must be non-negative, got {beta}"
         )));
     }

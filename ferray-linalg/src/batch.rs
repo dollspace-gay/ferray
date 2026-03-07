@@ -5,15 +5,15 @@
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix1, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use rayon::prelude::*;
 
 /// Compute the number of batches from a shape, given that the last `tail_dims`
 /// dimensions are the per-element shape.
-pub fn batch_count(shape: &[usize], tail_dims: usize) -> FerrumResult<usize> {
+pub fn batch_count(shape: &[usize], tail_dims: usize) -> FerrayResult<usize> {
     if shape.len() < tail_dims {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "expected at least {}D array, got {}D",
             tail_dims,
             shape.len()
@@ -41,13 +41,13 @@ pub fn extract_batch_matrix(data: &[f64], shape: &[usize], batch_idx: usize) -> 
 /// a result vector for that batch.
 ///
 /// Results are computed in parallel using Rayon.
-pub fn apply_batched_2d<F>(a: &Array<f64, IxDyn>, f: F) -> FerrumResult<Vec<Vec<f64>>>
+pub fn apply_batched_2d<F>(a: &Array<f64, IxDyn>, f: F) -> FerrayResult<Vec<Vec<f64>>>
 where
-    F: Fn(usize, usize, &[f64]) -> FerrumResult<Vec<f64>> + Send + Sync,
+    F: Fn(usize, usize, &[f64]) -> FerrayResult<Vec<f64>> + Send + Sync,
 {
     let shape = a.shape();
     if shape.len() < 2 {
-        return Err(FerrumError::shape_mismatch(
+        return Err(FerrayError::shape_mismatch(
             "expected at least 2D array for batched matrix operation",
         ));
     }
@@ -57,7 +57,7 @@ where
     let data: Vec<f64> = a.iter().copied().collect();
     let mat_size = m * n;
 
-    let results: Vec<FerrumResult<Vec<f64>>> = (0..num_batches)
+    let results: Vec<FerrayResult<Vec<f64>>> = (0..num_batches)
         .into_par_iter()
         .map(|b| {
             let offset = b * mat_size;
@@ -71,13 +71,13 @@ where
 
 /// Apply a scalar-returning function to each 2D matrix in a batched array.
 /// Returns an Array1<f64> with one scalar per batch.
-pub fn apply_batched_scalar<F>(a: &Array<f64, IxDyn>, f: F) -> FerrumResult<Array<f64, Ix1>>
+pub fn apply_batched_scalar<F>(a: &Array<f64, IxDyn>, f: F) -> FerrayResult<Array<f64, Ix1>>
 where
-    F: Fn(usize, usize, &[f64]) -> FerrumResult<f64> + Send + Sync,
+    F: Fn(usize, usize, &[f64]) -> FerrayResult<f64> + Send + Sync,
 {
     let shape = a.shape();
     if shape.len() < 2 {
-        return Err(FerrumError::shape_mismatch(
+        return Err(FerrayError::shape_mismatch(
             "expected at least 2D array for batched matrix operation",
         ));
     }
@@ -87,7 +87,7 @@ where
     let data: Vec<f64> = a.iter().copied().collect();
     let mat_size = m * n;
 
-    let results: Vec<FerrumResult<f64>> = (0..num_batches)
+    let results: Vec<FerrayResult<f64>> = (0..num_batches)
         .into_par_iter()
         .map(|b| {
             let offset = b * mat_size;
@@ -96,7 +96,7 @@ where
         })
         .collect();
 
-    let scalars: FerrumResult<Vec<f64>> = results.into_iter().collect();
+    let scalars: FerrayResult<Vec<f64>> = results.into_iter().collect();
     let scalars = scalars?;
     Array::from_vec(Ix1::new([scalars.len()]), scalars)
 }
@@ -107,21 +107,21 @@ pub fn apply_batched_2d_pair<F>(
     a: &Array<f64, IxDyn>,
     b: &Array<f64, IxDyn>,
     f: F,
-) -> FerrumResult<Vec<Vec<f64>>>
+) -> FerrayResult<Vec<Vec<f64>>>
 where
-    F: Fn(usize, usize, &[f64], usize, usize, &[f64]) -> FerrumResult<Vec<f64>> + Send + Sync,
+    F: Fn(usize, usize, &[f64], usize, usize, &[f64]) -> FerrayResult<Vec<f64>> + Send + Sync,
 {
     let a_shape = a.shape();
     let b_shape = b.shape();
     if a_shape.len() < 2 || b_shape.len() < 2 {
-        return Err(FerrumError::shape_mismatch(
+        return Err(FerrayError::shape_mismatch(
             "expected at least 2D arrays for batched matrix operation",
         ));
     }
     let a_batch = &a_shape[..a_shape.len() - 2];
     let b_batch = &b_shape[..b_shape.len() - 2];
     if a_batch != b_batch {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "batch dimensions must match: {:?} vs {:?}",
             a_batch, b_batch
         )));
@@ -136,7 +136,7 @@ where
     let a_mat_size = am * an;
     let b_mat_size = bm * bn;
 
-    let results: Vec<FerrumResult<Vec<f64>>> = (0..num_batches)
+    let results: Vec<FerrayResult<Vec<f64>>> = (0..num_batches)
         .into_par_iter()
         .map(|idx| {
             let a_offset = idx * a_mat_size;

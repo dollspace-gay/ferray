@@ -7,7 +7,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::MaskedArray;
@@ -21,7 +21,7 @@ use crate::MaskedArray;
 fn masked_unary_op<T, D>(
     ma: &MaskedArray<T, D>,
     f: impl Fn(T) -> T,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Copy,
     D: Dimension,
@@ -42,7 +42,7 @@ fn masked_binary_op<T, D>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,
     f: impl Fn(T, T) -> T,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Copy,
     D: Dimension,
@@ -73,7 +73,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn sin<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn sin<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -85,7 +85,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn cos<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn cos<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -97,7 +97,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn tan<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn tan<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -109,7 +109,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn arcsin<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn arcsin<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -121,7 +121,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn arccos<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn arccos<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -133,7 +133,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn arctan<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn arctan<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -149,7 +149,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn exp<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn exp<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -161,7 +161,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn exp2<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn exp2<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -173,7 +173,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn log<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn log<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -185,7 +185,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn log2<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn log2<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -197,7 +197,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn log10<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn log10<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -213,7 +213,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn floor<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn floor<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -225,7 +225,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn ceil<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn ceil<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -241,7 +241,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn sqrt<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn sqrt<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -253,7 +253,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn absolute<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn absolute<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -265,7 +265,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn negative<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn negative<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -277,7 +277,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn reciprocal<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn reciprocal<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -289,7 +289,7 @@ where
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn square<T, D>(ma: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+pub fn square<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -304,8 +304,8 @@ where
 /// Elementwise addition of two masked arrays with mask propagation.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
-pub fn add<T, D>(a: &MaskedArray<T, D>, b: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
+pub fn add<T, D>(a: &MaskedArray<T, D>, b: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -316,11 +316,11 @@ where
 /// Elementwise subtraction of two masked arrays with mask propagation.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
 pub fn subtract<T, D>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -331,11 +331,11 @@ where
 /// Elementwise multiplication of two masked arrays with mask propagation.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
 pub fn multiply<T, D>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -346,8 +346,8 @@ where
 /// Elementwise division of two masked arrays with mask propagation.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
-pub fn divide<T, D>(a: &MaskedArray<T, D>, b: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
+pub fn divide<T, D>(a: &MaskedArray<T, D>, b: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -358,8 +358,8 @@ where
 /// Elementwise power of two masked arrays with mask propagation.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
-pub fn power<T, D>(a: &MaskedArray<T, D>, b: &MaskedArray<T, D>) -> FerrumResult<MaskedArray<T, D>>
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
+pub fn power<T, D>(a: &MaskedArray<T, D>, b: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
     D: Dimension,

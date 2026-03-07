@@ -4,7 +4,7 @@
 // Recurrence: L_0(x) = 1, L_1(x) = 1-x,
 //   (n+1)*L_{n+1}(x) = (2n+1-x)*L_n(x) - n*L_{n-1}(x)
 
-use ferray_core::error::FerrumError;
+use ferray_core::error::FerrayError;
 use num_complex::Complex;
 
 use crate::fitting::{laguerre_vandermonde, least_squares_fit};
@@ -175,11 +175,11 @@ fn power_to_laguerre(power_coeffs: &[f64]) -> Vec<f64> {
 }
 
 impl Poly for Laguerre {
-    fn eval(&self, x: f64) -> Result<f64, FerrumError> {
+    fn eval(&self, x: f64) -> Result<f64, FerrayError> {
         Ok(clenshaw_laguerre(&self.coeffs, x))
     }
 
-    fn deriv(&self, m: usize) -> Result<Self, FerrumError> {
+    fn deriv(&self, m: usize) -> Result<Self, FerrayError> {
         if m == 0 {
             return Ok(self.clone());
         }
@@ -203,7 +203,7 @@ impl Poly for Laguerre {
         })
     }
 
-    fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrumError> {
+    fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrayError> {
         if m == 0 {
             return Ok(self.clone());
         }
@@ -222,7 +222,7 @@ impl Poly for Laguerre {
         })
     }
 
-    fn roots(&self) -> Result<Vec<Complex<f64>>, FerrumError> {
+    fn roots(&self) -> Result<Vec<Complex<f64>>, FerrayError> {
         let power = laguerre_to_power(&self.coeffs);
         find_roots_from_power_coeffs(&power)
     }
@@ -239,9 +239,9 @@ impl Poly for Laguerre {
         &self.coeffs
     }
 
-    fn trim(&self, tol: f64) -> Result<Self, FerrumError> {
+    fn trim(&self, tol: f64) -> Result<Self, FerrayError> {
         if tol < 0.0 {
-            return Err(FerrumError::invalid_value("tolerance must be non-negative"));
+            return Err(FerrayError::invalid_value("tolerance must be non-negative"));
         }
         let mut last = self.coeffs.len();
         while last > 1 && self.coeffs[last - 1].abs() <= tol {
@@ -252,9 +252,9 @@ impl Poly for Laguerre {
         })
     }
 
-    fn truncate(&self, size: usize) -> Result<Self, FerrumError> {
+    fn truncate(&self, size: usize) -> Result<Self, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value(
+            return Err(FerrayError::invalid_value(
                 "truncation size must be at least 1",
             ));
         }
@@ -264,7 +264,7 @@ impl Poly for Laguerre {
         })
     }
 
-    fn add(&self, other: &Self) -> Result<Self, FerrumError> {
+    fn add(&self, other: &Self) -> Result<Self, FerrayError> {
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -276,7 +276,7 @@ impl Poly for Laguerre {
         Ok(Self { coeffs: result })
     }
 
-    fn sub(&self, other: &Self) -> Result<Self, FerrumError> {
+    fn sub(&self, other: &Self) -> Result<Self, FerrayError> {
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -288,7 +288,7 @@ impl Poly for Laguerre {
         Ok(Self { coeffs: result })
     }
 
-    fn mul(&self, other: &Self) -> Result<Self, FerrumError> {
+    fn mul(&self, other: &Self) -> Result<Self, FerrayError> {
         let a_power = laguerre_to_power(&self.coeffs);
         let b_power = laguerre_to_power(&other.coeffs);
 
@@ -305,7 +305,7 @@ impl Poly for Laguerre {
         })
     }
 
-    fn pow(&self, n: usize) -> Result<Self, FerrumError> {
+    fn pow(&self, n: usize) -> Result<Self, FerrayError> {
         if n == 0 {
             return Ok(Self { coeffs: vec![1.0] });
         }
@@ -316,7 +316,7 @@ impl Poly for Laguerre {
         Ok(result)
     }
 
-    fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrumError> {
+    fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrayError> {
         let a_power = laguerre_to_power(&self.coeffs);
         let b_power = laguerre_to_power(&other.coeffs);
 
@@ -334,28 +334,28 @@ impl Poly for Laguerre {
         ))
     }
 
-    fn fit(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrumError> {
+    fn fit(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrayError> {
         if x.len() != y.len() {
-            return Err(FerrumError::invalid_value(
+            return Err(FerrayError::invalid_value(
                 "x and y must have the same length",
             ));
         }
         if x.is_empty() {
-            return Err(FerrumError::invalid_value("x and y must not be empty"));
+            return Err(FerrayError::invalid_value("x and y must not be empty"));
         }
         let v = laguerre_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, None)?;
         Ok(Self { coeffs })
     }
 
-    fn fit_weighted(x: &[f64], y: &[f64], deg: usize, w: &[f64]) -> Result<Self, FerrumError> {
+    fn fit_weighted(x: &[f64], y: &[f64], deg: usize, w: &[f64]) -> Result<Self, FerrayError> {
         if x.len() != y.len() || x.len() != w.len() {
-            return Err(FerrumError::invalid_value(
+            return Err(FerrayError::invalid_value(
                 "x, y, and w must have the same length",
             ));
         }
         if x.is_empty() {
-            return Err(FerrumError::invalid_value("x, y, and w must not be empty"));
+            return Err(FerrayError::invalid_value("x, y, and w must not be empty"));
         }
         let v = laguerre_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, Some(w))?;
@@ -368,13 +368,13 @@ impl Poly for Laguerre {
 }
 
 impl ToPowerBasis for Laguerre {
-    fn to_power_basis(&self) -> Result<Vec<f64>, FerrumError> {
+    fn to_power_basis(&self) -> Result<Vec<f64>, FerrayError> {
         Ok(laguerre_to_power(&self.coeffs))
     }
 }
 
 impl FromPowerBasis for Laguerre {
-    fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrumError> {
+    fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrayError> {
         Ok(Self {
             coeffs: power_to_laguerre(coeffs),
         })

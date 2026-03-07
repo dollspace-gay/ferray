@@ -4,7 +4,7 @@
 Implements `numpy.polynomial`: power, Chebyshev, Legendre, Laguerre, Hermite, and HermiteE polynomial classes with a common `Poly` trait. Supports evaluation, differentiation, integration, root-finding (via companion matrix eigenvalues), fitting, and arithmetic. Basis conversion uses power basis as a canonical pivot to avoid N^2 conversion implementations.
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, Array1, Complex, FerrumError), `ferray-linalg` (eigenvalue computation for root-finding via companion matrix)
+- **Upstream**: `ferray-core` (NdArray, Array1, Complex, FerrayError), `ferray-linalg` (eigenvalue computation for root-finding via companion matrix)
 - **Downstream**: ferray (re-export)
 - **External crates**: `num-complex`
 - **Phase**: 2 — Submodules

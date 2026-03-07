@@ -4,7 +4,7 @@
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::IxDyn;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 /// Specifies axes for tensordot contraction.
 #[derive(Debug, Clone)]
@@ -20,19 +20,19 @@ pub enum TensordotAxes {
 /// Analogous to `numpy.tensordot`.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if axes are incompatible.
+/// - `FerrayError::ShapeMismatch` if axes are incompatible.
 pub fn tensordot(
     a: &Array<f64, IxDyn>,
     b: &Array<f64, IxDyn>,
     axes: TensordotAxes,
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
 
     let (axes_a, axes_b) = match axes {
         TensordotAxes::Scalar(n) => {
             if n > a_shape.len() || n > b_shape.len() {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "tensordot: cannot contract {} axes from shapes {:?} and {:?}",
                     n, a_shape, b_shape
                 )));
@@ -43,7 +43,7 @@ pub fn tensordot(
         }
         TensordotAxes::Pairs(axes_a, axes_b) => {
             if axes_a.len() != axes_b.len() {
-                return Err(FerrumError::shape_mismatch(
+                return Err(FerrayError::shape_mismatch(
                     "tensordot: axes_a and axes_b must have the same length",
                 ));
             }
@@ -54,7 +54,7 @@ pub fn tensordot(
     // Verify contracted dimensions match
     for (&ax_a, &ax_b) in axes_a.iter().zip(axes_b.iter()) {
         if ax_a >= a_shape.len() || ax_b >= b_shape.len() {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "tensordot: axis out of bounds (a axis {} for {}D, b axis {} for {}D)",
                 ax_a,
                 a_shape.len(),
@@ -63,7 +63,7 @@ pub fn tensordot(
             )));
         }
         if a_shape[ax_a] != b_shape[ax_b] {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "tensordot: contracted dimensions must match (a[{}]={} != b[{}]={})",
                 ax_a, a_shape[ax_a], ax_b, b_shape[ax_b]
             )));

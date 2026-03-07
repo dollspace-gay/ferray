@@ -6,7 +6,7 @@
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix1, Ix2};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use num_complex::Complex;
 
 use crate::faer_bridge;
@@ -18,14 +18,14 @@ use crate::faer_bridge;
 /// The columns of eigenvectors are the right eigenvectors.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if matrix is not square.
-/// - `FerrumError::InvalidValue` if eigendecomposition fails.
+/// - `FerrayError::ShapeMismatch` if matrix is not square.
+/// - `FerrayError::InvalidValue` if eigendecomposition fails.
 pub fn eig(
     a: &Array<f64, Ix2>,
-) -> FerrumResult<(Array<Complex<f64>, Ix1>, Array<Complex<f64>, Ix2>)> {
+) -> FerrayResult<(Array<Complex<f64>, Ix1>, Array<Complex<f64>, Ix2>)> {
     let shape = a.shape();
     if shape[0] != shape[1] {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "eig requires a square matrix, got {}x{}",
             shape[0], shape[1]
         )));
@@ -35,7 +35,7 @@ pub fn eig(
     let decomp = mat
         .as_ref()
         .eigen()
-        .map_err(|e| FerrumError::InvalidValue {
+        .map_err(|e| FerrayError::InvalidValue {
             message: format!("eigendecomposition failed: {e:?}"),
         })?;
 
@@ -67,12 +67,12 @@ pub fn eig(
 /// whose columns are orthonormal eigenvectors.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if matrix is not square.
-/// - `FerrumError::InvalidValue` if eigendecomposition fails.
-pub fn eigh(a: &Array<f64, Ix2>) -> FerrumResult<(Array<f64, Ix1>, Array<f64, Ix2>)> {
+/// - `FerrayError::ShapeMismatch` if matrix is not square.
+/// - `FerrayError::InvalidValue` if eigendecomposition fails.
+pub fn eigh(a: &Array<f64, Ix2>) -> FerrayResult<(Array<f64, Ix1>, Array<f64, Ix2>)> {
     let shape = a.shape();
     if shape[0] != shape[1] {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "eigh requires a square matrix, got {}x{}",
             shape[0], shape[1]
         )));
@@ -82,7 +82,7 @@ pub fn eigh(a: &Array<f64, Ix2>) -> FerrumResult<(Array<f64, Ix1>, Array<f64, Ix
     let decomp = mat
         .as_ref()
         .self_adjoint_eigen(faer::Side::Lower)
-        .map_err(|e| FerrumError::InvalidValue {
+        .map_err(|e| FerrayError::InvalidValue {
             message: format!("symmetric eigendecomposition failed: {e:?}"),
         })?;
 
@@ -105,12 +105,12 @@ pub fn eigh(a: &Array<f64, Ix2>) -> FerrumResult<(Array<f64, Ix1>, Array<f64, Ix
 /// Returns a 1D array of Complex<f64> eigenvalues.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if matrix is not square.
-/// - `FerrumError::InvalidValue` if computation fails.
-pub fn eigvals(a: &Array<f64, Ix2>) -> FerrumResult<Array<Complex<f64>, Ix1>> {
+/// - `FerrayError::ShapeMismatch` if matrix is not square.
+/// - `FerrayError::InvalidValue` if computation fails.
+pub fn eigvals(a: &Array<f64, Ix2>) -> FerrayResult<Array<Complex<f64>, Ix1>> {
     let shape = a.shape();
     if shape[0] != shape[1] {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "eigvals requires a square matrix, got {}x{}",
             shape[0], shape[1]
         )));
@@ -119,7 +119,7 @@ pub fn eigvals(a: &Array<f64, Ix2>) -> FerrumResult<Array<Complex<f64>, Ix1>> {
     let vals = mat
         .as_ref()
         .eigenvalues()
-        .map_err(|e| FerrumError::InvalidValue {
+        .map_err(|e| FerrayError::InvalidValue {
             message: format!("eigenvalue computation failed: {e:?}"),
         })?;
     Array::from_vec(Ix1::new([vals.len()]), vals)
@@ -130,12 +130,12 @@ pub fn eigvals(a: &Array<f64, Ix2>) -> FerrumResult<Array<Complex<f64>, Ix1>> {
 /// Returns a 1D array of real f64 eigenvalues in nondecreasing order.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if matrix is not square.
-/// - `FerrumError::InvalidValue` if computation fails.
-pub fn eigvalsh(a: &Array<f64, Ix2>) -> FerrumResult<Array<f64, Ix1>> {
+/// - `FerrayError::ShapeMismatch` if matrix is not square.
+/// - `FerrayError::InvalidValue` if computation fails.
+pub fn eigvalsh(a: &Array<f64, Ix2>) -> FerrayResult<Array<f64, Ix1>> {
     let shape = a.shape();
     if shape[0] != shape[1] {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "eigvalsh requires a square matrix, got {}x{}",
             shape[0], shape[1]
         )));
@@ -144,7 +144,7 @@ pub fn eigvalsh(a: &Array<f64, Ix2>) -> FerrumResult<Array<f64, Ix1>> {
     let vals = mat
         .as_ref()
         .self_adjoint_eigenvalues(faer::Side::Lower)
-        .map_err(|e| FerrumError::InvalidValue {
+        .map_err(|e| FerrayError::InvalidValue {
             message: format!("symmetric eigenvalue computation failed: {e:?}"),
         })?;
     Array::from_vec(Ix1::new([vals.len()]), vals)

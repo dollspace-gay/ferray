@@ -2,7 +2,7 @@
 //
 // binomial, negative_binomial, poisson, geometric, hypergeometric, logseries
 
-use ferray_core::{Array, FerrumError, Ix1};
+use ferray_core::{Array, FerrayError, Ix1};
 
 use crate::bitgen::BitGenerator;
 use crate::distributions::gamma::standard_gamma_single;
@@ -144,18 +144,18 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` for invalid parameters.
+    /// Returns `FerrayError::InvalidValue` for invalid parameters.
     pub fn binomial(
         &mut self,
         n: u64,
         p: f64,
         size: usize,
-    ) -> Result<Array<i64, Ix1>, FerrumError> {
+    ) -> Result<Array<i64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if !(0.0..=1.0).contains(&p) {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "p must be in [0, 1], got {p}"
             )));
         }
@@ -174,23 +174,23 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` for invalid parameters.
+    /// Returns `FerrayError::InvalidValue` for invalid parameters.
     pub fn negative_binomial(
         &mut self,
         n: f64,
         p: f64,
         size: usize,
-    ) -> Result<Array<i64, Ix1>, FerrumError> {
+    ) -> Result<Array<i64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if n <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "n must be positive, got {n}"
             )));
         }
         if p <= 0.0 || p > 1.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "p must be in (0, 1], got {p}"
             )));
         }
@@ -210,13 +210,13 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `lam < 0` or `size` is zero.
-    pub fn poisson(&mut self, lam: f64, size: usize) -> Result<Array<i64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `lam < 0` or `size` is zero.
+    pub fn poisson(&mut self, lam: f64, size: usize) -> Result<Array<i64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if lam < 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "lam must be non-negative, got {lam}"
             )));
         }
@@ -237,13 +237,13 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `p` not in (0, 1] or `size` is zero.
-    pub fn geometric(&mut self, p: f64, size: usize) -> Result<Array<i64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `p` not in (0, 1] or `size` is zero.
+    pub fn geometric(&mut self, p: f64, size: usize) -> Result<Array<i64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if p <= 0.0 || p > 1.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "p must be in (0, 1], got {p}"
             )));
         }
@@ -275,20 +275,20 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `nsample > ngood + nbad` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `nsample > ngood + nbad` or `size` is zero.
     pub fn hypergeometric(
         &mut self,
         ngood: u64,
         nbad: u64,
         nsample: u64,
         size: usize,
-    ) -> Result<Array<i64, Ix1>, FerrumError> {
+    ) -> Result<Array<i64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         let total = ngood + nbad;
         if nsample > total {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "nsample ({nsample}) > ngood + nbad ({total})"
             )));
         }
@@ -305,13 +305,13 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `p` not in (0, 1) or `size` is zero.
-    pub fn logseries(&mut self, p: f64, size: usize) -> Result<Array<i64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `p` not in (0, 1) or `size` is zero.
+    pub fn logseries(&mut self, p: f64, size: usize) -> Result<Array<i64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if p <= 0.0 || p >= 1.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "p must be in (0, 1), got {p}"
             )));
         }

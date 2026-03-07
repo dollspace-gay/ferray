@@ -14,8 +14,8 @@
 use crate::dimension::Dimension;
 use crate::dtype::{DType, Element};
 #[cfg(not(feature = "no_std"))]
-use crate::error::FerrumError;
-use crate::error::FerrumResult;
+use crate::error::FerrayError;
+use crate::error::FerrayResult;
 
 #[cfg(not(feature = "no_std"))]
 use super::promotion::PromoteTo;
@@ -50,8 +50,8 @@ pub enum CastKind {
 /// Check whether a cast from `from` to `to` is allowed under the given `casting` rule.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidDtype` if the combination is not recognized.
-pub fn can_cast(from: DType, to: DType, casting: CastKind) -> FerrumResult<bool> {
+/// Returns `FerrayError::InvalidDtype` if the combination is not recognized.
+pub fn can_cast(from: DType, to: DType, casting: CastKind) -> FerrayResult<bool> {
     Ok(match casting {
         CastKind::No | CastKind::Equiv => from == to,
         CastKind::Safe => is_safe_cast(from, to),
@@ -107,8 +107,8 @@ fn dtype_kind(dt: DType) -> u8 {
 /// precision loss.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidDtype` if promotion fails.
-pub fn promote_types(a: DType, b: DType) -> FerrumResult<DType> {
+/// Returns `FerrayError::InvalidDtype` if promotion fails.
+pub fn promote_types(a: DType, b: DType) -> FerrayResult<DType> {
     super::promotion::result_type(a, b)
 }
 
@@ -119,8 +119,8 @@ pub fn promote_types(a: DType, b: DType) -> FerrumResult<DType> {
 /// Determine the common type for two dtypes. This is an alias for [`promote_types`].
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidDtype` if promotion fails.
-pub fn common_type(a: DType, b: DType) -> FerrumResult<DType> {
+/// Returns `FerrayError::InvalidDtype` if promotion fails.
+pub fn common_type(a: DType, b: DType) -> FerrayResult<DType> {
     promote_types(a, b)
 }
 
@@ -230,8 +230,8 @@ pub trait AsType<D: Dimension> {
     /// Cast all elements to type `U`, returning a new array.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidDtype` if the cast is not possible.
-    fn astype<U: Element>(&self) -> FerrumResult<crate::array::owned::Array<U, D>>
+    /// Returns `FerrayError::InvalidDtype` if the cast is not possible.
+    fn astype<U: Element>(&self) -> FerrayResult<crate::array::owned::Array<U, D>>
     where
         Self: AsTypeInner<U, D>;
 }
@@ -241,12 +241,12 @@ pub trait AsType<D: Dimension> {
 #[cfg(not(feature = "no_std"))]
 pub trait AsTypeInner<U: Element, D: Dimension> {
     /// Perform the cast.
-    fn astype_inner(&self) -> FerrumResult<crate::array::owned::Array<U, D>>;
+    fn astype_inner(&self) -> FerrayResult<crate::array::owned::Array<U, D>>;
 }
 
 #[cfg(not(feature = "no_std"))]
 impl<T: Element, D: Dimension> AsType<D> for crate::array::owned::Array<T, D> {
-    fn astype<U: Element>(&self) -> FerrumResult<crate::array::owned::Array<U, D>>
+    fn astype<U: Element>(&self) -> FerrayResult<crate::array::owned::Array<U, D>>
     where
         Self: AsTypeInner<U, D>,
     {
@@ -262,7 +262,7 @@ where
     U: Element,
     D: Dimension,
 {
-    fn astype_inner(&self) -> FerrumResult<crate::array::owned::Array<U, D>> {
+    fn astype_inner(&self) -> FerrayResult<crate::array::owned::Array<U, D>> {
         let mapped = self.inner.mapv(|x| x.promote());
         Ok(crate::array::owned::Array::from_ndarray(mapped))
     }
@@ -282,16 +282,16 @@ where
 /// as a different type. The caller must ensure this is meaningful.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidDtype` if the element sizes are incompatible.
+/// Returns `FerrayError::InvalidDtype` if the element sizes are incompatible.
 #[cfg(not(feature = "no_std"))]
 pub fn view_cast<T: Element, U: Element, D: Dimension>(
     arr: &crate::array::owned::Array<T, D>,
-) -> FerrumResult<crate::array::owned::Array<U, D>> {
+) -> FerrayResult<crate::array::owned::Array<U, D>> {
     let t_size = core::mem::size_of::<T>();
     let u_size = core::mem::size_of::<U>();
 
     if t_size != u_size {
-        return Err(FerrumError::invalid_dtype(format!(
+        return Err(FerrayError::invalid_dtype(format!(
             "view cast requires equal element sizes: {} ({} bytes) vs {} ({} bytes)",
             T::dtype(),
             t_size,
@@ -326,7 +326,7 @@ impl<T: Element, D: Dimension> crate::array::owned::Array<T, D> {
     pub fn add_promoted<U>(
         &self,
         other: &crate::array::owned::Array<U, D>,
-    ) -> FerrumResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
+    ) -> FerrayResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
     where
         U: Element,
         T: super::promotion::Promoted<U> + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
@@ -348,7 +348,7 @@ impl<T: Element, D: Dimension> crate::array::owned::Array<T, D> {
     pub fn sub_promoted<U>(
         &self,
         other: &crate::array::owned::Array<U, D>,
-    ) -> FerrumResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
+    ) -> FerrayResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
     where
         U: Element,
         T: super::promotion::Promoted<U> + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
@@ -370,7 +370,7 @@ impl<T: Element, D: Dimension> crate::array::owned::Array<T, D> {
     pub fn mul_promoted<U>(
         &self,
         other: &crate::array::owned::Array<U, D>,
-    ) -> FerrumResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
+    ) -> FerrayResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
     where
         U: Element,
         T: super::promotion::Promoted<U> + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
@@ -392,7 +392,7 @@ impl<T: Element, D: Dimension> crate::array::owned::Array<T, D> {
     pub fn div_promoted<U>(
         &self,
         other: &crate::array::owned::Array<U, D>,
-    ) -> FerrumResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
+    ) -> FerrayResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
     where
         U: Element,
         T: super::promotion::Promoted<U> + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,

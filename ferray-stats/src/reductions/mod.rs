@@ -6,7 +6,7 @@ pub mod quantile;
 
 use std::any::TypeId;
 
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, IxDyn};
 use num_traits::Float;
 
@@ -135,9 +135,9 @@ pub(crate) fn reduce_axis_general<T: Copy, F: Fn(&[T]) -> T>(
 }
 
 /// Validate axis parameter and return an error if out of bounds.
-pub(crate) fn validate_axis(axis: usize, ndim: usize) -> FerrumResult<()> {
+pub(crate) fn validate_axis(axis: usize, ndim: usize) -> FerrayResult<()> {
     if axis >= ndim {
-        Err(FerrumError::axis_out_of_bounds(axis, ndim))
+        Err(FerrayError::axis_out_of_bounds(axis, ndim))
     } else {
         Ok(())
     }
@@ -179,7 +179,7 @@ pub(crate) fn borrow_data<'a, T: Element + Copy, D: Dimension>(
 pub(crate) fn make_result<T: Element>(
     out_shape: &[usize],
     data: Vec<T>,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     Array::from_vec(IxDyn::new(out_shape), data)
 }
 
@@ -207,7 +207,7 @@ pub(crate) fn output_shape(shape: &[usize], axis: usize) -> Vec<usize> {
 /// let s = sum(&a, None).unwrap();
 /// assert_eq!(s.iter().next(), Some(&10.0));
 /// ```
-pub fn sum<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn sum<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Add<Output = T> + Copy + Send + Sync,
     D: Dimension,
@@ -239,7 +239,7 @@ where
 /// Product of array elements over a given axis.
 ///
 /// Equivalent to `numpy.prod`.
-pub fn prod<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn prod<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy + Send + Sync,
     D: Dimension,
@@ -271,13 +271,13 @@ where
 /// Minimum value of array elements over a given axis.
 ///
 /// Equivalent to `numpy.min` / `numpy.amin`.
-pub fn min<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn min<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
 {
     if a.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot compute min of empty array",
         ));
     }
@@ -309,13 +309,13 @@ where
 /// Maximum value of array elements over a given axis.
 ///
 /// Equivalent to `numpy.max` / `numpy.amax`.
-pub fn max<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn max<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
 {
     if a.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot compute max of empty array",
         ));
     }
@@ -352,13 +352,13 @@ where
 /// For axis=Some(ax), returns indices along that axis.
 ///
 /// Equivalent to `numpy.argmin`.
-pub fn argmin<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<u64, IxDyn>>
+pub fn argmin<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<u64, IxDyn>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
 {
     if a.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot compute argmin of empty array",
         ));
     }
@@ -392,13 +392,13 @@ where
 /// Index of the maximum value.
 ///
 /// Equivalent to `numpy.argmax`.
-pub fn argmax<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<u64, IxDyn>>
+pub fn argmax<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<u64, IxDyn>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
 {
     if a.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot compute argmax of empty array",
         ));
     }
@@ -492,13 +492,13 @@ pub(crate) fn reduce_axis_general_u64<T: Copy, F: Fn(&[T]) -> u64>(
 /// Mean of array elements over a given axis.
 ///
 /// Equivalent to `numpy.mean`. The result is always floating-point.
-pub fn mean<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn mean<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float + Send + Sync,
     D: Dimension,
 {
     if a.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot compute mean of empty array",
         ));
     }
@@ -534,13 +534,13 @@ where
 ///
 /// `ddof` is the delta degrees of freedom (0 for population variance, 1 for sample).
 /// Equivalent to `numpy.var`.
-pub fn var<T, D>(a: &Array<T, D>, axis: Option<usize>, ddof: usize) -> FerrumResult<Array<T, IxDyn>>
+pub fn var<T, D>(a: &Array<T, D>, axis: Option<usize>, ddof: usize) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float + Send + Sync,
     D: Dimension,
 {
     if a.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot compute variance of empty array",
         ));
     }
@@ -549,7 +549,7 @@ where
         None => {
             let n = data.len();
             if n <= ddof {
-                return Err(FerrumError::invalid_value(
+                return Err(FerrayError::invalid_value(
                     "ddof >= number of elements, variance undefined",
                 ));
             }
@@ -572,7 +572,7 @@ where
             let out_s = output_shape(shape, ax);
             let axis_len = shape[ax];
             if axis_len <= ddof {
-                return Err(FerrumError::invalid_value(
+                return Err(FerrayError::invalid_value(
                     "ddof >= axis length, variance undefined",
                 ));
             }
@@ -607,7 +607,7 @@ pub fn std_<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
     ddof: usize,
-) -> FerrumResult<Array<T, IxDyn>>
+) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float + Send + Sync,
     D: Dimension,
@@ -624,7 +624,7 @@ where
 /// Cumulative sum along an axis (or flattened if axis is None).
 ///
 /// Re-exported from `ferray_ufunc::cumsum` for convenience.
-pub fn cumsum<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, D>>
+pub fn cumsum<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
@@ -635,7 +635,7 @@ where
 /// Cumulative product along an axis (or flattened if axis is None).
 ///
 /// Re-exported from `ferray_ufunc::cumprod` for convenience.
-pub fn cumprod<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, D>>
+pub fn cumprod<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
     D: Dimension,

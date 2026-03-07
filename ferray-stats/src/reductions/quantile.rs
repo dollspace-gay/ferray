@@ -1,7 +1,7 @@
 // ferray-stats: Quantile-based reductions — median, percentile, quantile (REQ-1)
 // Also nanmedian, nanpercentile (REQ-3)
 
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, IxDyn};
 use num_traits::Float;
 
@@ -64,16 +64,16 @@ fn lane_nanquantile<T: Float>(lane: &[T], q: T) -> T {
 ///
 /// `q` must be in \[0, 1\]. Uses linear interpolation (NumPy default method).
 /// Equivalent to `numpy.quantile`.
-pub fn quantile<T, D>(a: &Array<T, D>, q: T, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn quantile<T, D>(a: &Array<T, D>, q: T, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
 {
     if q < <T as Element>::zero() || q > <T as Element>::one() {
-        return Err(FerrumError::invalid_value("quantile q must be in [0, 1]"));
+        return Err(FerrayError::invalid_value("quantile q must be in [0, 1]"));
     }
     if a.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot compute quantile of empty array",
         ));
     }
@@ -101,14 +101,14 @@ where
 ///
 /// `q` must be in \[0, 100\].
 /// Equivalent to `numpy.percentile`.
-pub fn percentile<T, D>(a: &Array<T, D>, q: T, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn percentile<T, D>(a: &Array<T, D>, q: T, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
 {
     let hundred = T::from(100.0).unwrap();
     if q < <T as Element>::zero() || q > hundred {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "percentile q must be in [0, 100]",
         ));
     }
@@ -122,7 +122,7 @@ where
 /// Compute the median of array elements along a given axis.
 ///
 /// Equivalent to `numpy.median`.
-pub fn median<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn median<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
@@ -138,7 +138,7 @@ where
 /// Median, skipping NaN values.
 ///
 /// Equivalent to `numpy.nanmedian`.
-pub fn nanmedian<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+pub fn nanmedian<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
@@ -154,14 +154,14 @@ pub fn nanpercentile<T, D>(
     a: &Array<T, D>,
     q: T,
     axis: Option<usize>,
-) -> FerrumResult<Array<T, IxDyn>>
+) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
 {
     let hundred = T::from(100.0).unwrap();
     if q < <T as Element>::zero() || q > hundred {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "nanpercentile q must be in [0, 100]",
         ));
     }
@@ -169,16 +169,16 @@ where
 }
 
 /// Quantile, skipping NaN values.
-fn nanquantile<T, D>(a: &Array<T, D>, q: T, axis: Option<usize>) -> FerrumResult<Array<T, IxDyn>>
+fn nanquantile<T, D>(a: &Array<T, D>, q: T, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
 {
     if q < <T as Element>::zero() || q > <T as Element>::one() {
-        return Err(FerrumError::invalid_value("quantile q must be in [0, 1]"));
+        return Err(FerrayError::invalid_value("quantile q must be in [0, 1]"));
     }
     if a.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot compute nanquantile of empty array",
         ));
     }

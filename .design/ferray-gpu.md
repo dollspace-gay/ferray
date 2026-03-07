@@ -7,7 +7,7 @@ Adds optional GPU acceleration to ferray's highest-impact operations: matrix mul
 Current CPU benchmarks show ferray is 4-4.6x slower than NumPy on matmul (50x50-100x100) due to the BLAS gap, and transcendentals (sin, cos, exp, log) are 1.4-2.1x slower at scale due to CORE-MATH's correctly-rounded algorithms. GPU acceleration eliminates both gaps: cuBLAS matmul delivers 10-100x over CPU for large matrices, and GPU SIMD parallelism handles millions of elementwise ops in microseconds. For reference, CuPy (NumPy on GPU) typically achieves 10-1000x speedups over NumPy for arrays > 100K elements.
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, Dimension, Element, FerrumError), `ferray-ufunc` (CPU fallback paths), `ferray-linalg` (CPU fallback), `ferray-fft` (CPU fallback), `ferray-stats` (CPU fallback)
+- **Upstream**: `ferray-core` (NdArray, Dimension, Element, FerrayError), `ferray-ufunc` (CPU fallback paths), `ferray-linalg` (CPU fallback), `ferray-fft` (CPU fallback), `ferray-stats` (CPU fallback)
 - **Downstream**: `ferray` (re-export under `ferray::gpu`)
 - **External crates**:
   - `cubecl` ~0.5 (cross-platform GPU kernel compiler: CUDA, ROCm, Vulkan, Metal, WebGPU)
@@ -172,7 +172,7 @@ Current CPU benchmarks show ferray is 4-4.6x slower than NumPy on matmul (50x50-
 
 - REQ-26: `GpuArray::clone()` — device-to-device copy (no host roundtrip). `GpuArray::to_device(&other_device)` — cross-device copy (via host staging if needed).
 
-- REQ-27: Out-of-memory handling: return `FerrumError::GpuOutOfMemory` with device name and requested/available bytes. Never panic.
+- REQ-27: Out-of-memory handling: return `FerrayError::GpuOutOfMemory` with device name and requested/available bytes. Never panic.
 
 - REQ-28: `gpu::memory_stats(&device)` — report allocated, cached, peak usage.
 
@@ -192,14 +192,14 @@ Current CPU benchmarks show ferray is 4-4.6x slower than NumPy on matmul (50x50-
 
 ### Error Handling (GPU-ERR)
 
-- REQ-29: New `FerrumError` variants:
+- REQ-29: New `FerrayError` variants:
   - `GpuNotAvailable` — no GPU device found
   - `GpuOutOfMemory { device, requested, available }`
   - `GpuKernelError { backend, message }` — kernel compilation/launch failure
   - `GpuUnsupportedDtype { dtype, backend }` — e.g., f64 on wgpu
   - `GpuTransferError { direction, message }` — host-device copy failure
 
-- REQ-30: All GPU operations return `Result<T, FerrumError>`. Zero panics.
+- REQ-30: All GPU operations return `Result<T, FerrayError>`. Zero panics.
 
 ## Acceptance Criteria
 
@@ -230,7 +230,7 @@ ferray-gpu/
     array.rs                  # GpuArray<T, D> type, host-device transfers
     element.rs                # GpuElement trait, type support matrix
     memory.rs                 # GPU memory pool, sub-allocator, stats
-    error.rs                  # GPU-specific FerrumError variants
+    error.rs                  # GPU-specific FerrayError variants
     auto_dispatch.rs          # Size-based auto-offload logic
     backends/
       mod.rs                  # Backend trait and dispatch
@@ -335,7 +335,7 @@ fn gpu_matmul_f64(
     b: &CudaSlice<f64>,     // K x N, device memory
     c: &mut CudaSlice<f64>, // M x N, device memory
     m: usize, n: usize, k: usize,
-) -> Result<(), FerrumError> {
+) -> Result<(), FerrayError> {
     unsafe {
         blas.gemm(
             GemmConfig {
@@ -344,7 +344,7 @@ fn gpu_matmul_f64(
                 lda: m, ldb: k, ldc: m,
             },
             a, b, c,
-        ).map_err(|e| FerrumError::gpu_kernel_error("cuda", e))?;
+        ).map_err(|e| FerrayError::gpu_kernel_error("cuda", e))?;
     }
     Ok(())
 }

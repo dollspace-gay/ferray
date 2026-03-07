@@ -5,7 +5,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::cr_math::CrMath;
@@ -14,7 +14,7 @@ use crate::helpers::unary_float_op;
 /// Normalized sinc function: sin(pi*x) / (pi*x).
 ///
 /// AC-13: `sinc(0.0) == 1.0`.
-pub fn sinc<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn sinc<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -34,7 +34,7 @@ where
 ///
 /// Uses a polynomial approximation (Abramowitz and Stegun).
 /// AC-13: `i0(0.0) == 1.0`.
-pub fn i0<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn i0<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -85,7 +85,7 @@ fn bessel_i0<T: Float + CrMath>(x: T) -> T {
 
 /// Normalized sinc function for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn sinc_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn sinc_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {

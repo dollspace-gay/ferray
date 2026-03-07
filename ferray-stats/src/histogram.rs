@@ -1,6 +1,6 @@
 // ferray-stats: Histogram functions — histogram, histogram2d, histogramdd, bincount, digitize (REQ-8, REQ-9, REQ-10)
 
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Element, Ix1, Ix2, IxDyn};
 use num_traits::Float;
 
@@ -35,7 +35,7 @@ pub fn histogram<T>(
     bins: Bins<T>,
     range: Option<(T, T)>,
     density: bool,
-) -> FerrumResult<(Array<u64, Ix1>, Array<T, Ix1>)>
+) -> FerrayResult<(Array<u64, Ix1>, Array<T, Ix1>)>
 where
     T: Element + Float,
 {
@@ -45,7 +45,7 @@ where
     let (lo, hi) = match range {
         Some((l, h)) => {
             if l >= h {
-                return Err(FerrumError::invalid_value(
+                return Err(FerrayError::invalid_value(
                     "range lower bound must be less than upper",
                 ));
             }
@@ -53,7 +53,7 @@ where
         }
         None => {
             if data.is_empty() {
-                return Err(FerrumError::invalid_value(
+                return Err(FerrayError::invalid_value(
                     "cannot compute histogram of empty array without range",
                 ));
             }
@@ -74,7 +74,7 @@ where
     let edges = match bins {
         Bins::Count(n) => {
             if n == 0 {
-                return Err(FerrumError::invalid_value("number of bins must be > 0"));
+                return Err(FerrayError::invalid_value("number of bins must be > 0"));
             }
             let step = (hi - lo) / T::from(n).unwrap();
             let mut edges = Vec::with_capacity(n + 1);
@@ -86,7 +86,7 @@ where
         }
         Bins::Edges(e) => {
             if e.len() < 2 {
-                return Err(FerrumError::invalid_value(
+                return Err(FerrayError::invalid_value(
                     "bin edges must have at least 2 elements",
                 ));
             }
@@ -143,7 +143,7 @@ pub fn histogram2d<T>(
     x: &Array<T, Ix1>,
     y: &Array<T, Ix1>,
     bins: (usize, usize),
-) -> FerrumResult<(Array<u64, Ix2>, Array<T, Ix1>, Array<T, Ix1>)>
+) -> FerrayResult<(Array<u64, Ix2>, Array<T, Ix1>, Array<T, Ix1>)>
 where
     T: Element + Float,
 {
@@ -151,19 +151,19 @@ where
     let ydata: Vec<T> = y.iter().copied().collect();
 
     if xdata.len() != ydata.len() {
-        return Err(FerrumError::shape_mismatch(
+        return Err(FerrayError::shape_mismatch(
             "x and y must have the same length",
         ));
     }
     if xdata.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot compute histogram2d of empty arrays",
         ));
     }
 
     let (nx, ny) = bins;
     if nx == 0 || ny == 0 {
-        return Err(FerrumError::invalid_value("number of bins must be > 0"));
+        return Err(FerrayError::invalid_value("number of bins must be > 0"));
     }
 
     let x_min = xdata.iter().copied().fold(T::infinity(), |a, b| a.min(b));
@@ -252,7 +252,7 @@ fn bin_index<T: Float>(val: T, lo: T, step: T, nbins: usize) -> Option<usize> {
 pub fn histogramdd<T>(
     sample: &Array<T, Ix2>,
     bins: &[usize],
-) -> FerrumResult<(Array<u64, IxDyn>, Vec<Array<T, Ix1>>)>
+) -> FerrayResult<(Array<u64, IxDyn>, Vec<Array<T, Ix1>>)>
 where
     T: Element + Float,
 {
@@ -261,7 +261,7 @@ where
     let data: Vec<T> = sample.iter().copied().collect();
 
     if bins.len() != ndims {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "bins length {} does not match sample dimensions {}",
             bins.len(),
             ndims
@@ -269,7 +269,7 @@ where
     }
     for &b in bins {
         if b == 0 {
-            return Err(FerrumError::invalid_value("number of bins must be > 0"));
+            return Err(FerrayError::invalid_value("number of bins must be > 0"));
         }
     }
 
@@ -368,12 +368,12 @@ pub fn bincount(
     x: &Array<u64, Ix1>,
     weights: Option<&Array<f64, Ix1>>,
     minlength: usize,
-) -> FerrumResult<Array<f64, Ix1>> {
+) -> FerrayResult<Array<f64, Ix1>> {
     let data: Vec<u64> = x.iter().copied().collect();
 
     if let Some(w) = weights {
         if w.size() != x.size() {
-            return Err(FerrumError::shape_mismatch(
+            return Err(FerrayError::shape_mismatch(
                 "x and weights must have the same length",
             ));
         }
@@ -416,7 +416,7 @@ pub fn digitize<T>(
     x: &Array<T, Ix1>,
     bins: &Array<T, Ix1>,
     right: bool,
-) -> FerrumResult<Array<u64, Ix1>>
+) -> FerrayResult<Array<u64, Ix1>>
 where
     T: Element + PartialOrd + Copy,
 {
@@ -424,7 +424,7 @@ where
     let bdata: Vec<T> = bins.iter().copied().collect();
 
     if bdata.is_empty() {
-        return Err(FerrumError::invalid_value("bins must not be empty"));
+        return Err(FerrayError::invalid_value("bins must not be empty"));
     }
 
     // Determine if bins are monotonically increasing or decreasing

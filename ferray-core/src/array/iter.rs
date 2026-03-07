@@ -2,7 +2,7 @@
 
 use crate::dimension::{Axis, Dimension, Ix1, IxDyn};
 use crate::dtype::Element;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 use super::owned::Array;
 use super::view::ArrayView;
@@ -55,14 +55,14 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// For `axis=0`, this yields each column.
     ///
     /// # Errors
-    /// Returns `FerrumError::AxisOutOfBounds` if `axis >= ndim`.
+    /// Returns `FerrayError::AxisOutOfBounds` if `axis >= ndim`.
     pub fn lanes(
         &self,
         axis: Axis,
-    ) -> FerrumResult<impl Iterator<Item = ArrayView<'_, T, Ix1>> + '_> {
+    ) -> FerrayResult<impl Iterator<Item = ArrayView<'_, T, Ix1>> + '_> {
         let ndim = self.ndim();
         if axis.index() >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(axis.index(), ndim));
+            return Err(FerrayError::axis_out_of_bounds(axis.index(), ndim));
         }
         let nd_axis = ndarray::Axis(axis.index());
         Ok(self
@@ -78,17 +78,17 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// two 2-D views each of shape `[3,4]`.
     ///
     /// # Errors
-    /// Returns `FerrumError::AxisOutOfBounds` if `axis >= ndim`.
+    /// Returns `FerrayError::AxisOutOfBounds` if `axis >= ndim`.
     pub fn axis_iter(
         &self,
         axis: Axis,
-    ) -> FerrumResult<impl Iterator<Item = ArrayView<'_, T, IxDyn>> + '_>
+    ) -> FerrayResult<impl Iterator<Item = ArrayView<'_, T, IxDyn>> + '_>
     where
         D::NdarrayDim: ndarray::RemoveAxis,
     {
         let ndim = self.ndim();
         if axis.index() >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(axis.index(), ndim));
+            return Err(FerrayError::axis_out_of_bounds(axis.index(), ndim));
         }
         let nd_axis = ndarray::Axis(axis.index());
         Ok(self.inner.axis_iter(nd_axis).map(|sub| {
@@ -100,17 +100,17 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// Mutably iterate over sub-arrays along the given axis.
     ///
     /// # Errors
-    /// Returns `FerrumError::AxisOutOfBounds` if `axis >= ndim`.
+    /// Returns `FerrayError::AxisOutOfBounds` if `axis >= ndim`.
     pub fn axis_iter_mut(
         &mut self,
         axis: Axis,
-    ) -> FerrumResult<impl Iterator<Item = ArrayViewMut<'_, T, IxDyn>> + '_>
+    ) -> FerrayResult<impl Iterator<Item = ArrayViewMut<'_, T, IxDyn>> + '_>
     where
         D::NdarrayDim: ndarray::RemoveAxis,
     {
         let ndim = self.ndim();
         if axis.index() >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(axis.index(), ndim));
+            return Err(FerrayError::axis_out_of_bounds(axis.index(), ndim));
         }
         let nd_axis = ndarray::Axis(axis.index());
         Ok(self.inner.axis_iter_mut(nd_axis).map(|sub| {

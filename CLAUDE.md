@@ -6,12 +6,12 @@
 
 ## Import Paths
 - Core types: `use ferray_core::{NdArray, Array1, Array2, ArrayD, ArrayView, Dimension}`
-- Errors: `use ferray_core::FerrumError`
+- Errors: `use ferray_core::FerrayError`
 - Element trait: `use ferray_core::Element`
 - Complex: `use num_complex::Complex`
 
 ## Error Handling
-- All public functions return `Result<T, FerrumError>`
+- All public functions return `Result<T, FerrayError>`
 - Use `thiserror` 2.0 for derive
 - Never panic in library code
 - Every error variant carries diagnostic context
@@ -24,14 +24,14 @@
 ## SIMD Strategy
 - Use `pulp` crate for runtime CPU dispatch (SSE2/AVX2/AVX-512/NEON)
 - Do NOT use `std::simd` — it is unstable. If you see examples using `std::simd::f64x4`, ignore them and use `pulp` instead.
-- Scalar fallback controlled by `FERRUM_FORCE_SCALAR=1` env var
+- Scalar fallback controlled by `FERRAY_FORCE_SCALAR=1` env var
 - All contiguous inner loops must have SIMD paths for f32, f64, i32, i64
 
 ## Testing Patterns
 - Oracle fixtures: load JSON from `fixtures/`, compare with ULP tolerance
 - Property tests: `proptest` with `ProptestConfig::with_cases(256)`
 - Fuzz targets: one per public function family
-- SIMD verification: run all tests with FERRUM_FORCE_SCALAR=1
+- SIMD verification: run all tests with FERRAY_FORCE_SCALAR=1
 
 ## Naming Conventions
 - Public array type: `NdArray<T, D>` (never expose ndarray types)

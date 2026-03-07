@@ -7,7 +7,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::MaskedArray;
@@ -15,11 +15,11 @@ use crate::MaskedArray;
 /// Create a `MaskedArray` by masking elements where the condition array is `true`.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if `condition` and `data` have different shapes.
+/// Returns `FerrayError::ShapeMismatch` if `condition` and `data` have different shapes.
 pub fn masked_where<T: Element + Copy, D: Dimension>(
     condition: &Array<bool, D>,
     data: &Array<T, D>,
-) -> FerrumResult<MaskedArray<T, D>> {
+) -> FerrayResult<MaskedArray<T, D>> {
     MaskedArray::new(data.clone(), condition.clone())
 }
 
@@ -29,7 +29,7 @@ pub fn masked_where<T: Element + Copy, D: Dimension>(
 /// Returns an error only for internal failures.
 pub fn masked_invalid<T: Element + Float, D: Dimension>(
     data: &Array<T, D>,
-) -> FerrumResult<MaskedArray<T, D>> {
+) -> FerrayResult<MaskedArray<T, D>> {
     let mask_data: Vec<bool> = data.iter().map(|v| v.is_nan() || v.is_infinite()).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
     MaskedArray::new(data.clone(), mask)
@@ -42,7 +42,7 @@ pub fn masked_invalid<T: Element + Float, D: Dimension>(
 pub fn masked_equal<T: Element + PartialEq + Copy, D: Dimension>(
     data: &Array<T, D>,
     value: T,
-) -> FerrumResult<MaskedArray<T, D>> {
+) -> FerrayResult<MaskedArray<T, D>> {
     let mask_data: Vec<bool> = data.iter().map(|v| *v == value).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
     MaskedArray::new(data.clone(), mask)
@@ -55,7 +55,7 @@ pub fn masked_equal<T: Element + PartialEq + Copy, D: Dimension>(
 pub fn masked_not_equal<T: Element + PartialEq + Copy, D: Dimension>(
     data: &Array<T, D>,
     value: T,
-) -> FerrumResult<MaskedArray<T, D>> {
+) -> FerrayResult<MaskedArray<T, D>> {
     let mask_data: Vec<bool> = data.iter().map(|v| *v != value).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
     MaskedArray::new(data.clone(), mask)
@@ -68,7 +68,7 @@ pub fn masked_not_equal<T: Element + PartialEq + Copy, D: Dimension>(
 pub fn masked_greater<T: Element + PartialOrd + Copy, D: Dimension>(
     data: &Array<T, D>,
     value: T,
-) -> FerrumResult<MaskedArray<T, D>> {
+) -> FerrayResult<MaskedArray<T, D>> {
     let mask_data: Vec<bool> = data.iter().map(|v| *v > value).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
     MaskedArray::new(data.clone(), mask)
@@ -81,7 +81,7 @@ pub fn masked_greater<T: Element + PartialOrd + Copy, D: Dimension>(
 pub fn masked_less<T: Element + PartialOrd + Copy, D: Dimension>(
     data: &Array<T, D>,
     value: T,
-) -> FerrumResult<MaskedArray<T, D>> {
+) -> FerrayResult<MaskedArray<T, D>> {
     let mask_data: Vec<bool> = data.iter().map(|v| *v < value).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
     MaskedArray::new(data.clone(), mask)
@@ -94,7 +94,7 @@ pub fn masked_less<T: Element + PartialOrd + Copy, D: Dimension>(
 pub fn masked_greater_equal<T: Element + PartialOrd + Copy, D: Dimension>(
     data: &Array<T, D>,
     value: T,
-) -> FerrumResult<MaskedArray<T, D>> {
+) -> FerrayResult<MaskedArray<T, D>> {
     let mask_data: Vec<bool> = data.iter().map(|v| *v >= value).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
     MaskedArray::new(data.clone(), mask)
@@ -107,7 +107,7 @@ pub fn masked_greater_equal<T: Element + PartialOrd + Copy, D: Dimension>(
 pub fn masked_less_equal<T: Element + PartialOrd + Copy, D: Dimension>(
     data: &Array<T, D>,
     value: T,
-) -> FerrumResult<MaskedArray<T, D>> {
+) -> FerrayResult<MaskedArray<T, D>> {
     let mask_data: Vec<bool> = data.iter().map(|v| *v <= value).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
     MaskedArray::new(data.clone(), mask)
@@ -121,7 +121,7 @@ pub fn masked_inside<T: Element + PartialOrd + Copy, D: Dimension>(
     data: &Array<T, D>,
     v1: T,
     v2: T,
-) -> FerrumResult<MaskedArray<T, D>> {
+) -> FerrayResult<MaskedArray<T, D>> {
     let mask_data: Vec<bool> = data.iter().map(|v| *v >= v1 && *v <= v2).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
     MaskedArray::new(data.clone(), mask)
@@ -135,7 +135,7 @@ pub fn masked_outside<T: Element + PartialOrd + Copy, D: Dimension>(
     data: &Array<T, D>,
     v1: T,
     v2: T,
-) -> FerrumResult<MaskedArray<T, D>> {
+) -> FerrayResult<MaskedArray<T, D>> {
     let mask_data: Vec<bool> = data.iter().map(|v| *v < v1 || *v > v2).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
     MaskedArray::new(data.clone(), mask)

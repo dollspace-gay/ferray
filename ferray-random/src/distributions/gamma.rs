@@ -3,7 +3,7 @@
 // Gamma sampling uses Marsaglia & Tsang's method (shape >= 1) with
 // Ahrens-Dieter transformation for shape < 1.
 
-use ferray_core::{Array, FerrumError, Ix1};
+use ferray_core::{Array, FerrayError, Ix1};
 
 use crate::bitgen::BitGenerator;
 use crate::distributions::normal::standard_normal_single;
@@ -62,17 +62,17 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `shape <= 0` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `shape <= 0` or `size` is zero.
     pub fn standard_gamma(
         &mut self,
         shape: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if shape <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "shape must be positive, got {shape}"
             )));
         }
@@ -91,23 +91,23 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `shape <= 0`, `scale <= 0`, or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `shape <= 0`, `scale <= 0`, or `size` is zero.
     pub fn gamma(
         &mut self,
         shape: f64,
         scale: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if shape <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "shape must be positive, got {shape}"
             )));
         }
         if scale <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
@@ -125,18 +125,18 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `a <= 0`, `b <= 0`, or `size` is zero.
-    pub fn beta(&mut self, a: f64, b: f64, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `a <= 0`, `b <= 0`, or `size` is zero.
+    pub fn beta(&mut self, a: f64, b: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if a <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "a must be positive, got {a}"
             )));
         }
         if b <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "b must be positive, got {b}"
             )));
         }
@@ -161,13 +161,13 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `df <= 0` or `size` is zero.
-    pub fn chisquare(&mut self, df: f64, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `df <= 0` or `size` is zero.
+    pub fn chisquare(&mut self, df: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if df <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "df must be positive, got {df}"
             )));
         }
@@ -185,23 +185,23 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if either df is non-positive or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if either df is non-positive or `size` is zero.
     pub fn f(
         &mut self,
         dfnum: f64,
         dfden: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if dfnum <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "dfnum must be positive, got {dfnum}"
             )));
         }
         if dfden <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "dfden must be positive, got {dfden}"
             )));
         }
@@ -226,13 +226,13 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `df <= 0` or `size` is zero.
-    pub fn student_t(&mut self, df: f64, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `df <= 0` or `size` is zero.
+    pub fn student_t(&mut self, df: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if df <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "df must be positive, got {df}"
             )));
         }

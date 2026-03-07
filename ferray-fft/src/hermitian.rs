@@ -12,7 +12,7 @@ use num_complex::Complex;
 
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::norm::FftNorm;
 
@@ -43,7 +43,7 @@ pub fn hfft<D: Dimension>(
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     // hfft is essentially irfft with Forward normalization swapped:
     // numpy defines hfft as the inverse of ihfft.
     // hfft(a, n) = irfft(conj(a), n) * n  (with backward norm)
@@ -56,7 +56,7 @@ pub fn hfft<D: Dimension>(
     let output_len = n.unwrap_or(2 * (half_len - 1));
 
     if output_len == 0 {
-        return Err(FerrumError::invalid_value("hfft output length must be > 0"));
+        return Err(FerrayError::invalid_value("hfft output length must be > 0"));
     }
 
     // Conjugate the input (hfft = ifft(conj(a)) * n effectively)
@@ -96,7 +96,7 @@ pub fn ihfft<D: Dimension>(
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     // ihfft is essentially rfft with swapped normalization and conjugation
     // numpy: ihfft(a) = conj(rfft(a)) / n  (with backward norm)
 
@@ -119,18 +119,18 @@ pub fn ihfft<D: Dimension>(
     Array::from_vec(IxDyn::new(&out_shape), conj_data)
 }
 
-fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrumResult<usize> {
+fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrayResult<usize> {
     match axis {
         Some(ax) => {
             if ax >= ndim {
-                Err(FerrumError::axis_out_of_bounds(ax, ndim))
+                Err(FerrayError::axis_out_of_bounds(ax, ndim))
             } else {
                 Ok(ax)
             }
         }
         None => {
             if ndim == 0 {
-                Err(FerrumError::invalid_value(
+                Err(FerrayError::invalid_value(
                     "cannot compute FFT on a 0-dimensional array",
                 ))
             } else {

@@ -2,7 +2,7 @@
 //
 // Parses subscript strings like "ij,jk->ik", "ij,jk", "ii->i", "...ij,...jk->...ik"
 
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use std::collections::HashMap;
 
 /// Parsed einsum expression.
@@ -35,8 +35,8 @@ pub enum Label {
 /// - Ellipsis: `"...ij,...jk->...ik"`
 ///
 /// # Errors
-/// - `FerrumError::InvalidValue` for malformed subscripts.
-pub fn parse_subscripts(subscripts: &str, operand_shapes: &[&[usize]]) -> FerrumResult<EinsumExpr> {
+/// - `FerrayError::InvalidValue` for malformed subscripts.
+pub fn parse_subscripts(subscripts: &str, operand_shapes: &[&[usize]]) -> FerrayResult<EinsumExpr> {
     let subscripts = subscripts.replace(' ', "");
     let has_ellipsis = subscripts.contains("...");
 
@@ -50,7 +50,7 @@ pub fn parse_subscripts(subscripts: &str, operand_shapes: &[&[usize]]) -> Ferrum
 
     let input_strs: Vec<&str> = inputs_str.split(',').collect();
     if input_strs.len() != operand_shapes.len() {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "einsum: subscript has {} operands but {} were provided",
             input_strs.len(),
             operand_shapes.len()
@@ -110,7 +110,7 @@ pub fn parse_subscripts(subscripts: &str, operand_shapes: &[&[usize]]) -> Ferrum
 
         // Verify expanded label count matches shape
         if expanded.len() != shape.len() {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "einsum: operand {} has {} dimensions but subscript implies {}",
                 idx,
                 shape.len(),
@@ -174,7 +174,7 @@ pub fn parse_subscripts(subscripts: &str, operand_shapes: &[&[usize]]) -> Ferrum
     })
 }
 
-fn parse_input_labels(s: &str, has_ellipsis: bool) -> FerrumResult<(Vec<Label>, usize)> {
+fn parse_input_labels(s: &str, has_ellipsis: bool) -> FerrayResult<(Vec<Label>, usize)> {
     let mut labels = Vec::new();
     let mut n_explicit = 0;
     let chars: Vec<char> = s.chars().collect();
@@ -193,7 +193,7 @@ fn parse_input_labels(s: &str, has_ellipsis: bool) -> FerrumResult<(Vec<Label>, 
             n_explicit += 1;
             i += 1;
         } else {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "einsum: invalid character '{}' in subscript",
                 chars[i]
             )));

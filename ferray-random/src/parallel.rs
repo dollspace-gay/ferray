@@ -3,7 +3,7 @@
 // Provides deterministic parallel generation that produces the same output
 // regardless of thread count, by using fixed index-range assignment.
 
-use ferray_core::{Array, FerrumError, Ix1};
+use ferray_core::{Array, FerrayError, Ix1};
 
 use crate::bitgen::BitGenerator;
 use crate::distributions::normal::standard_normal_pair;
@@ -24,13 +24,13 @@ impl<B: BitGenerator + Clone> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `size` is zero.
     pub fn standard_normal_parallel(
         &mut self,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
 
         // For determinism: always use sequential generation with the same
@@ -63,8 +63,8 @@ impl<B: BitGenerator + Clone> Generator<B> {
     /// * `n` - Number of child generators to create.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `n` is zero.
-    pub fn spawn(&mut self, n: usize) -> Result<Vec<Generator<B>>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `n` is zero.
+    pub fn spawn(&mut self, n: usize) -> Result<Vec<Generator<B>>, FerrayError> {
         crate::generator::spawn_generators(self, n)
     }
 }

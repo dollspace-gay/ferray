@@ -4,7 +4,7 @@
 Implements NumPy's window functions: `bartlett`, `blackman`, `hamming`, `hanning`, `kaiser`. These are used in signal processing, spectral analysis, and FFT windowing. Also includes `vectorize` and other functional programming utilities (`piecewise`, `apply_along_axis`, `apply_over_axes`) that are missing from other ferray crates.
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, Array1, Element, FerrumError), `ferray-ufunc` (math functions for window computation)
+- **Upstream**: `ferray-core` (NdArray, Array1, Element, FerrayError), `ferray-ufunc` (math functions for window computation)
 - **Downstream**: ferray (re-export as `ferray::window::`)
 - **Phase**: 2 — Submodules (ships alongside fft, random, polynomial)
 

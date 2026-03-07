@@ -4,7 +4,7 @@
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::IxDyn;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use std::collections::HashMap;
 
 use super::parser::{EinsumExpr, Label};
@@ -16,7 +16,7 @@ use super::parser::{EinsumExpr, Label};
 pub fn generic_contraction(
     expr: &EinsumExpr,
     operands: &[&Array<f64, IxDyn>],
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     // Build a mapping from each label to its size
     let mut label_sizes: HashMap<Label, usize> = HashMap::new();
     for (op_idx, labels) in expr.inputs.iter().enumerate() {
@@ -25,7 +25,7 @@ pub fn generic_contraction(
             let size = shape[dim_idx];
             if let Some(&existing) = label_sizes.get(&label) {
                 if existing != size {
-                    return Err(FerrumError::shape_mismatch(format!(
+                    return Err(FerrayError::shape_mismatch(format!(
                         "einsum: label {:?} has inconsistent sizes {} and {}",
                         label, existing, size
                     )));
@@ -42,13 +42,13 @@ pub fn generic_contraction(
         .iter()
         .map(|l| {
             label_sizes.get(l).copied().ok_or_else(|| {
-                FerrumError::invalid_value(format!(
+                FerrayError::invalid_value(format!(
                     "einsum: output label {:?} not found in any input",
                     l
                 ))
             })
         })
-        .collect::<FerrumResult<Vec<_>>>()?;
+        .collect::<FerrayResult<Vec<_>>>()?;
 
     let out_size: usize = if out_shape.is_empty() {
         1

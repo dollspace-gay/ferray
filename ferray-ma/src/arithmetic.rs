@@ -5,7 +5,7 @@ use std::ops::{Add, Div, Mul, Sub};
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::MaskedArray;
 
@@ -13,9 +13,9 @@ use crate::MaskedArray;
 fn mask_union<D: Dimension>(
     a: &Array<bool, D>,
     b: &Array<bool, D>,
-) -> FerrumResult<Array<bool, D>> {
+) -> FerrayResult<Array<bool, D>> {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "mask_union: shapes {:?} and {:?} differ",
             a.shape(),
             b.shape()
@@ -28,17 +28,17 @@ fn mask_union<D: Dimension>(
 /// Add two masked arrays elementwise, propagating the mask union.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
 pub fn masked_add<T, D>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Add<Output = T> + Copy,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "masked_add: shapes {:?} and {:?} differ",
             a.shape(),
             b.shape()
@@ -59,17 +59,17 @@ where
 /// Subtract two masked arrays elementwise, propagating the mask union.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
 pub fn masked_sub<T, D>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Sub<Output = T> + Copy,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "masked_sub: shapes {:?} and {:?} differ",
             a.shape(),
             b.shape()
@@ -90,17 +90,17 @@ where
 /// Multiply two masked arrays elementwise, propagating the mask union.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
 pub fn masked_mul<T, D>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Mul<Output = T> + Copy,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "masked_mul: shapes {:?} and {:?} differ",
             a.shape(),
             b.shape()
@@ -121,17 +121,17 @@ where
 /// Divide two masked arrays elementwise, propagating the mask union.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
 pub fn masked_div<T, D>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Div<Output = T> + Copy,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "masked_div: shapes {:?} and {:?} differ",
             a.shape(),
             b.shape()
@@ -152,17 +152,17 @@ where
 /// Add a masked array and a regular array, treating the regular array as unmasked.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
 pub fn masked_add_array<T, D>(
     ma: &MaskedArray<T, D>,
     arr: &Array<T, D>,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Add<Output = T> + Copy,
     D: Dimension,
 {
     if ma.shape() != arr.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "masked_add_array: shapes {:?} and {:?} differ",
             ma.shape(),
             arr.shape()
@@ -182,17 +182,17 @@ where
 /// Subtract a regular array from a masked array, treating the regular array as unmasked.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
 pub fn masked_sub_array<T, D>(
     ma: &MaskedArray<T, D>,
     arr: &Array<T, D>,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Sub<Output = T> + Copy,
     D: Dimension,
 {
     if ma.shape() != arr.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "masked_sub_array: shapes {:?} and {:?} differ",
             ma.shape(),
             arr.shape()
@@ -212,17 +212,17 @@ where
 /// Multiply a masked array and a regular array, treating the regular array as unmasked.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
 pub fn masked_mul_array<T, D>(
     ma: &MaskedArray<T, D>,
     arr: &Array<T, D>,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Mul<Output = T> + Copy,
     D: Dimension,
 {
     if ma.shape() != arr.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "masked_mul_array: shapes {:?} and {:?} differ",
             ma.shape(),
             arr.shape()
@@ -242,17 +242,17 @@ where
 /// Divide a masked array by a regular array, treating the regular array as unmasked.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
 pub fn masked_div_array<T, D>(
     ma: &MaskedArray<T, D>,
     arr: &Array<T, D>,
-) -> FerrumResult<MaskedArray<T, D>>
+) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Div<Output = T> + Copy,
     D: Dimension,
 {
     if ma.shape() != arr.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "masked_div_array: shapes {:?} and {:?} differ",
             ma.shape(),
             arr.shape()

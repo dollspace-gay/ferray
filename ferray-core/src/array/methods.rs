@@ -3,7 +3,7 @@
 
 use crate::dimension::{Axis, Dimension, IxDyn};
 use crate::dtype::Element;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 use super::owned::Array;
 use super::view::ArrayView;
@@ -30,14 +30,14 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// `self` and can be modified, the second is from `other`.
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if shapes differ.
+    /// Returns `FerrayError::ShapeMismatch` if shapes differ.
     pub fn zip_mut_with(
         &mut self,
         other: &Array<T, D>,
         f: impl Fn(&mut T, &T),
-    ) -> FerrumResult<()> {
+    ) -> FerrayResult<()> {
         if self.shape() != other.shape() {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "cannot zip arrays with shapes {:?} and {:?}",
                 self.shape(),
                 other.shape(),
@@ -57,19 +57,19 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// The result is always returned as a dynamic-rank array.
     ///
     /// # Errors
-    /// Returns `FerrumError::AxisOutOfBounds` if `axis >= ndim`.
+    /// Returns `FerrayError::AxisOutOfBounds` if `axis >= ndim`.
     pub fn fold_axis(
         &self,
         axis: Axis,
         init: T,
         fold: impl FnMut(&T, &T) -> T,
-    ) -> FerrumResult<Array<T, IxDyn>>
+    ) -> FerrayResult<Array<T, IxDyn>>
     where
         D::NdarrayDim: ndarray::RemoveAxis,
     {
         let ndim = self.ndim();
         if axis.index() >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(axis.index(), ndim));
+            return Err(FerrayError::axis_out_of_bounds(axis.index(), ndim));
         }
         let nd_axis = ndarray::Axis(axis.index());
         let mut fold = fold;
@@ -105,13 +105,13 @@ impl<T: Element, D: Dimension> ArrayView<'_, T, D> {
         axis: Axis,
         init: T,
         fold: impl FnMut(&T, &T) -> T,
-    ) -> FerrumResult<Array<T, IxDyn>>
+    ) -> FerrayResult<Array<T, IxDyn>>
     where
         D::NdarrayDim: ndarray::RemoveAxis,
     {
         let ndim = self.ndim();
         if axis.index() >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(axis.index(), ndim));
+            return Err(FerrayError::axis_out_of_bounds(axis.index(), ndim));
         }
         let nd_axis = ndarray::Axis(axis.index());
         let mut fold = fold;

@@ -5,7 +5,7 @@
 // yet be available. When ferray-linalg::eigvals is ready, this can delegate
 // to it for improved performance.
 
-use ferray_core::error::FerrumError;
+use ferray_core::error::FerrayError;
 use num_complex::Complex;
 
 use crate::companion::companion_matrix;
@@ -21,11 +21,11 @@ use crate::companion::companion_matrix;
 /// For higher degrees, uses companion matrix eigenvalues via QR iteration.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if coefficients are empty or
+/// Returns `FerrayError::InvalidValue` if coefficients are empty or
 /// the leading coefficient is zero.
-pub fn find_roots_from_power_coeffs(coeffs: &[f64]) -> Result<Vec<Complex<f64>>, FerrumError> {
+pub fn find_roots_from_power_coeffs(coeffs: &[f64]) -> Result<Vec<Complex<f64>>, FerrayError> {
     if coeffs.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot find roots of empty polynomial",
         ));
     }
@@ -77,7 +77,7 @@ pub fn find_roots_from_power_coeffs(coeffs: &[f64]) -> Result<Vec<Complex<f64>>,
 ///
 /// This is a simplified but functional implementation suitable for companion matrices.
 /// Returns all eigenvalues as Complex<f64>.
-fn qr_eigenvalues(mat: &[f64], n: usize) -> Result<Vec<Complex<f64>>, FerrumError> {
+fn qr_eigenvalues(mat: &[f64], n: usize) -> Result<Vec<Complex<f64>>, FerrayError> {
     if n == 0 {
         return Ok(Vec::new());
     }
@@ -98,7 +98,7 @@ fn qr_eigenvalues(mat: &[f64], n: usize) -> Result<Vec<Complex<f64>>, FerrumErro
 
     while p > 2 {
         if iter_count > max_iter {
-            return Err(FerrumError::ConvergenceFailure {
+            return Err(FerrayError::ConvergenceFailure {
                 iterations: max_iter,
                 message: "QR iteration did not converge".to_string(),
             });

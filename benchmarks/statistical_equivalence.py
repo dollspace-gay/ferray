@@ -47,8 +47,8 @@ CATEGORY_MAX_ULP = {
     "linalg": None,     # Matmul: O(N) error growth. Scale threshold with matrix size.
     "fft": None,        # FFT: O(log N) error per butterfly. Scale with transform size.
 }
-FERRUM_BENCH_DIR = Path(__file__).parent / "ferray_bench"
-FERRUM_BENCH_BIN = None  # Set after build
+FERRAY_BENCH_DIR = Path(__file__).parent / "ferray_bench"
+FERRAY_BENCH_BIN = None  # Set after build
 
 # Try to import scipy for statistical testing
 try:
@@ -191,14 +191,14 @@ def run_numpy(case):
 
 
 # ---------------------------------------------------------------------------
-# Ferrum execution
+# Ferray execution
 # ---------------------------------------------------------------------------
 
 def find_ferray_bench():
     """Find or build the ferray-bench binary."""
     # Check common build locations
     for profile in ["release", "debug"]:
-        candidate = FERRUM_BENCH_DIR / "target" / profile / "ferray-bench"
+        candidate = FERRAY_BENCH_DIR / "target" / profile / "ferray-bench"
         if candidate.exists():
             return str(candidate)
 
@@ -206,7 +206,7 @@ def find_ferray_bench():
     print("Building ferray-bench binary...")
     result = subprocess.run(
         ["cargo", "build", "--release"],
-        cwd=str(FERRUM_BENCH_DIR),
+        cwd=str(FERRAY_BENCH_DIR),
         capture_output=True,
         text=True,
         timeout=600,
@@ -215,7 +215,7 @@ def find_ferray_bench():
         print(f"WARNING: Failed to build ferray-bench:\n{result.stderr}")
         return None
 
-    candidate = FERRUM_BENCH_DIR / "target" / "release" / "ferray-bench"
+    candidate = FERRAY_BENCH_DIR / "target" / "release" / "ferray-bench"
     if candidate.exists():
         return str(candidate)
 
@@ -479,7 +479,7 @@ def main():
         print("ERROR: Could not find or build ferray-bench binary.")
         print(
             f"       Build it manually: "
-            f"cd {FERRUM_BENCH_DIR} && cargo build --release"
+            f"cd {FERRAY_BENCH_DIR} && cargo build --release"
         )
         print()
         print("Generating test cases and running NumPy only (dry run)...")
@@ -489,7 +489,7 @@ def main():
         print("Skipping comparison -- ferray-bench binary not available.")
         sys.exit(0)
 
-    print(f"Ferrum bench:   {bench_bin}")
+    print(f"Ferray bench:   {bench_bin}")
     print()
 
     # Generate test cases

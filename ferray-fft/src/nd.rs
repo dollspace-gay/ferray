@@ -8,7 +8,7 @@
 use num_complex::Complex;
 use rayon::prelude::*;
 
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::norm::FftNorm;
 use crate::plan::get_cached_plan;
@@ -27,16 +27,16 @@ pub(crate) fn fft_along_axis(
     n: Option<usize>,
     inverse: bool,
     norm: FftNorm,
-) -> FerrumResult<(Vec<usize>, Vec<Complex<f64>>)> {
+) -> FerrayResult<(Vec<usize>, Vec<Complex<f64>>)> {
     let ndim = shape.len();
     if axis >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis, ndim));
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
     }
 
     let axis_len = shape[axis];
     let fft_len = n.unwrap_or(axis_len);
     if fft_len == 0 {
-        return Err(FerrumError::invalid_value("FFT length must be > 0"));
+        return Err(FerrayError::invalid_value("FFT length must be > 0"));
     }
 
     // Total elements
@@ -143,7 +143,7 @@ fn fft_1d_fast(
     input_len: usize,
     inverse: bool,
     norm: FftNorm,
-) -> FerrumResult<(Vec<usize>, Vec<Complex<f64>>)> {
+) -> FerrayResult<(Vec<usize>, Vec<Complex<f64>>)> {
     // Build buffer: copy input (truncated or padded)
     let mut buffer = Vec::with_capacity(fft_len);
     let copy_len = input_len.min(fft_len);
@@ -182,7 +182,7 @@ pub(crate) fn fft_along_axes(
     axes_and_sizes: &[(usize, Option<usize>)],
     inverse: bool,
     norm: FftNorm,
-) -> FerrumResult<(Vec<usize>, Vec<Complex<f64>>)> {
+) -> FerrayResult<(Vec<usize>, Vec<Complex<f64>>)> {
     let mut current_data = data.to_vec();
     let mut current_shape = shape.to_vec();
 
@@ -205,7 +205,7 @@ pub(crate) fn fft_1d_along_axis(
     n: Option<usize>,
     inverse: bool,
     norm: FftNorm,
-) -> FerrumResult<(Vec<usize>, Vec<Complex<f64>>)> {
+) -> FerrayResult<(Vec<usize>, Vec<Complex<f64>>)> {
     fft_along_axis(data, shape, axis, n, inverse, norm)
 }
 

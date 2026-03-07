@@ -5,14 +5,14 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::cr_math::CrMath;
 use crate::helpers::{binary_float_op, unary_float_op, unary_slice_op_f64, unary_slice_op_f32};
 
 /// Elementwise exponential (e^x).
-pub fn exp<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn exp<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -32,7 +32,7 @@ where
 /// For f64 arrays, uses the optimized batch kernel directly.
 /// For f32 arrays, promotes to f64 internally (f32 has only 24 mantissa bits,
 /// so the result is correctly rounded for all finite f32 inputs).
-pub fn exp_fast<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn exp_fast<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -63,7 +63,7 @@ where
 }
 
 /// Elementwise 2^x.
-pub fn exp2<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn exp2<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -72,7 +72,7 @@ where
 }
 
 /// Elementwise exp(x) - 1, accurate near zero.
-pub fn expm1<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn expm1<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -81,7 +81,7 @@ where
 }
 
 /// Elementwise natural logarithm.
-pub fn log<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn log<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -90,7 +90,7 @@ where
 }
 
 /// Elementwise base-2 logarithm.
-pub fn log2<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn log2<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -99,7 +99,7 @@ where
 }
 
 /// Elementwise base-10 logarithm.
-pub fn log10<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn log10<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -108,7 +108,7 @@ where
 }
 
 /// Elementwise ln(1 + x), accurate near zero.
-pub fn log1p<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn log1p<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -117,7 +117,7 @@ where
 }
 
 /// log(exp(a) + exp(b)), computed in a numerically stable way.
-pub fn logaddexp<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn logaddexp<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -130,7 +130,7 @@ where
 }
 
 /// log2(2^a + 2^b), computed in a numerically stable way.
-pub fn logaddexp2<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn logaddexp2<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -149,7 +149,7 @@ where
 
 /// Elementwise exponential for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn exp_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn exp_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -158,7 +158,7 @@ where
 
 /// Elementwise 2^x for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn exp2_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn exp2_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -167,7 +167,7 @@ where
 
 /// Elementwise exp(x)-1 for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn expm1_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn expm1_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -176,7 +176,7 @@ where
 
 /// Elementwise natural logarithm for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn log_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn log_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -185,7 +185,7 @@ where
 
 /// Elementwise base-2 logarithm for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn log2_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn log2_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -194,7 +194,7 @@ where
 
 /// Elementwise base-10 logarithm for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn log10_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn log10_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -203,7 +203,7 @@ where
 
 /// Elementwise ln(1+x) for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn log1p_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn log1p_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {

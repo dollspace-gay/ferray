@@ -1,8 +1,8 @@
 // ferray-io: .npy file I/O
 //
 // REQ-1: save(path, &array) writes .npy format
-// REQ-2: load::<T, D>(path) reads .npy and returns Result<Array<T, D>, FerrumError>
-// REQ-3: load_dynamic(path) reads .npy and returns Result<DynArray, FerrumError>
+// REQ-2: load::<T, D>(path) reads .npy and returns Result<Array<T, D>, FerrayError>
+// REQ-3: load_dynamic(path) reads .npy and returns Result<DynArray, FerrayError>
 // REQ-6: Support format versions 1.0, 2.0, 3.0
 // REQ-12: Support reading/writing both little-endian and big-endian
 
@@ -17,7 +17,7 @@ use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::dtype::{DType, Element};
 use ferray_core::dynarray::DynArray;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use self::dtype_parse::Endianness;
 
@@ -26,13 +26,13 @@ use self::dtype_parse::Endianness;
 /// The file is written in native byte order with C (row-major) layout.
 ///
 /// # Errors
-/// Returns `FerrumError::IoError` if the file cannot be created or written.
+/// Returns `FerrayError::IoError` if the file cannot be created or written.
 pub fn save<T: Element + NpyElement, D: Dimension, P: AsRef<Path>>(
     path: P,
     array: &Array<T, D>,
-) -> FerrumResult<()> {
+) -> FerrayResult<()> {
     let file = File::create(path.as_ref()).map_err(|e| {
-        FerrumError::io_error(format!(
+        FerrayError::io_error(format!(
             "failed to create file '{}': {e}",
             path.as_ref().display()
         ))
@@ -45,7 +45,7 @@ pub fn save<T: Element + NpyElement, D: Dimension, P: AsRef<Path>>(
 pub fn save_to_writer<T: Element + NpyElement, D: Dimension, W: Write>(
     writer: &mut W,
     array: &Array<T, D>,
-) -> FerrumResult<()> {
+) -> FerrayResult<()> {
     let fortran_order = false;
     header::write_header(writer, T::dtype(), array.shape(), fortran_order)?;
 
@@ -53,7 +53,7 @@ pub fn save_to_writer<T: Element + NpyElement, D: Dimension, W: Write>(
     if let Some(slice) = array.as_slice() {
         T::write_slice(slice, writer)?;
     } else {
-        return Err(FerrumError::io_error(
+        return Err(FerrayError::io_error(
             "cannot save non-contiguous array to .npy (make contiguous first)",
         ));
     }
@@ -65,14 +65,14 @@ pub fn save_to_writer<T: Element + NpyElement, D: Dimension, W: Write>(
 /// Load an array from a `.npy` file with compile-time type and dimension.
 ///
 /// # Errors
-/// - Returns `FerrumError::InvalidDtype` if the file's dtype doesn't match `T`.
-/// - Returns `FerrumError::ShapeMismatch` if the file's shape doesn't match `D`.
-/// - Returns `FerrumError::IoError` on file read failures.
+/// - Returns `FerrayError::InvalidDtype` if the file's dtype doesn't match `T`.
+/// - Returns `FerrayError::ShapeMismatch` if the file's shape doesn't match `D`.
+/// - Returns `FerrayError::IoError` on file read failures.
 pub fn load<T: Element + NpyElement, D: Dimension, P: AsRef<Path>>(
     path: P,
-) -> FerrumResult<Array<T, D>> {
+) -> FerrayResult<Array<T, D>> {
     let file = File::open(path.as_ref()).map_err(|e| {
-        FerrumError::io_error(format!(
+        FerrayError::io_error(format!(
             "failed to open file '{}': {e}",
             path.as_ref().display()
         ))
@@ -84,12 +84,12 @@ pub fn load<T: Element + NpyElement, D: Dimension, P: AsRef<Path>>(
 /// Load an array from a reader in `.npy` format with compile-time type.
 pub fn load_from_reader<T: Element + NpyElement, D: Dimension, R: Read>(
     reader: &mut R,
-) -> FerrumResult<Array<T, D>> {
+) -> FerrayResult<Array<T, D>> {
     let hdr = header::read_header(reader)?;
 
     // Check dtype matches T
     if hdr.dtype != T::dtype() {
-        return Err(FerrumError::invalid_dtype(format!(
+        return Err(FerrayError::invalid_dtype(format!(
             "expected dtype {:?} for type {}, but file has {:?}",
             T::dtype(),
             std::any::type_name::<T>(),
@@ -100,7 +100,7 @@ pub fn load_from_reader<T: Element + NpyElement, D: Dimension, R: Read>(
     // Check dimension compatibility
     if let Some(ndim) = D::NDIM {
         if ndim != hdr.shape.len() {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "expected {} dimensions, but file has {} (shape {:?})",
                 ndim,
                 hdr.shape.len(),
@@ -127,9 +127,9 @@ pub fn load_from_reader<T: Element + NpyElement, D: Dimension, R: Read>(
 ///
 /// # Errors
 /// Returns errors on I/O failures or unsupported dtypes.
-pub fn load_dynamic<P: AsRef<Path>>(path: P) -> FerrumResult<DynArray> {
+pub fn load_dynamic<P: AsRef<Path>>(path: P) -> FerrayResult<DynArray> {
     let file = File::open(path.as_ref()).map_err(|e| {
-        FerrumError::io_error(format!(
+        FerrayError::io_error(format!(
             "failed to open file '{}': {e}",
             path.as_ref().display()
         ))
@@ -139,7 +139,7 @@ pub fn load_dynamic<P: AsRef<Path>>(path: P) -> FerrumResult<DynArray> {
 }
 
 /// Load a `.npy` from a reader with runtime type dispatch.
-pub fn load_dynamic_from_reader<R: Read>(reader: &mut R) -> FerrumResult<DynArray> {
+pub fn load_dynamic_from_reader<R: Read>(reader: &mut R) -> FerrayResult<DynArray> {
     let hdr = header::read_header(reader)?;
     let total: usize = hdr.shape.iter().product();
     let dim = IxDyn::new(&hdr.shape);
@@ -176,7 +176,7 @@ pub fn load_dynamic_from_reader<R: Read>(reader: &mut R) -> FerrumResult<DynArra
         DType::Complex64 => {
             load_complex64_dynamic(reader, total, dim, hdr.fortran_order, hdr.endianness)
         }
-        _ => Err(FerrumError::invalid_dtype(format!(
+        _ => Err(FerrayError::invalid_dtype(format!(
             "unsupported dtype {:?} for .npy loading",
             hdr.dtype
         ))),
@@ -190,7 +190,7 @@ fn load_complex32_dynamic<R: Read>(
     dim: IxDyn,
     fortran_order: bool,
     endian: Endianness,
-) -> FerrumResult<DynArray> {
+) -> FerrayResult<DynArray> {
     // Complex<f32> is 8 bytes: two f32 (re, im)
     let byte_count = total * 8;
     let mut raw = vec![0u8; byte_count];
@@ -222,7 +222,7 @@ fn load_complex32_dynamic<R: Read>(
 
     // Verify length
     if data.len() != total * 8 {
-        return Err(FerrumError::io_error(
+        return Err(FerrayError::io_error(
             "unexpected data length for complex32",
         ));
     }
@@ -258,7 +258,7 @@ fn load_complex32_from_bytes_copy(
     total: usize,
     dim: IxDyn,
     fortran_order: bool,
-) -> FerrumResult<DynArray> {
+) -> FerrayResult<DynArray> {
     // Create a DynArray::zeros and fill it from bytes
     let mut arr_dyn = DynArray::zeros(DType::Complex32, dim.as_slice())?;
     if let DynArray::Complex32(ref mut arr) = arr_dyn {
@@ -290,7 +290,7 @@ fn load_complex64_dynamic<R: Read>(
     dim: IxDyn,
     fortran_order: bool,
     endian: Endianness,
-) -> FerrumResult<DynArray> {
+) -> FerrayResult<DynArray> {
     let byte_count = total * 16;
     let mut raw = vec![0u8; byte_count];
     reader.read_exact(&mut raw)?;
@@ -309,7 +309,7 @@ fn load_complex64_from_bytes_copy(
     total: usize,
     dim: IxDyn,
     _fortran_order: bool,
-) -> FerrumResult<DynArray> {
+) -> FerrayResult<DynArray> {
     let mut arr_dyn = DynArray::zeros(DType::Complex64, dim.as_slice())?;
     if let DynArray::Complex64(ref mut arr) = arr_dyn {
         if let Some(slice) = arr.as_slice_mut() {
@@ -323,9 +323,9 @@ fn load_complex64_from_bytes_copy(
 }
 
 /// Save a `DynArray` to a `.npy` file.
-pub fn save_dynamic<P: AsRef<Path>>(path: P, array: &DynArray) -> FerrumResult<()> {
+pub fn save_dynamic<P: AsRef<Path>>(path: P, array: &DynArray) -> FerrayResult<()> {
     let file = File::create(path.as_ref()).map_err(|e| {
-        FerrumError::io_error(format!(
+        FerrayError::io_error(format!(
             "failed to create file '{}': {e}",
             path.as_ref().display()
         ))
@@ -335,14 +335,14 @@ pub fn save_dynamic<P: AsRef<Path>>(path: P, array: &DynArray) -> FerrumResult<(
 }
 
 /// Save a `DynArray` to a writer in `.npy` format.
-pub fn save_dynamic_to_writer<W: Write>(writer: &mut W, array: &DynArray) -> FerrumResult<()> {
+pub fn save_dynamic_to_writer<W: Write>(writer: &mut W, array: &DynArray) -> FerrayResult<()> {
     macro_rules! save_typed {
         ($arr:expr, $dtype:expr, $ty:ty) => {{
             header::write_header(writer, $dtype, $arr.shape(), false)?;
             if let Some(s) = $arr.as_slice() {
                 <$ty as NpyElement>::write_slice(s, writer)?;
             } else {
-                return Err(FerrumError::io_error(
+                return Err(FerrayError::io_error(
                     "cannot save non-contiguous DynArray to .npy",
                 ));
             }
@@ -372,7 +372,7 @@ pub fn save_dynamic_to_writer<W: Write>(writer: &mut W, array: &DynArray) -> Fer
             save_complex_raw(a.as_slice(), 16, writer)?;
         }
         _ => {
-            return Err(FerrumError::invalid_dtype(
+            return Err(FerrayError::invalid_dtype(
                 "unsupported DynArray variant for .npy saving",
             ));
         }
@@ -388,9 +388,9 @@ fn save_complex_raw<T, W: Write>(
     slice_opt: Option<&[T]>,
     elem_size: usize,
     writer: &mut W,
-) -> FerrumResult<()> {
+) -> FerrayResult<()> {
     let slice = slice_opt
-        .ok_or_else(|| FerrumError::io_error("cannot save non-contiguous complex array"))?;
+        .ok_or_else(|| FerrayError::io_error("cannot save non-contiguous complex array"))?;
     let byte_len = slice.len() * elem_size;
     let bytes = unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const u8, byte_len) };
     writer.write_all(bytes)?;
@@ -398,19 +398,19 @@ fn save_complex_raw<T, W: Write>(
 }
 
 /// Build a dimension value of type `D` from a shape slice.
-fn build_dimension<D: Dimension>(shape: &[usize]) -> FerrumResult<D> {
+fn build_dimension<D: Dimension>(shape: &[usize]) -> FerrayResult<D> {
     build_dim_from_shape::<D>(shape)
 }
 
 /// Helper to build a dimension from a shape slice.
 /// This works for all fixed dimensions (Ix0-Ix6) and IxDyn.
-fn build_dim_from_shape<D: Dimension>(shape: &[usize]) -> FerrumResult<D> {
+fn build_dim_from_shape<D: Dimension>(shape: &[usize]) -> FerrayResult<D> {
     use ferray_core::dimension::*;
     use std::any::Any;
 
     if let Some(ndim) = D::NDIM {
         if shape.len() != ndim {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "expected {ndim} dimensions, got {}",
                 shape.len()
             )));
@@ -461,7 +461,7 @@ fn build_dim_from_shape<D: Dimension>(shape: &[usize]) -> FerrumResult<D> {
         _ => {}
     }
 
-    Err(FerrumError::io_error(
+    Err(FerrayError::io_error(
         "unsupported dimension type for .npy loading",
     ))
 }
@@ -476,14 +476,14 @@ fn build_dim_from_shape<D: Dimension>(shape: &[usize]) -> FerrumResult<D> {
 /// (excluding Complex, which is handled via raw byte I/O in the dynamic path).
 pub trait NpyElement: Element + private::NpySealed {
     /// Write a contiguous slice of elements to a writer in native byte order.
-    fn write_slice<W: Write>(data: &[Self], writer: &mut W) -> FerrumResult<()>;
+    fn write_slice<W: Write>(data: &[Self], writer: &mut W) -> FerrayResult<()>;
 
     /// Read `count` elements from a reader, applying byte-swapping if needed.
     fn read_vec<R: Read>(
         reader: &mut R,
         count: usize,
         endian: Endianness,
-    ) -> FerrumResult<Vec<Self>>;
+    ) -> FerrayResult<Vec<Self>>;
 }
 
 mod private {
@@ -499,7 +499,7 @@ macro_rules! impl_npy_element {
         impl private::NpySealed for $ty {}
 
         impl NpyElement for $ty {
-            fn write_slice<W: Write>(data: &[$ty], writer: &mut W) -> FerrumResult<()> {
+            fn write_slice<W: Write>(data: &[$ty], writer: &mut W) -> FerrayResult<()> {
                 for &val in data {
                     writer.write_all(&val.to_ne_bytes())?;
                 }
@@ -510,7 +510,7 @@ macro_rules! impl_npy_element {
                 reader: &mut R,
                 count: usize,
                 endian: Endianness,
-            ) -> FerrumResult<Vec<$ty>> {
+            ) -> FerrayResult<Vec<$ty>> {
                 let mut result = Vec::with_capacity(count);
                 let mut buf = [0u8; $size];
                 let needs_swap = endian.needs_swap();
@@ -536,7 +536,7 @@ macro_rules! impl_npy_element {
 impl private::NpySealed for bool {}
 
 impl NpyElement for bool {
-    fn write_slice<W: Write>(data: &[bool], writer: &mut W) -> FerrumResult<()> {
+    fn write_slice<W: Write>(data: &[bool], writer: &mut W) -> FerrayResult<()> {
         for &val in data {
             writer.write_all(&[val as u8])?;
         }
@@ -547,7 +547,7 @@ impl NpyElement for bool {
         reader: &mut R,
         count: usize,
         _endian: Endianness,
-    ) -> FerrumResult<Vec<bool>> {
+    ) -> FerrayResult<Vec<bool>> {
         let mut result = Vec::with_capacity(count);
         let mut buf = [0u8; 1];
         for _ in 0..count {

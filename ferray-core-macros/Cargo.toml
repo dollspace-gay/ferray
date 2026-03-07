@@ -9,7 +9,7 @@ homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
 readme = "README.md"
-description = "Procedural macros for ferray-core (FerrumRecord, s![], promoted_type!)"
+description = "Procedural macros for ferray-core (FerrayRecord, s![], promoted_type!)"
 
 [lib]
 proc-macro = true

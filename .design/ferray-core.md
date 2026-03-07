@@ -1,7 +1,7 @@
 # Feature: ferray-core — N-dimensional array type and foundational primitives
 
 ## Summary
-The foundational crate for the ferray workspace. Provides `NdArray<T, D>` — a generic N-dimensional array type with full ownership model (owned, view, mutable view, arc, cow), broadcasting, basic and advanced indexing, array creation routines, shape manipulation, type promotion, and the `FerrumError` error hierarchy. Every other ferray crate depends on this. Internally backed by `ndarray` for storage, but `ndarray` is not part of the public API.
+The foundational crate for the ferray workspace. Provides `NdArray<T, D>` — a generic N-dimensional array type with full ownership model (owned, view, mutable view, arc, cow), broadcasting, basic and advanced indexing, array creation routines, shape manipulation, type promotion, and the `FerrayError` error hierarchy. Every other ferray crate depends on this. Internally backed by `ndarray` for storage, but `ndarray` is not part of the public API.
 
 ## Dependencies
 - **Upstream**: None (this is the root of the dependency graph)
@@ -16,7 +16,7 @@ This crate is too large for a single agent. The coordinator SHOULD split it into
 - **Agent 1a: core-types** (opus) — NdArray<T,D>, ownership model (REQ-1 through REQ-5), Dimension trait, MemoryLayout, DType system (REQ-6 through REQ-8), error handling (REQ-27, REQ-28), buffer interop (REQ-29, REQ-30), introspection (REQ-35, REQ-36), iterator/Display (REQ-37, REQ-38, REQ-39)
 - **Agent 1b: core-indexing** (opus) — Broadcasting (REQ-9 through REQ-11), basic + advanced indexing (REQ-12 through REQ-15), extended indexing (REQ-15a)
 - **Agent 1c: core-creation-manipulation** (sonnet) — Array creation (REQ-16 through REQ-19), shape manipulation (REQ-20 through REQ-22), extended manipulation (REQ-22a), constants/finfo (REQ-33, REQ-34)
-- **Agent 1d: core-macros** (sonnet) — FerrumRecord proc macro (REQ-8), s![] macro, promoted_type! macro (REQ-23 through REQ-26)
+- **Agent 1d: core-macros** (sonnet) — FerrayRecord proc macro (REQ-8), s![] macro, promoted_type! macro (REQ-23 through REQ-26)
 
 Agent 1a must complete before 1b/1c/1d can start. 1b, 1c, 1d can run in parallel.
 
@@ -32,7 +32,7 @@ Agent 1a must complete before 1b/1c/1d can start. 1b, 1c, 1d can run in parallel
 ### Dtype System
 - REQ-6: Define the `Element` trait bounding valid array element types. Implement for: `f16` (feature-gated), `f32`, `f64`, `Complex<f32>`, `Complex<f64>`, `i8`, `i16`, `i32`, `i64`, `i128`, `u8`, `u16`, `u32`, `u64`, `u128`, `bool`
 - REQ-7: Implement `DType` runtime enum mirroring all supported element types, with `size_of()`, `alignment()`, `is_float()`, `is_integer()`, `is_complex()` introspection methods
-- REQ-8: Implement structured dtype support via `#[derive(FerrumRecord)]` proc macro. Arrays of structs must support zero-copy strided views of individual fields.
+- REQ-8: Implement structured dtype support via `#[derive(FerrayRecord)]` proc macro. Arrays of structs must support zero-copy strided views of individual fields.
 
 ### Broadcasting
 - REQ-9: Implement NumPy's full broadcasting rules: (1) prepend 1s to shape of lower-dim array, (2) stretch size-1 dimensions, (3) error on size mismatch where neither is 1
@@ -65,8 +65,8 @@ Agent 1a must complete before 1b/1c/1d can start. 1b, 1c, 1d can run in parallel
 - REQ-26: Type inspection predicates: `issubdtype()`, `isrealobj()`, `iscomplexobj()`
 
 ### Error Handling
-- REQ-27: Define `FerrumError` as a `#[non_exhaustive]` enum with variants: `ShapeMismatch`, `BroadcastFailure`, `AxisOutOfBounds`, `IndexOutOfBounds`, `SingularMatrix`, `ConvergenceFailure`, `InvalidDtype`, `NumericalInstability`, `IoError`, `InvalidValue`
-- REQ-28: All public functions return `Result<T, FerrumError>`. Zero panics in library code.
+- REQ-27: Define `FerrayError` as a `#[non_exhaustive]` enum with variants: `ShapeMismatch`, `BroadcastFailure`, `AxisOutOfBounds`, `IndexOutOfBounds`, `SingularMatrix`, `ConvergenceFailure`, `InvalidDtype`, `NumericalInstability`, `IoError`, `InvalidValue`
+- REQ-28: All public functions return `Result<T, FerrayError>`. Zero panics in library code.
 
 ### Memory Layout and Interop
 - REQ-29: Implement `AsRawBuffer` trait exposing `as_ptr()`, `shape()`, `strides()`, `dtype()`, `is_c_contiguous()`, `is_f_contiguous()` for zero-copy interop
@@ -97,7 +97,7 @@ Agent 1a must complete before 1b/1c/1d can start. 1b, 1c, 1d can run in parallel
 - [ ] AC-5: Advanced indexing: `index_select` and `boolean_index` return copies; basic indexing returns views. Verified by checking pointer identity.
 - [ ] AC-6: `ferray::empty((3,4))` returns `Array2<MaybeUninit<f64>>` — calling methods that read elements without `assume_init()` is a compile error.
 - [ ] AC-7: `From<ndarray::Array2<f64>>` round-trips losslessly. `ndarray` does not appear in any public type signature (verified by `cargo doc` inspection).
-- [ ] AC-8: `#[derive(FerrumRecord)]` generates a working structured array with zero-copy field views.
+- [ ] AC-8: `#[derive(FerrayRecord)]` generates a working structured array with zero-copy field views.
 - [ ] AC-9: All array creation/manipulation functions compile and produce results matching NumPy for representative inputs.
 - [ ] AC-10: `cargo test -p ferray-core` passes with zero failures. `cargo clippy -p ferray-core -- -D warnings` produces zero warnings.
 - [ ] AC-11: Type promotion: `f32 + f64 -> f64`, `i32 + f32 -> f64`, `Complex<f32> + f64 -> Complex<f64>` all resolve correctly via `promoted_type!()`.
@@ -148,13 +148,13 @@ ferray-core/
       mod.rs                  # reshape, concat, stack, transpose, flip, etc.
       extended.rs             # pad, tile, repeat, delete, insert, append, resize, trim_zeros
     constants.rs              # PI, E, INF, NAN, NEWAXIS, EULER_GAMMA, etc.
-    error.rs                  # FerrumError enum
+    error.rs                  # FerrayError enum
     buffer.rs                 # AsRawBuffer trait
     dynarray.rs               # DynArray runtime-typed enum
-    record.rs                 # FerrumRecord derive macro support
+    record.rs                 # FerrayRecord derive macro support
     layout.rs                 # MemoryLayout enum
     prelude.rs                # use ferray_core::prelude::*
-  ferray-core-macros/         # Proc macro crate for #[derive(FerrumRecord)] and s![]
+  ferray-core-macros/         # Proc macro crate for #[derive(FerrayRecord)] and s![]
     Cargo.toml
     src/lib.rs
 ```
@@ -163,7 +163,7 @@ ferray-core/
 - `ndarray` is a private dependency. `NdArray` wraps `ndarray::ArrayBase` internally but exposes its own API. This insulates users from ndarray version churn.
 - The `Dimension` trait hierarchy mirrors ndarray's (`Ix1`..`Ix6`, `IxDyn`) but is re-defined in ferray-core's namespace.
 - Broadcasting is implemented as a standalone function that returns virtual shape/stride pairs, not new allocations.
-- `FerrumRecord` proc macro lives in a separate `ferray-core-macros` crate (Rust proc macro constraint).
+- `FerrayRecord` proc macro lives in a separate `ferray-core-macros` crate (Rust proc macro constraint).
 - Do NOT use `std::simd` — use `pulp` for all SIMD. `std::simd` is unstable.
 
 ## Open Questions

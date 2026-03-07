@@ -5,7 +5,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::helpers::unary_float_op;
@@ -48,7 +48,7 @@ fn bankers_round<T: Float>(x: T) -> T {
 ///
 /// This matches NumPy's `np.round` / `np.around` behavior.
 /// AC-9: `round(0.5)==0`, `round(1.5)==2`.
-pub fn round<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn round<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -57,7 +57,7 @@ where
 }
 
 /// Alias for [`round`] -- matches NumPy's `around`.
-pub fn around<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn around<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -66,7 +66,7 @@ where
 }
 
 /// Alias for [`round`] -- matches NumPy's `rint`.
-pub fn rint<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn rint<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -75,7 +75,7 @@ where
 }
 
 /// Elementwise floor (round toward negative infinity).
-pub fn floor<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn floor<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -84,7 +84,7 @@ where
 }
 
 /// Elementwise ceiling (round toward positive infinity).
-pub fn ceil<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn ceil<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -93,7 +93,7 @@ where
 }
 
 /// Elementwise truncation (round toward zero).
-pub fn trunc<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn trunc<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -102,7 +102,7 @@ where
 }
 
 /// Elementwise fix: round toward zero (same as trunc for real numbers).
-pub fn fix<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn fix<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -116,7 +116,7 @@ where
 
 /// Elementwise floor for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn floor_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn floor_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -125,7 +125,7 @@ where
 
 /// Elementwise ceiling for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn ceil_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn ceil_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -134,7 +134,7 @@ where
 
 /// Elementwise truncation for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn trunc_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn trunc_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -143,7 +143,7 @@ where
 
 /// Elementwise banker's rounding for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn round_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn round_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {

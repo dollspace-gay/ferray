@@ -6,7 +6,7 @@
 
 use ferray_core::dimension::broadcast as core_broadcast;
 use ferray_core::dimension::{Dimension, IxDyn};
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 use ferray_core::{Array, ArrayView, Element};
 
 /// Broadcast an array to a target shape via zero-copy stride manipulation.
@@ -17,7 +17,7 @@ use ferray_core::{Array, ArrayView, Element};
 ///
 /// # Errors
 ///
-/// Returns `FerrumError::BroadcastFailure` if the array's shape cannot be
+/// Returns `FerrayError::BroadcastFailure` if the array's shape cannot be
 /// broadcast to `target_shape` (e.g., a non-1 dimension differs from the
 /// target).
 ///
@@ -34,7 +34,7 @@ use ferray_core::{Array, ArrayView, Element};
 pub fn broadcast_to<'a, T: Element, D: Dimension>(
     array: &'a Array<T, D>,
     target_shape: &[usize],
-) -> FerrumResult<ArrayView<'a, T, IxDyn>> {
+) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
     core_broadcast::broadcast_to(array, target_shape)
 }
 
@@ -45,7 +45,7 @@ pub fn broadcast_to<'a, T: Element, D: Dimension>(
 ///
 /// # Errors
 ///
-/// Returns `FerrumError::BroadcastFailure` if the shapes are incompatible.
+/// Returns `FerrayError::BroadcastFailure` if the shapes are incompatible.
 ///
 /// # Examples
 ///
@@ -61,7 +61,7 @@ pub fn broadcast_to<'a, T: Element, D: Dimension>(
 /// ```
 pub fn broadcast_arrays<'a, T: Element, D: Dimension>(
     arrays: &'a [Array<T, D>],
-) -> FerrumResult<Vec<ArrayView<'a, T, IxDyn>>> {
+) -> FerrayResult<Vec<ArrayView<'a, T, IxDyn>>> {
     core_broadcast::broadcast_arrays(arrays)
 }
 
@@ -73,7 +73,7 @@ pub fn broadcast_arrays<'a, T: Element, D: Dimension>(
 ///
 /// # Errors
 ///
-/// Returns `FerrumError::BroadcastFailure` if any pair of shapes is
+/// Returns `FerrayError::BroadcastFailure` if any pair of shapes is
 /// incompatible.
 ///
 /// # Examples
@@ -83,7 +83,7 @@ pub fn broadcast_arrays<'a, T: Element, D: Dimension>(
 /// let result = broadcast_shapes(&[&[3, 1][..], &[1, 4][..]]).unwrap();
 /// assert_eq!(result, vec![3, 4]);
 /// ```
-pub fn broadcast_shapes(shapes: &[&[usize]]) -> FerrumResult<Vec<usize>> {
+pub fn broadcast_shapes(shapes: &[&[usize]]) -> FerrayResult<Vec<usize>> {
     core_broadcast::broadcast_shapes_multi(shapes)
 }
 

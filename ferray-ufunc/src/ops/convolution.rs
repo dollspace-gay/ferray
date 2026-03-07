@@ -5,7 +5,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Ix1;
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 /// Convolution mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,7 +25,7 @@ pub fn convolve<T>(
     a: &Array<T, Ix1>,
     v: &Array<T, Ix1>,
     mode: ConvolveMode,
-) -> FerrumResult<Array<T, Ix1>>
+) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + std::ops::Add<Output = T> + std::ops::Mul<Output = T> + Copy,
 {
@@ -35,7 +35,7 @@ where
     let m = v_data.len();
 
     if n == 0 || m == 0 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "convolve: input arrays must be non-empty",
         ));
     }

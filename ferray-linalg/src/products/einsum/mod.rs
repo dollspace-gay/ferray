@@ -11,7 +11,7 @@ pub mod parser;
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::IxDyn;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use self::contraction::generic_contraction;
 use self::optimizer::{EinsumStrategy, optimize};
@@ -35,12 +35,12 @@ use self::parser::parse_subscripts;
 /// - `operands`: Slice of references to input arrays.
 ///
 /// # Errors
-/// - `FerrumError::InvalidValue` for malformed subscripts.
-/// - `FerrumError::ShapeMismatch` for incompatible operand shapes.
+/// - `FerrayError::InvalidValue` for malformed subscripts.
+/// - `FerrayError::ShapeMismatch` for incompatible operand shapes.
 pub fn einsum(
     subscripts: &str,
     operands: &[&Array<f64, IxDyn>],
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     let shapes: Vec<&[usize]> = operands.iter().map(|o| o.shape()).collect();
     let expr = parse_subscripts(subscripts, &shapes)?;
 
@@ -65,7 +65,7 @@ fn execute_matmul(
     a: &Array<f64, IxDyn>,
     b: &Array<f64, IxDyn>,
     expr: &parser::EinsumExpr,
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     // For simple 2D matmul, delegate to our matmul
     let a_shape = a.shape();
     let b_shape = b.shape();
@@ -97,7 +97,7 @@ fn execute_tensordot(
     b: &Array<f64, IxDyn>,
     axes_a: Vec<usize>,
     axes_b: Vec<usize>,
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     use crate::products::tensordot::{TensordotAxes, tensordot};
     tensordot(a, b, TensordotAxes::Pairs(axes_a, axes_b))
 }

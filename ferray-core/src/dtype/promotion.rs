@@ -14,7 +14,7 @@ use alloc::format;
 use num_complex::Complex;
 
 use crate::dtype::{DType, Element};
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 // ---------------------------------------------------------------------------
 // Promoted trait — compile-time type promotion via trait resolution
@@ -415,16 +415,16 @@ impl_promoted!(Complex<f32>, Complex<f64> => Complex<f64>);
 /// represent both inputs without precision loss.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidDtype` if promotion is not possible (should
+/// Returns `FerrayError::InvalidDtype` if promotion is not possible (should
 /// not happen for valid DType values).
-pub fn result_type(a: DType, b: DType) -> FerrumResult<DType> {
+pub fn result_type(a: DType, b: DType) -> FerrayResult<DType> {
     if a == b {
         return Ok(a);
     }
 
     // Use a static lookup table for the promotion result.
     let result = promote_dtypes(a, b);
-    result.ok_or_else(|| FerrumError::invalid_dtype(format!("cannot promote {a} and {b}")))
+    result.ok_or_else(|| FerrayError::invalid_dtype(format!("cannot promote {a} and {b}")))
 }
 
 /// Internal promotion function returning Option.

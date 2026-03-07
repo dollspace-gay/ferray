@@ -13,7 +13,7 @@ The top-level `ferray` crate that re-exports all subcrates into a unified namesp
 ### Namespace Structure
 - REQ-1: Top-level namespace `ferray::` contains all array creation functions (zeros, ones, array, arange, linspace, etc.) and free-function equivalents of array methods
 - REQ-2: Submodule namespaces: `ferray::linalg::`, `ferray::fft::`, `ferray::random::`, `ferray::polynomial::`, `ferray::strings::`, `ferray::ma::`, `ferray::io::`, `ferray::lib::stride_tricks::`, `ferray::window::`
-- REQ-3: `ferray::prelude::*` exports: `NdArray`, `Array1`-`Array3`, `ArrayD`, `ArrayView`, `ArrayViewMut`, `ArcArray`, `CowArray`, `Axis`, `s![]` macro, `Element` trait, `FerrumError`, all array creation functions, all common math functions
+- REQ-3: `ferray::prelude::*` exports: `NdArray`, `Array1`-`Array3`, `ArrayD`, `ArrayView`, `ArrayViewMut`, `ArcArray`, `CowArray`, `Axis`, `s![]` macro, `Element` trait, `FerrayError`, all array creation functions, all common math functions
 - REQ-3a: `ferray::` re-exports all constants from `ferray_core::constants`: `ferray::PI`, `ferray::E`, `ferray::INF`, `ferray::NAN`, `ferray::EULER_GAMMA`, `ferray::NEWAXIS`, `ferray::PZERO`, `ferray::NZERO`, `ferray::NEG_INF`
 
 ### Feature Flags (Section 24)

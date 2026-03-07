@@ -4,7 +4,7 @@
 Implements the full `numpy.linalg` surface: matrix products (dot, matmul, einsum, tensordot, kron), decompositions (cholesky, QR, SVD, LU, eigen), solvers (solve, lstsq, inv, pinv), norms and measures (norm, cond, det, trace, matrix_rank). All functions support batched (stacked 3D+) arrays with automatic parallelization along batch dimensions. Internally powered by `faer` with an optional system BLAS backend via feature flag.
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, Dimension, Element, FerrumError), `ferray-ufunc` (arithmetic for einsum)
+- **Upstream**: `ferray-core` (NdArray, Dimension, Element, FerrayError), `ferray-ufunc` (arithmetic for einsum)
 - **Downstream**: `ferray-polynomial` (uses linalg for companion matrix eigenvalues / root finding), ferray (re-export)
 - **External crates**: `faer` 0.24 (all BLAS-level operations), `rayon` (batch parallelism)
 - **Feature flags**: `blas` — link system BLAS/LAPACK for matmul and decompositions instead of faer's pure-Rust implementations

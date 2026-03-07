@@ -5,7 +5,7 @@
 // Instead we store shape metadata alongside a flat Vec<String>.
 
 use ferray_core::dimension::{Dimension, Ix1, Ix2, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 /// A specialized N-dimensional array of strings.
 ///
@@ -31,12 +31,12 @@ impl<D: Dimension> StringArray<D> {
     /// Create a new `StringArray` from a flat vector of strings and a shape.
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if `data.len()` does not equal
+    /// Returns `FerrayError::ShapeMismatch` if `data.len()` does not equal
     /// the product of the shape dimensions.
-    pub fn from_vec(dim: D, data: Vec<String>) -> FerrumResult<Self> {
+    pub fn from_vec(dim: D, data: Vec<String>) -> FerrayResult<Self> {
         let expected = dim.size();
         if data.len() != expected {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "data length {} does not match shape {:?} (expected {})",
                 data.len(),
                 dim.as_slice(),
@@ -51,7 +51,7 @@ impl<D: Dimension> StringArray<D> {
     /// # Errors
     /// This function is infallible for valid shapes but returns `Result`
     /// for API consistency.
-    pub fn empty(dim: D) -> FerrumResult<Self> {
+    pub fn empty(dim: D) -> FerrayResult<Self> {
         let size = dim.size();
         let data = vec![String::new(); size];
         Ok(Self { data, dim })
@@ -106,7 +106,7 @@ impl<D: Dimension> StringArray<D> {
     }
 
     /// Apply a function to each element, producing a new `StringArray`.
-    pub fn map<F>(&self, f: F) -> FerrumResult<StringArray<D>>
+    pub fn map<F>(&self, f: F) -> FerrayResult<StringArray<D>>
     where
         F: Fn(&str) -> String,
     {
@@ -150,7 +150,7 @@ impl StringArray<Ix1> {
     /// ```ignore
     /// let a = StringArray1::from_slice(&["hello", "world"]).unwrap();
     /// ```
-    pub fn from_slice(items: &[&str]) -> FerrumResult<Self> {
+    pub fn from_slice(items: &[&str]) -> FerrayResult<Self> {
         let data: Vec<String> = items.iter().map(|s| (*s).to_string()).collect();
         let dim = Ix1::new([data.len()]);
         Self::from_vec(dim, data)
@@ -161,15 +161,15 @@ impl StringArray<Ix2> {
     /// Create a 2-D `StringArray` from nested slices.
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if inner slices have different lengths.
-    pub fn from_rows(rows: &[&[&str]]) -> FerrumResult<Self> {
+    /// Returns `FerrayError::ShapeMismatch` if inner slices have different lengths.
+    pub fn from_rows(rows: &[&[&str]]) -> FerrayResult<Self> {
         if rows.is_empty() {
             return Self::from_vec(Ix2::new([0, 0]), Vec::new());
         }
         let ncols = rows[0].len();
         for (i, row) in rows.iter().enumerate() {
             if row.len() != ncols {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "row {} has length {} but row 0 has length {}",
                     i,
                     row.len(),
@@ -188,7 +188,7 @@ impl StringArray<Ix2> {
 
 impl StringArray<IxDyn> {
     /// Create a dynamic-rank `StringArray` from a flat vec and a dynamic shape.
-    pub fn from_vec_dyn(shape: &[usize], data: Vec<String>) -> FerrumResult<Self> {
+    pub fn from_vec_dyn(shape: &[usize], data: Vec<String>) -> FerrayResult<Self> {
         Self::from_vec(IxDyn::new(shape), data)
     }
 }
@@ -199,7 +199,7 @@ impl StringArray<IxDyn> {
 /// # Errors
 /// This function is infallible for valid inputs but returns `Result`
 /// for API consistency.
-pub fn array(items: &[&str]) -> FerrumResult<StringArray1> {
+pub fn array(items: &[&str]) -> FerrayResult<StringArray1> {
     StringArray1::from_slice(items)
 }
 
@@ -219,7 +219,7 @@ pub(crate) type BroadcastResult = (Vec<usize>, Vec<(usize, usize)>);
 pub(crate) fn broadcast_binary<Da: Dimension, Db: Dimension>(
     a: &StringArray<Da>,
     b: &StringArray<Db>,
-) -> FerrumResult<BroadcastResult> {
+) -> FerrayResult<BroadcastResult> {
     let shape_a = a.shape();
     let shape_b = b.shape();
     let out_shape = broadcast_shapes(shape_a, shape_b)?;

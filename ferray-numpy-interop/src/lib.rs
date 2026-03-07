@@ -23,7 +23,7 @@
 //! 2. **Zero-copy when possible** — C-contiguous arrays are shared without
 //!    copying where the target format supports it.
 //! 3. **Explicit errors** — dtype mismatches, null values, and unsupported
-//!    types produce clear [`FerrumError`](ferray_core::FerrumError) messages.
+//!    types produce clear [`FerrayError`](ferray_core::FerrayError) messages.
 
 pub mod dtype_map;
 
@@ -45,4 +45,4 @@ pub use arrow_conv::{FromArrow, FromArrowBool, ToArrow, ToArrowBool};
 pub use polars_conv::{FromPolars, FromPolarsBool, ToPolars, ToPolarsBool};
 
 #[cfg(feature = "python")]
-pub use numpy_conv::{AsFerrum, IntoNumPy};
+pub use numpy_conv::{AsFerray, IntoNumPy};

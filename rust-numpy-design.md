@@ -118,7 +118,7 @@ NumPy's dtype system is one of its most powerful features and the hardest to rep
 Structured dtypes (NumPy's `np.dtype([('x', np.float64), ('y', np.int32)])`) are supported via a derive macro:
 
 ```rust
-#[derive(FerrumRecord)]
+#[derive(FerrayRecord)]
 struct Point {
     x: f64,
     y: f64,
@@ -737,7 +737,7 @@ Mirrors `numpy.lib.npyio` — serialization to `.npy` and `.npz` formats, and te
 // Binary formats
 io::save("array.npy", &a)?;                    // np.save
 io::load::<f64, _>("array.npy")?               // np.load — caller specifies dtype at compile time
-io::load_dynamic("array.npy")?                 // → Result<DynArray, FerrumError>
+io::load_dynamic("array.npy")?                 // → Result<DynArray, FerrayError>
                                                //   DynArray is an enum over all supported dtypes;
                                                //   use when the file's dtype is not known ahead of time
 io::savez("arrays.npz", &[("x", &x), ("y", &y)])?  // np.savez
@@ -768,7 +768,7 @@ pub enum DynArray {
 }
 ```
 
-`io::load::<T>()` is a convenience that calls `load_dynamic` internally and returns `Err(FerrumError::InvalidDtype { .. })` if the file's dtype does not match `T`.
+`io::load::<T>()` is a convenience that calls `load_dynamic` internally and returns `Err(FerrayError::InvalidDtype { .. })` if the file's dtype does not match `T`.
 
 ---
 
@@ -979,11 +979,11 @@ let ferray_array: ferray::Array1<f64> = arrow_array.into_ferray()?;
 
 ## 22. Error Handling
 
-All public functions return `Result<T, FerrumError>`. Panics are forbidden in library code.
+All public functions return `Result<T, FerrayError>`. Panics are forbidden in library code.
 
 ```rust
 #[non_exhaustive]
-pub enum FerrumError {
+pub enum FerrayError {
     ShapeMismatch { lhs: Vec<usize>, rhs: Vec<usize> },
     BroadcastFailure { lhs: Vec<usize>, rhs: Vec<usize> },
     AxisOutOfBounds { axis: usize, ndim: usize },
@@ -1007,7 +1007,7 @@ The full six-layer correctness stack from `ferrolearn` Section 20 applies to `fe
 
 **ufunc correctness** requires special attention: broadcasting must be verified to produce bit-identical results to NumPy for all valid broadcast combinations, not just the simple cases. A fixture generator must enumerate a representative set of broadcast shape pairs for each ufunc.
 
-**SIMD path verification**: both the SIMD and scalar code paths must be tested against the same fixture set. A test flag `FERRUM_FORCE_SCALAR=1` must disable SIMD dispatch and allow running all fixture tests in scalar mode.
+**SIMD path verification**: both the SIMD and scalar code paths must be tested against the same fixture set. A test flag `FERRAY_FORCE_SCALAR=1` must disable SIMD dispatch and allow running all fixture tests in scalar mode.
 
 **Numerical parity tolerance** follows the same ULP budget as `ferrolearn`, with one addition: for transcendental functions (`sin`, `exp`, `log`, etc.) the budget is 1 ULP for correctly-rounded implementations (matching NumPy's target) and at most 4 ULPs for approximation-based implementations, with the budget documented per function.
 
@@ -1018,7 +1018,7 @@ The full six-layer correctness stack from `ferrolearn` Section 20 applies to `fe
 ```
 ferray/
 ├── ferray/                  # Main crate — one import covers everything
-├── ferray-core/             # NdArray type, Dimension, DType, FerrumError
+├── ferray-core/             # NdArray type, Dimension, DType, FerrayError
 ├── ferray-ufunc/            # Ufunc trait + all elementwise math
 ├── ferray-linalg/           # numpy.linalg — wraps faer
 ├── ferray-fft/              # numpy.fft — wraps rustfft  

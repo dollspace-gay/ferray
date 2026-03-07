@@ -4,7 +4,7 @@
 Implements NumPy-compatible binary (.npy/.npz) and text (CSV/delimited) I/O for ferray arrays. Supports typed loading (`io::load::<f64>()`), dynamic loading (`io::load_dynamic()` returning `DynArray`), compressed archives, and memory-mapped files for large arrays. This is essential infrastructure — without it, ferray arrays cannot persist or interoperate with Python workflows.
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, DynArray, DType, Element, FerrumError)
+- **Upstream**: `ferray-core` (NdArray, DynArray, DType, Element, FerrayError)
 - **Downstream**: ferray (re-export)
 - **External crates**: `byteorder` (endian-aware binary I/O), `flate2` (gzip for .npz compressed), `memmap2` (memory-mapped I/O), `zip` (.npz archive handling)
 - **Phase**: 1 — Core Array and Ufuncs
@@ -13,8 +13,8 @@ Implements NumPy-compatible binary (.npy/.npz) and text (CSV/delimited) I/O for 
 
 ### Binary Formats (.npy/.npz)
 - REQ-1: `io::save(path, &array)` writes a single array in NumPy .npy format (magic bytes, version, header with dtype/shape/fortran_order, raw data)
-- REQ-2: `io::load::<T, D>(path)` reads a .npy file and returns `Result<NdArray<T, D>, FerrumError>`. Returns `Err(InvalidDtype)` if the file's dtype does not match `T`.
-- REQ-3: `io::load_dynamic(path)` reads a .npy file and returns `Result<DynArray, FerrumError>` using runtime dtype dispatch
+- REQ-2: `io::load::<T, D>(path)` reads a .npy file and returns `Result<NdArray<T, D>, FerrayError>`. Returns `Err(InvalidDtype)` if the file's dtype does not match `T`.
+- REQ-3: `io::load_dynamic(path)` reads a .npy file and returns `Result<DynArray, FerrayError>` using runtime dtype dispatch
 - REQ-4: `io::savez(path, &[("name", &array), ...])` writes multiple arrays to a .npz (zip) archive
 - REQ-5: `io::savez_compressed(path, ...)` writes a gzip-compressed .npz archive
 - REQ-6: Support NumPy format versions 1.0, 2.0, and 3.0. Parse headers with structured dtype descriptions.

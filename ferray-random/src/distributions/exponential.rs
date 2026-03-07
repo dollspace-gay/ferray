@@ -1,6 +1,6 @@
 // ferray-random: Exponential distribution sampling — standard_exponential, exponential
 
-use ferray_core::{Array, FerrumError, Ix1};
+use ferray_core::{Array, FerrayError, Ix1};
 
 use crate::bitgen::BitGenerator;
 use crate::generator::{Generator, generate_vec, vec_to_array1};
@@ -24,10 +24,10 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `size` is zero.
-    pub fn standard_exponential(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `size` is zero.
+    pub fn standard_exponential(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         let data = generate_vec(self, size, standard_exponential_single);
         vec_to_array1(data)
@@ -42,13 +42,13 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `scale <= 0` or `size` is zero.
-    pub fn exponential(&mut self, scale: f64, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `size` is zero.
+    pub fn exponential(&mut self, scale: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if scale <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }

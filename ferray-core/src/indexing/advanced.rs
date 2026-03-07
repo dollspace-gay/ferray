@@ -10,7 +10,7 @@ use crate::array::owned::Array;
 use crate::array::view::ArrayView;
 use crate::dimension::{Axis, Dimension, Ix1, IxDyn};
 use crate::dtype::Element;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 // ---------------------------------------------------------------------------
 // index_select
@@ -28,11 +28,11 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// # Errors
     /// - `AxisOutOfBounds` if `axis >= ndim`
     /// - `IndexOutOfBounds` if any index is out of range
-    pub fn index_select(&self, axis: Axis, indices: &[isize]) -> FerrumResult<Array<T, IxDyn>> {
+    pub fn index_select(&self, axis: Axis, indices: &[isize]) -> FerrayResult<Array<T, IxDyn>> {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
         let axis_size = self.shape()[ax];
 
@@ -40,7 +40,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
         let normalized: Vec<usize> = indices
             .iter()
             .map(|&idx| normalize_index_adv(idx, axis_size, ax))
-            .collect::<FerrumResult<Vec<_>>>()?;
+            .collect::<FerrayResult<Vec<_>>>()?;
 
         let dyn_view = self.inner.view().into_dyn();
         let nd_axis = ndarray::Axis(ax);
@@ -59,9 +59,9 @@ impl<T: Element, D: Dimension> Array<T, D> {
     ///
     /// # Errors
     /// - `ShapeMismatch` if mask shape is incompatible
-    pub fn boolean_index(&self, mask: &Array<bool, D>) -> FerrumResult<Array<T, Ix1>> {
+    pub fn boolean_index(&self, mask: &Array<bool, D>) -> FerrayResult<Array<T, Ix1>> {
         if self.shape() != mask.shape() {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "boolean index mask shape {:?} does not match array shape {:?}",
                 mask.shape(),
                 self.shape()
@@ -85,9 +85,9 @@ impl<T: Element, D: Dimension> Array<T, D> {
     ///
     /// # Errors
     /// - `ShapeMismatch` if `mask.len() != self.size()`
-    pub fn boolean_index_flat(&self, mask: &Array<bool, Ix1>) -> FerrumResult<Array<T, Ix1>> {
+    pub fn boolean_index_flat(&self, mask: &Array<bool, Ix1>) -> FerrayResult<Array<T, Ix1>> {
         if mask.size() != self.size() {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "flat boolean mask length {} does not match array size {}",
                 mask.size(),
                 self.size()
@@ -111,9 +111,9 @@ impl<T: Element, D: Dimension> Array<T, D> {
     ///
     /// # Errors
     /// - `ShapeMismatch` if mask shape differs from array shape
-    pub fn boolean_index_assign(&mut self, mask: &Array<bool, D>, value: T) -> FerrumResult<()> {
+    pub fn boolean_index_assign(&mut self, mask: &Array<bool, D>, value: T) -> FerrayResult<()> {
         if self.shape() != mask.shape() {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "boolean index mask shape {:?} does not match array shape {:?}",
                 mask.shape(),
                 self.shape()
@@ -139,9 +139,9 @@ impl<T: Element, D: Dimension> Array<T, D> {
         &mut self,
         mask: &Array<bool, D>,
         values: &Array<T, Ix1>,
-    ) -> FerrumResult<()> {
+    ) -> FerrayResult<()> {
         if self.shape() != mask.shape() {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "boolean index mask shape {:?} does not match array shape {:?}",
                 mask.shape(),
                 self.shape()
@@ -150,7 +150,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
         let true_count = mask.inner.iter().filter(|&&m| m).count();
         if values.size() != true_count {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "values array has {} elements but mask has {} true entries",
                 values.size(),
                 true_count
@@ -175,18 +175,18 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
 impl<T: Element, D: Dimension> ArrayView<'_, T, D> {
     /// Select elements along an axis using an array of indices (copy).
-    pub fn index_select(&self, axis: Axis, indices: &[isize]) -> FerrumResult<Array<T, IxDyn>> {
+    pub fn index_select(&self, axis: Axis, indices: &[isize]) -> FerrayResult<Array<T, IxDyn>> {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
         let axis_size = self.shape()[ax];
 
         let normalized: Vec<usize> = indices
             .iter()
             .map(|&idx| normalize_index_adv(idx, axis_size, ax))
-            .collect::<FerrumResult<Vec<_>>>()?;
+            .collect::<FerrayResult<Vec<_>>>()?;
 
         let dyn_view = self.inner.clone().into_dyn();
         let nd_axis = ndarray::Axis(ax);
@@ -195,9 +195,9 @@ impl<T: Element, D: Dimension> ArrayView<'_, T, D> {
     }
 
     /// Select elements using a boolean mask (copy).
-    pub fn boolean_index(&self, mask: &Array<bool, D>) -> FerrumResult<Array<T, Ix1>> {
+    pub fn boolean_index(&self, mask: &Array<bool, D>) -> FerrayResult<Array<T, Ix1>> {
         if self.shape() != mask.shape() {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "boolean index mask shape {:?} does not match view shape {:?}",
                 mask.shape(),
                 self.shape()
@@ -217,17 +217,17 @@ impl<T: Element, D: Dimension> ArrayView<'_, T, D> {
 }
 
 /// Normalize a (potentially negative) index for advanced indexing.
-fn normalize_index_adv(index: isize, size: usize, axis: usize) -> FerrumResult<usize> {
+fn normalize_index_adv(index: isize, size: usize, axis: usize) -> FerrayResult<usize> {
     if index < 0 {
         let pos = size as isize + index;
         if pos < 0 {
-            return Err(FerrumError::index_out_of_bounds(index, axis, size));
+            return Err(FerrayError::index_out_of_bounds(index, axis, size));
         }
         Ok(pos as usize)
     } else {
         let idx = index as usize;
         if idx >= size {
-            return Err(FerrumError::index_out_of_bounds(index, axis, size));
+            return Err(FerrayError::index_out_of_bounds(index, axis, size));
         }
         Ok(idx)
     }

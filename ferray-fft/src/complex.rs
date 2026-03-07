@@ -4,7 +4,7 @@ use num_complex::Complex;
 
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::nd::{fft_1d_along_axis, fft_along_axes};
 use crate::norm::FftNorm;
@@ -19,18 +19,18 @@ fn to_complex_flat<D: Dimension>(a: &Array<Complex<f64>, D>) -> Vec<Complex<f64>
 }
 
 /// Resolve an axis parameter: if None, use the last axis.
-fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrumResult<usize> {
+fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrayResult<usize> {
     match axis {
         Some(ax) => {
             if ax >= ndim {
-                Err(FerrumError::axis_out_of_bounds(ax, ndim))
+                Err(FerrayError::axis_out_of_bounds(ax, ndim))
             } else {
                 Ok(ax)
             }
         }
         None => {
             if ndim == 0 {
-                Err(FerrumError::invalid_value(
+                Err(FerrayError::invalid_value(
                     "cannot compute FFT on a 0-dimensional array",
                 ))
             } else {
@@ -41,12 +41,12 @@ fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrumResult<usize> {
 }
 
 /// Resolve axes for multi-dimensional FFT. If None, use all axes.
-fn resolve_axes(ndim: usize, axes: Option<&[usize]>) -> FerrumResult<Vec<usize>> {
+fn resolve_axes(ndim: usize, axes: Option<&[usize]>) -> FerrayResult<Vec<usize>> {
     match axes {
         Some(ax) => {
             for &a in ax {
                 if a >= ndim {
-                    return Err(FerrumError::axis_out_of_bounds(a, ndim));
+                    return Err(FerrayError::axis_out_of_bounds(a, ndim));
                 }
             }
             Ok(ax.to_vec())
@@ -60,11 +60,11 @@ fn resolve_shapes(
     input_shape: &[usize],
     axes: &[usize],
     s: Option<&[usize]>,
-) -> FerrumResult<Vec<Option<usize>>> {
+) -> FerrayResult<Vec<Option<usize>>> {
     match s {
         Some(sizes) => {
             if sizes.len() != axes.len() {
-                return Err(FerrumError::invalid_value(format!(
+                return Err(FerrayError::invalid_value(format!(
                     "shape parameter length {} does not match axes length {}",
                     sizes.len(),
                     axes.len(),
@@ -99,7 +99,7 @@ pub fn fft<D: Dimension>(
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     let shape = a.shape().to_vec();
     let ndim = shape.len();
     let ax = resolve_axis(ndim, axis)?;
@@ -127,7 +127,7 @@ pub fn ifft<D: Dimension>(
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     let shape = a.shape().to_vec();
     let ndim = shape.len();
     let ax = resolve_axis(ndim, axis)?;
@@ -162,13 +162,13 @@ pub fn fft2<D: Dimension>(
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     let ndim = a.shape().len();
     let axes = match axes {
         Some(ax) => ax.to_vec(),
         None => {
             if ndim < 2 {
-                return Err(FerrumError::invalid_value(
+                return Err(FerrayError::invalid_value(
                     "fft2 requires at least 2 dimensions",
                 ));
             }
@@ -196,13 +196,13 @@ pub fn ifft2<D: Dimension>(
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     let ndim = a.shape().len();
     let axes = match axes {
         Some(ax) => ax.to_vec(),
         None => {
             if ndim < 2 {
-                return Err(FerrumError::invalid_value(
+                return Err(FerrayError::invalid_value(
                     "ifft2 requires at least 2 dimensions",
                 ));
             }
@@ -236,7 +236,7 @@ pub fn fftn<D: Dimension>(
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     let ax = resolve_axes(a.shape().len(), axes)?;
     fftn_impl(a, s, &ax, false, norm)
 }
@@ -260,7 +260,7 @@ pub fn ifftn<D: Dimension>(
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     let ax = resolve_axes(a.shape().len(), axes)?;
     fftn_impl(a, s, &ax, true, norm)
 }
@@ -275,7 +275,7 @@ fn fftn_impl<D: Dimension>(
     axes: &[usize],
     inverse: bool,
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     let shape = a.shape().to_vec();
     let sizes = resolve_shapes(&shape, axes, s)?;
     let data = to_complex_flat(a);

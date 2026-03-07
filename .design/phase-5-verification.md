@@ -30,7 +30,7 @@ The final phase: comprehensive verification that ferray produces correct results
   - Random properties: determinism with same seed, output shape matches requested shape, distribution moments within tolerance
 
 ### Layer 3 — SIMD vs Scalar Verification
-- REQ-7: The full oracle fixture test suite must pass under `FERRUM_FORCE_SCALAR=1` (scalar code path)
+- REQ-7: The full oracle fixture test suite must pass under `FERRAY_FORCE_SCALAR=1` (scalar code path)
 - REQ-8: Results of SIMD and scalar paths must be bit-identical for all operations on the same input
 - REQ-9: Benchmark both paths with `criterion` to verify SIMD achieves at least 2x throughput on contiguous inputs (on hardware with AVX2+)
 
@@ -41,13 +41,13 @@ The final phase: comprehensive verification that ferray produces correct results
 
 ### Layer 5 — Fuzz Testing for Numerical Robustness (adapted from ferrolearn Section 20.5)
 - REQ-13: Every public function that accepts array input must have a fuzz target in `fuzz/fuzz_targets/`
-- REQ-14: The contract: ferray either returns `Ok(valid_result)` or `Err(FerrumError)` — never panics, never hangs, never propagates NaN from non-NaN input
+- REQ-14: The contract: ferray either returns `Ok(valid_result)` or `Err(FerrayError)` — never panics, never hangs, never propagates NaN from non-NaN input
 - REQ-15: Fuzz corpus must be run for a minimum of 24 CPU-hours before release
 - REQ-16: Mandatory seed corpus inputs: all-zero, all-NaN, single-row, single-column, n_samples < n_features, f64::MAX, f64::MIN_POSITIVE, duplicate rows, perfectly collinear features
 - REQ-17: Any panic discovered by fuzzing is a P0 bug that blocks release
 
 ### Layer 6 — Formal Verification of Core Primitives (adapted from ferrolearn Section 20.6)
-- REQ-18: `FerrumError` variants: Prusti pre/postconditions on all public functions that return `Result` verifying that error conditions are correctly detected (e.g., shape mismatch → ShapeMismatch error)
+- REQ-18: `FerrayError` variants: Prusti pre/postconditions on all public functions that return `Result` verifying that error conditions are correctly detected (e.g., shape mismatch → ShapeMismatch error)
 - REQ-19: Broadcasting: formally verify that `broadcast_shapes` output satisfies NumPy's broadcasting rules as logical postconditions
 - REQ-20: Index bounds: formally verify that all indexing operations either return valid data or `Err(IndexOutOfBounds)` — no out-of-bounds access is possible
 - REQ-21: Type promotion: formally verify that `promoted_type!(A, B)` satisfies the promotion table (smallest type without precision loss)
@@ -68,7 +68,7 @@ The final phase: comprehensive verification that ferray produces correct results
 ## Acceptance Criteria
 - [ ] AC-1: `scripts/generate_fixtures.py` runs successfully and produces fixtures for all public functions in all subcrates
 - [ ] AC-2: `cargo test --workspace` passes with fixture tests covering every public function
-- [ ] AC-3: `FERRUM_FORCE_SCALAR=1 cargo test --workspace` passes with zero failures
+- [ ] AC-3: `FERRAY_FORCE_SCALAR=1 cargo test --workspace` passes with zero failures
 - [ ] AC-4: SIMD and scalar paths produce bit-identical output on the full fixture suite
 - [ ] AC-5: `benchmarks/statistical_equivalence.py` reports zero statistically significant regressions
 - [ ] AC-6: `cargo fuzz run` for 24 CPU-hours discovers zero panics
@@ -81,7 +81,7 @@ The final phase: comprehensive verification that ferray produces correct results
 ```
 scripts/
   generate_fixtures.py        # NumPy fixture generator
-  verify_simd_scalar.sh       # Runs tests with and without FERRUM_FORCE_SCALAR
+  verify_simd_scalar.sh       # Runs tests with and without FERRAY_FORCE_SCALAR
 fixtures/
   core/                       # ferray-core fixtures (creation, indexing, broadcasting)
   ufunc/                      # ferray-ufunc fixtures (all math functions)

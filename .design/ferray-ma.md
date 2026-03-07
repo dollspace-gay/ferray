@@ -4,7 +4,7 @@
 Implements `numpy.ma`: masked arrays that represent missing or invalid data inline with array data. `MaskedArray` pairs a data array with a boolean mask array. All operations (arithmetic, reductions, comparisons, ufuncs) respect the mask, skipping masked elements. Provides masking constructors for NaN, Inf, equality, and comparison conditions, plus mask manipulation utilities.
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, Element, Dimension, FerrumError), `ferray-ufunc` (elementwise ops respect masks), `ferray-stats` (masked reductions)
+- **Upstream**: `ferray-core` (NdArray, Element, Dimension, FerrayError), `ferray-ufunc` (elementwise ops respect masks), `ferray-stats` (masked reductions)
 - **Downstream**: ferray (re-export)
 - **Phase**: 3 — Completeness
 

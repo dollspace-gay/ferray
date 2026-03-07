@@ -3,7 +3,7 @@
 // The companion matrix of a monic polynomial p(x) = x^n + c_{n-1}x^{n-1} + ... + c_0
 // has eigenvalues equal to the roots of p(x).
 
-use ferray_core::error::FerrumError;
+use ferray_core::error::FerrayError;
 
 /// Build a companion matrix for root-finding from power basis coefficients.
 ///
@@ -21,13 +21,13 @@ use ferray_core::error::FerrumError;
 /// ```
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if:
+/// Returns `FerrayError::InvalidValue` if:
 /// - coefficients are empty
 /// - leading coefficient is zero
 /// - polynomial has degree 0
-pub fn companion_matrix(coeffs: &[f64]) -> Result<Vec<f64>, FerrumError> {
+pub fn companion_matrix(coeffs: &[f64]) -> Result<Vec<f64>, FerrayError> {
     if coeffs.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot build companion matrix from empty coefficients",
         ));
     }
@@ -40,14 +40,14 @@ pub fn companion_matrix(coeffs: &[f64]) -> Result<Vec<f64>, FerrumError> {
 
     let deg = n - 1;
     if deg == 0 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "cannot find roots of a constant polynomial (degree 0)",
         ));
     }
 
     let leading = coeffs[n - 1];
     if leading.abs() < f64::EPSILON * 100.0 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "leading coefficient is effectively zero",
         ));
     }
@@ -72,9 +72,9 @@ pub fn companion_matrix(coeffs: &[f64]) -> Result<Vec<f64>, FerrumError> {
 ///
 /// # Errors
 /// Returns an error if the coefficients represent a constant polynomial.
-pub fn companion_size(coeffs: &[f64]) -> Result<usize, FerrumError> {
+pub fn companion_size(coeffs: &[f64]) -> Result<usize, FerrayError> {
     if coeffs.is_empty() {
-        return Err(FerrumError::invalid_value("empty coefficients"));
+        return Err(FerrayError::invalid_value("empty coefficients"));
     }
     let mut n = coeffs.len();
     while n > 1 && coeffs[n - 1].abs() < f64::EPSILON * 100.0 {
@@ -82,7 +82,7 @@ pub fn companion_size(coeffs: &[f64]) -> Result<usize, FerrumError> {
     }
     let deg = n - 1;
     if deg == 0 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "constant polynomial has no companion matrix",
         ));
     }

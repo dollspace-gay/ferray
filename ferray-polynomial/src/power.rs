@@ -2,7 +2,7 @@
 //
 // p(x) = c[0] + c[1]*x + c[2]*x^2 + ... + c[n]*x^n
 
-use ferray_core::error::FerrumError;
+use ferray_core::error::FerrayError;
 use num_complex::Complex;
 
 use crate::fitting::{least_squares_fit, power_vandermonde};
@@ -36,7 +36,7 @@ impl Polynomial {
 }
 
 impl Poly for Polynomial {
-    fn eval(&self, x: f64) -> Result<f64, FerrumError> {
+    fn eval(&self, x: f64) -> Result<f64, FerrayError> {
         // Horner's method
         let mut result = 0.0;
         for &c in self.coeffs.iter().rev() {
@@ -45,7 +45,7 @@ impl Poly for Polynomial {
         Ok(result)
     }
 
-    fn deriv(&self, m: usize) -> Result<Self, FerrumError> {
+    fn deriv(&self, m: usize) -> Result<Self, FerrayError> {
         if m == 0 {
             return Ok(self.clone());
         }
@@ -67,7 +67,7 @@ impl Poly for Polynomial {
         Ok(Self { coeffs })
     }
 
-    fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrumError> {
+    fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrayError> {
         if m == 0 {
             return Ok(self.clone());
         }
@@ -84,7 +84,7 @@ impl Poly for Polynomial {
         Ok(Self { coeffs })
     }
 
-    fn roots(&self) -> Result<Vec<Complex<f64>>, FerrumError> {
+    fn roots(&self) -> Result<Vec<Complex<f64>>, FerrayError> {
         find_roots_from_power_coeffs(&self.coeffs)
     }
 
@@ -101,9 +101,9 @@ impl Poly for Polynomial {
         &self.coeffs
     }
 
-    fn trim(&self, tol: f64) -> Result<Self, FerrumError> {
+    fn trim(&self, tol: f64) -> Result<Self, FerrayError> {
         if tol < 0.0 {
-            return Err(FerrumError::invalid_value("tolerance must be non-negative"));
+            return Err(FerrayError::invalid_value("tolerance must be non-negative"));
         }
         let mut last = self.coeffs.len();
         while last > 1 && self.coeffs[last - 1].abs() <= tol {
@@ -114,9 +114,9 @@ impl Poly for Polynomial {
         })
     }
 
-    fn truncate(&self, size: usize) -> Result<Self, FerrumError> {
+    fn truncate(&self, size: usize) -> Result<Self, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value(
+            return Err(FerrayError::invalid_value(
                 "truncation size must be at least 1",
             ));
         }
@@ -126,7 +126,7 @@ impl Poly for Polynomial {
         })
     }
 
-    fn add(&self, other: &Self) -> Result<Self, FerrumError> {
+    fn add(&self, other: &Self) -> Result<Self, FerrayError> {
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -138,7 +138,7 @@ impl Poly for Polynomial {
         Ok(Self { coeffs: result })
     }
 
-    fn sub(&self, other: &Self) -> Result<Self, FerrumError> {
+    fn sub(&self, other: &Self) -> Result<Self, FerrayError> {
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -150,7 +150,7 @@ impl Poly for Polynomial {
         Ok(Self { coeffs: result })
     }
 
-    fn mul(&self, other: &Self) -> Result<Self, FerrumError> {
+    fn mul(&self, other: &Self) -> Result<Self, FerrayError> {
         if self.coeffs.is_empty() || other.coeffs.is_empty() {
             return Ok(Self { coeffs: vec![0.0] });
         }
@@ -164,7 +164,7 @@ impl Poly for Polynomial {
         Ok(Self { coeffs: result })
     }
 
-    fn pow(&self, n: usize) -> Result<Self, FerrumError> {
+    fn pow(&self, n: usize) -> Result<Self, FerrayError> {
         if n == 0 {
             return Ok(Self { coeffs: vec![1.0] });
         }
@@ -175,10 +175,10 @@ impl Poly for Polynomial {
         Ok(result)
     }
 
-    fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrumError> {
+    fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrayError> {
         let other_trimmed = other.trim(0.0)?;
         if other_trimmed.degree() == 0 && other_trimmed.coeffs[0].abs() < f64::EPSILON * 100.0 {
-            return Err(FerrumError::invalid_value("division by zero polynomial"));
+            return Err(FerrayError::invalid_value("division by zero polynomial"));
         }
 
         let self_trimmed = self.trim(0.0)?;
@@ -217,30 +217,30 @@ impl Poly for Polynomial {
         ))
     }
 
-    fn fit(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrumError> {
+    fn fit(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrayError> {
         if x.len() != y.len() {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "x and y must have the same length, got {} and {}",
                 x.len(),
                 y.len()
             )));
         }
         if x.is_empty() {
-            return Err(FerrumError::invalid_value("x and y must not be empty"));
+            return Err(FerrayError::invalid_value("x and y must not be empty"));
         }
         let v = power_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, None)?;
         Ok(Self { coeffs })
     }
 
-    fn fit_weighted(x: &[f64], y: &[f64], deg: usize, w: &[f64]) -> Result<Self, FerrumError> {
+    fn fit_weighted(x: &[f64], y: &[f64], deg: usize, w: &[f64]) -> Result<Self, FerrayError> {
         if x.len() != y.len() || x.len() != w.len() {
-            return Err(FerrumError::invalid_value(
+            return Err(FerrayError::invalid_value(
                 "x, y, and w must have the same length",
             ));
         }
         if x.is_empty() {
-            return Err(FerrumError::invalid_value("x, y, and w must not be empty"));
+            return Err(FerrayError::invalid_value("x, y, and w must not be empty"));
         }
         let v = power_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, Some(w))?;
@@ -253,13 +253,13 @@ impl Poly for Polynomial {
 }
 
 impl ToPowerBasis for Polynomial {
-    fn to_power_basis(&self) -> Result<Vec<f64>, FerrumError> {
+    fn to_power_basis(&self) -> Result<Vec<f64>, FerrayError> {
         Ok(self.coeffs.clone())
     }
 }
 
 impl FromPowerBasis for Polynomial {
-    fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrumError> {
+    fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrayError> {
         Ok(Self::new(coeffs))
     }
 }

@@ -1,6 +1,6 @@
 // ferray-stats: Set operations — union1d, intersect1d, setdiff1d, setxor1d, in1d, isin (REQ-18)
 
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 use ferray_core::{Array, Element, Ix1};
 
 // ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ fn to_vec<T: Element + Copy>(a: &Array<T, Ix1>) -> Vec<T> {
 }
 
 /// Make a 1-D result array.
-fn make_1d<T: Element>(data: Vec<T>) -> FerrumResult<Array<T, Ix1>> {
+fn make_1d<T: Element>(data: Vec<T>) -> FerrayResult<Array<T, Ix1>> {
     let n = data.len();
     Array::from_vec(Ix1::new([n]), data)
 }
@@ -37,7 +37,7 @@ pub fn union1d<T>(
     a: &Array<T, Ix1>,
     b: &Array<T, Ix1>,
     assume_unique: bool,
-) -> FerrumResult<Array<T, Ix1>>
+) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + PartialOrd + Copy,
 {
@@ -92,7 +92,7 @@ pub fn intersect1d<T>(
     a: &Array<T, Ix1>,
     b: &Array<T, Ix1>,
     assume_unique: bool,
-) -> FerrumResult<Array<T, Ix1>>
+) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + PartialOrd + Copy,
 {
@@ -138,7 +138,7 @@ pub fn setdiff1d<T>(
     a: &Array<T, Ix1>,
     b: &Array<T, Ix1>,
     assume_unique: bool,
-) -> FerrumResult<Array<T, Ix1>>
+) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + PartialOrd + Copy,
 {
@@ -195,7 +195,7 @@ pub fn setxor1d<T>(
     a: &Array<T, Ix1>,
     b: &Array<T, Ix1>,
     assume_unique: bool,
-) -> FerrumResult<Array<T, Ix1>>
+) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + PartialOrd + Copy,
 {
@@ -250,7 +250,7 @@ pub fn in1d<T>(
     a: &Array<T, Ix1>,
     b: &Array<T, Ix1>,
     assume_unique: bool,
-) -> FerrumResult<Array<bool, Ix1>>
+) -> FerrayResult<Array<bool, Ix1>>
 where
     T: Element + PartialOrd + Copy,
 {
@@ -288,7 +288,7 @@ pub fn isin<T>(
     element: &Array<T, Ix1>,
     test_elements: &Array<T, Ix1>,
     assume_unique: bool,
-) -> FerrumResult<Array<bool, Ix1>>
+) -> FerrayResult<Array<bool, Ix1>>
 where
     T: Element + PartialOrd + Copy,
 {

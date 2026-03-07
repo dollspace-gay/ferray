@@ -13,7 +13,7 @@ use memmap2::{Mmap, MmapMut, MmapOptions};
 use ferray_core::Array;
 use ferray_core::dimension::IxDyn;
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::format::MemmapMode;
 use crate::npy::NpyElement;
@@ -55,7 +55,7 @@ impl<T: Element> MemmapArray<T> {
     }
 
     /// Copy the memory-mapped data into an owned `Array`.
-    pub fn to_array(&self) -> FerrumResult<Array<T, IxDyn>> {
+    pub fn to_array(&self) -> FerrayResult<Array<T, IxDyn>> {
         let data = self.as_slice().to_vec();
         Array::from_vec(IxDyn::new(&self.shape), data)
     }
@@ -100,16 +100,16 @@ impl<T: Element> MemmapArrayMut<T> {
     }
 
     /// Copy the memory-mapped data into an owned `Array`.
-    pub fn to_array(&self) -> FerrumResult<Array<T, IxDyn>> {
+    pub fn to_array(&self) -> FerrayResult<Array<T, IxDyn>> {
         let data = self.as_slice().to_vec();
         Array::from_vec(IxDyn::new(&self.shape), data)
     }
 
     /// Flush changes to disk (only meaningful for ReadWrite mode).
-    pub fn flush(&self) -> FerrumResult<()> {
+    pub fn flush(&self) -> FerrayResult<()> {
         self._mmap
             .flush()
-            .map_err(|e| FerrumError::io_error(format!("failed to flush mmap: {e}")))
+            .map_err(|e| FerrayError::io_error(format!("failed to flush mmap: {e}")))
     }
 }
 
@@ -118,11 +118,11 @@ impl<T: Element> MemmapArrayMut<T> {
 /// The file must contain data in native byte order and C-contiguous layout.
 ///
 /// # Errors
-/// - `FerrumError::InvalidDtype` if the file dtype doesn't match `T`.
-/// - `FerrumError::IoError` on file or mapping failures.
+/// - `FerrayError::InvalidDtype` if the file dtype doesn't match `T`.
+/// - `FerrayError::IoError` on file or mapping failures.
 pub fn memmap_readonly<T: Element + NpyElement, P: AsRef<Path>>(
     path: P,
-) -> FerrumResult<MemmapArray<T>> {
+) -> FerrayResult<MemmapArray<T>> {
     let (header, data_offset) = read_npy_header_with_offset(path.as_ref())?;
     validate_dtype::<T>(&header)?;
     validate_native_endian(&header)?;
@@ -133,7 +133,7 @@ pub fn memmap_readonly<T: Element + NpyElement, P: AsRef<Path>>(
             .offset(data_offset as u64)
             .len(header.shape.iter().product::<usize>() * std::mem::size_of::<T>())
             .map(&file)
-            .map_err(|e| FerrumError::io_error(format!("mmap failed: {e}")))?
+            .map_err(|e| FerrayError::io_error(format!("mmap failed: {e}")))?
     };
 
     let len: usize = header.shape.iter().product();
@@ -141,7 +141,7 @@ pub fn memmap_readonly<T: Element + NpyElement, P: AsRef<Path>>(
 
     // Validate alignment
     if (data_ptr as usize) % std::mem::align_of::<T>() != 0 {
-        return Err(FerrumError::io_error(
+        return Err(FerrayError::io_error(
             "memory-mapped data is not properly aligned for the element type",
         ));
     }
@@ -162,15 +162,15 @@ pub fn memmap_readonly<T: Element + NpyElement, P: AsRef<Path>>(
 ///   `MemmapMode::CopyOnWrite` keeps changes in memory only.
 ///
 /// # Errors
-/// - `FerrumError::InvalidDtype` if the file dtype doesn't match `T`.
-/// - `FerrumError::IoError` on file or mapping failures.
-/// - `FerrumError::InvalidValue` if `mode` is `ReadOnly` (use `memmap_readonly` instead).
+/// - `FerrayError::InvalidDtype` if the file dtype doesn't match `T`.
+/// - `FerrayError::IoError` on file or mapping failures.
+/// - `FerrayError::InvalidValue` if `mode` is `ReadOnly` (use `memmap_readonly` instead).
 pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
     path: P,
     mode: MemmapMode,
-) -> FerrumResult<MemmapArrayMut<T>> {
+) -> FerrayResult<MemmapArrayMut<T>> {
     if mode == MemmapMode::ReadOnly {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "use memmap_readonly for read-only access",
         ));
     }
@@ -193,7 +193,7 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
                     .offset(data_offset as u64)
                     .len(data_bytes)
                     .map_mut(&file)
-                    .map_err(|e| FerrumError::io_error(format!("mmap_mut failed: {e}")))?
+                    .map_err(|e| FerrayError::io_error(format!("mmap_mut failed: {e}")))?
             }
         }
         MemmapMode::CopyOnWrite => {
@@ -203,7 +203,7 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
                     .offset(data_offset as u64)
                     .len(data_bytes)
                     .map_copy(&file)
-                    .map_err(|e| FerrumError::io_error(format!("mmap copy-on-write failed: {e}")))?
+                    .map_err(|e| FerrayError::io_error(format!("mmap copy-on-write failed: {e}")))?
             }
         }
         MemmapMode::ReadOnly => unreachable!(),
@@ -212,7 +212,7 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
     let data_ptr = mmap.as_ptr() as *mut T;
 
     if (data_ptr as usize) % std::mem::align_of::<T>() != 0 {
-        return Err(FerrumError::io_error(
+        return Err(FerrayError::io_error(
             "memory-mapped data is not properly aligned for the element type",
         ));
     }
@@ -237,7 +237,7 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
 pub fn open_memmap<T: Element + NpyElement, P: AsRef<Path>>(
     path: P,
     mode: MemmapMode,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     match mode {
         MemmapMode::ReadOnly => {
             let mapped = memmap_readonly::<T, _>(path)?;
@@ -251,7 +251,7 @@ pub fn open_memmap<T: Element + NpyElement, P: AsRef<Path>>(
 }
 
 /// Read the npy header and compute the data byte offset.
-fn read_npy_header_with_offset(path: &Path) -> FerrumResult<(NpyHeader, usize)> {
+fn read_npy_header_with_offset(path: &Path) -> FerrayResult<(NpyHeader, usize)> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     let hdr = header::read_header(&mut reader)?;
@@ -284,9 +284,9 @@ fn read_npy_header_with_offset(path: &Path) -> FerrumResult<(NpyHeader, usize)> 
     Ok((hdr, data_offset))
 }
 
-fn validate_dtype<T: Element>(header: &NpyHeader) -> FerrumResult<()> {
+fn validate_dtype<T: Element>(header: &NpyHeader) -> FerrayResult<()> {
     if header.dtype != T::dtype() {
-        return Err(FerrumError::invalid_dtype(format!(
+        return Err(FerrayError::invalid_dtype(format!(
             "expected dtype {:?} for type {}, but file has {:?}",
             T::dtype(),
             std::any::type_name::<T>(),
@@ -296,9 +296,9 @@ fn validate_dtype<T: Element>(header: &NpyHeader) -> FerrumResult<()> {
     Ok(())
 }
 
-fn validate_native_endian(header: &NpyHeader) -> FerrumResult<()> {
+fn validate_native_endian(header: &NpyHeader) -> FerrayResult<()> {
     if header.endianness.needs_swap() {
-        return Err(FerrumError::io_error(
+        return Err(FerrayError::io_error(
             "memory-mapped arrays require native byte order; file has non-native endianness",
         ));
     }

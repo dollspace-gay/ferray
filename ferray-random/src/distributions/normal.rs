@@ -1,6 +1,6 @@
 // ferray-random: Normal distribution sampling — standard_normal, normal, lognormal
 
-use ferray_core::{Array, FerrumError, Ix1};
+use ferray_core::{Array, FerrayError, Ix1};
 
 use crate::bitgen::BitGenerator;
 use crate::generator::{Generator, generate_vec, vec_to_array1};
@@ -38,10 +38,10 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `size` is zero.
-    pub fn standard_normal(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `size` is zero.
+    pub fn standard_normal(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         let mut data = Vec::with_capacity(size);
         while data.len() < size {
@@ -62,18 +62,18 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `scale <= 0` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `size` is zero.
     pub fn normal(
         &mut self,
         loc: f64,
         scale: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if scale <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
@@ -91,18 +91,18 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `sigma <= 0` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `sigma <= 0` or `size` is zero.
     pub fn lognormal(
         &mut self,
         mean: f64,
         sigma: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if sigma <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "sigma must be positive, got {sigma}"
             )));
         }

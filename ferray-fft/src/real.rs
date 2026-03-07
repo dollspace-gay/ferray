@@ -8,7 +8,7 @@ use num_complex::Complex;
 
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::nd::fft_along_axis;
 use crate::norm::FftNorm;
@@ -22,18 +22,18 @@ fn real_to_complex_flat<D: Dimension>(a: &Array<f64, D>) -> Vec<Complex<f64>> {
     a.iter().map(|&v| Complex::new(v, 0.0)).collect()
 }
 
-fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrumResult<usize> {
+fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrayResult<usize> {
     match axis {
         Some(ax) => {
             if ax >= ndim {
-                Err(FerrumError::axis_out_of_bounds(ax, ndim))
+                Err(FerrayError::axis_out_of_bounds(ax, ndim))
             } else {
                 Ok(ax)
             }
         }
         None => {
             if ndim == 0 {
-                Err(FerrumError::invalid_value(
+                Err(FerrayError::invalid_value(
                     "cannot compute FFT on a 0-dimensional array",
                 ))
             } else {
@@ -43,12 +43,12 @@ fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrumResult<usize> {
     }
 }
 
-fn resolve_axes(ndim: usize, axes: Option<&[usize]>) -> FerrumResult<Vec<usize>> {
+fn resolve_axes(ndim: usize, axes: Option<&[usize]>) -> FerrayResult<Vec<usize>> {
     match axes {
         Some(ax) => {
             for &a in ax {
                 if a >= ndim {
-                    return Err(FerrumError::axis_out_of_bounds(a, ndim));
+                    return Err(FerrayError::axis_out_of_bounds(a, ndim));
                 }
             }
             Ok(ax.to_vec())
@@ -190,14 +190,14 @@ pub fn rfft<D: Dimension>(
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     let shape = a.shape().to_vec();
     let ndim = shape.len();
     let ax = resolve_axis(ndim, axis)?;
 
     let fft_len = n.unwrap_or(shape[ax]);
     if fft_len == 0 {
-        return Err(FerrumError::invalid_value("FFT length must be > 0"));
+        return Err(FerrayError::invalid_value("FFT length must be > 0"));
     }
 
     // Convert real to complex and compute full FFT
@@ -230,7 +230,7 @@ pub fn irfft<D: Dimension>(
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     let shape = a.shape().to_vec();
     let ndim = shape.len();
     let ax = resolve_axis(ndim, axis)?;
@@ -238,7 +238,7 @@ pub fn irfft<D: Dimension>(
     let half_len = shape[ax];
     let output_len = n.unwrap_or(2 * (half_len - 1));
     if output_len == 0 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "irfft output length must be > 0",
         ));
     }
@@ -279,13 +279,13 @@ pub fn rfft2<D: Dimension>(
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     let ndim = a.shape().len();
     let axes = match axes {
         Some(ax) => ax.to_vec(),
         None => {
             if ndim < 2 {
-                return Err(FerrumError::invalid_value(
+                return Err(FerrayError::invalid_value(
                     "rfft2 requires at least 2 dimensions",
                 ));
             }
@@ -312,13 +312,13 @@ pub fn irfft2<D: Dimension>(
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     let ndim = a.shape().len();
     let axes = match axes {
         Some(ax) => ax.to_vec(),
         None => {
             if ndim < 2 {
-                return Err(FerrumError::invalid_value(
+                return Err(FerrayError::invalid_value(
                     "irfft2 requires at least 2 dimensions",
                 ));
             }
@@ -350,7 +350,7 @@ pub fn rfftn<D: Dimension>(
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     let ax = resolve_axes(a.shape().len(), axes)?;
     rfftn_impl(a, s, &ax, norm)
 }
@@ -372,7 +372,7 @@ pub fn irfftn<D: Dimension>(
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     let ax = resolve_axes(a.shape().len(), axes)?;
     irfftn_impl(a, s, &ax, norm)
 }
@@ -386,7 +386,7 @@ fn rfftn_impl<D: Dimension>(
     s: Option<&[usize]>,
     axes: &[usize],
     norm: FftNorm,
-) -> FerrumResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     if axes.is_empty() {
         // No axes to transform — just convert to complex
         let data: Vec<Complex<f64>> = a.iter().map(|&v| Complex::new(v, 0.0)).collect();
@@ -397,7 +397,7 @@ fn rfftn_impl<D: Dimension>(
     let sizes: Vec<Option<usize>> = match s {
         Some(sizes) => {
             if sizes.len() != axes.len() {
-                return Err(FerrumError::invalid_value(format!(
+                return Err(FerrayError::invalid_value(format!(
                     "shape parameter length {} does not match axes length {}",
                     sizes.len(),
                     axes.len(),
@@ -446,7 +446,7 @@ fn irfftn_impl<D: Dimension>(
     s: Option<&[usize]>,
     axes: &[usize],
     norm: FftNorm,
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     if axes.is_empty() {
         let data: Vec<f64> = a.iter().map(|c| c.re).collect();
         return Array::from_vec(IxDyn::new(a.shape()), data);
@@ -458,7 +458,7 @@ fn irfftn_impl<D: Dimension>(
     let sizes: Vec<Option<usize>> = match s {
         Some(sizes) => {
             if sizes.len() != axes.len() {
-                return Err(FerrumError::invalid_value(format!(
+                return Err(FerrayError::invalid_value(format!(
                     "shape parameter length {} does not match axes length {}",
                     sizes.len(),
                     axes.len(),

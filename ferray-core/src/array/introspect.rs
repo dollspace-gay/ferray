@@ -2,7 +2,7 @@
 
 use crate::dimension::Dimension;
 use crate::dtype::{DType, Element};
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 use super::ArrayFlags;
 use super::owned::Array;
@@ -57,9 +57,9 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// Return the raw bytes of the array data.
     ///
     /// Only succeeds if the array is contiguous; returns an error otherwise.
-    pub fn to_bytes(&self) -> FerrumResult<&[u8]> {
+    pub fn to_bytes(&self) -> FerrayResult<&[u8]> {
         let slice = self.inner.as_slice().ok_or_else(|| {
-            FerrumError::invalid_value("array is not contiguous; cannot produce byte slice")
+            FerrayError::invalid_value("array is not contiguous; cannot produce byte slice")
         })?;
         let ptr = slice.as_ptr() as *const u8;
         let len = std::mem::size_of_val(slice);

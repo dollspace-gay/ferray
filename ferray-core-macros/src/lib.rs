@@ -1,7 +1,7 @@
 // ferray-core-macros: Procedural macros for ferray-core
 //
 // Implements:
-// - #[derive(FerrumRecord)] — generates FerrumRecord trait impl for #[repr(C)] structs
+// - #[derive(FerrayRecord)] — generates FerrayRecord trait impl for #[repr(C)] structs
 // - s![] — NumPy-style slice indexing macro
 // - promoted_type!() — compile-time type promotion macro
 
@@ -12,10 +12,10 @@ use quote::quote;
 use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
 // ---------------------------------------------------------------------------
-// #[derive(FerrumRecord)]
+// #[derive(FerrayRecord)]
 // ---------------------------------------------------------------------------
 
-/// Derive macro that generates an `unsafe impl FerrumRecord` for a `#[repr(C)]` struct.
+/// Derive macro that generates an `unsafe impl FerrayRecord` for a `#[repr(C)]` struct.
 ///
 /// # Requirements
 /// - The struct must have `#[repr(C)]`.
@@ -25,7 +25,7 @@ use syn::{Data, DeriveInput, Fields, parse_macro_input};
 /// - `field_descriptors()` returns a static slice of `FieldDescriptor` with correct
 ///   name, dtype, offset, and size for each field.
 /// - `record_size()` returns `std::mem::size_of::<Self>()`.
-#[proc_macro_derive(FerrumRecord)]
+#[proc_macro_derive(FerrayRecord)]
 pub fn derive_ferray_record(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match impl_ferray_record(&input) {
@@ -55,7 +55,7 @@ fn impl_ferray_record(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
     if !has_repr_c {
         return Err(syn::Error::new_spanned(
             &input.ident,
-            "FerrumRecord requires #[repr(C)] on the struct",
+            "FerrayRecord requires #[repr(C)] on the struct",
         ));
     }
 
@@ -66,14 +66,14 @@ fn impl_ferray_record(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
             _ => {
                 return Err(syn::Error::new_spanned(
                     &input.ident,
-                    "FerrumRecord only supports structs with named fields",
+                    "FerrayRecord only supports structs with named fields",
                 ));
             }
         },
         _ => {
             return Err(syn::Error::new_spanned(
                 &input.ident,
-                "FerrumRecord can only be derived for structs",
+                "FerrayRecord can only be derived for structs",
             ));
         }
     };
@@ -99,7 +99,7 @@ fn impl_ferray_record(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let expanded = quote! {
-        unsafe impl #impl_generics ferray_core::record::FerrumRecord for #name #ty_generics #where_clause {
+        unsafe impl #impl_generics ferray_core::record::FerrayRecord for #name #ty_generics #where_clause {
             fn field_descriptors() -> &'static [ferray_core::record::FieldDescriptor] {
                 static FIELDS: std::sync::LazyLock<Vec<ferray_core::record::FieldDescriptor>> =
                     std::sync::LazyLock::new(|| {

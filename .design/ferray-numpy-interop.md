@@ -4,7 +4,7 @@
 A companion crate (feature-flagged, not part of the main ferray crate) providing zero-copy conversion between `ferray::Array` and NumPy arrays via PyO3, and between ferray arrays and Apache Arrow `ArrayData` / Polars `Series`. Enables ferray to be used as the compute backend for Python extensions and data pipeline integrations.
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, AsRawBuffer, DType, FerrumError)
+- **Upstream**: `ferray-core` (NdArray, AsRawBuffer, DType, FerrayError)
 - **Downstream**: None (optional companion crate)
 - **External crates**: `pyo3` 0.23 (Python binding), `numpy` (PyO3 NumPy bindings), `arrow` 54 (Arrow interop, feature-gated), `polars` (Polars interop, feature-gated)
 - **Phase**: 3 — Completeness

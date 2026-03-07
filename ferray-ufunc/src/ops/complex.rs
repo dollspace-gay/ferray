@@ -5,14 +5,14 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 use num_complex::Complex;
 use num_traits::Float;
 
 /// Extract the real part of a complex array.
 ///
 /// Works with `Complex<f32>` and `Complex<f64>` arrays.
-pub fn real<T, D>(input: &Array<Complex<T>, D>) -> FerrumResult<Array<T, D>>
+pub fn real<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     Complex<T>: Element,
@@ -23,7 +23,7 @@ where
 }
 
 /// Extract the imaginary part of a complex array.
-pub fn imag<T, D>(input: &Array<Complex<T>, D>) -> FerrumResult<Array<T, D>>
+pub fn imag<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     Complex<T>: Element,
@@ -34,7 +34,7 @@ where
 }
 
 /// Compute the complex conjugate.
-pub fn conj<T, D>(input: &Array<Complex<T>, D>) -> FerrumResult<Array<Complex<T>, D>>
+pub fn conj<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<Complex<T>, D>>
 where
     T: Element + Float,
     Complex<T>: Element,
@@ -45,7 +45,7 @@ where
 }
 
 /// Alias for [`conj`].
-pub fn conjugate<T, D>(input: &Array<Complex<T>, D>) -> FerrumResult<Array<Complex<T>, D>>
+pub fn conjugate<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<Complex<T>, D>>
 where
     T: Element + Float,
     Complex<T>: Element,
@@ -57,7 +57,7 @@ where
 /// Compute the angle (argument/phase) of complex numbers.
 ///
 /// Returns values in radians, in the range [-pi, pi].
-pub fn angle<T, D>(input: &Array<Complex<T>, D>) -> FerrumResult<Array<T, D>>
+pub fn angle<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     Complex<T>: Element,
@@ -70,7 +70,7 @@ where
 /// Compute the absolute value (magnitude) of complex numbers.
 ///
 /// Returns a real array.
-pub fn abs<T, D>(input: &Array<Complex<T>, D>) -> FerrumResult<Array<T, D>>
+pub fn abs<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     Complex<T>: Element,

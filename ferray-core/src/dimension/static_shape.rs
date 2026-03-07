@@ -11,7 +11,7 @@ use std::fmt;
 use crate::array::owned::Array;
 use crate::dimension::{Dimension, Ix1, Ix2, Ix3, Ix4, Ix5, Ix6, IxDyn};
 use crate::dtype::Element;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 // ===========================================================================
 // StaticSize trait — compile-time total element count
@@ -640,8 +640,8 @@ pub trait StaticMatMul<Rhs> {
     /// Perform matrix multiplication with compile-time shape verification.
     ///
     /// # Errors
-    /// Returns `FerrumError` if the underlying computation fails (e.g., allocation).
-    fn static_matmul(self, rhs: Rhs) -> FerrumResult<Self::Output>;
+    /// Returns `FerrayError` if the underlying computation fails (e.g., allocation).
+    fn static_matmul(self, rhs: Rhs) -> FerrayResult<Self::Output>;
 }
 
 impl<T, const M: usize, const K: usize, const N: usize> StaticMatMul<Array<T, Shape2<K, N>>>
@@ -651,7 +651,7 @@ where
 {
     type Output = Array<T, Shape2<M, N>>;
 
-    fn static_matmul(self, rhs: Array<T, Shape2<K, N>>) -> FerrumResult<Self::Output> {
+    fn static_matmul(self, rhs: Array<T, Shape2<K, N>>) -> FerrayResult<Self::Output> {
         // Delegate to a straightforward matmul implementation.
         // Both arrays share ndarray::Ix2 as NdarrayDim.
         let a = &self.inner;
@@ -800,7 +800,7 @@ impl<T: Element, D: Dimension + StaticSize> Array<T, D> {
     /// the runtime check when the sizes are equal.
     ///
     /// # Errors
-    /// Returns `FerrumError::ShapeMismatch` if the element counts differ.
+    /// Returns `FerrayError::ShapeMismatch` if the element counts differ.
     ///
     /// # Examples
     /// ```
@@ -812,7 +812,7 @@ impl<T: Element, D: Dimension + StaticSize> Array<T, D> {
     /// let b: Array<f64, Shape2<3, 4>> = a.static_reshape().unwrap();
     /// assert_eq!(b.shape(), &[3, 4]);
     /// ```
-    pub fn static_reshape<NewD>(self) -> FerrumResult<Array<T, NewD>>
+    pub fn static_reshape<NewD>(self) -> FerrayResult<Array<T, NewD>>
     where
         NewD: Dimension + StaticSize + DefaultNdarrayDim,
     {
@@ -875,15 +875,15 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
 /// the element counts must match (verified at runtime but const-evaluable).
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if sizes differ.
-pub fn static_reshape_array<T, OldD, NewD>(arr: Array<T, OldD>) -> FerrumResult<Array<T, NewD>>
+/// Returns `FerrayError::ShapeMismatch` if sizes differ.
+pub fn static_reshape_array<T, OldD, NewD>(arr: Array<T, OldD>) -> FerrayResult<Array<T, NewD>>
 where
     T: Element,
     OldD: Dimension + StaticSize,
     NewD: Dimension + StaticSize + DefaultNdarrayDim,
 {
     if OldD::SIZE != NewD::SIZE {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "cannot reshape array of size {} into shape with size {}",
             OldD::SIZE,
             NewD::SIZE,
@@ -1279,7 +1279,7 @@ mod tests {
             Array::<f64, Shape1<12>>::from_vec(Shape1::new(), (0..12).map(|i| i as f64).collect())
                 .unwrap();
         // 3*5 = 15 != 12, so this should fail
-        let result: FerrumResult<Array<f64, Shape2<3, 5>>> = static_reshape_array(a);
+        let result: FerrayResult<Array<f64, Shape2<3, 5>>> = static_reshape_array(a);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("12"));

@@ -4,7 +4,7 @@
 
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
 use crate::MaskedArray;
@@ -19,7 +19,7 @@ where
     /// # Errors
     /// This function does not currently error but returns `Result` for API
     /// consistency.
-    pub fn count(&self) -> FerrumResult<usize> {
+    pub fn count(&self) -> FerrayResult<usize> {
         let n = self
             .data()
             .iter()
@@ -41,7 +41,7 @@ where
     ///
     /// # Errors
     /// Returns an error only for internal failures.
-    pub fn sum(&self) -> FerrumResult<T> {
+    pub fn sum(&self) -> FerrayResult<T> {
         let zero = num_traits::zero::<T>();
         let s = self
             .data()
@@ -58,7 +58,7 @@ where
     ///
     /// # Errors
     /// Returns an error only for internal failures.
-    pub fn mean(&self) -> FerrumResult<T> {
+    pub fn mean(&self) -> FerrayResult<T> {
         let zero = num_traits::zero::<T>();
         let one: T = num_traits::one();
         let (sum, count) = self
@@ -76,8 +76,8 @@ where
     /// Compute the minimum of unmasked elements.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if no elements are unmasked.
-    pub fn min(&self) -> FerrumResult<T> {
+    /// Returns `FerrayError::InvalidValue` if no elements are unmasked.
+    pub fn min(&self) -> FerrayResult<T> {
         self.data()
             .iter()
             .zip(self.mask().iter())
@@ -95,14 +95,14 @@ where
                     None => v,
                 })
             })
-            .ok_or_else(|| FerrumError::invalid_value("min: all elements are masked"))
+            .ok_or_else(|| FerrayError::invalid_value("min: all elements are masked"))
     }
 
     /// Compute the maximum of unmasked elements.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if no elements are unmasked.
-    pub fn max(&self) -> FerrumResult<T> {
+    /// Returns `FerrayError::InvalidValue` if no elements are unmasked.
+    pub fn max(&self) -> FerrayResult<T> {
         self.data()
             .iter()
             .zip(self.mask().iter())
@@ -120,7 +120,7 @@ where
                     None => v,
                 })
             })
-            .ok_or_else(|| FerrumError::invalid_value("max: all elements are masked"))
+            .ok_or_else(|| FerrayError::invalid_value("max: all elements are masked"))
     }
 
     /// Compute the variance of unmasked elements (population variance, ddof=0).
@@ -129,7 +129,7 @@ where
     ///
     /// # Errors
     /// Returns an error only for internal failures.
-    pub fn var(&self) -> FerrumResult<T> {
+    pub fn var(&self) -> FerrayResult<T> {
         let mean = self.mean()?;
         if mean.is_nan() {
             return Ok(T::nan());
@@ -157,7 +157,7 @@ where
     ///
     /// # Errors
     /// Returns an error only for internal failures.
-    pub fn std(&self) -> FerrumResult<T> {
+    pub fn std(&self) -> FerrayResult<T> {
         Ok(self.var()?.sqrt())
     }
 }

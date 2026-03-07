@@ -4,7 +4,7 @@
 // (DType, Endianness) pairs.
 
 use ferray_core::dtype::DType;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 /// Byte order / endianness extracted from a NumPy dtype string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,9 +35,9 @@ impl Endianness {
 /// - `"<f8"` -> `(DType::F64, Endianness::Little)`
 /// - `"|b1"` -> `(DType::Bool, Endianness::Native)`
 /// - `">i4"` -> `(DType::I32, Endianness::Big)`
-pub fn parse_dtype_str(s: &str) -> FerrumResult<(DType, Endianness)> {
+pub fn parse_dtype_str(s: &str) -> FerrayResult<(DType, Endianness)> {
     if s.len() < 2 {
-        return Err(FerrumError::invalid_dtype(format!(
+        return Err(FerrayError::invalid_dtype(format!(
             "dtype string too short: '{s}'"
         )));
     }
@@ -68,7 +68,7 @@ pub fn parse_dtype_str(s: &str) -> FerrumResult<(DType, Endianness)> {
         "c8" => DType::Complex32,
         "c16" => DType::Complex64,
         _ => {
-            return Err(FerrumError::invalid_dtype(format!(
+            return Err(FerrayError::invalid_dtype(format!(
                 "unsupported dtype descriptor: '{s}'"
             )));
         }
@@ -80,8 +80,8 @@ pub fn parse_dtype_str(s: &str) -> FerrumResult<(DType, Endianness)> {
 /// Convert a `DType` to its NumPy dtype descriptor string with the given endianness.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidDtype` for unsupported dtype variants.
-pub fn dtype_to_descr(dtype: DType, endian: Endianness) -> FerrumResult<String> {
+/// Returns `FerrayError::InvalidDtype` for unsupported dtype variants.
+pub fn dtype_to_descr(dtype: DType, endian: Endianness) -> FerrayResult<String> {
     let prefix = match endian {
         Endianness::Little => '<',
         Endianness::Big => '>',
@@ -105,7 +105,7 @@ pub fn dtype_to_descr(dtype: DType, endian: Endianness) -> FerrumResult<String> 
         DType::Complex32 => "c8",
         DType::Complex64 => "c16",
         _ => {
-            return Err(FerrumError::invalid_dtype(format!(
+            return Err(FerrayError::invalid_dtype(format!(
                 "unsupported dtype for descriptor: {dtype:?}"
             )));
         }
@@ -123,8 +123,8 @@ pub fn dtype_to_descr(dtype: DType, endian: Endianness) -> FerrumResult<String> 
 /// Return the native-endian dtype descriptor for a given DType.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidDtype` for unsupported dtype variants.
-pub fn dtype_to_native_descr(dtype: DType) -> FerrumResult<String> {
+/// Returns `FerrayError::InvalidDtype` for unsupported dtype variants.
+pub fn dtype_to_native_descr(dtype: DType) -> FerrayResult<String> {
     let endian = if cfg!(target_endian = "little") {
         Endianness::Little
     } else {

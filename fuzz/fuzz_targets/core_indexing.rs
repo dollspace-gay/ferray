@@ -2,7 +2,7 @@
 
 //! Fuzz target for core indexing: get, slice_axis, slice_multi, index_select.
 //!
-//! Contract: ferray either returns Ok or Err(FerrumError) — never panics.
+//! Contract: ferray either returns Ok or Err(FerrayError) — never panics.
 
 use libfuzzer_sys::fuzz_target;
 

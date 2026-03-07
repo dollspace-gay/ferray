@@ -1,6 +1,6 @@
 // ferray-io: Delimited text parser with missing value handling
 
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 /// Options for parsing delimited text files.
 #[derive(Debug, Clone)]
@@ -32,7 +32,7 @@ impl Default for TextParseOptions {
 pub fn parse_text_grid(
     content: &str,
     opts: &TextParseOptions,
-) -> FerrumResult<(Vec<String>, usize, usize)> {
+) -> FerrayResult<(Vec<String>, usize, usize)> {
     let all_lines: Vec<&str> = content.lines().collect();
 
     // Filter comments and empty lines first, then skip rows.
@@ -85,7 +85,7 @@ pub fn parse_text_grid(
     for (row_idx, line) in data_lines.iter().enumerate() {
         let fields: Vec<&str> = line.split(delim).collect();
         if fields.len() != ncols {
-            return Err(FerrumError::io_error(format!(
+            return Err(FerrayError::io_error(format!(
                 "row {} has {} columns, expected {} (line: '{}')",
                 row_idx + opts.skiprows,
                 fields.len(),
@@ -109,7 +109,7 @@ pub fn parse_text_grid_with_missing(
     content: &str,
     opts: &TextParseOptions,
     missing_values: &[&str],
-) -> FerrumResult<(Vec<Option<String>>, usize, usize)> {
+) -> FerrayResult<(Vec<Option<String>>, usize, usize)> {
     let all_lines: Vec<&str> = content.lines().collect();
 
     // Filter comments and empty lines first, then skip rows.
@@ -171,7 +171,7 @@ pub fn parse_text_grid_with_missing(
         }
         // Extra columns beyond ncols generate an error
         if fields.len() > ncols {
-            return Err(FerrumError::io_error(format!(
+            return Err(FerrayError::io_error(format!(
                 "row {} has {} columns, expected {} (line: '{}')",
                 row_idx + opts.skiprows,
                 fields.len(),

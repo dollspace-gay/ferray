@@ -6,7 +6,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::helpers::{binary_float_op, unary_float_op};
 
@@ -42,7 +42,7 @@ impl_bitwise_ops!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, bool);
 impl_shift_ops!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128);
 
 /// Elementwise bitwise AND.
-pub fn bitwise_and<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn bitwise_and<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + BitwiseOps,
     D: Dimension,
@@ -51,7 +51,7 @@ where
 }
 
 /// Elementwise bitwise OR.
-pub fn bitwise_or<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn bitwise_or<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + BitwiseOps,
     D: Dimension,
@@ -60,7 +60,7 @@ where
 }
 
 /// Elementwise bitwise XOR.
-pub fn bitwise_xor<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn bitwise_xor<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + BitwiseOps,
     D: Dimension,
@@ -69,7 +69,7 @@ where
 }
 
 /// Elementwise bitwise NOT.
-pub fn bitwise_not<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn bitwise_not<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + BitwiseOps,
     D: Dimension,
@@ -78,7 +78,7 @@ where
 }
 
 /// Alias for [`bitwise_not`].
-pub fn invert<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn invert<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + BitwiseOps,
     D: Dimension,
@@ -89,13 +89,13 @@ where
 /// Elementwise left shift.
 ///
 /// Each element of `a` is shifted left by the corresponding element of `b`.
-pub fn left_shift<T, D>(a: &Array<T, D>, b: &Array<u32, D>) -> FerrumResult<Array<T, D>>
+pub fn left_shift<T, D>(a: &Array<T, D>, b: &Array<u32, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + ShiftOps,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(ferray_core::error::FerrumError::shape_mismatch(format!(
+        return Err(ferray_core::error::FerrayError::shape_mismatch(format!(
             "left_shift: shapes {:?} and {:?} do not match",
             a.shape(),
             b.shape()
@@ -108,13 +108,13 @@ where
 /// Elementwise right shift.
 ///
 /// Each element of `a` is shifted right by the corresponding element of `b`.
-pub fn right_shift<T, D>(a: &Array<T, D>, b: &Array<u32, D>) -> FerrumResult<Array<T, D>>
+pub fn right_shift<T, D>(a: &Array<T, D>, b: &Array<u32, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + ShiftOps,
     D: Dimension,
 {
     if a.shape() != b.shape() {
-        return Err(ferray_core::error::FerrumError::shape_mismatch(format!(
+        return Err(ferray_core::error::FerrayError::shape_mismatch(format!(
             "right_shift: shapes {:?} and {:?} do not match",
             a.shape(),
             b.shape()

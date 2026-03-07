@@ -3,7 +3,7 @@
 // Implements add (elementwise concat with broadcasting) and multiply (repeat).
 
 use ferray_core::dimension::{Dimension, IxDyn};
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::string_array::{StringArray, broadcast_binary};
 
@@ -16,11 +16,11 @@ use crate::string_array::{StringArray, broadcast_binary};
 /// The result is always a dynamic-rank `StringArray<IxDyn>`.
 ///
 /// # Errors
-/// Returns `FerrumError::BroadcastFailure` if shapes are incompatible.
+/// Returns `FerrayError::BroadcastFailure` if shapes are incompatible.
 pub fn add<Da: Dimension, Db: Dimension>(
     a: &StringArray<Da>,
     b: &StringArray<Db>,
-) -> FerrumResult<StringArray<IxDyn>> {
+) -> FerrayResult<StringArray<IxDyn>> {
     let (out_shape, pairs) = broadcast_binary(a, b)?;
     let a_data = a.as_slice();
     let b_data = b.as_slice();
@@ -37,7 +37,7 @@ pub fn add<Da: Dimension, Db: Dimension>(
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn multiply<D: Dimension>(a: &StringArray<D>, n: usize) -> FerrumResult<StringArray<D>> {
+pub fn multiply<D: Dimension>(a: &StringArray<D>, n: usize) -> FerrayResult<StringArray<D>> {
     a.map(|s| s.repeat(n))
 }
 

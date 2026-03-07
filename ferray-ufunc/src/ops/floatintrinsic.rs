@@ -7,7 +7,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
 use crate::helpers::{binary_float_op, unary_float_op, unary_map_op};
@@ -17,7 +17,7 @@ use crate::helpers::{binary_float_op, unary_float_op, unary_map_op};
 // ---------------------------------------------------------------------------
 
 /// Elementwise test for NaN.
-pub fn isnan<T, D>(input: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn isnan<T, D>(input: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -26,7 +26,7 @@ where
 }
 
 /// Elementwise test for infinity (positive or negative).
-pub fn isinf<T, D>(input: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn isinf<T, D>(input: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -35,7 +35,7 @@ where
 }
 
 /// Elementwise test for finiteness.
-pub fn isfinite<T, D>(input: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn isfinite<T, D>(input: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -44,7 +44,7 @@ where
 }
 
 /// Elementwise test for negative infinity.
-pub fn isneginf<T, D>(input: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn isneginf<T, D>(input: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -53,7 +53,7 @@ where
 }
 
 /// Elementwise test for positive infinity.
-pub fn isposinf<T, D>(input: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn isposinf<T, D>(input: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -62,7 +62,7 @@ where
 }
 
 /// Elementwise sign bit test.
-pub fn signbit<T, D>(input: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn signbit<T, D>(input: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -82,7 +82,7 @@ pub fn nan_to_num<T, D>(
     nan: Option<T>,
     posinf: Option<T>,
     neginf: Option<T>,
-) -> FerrumResult<Array<T, D>>
+) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -106,13 +106,13 @@ where
 }
 
 /// Clip (limit) values to [a_min, a_max].
-pub fn clip<T, D>(input: &Array<T, D>, a_min: T, a_max: T) -> FerrumResult<Array<T, D>>
+pub fn clip<T, D>(input: &Array<T, D>, a_min: T, a_max: T) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
 {
     if a_min > a_max {
-        return Err(FerrumError::invalid_value("clip: a_min must be <= a_max"));
+        return Err(FerrayError::invalid_value("clip: a_min must be <= a_max"));
     }
     unary_float_op(input, |x| {
         if x < a_min {
@@ -130,7 +130,7 @@ where
 // ---------------------------------------------------------------------------
 
 /// Return the next floating-point value after x1 towards x2.
-pub fn nextafter<T, D>(x1: &Array<T, D>, x2: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn nextafter<T, D>(x1: &Array<T, D>, x2: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -152,7 +152,7 @@ where
 }
 
 /// Return the spacing of values: the ULP (unit in the last place).
-pub fn spacing<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn spacing<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -171,13 +171,13 @@ where
 /// Multiply x by 2^n (ldexp).
 ///
 /// `n` is provided as an integer array of same shape.
-pub fn ldexp<T, D>(x: &Array<T, D>, n: &Array<i32, D>) -> FerrumResult<Array<T, D>>
+pub fn ldexp<T, D>(x: &Array<T, D>, n: &Array<i32, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
 {
     if x.shape() != n.shape() {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "ldexp: shapes {:?} and {:?} do not match",
             x.shape(),
             n.shape()
@@ -196,7 +196,7 @@ where
 ///
 /// Returns (mantissa_array, exponent_array) where mantissa is in [0.5, 1.0).
 /// This matches C's `frexp`: for x=4.0, returns (0.5, 3) since 0.5 * 2^3 = 4.
-pub fn frexp<T, D>(input: &Array<T, D>) -> FerrumResult<(Array<T, D>, Array<i32, D>)>
+pub fn frexp<T, D>(input: &Array<T, D>) -> FerrayResult<(Array<T, D>, Array<i32, D>)>
 where
     T: Element + Float,
     D: Dimension,
@@ -242,7 +242,7 @@ where
 }
 
 /// Elementwise copysign: magnitude of x1, sign of x2.
-pub fn copysign<T, D>(x1: &Array<T, D>, x2: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn copysign<T, D>(x1: &Array<T, D>, x2: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -254,7 +254,7 @@ where
 }
 
 /// Float power: x1^x2, always returning float.
-pub fn float_power<T, D>(x1: &Array<T, D>, x2: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn float_power<T, D>(x1: &Array<T, D>, x2: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -263,7 +263,7 @@ where
 }
 
 /// Elementwise maximum, propagating NaN.
-pub fn maximum<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn maximum<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -280,7 +280,7 @@ where
 }
 
 /// Elementwise minimum, propagating NaN.
-pub fn minimum<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn minimum<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -297,7 +297,7 @@ where
 }
 
 /// Elementwise maximum, ignoring NaN.
-pub fn fmax<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn fmax<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -314,7 +314,7 @@ where
 }
 
 /// Elementwise minimum, ignoring NaN.
-pub fn fmin<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn fmin<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -336,7 +336,7 @@ where
 
 /// Elementwise test for NaN for f16 arrays.
 #[cfg(feature = "f16")]
-pub fn isnan_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<bool, D>>
+pub fn isnan_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<bool, D>>
 where
     D: Dimension,
 {
@@ -345,7 +345,7 @@ where
 
 /// Elementwise test for infinity for f16 arrays.
 #[cfg(feature = "f16")]
-pub fn isinf_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<bool, D>>
+pub fn isinf_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<bool, D>>
 where
     D: Dimension,
 {
@@ -354,7 +354,7 @@ where
 
 /// Elementwise test for finiteness for f16 arrays.
 #[cfg(feature = "f16")]
-pub fn isfinite_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<bool, D>>
+pub fn isfinite_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<bool, D>>
 where
     D: Dimension,
 {
@@ -367,14 +367,14 @@ pub fn clip_f16<D>(
     input: &Array<half::f16, D>,
     a_min: half::f16,
     a_max: half::f16,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
     let min_f32 = a_min.to_f32();
     let max_f32 = a_max.to_f32();
     if min_f32 > max_f32 {
-        return Err(FerrumError::invalid_value("clip: a_min must be <= a_max"));
+        return Err(FerrayError::invalid_value("clip: a_min must be <= a_max"));
     }
     crate::helpers::unary_f16_op(input, |x| {
         if x < min_f32 {
@@ -394,7 +394,7 @@ pub fn nan_to_num_f16<D>(
     nan: Option<half::f16>,
     posinf: Option<half::f16>,
     neginf: Option<half::f16>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -417,7 +417,7 @@ where
 pub fn maximum_f16<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -437,7 +437,7 @@ where
 pub fn minimum_f16<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {

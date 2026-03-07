@@ -6,12 +6,12 @@
 use ferray_core::Array;
 use ferray_core::dimension::{Axis, Dimension, Ix1, IxDyn};
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 /// Wrap a scalar function to operate elementwise on arrays.
 ///
 /// Returns a closure that accepts `&Array<T, D>` and returns
-/// `FerrumResult<Array<U, D>>`, applying `f` to every element.
+/// `FerrayResult<Array<U, D>>`, applying `f` to every element.
 ///
 /// This is NumPy's `np.vectorize` — in Rust it is essentially `.mapv()`
 /// wrapped as a reusable callable.
@@ -21,7 +21,7 @@ use ferray_core::error::{FerrumError, FerrumResult};
 /// let square = vectorize(|x: f64| x * x);
 /// let result = square(&input_array)?;
 /// ```
-pub fn vectorize<T, U, F>(f: F) -> impl Fn(&Array<T, Ix1>) -> FerrumResult<Array<U, Ix1>>
+pub fn vectorize<T, U, F>(f: F) -> impl Fn(&Array<T, Ix1>) -> FerrayResult<Array<U, Ix1>>
 where
     T: Element + Copy,
     U: Element,
@@ -42,7 +42,7 @@ where
 /// let square = vectorize_nd(|x: f64| x * x);
 /// let result = square(&input_2d_array)?;
 /// ```
-pub fn vectorize_nd<T, U, F, D>(f: F) -> impl Fn(&Array<T, D>) -> FerrumResult<Array<U, D>>
+pub fn vectorize_nd<T, U, F, D>(f: F) -> impl Fn(&Array<T, D>) -> FerrayResult<Array<U, D>>
 where
     T: Element + Copy,
     U: Element,
@@ -70,20 +70,20 @@ where
 /// * `default` - The default value for elements where no condition is true.
 ///
 /// # Errors
-/// - Returns `FerrumError::InvalidValue` if `condlist` and `funclist` have different lengths.
-/// - Returns `FerrumError::ShapeMismatch` if any condition array has a different shape than `x`.
+/// - Returns `FerrayError::InvalidValue` if `condlist` and `funclist` have different lengths.
+/// - Returns `FerrayError::ShapeMismatch` if any condition array has a different shape than `x`.
 pub fn piecewise<T, D>(
     x: &Array<T, D>,
     condlist: &[Array<bool, D>],
     funclist: &[Box<dyn Fn(T) -> T>],
     default: T,
-) -> FerrumResult<Array<T, D>>
+) -> FerrayResult<Array<T, D>>
 where
     T: Element + Copy,
     D: Dimension,
 {
     if condlist.len() != funclist.len() {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "piecewise: condlist length ({}) must equal funclist length ({})",
             condlist.len(),
             funclist.len()
@@ -92,7 +92,7 @@ where
 
     for (i, cond) in condlist.iter().enumerate() {
         if cond.shape() != x.shape() {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "piecewise: condlist[{i}] shape {:?} does not match x shape {:?}",
                 cond.shape(),
                 x.shape()
@@ -138,13 +138,13 @@ where
 /// * `a` - The input array.
 ///
 /// # Errors
-/// - Returns `FerrumError::AxisOutOfBounds` if `axis >= ndim`.
+/// - Returns `FerrayError::AxisOutOfBounds` if `axis >= ndim`.
 /// - Propagates any error from the function or array construction.
 pub fn apply_along_axis<T, D>(
-    func: impl Fn(&Array<T, Ix1>) -> FerrumResult<T>,
+    func: impl Fn(&Array<T, Ix1>) -> FerrayResult<T>,
     axis: Axis,
     a: &Array<T, D>,
-) -> FerrumResult<Array<T, IxDyn>>
+) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Copy,
     D: Dimension,
@@ -152,7 +152,7 @@ where
     let ndim = a.ndim();
     let ax = axis.index();
     if ax >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+        return Err(FerrayError::axis_out_of_bounds(ax, ndim));
     }
 
     // Collect lanes along the axis, apply the function, collect results
@@ -192,17 +192,17 @@ where
 /// * `axes` - The axes over which to apply the function.
 ///
 /// # Errors
-/// - Returns `FerrumError::AxisOutOfBounds` if any axis is out of bounds.
+/// - Returns `FerrayError::AxisOutOfBounds` if any axis is out of bounds.
 /// - Propagates any error from the function.
 pub fn apply_over_axes(
-    func: impl Fn(&Array<f64, IxDyn>, Axis) -> FerrumResult<Array<f64, IxDyn>>,
+    func: impl Fn(&Array<f64, IxDyn>, Axis) -> FerrayResult<Array<f64, IxDyn>>,
     a: &Array<f64, IxDyn>,
     axes: &[usize],
-) -> FerrumResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<f64, IxDyn>> {
     let ndim = a.ndim();
     for &ax in axes {
         if ax >= ndim {
-            return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
         }
     }
 
@@ -222,12 +222,12 @@ pub fn apply_over_axes(
 /// This is useful as a `func` argument for [`apply_over_axes`].
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if `axis >= ndim`.
-pub fn sum_axis_keepdims(a: &Array<f64, IxDyn>, axis: Axis) -> FerrumResult<Array<f64, IxDyn>> {
+/// Returns `FerrayError::AxisOutOfBounds` if `axis >= ndim`.
+pub fn sum_axis_keepdims(a: &Array<f64, IxDyn>, axis: Axis) -> FerrayResult<Array<f64, IxDyn>> {
     let ndim = a.ndim();
     let ax = axis.index();
     if ax >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+        return Err(FerrayError::axis_out_of_bounds(ax, ndim));
     }
 
     let reduced = a.fold_axis(axis, 0.0, |acc, &x| *acc + x)?;

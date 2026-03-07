@@ -9,7 +9,7 @@ SIMD-accelerated universal functions for the [ferray](https://crates.io/crates/f
 - CORE-MATH correctly-rounded transcendentals (< 0.5 ULP from mathematical truth)
 - `exp_fast()` — Even/Odd Remez decomposition, ~30% faster than CORE-MATH at ≤1 ULP accuracy
 - Portable SIMD via `pulp` (SSE2/AVX2/AVX-512/NEON) on stable Rust
-- Scalar fallback with `FERRUM_FORCE_SCALAR=1` environment variable
+- Scalar fallback with `FERRAY_FORCE_SCALAR=1` environment variable
 - SIMD paths for f32, f64, i32, i64 on all contiguous inner loops
 
 ## Performance

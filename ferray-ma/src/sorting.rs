@@ -5,7 +5,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, Ix1};
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::MaskedArray;
 
@@ -22,7 +22,7 @@ where
     ///
     /// # Errors
     /// Returns an error only for internal failures.
-    pub fn sort(&self) -> FerrumResult<MaskedArray<T, Ix1>> {
+    pub fn sort(&self) -> FerrayResult<MaskedArray<T, Ix1>> {
         let mut unmasked: Vec<T> = Vec::new();
         let mut masked_vals: Vec<T> = Vec::new();
 
@@ -61,7 +61,7 @@ where
     ///
     /// # Errors
     /// Returns an error only for internal failures.
-    pub fn argsort(&self) -> FerrumResult<Vec<usize>> {
+    pub fn argsort(&self) -> FerrayResult<Vec<usize>> {
         let vals: Vec<T> = self.data().iter().copied().collect();
         let masks: Vec<bool> = self.mask().iter().copied().collect();
 

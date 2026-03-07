@@ -3,7 +3,7 @@
 // laplace, logistic, rayleigh, weibull, pareto, gumbel, power, triangular,
 // vonmises, wald, standard_cauchy
 
-use ferray_core::{Array, FerrumError, Ix1};
+use ferray_core::{Array, FerrayError, Ix1};
 
 use crate::bitgen::BitGenerator;
 use crate::distributions::exponential::standard_exponential_single;
@@ -21,18 +21,18 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `scale <= 0` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `size` is zero.
     pub fn laplace(
         &mut self,
         loc: f64,
         scale: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if scale <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
@@ -53,18 +53,18 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `scale <= 0` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `size` is zero.
     pub fn logistic(
         &mut self,
         loc: f64,
         scale: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if scale <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
@@ -88,13 +88,13 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `scale <= 0` or `size` is zero.
-    pub fn rayleigh(&mut self, scale: f64, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `size` is zero.
+    pub fn rayleigh(&mut self, scale: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if scale <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
@@ -113,13 +113,13 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `a <= 0` or `size` is zero.
-    pub fn weibull(&mut self, a: f64, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `a <= 0` or `size` is zero.
+    pub fn weibull(&mut self, a: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if a <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "a must be positive, got {a}"
             )));
         }
@@ -139,13 +139,13 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `a <= 0` or `size` is zero.
-    pub fn pareto(&mut self, a: f64, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `a <= 0` or `size` is zero.
+    pub fn pareto(&mut self, a: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if a <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "a must be positive, got {a}"
             )));
         }
@@ -166,18 +166,18 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `scale <= 0` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `size` is zero.
     pub fn gumbel(
         &mut self,
         loc: f64,
         scale: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if scale <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
@@ -202,13 +202,13 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `a <= 0` or `size` is zero.
-    pub fn power(&mut self, a: f64, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `a <= 0` or `size` is zero.
+    pub fn power(&mut self, a: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if a <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "a must be positive, got {a}"
             )));
         }
@@ -231,24 +231,24 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if parameters are invalid or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if parameters are invalid or `size` is zero.
     pub fn triangular(
         &mut self,
         left: f64,
         mode: f64,
         right: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if left >= right {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "left ({left}) must be less than right ({right})"
             )));
         }
         if mode < left || mode > right {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "mode ({mode}) must be in [{left}, {right}]"
             )));
         }
@@ -275,18 +275,18 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `kappa < 0` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `kappa < 0` or `size` is zero.
     pub fn vonmises(
         &mut self,
         mu: f64,
         kappa: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if kappa < 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "kappa must be non-negative, got {kappa}"
             )));
         }
@@ -332,23 +332,23 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `mean <= 0`, `scale <= 0`, or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `mean <= 0`, `scale <= 0`, or `size` is zero.
     pub fn wald(
         &mut self,
         mean: f64,
         scale: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if mean <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "mean must be positive, got {mean}"
             )));
         }
         if scale <= 0.0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
@@ -374,10 +374,10 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `size` is zero.
-    pub fn standard_cauchy(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if `size` is zero.
+    pub fn standard_cauchy(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         let data = generate_vec(self, size, |bg| {
             loop {

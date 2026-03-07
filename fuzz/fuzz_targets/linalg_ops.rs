@@ -5,7 +5,7 @@
 //! All linalg functions take f64 arrays. We construct small matrices from
 //! fuzzed bytes and verify no panics occur.
 //!
-//! Contract: ferray either returns Ok or Err(FerrumError) — never panics.
+//! Contract: ferray either returns Ok or Err(FerrayError) — never panics.
 
 use libfuzzer_sys::fuzz_target;
 

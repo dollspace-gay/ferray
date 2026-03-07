@@ -5,7 +5,7 @@
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Dimension, Ix1, Ix2, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 /// Convert a 2D ferray Array<f64, Ix2> to a faer::Mat<f64>.
 ///
@@ -29,10 +29,10 @@ pub fn array2_to_faer(a: &Array<f64, Ix2>) -> faer::Mat<f64> {
 
 /// Convert a 2D ferray Array<f64, Ix2> to a faer::Mat<f64> using iter-based
 /// indexing for any layout.
-pub fn array2_to_faer_general<D: Dimension>(a: &Array<f64, D>) -> FerrumResult<faer::Mat<f64>> {
+pub fn array2_to_faer_general<D: Dimension>(a: &Array<f64, D>) -> FerrayResult<faer::Mat<f64>> {
     let shape = a.shape();
     if shape.len() != 2 {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "expected 2D array, got {}D",
             shape.len()
         )));
@@ -43,7 +43,7 @@ pub fn array2_to_faer_general<D: Dimension>(a: &Array<f64, D>) -> FerrumResult<f
 }
 
 /// Convert a faer::Mat<f64> back to a ferray Array<f64, Ix2>.
-pub fn faer_to_array2(mat: &faer::Mat<f64>) -> FerrumResult<Array<f64, Ix2>> {
+pub fn faer_to_array2(mat: &faer::Mat<f64>) -> FerrayResult<Array<f64, Ix2>> {
     let (m, n) = mat.shape();
     let mut data = Vec::with_capacity(m * n);
     for i in 0..m {
@@ -55,7 +55,7 @@ pub fn faer_to_array2(mat: &faer::Mat<f64>) -> FerrumResult<Array<f64, Ix2>> {
 }
 
 /// Convert a faer::Mat<f64> to a ferray Array<f64, IxDyn>.
-pub fn faer_to_arrayd(mat: &faer::Mat<f64>) -> FerrumResult<Array<f64, IxDyn>> {
+pub fn faer_to_arrayd(mat: &faer::Mat<f64>) -> FerrayResult<Array<f64, IxDyn>> {
     let (m, n) = mat.shape();
     let mut data = Vec::with_capacity(m * n);
     for i in 0..m {
@@ -74,7 +74,7 @@ pub fn array1_to_faer_col(a: &Array<f64, Ix1>) -> faer::Mat<f64> {
 }
 
 /// Convert a faer column vector (Mat with 1 column) to a ferray Array<f64, Ix1>.
-pub fn faer_col_to_array1(mat: &faer::Mat<f64>) -> FerrumResult<Array<f64, Ix1>> {
+pub fn faer_col_to_array1(mat: &faer::Mat<f64>) -> FerrayResult<Array<f64, Ix1>> {
     let m = mat.nrows();
     let mut data = Vec::with_capacity(m);
     for i in 0..m {
@@ -88,11 +88,11 @@ pub fn faer_col_to_array1(mat: &faer::Mat<f64>) -> FerrumResult<Array<f64, Ix1>>
 pub fn extract_matrix_from_batch(
     a: &Array<f64, IxDyn>,
     batch_idx: usize,
-) -> FerrumResult<faer::Mat<f64>> {
+) -> FerrayResult<faer::Mat<f64>> {
     let shape = a.shape();
     let ndim = shape.len();
     if ndim < 2 {
-        return Err(FerrumError::shape_mismatch(
+        return Err(FerrayError::shape_mismatch(
             "array must have at least 2 dimensions for matrix operations",
         ));
     }
@@ -102,7 +102,7 @@ pub fn extract_matrix_from_batch(
     let data: Vec<f64> = a.iter().copied().collect();
     let offset = batch_idx * matrix_size;
     if offset + matrix_size > data.len() {
-        return Err(FerrumError::shape_mismatch("batch index out of bounds"));
+        return Err(FerrayError::shape_mismatch("batch index out of bounds"));
     }
     Ok(faer::Mat::from_fn(m, n, |i, j| data[offset + i * n + j]))
 }

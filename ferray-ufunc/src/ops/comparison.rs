@@ -6,13 +6,13 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::helpers::binary_map_op;
 
 /// Elementwise equality test.
-pub fn equal<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn equal<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + PartialEq + Copy,
     D: Dimension,
@@ -21,7 +21,7 @@ where
 }
 
 /// Elementwise inequality test.
-pub fn not_equal<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn not_equal<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + PartialEq + Copy,
     D: Dimension,
@@ -30,7 +30,7 @@ where
 }
 
 /// Elementwise less-than test.
-pub fn less<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn less<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
@@ -39,7 +39,7 @@ where
 }
 
 /// Elementwise less-than-or-equal test.
-pub fn less_equal<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn less_equal<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
@@ -48,7 +48,7 @@ where
 }
 
 /// Elementwise greater-than test.
-pub fn greater<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn greater<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
@@ -57,7 +57,7 @@ where
 }
 
 /// Elementwise greater-than-or-equal test.
-pub fn greater_equal<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn greater_equal<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
@@ -93,7 +93,7 @@ where
 /// Test whether two arrays are element-wise close within tolerances.
 ///
 /// |a - b| <= atol + rtol * |b|
-pub fn allclose<T, D>(a: &Array<T, D>, b: &Array<T, D>, rtol: T, atol: T) -> FerrumResult<bool>
+pub fn allclose<T, D>(a: &Array<T, D>, b: &Array<T, D>, rtol: T, atol: T) -> FerrayResult<bool>
 where
     T: Element + Float,
     D: Dimension,
@@ -113,7 +113,7 @@ pub fn isclose<T, D>(
     rtol: T,
     atol: T,
     equal_nan: bool,
-) -> FerrumResult<Array<bool, D>>
+) -> FerrayResult<Array<bool, D>>
 where
     T: Element + Float,
     D: Dimension,

@@ -2,7 +2,7 @@
 
 use ferray_core::Array;
 use ferray_core::dimension::Ix1;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 /// Return the Discrete Fourier Transform sample frequencies.
 ///
@@ -20,7 +20,7 @@ use ferray_core::error::{FerrumError, FerrumResult};
 /// - `d`: Sample spacing (inverse of the sampling rate). Default is 1.0.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `n` is 0 or `d` is 0.
+/// Returns `FerrayError::InvalidValue` if `n` is 0 or `d` is 0.
 ///
 /// # Example
 /// ```
@@ -29,12 +29,12 @@ use ferray_core::error::{FerrumError, FerrumResult};
 /// let freq = fftfreq(8, 1.0).unwrap();
 /// // Returns [0.0, 0.125, 0.25, 0.375, -0.5, -0.375, -0.25, -0.125]
 /// ```
-pub fn fftfreq(n: usize, d: f64) -> FerrumResult<Array<f64, Ix1>> {
+pub fn fftfreq(n: usize, d: f64) -> FerrayResult<Array<f64, Ix1>> {
     if n == 0 {
-        return Err(FerrumError::invalid_value("fftfreq: n must be > 0"));
+        return Err(FerrayError::invalid_value("fftfreq: n must be > 0"));
     }
     if d == 0.0 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "fftfreq: sample spacing d must be nonzero",
         ));
     }
@@ -76,7 +76,7 @@ pub fn fftfreq(n: usize, d: f64) -> FerrumResult<Array<f64, Ix1>> {
 /// - `d`: Sample spacing (inverse of the sampling rate). Default is 1.0.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `n` is 0 or `d` is 0.
+/// Returns `FerrayError::InvalidValue` if `n` is 0 or `d` is 0.
 ///
 /// # Example
 /// ```
@@ -85,12 +85,12 @@ pub fn fftfreq(n: usize, d: f64) -> FerrumResult<Array<f64, Ix1>> {
 /// let freq = rfftfreq(8, 1.0).unwrap();
 /// // Returns [0.0, 0.125, 0.25, 0.375, 0.5]
 /// ```
-pub fn rfftfreq(n: usize, d: f64) -> FerrumResult<Array<f64, Ix1>> {
+pub fn rfftfreq(n: usize, d: f64) -> FerrayResult<Array<f64, Ix1>> {
     if n == 0 {
-        return Err(FerrumError::invalid_value("rfftfreq: n must be > 0"));
+        return Err(FerrayError::invalid_value("rfftfreq: n must be > 0"));
     }
     if d == 0.0 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "rfftfreq: sample spacing d must be nonzero",
         ));
     }

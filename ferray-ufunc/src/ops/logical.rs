@@ -5,7 +5,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::helpers::{binary_map_op, unary_map_op};
 
@@ -66,7 +66,7 @@ impl Logical for num_complex::Complex<f64> {
 }
 
 /// Elementwise logical AND.
-pub fn logical_and<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn logical_and<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + Logical + Copy,
     D: Dimension,
@@ -75,7 +75,7 @@ where
 }
 
 /// Elementwise logical OR.
-pub fn logical_or<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn logical_or<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + Logical + Copy,
     D: Dimension,
@@ -84,7 +84,7 @@ where
 }
 
 /// Elementwise logical XOR.
-pub fn logical_xor<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn logical_xor<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + Logical + Copy,
     D: Dimension,
@@ -93,7 +93,7 @@ where
 }
 
 /// Elementwise logical NOT.
-pub fn logical_not<T, D>(input: &Array<T, D>) -> FerrumResult<Array<bool, D>>
+pub fn logical_not<T, D>(input: &Array<T, D>) -> FerrayResult<Array<bool, D>>
 where
     T: Element + Logical + Copy,
     D: Dimension,

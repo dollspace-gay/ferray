@@ -3,7 +3,7 @@
 // Implements center, ljust, rjust, zfill — elementwise on StringArray.
 
 use ferray_core::dimension::Dimension;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::string_array::StringArray;
 
@@ -17,7 +17,7 @@ pub fn center<D: Dimension>(
     a: &StringArray<D>,
     width: usize,
     fillchar: char,
-) -> FerrumResult<StringArray<D>> {
+) -> FerrayResult<StringArray<D>> {
     a.map(|s| {
         let char_count = s.chars().count();
         if char_count >= width {
@@ -44,7 +44,7 @@ pub fn center<D: Dimension>(
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn ljust<D: Dimension>(a: &StringArray<D>, width: usize) -> FerrumResult<StringArray<D>> {
+pub fn ljust<D: Dimension>(a: &StringArray<D>, width: usize) -> FerrayResult<StringArray<D>> {
     a.map(|s| {
         let char_count = s.chars().count();
         if char_count >= width {
@@ -66,7 +66,7 @@ pub fn ljust<D: Dimension>(a: &StringArray<D>, width: usize) -> FerrumResult<Str
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn rjust<D: Dimension>(a: &StringArray<D>, width: usize) -> FerrumResult<StringArray<D>> {
+pub fn rjust<D: Dimension>(a: &StringArray<D>, width: usize) -> FerrayResult<StringArray<D>> {
     a.map(|s| {
         let char_count = s.chars().count();
         if char_count >= width {
@@ -90,7 +90,7 @@ pub fn rjust<D: Dimension>(a: &StringArray<D>, width: usize) -> FerrumResult<Str
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn zfill<D: Dimension>(a: &StringArray<D>, width: usize) -> FerrumResult<StringArray<D>> {
+pub fn zfill<D: Dimension>(a: &StringArray<D>, width: usize) -> FerrayResult<StringArray<D>> {
     a.map(|s| {
         let char_count = s.chars().count();
         if char_count >= width {

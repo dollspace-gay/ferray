@@ -14,7 +14,7 @@ use crate::array::owned::Array;
 use crate::array::view::ArrayView;
 use crate::dimension::{Dimension, IxDyn};
 use crate::dtype::Element;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 /// Compute the broadcast shape from two shapes, following NumPy rules.
 ///
@@ -34,8 +34,8 @@ use crate::error::{FerrumError, FerrumResult};
 /// ```
 ///
 /// # Errors
-/// Returns `FerrumError::BroadcastFailure` if shapes are incompatible.
-pub fn broadcast_shapes(a: &[usize], b: &[usize]) -> FerrumResult<Vec<usize>> {
+/// Returns `FerrayError::BroadcastFailure` if shapes are incompatible.
+pub fn broadcast_shapes(a: &[usize], b: &[usize]) -> FerrayResult<Vec<usize>> {
     let ndim = a.len().max(b.len());
     let mut result = vec![0usize; ndim];
 
@@ -58,7 +58,7 @@ pub fn broadcast_shapes(a: &[usize], b: &[usize]) -> FerrumResult<Vec<usize>> {
         } else if db == 1 {
             result[i] = da;
         } else {
-            return Err(FerrumError::broadcast_failure(a, b));
+            return Err(FerrayError::broadcast_failure(a, b));
         }
     }
     Ok(result)
@@ -70,8 +70,8 @@ pub fn broadcast_shapes(a: &[usize], b: &[usize]) -> FerrumResult<Vec<usize>> {
 /// over all input shapes.
 ///
 /// # Errors
-/// Returns `FerrumError::BroadcastFailure` if any pair is incompatible.
-pub fn broadcast_shapes_multi(shapes: &[&[usize]]) -> FerrumResult<Vec<usize>> {
+/// Returns `FerrayError::BroadcastFailure` if any pair is incompatible.
+pub fn broadcast_shapes_multi(shapes: &[&[usize]]) -> FerrayResult<Vec<usize>> {
     if shapes.is_empty() {
         return Ok(vec![]);
     }
@@ -90,18 +90,18 @@ pub fn broadcast_shapes_multi(shapes: &[&[usize]]) -> FerrumResult<Vec<usize>> {
 /// 1s (stride 0) as needed.
 ///
 /// # Errors
-/// Returns `FerrumError::BroadcastFailure` if the source cannot be broadcast
+/// Returns `FerrayError::BroadcastFailure` if the source cannot be broadcast
 /// to the target (i.e., a source dimension is neither 1 nor equal to target).
 pub fn broadcast_strides(
     src_shape: &[usize],
     src_strides: &[isize],
     target_shape: &[usize],
-) -> FerrumResult<Vec<isize>> {
+) -> FerrayResult<Vec<isize>> {
     let tndim = target_shape.len();
     let sndim = src_shape.len();
 
     if tndim < sndim {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "cannot broadcast shape {:?} to shape {:?}: target has fewer dimensions",
             src_shape, target_shape
         )));
@@ -125,7 +125,7 @@ pub fn broadcast_strides(
                 // Broadcast: virtual expansion
                 out_strides[i] = 0;
             } else {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "cannot broadcast dimension {} (size {}) to size {}",
                     si, src_dim, tgt_dim
                 )));
@@ -142,19 +142,19 @@ pub fn broadcast_strides(
 /// dimensions — no data is copied. The view borrows from the source array.
 ///
 /// # Errors
-/// Returns `FerrumError::BroadcastFailure` if the array cannot be broadcast
+/// Returns `FerrayError::BroadcastFailure` if the array cannot be broadcast
 /// to the given shape.
 pub fn broadcast_to<'a, T: Element, D: Dimension>(
     array: &'a Array<T, D>,
     target_shape: &[usize],
-) -> FerrumResult<ArrayView<'a, T, IxDyn>> {
+) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
     let src_shape = array.shape();
     let src_strides = array.strides();
 
     // Validate broadcast compatibility
     let result_shape = broadcast_shapes(src_shape, target_shape)?;
     if result_shape != target_shape {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "cannot broadcast shape {:?} to shape {:?}",
             src_shape, target_shape
         )));
@@ -179,17 +179,17 @@ pub fn broadcast_to<'a, T: Element, D: Dimension>(
 /// Broadcast an `ArrayView` to a target shape, returning a new view.
 ///
 /// # Errors
-/// Returns `FerrumError::BroadcastFailure` if the view cannot be broadcast.
+/// Returns `FerrayError::BroadcastFailure` if the view cannot be broadcast.
 pub fn broadcast_view_to<'a, T: Element, D: Dimension>(
     view: &ArrayView<'a, T, D>,
     target_shape: &[usize],
-) -> FerrumResult<ArrayView<'a, T, IxDyn>> {
+) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
     let src_shape = view.shape();
     let src_strides = view.strides();
 
     let result_shape = broadcast_shapes(src_shape, target_shape)?;
     if result_shape != target_shape {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "cannot broadcast shape {:?} to shape {:?}",
             src_shape, target_shape
         )));
@@ -212,10 +212,10 @@ pub fn broadcast_view_to<'a, T: Element, D: Dimension>(
 /// broadcast shape. No data is copied.
 ///
 /// # Errors
-/// Returns `FerrumError::BroadcastFailure` if shapes are incompatible.
+/// Returns `FerrayError::BroadcastFailure` if shapes are incompatible.
 pub fn broadcast_arrays<'a, T: Element, D: Dimension>(
     arrays: &'a [Array<T, D>],
-) -> FerrumResult<Vec<ArrayView<'a, T, IxDyn>>> {
+) -> FerrayResult<Vec<ArrayView<'a, T, IxDyn>>> {
     if arrays.is_empty() {
         return Ok(vec![]);
     }
@@ -242,9 +242,9 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// Uses stride-0 tricks for virtual expansion — no data is copied.
     ///
     /// # Errors
-    /// Returns `FerrumError::BroadcastFailure` if the array cannot be broadcast
+    /// Returns `FerrayError::BroadcastFailure` if the array cannot be broadcast
     /// to the target shape.
-    pub fn broadcast_to(&self, target_shape: &[usize]) -> FerrumResult<ArrayView<'_, T, IxDyn>> {
+    pub fn broadcast_to(&self, target_shape: &[usize]) -> FerrayResult<ArrayView<'_, T, IxDyn>> {
         broadcast_to(self, target_shape)
     }
 }
@@ -253,14 +253,14 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
     /// Broadcast this view to the given shape, returning a dynamic-rank view.
     ///
     /// # Errors
-    /// Returns `FerrumError::BroadcastFailure` if the view cannot be broadcast.
-    pub fn broadcast_to(&self, target_shape: &[usize]) -> FerrumResult<ArrayView<'a, T, IxDyn>> {
+    /// Returns `FerrayError::BroadcastFailure` if the view cannot be broadcast.
+    pub fn broadcast_to(&self, target_shape: &[usize]) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
         let src_shape = self.shape();
         let src_strides = self.strides();
 
         let result_shape = broadcast_shapes(src_shape, target_shape)?;
         if result_shape != target_shape {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "cannot broadcast shape {:?} to shape {:?}",
                 src_shape, target_shape
             )));

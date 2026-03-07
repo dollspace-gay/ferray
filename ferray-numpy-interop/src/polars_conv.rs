@@ -6,7 +6,7 @@
 use polars::prelude::*;
 
 use ferray_core::array::aliases::Array1;
-use ferray_core::{Element, FerrumError, Ix1};
+use ferray_core::{Element, FerrayError, Ix1};
 
 use crate::dtype_map;
 
@@ -28,7 +28,7 @@ pub trait PolarsElement: Element {
     /// # Errors
     ///
     /// Returns an error if the Series dtype does not match.
-    fn extract_ca(series: &Series) -> Result<&ChunkedArray<Self::PolarsType>, FerrumError>;
+    fn extract_ca(series: &Series) -> Result<&ChunkedArray<Self::PolarsType>, FerrayError>;
 }
 
 macro_rules! impl_polars_element {
@@ -36,9 +36,9 @@ macro_rules! impl_polars_element {
         impl PolarsElement for $rust_ty {
             type PolarsType = $polars_ty;
 
-            fn extract_ca(series: &Series) -> Result<&ChunkedArray<Self::PolarsType>, FerrumError> {
+            fn extract_ca(series: &Series) -> Result<&ChunkedArray<Self::PolarsType>, FerrayError> {
                 series.$extractor().map_err(|e| {
-                    FerrumError::invalid_dtype(format!("Polars Series dtype mismatch: {e}"))
+                    FerrayError::invalid_dtype(format!("Polars Series dtype mismatch: {e}"))
                 })
             }
         }
@@ -66,16 +66,16 @@ pub trait ToPolars {
     ///
     /// # Errors
     ///
-    /// Returns [`FerrumError::InvalidDtype`] if the element type has no
+    /// Returns [`FerrayError::InvalidDtype`] if the element type has no
     /// Polars equivalent.
-    fn to_polars_series(&self, name: &str) -> Result<Series, FerrumError>;
+    fn to_polars_series(&self, name: &str) -> Result<Series, FerrayError>;
 }
 
 impl<T: PolarsElement> ToPolars for Array1<T>
 where
     ChunkedArray<T::PolarsType>: IntoSeries,
 {
-    fn to_polars_series(&self, name: &str) -> Result<Series, FerrumError> {
+    fn to_polars_series(&self, name: &str) -> Result<Series, FerrayError> {
         // Validate dtype mapping exists
         let _ = dtype_map::dtype_to_polars(self.dtype())?;
 
@@ -91,12 +91,12 @@ pub trait ToPolarsBool {
     ///
     /// # Errors
     ///
-    /// Returns [`FerrumError::InvalidDtype`] on internal inconsistency.
-    fn to_polars_series(&self, name: &str) -> Result<Series, FerrumError>;
+    /// Returns [`FerrayError::InvalidDtype`] on internal inconsistency.
+    fn to_polars_series(&self, name: &str) -> Result<Series, FerrayError>;
 }
 
 impl ToPolarsBool for Array1<bool> {
-    fn to_polars_series(&self, name: &str) -> Result<Series, FerrumError> {
+    fn to_polars_series(&self, name: &str) -> Result<Series, FerrayError> {
         let data: Vec<bool> = self.to_vec_flat();
         let ca = BooleanChunked::new(name.into(), &data);
         Ok(ca.into_series())
@@ -113,19 +113,19 @@ pub trait FromPolars<T: Element>: Sized {
     ///
     /// # Errors
     ///
-    /// Returns [`FerrumError::InvalidDtype`] if the Series dtype does not
-    /// match `T`, or [`FerrumError::InvalidValue`] if the Series contains
+    /// Returns [`FerrayError::InvalidDtype`] if the Series dtype does not
+    /// match `T`, or [`FerrayError::InvalidValue`] if the Series contains
     /// null values.
-    fn into_ferray(self) -> Result<Array1<T>, FerrumError>;
+    fn into_ferray(self) -> Result<Array1<T>, FerrayError>;
 }
 
 impl<T: PolarsElement> FromPolars<T> for Series {
-    fn into_ferray(self) -> Result<Array1<T>, FerrumError> {
+    fn into_ferray(self) -> Result<Array1<T>, FerrayError> {
         // Validate dtype
         let polars_dt = self.dtype().clone();
         let ferray_dt = dtype_map::polars_to_dtype(&polars_dt)?;
         if ferray_dt != T::dtype() {
-            return Err(FerrumError::invalid_dtype(format!(
+            return Err(FerrayError::invalid_dtype(format!(
                 "Polars Series has dtype {polars_dt:?} (ferray {ferray_dt}), but requested {}",
                 T::dtype()
             )));
@@ -133,7 +133,7 @@ impl<T: PolarsElement> FromPolars<T> for Series {
 
         // Check for nulls
         if self.null_count() > 0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "Polars Series contains {} null values; ferray arrays do not support nulls",
                 self.null_count()
             )));
@@ -153,29 +153,29 @@ pub trait FromPolarsBool: Sized {
     ///
     /// # Errors
     ///
-    /// Returns [`FerrumError::InvalidDtype`] if the Series is not boolean,
-    /// or [`FerrumError::InvalidValue`] if it contains nulls.
-    fn into_ferray_bool(self) -> Result<Array1<bool>, FerrumError>;
+    /// Returns [`FerrayError::InvalidDtype`] if the Series is not boolean,
+    /// or [`FerrayError::InvalidValue`] if it contains nulls.
+    fn into_ferray_bool(self) -> Result<Array1<bool>, FerrayError>;
 }
 
 impl FromPolarsBool for Series {
-    fn into_ferray_bool(self) -> Result<Array1<bool>, FerrumError> {
+    fn into_ferray_bool(self) -> Result<Array1<bool>, FerrayError> {
         if *self.dtype() != DataType::Boolean {
-            return Err(FerrumError::invalid_dtype(format!(
+            return Err(FerrayError::invalid_dtype(format!(
                 "expected Boolean Series, got {:?}",
                 self.dtype()
             )));
         }
 
         if self.null_count() > 0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "Polars Series contains {} null values; ferray arrays do not support nulls",
                 self.null_count()
             )));
         }
 
         let ca = self.bool().map_err(|e| {
-            FerrumError::invalid_dtype(format!("failed to extract BooleanChunked: {e}"))
+            FerrayError::invalid_dtype(format!("failed to extract BooleanChunked: {e}"))
         })?;
         let data: Vec<bool> = ca.into_no_null_iter().collect();
         let len = data.len();

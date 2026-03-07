@@ -2,7 +2,7 @@
 
 //! Fuzz target for rounding ufuncs: round, floor, ceil, trunc, rint, fix.
 //!
-//! Contract: ferray either returns Ok or Err(FerrumError) — never panics.
+//! Contract: ferray either returns Ok or Err(FerrayError) — never panics.
 
 use libfuzzer_sys::fuzz_target;
 

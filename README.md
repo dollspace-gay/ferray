@@ -7,7 +7,7 @@ A NumPy-equivalent scientific computing library for Rust. Correctly-rounded math
 - **More accurate than NumPy** on every transcendental function (CORE-MATH, < 0.5 ULP)
 - **Faster than NumPy** on 23 of 55 benchmarks — all FFT sizes, all variance/std, small reductions
 - **Memory safe** without garbage collection (17 Kani formal verification proof harnesses)
-- **Zero panics** in library code — all public functions return `Result<T, FerrumError>`
+- **Zero panics** in library code — all public functions return `Result<T, FerrayError>`
 - **Full NumPy API surface** — linalg, fft, random, polynomial, masked arrays, string arrays
 
 ## Quick Start

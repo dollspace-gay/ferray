@@ -19,7 +19,7 @@ pub use ferray_core::ArrayViewMut;
 pub use ferray_core::AsRawBuffer;
 pub use ferray_core::CowArray;
 pub use ferray_core::DynArray;
-pub use ferray_core::FerrumRecord;
+pub use ferray_core::FerrayRecord;
 pub use ferray_core::FieldDescriptor;
 
 // Dimension types
@@ -32,13 +32,13 @@ pub use ferray_core::dtype::promotion;
 pub use ferray_core::{DType, Element, SliceInfoElem};
 
 // Error handling
-pub use ferray_core::{FerrumError, FerrumResult};
+pub use ferray_core::{FerrayError, FerrayResult};
 
 // Memory layout
 pub use ferray_core::MemoryLayout;
 
 // Macros
-pub use ferray_core::{FerrumRecord as DeriveFerrumRecord, promoted_type, s};
+pub use ferray_core::{FerrayRecord as DeriveFerrayRecord, promoted_type, s};
 
 // Type aliases
 pub use ferray_core::aliases;

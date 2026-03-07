@@ -5,7 +5,7 @@ use num_complex::Complex;
 use crate::array::owned::Array;
 use crate::dimension::IxDyn;
 use crate::dtype::DType;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 /// A runtime-typed array whose element type is determined at runtime.
 ///
@@ -128,11 +128,11 @@ impl DynArray {
     /// Try to extract the inner `Array<f64, IxDyn>`.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidDtype` if the dtype is not `f64`.
-    pub fn try_into_f64(self) -> FerrumResult<Array<f64, IxDyn>> {
+    /// Returns `FerrayError::InvalidDtype` if the dtype is not `f64`.
+    pub fn try_into_f64(self) -> FerrayResult<Array<f64, IxDyn>> {
         match self {
             Self::F64(a) => Ok(a),
-            other => Err(FerrumError::invalid_dtype(format!(
+            other => Err(FerrayError::invalid_dtype(format!(
                 "expected float64, got {}",
                 other.dtype()
             ))),
@@ -140,10 +140,10 @@ impl DynArray {
     }
 
     /// Try to extract the inner `Array<f32, IxDyn>`.
-    pub fn try_into_f32(self) -> FerrumResult<Array<f32, IxDyn>> {
+    pub fn try_into_f32(self) -> FerrayResult<Array<f32, IxDyn>> {
         match self {
             Self::F32(a) => Ok(a),
-            other => Err(FerrumError::invalid_dtype(format!(
+            other => Err(FerrayError::invalid_dtype(format!(
                 "expected float32, got {}",
                 other.dtype()
             ))),
@@ -151,10 +151,10 @@ impl DynArray {
     }
 
     /// Try to extract the inner `Array<i64, IxDyn>`.
-    pub fn try_into_i64(self) -> FerrumResult<Array<i64, IxDyn>> {
+    pub fn try_into_i64(self) -> FerrayResult<Array<i64, IxDyn>> {
         match self {
             Self::I64(a) => Ok(a),
-            other => Err(FerrumError::invalid_dtype(format!(
+            other => Err(FerrayError::invalid_dtype(format!(
                 "expected int64, got {}",
                 other.dtype()
             ))),
@@ -162,10 +162,10 @@ impl DynArray {
     }
 
     /// Try to extract the inner `Array<i32, IxDyn>`.
-    pub fn try_into_i32(self) -> FerrumResult<Array<i32, IxDyn>> {
+    pub fn try_into_i32(self) -> FerrayResult<Array<i32, IxDyn>> {
         match self {
             Self::I32(a) => Ok(a),
-            other => Err(FerrumError::invalid_dtype(format!(
+            other => Err(FerrayError::invalid_dtype(format!(
                 "expected int32, got {}",
                 other.dtype()
             ))),
@@ -173,10 +173,10 @@ impl DynArray {
     }
 
     /// Try to extract the inner `Array<bool, IxDyn>`.
-    pub fn try_into_bool(self) -> FerrumResult<Array<bool, IxDyn>> {
+    pub fn try_into_bool(self) -> FerrayResult<Array<bool, IxDyn>> {
         match self {
             Self::Bool(a) => Ok(a),
-            other => Err(FerrumError::invalid_dtype(format!(
+            other => Err(FerrayError::invalid_dtype(format!(
                 "expected bool, got {}",
                 other.dtype()
             ))),
@@ -184,7 +184,7 @@ impl DynArray {
     }
 
     /// Create a `DynArray` of zeros with the given dtype and shape.
-    pub fn zeros(dtype: DType, shape: &[usize]) -> FerrumResult<Self> {
+    pub fn zeros(dtype: DType, shape: &[usize]) -> FerrayResult<Self> {
         let dim = IxDyn::new(shape);
         Ok(match dtype {
             DType::Bool => Self::Bool(Array::zeros(dim)?),

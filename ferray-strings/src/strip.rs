@@ -3,7 +3,7 @@
 // Implements strip, lstrip, rstrip — elementwise on StringArray.
 
 use ferray_core::dimension::Dimension;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::string_array::StringArray;
 
@@ -17,7 +17,7 @@ use crate::string_array::StringArray;
 pub fn strip<D: Dimension>(
     a: &StringArray<D>,
     chars: Option<&str>,
-) -> FerrumResult<StringArray<D>> {
+) -> FerrayResult<StringArray<D>> {
     match chars {
         None => a.map(|s| s.trim().to_string()),
         Some(ch) => {
@@ -37,7 +37,7 @@ pub fn strip<D: Dimension>(
 pub fn lstrip<D: Dimension>(
     a: &StringArray<D>,
     chars: Option<&str>,
-) -> FerrumResult<StringArray<D>> {
+) -> FerrayResult<StringArray<D>> {
     match chars {
         None => a.map(|s| s.trim_start().to_string()),
         Some(ch) => {
@@ -60,7 +60,7 @@ pub fn lstrip<D: Dimension>(
 pub fn rstrip<D: Dimension>(
     a: &StringArray<D>,
     chars: Option<&str>,
-) -> FerrumResult<StringArray<D>> {
+) -> FerrayResult<StringArray<D>> {
     match chars {
         None => a.map(|s| s.trim_end().to_string()),
         Some(ch) => {

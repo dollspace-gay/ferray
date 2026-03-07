@@ -3,7 +3,7 @@
 // Implements upper, lower, capitalize, title — elementwise on StringArray.
 
 use ferray_core::dimension::Dimension;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::string_array::StringArray;
 
@@ -18,7 +18,7 @@ use crate::string_array::StringArray;
 /// let b = strings::upper(&a).unwrap();
 /// assert_eq!(b.as_slice(), &["HELLO", "WORLD"]);
 /// ```
-pub fn upper<D: Dimension>(a: &StringArray<D>) -> FerrumResult<StringArray<D>> {
+pub fn upper<D: Dimension>(a: &StringArray<D>) -> FerrayResult<StringArray<D>> {
     a.map(|s| s.to_uppercase())
 }
 
@@ -26,7 +26,7 @@ pub fn upper<D: Dimension>(a: &StringArray<D>) -> FerrumResult<StringArray<D>> {
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn lower<D: Dimension>(a: &StringArray<D>) -> FerrumResult<StringArray<D>> {
+pub fn lower<D: Dimension>(a: &StringArray<D>) -> FerrayResult<StringArray<D>> {
     a.map(|s| s.to_lowercase())
 }
 
@@ -34,7 +34,7 @@ pub fn lower<D: Dimension>(a: &StringArray<D>) -> FerrumResult<StringArray<D>> {
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn capitalize<D: Dimension>(a: &StringArray<D>) -> FerrumResult<StringArray<D>> {
+pub fn capitalize<D: Dimension>(a: &StringArray<D>) -> FerrayResult<StringArray<D>> {
     a.map(|s| {
         let mut chars = s.chars();
         match chars.next() {
@@ -55,7 +55,7 @@ pub fn capitalize<D: Dimension>(a: &StringArray<D>) -> FerrumResult<StringArray<
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn title<D: Dimension>(a: &StringArray<D>) -> FerrumResult<StringArray<D>> {
+pub fn title<D: Dimension>(a: &StringArray<D>) -> FerrayResult<StringArray<D>> {
     a.map(|s| {
         let mut result = String::with_capacity(s.len());
         let mut capitalize_next = true;

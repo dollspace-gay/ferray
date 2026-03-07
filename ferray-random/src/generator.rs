@@ -3,7 +3,7 @@
 // Wraps a BitGenerator and provides distribution sampling methods.
 // Takes &mut self — stateful, NOT Sync.
 
-use ferray_core::{Array, FerrumError, Ix1};
+use ferray_core::{Array, FerrayError, Ix1};
 
 use crate::bitgen::{BitGenerator, Xoshiro256StarStar};
 
@@ -115,13 +115,13 @@ pub fn default_rng_seeded(seed: u64) -> Generator<Xoshiro256StarStar> {
 /// the parent generator's output.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `n` is zero.
+/// Returns `FerrayError::InvalidValue` if `n` is zero.
 pub fn spawn_generators<B: BitGenerator + Clone>(
     parent: &mut Generator<B>,
     n: usize,
-) -> Result<Vec<Generator<B>>, FerrumError> {
+) -> Result<Vec<Generator<B>>, FerrayError> {
     if n == 0 {
-        return Err(FerrumError::invalid_value("spawn count must be > 0"));
+        return Err(FerrayError::invalid_value("spawn count must be > 0"));
     }
 
     let mut children = Vec::with_capacity(n);
@@ -190,13 +190,13 @@ pub(crate) fn generate_vec_i64<B: BitGenerator>(
 }
 
 // Helper: wrap a Vec<f64> into an Array1<f64>
-pub(crate) fn vec_to_array1(data: Vec<f64>) -> Result<Array<f64, Ix1>, FerrumError> {
+pub(crate) fn vec_to_array1(data: Vec<f64>) -> Result<Array<f64, Ix1>, FerrayError> {
     let n = data.len();
     Array::<f64, Ix1>::from_vec(Ix1::new([n]), data)
 }
 
 // Helper: wrap a Vec<i64> into an Array1<i64>
-pub(crate) fn vec_to_array1_i64(data: Vec<i64>) -> Result<Array<i64, Ix1>, FerrumError> {
+pub(crate) fn vec_to_array1_i64(data: Vec<i64>) -> Result<Array<i64, Ix1>, FerrayError> {
     let n = data.len();
     Array::<i64, Ix1>::from_vec(Ix1::new([n]), data)
 }

@@ -1,6 +1,6 @@
 // ferray-random: Uniform distribution sampling — random, uniform, integers
 
-use ferray_core::{Array, FerrumError, Ix1};
+use ferray_core::{Array, FerrayError, Ix1};
 
 use crate::bitgen::BitGenerator;
 use crate::generator::{
@@ -16,7 +16,7 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `size` is zero.
     ///
     /// # Example
     /// ```
@@ -24,9 +24,9 @@ impl<B: BitGenerator> Generator<B> {
     /// let arr = rng.random(10).unwrap();
     /// assert_eq!(arr.shape(), &[10]);
     /// ```
-    pub fn random(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrumError> {
+    pub fn random(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         let data = generate_vec(self, size, |bg| bg.next_f64());
         vec_to_array1(data)
@@ -42,18 +42,18 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `low >= high` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `low >= high` or `size` is zero.
     pub fn uniform(
         &mut self,
         low: f64,
         high: f64,
         size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrumError> {
+    ) -> Result<Array<f64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if low >= high {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "low ({low}) must be less than high ({high})"
             )));
         }
@@ -72,18 +72,18 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of values to generate.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `low >= high` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `low >= high` or `size` is zero.
     pub fn integers(
         &mut self,
         low: i64,
         high: i64,
         size: usize,
-    ) -> Result<Array<i64, Ix1>, FerrumError> {
+    ) -> Result<Array<i64, Ix1>, FerrayError> {
         if size == 0 {
-            return Err(FerrumError::invalid_value("size must be > 0"));
+            return Err(FerrayError::invalid_value("size must be > 0"));
         }
         if low >= high {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "low ({low}) must be less than high ({high})"
             )));
         }

@@ -10,7 +10,7 @@ use arrow::buffer::Buffer;
 use arrow::datatypes::{ArrowNativeType, ArrowPrimitiveType};
 
 use ferray_core::array::aliases::Array1;
-use ferray_core::{Element, FerrumError, Ix1};
+use ferray_core::{Element, FerrayError, Ix1};
 
 use crate::dtype_map;
 
@@ -63,9 +63,9 @@ pub trait ToArrow {
     ///
     /// # Errors
     ///
-    /// Returns [`FerrumError::InvalidDtype`] if the element type has no
+    /// Returns [`FerrayError::InvalidDtype`] if the element type has no
     /// Arrow equivalent.
-    fn to_arrow(&self) -> Result<Self::ArrowArray, FerrumError>;
+    fn to_arrow(&self) -> Result<Self::ArrowArray, FerrayError>;
 }
 
 impl<T: ArrowElement> ToArrow for Array1<T>
@@ -75,7 +75,7 @@ where
 {
     type ArrowArray = PrimitiveArray<T::ArrowType>;
 
-    fn to_arrow(&self) -> Result<Self::ArrowArray, FerrumError> {
+    fn to_arrow(&self) -> Result<Self::ArrowArray, FerrayError> {
         // Validate that the ferray dtype has an Arrow equivalent
         let _ = dtype_map::dtype_to_arrow(self.dtype())?;
 
@@ -99,12 +99,12 @@ pub trait ToArrowBool {
     ///
     /// # Errors
     ///
-    /// Returns [`FerrumError::InvalidDtype`] on internal inconsistency.
-    fn to_arrow(&self) -> Result<BooleanArray, FerrumError>;
+    /// Returns [`FerrayError::InvalidDtype`] on internal inconsistency.
+    fn to_arrow(&self) -> Result<BooleanArray, FerrayError>;
 }
 
 impl ToArrowBool for Array1<bool> {
-    fn to_arrow(&self) -> Result<BooleanArray, FerrumError> {
+    fn to_arrow(&self) -> Result<BooleanArray, FerrayError> {
         let values: Vec<bool> = self.to_vec_flat();
         Ok(BooleanArray::from(values))
     }
@@ -121,20 +121,20 @@ pub trait FromArrow<T: Element>: Sized {
     ///
     /// # Errors
     ///
-    /// Returns [`FerrumError::InvalidDtype`] if the Arrow array dtype does
-    /// not match `T`, or [`FerrumError::InvalidValue`] if the Arrow array
+    /// Returns [`FerrayError::InvalidDtype`] if the Arrow array dtype does
+    /// not match `T`, or [`FerrayError::InvalidValue`] if the Arrow array
     /// contains nulls (ferray arrays do not support null values).
-    fn into_ferray(self) -> Result<Array1<T>, FerrumError>;
+    fn into_ferray(self) -> Result<Array1<T>, FerrayError>;
 }
 
 impl<T: ArrowElement> FromArrow<T> for PrimitiveArray<T::ArrowType>
 where
     T::ArrowType: ArrowPrimitiveType<Native = T>,
 {
-    fn into_ferray(self) -> Result<Array1<T>, FerrumError> {
+    fn into_ferray(self) -> Result<Array1<T>, FerrayError> {
         // Validate no nulls
         if self.null_count() > 0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "Arrow array contains {} null values; ferray arrays do not support nulls",
                 self.null_count()
             )));
@@ -144,7 +144,7 @@ where
         let arrow_dt = self.data_type();
         let ferray_dt = dtype_map::arrow_to_dtype(arrow_dt)?;
         if ferray_dt != T::dtype() {
-            return Err(FerrumError::invalid_dtype(format!(
+            return Err(FerrayError::invalid_dtype(format!(
                 "Arrow dtype {arrow_dt:?} maps to ferray {ferray_dt}, but requested {}",
                 T::dtype()
             )));
@@ -164,14 +164,14 @@ pub trait FromArrowBool: Sized {
     ///
     /// # Errors
     ///
-    /// Returns [`FerrumError::InvalidValue`] if the array contains nulls.
-    fn into_ferray_bool(self) -> Result<Array1<bool>, FerrumError>;
+    /// Returns [`FerrayError::InvalidValue`] if the array contains nulls.
+    fn into_ferray_bool(self) -> Result<Array1<bool>, FerrayError>;
 }
 
 impl FromArrowBool for BooleanArray {
-    fn into_ferray_bool(self) -> Result<Array1<bool>, FerrumError> {
+    fn into_ferray_bool(self) -> Result<Array1<bool>, FerrayError> {
         if self.null_count() > 0 {
-            return Err(FerrumError::invalid_value(format!(
+            return Err(FerrayError::invalid_value(format!(
                 "Arrow BooleanArray contains {} null values; ferray arrays do not support nulls",
                 self.null_count()
             )));

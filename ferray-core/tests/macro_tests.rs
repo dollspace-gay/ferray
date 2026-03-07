@@ -1,25 +1,25 @@
 // Integration tests for ferray-core-macros
 //
-// These tests exercise the proc macros (FerrumRecord, s!, promoted_type!)
+// These tests exercise the proc macros (FerrayRecord, s!, promoted_type!)
 // from the consumer perspective — i.e., they use the macros via ferray-core's
 // public re-exports, just as a downstream crate would.
 
 use ferray_core::dtype::{DType, SliceInfoElem};
-use ferray_core::record::FerrumRecord;
+use ferray_core::record::FerrayRecord;
 
 // ---------------------------------------------------------------------------
-// #[derive(FerrumRecord)] tests
+// #[derive(FerrayRecord)] tests
 // ---------------------------------------------------------------------------
 
 #[repr(C)]
-#[derive(Clone, Debug, ferray_core::FerrumRecord)]
+#[derive(Clone, Debug, ferray_core::FerrayRecord)]
 struct Point {
     x: f64,
     y: f64,
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, ferray_core::FerrumRecord)]
+#[derive(Clone, Debug, ferray_core::FerrayRecord)]
 struct Measurement {
     time: f64,
     value: f32,

@@ -8,7 +8,7 @@ use std::io::{BufReader, Cursor, Read, Write};
 use std::path::Path;
 
 use ferray_core::dynarray::DynArray;
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::npy;
 
@@ -18,10 +18,10 @@ use crate::npy;
 /// filename inside the archive (`.npy` extension is appended automatically).
 ///
 /// # Errors
-/// Returns `FerrumError::IoError` on file creation or write failures.
-pub fn savez<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -> FerrumResult<()> {
+/// Returns `FerrayError::IoError` on file creation or write failures.
+pub fn savez<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -> FerrayResult<()> {
     let file = File::create(path.as_ref()).map_err(|e| {
-        FerrumError::io_error(format!(
+        FerrayError::io_error(format!(
             "failed to create .npz file '{}': {e}",
             path.as_ref().display()
         ))
@@ -40,7 +40,7 @@ pub fn savez<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -> FerrumRes
             .compression_method(zip::CompressionMethod::Stored);
 
         zip_writer.start_file(&entry_name, options).map_err(|e| {
-            FerrumError::io_error(format!("failed to create zip entry '{entry_name}': {e}"))
+            FerrayError::io_error(format!("failed to create zip entry '{entry_name}': {e}"))
         })?;
 
         // Write the .npy data into a buffer first
@@ -48,13 +48,13 @@ pub fn savez<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -> FerrumRes
         npy::save_dynamic_to_writer(&mut npy_buf, array)?;
 
         zip_writer.write_all(&npy_buf).map_err(|e| {
-            FerrumError::io_error(format!("failed to write zip entry '{entry_name}': {e}"))
+            FerrayError::io_error(format!("failed to write zip entry '{entry_name}': {e}"))
         })?;
     }
 
     zip_writer
         .finish()
-        .map_err(|e| FerrumError::io_error(format!("failed to finalize .npz file: {e}")))?;
+        .map_err(|e| FerrayError::io_error(format!("failed to finalize .npz file: {e}")))?;
 
     Ok(())
 }
@@ -64,10 +64,10 @@ pub fn savez<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -> FerrumRes
 /// Same as [`savez`] but each entry is individually compressed with DEFLATE.
 ///
 /// # Errors
-/// Returns `FerrumError::IoError` on file creation or write failures.
-pub fn savez_compressed<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -> FerrumResult<()> {
+/// Returns `FerrayError::IoError` on file creation or write failures.
+pub fn savez_compressed<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -> FerrayResult<()> {
     let file = File::create(path.as_ref()).map_err(|e| {
-        FerrumError::io_error(format!(
+        FerrayError::io_error(format!(
             "failed to create .npz file '{}': {e}",
             path.as_ref().display()
         ))
@@ -86,20 +86,20 @@ pub fn savez_compressed<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -
             .compression_method(zip::CompressionMethod::Deflated);
 
         zip_writer.start_file(&entry_name, options).map_err(|e| {
-            FerrumError::io_error(format!("failed to create zip entry '{entry_name}': {e}"))
+            FerrayError::io_error(format!("failed to create zip entry '{entry_name}': {e}"))
         })?;
 
         let mut npy_buf = Vec::new();
         npy::save_dynamic_to_writer(&mut npy_buf, array)?;
 
         zip_writer.write_all(&npy_buf).map_err(|e| {
-            FerrumError::io_error(format!("failed to write zip entry '{entry_name}': {e}"))
+            FerrayError::io_error(format!("failed to write zip entry '{entry_name}': {e}"))
         })?;
     }
 
     zip_writer
         .finish()
-        .map_err(|e| FerrumError::io_error(format!("failed to finalize .npz file: {e}")))?;
+        .map_err(|e| FerrayError::io_error(format!("failed to finalize .npz file: {e}")))?;
 
     Ok(())
 }
@@ -115,9 +115,9 @@ impl NpzFile {
     ///
     /// All entries are read into memory. Use the [`get`](Self::get) method to
     /// retrieve individual arrays.
-    pub fn open<P: AsRef<Path>>(path: P) -> FerrumResult<Self> {
+    pub fn open<P: AsRef<Path>>(path: P) -> FerrayResult<Self> {
         let file = File::open(path.as_ref()).map_err(|e| {
-            FerrumError::io_error(format!(
+            FerrayError::io_error(format!(
                 "failed to open .npz file '{}': {e}",
                 path.as_ref().display()
             ))
@@ -127,14 +127,14 @@ impl NpzFile {
     }
 
     /// Read a `.npz` from a reader.
-    pub fn from_reader<R: Read + std::io::Seek>(reader: R) -> FerrumResult<Self> {
+    pub fn from_reader<R: Read + std::io::Seek>(reader: R) -> FerrayResult<Self> {
         let mut archive = zip::ZipArchive::new(reader)
-            .map_err(|e| FerrumError::io_error(format!("failed to read .npz archive: {e}")))?;
+            .map_err(|e| FerrayError::io_error(format!("failed to read .npz archive: {e}")))?;
 
         let mut entries = Vec::new();
         for i in 0..archive.len() {
             let mut entry = archive.by_index(i).map_err(|e| {
-                FerrumError::io_error(format!("failed to read .npz entry {i}: {e}"))
+                FerrayError::io_error(format!("failed to read .npz entry {i}: {e}"))
             })?;
 
             let name = entry
@@ -145,7 +145,7 @@ impl NpzFile {
 
             let mut data = Vec::new();
             entry.read_to_end(&mut data).map_err(|e| {
-                FerrumError::io_error(format!("failed to read .npz entry data: {e}"))
+                FerrayError::io_error(format!("failed to read .npz entry data: {e}"))
             })?;
 
             entries.push((name, data));
@@ -162,15 +162,15 @@ impl NpzFile {
     /// Retrieve a named array as a `DynArray`.
     ///
     /// # Errors
-    /// Returns `FerrumError::IoError` if the name is not found or the data is invalid.
-    pub fn get(&self, name: &str) -> FerrumResult<DynArray> {
+    /// Returns `FerrayError::IoError` if the name is not found or the data is invalid.
+    pub fn get(&self, name: &str) -> FerrayResult<DynArray> {
         let data = self
             .entries
             .iter()
             .find(|(n, _)| n == name)
             .map(|(_, d)| d)
             .ok_or_else(|| {
-                FerrumError::io_error(format!("array '{name}' not found in .npz archive"))
+                FerrayError::io_error(format!("array '{name}' not found in .npz archive"))
             })?;
 
         let mut cursor = Cursor::new(data);

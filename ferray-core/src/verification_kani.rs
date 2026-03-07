@@ -11,7 +11,7 @@
 
 use crate::dimension::{Dimension, Ix1, Ix2, IxDyn};
 use crate::dtype::{DType, Element};
-use crate::error::FerrumError;
+use crate::error::FerrayError;
 
 // ---------------------------------------------------------------------------
 // Broadcasting shape resolution (REQ-19)
@@ -335,23 +335,23 @@ fn verify_reshape_element_count() {
 // Error condition detection (REQ-18)
 // ---------------------------------------------------------------------------
 
-/// Verify FerrumError variants carry context.
+/// Verify FerrayError variants carry context.
 #[kani::proof]
 fn verify_error_shape_mismatch() {
-    let err = FerrumError::shape_mismatch("test context");
+    let err = FerrayError::shape_mismatch("test context");
     // The error should be the ShapeMismatch variant
     match err {
-        FerrumError::ShapeMismatch { .. } => {} // correct
+        FerrayError::ShapeMismatch { .. } => {} // correct
         _ => panic!("Expected ShapeMismatch"),
     }
 }
 
-/// Verify FerrumError index_out_of_bounds.
+/// Verify FerrayError index_out_of_bounds.
 #[kani::proof]
 fn verify_error_index_out_of_bounds() {
-    let err = FerrumError::index_out_of_bounds(5, 0, 3);
+    let err = FerrayError::index_out_of_bounds(5, 0, 3);
     match err {
-        FerrumError::IndexOutOfBounds { .. } => {} // correct
+        FerrayError::IndexOutOfBounds { .. } => {} // correct
         _ => panic!("Expected IndexOutOfBounds"),
     }
 }

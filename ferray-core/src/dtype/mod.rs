@@ -217,7 +217,7 @@ impl fmt::Display for DType {
 ///
 /// This is implemented for all supported numeric types plus `bool`.
 /// The trait is sealed: downstream crates cannot implement it for new types
-/// (use `DynArray` or `FerrumRecord` for custom element types).
+/// (use `DynArray` or `FerrayRecord` for custom element types).
 pub trait Element:
     Clone + fmt::Debug + fmt::Display + Send + Sync + PartialEq + 'static + private::Sealed
 {

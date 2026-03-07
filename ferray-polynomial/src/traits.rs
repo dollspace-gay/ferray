@@ -1,6 +1,6 @@
 // ferray-polynomial: Poly, ToPowerBasis, FromPowerBasis traits (REQ-7, REQ-8, REQ-9, REQ-10, REQ-11)
 
-use ferray_core::error::FerrumError;
+use ferray_core::error::FerrayError;
 use num_complex::Complex;
 
 /// Common trait for polynomial types in all bases.
@@ -12,22 +12,22 @@ pub trait Poly: Clone + Sized {
     /// Evaluate the polynomial at a single point.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if computation fails.
-    fn eval(&self, x: f64) -> Result<f64, FerrumError>;
+    /// Returns `FerrayError::InvalidValue` if computation fails.
+    fn eval(&self, x: f64) -> Result<f64, FerrayError>;
 
     /// Evaluate the polynomial at multiple points.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if computation fails.
-    fn eval_many(&self, x: &[f64]) -> Result<Vec<f64>, FerrumError> {
+    /// Returns `FerrayError::InvalidValue` if computation fails.
+    fn eval_many(&self, x: &[f64]) -> Result<Vec<f64>, FerrayError> {
         x.iter().map(|&xi| self.eval(xi)).collect()
     }
 
     /// Differentiate the polynomial `m` times.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `m` is invalid.
-    fn deriv(&self, m: usize) -> Result<Self, FerrumError>;
+    /// Returns `FerrayError::InvalidValue` if `m` is invalid.
+    fn deriv(&self, m: usize) -> Result<Self, FerrayError>;
 
     /// Integrate the polynomial `m` times with integration constants `k`.
     ///
@@ -35,8 +35,8 @@ pub trait Poly: Clone + Sized {
     /// zeros are used for the missing constants.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if computation fails.
-    fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrumError>;
+    /// Returns `FerrayError::InvalidValue` if computation fails.
+    fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrayError>;
 
     /// Return the roots of the polynomial as complex values.
     ///
@@ -44,7 +44,7 @@ pub trait Poly: Clone + Sized {
     ///
     /// # Errors
     /// Returns an error if root-finding fails or linalg is unavailable.
-    fn roots(&self) -> Result<Vec<Complex<f64>>, FerrumError>;
+    fn roots(&self) -> Result<Vec<Complex<f64>>, FerrayError>;
 
     /// Return the degree of the polynomial.
     fn degree(&self) -> usize;
@@ -55,56 +55,56 @@ pub trait Poly: Clone + Sized {
     /// Remove trailing coefficients below tolerance.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `tol` is negative.
-    fn trim(&self, tol: f64) -> Result<Self, FerrumError>;
+    /// Returns `FerrayError::InvalidValue` if `tol` is negative.
+    fn trim(&self, tol: f64) -> Result<Self, FerrayError>;
 
     /// Truncate the polynomial to the given number of terms.
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if `size` is zero.
-    fn truncate(&self, size: usize) -> Result<Self, FerrumError>;
+    /// Returns `FerrayError::InvalidValue` if `size` is zero.
+    fn truncate(&self, size: usize) -> Result<Self, FerrayError>;
 
     /// Add two polynomials of the same basis.
     ///
     /// # Errors
     /// Returns an error if the operation fails.
-    fn add(&self, other: &Self) -> Result<Self, FerrumError>;
+    fn add(&self, other: &Self) -> Result<Self, FerrayError>;
 
     /// Subtract another polynomial of the same basis.
     ///
     /// # Errors
     /// Returns an error if the operation fails.
-    fn sub(&self, other: &Self) -> Result<Self, FerrumError>;
+    fn sub(&self, other: &Self) -> Result<Self, FerrayError>;
 
     /// Multiply two polynomials of the same basis.
     ///
     /// # Errors
     /// Returns an error if the operation fails.
-    fn mul(&self, other: &Self) -> Result<Self, FerrumError>;
+    fn mul(&self, other: &Self) -> Result<Self, FerrayError>;
 
     /// Raise the polynomial to the `n`-th power.
     ///
     /// # Errors
     /// Returns an error if the operation fails.
-    fn pow(&self, n: usize) -> Result<Self, FerrumError>;
+    fn pow(&self, n: usize) -> Result<Self, FerrayError>;
 
     /// Divide this polynomial by another, returning (quotient, remainder).
     ///
     /// # Errors
-    /// Returns `FerrumError::InvalidValue` if the divisor is zero.
-    fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrumError>;
+    /// Returns `FerrayError::InvalidValue` if the divisor is zero.
+    fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrayError>;
 
     /// Least-squares polynomial fit of degree `deg` to the given data.
     ///
     /// # Errors
     /// Returns an error if the fit fails (e.g., singular matrix).
-    fn fit(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrumError>;
+    fn fit(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrayError>;
 
     /// Weighted least-squares polynomial fit.
     ///
     /// # Errors
     /// Returns an error if the fit fails.
-    fn fit_weighted(x: &[f64], y: &[f64], deg: usize, w: &[f64]) -> Result<Self, FerrumError>;
+    fn fit_weighted(x: &[f64], y: &[f64], deg: usize, w: &[f64]) -> Result<Self, FerrayError>;
 
     /// Construct the polynomial from the given coefficients.
     fn from_coeffs(coeffs: &[f64]) -> Self;
@@ -116,7 +116,7 @@ pub trait ToPowerBasis: Poly {
     ///
     /// # Errors
     /// Returns an error if conversion fails.
-    fn to_power_basis(&self) -> Result<Vec<f64>, FerrumError>;
+    fn to_power_basis(&self) -> Result<Vec<f64>, FerrayError>;
 }
 
 /// Trait for constructing a polynomial from power basis coefficients.
@@ -125,7 +125,7 @@ pub trait FromPowerBasis: Poly {
     ///
     /// # Errors
     /// Returns an error if conversion fails.
-    fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrumError>;
+    fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrayError>;
 }
 
 /// Extension trait providing `.convert::<TargetType>()` for basis conversion.
@@ -138,7 +138,7 @@ pub trait ConvertBasis: ToPowerBasis {
     ///
     /// # Errors
     /// Returns an error if conversion fails.
-    fn convert<T: FromPowerBasis>(&self) -> Result<T, FerrumError> {
+    fn convert<T: FromPowerBasis>(&self) -> Result<T, FerrayError> {
         let power_coeffs = self.to_power_basis()?;
         T::from_power_basis(&power_coeffs)
     }

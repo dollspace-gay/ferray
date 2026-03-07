@@ -147,7 +147,7 @@ Phase 5: Verification  ▼
 | 1a | ferray-core-types | opus | Architectural foundation — NdArray, ownership, traits, iterators, Display |
 | 1b | ferray-core-indexing | opus | Broadcasting + basic/advanced/extended indexing |
 | 1c | ferray-core-creation-manipulation | sonnet | Array creation, shape manipulation, pad/tile/repeat, constants, finfo |
-| 1d | ferray-core-macros | sonnet | FerrumRecord proc macro, s![] macro, promoted_type! macro |
+| 1d | ferray-core-macros | sonnet | FerrayRecord proc macro, s![] macro, promoted_type! macro |
 | 2 | ferray-ufunc | opus | SIMD dispatch via pulp, 100+ function implementations, cumsum/diff/convolve/interp |
 | 3 | ferray-stats | sonnet | Standard reduction algorithms, cumulative ops, well-defined math |
 | 4 | ferray-io | sonnet | Binary format parsing, straightforward I/O |
@@ -190,12 +190,12 @@ Written by the coordinator at startup:
 
 ## Import Paths
 - Core types: `use ferray_core::{NdArray, Array1, Array2, ArrayD, ArrayView, Dimension}`
-- Errors: `use ferray_core::FerrumError`
+- Errors: `use ferray_core::FerrayError`
 - Element trait: `use ferray_core::Element`
 - Complex: `use num_complex::Complex`
 
 ## Error Handling
-- All public functions return `Result<T, FerrumError>`
+- All public functions return `Result<T, FerrayError>`
 - Use `thiserror` 2.0 for derive
 - Never panic in library code
 - Every error variant carries diagnostic context
@@ -207,14 +207,14 @@ Written by the coordinator at startup:
 
 ## SIMD Strategy
 - Use `pulp` crate for runtime CPU dispatch (SSE2/AVX2/AVX-512/NEON)
-- Scalar fallback controlled by `FERRUM_FORCE_SCALAR=1` env var
+- Scalar fallback controlled by `FERRAY_FORCE_SCALAR=1` env var
 - All contiguous inner loops must have SIMD paths for f32, f64, i32, i64
 
 ## Testing Patterns
 - Oracle fixtures: load JSON from `fixtures/`, compare with ULP tolerance
 - Property tests: `proptest` with `ProptestConfig::with_cases(256)`
 - Fuzz targets: one per public function family
-- SIMD verification: run all tests with FERRUM_FORCE_SCALAR=1
+- SIMD verification: run all tests with FERRAY_FORCE_SCALAR=1
 
 ## Naming Conventions
 - Public array type: `NdArray<T, D>` (never expose ndarray types)
@@ -224,7 +224,7 @@ Written by the coordinator at startup:
 ## SIMD Strategy
 - Use `pulp` crate for runtime CPU dispatch (SSE2/AVX2/AVX-512/NEON)
 - Do NOT use `std::simd` — it is unstable. If you see examples using `std::simd::f64x4`, ignore them and use `pulp` instead.
-- Scalar fallback controlled by `FERRUM_FORCE_SCALAR=1` env var
+- Scalar fallback controlled by `FERRAY_FORCE_SCALAR=1` env var
 - All contiguous inner loops must have SIMD paths for f32, f64, i32, i64
 
 ## Crate Dependencies (use these exact versions)

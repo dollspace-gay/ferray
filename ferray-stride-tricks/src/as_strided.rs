@@ -5,7 +5,7 @@
 // check for callers who need overlapping views (e.g. Toeplitz matrices).
 
 use ferray_core::dimension::{Dimension, IxDyn};
-use ferray_core::error::{FerrumError, FerrumResult};
+use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, ArrayView, Element};
 
 use crate::overlap_check::{all_offsets_in_bounds, has_overlapping_strides};
@@ -28,7 +28,7 @@ use crate::overlap_check::{all_offsets_in_bounds, has_overlapping_strides};
 ///
 /// # Errors
 ///
-/// Returns `FerrumError::InvalidValue` if:
+/// Returns `FerrayError::InvalidValue` if:
 /// - `shape` and `strides` have different lengths.
 /// - Any stride is negative (use `as_strided_unchecked` for advanced patterns).
 /// - Any computed offset falls outside the source buffer.
@@ -50,10 +50,10 @@ pub fn as_strided<'a, T: Element, D: Dimension>(
     array: &'a Array<T, D>,
     shape: &[usize],
     strides: &[usize],
-) -> FerrumResult<ArrayView<'a, T, IxDyn>> {
+) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
     // Validate shape and strides have the same length.
     if shape.len() != strides.len() {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "shape length ({}) must equal strides length ({})",
             shape.len(),
             strides.len(),
@@ -75,7 +75,7 @@ pub fn as_strided<'a, T: Element, D: Dimension>(
     // Bounds check: all offsets must be within the source buffer.
     let buf_len = array.size();
     if !all_offsets_in_bounds(shape, &istrides, buf_len) {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "as_strided: strides {:?} with shape {:?} would access elements \
              outside the source buffer of length {}",
             strides, shape, buf_len,
@@ -84,7 +84,7 @@ pub fn as_strided<'a, T: Element, D: Dimension>(
 
     // Overlap check: no two indices may map to the same element.
     if has_overlapping_strides(shape, &istrides) {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "as_strided: strides {:?} with shape {:?} produce overlapping \
              memory accesses; use as_strided_unchecked for overlapping views",
             strides, shape,
@@ -148,17 +148,17 @@ pub fn as_strided<'a, T: Element, D: Dimension>(
 ///
 /// # Errors
 ///
-/// Returns `FerrumError::InvalidValue` if:
+/// Returns `FerrayError::InvalidValue` if:
 /// - `shape` and `strides` have different lengths.
 /// - Any computed offset falls outside the source buffer.
 pub unsafe fn as_strided_unchecked<'a, T: Element, D: Dimension>(
     array: &'a Array<T, D>,
     shape: &[usize],
     strides: &[usize],
-) -> FerrumResult<ArrayView<'a, T, IxDyn>> {
+) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
     // Validate shape and strides have the same length.
     if shape.len() != strides.len() {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "shape length ({}) must equal strides length ({})",
             shape.len(),
             strides.len(),
@@ -178,7 +178,7 @@ pub unsafe fn as_strided_unchecked<'a, T: Element, D: Dimension>(
     // Bounds check: all offsets must be within the source buffer.
     let buf_len = array.size();
     if !all_offsets_in_bounds(shape, &istrides, buf_len) {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "as_strided_unchecked: strides {:?} with shape {:?} would access \
              elements outside the source buffer of length {}",
             strides, shape, buf_len,

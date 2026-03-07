@@ -6,7 +6,7 @@
 //! for any finite input. We verify no panics and check the round-trip
 //! for non-NaN finite inputs.
 //!
-//! Contract: ferray either returns Ok or Err(FerrumError) — never panics.
+//! Contract: ferray either returns Ok or Err(FerrayError) — never panics.
 
 use libfuzzer_sys::fuzz_target;
 use num_complex::Complex;

@@ -3,7 +3,7 @@
 //! Fuzz target for core reshape/manipulation: reshape, flatten, ravel,
 //! transpose, squeeze, expand_dims.
 //!
-//! Contract: ferray either returns Ok or Err(FerrumError) — never panics.
+//! Contract: ferray either returns Ok or Err(FerrayError) — never panics.
 
 use libfuzzer_sys::fuzz_target;
 

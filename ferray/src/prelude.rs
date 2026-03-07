@@ -22,7 +22,7 @@ pub use ferray_core::dimension::{Axis, Dimension, Ix0, Ix1, Ix2, Ix3, Ix4, Ix5, 
 pub use ferray_core::{DType, Element, SliceInfoElem};
 
 // Error handling
-pub use ferray_core::{FerrumError, FerrumResult};
+pub use ferray_core::{FerrayError, FerrayResult};
 
 // Macros
 pub use ferray_core::{promoted_type, s};

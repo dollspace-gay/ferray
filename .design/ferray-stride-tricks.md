@@ -4,7 +4,7 @@
 Implements `numpy.lib.stride_tricks`: low-level view construction via custom strides for operations like windowed convolution, Toeplitz matrices, and overlapping tiles. Provides both safe (non-overlapping) and unsafe (overlapping) variants, plus safe convenience functions (`sliding_window_view`, `broadcast_to`, `broadcast_arrays`, `broadcast_shapes`).
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, ArrayView, Dimension, FerrumError)
+- **Upstream**: `ferray-core` (NdArray, ArrayView, Dimension, FerrayError)
 - **Downstream**: ferray (re-export)
 - **Phase**: 3 — Completeness
 
@@ -17,7 +17,7 @@ Implements `numpy.lib.stride_tricks`: low-level view construction via custom str
 - REQ-4: `ferray::broadcast_shapes(&[shape1, shape2, ...])` — compute the broadcast result shape without allocating arrays
 
 ### Unsafe Stride Tricks
-- REQ-5: `stride_tricks::as_strided(&a, shape, strides)` — SAFE variant that validates non-overlapping strides at runtime, returning `Result<ArrayView, FerrumError>`
+- REQ-5: `stride_tricks::as_strided(&a, shape, strides)` — SAFE variant that validates non-overlapping strides at runtime, returning `Result<ArrayView, FerrayError>`
 - REQ-6: `unsafe stride_tricks::as_strided_unchecked(&a, shape, strides)` — UNSAFE variant for overlapping strides. The safety contract: caller must ensure no concurrent mutation through any alias of the overlapping memory region. This is documented at the call site.
 
 ### Safety Documentation

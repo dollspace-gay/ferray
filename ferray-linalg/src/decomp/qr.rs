@@ -4,7 +4,7 @@
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::Ix2;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 
 use crate::faer_bridge;
 
@@ -22,8 +22,8 @@ pub enum QrMode {
 /// Returns `(Q, R)` where `A = Q * R`.
 ///
 /// # Errors
-/// - `FerrumError::ShapeMismatch` if the input is not 2D.
-pub fn qr(a: &Array<f64, Ix2>, mode: QrMode) -> FerrumResult<(Array<f64, Ix2>, Array<f64, Ix2>)> {
+/// - `FerrayError::ShapeMismatch` if the input is not 2D.
+pub fn qr(a: &Array<f64, Ix2>, mode: QrMode) -> FerrayResult<(Array<f64, Ix2>, Array<f64, Ix2>)> {
     let mat = faer_bridge::array2_to_faer(a);
     let decomp = mat.as_ref().qr();
 

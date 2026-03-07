@@ -4,7 +4,7 @@
 Implements all NumPy statistical functions as array methods and top-level free functions: reductions (sum, prod, min, max, mean, var, std, median, percentile, quantile), cumulative operations, NaN-aware variants, correlations, covariance, histograms, sorting, searching, unique, and set operations. These are the bread-and-butter data analysis functions that most users reach for after array creation.
 
 ## Dependencies
-- **Upstream**: `ferray-core` (NdArray, Dimension, Element, FerrumError), `ferray-ufunc` (comparison ufuncs for sorting/searching)
+- **Upstream**: `ferray-core` (NdArray, Dimension, Element, FerrayError), `ferray-ufunc` (comparison ufuncs for sorting/searching)
 - **Downstream**: ferray-linalg (uses reductions), ferray-random (may use stats for validation), ferray (re-export)
 - **External crates**: `rayon` (parallel reductions), `num-traits`
 - **Phase**: 1 — Core Array and Ufuncs

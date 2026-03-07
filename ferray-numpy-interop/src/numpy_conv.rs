@@ -1,11 +1,11 @@
 //! PyO3 NumPy <-> ferray array conversions (feature-gated behind `"python"`).
 //!
-//! Provides [`AsFerrum`] and [`IntoNumPy`] traits for zero-copy conversion
+//! Provides [`AsFerray`] and [`IntoNumPy`] traits for zero-copy conversion
 //! between PyO3 NumPy arrays and ferray arrays.
 //!
 //! # Zero-copy semantics
 //!
-//! - **NumPy -> ferray**: [`AsFerrum::as_ferray`] borrows from the NumPy array
+//! - **NumPy -> ferray**: [`AsFerray::as_ferray`] borrows from the NumPy array
 //!   (returning an [`ArrayView`]) when the array is C-contiguous. If the array
 //!   is not C-contiguous, a copy is made and an owned [`Array`] is returned
 //!   inside a view.
@@ -22,7 +22,7 @@ use pyo3::prelude::*;
 
 use ferray_core::array::aliases::{Array1, Array2, ArrayD};
 use ferray_core::dimension::{Ix1, Ix2, IxDyn};
-use ferray_core::{Array, Element, FerrumError};
+use ferray_core::{Array, Element, FerrayError};
 
 // ---------------------------------------------------------------------------
 // Marker: ferray Element that is also a NumPy element
@@ -52,20 +52,20 @@ impl_np_element!(f32, f64, i8, i16, i32, i64, u8, u16, u32, u64);
 
 /// Extension trait for zero-copy conversion from a NumPy readonly array
 /// to a ferray array view.
-pub trait AsFerrum<T: Element, D: ferray_core::Dimension> {
+pub trait AsFerray<T: Element, D: ferray_core::Dimension> {
     /// Zero-copy borrow as a ferray [`ArrayView`] if C-contiguous,
     /// otherwise copy into an owned ferray [`Array`].
     ///
     /// # Errors
     ///
-    /// Returns [`FerrumError::InvalidDtype`] if the NumPy dtype does not
-    /// match `T`, or [`FerrumError::ShapeMismatch`] if the dimensions do
+    /// Returns [`FerrayError::InvalidDtype`] if the NumPy dtype does not
+    /// match `T`, or [`FerrayError::ShapeMismatch`] if the dimensions do
     /// not match `D`.
-    fn as_ferray(&self) -> Result<Array<T, D>, FerrumError>;
+    fn as_ferray(&self) -> Result<Array<T, D>, FerrayError>;
 }
 
-impl<T: NpElement> AsFerrum<T, Ix1> for PyReadonlyArray1<'_, T> {
-    fn as_ferray(&self) -> Result<Array1<T>, FerrumError> {
+impl<T: NpElement> AsFerray<T, Ix1> for PyReadonlyArray1<'_, T> {
+    fn as_ferray(&self) -> Result<Array1<T>, FerrayError> {
         let py_arr = self.as_array();
         let shape = py_arr.shape();
         let dim = Ix1::new([shape[0]]);
@@ -74,8 +74,8 @@ impl<T: NpElement> AsFerrum<T, Ix1> for PyReadonlyArray1<'_, T> {
     }
 }
 
-impl<T: NpElement> AsFerrum<T, Ix2> for PyReadonlyArray2<'_, T> {
-    fn as_ferray(&self) -> Result<Array2<T>, FerrumError> {
+impl<T: NpElement> AsFerray<T, Ix2> for PyReadonlyArray2<'_, T> {
+    fn as_ferray(&self) -> Result<Array2<T>, FerrayError> {
         let py_arr = self.as_array();
         let shape = py_arr.shape();
         let dim = Ix2::new([shape[0], shape[1]]);
@@ -84,8 +84,8 @@ impl<T: NpElement> AsFerrum<T, Ix2> for PyReadonlyArray2<'_, T> {
     }
 }
 
-impl<T: NpElement> AsFerrum<T, IxDyn> for PyReadonlyArrayDyn<'_, T> {
-    fn as_ferray(&self) -> Result<ArrayD<T>, FerrumError> {
+impl<T: NpElement> AsFerray<T, IxDyn> for PyReadonlyArrayDyn<'_, T> {
+    fn as_ferray(&self) -> Result<ArrayD<T>, FerrayError> {
         let py_arr = self.as_array();
         let shape = py_arr.shape();
         let dim = IxDyn::new(shape);
@@ -110,18 +110,18 @@ pub trait IntoNumPy<T: Element, D: ferray_core::Dimension> {
     ///
     /// # Errors
     ///
-    /// Returns [`FerrumError::InvalidDtype`] if the element type has no
+    /// Returns [`FerrayError::InvalidDtype`] if the element type has no
     /// NumPy equivalent.
     fn into_pyarray<'py>(
         self,
         py: Python<'py>,
-    ) -> Result<Bound<'py, Self::PyArrayType>, FerrumError>;
+    ) -> Result<Bound<'py, Self::PyArrayType>, FerrayError>;
 }
 
 impl<T: NpElement> IntoNumPy<T, Ix1> for Array1<T> {
     type PyArrayType = PyArray1<T>;
 
-    fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArray1<T>>, FerrumError> {
+    fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArray1<T>>, FerrayError> {
         let data = self.to_vec_flat();
         Ok(PyArray1::from_vec(py, data))
     }
@@ -130,13 +130,13 @@ impl<T: NpElement> IntoNumPy<T, Ix1> for Array1<T> {
 impl<T: NpElement> IntoNumPy<T, Ix2> for Array2<T> {
     type PyArrayType = PyArray2<T>;
 
-    fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArray2<T>>, FerrumError> {
+    fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArray2<T>>, FerrayError> {
         let shape = [self.shape()[0], self.shape()[1]];
         let data = self.to_vec_flat();
         let arr = PyArray1::from_vec(py, data);
         let reshaped = arr
             .reshape(shape)
-            .map_err(|e| FerrumError::shape_mismatch(format!("failed to reshape PyArray: {e}")))?;
+            .map_err(|e| FerrayError::shape_mismatch(format!("failed to reshape PyArray: {e}")))?;
         Ok(reshaped)
     }
 }
@@ -144,13 +144,13 @@ impl<T: NpElement> IntoNumPy<T, Ix2> for Array2<T> {
 impl<T: NpElement> IntoNumPy<T, IxDyn> for ArrayD<T> {
     type PyArrayType = PyArrayDyn<T>;
 
-    fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArrayDyn<T>>, FerrumError> {
+    fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArrayDyn<T>>, FerrayError> {
         let shape: Vec<usize> = self.shape().to_vec();
         let data = self.to_vec_flat();
         let flat = PyArray1::from_vec(py, data);
         let reshaped = flat
             .reshape(&shape[..])
-            .map_err(|e| FerrumError::shape_mismatch(format!("failed to reshape PyArray: {e}")))?;
+            .map_err(|e| FerrayError::shape_mismatch(format!("failed to reshape PyArray: {e}")))?;
         Ok(reshaped)
     }
 }

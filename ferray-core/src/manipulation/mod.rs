@@ -8,7 +8,7 @@ pub mod extended;
 use crate::array::owned::Array;
 use crate::dimension::{Dimension, Ix1, IxDyn};
 use crate::dtype::Element;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 // ============================================================================
 // REQ-20: Shape methods
@@ -21,16 +21,16 @@ use crate::error::{FerrumError, FerrumResult};
 /// Analogous to `numpy.reshape()`.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if the new shape has a different
+/// Returns `FerrayError::ShapeMismatch` if the new shape has a different
 /// total number of elements.
 pub fn reshape<T: Element, D: Dimension>(
     a: &Array<T, D>,
     new_shape: &[usize],
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let old_size = a.size();
     let new_size: usize = new_shape.iter().product();
     if old_size != new_size {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "cannot reshape array of size {} into shape {:?} (size {})",
             old_size, new_shape, new_size,
         )));
@@ -42,7 +42,7 @@ pub fn reshape<T: Element, D: Dimension>(
 /// Return a flattened (1-D) copy of the array.
 ///
 /// Analogous to `numpy.ravel()`.
-pub fn ravel<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrumResult<Array<T, Ix1>> {
+pub fn ravel<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrayResult<Array<T, Ix1>> {
     let data: Vec<T> = a.iter().cloned().collect();
     let n = data.len();
     Array::from_vec(Ix1::new([n]), data)
@@ -51,7 +51,7 @@ pub fn ravel<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrumResult<Array<T,
 /// Return a flattened (1-D) copy of the array.
 ///
 /// Identical to `ravel()` — analogous to `ndarray.flatten()`.
-pub fn flatten<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrumResult<Array<T, Ix1>> {
+pub fn flatten<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrayResult<Array<T, Ix1>> {
     ravel(a)
 }
 
@@ -63,20 +63,20 @@ pub fn flatten<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrumResult<Array<
 /// Analogous to `numpy.squeeze()`.
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if the axis is invalid, or
-/// `FerrumError::InvalidValue` if the specified axis has size != 1.
+/// Returns `FerrayError::AxisOutOfBounds` if the axis is invalid, or
+/// `FerrayError::InvalidValue` if the specified axis has size != 1.
 pub fn squeeze<T: Element, D: Dimension>(
     a: &Array<T, D>,
     axis: Option<usize>,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     match axis {
         Some(ax) => {
             if ax >= shape.len() {
-                return Err(FerrumError::axis_out_of_bounds(ax, shape.len()));
+                return Err(FerrayError::axis_out_of_bounds(ax, shape.len()));
             }
             if shape[ax] != 1 {
-                return Err(FerrumError::invalid_value(format!(
+                return Err(FerrayError::invalid_value(format!(
                     "cannot select axis {} with size {} for squeeze (must be 1)",
                     ax, shape[ax],
                 )));
@@ -112,14 +112,14 @@ pub fn squeeze<T: Element, D: Dimension>(
 /// Analogous to `numpy.expand_dims()`.
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if `axis > ndim`.
+/// Returns `FerrayError::AxisOutOfBounds` if `axis > ndim`.
 pub fn expand_dims<T: Element, D: Dimension>(
     a: &Array<T, D>,
     axis: usize,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let ndim = a.ndim();
     if axis > ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis, ndim + 1));
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim + 1));
     }
     let mut new_shape: Vec<usize> = a.shape().to_vec();
     new_shape.insert(axis, 1);
@@ -134,17 +134,17 @@ pub fn expand_dims<T: Element, D: Dimension>(
 /// Analogous to `numpy.broadcast_to()`.
 ///
 /// # Errors
-/// Returns `FerrumError::BroadcastFailure` if the shapes are incompatible.
+/// Returns `FerrayError::BroadcastFailure` if the shapes are incompatible.
 pub fn broadcast_to<T: Element, D: Dimension>(
     a: &Array<T, D>,
     new_shape: &[usize],
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let src_shape = a.shape();
     let src_ndim = src_shape.len();
     let dst_ndim = new_shape.len();
 
     if dst_ndim < src_ndim {
-        return Err(FerrumError::BroadcastFailure {
+        return Err(FerrayError::BroadcastFailure {
             shape_a: src_shape.to_vec(),
             shape_b: new_shape.to_vec(),
         });
@@ -156,7 +156,7 @@ pub fn broadcast_to<T: Element, D: Dimension>(
         let s = src_shape[i];
         let d = new_shape[pad + i];
         if s != d && s != 1 {
-            return Err(FerrumError::BroadcastFailure {
+            return Err(FerrayError::BroadcastFailure {
                 shape_a: src_shape.to_vec(),
                 shape_b: new_shape.to_vec(),
             });
@@ -208,21 +208,21 @@ pub fn broadcast_to<T: Element, D: Dimension>(
 /// Analogous to `numpy.concatenate()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if the array list is empty.
-/// Returns `FerrumError::ShapeMismatch` if shapes differ on non-concatenation axes.
-/// Returns `FerrumError::AxisOutOfBounds` if axis is out of bounds.
+/// Returns `FerrayError::InvalidValue` if the array list is empty.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ on non-concatenation axes.
+/// Returns `FerrayError::AxisOutOfBounds` if axis is out of bounds.
 pub fn concatenate<T: Element>(
     arrays: &[Array<T, IxDyn>],
     axis: usize,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     if arrays.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "concatenate: need at least one array",
         ));
     }
     let ndim = arrays[0].ndim();
     if axis >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis, ndim));
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
     }
     let base_shape = arrays[0].shape();
 
@@ -230,7 +230,7 @@ pub fn concatenate<T: Element>(
     let mut total_along_axis = 0usize;
     for arr in arrays {
         if arr.ndim() != ndim {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "all arrays must have same ndim; got {} and {}",
                 ndim,
                 arr.ndim(),
@@ -238,7 +238,7 @@ pub fn concatenate<T: Element>(
         }
         for (i, (&s, &base)) in arr.shape().iter().zip(base_shape.iter()).enumerate() {
             if i != axis && s != base {
-                return Err(FerrumError::shape_mismatch(format!(
+                return Err(FerrayError::shape_mismatch(format!(
                     "shape mismatch on axis {}: {} vs {}",
                     i, s, base,
                 )));
@@ -313,23 +313,23 @@ pub fn concatenate<T: Element>(
 /// Analogous to `numpy.stack()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if the array list is empty.
-/// Returns `FerrumError::ShapeMismatch` if shapes differ.
-/// Returns `FerrumError::AxisOutOfBounds` if axis > ndim.
-pub fn stack<T: Element>(arrays: &[Array<T, IxDyn>], axis: usize) -> FerrumResult<Array<T, IxDyn>> {
+/// Returns `FerrayError::InvalidValue` if the array list is empty.
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
+/// Returns `FerrayError::AxisOutOfBounds` if axis > ndim.
+pub fn stack<T: Element>(arrays: &[Array<T, IxDyn>], axis: usize) -> FerrayResult<Array<T, IxDyn>> {
     if arrays.is_empty() {
-        return Err(FerrumError::invalid_value("stack: need at least one array"));
+        return Err(FerrayError::invalid_value("stack: need at least one array"));
     }
     let base_shape = arrays[0].shape();
     let ndim = base_shape.len();
 
     if axis > ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis, ndim + 1));
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim + 1));
     }
 
     for arr in &arrays[1..] {
         if arr.shape() != base_shape {
-            return Err(FerrumError::shape_mismatch(format!(
+            return Err(FerrayError::shape_mismatch(format!(
                 "all input arrays must have the same shape; got {:?} and {:?}",
                 base_shape,
                 arr.shape(),
@@ -349,9 +349,9 @@ pub fn stack<T: Element>(arrays: &[Array<T, IxDyn>], axis: usize) -> FerrumResul
 /// for 2-D+ arrays, or equivalent to stacking 1-D arrays as rows.
 ///
 /// Analogous to `numpy.vstack()`.
-pub fn vstack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrumResult<Array<T, IxDyn>> {
+pub fn vstack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrayResult<Array<T, IxDyn>> {
     if arrays.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "vstack: need at least one array",
         ));
     }
@@ -373,9 +373,9 @@ pub fn vstack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrumResult<Array<T, I
 /// axis 1 for 2-D+ arrays, or along axis 0 for 1-D arrays.
 ///
 /// Analogous to `numpy.hstack()`.
-pub fn hstack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrumResult<Array<T, IxDyn>> {
+pub fn hstack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrayResult<Array<T, IxDyn>> {
     if arrays.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "hstack: need at least one array",
         ));
     }
@@ -394,9 +394,9 @@ pub fn hstack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrumResult<Array<T, I
 /// Then concatenates along axis 2.
 ///
 /// Analogous to `numpy.dstack()`.
-pub fn dstack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrumResult<Array<T, IxDyn>> {
+pub fn dstack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrayResult<Array<T, IxDyn>> {
     if arrays.is_empty() {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "dstack: need at least one array",
         ));
     }
@@ -431,14 +431,14 @@ pub fn dstack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrumResult<Array<T, I
 ///
 /// # Errors
 /// Returns errors on shape mismatches.
-pub fn block<T: Element>(blocks: &[Vec<Array<T, IxDyn>>]) -> FerrumResult<Array<T, IxDyn>> {
+pub fn block<T: Element>(blocks: &[Vec<Array<T, IxDyn>>]) -> FerrayResult<Array<T, IxDyn>> {
     if blocks.is_empty() {
-        return Err(FerrumError::invalid_value("block: empty input"));
+        return Err(FerrayError::invalid_value("block: empty input"));
     }
     let mut rows = Vec::with_capacity(blocks.len());
     for row in blocks {
         if row.is_empty() {
-            return Err(FerrumError::invalid_value("block: empty row"));
+            return Err(FerrayError::invalid_value("block: empty row"));
         }
         // Concatenate along axis 1 (columns within each row)
         let row_arr = if row.len() == 1 {
@@ -463,22 +463,22 @@ pub fn block<T: Element>(blocks: &[Vec<Array<T, IxDyn>>]) -> FerrumResult<Array<
 /// Analogous to `numpy.split()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if the axis cannot be evenly split.
+/// Returns `FerrayError::InvalidValue` if the axis cannot be evenly split.
 pub fn split<T: Element>(
     a: &Array<T, IxDyn>,
     n_sections: usize,
     axis: usize,
-) -> FerrumResult<Vec<Array<T, IxDyn>>> {
+) -> FerrayResult<Vec<Array<T, IxDyn>>> {
     let shape = a.shape();
     if axis >= shape.len() {
-        return Err(FerrumError::axis_out_of_bounds(axis, shape.len()));
+        return Err(FerrayError::axis_out_of_bounds(axis, shape.len()));
     }
     let axis_len = shape[axis];
     if n_sections == 0 {
-        return Err(FerrumError::invalid_value("split: n_sections must be > 0"));
+        return Err(FerrayError::invalid_value("split: n_sections must be > 0"));
     }
     if axis_len % n_sections != 0 {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "array of size {} along axis {} cannot be evenly split into {} sections",
             axis_len, axis, n_sections,
         )));
@@ -495,16 +495,16 @@ pub fn split<T: Element>(
 /// Analogous to `numpy.array_split()` (with explicit split points).
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if axis is invalid.
+/// Returns `FerrayError::AxisOutOfBounds` if axis is invalid.
 pub fn array_split<T: Element>(
     a: &Array<T, IxDyn>,
     indices: &[usize],
     axis: usize,
-) -> FerrumResult<Vec<Array<T, IxDyn>>> {
+) -> FerrayResult<Vec<Array<T, IxDyn>>> {
     let shape = a.shape();
     let ndim = shape.len();
     if axis >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis, ndim));
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
     }
     let axis_len = shape[axis];
     let src_data: Vec<T> = a.iter().cloned().collect();
@@ -564,7 +564,7 @@ pub fn array_split<T: Element>(
 pub fn vsplit<T: Element>(
     a: &Array<T, IxDyn>,
     n_sections: usize,
-) -> FerrumResult<Vec<Array<T, IxDyn>>> {
+) -> FerrayResult<Vec<Array<T, IxDyn>>> {
     split(a, n_sections, 0)
 }
 
@@ -574,7 +574,7 @@ pub fn vsplit<T: Element>(
 pub fn hsplit<T: Element>(
     a: &Array<T, IxDyn>,
     n_sections: usize,
-) -> FerrumResult<Vec<Array<T, IxDyn>>> {
+) -> FerrayResult<Vec<Array<T, IxDyn>>> {
     split(a, n_sections, 1)
 }
 
@@ -584,7 +584,7 @@ pub fn hsplit<T: Element>(
 pub fn dsplit<T: Element>(
     a: &Array<T, IxDyn>,
     n_sections: usize,
-) -> FerrumResult<Vec<Array<T, IxDyn>>> {
+) -> FerrayResult<Vec<Array<T, IxDyn>>> {
     split(a, n_sections, 2)
 }
 
@@ -600,18 +600,18 @@ pub fn dsplit<T: Element>(
 /// Analogous to `numpy.transpose()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `axes` is the wrong length or
+/// Returns `FerrayError::InvalidValue` if `axes` is the wrong length or
 /// contains invalid/duplicate axis indices.
 pub fn transpose<T: Element, D: Dimension>(
     a: &Array<T, D>,
     axes: Option<&[usize]>,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     let ndim = shape.len();
     let perm: Vec<usize> = match axes {
         Some(ax) => {
             if ax.len() != ndim {
-                return Err(FerrumError::invalid_value(format!(
+                return Err(FerrayError::invalid_value(format!(
                     "axes must have length {} but got {}",
                     ndim,
                     ax.len(),
@@ -621,10 +621,10 @@ pub fn transpose<T: Element, D: Dimension>(
             let mut seen = vec![false; ndim];
             for &a in ax {
                 if a >= ndim {
-                    return Err(FerrumError::axis_out_of_bounds(a, ndim));
+                    return Err(FerrayError::axis_out_of_bounds(a, ndim));
                 }
                 if seen[a] {
-                    return Err(FerrumError::invalid_value(format!(
+                    return Err(FerrayError::invalid_value(format!(
                         "duplicate axis {} in transpose",
                         a,
                     )));
@@ -675,18 +675,18 @@ pub fn transpose<T: Element, D: Dimension>(
 /// Analogous to `numpy.swapaxes()`.
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if either axis is out of bounds.
+/// Returns `FerrayError::AxisOutOfBounds` if either axis is out of bounds.
 pub fn swapaxes<T: Element, D: Dimension>(
     a: &Array<T, D>,
     axis1: usize,
     axis2: usize,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let ndim = a.ndim();
     if axis1 >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis1, ndim));
+        return Err(FerrayError::axis_out_of_bounds(axis1, ndim));
     }
     if axis2 >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis2, ndim));
+        return Err(FerrayError::axis_out_of_bounds(axis2, ndim));
     }
     let mut perm: Vec<usize> = (0..ndim).collect();
     perm.swap(axis1, axis2);
@@ -698,18 +698,18 @@ pub fn swapaxes<T: Element, D: Dimension>(
 /// Analogous to `numpy.moveaxis()`.
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if either axis is out of bounds.
+/// Returns `FerrayError::AxisOutOfBounds` if either axis is out of bounds.
 pub fn moveaxis<T: Element, D: Dimension>(
     a: &Array<T, D>,
     source: usize,
     destination: usize,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let ndim = a.ndim();
     if source >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(source, ndim));
+        return Err(FerrayError::axis_out_of_bounds(source, ndim));
     }
     if destination >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(destination, ndim));
+        return Err(FerrayError::axis_out_of_bounds(destination, ndim));
     }
     // Build permutation by removing source and inserting at destination
     let mut order: Vec<usize> = (0..ndim).filter(|&x| x != source).collect();
@@ -722,18 +722,18 @@ pub fn moveaxis<T: Element, D: Dimension>(
 /// Analogous to `numpy.rollaxis()`.
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if `axis >= ndim` or `start > ndim`.
+/// Returns `FerrayError::AxisOutOfBounds` if `axis >= ndim` or `start > ndim`.
 pub fn rollaxis<T: Element, D: Dimension>(
     a: &Array<T, D>,
     axis: usize,
     start: usize,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let ndim = a.ndim();
     if axis >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis, ndim));
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
     }
     if start > ndim {
-        return Err(FerrumError::axis_out_of_bounds(start, ndim + 1));
+        return Err(FerrayError::axis_out_of_bounds(start, ndim + 1));
     }
     let dst = if start > axis { start - 1 } else { start };
     if axis == dst {
@@ -749,15 +749,15 @@ pub fn rollaxis<T: Element, D: Dimension>(
 /// Analogous to `numpy.flip()`.
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if axis is out of bounds.
+/// Returns `FerrayError::AxisOutOfBounds` if axis is out of bounds.
 pub fn flip<T: Element, D: Dimension>(
     a: &Array<T, D>,
     axis: usize,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     let ndim = shape.len();
     if axis >= ndim {
-        return Err(FerrumError::axis_out_of_bounds(axis, ndim));
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
     }
     let src_data: Vec<T> = a.iter().cloned().collect();
     let total = src_data.len();
@@ -788,10 +788,10 @@ pub fn flip<T: Element, D: Dimension>(
 /// Analogous to `numpy.fliplr()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if the array has fewer than 2 dimensions.
-pub fn fliplr<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrumResult<Array<T, IxDyn>> {
+/// Returns `FerrayError::InvalidValue` if the array has fewer than 2 dimensions.
+pub fn fliplr<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrayResult<Array<T, IxDyn>> {
     if a.ndim() < 2 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "fliplr: array must be at least 2-D",
         ));
     }
@@ -803,10 +803,10 @@ pub fn fliplr<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrumResult<Array<T
 /// Analogous to `numpy.flipud()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if the array has 0 dimensions.
-pub fn flipud<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrumResult<Array<T, IxDyn>> {
+/// Returns `FerrayError::InvalidValue` if the array has 0 dimensions.
+pub fn flipud<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrayResult<Array<T, IxDyn>> {
     if a.ndim() < 1 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "flipud: array must be at least 1-D",
         ));
     }
@@ -820,10 +820,10 @@ pub fn flipud<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrumResult<Array<T
 /// Analogous to `numpy.rot90()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if the array has fewer than 2 dimensions.
-pub fn rot90<T: Element, D: Dimension>(a: &Array<T, D>, k: i32) -> FerrumResult<Array<T, IxDyn>> {
+/// Returns `FerrayError::InvalidValue` if the array has fewer than 2 dimensions.
+pub fn rot90<T: Element, D: Dimension>(a: &Array<T, D>, k: i32) -> FerrayResult<Array<T, IxDyn>> {
     if a.ndim() < 2 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "rot90: array must be at least 2-D",
         ));
     }
@@ -864,12 +864,12 @@ pub fn rot90<T: Element, D: Dimension>(a: &Array<T, D>, k: i32) -> FerrumResult<
 /// Analogous to `numpy.roll()`.
 ///
 /// # Errors
-/// Returns `FerrumError::AxisOutOfBounds` if axis is out of bounds.
+/// Returns `FerrayError::AxisOutOfBounds` if axis is out of bounds.
 pub fn roll<T: Element, D: Dimension>(
     a: &Array<T, D>,
     shift: isize,
     axis: Option<usize>,
-) -> FerrumResult<Array<T, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     match axis {
         None => {
             // Flatten, roll, reshape back
@@ -889,7 +889,7 @@ pub fn roll<T: Element, D: Dimension>(
             let shape = a.shape();
             let ndim = shape.len();
             if ax >= ndim {
-                return Err(FerrumError::axis_out_of_bounds(ax, ndim));
+                return Err(FerrayError::axis_out_of_bounds(ax, ndim));
             }
             let axis_len = shape[ax];
             if axis_len == 0 {

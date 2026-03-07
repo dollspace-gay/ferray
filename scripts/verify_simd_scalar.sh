@@ -19,8 +19,8 @@ echo ""
 # ---------------------------------------------------------------------------
 # Phase 2: Run full test suite with scalar fallback
 # ---------------------------------------------------------------------------
-echo "--- Running tests with FERRUM_FORCE_SCALAR=1 ---"
-if FERRUM_FORCE_SCALAR=1 cargo test --workspace 2>&1 | tee /tmp/ferray_scalar.txt; then
+echo "--- Running tests with FERRAY_FORCE_SCALAR=1 ---"
+if FERRAY_FORCE_SCALAR=1 cargo test --workspace 2>&1 | tee /tmp/ferray_scalar.txt; then
     SCALAR_RESULT=0
 else
     SCALAR_RESULT=$?

@@ -7,7 +7,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrumResult;
+use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::cr_math::CrMath;
@@ -18,7 +18,7 @@ use crate::helpers::{binary_float_op, unary_float_op};
 // ---------------------------------------------------------------------------
 
 /// Elementwise sine.
-pub fn sin<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn sin<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -27,7 +27,7 @@ where
 }
 
 /// Elementwise cosine.
-pub fn cos<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn cos<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -36,7 +36,7 @@ where
 }
 
 /// Elementwise tangent.
-pub fn tan<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn tan<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -45,7 +45,7 @@ where
 }
 
 /// Elementwise arc sine.
-pub fn arcsin<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn arcsin<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -54,7 +54,7 @@ where
 }
 
 /// Elementwise arc cosine.
-pub fn arccos<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn arccos<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -63,7 +63,7 @@ where
 }
 
 /// Elementwise arc tangent.
-pub fn arctan<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn arctan<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -72,7 +72,7 @@ where
 }
 
 /// Elementwise two-argument arc tangent (atan2).
-pub fn arctan2<T, D>(y: &Array<T, D>, x: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn arctan2<T, D>(y: &Array<T, D>, x: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -81,7 +81,7 @@ where
 }
 
 /// Elementwise hypotenuse: sqrt(a^2 + b^2).
-pub fn hypot<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn hypot<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -94,7 +94,7 @@ where
 // ---------------------------------------------------------------------------
 
 /// Elementwise hyperbolic sine.
-pub fn sinh<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn sinh<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -103,7 +103,7 @@ where
 }
 
 /// Elementwise hyperbolic cosine.
-pub fn cosh<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn cosh<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -112,7 +112,7 @@ where
 }
 
 /// Elementwise hyperbolic tangent.
-pub fn tanh<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn tanh<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -121,7 +121,7 @@ where
 }
 
 /// Elementwise inverse hyperbolic sine.
-pub fn arcsinh<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn arcsinh<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -130,7 +130,7 @@ where
 }
 
 /// Elementwise inverse hyperbolic cosine.
-pub fn arccosh<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn arccosh<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -139,7 +139,7 @@ where
 }
 
 /// Elementwise inverse hyperbolic tangent.
-pub fn arctanh<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn arctanh<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float + CrMath,
     D: Dimension,
@@ -152,7 +152,7 @@ where
 // ---------------------------------------------------------------------------
 
 /// Convert radians to degrees.
-pub fn degrees<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn degrees<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -161,7 +161,7 @@ where
 }
 
 /// Convert degrees to radians.
-pub fn radians<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn radians<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -170,7 +170,7 @@ where
 }
 
 /// Alias for [`radians`].
-pub fn deg2rad<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn deg2rad<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -179,7 +179,7 @@ where
 }
 
 /// Alias for [`degrees`].
-pub fn rad2deg<T, D>(input: &Array<T, D>) -> FerrumResult<Array<T, D>>
+pub fn rad2deg<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -190,7 +190,7 @@ where
 /// Unwrap by changing deltas between values to their 2*pi complement.
 ///
 /// Works on 1-D arrays. `discont` defaults to pi if `None`.
-pub fn unwrap<T, D>(input: &Array<T, D>, discont: Option<T>) -> FerrumResult<Array<T, D>>
+pub fn unwrap<T, D>(input: &Array<T, D>, discont: Option<T>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
@@ -232,7 +232,7 @@ where
 
 /// Elementwise sine for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn sin_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn sin_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -241,7 +241,7 @@ where
 
 /// Elementwise cosine for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn cos_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn cos_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -250,7 +250,7 @@ where
 
 /// Elementwise tangent for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn tan_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn tan_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -259,7 +259,7 @@ where
 
 /// Elementwise arc sine for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn arcsin_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn arcsin_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -268,7 +268,7 @@ where
 
 /// Elementwise arc cosine for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn arccos_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn arccos_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -277,7 +277,7 @@ where
 
 /// Elementwise arc tangent for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn arctan_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn arctan_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -289,7 +289,7 @@ where
 pub fn arctan2_f16<D>(
     y: &Array<half::f16, D>,
     x: &Array<half::f16, D>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -301,7 +301,7 @@ where
 pub fn hypot_f16<D>(
     a: &Array<half::f16, D>,
     b: &Array<half::f16, D>,
-) -> FerrumResult<Array<half::f16, D>>
+) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -310,7 +310,7 @@ where
 
 /// Elementwise hyperbolic sine for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn sinh_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn sinh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -319,7 +319,7 @@ where
 
 /// Elementwise hyperbolic cosine for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn cosh_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn cosh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -328,7 +328,7 @@ where
 
 /// Elementwise hyperbolic tangent for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn tanh_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn tanh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -337,7 +337,7 @@ where
 
 /// Elementwise inverse hyperbolic sine for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn arcsinh_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn arcsinh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -346,7 +346,7 @@ where
 
 /// Elementwise inverse hyperbolic cosine for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn arccosh_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn arccosh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -355,7 +355,7 @@ where
 
 /// Elementwise inverse hyperbolic tangent for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn arctanh_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn arctanh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -364,7 +364,7 @@ where
 
 /// Convert radians to degrees for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn degrees_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn degrees_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {
@@ -373,7 +373,7 @@ where
 
 /// Convert degrees to radians for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
-pub fn radians_f16<D>(input: &Array<half::f16, D>) -> FerrumResult<Array<half::f16, D>>
+pub fn radians_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
 where
     D: Dimension,
 {

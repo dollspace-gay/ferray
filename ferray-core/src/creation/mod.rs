@@ -8,7 +8,7 @@ use std::mem::MaybeUninit;
 use crate::array::owned::Array;
 use crate::dimension::{Dimension, Ix1, Ix2, IxDyn};
 use crate::dtype::Element;
-use crate::error::{FerrumError, FerrumResult};
+use crate::error::{FerrayError, FerrayResult};
 
 // ============================================================================
 // REQ-16: Basic creation functions
@@ -20,9 +20,9 @@ use crate::error::{FerrumError, FerrumResult};
 /// given a flat sequence plus a shape.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if `data.len()` does not equal the
+/// Returns `FerrayError::ShapeMismatch` if `data.len()` does not equal the
 /// product of the shape dimensions.
-pub fn array<T: Element, D: Dimension>(dim: D, data: Vec<T>) -> FerrumResult<Array<T, D>> {
+pub fn array<T: Element, D: Dimension>(dim: D, data: Vec<T>) -> FerrayResult<Array<T, D>> {
     Array::from_vec(dim, data)
 }
 
@@ -32,8 +32,8 @@ pub fn array<T: Element, D: Dimension>(dim: D, data: Vec<T>) -> FerrumResult<Arr
 /// require moving the data, this creates an owned array from the vector.
 ///
 /// # Errors
-/// Returns `FerrumError::ShapeMismatch` if lengths don't match.
-pub fn asarray<T: Element, D: Dimension>(dim: D, data: Vec<T>) -> FerrumResult<Array<T, D>> {
+/// Returns `FerrayError::ShapeMismatch` if lengths don't match.
+pub fn asarray<T: Element, D: Dimension>(dim: D, data: Vec<T>) -> FerrayResult<Array<T, D>> {
     Array::from_vec(dim, data)
 }
 
@@ -42,15 +42,15 @@ pub fn asarray<T: Element, D: Dimension>(dim: D, data: Vec<T>) -> FerrumResult<A
 /// Analogous to `numpy.frombuffer()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if the buffer length is not a multiple
+/// Returns `FerrayError::InvalidValue` if the buffer length is not a multiple
 /// of `size_of::<T>()`, or if the resulting length does not match the shape.
-pub fn frombuffer<T: Element, D: Dimension>(dim: D, buf: &[u8]) -> FerrumResult<Array<T, D>> {
+pub fn frombuffer<T: Element, D: Dimension>(dim: D, buf: &[u8]) -> FerrayResult<Array<T, D>> {
     let elem_size = std::mem::size_of::<T>();
     if elem_size == 0 {
-        return Err(FerrumError::invalid_value("zero-sized type"));
+        return Err(FerrayError::invalid_value("zero-sized type"));
     }
     if buf.len() % elem_size != 0 {
-        return Err(FerrumError::invalid_value(format!(
+        return Err(FerrayError::invalid_value(format!(
             "buffer length {} is not a multiple of element size {}",
             buf.len(),
             elem_size,
@@ -59,7 +59,7 @@ pub fn frombuffer<T: Element, D: Dimension>(dim: D, buf: &[u8]) -> FerrumResult<
     let n_elems = buf.len() / elem_size;
     let expected = dim.size();
     if n_elems != expected {
-        return Err(FerrumError::shape_mismatch(format!(
+        return Err(FerrayError::shape_mismatch(format!(
             "buffer contains {} elements but shape {:?} requires {}",
             n_elems,
             dim.as_slice(),
@@ -91,42 +91,42 @@ pub fn frombuffer<T: Element, D: Dimension>(dim: D, buf: &[u8]) -> FerrumResult<
 ///
 /// # Errors
 /// This function always succeeds (returns `Ok`).
-pub fn fromiter<T: Element>(iter: impl IntoIterator<Item = T>) -> FerrumResult<Array<T, Ix1>> {
+pub fn fromiter<T: Element>(iter: impl IntoIterator<Item = T>) -> FerrayResult<Array<T, Ix1>> {
     Array::from_iter_1d(iter)
 }
 
 /// Create an array filled with zeros.
 ///
 /// Analogous to `numpy.zeros()`.
-pub fn zeros<T: Element, D: Dimension>(dim: D) -> FerrumResult<Array<T, D>> {
+pub fn zeros<T: Element, D: Dimension>(dim: D) -> FerrayResult<Array<T, D>> {
     Array::zeros(dim)
 }
 
 /// Create an array filled with ones.
 ///
 /// Analogous to `numpy.ones()`.
-pub fn ones<T: Element, D: Dimension>(dim: D) -> FerrumResult<Array<T, D>> {
+pub fn ones<T: Element, D: Dimension>(dim: D) -> FerrayResult<Array<T, D>> {
     Array::ones(dim)
 }
 
 /// Create an array filled with a given value.
 ///
 /// Analogous to `numpy.full()`.
-pub fn full<T: Element, D: Dimension>(dim: D, fill_value: T) -> FerrumResult<Array<T, D>> {
+pub fn full<T: Element, D: Dimension>(dim: D, fill_value: T) -> FerrayResult<Array<T, D>> {
     Array::from_elem(dim, fill_value)
 }
 
 /// Create an array with the same shape as `other`, filled with zeros.
 ///
 /// Analogous to `numpy.zeros_like()`.
-pub fn zeros_like<T: Element, D: Dimension>(other: &Array<T, D>) -> FerrumResult<Array<T, D>> {
+pub fn zeros_like<T: Element, D: Dimension>(other: &Array<T, D>) -> FerrayResult<Array<T, D>> {
     Array::zeros(other.dim().clone())
 }
 
 /// Create an array with the same shape as `other`, filled with ones.
 ///
 /// Analogous to `numpy.ones_like()`.
-pub fn ones_like<T: Element, D: Dimension>(other: &Array<T, D>) -> FerrumResult<Array<T, D>> {
+pub fn ones_like<T: Element, D: Dimension>(other: &Array<T, D>) -> FerrayResult<Array<T, D>> {
     Array::ones(other.dim().clone())
 }
 
@@ -136,7 +136,7 @@ pub fn ones_like<T: Element, D: Dimension>(other: &Array<T, D>) -> FerrumResult<
 pub fn full_like<T: Element, D: Dimension>(
     other: &Array<T, D>,
     fill_value: T,
-) -> FerrumResult<Array<T, D>> {
+) -> FerrayResult<Array<T, D>> {
     Array::from_elem(other.dim().clone(), fill_value)
 }
 
@@ -184,11 +184,11 @@ impl<T: Element, D: Dimension> UninitArray<T, D> {
     /// Write a value at a flat index.
     ///
     /// # Errors
-    /// Returns `FerrumError::IndexOutOfBounds` if `flat_index >= size()`.
-    pub fn write_at(&mut self, flat_index: usize, value: T) -> FerrumResult<()> {
+    /// Returns `FerrayError::IndexOutOfBounds` if `flat_index >= size()`.
+    pub fn write_at(&mut self, flat_index: usize, value: T) -> FerrayResult<()> {
         let size = self.size();
         if flat_index >= size {
-            return Err(FerrumError::IndexOutOfBounds {
+            return Err(FerrayError::IndexOutOfBounds {
                 index: flat_index as isize,
                 axis: 0,
                 size,
@@ -286,11 +286,11 @@ impl_arange_float!(f32, f64);
 /// Analogous to `numpy.arange(start, stop, step)`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `step` is zero.
-pub fn arange<T: ArangeNum>(start: T, stop: T, step: T) -> FerrumResult<Array<T, Ix1>> {
+/// Returns `FerrayError::InvalidValue` if `step` is zero.
+pub fn arange<T: ArangeNum>(start: T, stop: T, step: T) -> FerrayResult<Array<T, Ix1>> {
     let step_f = step.to_f64();
     if step_f == 0.0 {
-        return Err(FerrumError::invalid_value("step cannot be zero"));
+        return Err(FerrayError::invalid_value("step cannot be zero"));
     }
     let start_f = start.to_f64();
     let stop_f = stop.to_f64();
@@ -343,14 +343,14 @@ impl LinspaceNum for f64 {
 /// Analogous to `numpy.linspace()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `num` is 0 and `endpoint` is true
+/// Returns `FerrayError::InvalidValue` if `num` is 0 and `endpoint` is true
 /// (cannot produce an empty array with an endpoint).
 pub fn linspace<T: LinspaceNum>(
     start: T,
     stop: T,
     num: usize,
     endpoint: bool,
-) -> FerrumResult<Array<T, Ix1>> {
+) -> FerrayResult<Array<T, Ix1>> {
     if num == 0 {
         return Array::from_vec(Ix1::new([0]), vec![]);
     }
@@ -386,7 +386,7 @@ pub fn logspace<T: LinspaceNum>(
     num: usize,
     endpoint: bool,
     base: f64,
-) -> FerrumResult<Array<T, Ix1>> {
+) -> FerrayResult<Array<T, Ix1>> {
     let lin = linspace(start, stop, num, endpoint)?;
     let data: Vec<T> = lin
         .iter()
@@ -402,23 +402,23 @@ pub fn logspace<T: LinspaceNum>(
 /// Analogous to `numpy.geomspace()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `start` or `stop` is zero or
+/// Returns `FerrayError::InvalidValue` if `start` or `stop` is zero or
 /// if they have different signs.
 pub fn geomspace<T: LinspaceNum>(
     start: T,
     stop: T,
     num: usize,
     endpoint: bool,
-) -> FerrumResult<Array<T, Ix1>> {
+) -> FerrayResult<Array<T, Ix1>> {
     let start_f = start.clone().to_f64();
     let stop_f = stop.clone().to_f64();
     if start_f == 0.0 || stop_f == 0.0 {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "geomspace: start and stop must be non-zero",
         ));
     }
     if (start_f < 0.0) != (stop_f < 0.0) {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "geomspace: start and stop must have the same sign",
         ));
     }
@@ -456,14 +456,14 @@ pub fn geomspace<T: LinspaceNum>(
 /// `indexing` should be `"xy"` (default Cartesian) or `"ij"` (matrix).
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `indexing` is not `"xy"` or `"ij"`,
+/// Returns `FerrayError::InvalidValue` if `indexing` is not `"xy"` or `"ij"`,
 /// or if there are fewer than 2 input arrays.
 pub fn meshgrid(
     arrays: &[Array<f64, Ix1>],
     indexing: &str,
-) -> FerrumResult<Vec<Array<f64, IxDyn>>> {
+) -> FerrayResult<Vec<Array<f64, IxDyn>>> {
     if indexing != "xy" && indexing != "ij" {
-        return Err(FerrumError::invalid_value(
+        return Err(FerrayError::invalid_value(
             "meshgrid: indexing must be 'xy' or 'ij'",
         ));
     }
@@ -522,8 +522,8 @@ pub fn meshgrid(
 /// Returns a vector of arrays, one per dimension.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if any step is zero.
-pub fn mgrid(ranges: &[(f64, f64, f64)]) -> FerrumResult<Vec<Array<f64, IxDyn>>> {
+/// Returns `FerrayError::InvalidValue` if any step is zero.
+pub fn mgrid(ranges: &[(f64, f64, f64)]) -> FerrayResult<Vec<Array<f64, IxDyn>>> {
     let mut arrs: Vec<Array<f64, Ix1>> = Vec::with_capacity(ranges.len());
     for &(start, stop, step) in ranges {
         arrs.push(arange(start, stop, step)?);
@@ -539,8 +539,8 @@ pub fn mgrid(ranges: &[(f64, f64, f64)]) -> FerrumResult<Vec<Array<f64, IxDyn>>>
 /// Each returned array has shape 1 in all dimensions except its own.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if any step is zero.
-pub fn ogrid(ranges: &[(f64, f64, f64)]) -> FerrumResult<Vec<Array<f64, IxDyn>>> {
+/// Returns `FerrayError::InvalidValue` if any step is zero.
+pub fn ogrid(ranges: &[(f64, f64, f64)]) -> FerrayResult<Vec<Array<f64, IxDyn>>> {
     let ndim = ranges.len();
     let mut results = Vec::with_capacity(ndim);
     for (i, &(start, stop, step)) in ranges.iter().enumerate() {
@@ -563,7 +563,7 @@ pub fn ogrid(ranges: &[(f64, f64, f64)]) -> FerrumResult<Vec<Array<f64, IxDyn>>>
 /// Create a 2-D identity matrix of size `n x n`.
 ///
 /// Analogous to `numpy.identity()`.
-pub fn identity<T: Element>(n: usize) -> FerrumResult<Array<T, Ix2>> {
+pub fn identity<T: Element>(n: usize) -> FerrayResult<Array<T, Ix2>> {
     eye(n, n, 0)
 }
 
@@ -572,7 +572,7 @@ pub fn identity<T: Element>(n: usize) -> FerrumResult<Array<T, Ix2>> {
 /// `k` is the diagonal offset: 0 = main diagonal, positive = above, negative = below.
 ///
 /// Analogous to `numpy.eye(N, M, k)`.
-pub fn eye<T: Element>(n: usize, m: usize, k: isize) -> FerrumResult<Array<T, Ix2>> {
+pub fn eye<T: Element>(n: usize, m: usize, k: isize) -> FerrayResult<Array<T, Ix2>> {
     let mut data = vec![T::zero(); n * m];
     for i in 0..n {
         let j = i as isize + k;
@@ -591,8 +591,8 @@ pub fn eye<T: Element>(n: usize, m: usize, k: isize) -> FerrumResult<Array<T, Ix
 /// Analogous to `numpy.diag()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if `a` is not 1-D or 2-D.
-pub fn diag<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrumResult<Array<T, IxDyn>> {
+/// Returns `FerrayError::InvalidValue` if `a` is not 1-D or 2-D.
+pub fn diag<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     match shape.len() {
         1 => {
@@ -622,7 +622,7 @@ pub fn diag<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrumResult<Array<T, 
             let len = diag_vals.len();
             Array::from_vec(IxDyn::new(&[len]), diag_vals)
         }
-        _ => Err(FerrumError::invalid_value("diag: input must be 1-D or 2-D")),
+        _ => Err(FerrayError::invalid_value("diag: input must be 1-D or 2-D")),
     }
 }
 
@@ -632,7 +632,7 @@ pub fn diag<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrumResult<Array<T, 
 ///
 /// # Errors
 /// Propagates errors from the underlying construction.
-pub fn diagflat<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrumResult<Array<T, IxDyn>> {
+pub fn diagflat<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrayResult<Array<T, IxDyn>> {
     // Flatten a to 1-D, then call diag
     let flat: Vec<T> = a.iter().cloned().collect();
     let n = flat.len();
@@ -645,7 +645,7 @@ pub fn diagflat<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrumResult<Array
 /// Returns an `n x m` array where `a[i, j] = 1` if `i >= j - k`, else `0`.
 ///
 /// Analogous to `numpy.tri(N, M, k)`.
-pub fn tri<T: Element>(n: usize, m: usize, k: isize) -> FerrumResult<Array<T, Ix2>> {
+pub fn tri<T: Element>(n: usize, m: usize, k: isize) -> FerrayResult<Array<T, Ix2>> {
     let mut data = vec![T::zero(); n * m];
     for i in 0..n {
         for j in 0..m {
@@ -664,11 +664,11 @@ pub fn tri<T: Element>(n: usize, m: usize, k: isize) -> FerrumResult<Array<T, Ix
 /// Analogous to `numpy.tril()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if input is not 2-D.
-pub fn tril<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrumResult<Array<T, IxDyn>> {
+/// Returns `FerrayError::InvalidValue` if input is not 2-D.
+pub fn tril<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     if shape.len() != 2 {
-        return Err(FerrumError::invalid_value("tril: input must be 2-D"));
+        return Err(FerrayError::invalid_value("tril: input must be 2-D"));
     }
     let (n, m) = (shape[0], shape[1]);
     let src: Vec<T> = a.iter().cloned().collect();
@@ -690,11 +690,11 @@ pub fn tril<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrumResult<Array<T, 
 /// Analogous to `numpy.triu()`.
 ///
 /// # Errors
-/// Returns `FerrumError::InvalidValue` if input is not 2-D.
-pub fn triu<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrumResult<Array<T, IxDyn>> {
+/// Returns `FerrayError::InvalidValue` if input is not 2-D.
+pub fn triu<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     if shape.len() != 2 {
-        return Err(FerrumError::invalid_value("triu: input must be 2-D"));
+        return Err(FerrayError::invalid_value("triu: input must be 2-D"));
     }
     let (n, m) = (shape[0], shape[1]);
     let src: Vec<T> = a.iter().cloned().collect();

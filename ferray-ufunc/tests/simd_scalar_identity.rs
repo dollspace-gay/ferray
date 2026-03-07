@@ -5,29 +5,29 @@
 //! 1. **High-level ufunc functions** (`ferray_ufunc::sin`, `ferray_ufunc::exp`, etc.)
 //!    which are generic over `T: Element + Float` and `D: Dimension`.
 //!    These currently use `unary_float_op` / `binary_float_op` helpers that
-//!    iterate directly — the `FERRUM_FORCE_SCALAR` env var has no effect on them
+//!    iterate directly — the `FERRAY_FORCE_SCALAR` env var has no effect on them
 //!    today, but this test locks in the contract that results are identical
 //!    regardless of the env var, future-proofing against SIMD kernels being
 //!    wired into the high-level path later.
 //!
 //! 2. **Low-level dispatch functions** (`dispatch_unary_f64`, `dispatch_binary_f64`)
-//!    which **do** branch on `FERRUM_FORCE_SCALAR`. We verify bit-identity at
+//!    which **do** branch on `FERRAY_FORCE_SCALAR`. We verify bit-identity at
 //!    this layer too.
 //!
 //! For each operation, we run it twice — once with the env var unset (SIMD path)
-//! and once with `FERRUM_FORCE_SCALAR=1` (scalar path) — then compare every
+//! and once with `FERRAY_FORCE_SCALAR=1` (scalar path) — then compare every
 //! output element at the bit level.
 
 use ferray_core::Array;
 use ferray_core::dimension::Ix1;
-use ferray_core::error::FerrumError;
+use ferray_core::error::FerrayError;
 
 // ---------------------------------------------------------------------------
 // Type aliases to keep clippy happy (type_complexity)
 // ---------------------------------------------------------------------------
 
-type UnaryFn = fn(&Array<f64, Ix1>) -> Result<Array<f64, Ix1>, FerrumError>;
-type BinaryFn = fn(&Array<f64, Ix1>, &Array<f64, Ix1>) -> Result<Array<f64, Ix1>, FerrumError>;
+type UnaryFn = fn(&Array<f64, Ix1>) -> Result<Array<f64, Ix1>, FerrayError>;
+type BinaryFn = fn(&Array<f64, Ix1>, &Array<f64, Ix1>) -> Result<Array<f64, Ix1>, FerrayError>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,17 +64,17 @@ fn run_unary_both(input: &[f64], f: UnaryFn) -> (Vec<f64>, Vec<f64>) {
     let a = arr(input);
 
     // SIMD path
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     let simd_result = f(&a).unwrap();
     let simd_vals: Vec<f64> = simd_result.iter().copied().collect();
 
     // Scalar path
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     let scalar_result = f(&a).unwrap();
     let scalar_vals: Vec<f64> = scalar_result.iter().copied().collect();
 
     // Clean up
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
 
     (simd_vals, scalar_vals)
 }
@@ -85,17 +85,17 @@ fn run_binary_both(a_data: &[f64], b_data: &[f64], f: BinaryFn) -> (Vec<f64>, Ve
     let b = arr(b_data);
 
     // SIMD path
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     let simd_result = f(&a, &b).unwrap();
     let simd_vals: Vec<f64> = simd_result.iter().copied().collect();
 
     // Scalar path
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     let scalar_result = f(&a, &b).unwrap();
     let scalar_vals: Vec<f64> = scalar_result.iter().copied().collect();
 
     // Clean up
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
 
     (simd_vals, scalar_vals)
 }
@@ -397,7 +397,7 @@ fn identity_hypot() {
 // ===========================================================================
 //
 // These test the `dispatch_unary_f64` and `dispatch_binary_f64` functions
-// directly, which ARE the functions that branch on FERRUM_FORCE_SCALAR.
+// directly, which ARE the functions that branch on FERRAY_FORCE_SCALAR.
 
 #[test]
 fn dispatch_unary_f64_sqrt_identity() {
@@ -406,14 +406,14 @@ fn dispatch_unary_f64_sqrt_identity() {
     let mut scalar_out = vec![0.0f64; input.len()];
 
     // SIMD path
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut simd_out, f64::sqrt);
 
     // Scalar path
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut scalar_out, f64::sqrt);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f64(&simd_out, &scalar_out, "dispatch_unary_f64(sqrt)");
 }
 
@@ -423,13 +423,13 @@ fn dispatch_unary_f64_sin_identity() {
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut simd_out, f64::sin);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut scalar_out, f64::sin);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f64(&simd_out, &scalar_out, "dispatch_unary_f64(sin)");
 }
 
@@ -439,13 +439,13 @@ fn dispatch_unary_f64_exp_identity() {
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut simd_out, f64::exp);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut scalar_out, f64::exp);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f64(&simd_out, &scalar_out, "dispatch_unary_f64(exp)");
 }
 
@@ -455,13 +455,13 @@ fn dispatch_unary_f64_ln_identity() {
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut simd_out, f64::ln);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut scalar_out, f64::ln);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f64(&simd_out, &scalar_out, "dispatch_unary_f64(ln)");
 }
 
@@ -471,13 +471,13 @@ fn dispatch_unary_f64_cos_identity() {
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut simd_out, f64::cos);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut scalar_out, f64::cos);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f64(&simd_out, &scalar_out, "dispatch_unary_f64(cos)");
 }
 
@@ -487,13 +487,13 @@ fn dispatch_unary_f64_floor_identity() {
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut simd_out, f64::floor);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut scalar_out, f64::floor);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f64(&simd_out, &scalar_out, "dispatch_unary_f64(floor)");
 }
 
@@ -503,13 +503,13 @@ fn dispatch_unary_f64_ceil_identity() {
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut simd_out, f64::ceil);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_unary_f64(&input, &mut scalar_out, f64::ceil);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f64(&simd_out, &scalar_out, "dispatch_unary_f64(ceil)");
 }
 
@@ -520,13 +520,13 @@ fn dispatch_binary_f64_add_identity() {
     let mut simd_out = vec![0.0f64; a.len()];
     let mut scalar_out = vec![0.0f64; a.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_binary_f64(&a, &b, &mut simd_out, |x, y| x + y);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_binary_f64(&a, &b, &mut scalar_out, |x, y| x + y);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f64(&simd_out, &scalar_out, "dispatch_binary_f64(add)");
 }
 
@@ -537,13 +537,13 @@ fn dispatch_binary_f64_mul_identity() {
     let mut simd_out = vec![0.0f64; a.len()];
     let mut scalar_out = vec![0.0f64; a.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_binary_f64(&a, &b, &mut simd_out, |x, y| x * y);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_binary_f64(&a, &b, &mut scalar_out, |x, y| x * y);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f64(&simd_out, &scalar_out, "dispatch_binary_f64(mul)");
 }
 
@@ -554,13 +554,13 @@ fn dispatch_binary_f64_div_identity() {
     let mut simd_out = vec![0.0f64; a.len()];
     let mut scalar_out = vec![0.0f64; a.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_binary_f64(&a, &b, &mut simd_out, |x, y| x / y);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_binary_f64(&a, &b, &mut scalar_out, |x, y| x / y);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f64(&simd_out, &scalar_out, "dispatch_binary_f64(div)");
 }
 
@@ -588,13 +588,13 @@ fn dispatch_unary_f32_sqrt_identity() {
     let mut simd_out = vec![0.0f32; input.len()];
     let mut scalar_out = vec![0.0f32; input.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_unary_f32(&input, &mut simd_out, f32::sqrt);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_unary_f32(&input, &mut scalar_out, f32::sqrt);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f32(&simd_out, &scalar_out, "dispatch_unary_f32(sqrt)");
 }
 
@@ -604,13 +604,13 @@ fn dispatch_unary_f32_sin_identity() {
     let mut simd_out = vec![0.0f32; input.len()];
     let mut scalar_out = vec![0.0f32; input.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_unary_f32(&input, &mut simd_out, f32::sin);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_unary_f32(&input, &mut scalar_out, f32::sin);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f32(&simd_out, &scalar_out, "dispatch_unary_f32(sin)");
 }
 
@@ -621,13 +621,13 @@ fn dispatch_binary_f32_add_identity() {
     let mut simd_out = vec![0.0f32; a.len()];
     let mut scalar_out = vec![0.0f32; a.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_binary_f32(&a, &b, &mut simd_out, |x, y| x + y);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_binary_f32(&a, &b, &mut scalar_out, |x, y| x + y);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f32(&simd_out, &scalar_out, "dispatch_binary_f32(add)");
 }
 
@@ -638,12 +638,12 @@ fn dispatch_binary_f32_mul_identity() {
     let mut simd_out = vec![0.0f32; a.len()];
     let mut scalar_out = vec![0.0f32; a.len()];
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     ferray_ufunc::dispatch::dispatch_binary_f32(&a, &b, &mut simd_out, |x, y| x * y);
 
-    unsafe { std::env::set_var("FERRUM_FORCE_SCALAR", "1") };
+    unsafe { std::env::set_var("FERRAY_FORCE_SCALAR", "1") };
     ferray_ufunc::dispatch::dispatch_binary_f32(&a, &b, &mut scalar_out, |x, y| x * y);
 
-    unsafe { std::env::remove_var("FERRUM_FORCE_SCALAR") };
+    unsafe { std::env::remove_var("FERRAY_FORCE_SCALAR") };
     assert_bit_identical_f32(&simd_out, &scalar_out, "dispatch_binary_f32(mul)");
 }
