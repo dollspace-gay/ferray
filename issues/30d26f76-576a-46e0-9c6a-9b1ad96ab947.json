@@ -2,11 +2,12 @@
   "uuid": "30d26f76-576a-46e0-9c6a-9b1ad96ab947",
   "display_id": 30,
   "title": "Phase 5: statistical equivalence benchmarks",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-06T20:59:36.023450439Z",
-  "updated_at": "2026-03-06T20:59:38.548021060Z",
+  "updated_at": "2026-03-07T01:57:21.806244238Z",
+  "closed_at": "2026-03-07T01:57:21.806244238Z",
   "labels": [
     "phase-5"
   ]
