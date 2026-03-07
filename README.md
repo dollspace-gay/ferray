@@ -21,19 +21,28 @@ ferray = "0.1"
 use ferray::prelude::*;
 
 // Create arrays
-let a = Array1::<f64>::linspace(0.0, 1.0, 1000)?;
-let b = ferray::ufunc::sin(&a)?;
+let a = ferray::linspace::<f64>(0.0, 1.0, 100, /* include_endpoint= */ true)?;
+let b = ferray::sin(&a)?;
 
 // Linear algebra
-let m = Array2::<f64>::eye(3)?;
+let m = ferray::eye::<f64>(3, 3, /* k (diagonal offset)= */ 0)?;
+#[cfg(feature = "linalg")]
 let det = ferray::linalg::det(&m)?;
 
 // FFT
-let spectrum = ferray::fft::fft(&b, None, None, None)?;
+#[cfg(feature = "fft")]
+let spectrum = ferray::fft::rfft(
+    &b,
+    /* n= */ None,
+    /* axis= */ None,
+    /* norm= */ ferray::fft::FftNorm::Backward,
+)?;
 
 // Statistics
-let mean = ferray::stats::mean(&a, None)?;
-let std = ferray::stats::std(&a, None, None)?;
+let mean = ferray::mean(&a, /* axis= */ None)?;
+let std = ferray::std_(&a, /* axis= */ None, /* ddof= */ 0)?;
+
+Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 ## Performance
@@ -69,7 +78,7 @@ Benchmarked against NumPy 2.3.5 on Linux (Rust 1.85, LTO, target-cpu=native).
 
 For throughput-sensitive workloads, ferray offers `exp_fast()` — an Even/Odd Remez decomposition that is **~30% faster than CORE-MATH** while maintaining ≤1 ULP accuracy (faithfully rounded). It auto-vectorizes for SSE/AVX2/AVX-512/NEON with no lookup tables.
 
-```rust
+```rust ignore
 // Default: correctly rounded (≤0.5 ULP, CORE-MATH)
 let result = ferray::exp(&array)?;
 

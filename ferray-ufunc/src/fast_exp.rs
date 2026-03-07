@@ -15,7 +15,11 @@
 /// edge cases: NaN, ±inf, overflow, underflow. Subnormal outputs (x < -708.4)
 /// are flushed to zero.
 #[inline(always)]
-#[allow(clippy::excessive_precision, clippy::approx_constant, clippy::manual_clamp)]
+#[allow(
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::manual_clamp
+)]
 pub fn exp_fast_f64(x: f64) -> f64 {
     let x_orig = x;
 
@@ -46,8 +50,7 @@ pub fn exp_fast_f64(x: f64) -> f64 {
             + r2 * (4.166666666666667823e-02
                 + r2 * (1.388888888887908173e-03
                     + r2 * (2.480158733642404552e-05
-                        + r2 * (2.755726329888269414e-07
-                            + r2 * 2.091813031817600864e-09)))));
+                        + r2 * (2.755726329888269414e-07 + r2 * 2.091813031817600864e-09)))));
 
     // Odd: sinh(r) via Horner in r² (Remez minimax coefficients)
     let odd = r
@@ -55,8 +58,7 @@ pub fn exp_fast_f64(x: f64) -> f64 {
             + r2 * (1.666666666666667962e-01
                 + r2 * (8.333333333319599412e-03
                     + r2 * (1.984126989005147428e-04
-                        + r2 * (2.755724091443086719e-06
-                            + r2 * 2.511003898736913440e-08)))));
+                        + r2 * (2.755724091443086719e-06 + r2 * 2.511003898736913440e-08)))));
 
     // expm1 reconstruction avoids absorption error from 1 + small
     let expm1 = even + odd;
@@ -139,9 +141,7 @@ mod tests {
     #[test]
     fn accuracy_vs_libm() {
         // Check ≤1 ULP vs libm across a range of values
-        let test_values: Vec<f64> = (-7000..=7097)
-            .map(|i| i as f64 * 0.1)
-            .collect();
+        let test_values: Vec<f64> = (-7000..=7097).map(|i| i as f64 * 0.1).collect();
         for &x in &test_values {
             let fast = exp_fast_f64(x);
             let reference = x.exp();
