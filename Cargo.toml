@@ -25,23 +25,27 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/dollspace-gay/ferrum"
+homepage = "https://github.com/dollspace-gay/ferrum"
+keywords = ["numpy", "ndarray", "scientific-computing", "simd", "linear-algebra"]
+categories = ["science", "mathematics"]
 
 [workspace.dependencies]
 # Internal crates
-ferrum-core = { path = "ferrum-core" }
-ferrum-core-macros = { path = "ferrum-core-macros" }
-ferrum-ufunc = { path = "ferrum-ufunc" }
-ferrum-stats = { path = "ferrum-stats" }
-ferrum-io = { path = "ferrum-io" }
-ferrum-linalg = { path = "ferrum-linalg" }
-ferrum-fft = { path = "ferrum-fft" }
-ferrum-random = { path = "ferrum-random" }
-ferrum-polynomial = { path = "ferrum-polynomial" }
-ferrum-window = { path = "ferrum-window" }
-ferrum-strings = { path = "ferrum-strings" }
-ferrum-ma = { path = "ferrum-ma" }
-ferrum-stride-tricks = { path = "ferrum-stride-tricks" }
-ferrum-numpy-interop = { path = "ferrum-numpy-interop" }
+ferrum-core = { path = "ferrum-core", version = "0.1.0" }
+ferrum-core-macros = { path = "ferrum-core-macros", version = "0.1.0" }
+ferrum-ufunc = { path = "ferrum-ufunc", version = "0.1.0" }
+ferrum-stats = { path = "ferrum-stats", version = "0.1.0" }
+ferrum-io = { path = "ferrum-io", version = "0.1.0" }
+ferrum-linalg = { path = "ferrum-linalg", version = "0.1.0" }
+ferrum-fft = { path = "ferrum-fft", version = "0.1.0" }
+ferrum-random = { path = "ferrum-random", version = "0.1.0" }
+ferrum-polynomial = { path = "ferrum-polynomial", version = "0.1.0" }
+ferrum-window = { path = "ferrum-window", version = "0.1.0" }
+ferrum-strings = { path = "ferrum-strings", version = "0.1.0" }
+ferrum-ma = { path = "ferrum-ma", version = "0.1.0" }
+ferrum-stride-tricks = { path = "ferrum-stride-tricks", version = "0.1.0" }
+ferrum-numpy-interop = { path = "ferrum-numpy-interop", version = "0.1.0" }
 
 # External dependencies (pinned versions per design spec)
 ndarray = "0.17"
