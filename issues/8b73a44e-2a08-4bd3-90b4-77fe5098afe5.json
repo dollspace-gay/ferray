@@ -6,8 +6,19 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-07T15:05:00.468942213Z",
-  "updated_at": "2026-03-07T15:05:02.649619469Z",
+  "updated_at": "2026-03-07T15:05:10.812223645Z",
   "labels": [
     "enhancement"
+  ],
+  "comments": [
+    {
+      "id": 41,
+      "author": "phase-4-coordinator",
+      "content": "Checking published versions across all 16 crate Cargo.tomls to determine which versions to yank",
+      "created_at": "2026-03-07T15:05:10.812223368Z",
+      "kind": "plan",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA7G7oK7b4p7visQk4ajYZeLWgGuGCbxOmVSNG0Isi8rUN/UtI+GMCFuXWbNULtw8Ye+UAo0pUt9792XikzZK9AA=="
+    }
   ]
 }
