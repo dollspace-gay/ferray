@@ -9,7 +9,7 @@ use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::cr_math::CrMath;
-use crate::helpers::{binary_float_op, unary_float_op, unary_slice_op_f64, unary_slice_op_f32};
+use crate::helpers::{binary_float_op, unary_float_op, unary_slice_op_f32, unary_slice_op_f64};
 
 /// Elementwise exponential (e^x).
 pub fn exp<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>

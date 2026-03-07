@@ -3,6 +3,7 @@
 // This is the top-level crate that users depend on. It re-exports all
 // subcrates into a unified namespace, matching NumPy's `import numpy as np`.
 
+#[doc = include_str!("../../README.md")]
 pub mod config;
 pub mod prelude;
 
@@ -87,7 +88,9 @@ pub use ferray_ufunc::{
 };
 
 // Exponential and logarithmic
-pub use ferray_ufunc::{exp, exp2, exp_fast, expm1, log, log1p, log2, log10, logaddexp, logaddexp2};
+pub use ferray_ufunc::{
+    exp, exp_fast, exp2, expm1, log, log1p, log2, log10, logaddexp, logaddexp2,
+};
 
 // Rounding
 pub use ferray_ufunc::{around, ceil, fix, floor, rint, round, trunc};

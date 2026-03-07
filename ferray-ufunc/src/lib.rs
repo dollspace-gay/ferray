@@ -37,7 +37,7 @@ pub use ops::trig::{
 };
 
 // Exponential and logarithmic
-pub use ops::explog::{exp, exp2, exp_fast, expm1, log, log1p, log2, log10, logaddexp, logaddexp2};
+pub use ops::explog::{exp, exp_fast, exp2, expm1, log, log1p, log2, log10, logaddexp, logaddexp2};
 
 // Rounding
 pub use ops::rounding::{around, ceil, fix, floor, rint, round, trunc};
