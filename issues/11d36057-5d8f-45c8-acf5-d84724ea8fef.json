@@ -1,0 +1,10 @@
+{
+  "uuid": "11d36057-5d8f-45c8-acf5-d84724ea8fef",
+  "display_id": 33,
+  "title": "GPU bindings design doc — ferrum-gpu crate with CUDA and cross-platform backends",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-07T01:02:21.616511932Z",
+  "updated_at": "2026-03-07T01:02:21.616511932Z"
+}
