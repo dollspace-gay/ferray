@@ -1,3 +1,36 @@
+# === Rust ===
+target/
+**/*.rs.bk
+
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# === Git worktrees ===
+.worktrees/
+
+# === Fuzz artifacts ===
+fuzz/corpus/
+fuzz/artifacts/
+
+# === Benchmark results (regenerated) ===
+benchmarks/speed_results.json
+
 # === Crosslink managed (do not edit between markers) ===
 # .crosslink/ — machine-local state (never commit)
 .crosslink/issues.db
