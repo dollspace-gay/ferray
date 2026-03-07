@@ -31,6 +31,9 @@ fuzz/artifacts/
 # === Benchmark results (regenerated) ===
 benchmarks/speed_results.json
 
+# === Crosslink subcrate state (never publish) ===
+*/.crosslink/
+
 # === Crosslink managed (do not edit between markers) ===
 # .crosslink/ — machine-local state (never commit)
 .crosslink/issues.db
