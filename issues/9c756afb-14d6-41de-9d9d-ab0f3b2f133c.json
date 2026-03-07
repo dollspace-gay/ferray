@@ -2,11 +2,12 @@
   "uuid": "9c756afb-14d6-41de-9d9d-ab0f3b2f133c",
   "display_id": 28,
   "title": "Phase 5: fuzz targets",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-06T20:58:45.306400047Z",
-  "updated_at": "2026-03-06T20:58:49.206737748Z",
+  "updated_at": "2026-03-07T01:57:18.777668947Z",
+  "closed_at": "2026-03-07T01:57:18.777668947Z",
   "labels": [
     "phase-5"
   ]
