@@ -1,22 +1,10 @@
 {
   "version": 1,
   "locks": {
-    "4": {
-      "agent_id": "driver--build-ferrum-phase-0-coordinator",
-      "branch": null,
-      "claimed_at": "2026-03-05T21:40:59.887113607Z",
-      "signed_by": "driver--build-ferrum-phase-0-coordinator"
-    },
     "21": {
       "agent_id": "driver--build-ferrum-phase-0-coordinator",
       "branch": null,
       "claimed_at": "2026-03-06T20:13:54.081735508Z",
-      "signed_by": "driver--build-ferrum-phase-0-coordinator"
-    },
-    "11": {
-      "agent_id": "driver--build-ferrum-phase-0-coordinator",
-      "branch": null,
-      "claimed_at": "2026-03-06T19:28:37.524432326Z",
       "signed_by": "driver--build-ferrum-phase-0-coordinator"
     },
     "38": {
@@ -25,17 +13,11 @@
       "claimed_at": "2026-03-07T15:05:04.815618875Z",
       "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U"
     },
-    "6": {
+    "14": {
       "agent_id": "driver--build-ferrum-phase-0-coordinator",
       "branch": null,
-      "claimed_at": "2026-03-06T03:05:49.887226788Z",
+      "claimed_at": "2026-03-06T19:30:50.486122238Z",
       "signed_by": "driver--build-ferrum-phase-0-coordinator"
-    },
-    "37": {
-      "agent_id": "phase-4-coordinator",
-      "branch": null,
-      "claimed_at": "2026-03-07T03:05:02.617503120Z",
-      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U"
     },
     "24": {
       "agent_id": "driver--build-ferrum-phase-0-coordinator",
@@ -43,34 +25,10 @@
       "claimed_at": "2026-03-06T20:13:31.879301524Z",
       "signed_by": "driver--build-ferrum-phase-0-coordinator"
     },
-    "14": {
-      "agent_id": "driver--build-ferrum-phase-0-coordinator",
-      "branch": null,
-      "claimed_at": "2026-03-06T19:30:50.486122238Z",
-      "signed_by": "driver--build-ferrum-phase-0-coordinator"
-    },
-    "23": {
-      "agent_id": "driver--build-ferrum-phase-0-coordinator",
-      "branch": null,
-      "claimed_at": "2026-03-06T20:13:30.110206089Z",
-      "signed_by": "driver--build-ferrum-phase-0-coordinator"
-    },
-    "17": {
-      "agent_id": "driver--build-ferrum-phase-0-coordinator",
-      "branch": null,
-      "claimed_at": "2026-03-06T19:31:04.053099304Z",
-      "signed_by": "driver--build-ferrum-phase-0-coordinator"
-    },
-    "3": {
-      "agent_id": "driver--build-ferrum-phase-0-coordinator",
-      "branch": null,
-      "claimed_at": "2026-03-05T21:40:27.915515058Z",
-      "signed_by": "driver--build-ferrum-phase-0-coordinator"
-    },
-    "36": {
+    "39": {
       "agent_id": "phase-4-coordinator",
       "branch": null,
-      "claimed_at": "2026-03-07T02:42:06.181489806Z",
+      "claimed_at": "2026-03-07T21:00:01.867170267Z",
       "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U"
     },
     "15": {
@@ -79,10 +37,58 @@
       "claimed_at": "2026-03-06T19:49:37.726261230Z",
       "signed_by": "driver--build-ferrum-phase-0-coordinator"
     },
+    "3": {
+      "agent_id": "driver--build-ferrum-phase-0-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-05T21:40:27.915515058Z",
+      "signed_by": "driver--build-ferrum-phase-0-coordinator"
+    },
+    "23": {
+      "agent_id": "driver--build-ferrum-phase-0-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-06T20:13:30.110206089Z",
+      "signed_by": "driver--build-ferrum-phase-0-coordinator"
+    },
     "35": {
       "agent_id": "phase-4-coordinator",
       "branch": null,
       "claimed_at": "2026-03-07T02:04:20.122321566Z",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U"
+    },
+    "11": {
+      "agent_id": "driver--build-ferrum-phase-0-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-06T19:28:37.524432326Z",
+      "signed_by": "driver--build-ferrum-phase-0-coordinator"
+    },
+    "17": {
+      "agent_id": "driver--build-ferrum-phase-0-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-06T19:31:04.053099304Z",
+      "signed_by": "driver--build-ferrum-phase-0-coordinator"
+    },
+    "6": {
+      "agent_id": "driver--build-ferrum-phase-0-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-06T03:05:49.887226788Z",
+      "signed_by": "driver--build-ferrum-phase-0-coordinator"
+    },
+    "4": {
+      "agent_id": "driver--build-ferrum-phase-0-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-05T21:40:59.887113607Z",
+      "signed_by": "driver--build-ferrum-phase-0-coordinator"
+    },
+    "36": {
+      "agent_id": "phase-4-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-07T02:42:06.181489806Z",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U"
+    },
+    "37": {
+      "agent_id": "phase-4-coordinator",
+      "branch": null,
+      "claimed_at": "2026-03-07T03:05:02.617503120Z",
       "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U"
     }
   },
