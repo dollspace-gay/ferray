@@ -1,0 +1,11 @@
+# Workspace-level cargo configuration
+#
+# Windows build fix: inject signgam compatibility header.
+# The CORE-MATH lgamma.c references `signgam`, a POSIX global absent from
+# the Windows CRT. This adds our compat/ directory to the include search
+# path and force-includes the header. The #if _WIN32 guard inside makes
+# this a no-op on Linux/macOS.
+# See: https://github.com/dollspace-gay/ferray/issues/5
+[env]
+CFLAGS = "-include signgam_compat.h"
+CPATH = { value = "compat", relative = true }
