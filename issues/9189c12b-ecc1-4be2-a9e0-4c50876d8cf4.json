@@ -6,7 +6,7 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-07T23:05:19.647891889Z",
-  "updated_at": "2026-03-07T23:05:31.531566062Z",
+  "updated_at": "2026-03-07T23:06:32.339561044Z",
   "labels": [
     "fix"
   ],
@@ -19,6 +19,15 @@
       "kind": "plan",
       "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
       "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAn0Vsp9dGn86mwaigLZ2wH+LTbLVJ7ACkbx7T7mlravfHeQLAL0ZImoMBNZPWuTuZ3F9V0/bxCTM/l5L19E8kBQ=="
+    },
+    {
+      "id": 47,
+      "author": "phase-4-coordinator",
+      "content": "core-math-sys already ships lib/signgam.c with 'int signgam;' and compiles it into the static lib. The issue is that lgamma.c does '#include <math.h> // for signgam' which declares signgam on POSIX but not on Windows. The fix is to declare signgam as extern in a compat header and inject it via CFLAGS. But since core-math-sys is an upstream dep with its own build.rs, we can't modify its compilation. Instead, we need to add the compat header at the ferray-ufunc level using a build.rs that sets the CFLAGS env var before core-math-sys compiles.",
+      "created_at": "2026-03-07T23:06:32.339560767Z",
+      "kind": "observation",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAgDzVdpPF2dwlw1rcRU2WY1jakzVbWKHUFLftj99mU+4v0EoT1pW39h2o9cMkHa6dm0QKthZREGBq//d14H3tCA=="
     }
   ]
 }
