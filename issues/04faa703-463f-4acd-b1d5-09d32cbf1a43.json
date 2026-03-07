@@ -6,7 +6,7 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-07T02:04:16.624723111Z",
-  "updated_at": "2026-03-07T02:34:28.603656233Z",
+  "updated_at": "2026-03-07T02:34:28.709543394Z",
   "labels": [
     "release"
   ],
@@ -19,6 +19,15 @@
       "kind": "note",
       "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
       "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAdQUHMgMDLvN+Qc7Sx1y+DCln/xVSjVlyGT5Si9RKp+chgzgS+xsHvQQdO89Av8RQLOc5GeJFXSGeVQd2PmsUCg=="
+    },
+    {
+      "id": 39,
+      "author": "phase-4-coordinator",
+      "content": "[auto] Session resumed after context compression.",
+      "created_at": "2026-03-07T02:34:28.709543166Z",
+      "kind": "note",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAg+LokfAIWsNfTY7flHPdnLE/2LHrl+PeIK+XWjDUtvl5IQGmpVqo4a18jkhXEPT0FK3YD4pKve4b64wo+IJxCA=="
     }
   ]
 }
