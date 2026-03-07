@@ -2,10 +2,11 @@
   "uuid": "6566d479-021e-485e-9de4-fe4e5175be63",
   "display_id": 23,
   "title": "Implement ferrum-numpy-interop: PyO3 NumPy zero-copy, Arrow and Polars conversion",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "parent_uuid": "dbf0100e-f29e-4f13-b4d5-2b1eb9963d0e",
   "created_by": "driver--build-ferrum-phase-0-coordinator",
   "created_at": "2026-03-06T20:11:22.088500803Z",
-  "updated_at": "2026-03-06T20:11:22.088500803Z"
+  "updated_at": "2026-03-07T01:57:08.347299297Z",
+  "closed_at": "2026-03-07T01:57:08.347299297Z"
 }
