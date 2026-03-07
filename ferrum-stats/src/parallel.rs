@@ -314,7 +314,6 @@ where
     }
 }
 
-
 /// Perform a parallel product on a slice of `Copy + Send + Sync` values.
 pub fn parallel_prod<T>(data: &[T], identity: T) -> T
 where

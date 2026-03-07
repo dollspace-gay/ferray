@@ -240,8 +240,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    if let Some(r) =
-        crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_reciprocal_f64)
+    if let Some(r) = crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_reciprocal_f64)
     {
         return r;
     }

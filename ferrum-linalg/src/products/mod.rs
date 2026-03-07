@@ -269,9 +269,9 @@ fn matmul_2d(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrumResult<Array
     let mut c_faer = faer::Mat::<f64>::zeros(m, n);
 
     let par = if max_dim >= FAER_PARALLEL_THRESHOLD {
-        faer::Par::Rayon(std::num::NonZeroUsize::new(0).unwrap_or(
-            std::num::NonZeroUsize::new(1).unwrap(),
-        ))
+        faer::Par::Rayon(
+            std::num::NonZeroUsize::new(0).unwrap_or(std::num::NonZeroUsize::new(1).unwrap()),
+        )
     } else {
         faer::Par::Seq
     };

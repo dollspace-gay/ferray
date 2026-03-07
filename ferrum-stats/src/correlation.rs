@@ -142,9 +142,7 @@ where
     // Compute means
     let means: Vec<T> = matrix
         .iter()
-        .map(|row| {
-            crate::parallel::pairwise_sum(row, <T as Element>::zero()) / nf
-        })
+        .map(|row| crate::parallel::pairwise_sum(row, <T as Element>::zero()) / nf)
         .collect();
 
     // Compute covariance matrix

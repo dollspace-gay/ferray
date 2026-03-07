@@ -116,8 +116,7 @@ where
     let n = slice.len();
     // SAFETY: T is f64, verified by TypeId check above. f64 and T have
     // identical size, alignment, and bit representation.
-    let f64_slice: &[f64] =
-        unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const f64, n) };
+    let f64_slice: &[f64] = unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const f64, n) };
     let mut output = Vec::with_capacity(n);
     #[allow(clippy::uninit_vec)]
     unsafe {

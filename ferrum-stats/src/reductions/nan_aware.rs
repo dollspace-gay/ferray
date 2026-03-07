@@ -43,10 +43,13 @@ fn lane_nanvar<T: Float>(lane: &[T], ddof: usize) -> T {
         return T::nan();
     }
     let mean = crate::parallel::pairwise_sum(&non_nan, T::zero()) / T::from(count).unwrap();
-    let sq_diffs: Vec<T> = non_nan.iter().map(|&x| {
-        let d = x - mean;
-        d * d
-    }).collect();
+    let sq_diffs: Vec<T> = non_nan
+        .iter()
+        .map(|&x| {
+            let d = x - mean;
+            d * d
+        })
+        .collect();
     crate::parallel::pairwise_sum(&sq_diffs, T::zero()) / T::from(count - ddof).unwrap()
 }
 

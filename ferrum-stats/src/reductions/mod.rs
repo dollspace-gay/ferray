@@ -42,8 +42,6 @@ fn try_simd_pairwise_sum<T: Element + Copy + 'static>(data: &[T]) -> Option<T> {
     }
 }
 
-
-
 // ---------------------------------------------------------------------------
 // Internal axis-reduction helper
 // ---------------------------------------------------------------------------
@@ -167,7 +165,9 @@ impl<T> std::ops::Deref for DataRef<'_, T> {
 }
 
 /// Get a reference to contiguous data, or copy if strided.
-pub(crate) fn borrow_data<'a, T: Element + Copy, D: Dimension>(a: &'a Array<T, D>) -> DataRef<'a, T> {
+pub(crate) fn borrow_data<'a, T: Element + Copy, D: Dimension>(
+    a: &'a Array<T, D>,
+) -> DataRef<'a, T> {
     if let Some(slice) = a.as_slice() {
         DataRef::Borrowed(slice)
     } else {

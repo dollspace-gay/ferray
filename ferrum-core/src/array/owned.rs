@@ -39,20 +39,6 @@ impl<T: Element, D: Dimension> Array<T, D> {
         self.inner
     }
 
-    /// Borrow the inner ndarray. Crate-internal.
-    /// Used by other ferrum-core agents (indexing, creation, manipulation).
-    #[allow(dead_code)]
-    pub(crate) fn as_ndarray(&self) -> &ndarray::Array<T, D::NdarrayDim> {
-        &self.inner
-    }
-
-    /// Mutably borrow the inner ndarray. Crate-internal.
-    /// Used by other ferrum-core agents (indexing, creation, manipulation).
-    #[allow(dead_code)]
-    pub(crate) fn as_ndarray_mut(&mut self) -> &mut ndarray::Array<T, D::NdarrayDim> {
-        &mut self.inner
-    }
-
     // -- Public construction --
 
     /// Create a new array filled with the given value.
