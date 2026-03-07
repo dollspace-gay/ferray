@@ -2,11 +2,12 @@
   "uuid": "533392fc-ddf7-45ae-b9eb-8f04e0e33534",
   "display_id": 9,
   "title": "Implement ferrum workspace and reexport crate: prelude, config, feature flags",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "driver--build-ferrum-phase-0-coordinator",
   "created_at": "2026-03-05T21:40:36.042038510Z",
-  "updated_at": "2026-03-05T21:40:37.606397910Z",
+  "updated_at": "2026-03-07T01:56:04.754689697Z",
+  "closed_at": "2026-03-07T01:56:04.754689697Z",
   "labels": [
     "feature"
   ]
