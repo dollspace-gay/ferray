@@ -2,11 +2,12 @@
   "uuid": "4b123506-9969-4810-8d1b-22d5ff4e4e74",
   "display_id": 25,
   "title": "Phase 4: const generic shapes — Shape1 through Shape6 with compile-time checking",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-06T20:42:27.517992597Z",
-  "updated_at": "2026-03-06T20:42:29.405771836Z",
+  "updated_at": "2026-03-07T01:57:11.897846896Z",
+  "closed_at": "2026-03-07T01:57:11.897846896Z",
   "labels": [
     "const_shapes"
   ]
