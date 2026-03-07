@@ -2,12 +2,13 @@
   "uuid": "f9cffe9c-1662-4ae7-be26-89e92100f95e",
   "display_id": 20,
   "title": "Implement ferrum-strings: StringArray type, vectorized string operations, regex support",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "parent_uuid": "dbf0100e-f29e-4f13-b4d5-2b1eb9963d0e",
   "created_by": "driver--build-ferrum-phase-0-coordinator",
   "created_at": "2026-03-06T20:11:17.223641479Z",
-  "updated_at": "2026-03-06T20:19:18.884388785Z",
+  "updated_at": "2026-03-07T01:57:02.869402280Z",
+  "closed_at": "2026-03-07T01:57:02.869402280Z",
   "comments": [
     {
       "id": 31,
