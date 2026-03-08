@@ -1,0 +1,10 @@
+{
+  "uuid": "82d87716-3cbe-4d82-a2bd-f75240049462",
+  "display_id": 42,
+  "title": "Fix exp_fast SIMD dispatch so it auto-vectorizes without target-cpu=native",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-08T01:01:46.825090328Z",
+  "updated_at": "2026-03-08T01:01:46.825090328Z"
+}
