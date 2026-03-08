@@ -3,7 +3,6 @@
 // This is the top-level crate that users depend on. It re-exports all
 // subcrates into a unified namespace, matching NumPy's `import numpy as np`.
 
-#[doc = include_str!("../../README.md")]
 pub mod config;
 pub mod prelude;
 
