@@ -484,6 +484,77 @@ impl pulp::WithSimd for ReciprocalF64Op<'_> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// exp_fast: pulp-dispatched batch operations
+// ---------------------------------------------------------------------------
+// These route exp_fast through pulp's per-ISA compilation so LLVM can
+// auto-vectorize the Remez polynomial for AVX2+FMA without requiring
+// the user to set -C target-cpu=native.
+// See: https://github.com/dollspace-gay/ferray/issues/6
+
+struct ExpFastF64Op<'a> {
+    input: &'a [f64],
+    output: &'a mut [f64],
+}
+
+impl pulp::WithSimd for ExpFastF64Op<'_> {
+    type Output = ();
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, _simd: S) -> Self::Output {
+        for i in 0..self.input.len() {
+            self.output[i] = crate::fast_exp::exp_fast_f64(self.input[i]);
+        }
+    }
+}
+
+struct ExpFastF32Op<'a> {
+    input: &'a [f32],
+    output: &'a mut [f32],
+}
+
+impl pulp::WithSimd for ExpFastF32Op<'_> {
+    type Output = ();
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, _simd: S) -> Self::Output {
+        for i in 0..self.input.len() {
+            self.output[i] = crate::fast_exp::exp_fast_f32(self.input[i]);
+        }
+    }
+}
+
+/// Dispatch `exp_fast` for f64 slices through pulp's per-ISA compilation.
+///
+/// This ensures the Even/Odd Remez polynomial auto-vectorizes for AVX2+FMA
+/// even when the crate is built without `-C target-cpu=native`.
+#[inline]
+pub fn dispatch_exp_fast_f64(input: &[f64], output: &mut [f64]) {
+    debug_assert_eq!(input.len(), output.len());
+    if force_scalar() {
+        for i in 0..input.len() {
+            output[i] = crate::fast_exp::exp_fast_f64(input[i]);
+        }
+    } else {
+        let arch = Arch::new();
+        arch.dispatch(ExpFastF64Op { input, output });
+    }
+}
+
+/// Dispatch `exp_fast` for f32 slices through pulp's per-ISA compilation.
+#[inline]
+pub fn dispatch_exp_fast_f32(input: &[f32], output: &mut [f32]) {
+    debug_assert_eq!(input.len(), output.len());
+    if force_scalar() {
+        for i in 0..input.len() {
+            output[i] = crate::fast_exp::exp_fast_f32(input[i]);
+        }
+    } else {
+        let arch = Arch::new();
+        arch.dispatch(ExpFastF32Op { input, output });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

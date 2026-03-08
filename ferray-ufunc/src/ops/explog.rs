@@ -9,7 +9,7 @@ use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::cr_math::CrMath;
-use crate::helpers::{binary_float_op, unary_float_op, unary_slice_op_f32, unary_slice_op_f64};
+use crate::helpers::{binary_float_op, unary_float_op};
 
 /// Elementwise exponential (e^x).
 pub fn exp<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
@@ -41,20 +41,42 @@ where
     if TypeId::of::<T>() == TypeId::of::<f64>() {
         // SAFETY: T is f64 — reinterpret the array reference
         let f64_input = unsafe { &*(input as *const Array<T, D> as *const Array<f64, D>) };
-        let result = unary_slice_op_f64(
-            f64_input,
-            crate::fast_exp::exp_fast_batch_f64,
-            crate::fast_exp::exp_fast_f64,
-        )?;
+        let n = f64_input.size();
+        let result = if let Some(slice) = f64_input.as_slice() {
+            let mut data = Vec::with_capacity(n);
+            #[allow(clippy::uninit_vec)]
+            unsafe {
+                data.set_len(n);
+            }
+            crate::dispatch::dispatch_exp_fast_f64(slice, &mut data);
+            Array::from_vec(f64_input.dim().clone(), data)?
+        } else {
+            let data: Vec<f64> = f64_input
+                .iter()
+                .map(|&x| crate::fast_exp::exp_fast_f64(x))
+                .collect();
+            Array::from_vec(f64_input.dim().clone(), data)?
+        };
         // SAFETY: T is f64, reinterpret back
         Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
         let f32_input = unsafe { &*(input as *const Array<T, D> as *const Array<f32, D>) };
-        let result = unary_slice_op_f32(
-            f32_input,
-            crate::fast_exp::exp_fast_batch_f32,
-            crate::fast_exp::exp_fast_f32,
-        )?;
+        let n = f32_input.size();
+        let result = if let Some(slice) = f32_input.as_slice() {
+            let mut data = Vec::with_capacity(n);
+            #[allow(clippy::uninit_vec)]
+            unsafe {
+                data.set_len(n);
+            }
+            crate::dispatch::dispatch_exp_fast_f32(slice, &mut data);
+            Array::from_vec(f32_input.dim().clone(), data)?
+        } else {
+            let data: Vec<f32> = f32_input
+                .iter()
+                .map(|&x| crate::fast_exp::exp_fast_f32(x))
+                .collect();
+            Array::from_vec(f32_input.dim().clone(), data)?
+        };
         Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
     } else {
         // Fallback for other float types: use libm exp
