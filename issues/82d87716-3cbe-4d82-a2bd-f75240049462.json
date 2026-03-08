@@ -6,8 +6,19 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-08T01:01:46.825090328Z",
-  "updated_at": "2026-03-08T01:01:49.576102831Z",
+  "updated_at": "2026-03-08T01:01:59.883609947Z",
   "labels": [
     "fix"
+  ],
+  "comments": [
+    {
+      "id": 53,
+      "author": "phase-4-coordinator",
+      "content": "Plan: Route exp_fast_batch_f64 and exp_fast_batch_f32 through pulp::WithSimd dispatch so LLVM auto-vectorizes within per-ISA compilation. Currently exp_fast bypasses pulp entirely — the batch function is a plain scalar loop called via unary_slice_op_f64. Fix: create ExpFastF64Op/ExpFastF32Op WithSimd impls, replace the direct batch calls in explog.rs with pulp-dispatched versions. Ref: GitHub issue dollspace-gay/ferray#6",
+      "created_at": "2026-03-08T01:01:59.883609658Z",
+      "kind": "plan",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAkI1EGIlsTVXdsPiiHaSgj3spO4Wj1npZhozxc351a2H4zyKF+Cslom5jiA0DbWVV8qw+I7AootvsSBRq5U5lCQ=="
+    }
   ]
 }
