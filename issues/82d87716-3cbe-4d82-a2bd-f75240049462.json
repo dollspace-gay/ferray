@@ -6,7 +6,7 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-08T01:01:46.825090328Z",
-  "updated_at": "2026-03-08T01:02:43.837933334Z",
+  "updated_at": "2026-03-08T01:04:34.287022583Z",
   "labels": [
     "fix"
   ],
@@ -28,6 +28,15 @@
       "kind": "decision",
       "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
       "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAdXD3sPrNEEV9dIpPNdhXrwlxesJ3qCj1dMtycXScPbOBX7QTf6LqxX8vAoYsuKCGlN6AFi3rSje0K3UwoUDtCw=="
+    },
+    {
+      "id": 55,
+      "author": "phase-4-coordinator",
+      "content": "Delivered: ExpFastF64Op/ExpFastF32Op WithSimd impls added to dispatch.rs. exp_fast in explog.rs now routes through dispatch_exp_fast_f64/f32 instead of calling batch functions directly. pulp compiles the WithSimd body for each ISA tier, so LLVM auto-vectorizes for AVX2+FMA without -C target-cpu=native. All 53 ufunc tests pass, clippy clean.",
+      "created_at": "2026-03-08T01:04:34.287022267Z",
+      "kind": "result",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAhWgqjxMDCHD2JQBEiXk+N50Vs6ewxgLi9yMjDtzYfFg89IjtxxNSJa6TnarqF7EPmp8uWpw5qZkbHZ/A0mTCAw=="
     }
   ]
 }
