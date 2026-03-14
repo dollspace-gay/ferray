@@ -16,6 +16,7 @@ use ferray_core::error::FerrayResult;
 use self::contraction::generic_contraction;
 use self::optimizer::{EinsumStrategy, optimize};
 use self::parser::parse_subscripts;
+use crate::scalar::LinalgFloat;
 
 /// Compute Einstein summation notation.
 ///
@@ -37,10 +38,10 @@ use self::parser::parse_subscripts;
 /// # Errors
 /// - `FerrayError::InvalidValue` for malformed subscripts.
 /// - `FerrayError::ShapeMismatch` for incompatible operand shapes.
-pub fn einsum(
+pub fn einsum<T: LinalgFloat>(
     subscripts: &str,
-    operands: &[&Array<f64, IxDyn>],
-) -> FerrayResult<Array<f64, IxDyn>> {
+    operands: &[&Array<T, IxDyn>],
+) -> FerrayResult<Array<T, IxDyn>> {
     let shapes: Vec<&[usize]> = operands.iter().map(|o| o.shape()).collect();
     let expr = parse_subscripts(subscripts, &shapes)?;
 
@@ -61,27 +62,28 @@ pub fn einsum(
     generic_contraction(&expr, operands)
 }
 
-fn execute_matmul(
-    a: &Array<f64, IxDyn>,
-    b: &Array<f64, IxDyn>,
+fn execute_matmul<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
     expr: &parser::EinsumExpr,
-) -> FerrayResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     // For simple 2D matmul, delegate to our matmul
     let a_shape = a.shape();
     let b_shape = b.shape();
 
     if a_shape.len() == 2 && b_shape.len() == 2 {
-        let a_data: Vec<f64> = a.iter().copied().collect();
-        let b_data: Vec<f64> = b.iter().copied().collect();
+        let a_data: Vec<T> = a.iter().copied().collect();
+        let b_data: Vec<T> = b.iter().copied().collect();
         let (m, k) = (a_shape[0], a_shape[1]);
         let n = b_shape[1];
 
-        let mut result = vec![0.0; m * n];
+        let zero = T::from_f64_const(0.0);
+        let mut result = vec![zero; m * n];
         for i in 0..m {
             for p in 0..k {
                 let a_ip = a_data[i * k + p];
                 for j in 0..n {
-                    result[i * n + j] += a_ip * b_data[p * n + j];
+                    result[i * n + j] = result[i * n + j] + a_ip * b_data[p * n + j];
                 }
             }
         }
@@ -92,12 +94,12 @@ fn execute_matmul(
     generic_contraction(expr, &[a, b])
 }
 
-fn execute_tensordot(
-    a: &Array<f64, IxDyn>,
-    b: &Array<f64, IxDyn>,
+fn execute_tensordot<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
     axes_a: Vec<usize>,
     axes_b: Vec<usize>,
-) -> FerrayResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     use crate::products::tensordot::{TensordotAxes, tensordot};
     tensordot(a, b, TensordotAxes::Pairs(axes_a, axes_b))
 }

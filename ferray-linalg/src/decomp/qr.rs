@@ -7,6 +7,7 @@ use ferray_core::dimension::Ix2;
 use ferray_core::error::FerrayResult;
 
 use crate::faer_bridge;
+use crate::scalar::LinalgFloat;
 
 /// Mode for QR decomposition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,7 +24,10 @@ pub enum QrMode {
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the input is not 2D.
-pub fn qr(a: &Array<f64, Ix2>, mode: QrMode) -> FerrayResult<(Array<f64, Ix2>, Array<f64, Ix2>)> {
+pub fn qr<T: LinalgFloat>(
+    a: &Array<T, Ix2>,
+    mode: QrMode,
+) -> FerrayResult<(Array<T, Ix2>, Array<T, Ix2>)> {
     let mat = faer_bridge::array2_to_faer(a);
     let decomp = mat.as_ref().qr();
 
@@ -87,6 +91,18 @@ mod tests {
                 orig[i]
             );
         }
+    }
+
+    #[test]
+    fn qr_f32() {
+        let a = Array::<f32, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0],
+        )
+        .unwrap();
+        let (q, r) = qr(&a, QrMode::Reduced).unwrap();
+        assert_eq!(q.shape(), &[3, 3]);
+        assert_eq!(r.shape(), &[3, 3]);
     }
 
     #[test]

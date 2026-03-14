@@ -145,6 +145,8 @@ pub fn min_scalar_type(dt: DType) -> DType {
         Complex32 | Complex64 => Complex32,
         #[cfg(feature = "f16")]
         F16 => F16,
+        #[cfg(feature = "bf16")]
+        BF16 => BF16,
     }
 }
 

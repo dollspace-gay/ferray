@@ -8,6 +8,7 @@ use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::batch;
 use crate::faer_bridge;
+use crate::scalar::LinalgFloat;
 
 /// Specifies the type of matrix or vector norm to compute.
 #[derive(Debug, Clone, Copy)]
@@ -36,7 +37,7 @@ pub enum NormOrder {
 ///
 /// # Errors
 /// - `FerrayError::InvalidValue` for invalid norm specifications.
-pub fn norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrayResult<f64> {
+pub fn norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult<T> {
     let shape = a.shape();
     match shape.len() {
         1 => vector_norm(a, ord),
@@ -48,103 +49,158 @@ pub fn norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrayResult<f64> {
     }
 }
 
-fn vector_norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrayResult<f64> {
-    let data: Vec<f64> = a.iter().copied().collect();
+fn vector_norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult<T> {
+    let data: Vec<T> = a.iter().copied().collect();
     match ord {
         NormOrder::L2 | NormOrder::Fro => {
-            let sum: f64 = data.iter().map(|x| x * x).sum();
+            let sum: T = data
+                .iter()
+                .map(|&x| x * x)
+                .fold(T::from_f64_const(0.0), |a, b| a + b);
             Ok(sum.sqrt())
         }
         NormOrder::L1 => {
-            let sum: f64 = data.iter().map(|x| x.abs()).sum();
+            let sum: T = data
+                .iter()
+                .map(|x| x.abs())
+                .fold(T::from_f64_const(0.0), |a, b| a + b);
             Ok(sum)
         }
         NormOrder::Inf => {
-            let max = data.iter().map(|x| x.abs()).fold(0.0f64, f64::max);
+            let max = data
+                .iter()
+                .map(|x| x.abs())
+                .fold(T::from_f64_const(0.0), |a, b| if a > b { a } else { b });
             Ok(max)
         }
         NormOrder::NegInf => {
-            let min = data.iter().map(|x| x.abs()).fold(f64::INFINITY, f64::min);
+            let min = data
+                .iter()
+                .map(|x| x.abs())
+                .fold(<T as num_traits::Float>::infinity(), |a, b| {
+                    if a < b { a } else { b }
+                });
             Ok(min)
         }
         NormOrder::Nuc => {
             // Nuclear norm is not typically defined for vectors; use L1
-            let sum: f64 = data.iter().map(|x| x.abs()).sum();
+            let sum: T = data
+                .iter()
+                .map(|x| x.abs())
+                .fold(T::from_f64_const(0.0), |a, b| a + b);
             Ok(sum)
         }
         NormOrder::P(p) => {
             if p == 0.0 {
                 // Number of nonzero elements
-                let count = data.iter().filter(|&&x| x != 0.0).count() as f64;
-                Ok(count)
+                let zero = T::from_f64_const(0.0);
+                let count = data.iter().filter(|&&x| x != zero).count();
+                Ok(T::from_usize(count))
             } else if p == f64::INFINITY {
-                let max = data.iter().map(|x| x.abs()).fold(0.0f64, f64::max);
+                let max = data
+                    .iter()
+                    .map(|x| x.abs())
+                    .fold(T::from_f64_const(0.0), |a, b| if a > b { a } else { b });
                 Ok(max)
             } else if p == f64::NEG_INFINITY {
-                let min = data.iter().map(|x| x.abs()).fold(f64::INFINITY, f64::min);
+                let min = data
+                    .iter()
+                    .map(|x| x.abs())
+                    .fold(<T as num_traits::Float>::infinity(), |a, b| {
+                        if a < b { a } else { b }
+                    });
                 Ok(min)
             } else {
-                let sum: f64 = data.iter().map(|x| x.abs().powf(p)).sum();
-                Ok(sum.powf(1.0 / p))
+                let p_t = T::from_f64_const(p);
+                let sum: T = data
+                    .iter()
+                    .map(|x| x.abs().powf(p_t))
+                    .fold(T::from_f64_const(0.0), |a, b| a + b);
+                Ok(sum.powf(T::from_f64_const(1.0) / p_t))
             }
         }
     }
 }
 
-fn matrix_norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrayResult<f64> {
+fn matrix_norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult<T> {
     let shape = a.shape();
     let (m, n) = (shape[0], shape[1]);
-    let data: Vec<f64> = a.iter().copied().collect();
+    let data: Vec<T> = a.iter().copied().collect();
 
     match ord {
         NormOrder::Fro => {
-            let sum: f64 = data.iter().map(|x| x * x).sum();
+            let sum: T = data
+                .iter()
+                .map(|&x| x * x)
+                .fold(T::from_f64_const(0.0), |a, b| a + b);
             Ok(sum.sqrt())
         }
         NormOrder::Nuc => {
             // Sum of singular values
-            let a2 = Array::<f64, Ix2>::from_vec(Ix2::new([m, n]), data)?;
+            let a2 = Array::<T, Ix2>::from_vec(Ix2::new([m, n]), data)?;
             let (_u, s, _vt) = crate::decomp::svd(&a2, false)?;
-            let sum: f64 = s.iter().copied().sum();
+            let sum: T = s.iter().copied().fold(T::from_f64_const(0.0), |a, b| a + b);
             Ok(sum)
         }
         NormOrder::L2 => {
             // Largest singular value
-            let a2 = Array::<f64, Ix2>::from_vec(Ix2::new([m, n]), data)?;
+            let a2 = Array::<T, Ix2>::from_vec(Ix2::new([m, n]), data)?;
             let (_u, s, _vt) = crate::decomp::svd(&a2, false)?;
             let svals = s.as_slice().unwrap();
-            Ok(if svals.is_empty() { 0.0 } else { svals[0] })
+            Ok(if svals.is_empty() {
+                T::from_f64_const(0.0)
+            } else {
+                svals[0]
+            })
         }
         NormOrder::Inf => {
             // Max absolute row sum
-            let mut max_sum = 0.0f64;
+            let mut max_sum = T::from_f64_const(0.0);
             for i in 0..m {
-                let row_sum: f64 = (0..n).map(|j| data[i * n + j].abs()).sum();
-                max_sum = max_sum.max(row_sum);
+                let mut row_sum = T::from_f64_const(0.0);
+                for j in 0..n {
+                    row_sum = row_sum + data[i * n + j].abs();
+                }
+                if row_sum > max_sum {
+                    max_sum = row_sum;
+                }
             }
             Ok(max_sum)
         }
         NormOrder::NegInf => {
             // Min absolute row sum
-            let mut min_sum = f64::INFINITY;
+            let mut min_sum = <T as num_traits::Float>::infinity();
             for i in 0..m {
-                let row_sum: f64 = (0..n).map(|j| data[i * n + j].abs()).sum();
-                min_sum = min_sum.min(row_sum);
+                let mut row_sum = T::from_f64_const(0.0);
+                for j in 0..n {
+                    row_sum = row_sum + data[i * n + j].abs();
+                }
+                if row_sum < min_sum {
+                    min_sum = row_sum;
+                }
             }
             Ok(min_sum)
         }
         NormOrder::L1 => {
             // Max absolute column sum
-            let mut max_sum = 0.0f64;
+            let mut max_sum = T::from_f64_const(0.0);
             for j in 0..n {
-                let col_sum: f64 = (0..m).map(|i| data[i * n + j].abs()).sum();
-                max_sum = max_sum.max(col_sum);
+                let mut col_sum = T::from_f64_const(0.0);
+                for i in 0..m {
+                    col_sum = col_sum + data[i * n + j].abs();
+                }
+                if col_sum > max_sum {
+                    max_sum = col_sum;
+                }
             }
             Ok(max_sum)
         }
         NormOrder::P(_) => {
             // General p-norm not standard for matrices; use Frobenius
-            let sum: f64 = data.iter().map(|x| x * x).sum();
+            let sum: T = data
+                .iter()
+                .map(|&x| x * x)
+                .fold(T::from_f64_const(0.0), |a, b| a + b);
             Ok(sum.sqrt())
         }
     }
@@ -156,7 +212,7 @@ fn matrix_norm(a: &Array<f64, IxDyn>, ord: NormOrder) -> FerrayResult<f64> {
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if not a square matrix.
-pub fn cond(a: &Array<f64, Ix2>, p: NormOrder) -> FerrayResult<f64> {
+pub fn cond<T: LinalgFloat>(a: &Array<T, Ix2>, p: NormOrder) -> FerrayResult<T> {
     let shape = a.shape();
     if shape[0] != shape[1] {
         return Err(FerrayError::shape_mismatch(format!(
@@ -168,50 +224,49 @@ pub fn cond(a: &Array<f64, Ix2>, p: NormOrder) -> FerrayResult<f64> {
     match p {
         NormOrder::L2 | NormOrder::Fro => {
             let n = shape[0];
-            // For 2x2, use the closed-form singular value formula which is
-            // more accurate than going through a full SVD decomposition.
+            // For 2x2, use the closed-form singular value formula
             if n == 2 {
-                // Closed-form 2x2 condition number via A^T A eigenvalues.
-                // cond = sqrt(λ_max / λ_min) where λ are eigenvalues of A^T A.
-                // For [[a,b],[c,d]]:
-                //   S = a²+b²+c²+d²
-                //   D = det(A^T A) = (ad-bc)²
-                //   cond² = (S + √(S²-4D)) / (S - √(S²-4D))
-                // Using the identity cond = (S + √(S²-4D)) / (2|det(A)|)
-                // avoids cancellation in the denominator.
                 let s = a.as_slice().unwrap();
                 let (a11, a12, a21, a22) = (s[0], s[1], s[2], s[3]);
                 let det_a = a11 * a22 - a12 * a21;
-                if det_a.abs() < f64::EPSILON * 1e-100 {
-                    return Ok(f64::INFINITY);
+                let eps_threshold = T::machine_epsilon() * T::from_f64_const(1e-100);
+                if det_a.abs() < eps_threshold {
+                    return Ok(<T as num_traits::Float>::infinity());
                 }
                 let sum_sq = a11 * a11 + a12 * a12 + a21 * a21 + a22 * a22;
-                let four_det_sq = 4.0 * det_a * det_a;
-                let disc = (sum_sq * sum_sq - four_det_sq).max(0.0).sqrt();
-                let s_max = ((sum_sq + disc) / 2.0).sqrt();
-                let s_min = det_a.abs() / s_max; // det = s1*s2, so s2 = det/s1
+                let four_det_sq = T::from_f64_const(4.0) * det_a * det_a;
+                let disc_inner = sum_sq * sum_sq - four_det_sq;
+                let disc = if disc_inner < T::from_f64_const(0.0) {
+                    T::from_f64_const(0.0)
+                } else {
+                    disc_inner
+                }
+                .sqrt();
+                let s_max = ((sum_sq + disc) / T::from_f64_const(2.0)).sqrt();
+                let s_min = det_a.abs() / s_max;
                 return Ok(s_max / s_min);
             }
             // General case: cond = largest_sv / smallest_sv
             let (_u, s, _vt) = crate::decomp::svd(a, false)?;
             let svals = s.as_slice().unwrap();
             if svals.is_empty() {
-                return Ok(0.0);
+                return Ok(T::from_f64_const(0.0));
             }
             let max_s = svals[0];
             let min_s = svals[svals.len() - 1];
-            if min_s == 0.0 {
-                Ok(f64::INFINITY)
+            let zero = T::from_f64_const(0.0);
+            if min_s == zero {
+                Ok(<T as num_traits::Float>::infinity())
             } else {
                 Ok(max_s / min_s)
             }
         }
         _ => {
             let a_dyn =
-                Array::<f64, IxDyn>::from_vec(IxDyn::new(shape), a.iter().copied().collect())?;
+                Array::<T, IxDyn>::from_vec(IxDyn::new(shape), a.iter().copied().collect())?;
             let norm_a = norm(&a_dyn, p)?;
             let inv_a = crate::solve::inv(a)?;
-            let inv_dyn = Array::<f64, IxDyn>::from_vec(
+            let inv_dyn = Array::<T, IxDyn>::from_vec(
                 IxDyn::new(inv_a.shape()),
                 inv_a.iter().copied().collect(),
             )?;
@@ -225,7 +280,7 @@ pub fn cond(a: &Array<f64, Ix2>, p: NormOrder) -> FerrayResult<f64> {
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the matrix is not square.
-pub fn det(a: &Array<f64, Ix2>) -> FerrayResult<f64> {
+pub fn det<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<T> {
     let shape = a.shape();
     if shape[0] != shape[1] {
         return Err(FerrayError::shape_mismatch(format!(
@@ -240,13 +295,11 @@ pub fn det(a: &Array<f64, Ix2>) -> FerrayResult<f64> {
 /// Batched determinant for 3D+ arrays.
 ///
 /// Returns a 1D array of determinants, one per batch.
-pub fn det_batched(a: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, Ix1>> {
+pub fn det_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Array<T, Ix1>> {
     let shape = a.shape();
     if shape.len() == 2 {
-        let a2 = Array::<f64, Ix2>::from_vec(
-            Ix2::new([shape[0], shape[1]]),
-            a.iter().copied().collect(),
-        )?;
+        let a2 =
+            Array::<T, Ix2>::from_vec(Ix2::new([shape[0], shape[1]]), a.iter().copied().collect())?;
         let d = det(&a2)?;
         return Array::from_vec(Ix1::new([1]), vec![d]);
     }
@@ -270,14 +323,15 @@ pub fn det_batched(a: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, Ix1>> {
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the matrix is not square.
-pub fn slogdet(a: &Array<f64, Ix2>) -> FerrayResult<(f64, f64)> {
+pub fn slogdet<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<(T, T)> {
     let d = det(a)?;
-    if d == 0.0 {
-        Ok((0.0, f64::NEG_INFINITY))
-    } else if d > 0.0 {
-        Ok((1.0, d.ln()))
+    let zero = T::from_f64_const(0.0);
+    if d == zero {
+        Ok((zero, <T as num_traits::Float>::neg_infinity()))
+    } else if d > zero {
+        Ok((T::from_f64_const(1.0), d.ln()))
     } else {
-        Ok((-1.0, (-d).ln()))
+        Ok((T::from_f64_const(-1.0), (-d).ln()))
     }
 }
 
@@ -288,16 +342,20 @@ pub fn slogdet(a: &Array<f64, Ix2>) -> FerrayResult<(f64, f64)> {
 ///
 /// # Errors
 /// - `FerrayError::InvalidValue` if SVD fails.
-pub fn matrix_rank(a: &Array<f64, Ix2>, tol: Option<f64>) -> FerrayResult<usize> {
+pub fn matrix_rank<T: LinalgFloat>(a: &Array<T, Ix2>, tol: Option<T>) -> FerrayResult<usize> {
     let (_u, s, _vt) = crate::decomp::svd(a, false)?;
     let svals = s.as_slice().unwrap();
 
     let threshold = tol.unwrap_or_else(|| {
         let m = a.shape()[0];
         let n = a.shape()[1];
-        let max_dim = m.max(n) as f64;
-        let max_s = if svals.is_empty() { 0.0 } else { svals[0] };
-        max_dim * max_s * f64::EPSILON
+        let max_dim = T::from_usize(m.max(n));
+        let max_s = if svals.is_empty() {
+            T::from_f64_const(0.0)
+        } else {
+            svals[0]
+        };
+        max_dim * max_s * T::machine_epsilon()
     });
 
     Ok(svals.iter().filter(|&&s_val| s_val > threshold).count())
@@ -309,14 +367,14 @@ pub fn matrix_rank(a: &Array<f64, Ix2>, tol: Option<f64>) -> FerrayResult<usize>
 ///
 /// # Errors
 /// Returns an error only if the array is malformed (never for valid input).
-pub fn trace(a: &Array<f64, Ix2>) -> FerrayResult<f64> {
+pub fn trace<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<T> {
     let shape = a.shape();
     let (m, n) = (shape[0], shape[1]);
-    let data: Vec<f64> = a.iter().copied().collect();
+    let data: Vec<T> = a.iter().copied().collect();
     let min_dim = m.min(n);
-    let mut sum = 0.0;
+    let mut sum = T::from_f64_const(0.0);
     for i in 0..min_dim {
-        sum += data[i * n + i];
+        sum = sum + data[i * n + i];
     }
     Ok(sum)
 }
@@ -341,6 +399,13 @@ mod tests {
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
         let d = det(&a).unwrap();
         assert!((d - (-2.0)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn det_f32() {
+        let a = Array::<f32, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0f32, 2.0, 3.0, 4.0]).unwrap();
+        let d = det(&a).unwrap();
+        assert!((d - (-2.0f32)).abs() < 1e-5);
     }
 
     #[test]

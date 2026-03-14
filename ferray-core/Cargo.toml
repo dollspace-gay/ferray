@@ -30,6 +30,7 @@ optional = true
 default = ["std"]
 std = []
 f16 = ["dep:half"]
+bf16 = ["dep:half"]
 serde = ["dep:serde", "ndarray/serde"]
 no_std = []
 const_shapes = []

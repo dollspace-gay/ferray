@@ -71,6 +71,9 @@ pub enum DType {
     /// `f16` — only available with the `f16` feature.
     #[cfg(feature = "f16")]
     F16,
+    /// `bf16` (bfloat16) — only available with the `bf16` feature.
+    #[cfg(feature = "bf16")]
+    BF16,
 }
 
 impl DType {
@@ -95,6 +98,8 @@ impl DType {
             Self::Complex64 => 16,
             #[cfg(feature = "f16")]
             Self::F16 => 2,
+            #[cfg(feature = "bf16")]
+            Self::BF16 => 2,
         }
     }
 
@@ -119,14 +124,20 @@ impl DType {
             Self::Complex64 => core::mem::align_of::<Complex<f64>>(),
             #[cfg(feature = "f16")]
             Self::F16 => core::mem::align_of::<half::f16>(),
+            #[cfg(feature = "bf16")]
+            Self::BF16 => core::mem::align_of::<half::bf16>(),
         }
     }
 
-    /// `true` if the dtype is a floating-point type (f16, f32, f64).
+    /// `true` if the dtype is a floating-point type (f16, bf16, f32, f64).
     #[inline]
     pub fn is_float(self) -> bool {
         #[cfg(feature = "f16")]
         if matches!(self, Self::F16) {
+            return true;
+        }
+        #[cfg(feature = "bf16")]
+        if matches!(self, Self::BF16) {
             return true;
         }
         matches!(self, Self::F32 | Self::F64)
@@ -173,13 +184,14 @@ impl DType {
                 | Self::Complex64
         ) || {
             #[cfg(feature = "f16")]
-            {
-                matches!(self, Self::F16)
+            if matches!(self, Self::F16) {
+                return true;
             }
-            #[cfg(not(feature = "f16"))]
-            {
-                false
+            #[cfg(feature = "bf16")]
+            if matches!(self, Self::BF16) {
+                return true;
             }
+            false
         }
     }
 }
@@ -204,6 +216,8 @@ impl fmt::Display for DType {
             Self::Complex64 => "complex128",
             #[cfg(feature = "f16")]
             Self::F16 => "float16",
+            #[cfg(feature = "bf16")]
+            Self::BF16 => "bfloat16",
         };
         write!(f, "{name}")
     }
@@ -381,6 +395,28 @@ impl Element for half::f16 {
     #[inline]
     fn one() -> Self {
         half::f16::ONE
+    }
+}
+
+// bf16 — feature-gated
+#[cfg(feature = "bf16")]
+impl private::Sealed for half::bf16 {}
+
+#[cfg(feature = "bf16")]
+impl Element for half::bf16 {
+    #[inline]
+    fn dtype() -> DType {
+        DType::BF16
+    }
+
+    #[inline]
+    fn zero() -> Self {
+        half::bf16::ZERO
+    }
+
+    #[inline]
+    fn one() -> Self {
+        half::bf16::ONE
     }
 }
 

@@ -7,6 +7,7 @@ use ferray_core::dimension::{Ix1, Ix2};
 use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::faer_bridge;
+use crate::scalar::LinalgFloat;
 
 /// Compute the Singular Value Decomposition of a matrix.
 ///
@@ -19,10 +20,10 @@ use crate::faer_bridge;
 ///
 /// # Errors
 /// - `FerrayError::InvalidValue` if SVD computation fails to converge.
-pub fn svd(
-    a: &Array<f64, Ix2>,
+pub fn svd<T: LinalgFloat>(
+    a: &Array<T, Ix2>,
     full_matrices: bool,
-) -> FerrayResult<(Array<f64, Ix2>, Array<f64, Ix1>, Array<f64, Ix2>)> {
+) -> FerrayResult<(Array<T, Ix2>, Array<T, Ix1>, Array<T, Ix2>)> {
     let mat = faer_bridge::array2_to_faer(a);
 
     let decomp = if full_matrices {
@@ -91,6 +92,40 @@ mod tests {
                 let expected = a.as_slice().unwrap()[i * n + j];
                 assert!(
                     (val - expected).abs() < 1e-10,
+                    "U*S*Vt[{},{}] = {} != {}",
+                    i,
+                    j,
+                    val,
+                    expected
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn svd_f32() {
+        let a =
+            Array::<f32, Ix2>::from_vec(Ix2::new([3, 2]), vec![1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
+        let (u, s, vt) = svd(&a, false).unwrap();
+
+        let us = u.as_slice().unwrap();
+        let ss = s.as_slice().unwrap();
+        let vts = vt.as_slice().unwrap();
+
+        let m = 3;
+        let n = 2;
+        let k = ss.len();
+
+        for i in 0..m {
+            for j in 0..n {
+                let mut val = 0.0f32;
+                for p in 0..k {
+                    val += us[i * k + p] * ss[p] * vts[p * n + j];
+                }
+                let expected = a.as_slice().unwrap()[i * n + j];
+                assert!(
+                    (val - expected).abs() < 1e-4,
                     "U*S*Vt[{},{}] = {} != {}",
                     i,
                     j,

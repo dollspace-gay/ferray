@@ -9,6 +9,8 @@ use ferray_core::error::{FerrayError, FerrayResult};
 
 use rayon::prelude::*;
 
+use crate::scalar::LinalgFloat;
+
 /// Compute the number of batches from a shape, given that the last `tail_dims`
 /// dimensions are the per-element shape.
 pub fn batch_count(shape: &[usize], tail_dims: usize) -> FerrayResult<usize> {
@@ -27,7 +29,7 @@ pub fn batch_count(shape: &[usize], tail_dims: usize) -> FerrayResult<usize> {
 
 /// Extract the i-th 2D matrix from a batched array (last 2 dims are matrix dims).
 /// Data is assumed to be in row-major (C) order.
-pub fn extract_batch_matrix(data: &[f64], shape: &[usize], batch_idx: usize) -> Vec<f64> {
+pub fn extract_batch_matrix<T: Copy>(data: &[T], shape: &[usize], batch_idx: usize) -> Vec<T> {
     let ndim = shape.len();
     let m = shape[ndim - 2];
     let n = shape[ndim - 1];
@@ -41,9 +43,10 @@ pub fn extract_batch_matrix(data: &[f64], shape: &[usize], batch_idx: usize) -> 
 /// a result vector for that batch.
 ///
 /// Results are computed in parallel using Rayon.
-pub fn apply_batched_2d<F>(a: &Array<f64, IxDyn>, f: F) -> FerrayResult<Vec<Vec<f64>>>
+pub fn apply_batched_2d<T, F>(a: &Array<T, IxDyn>, f: F) -> FerrayResult<Vec<Vec<T>>>
 where
-    F: Fn(usize, usize, &[f64]) -> FerrayResult<Vec<f64>> + Send + Sync,
+    T: LinalgFloat,
+    F: Fn(usize, usize, &[T]) -> FerrayResult<Vec<T>> + Send + Sync,
 {
     let shape = a.shape();
     if shape.len() < 2 {
@@ -54,10 +57,10 @@ where
     let m = shape[shape.len() - 2];
     let n = shape[shape.len() - 1];
     let num_batches = batch_count(shape, 2)?;
-    let data: Vec<f64> = a.iter().copied().collect();
+    let data: Vec<T> = a.iter().copied().collect();
     let mat_size = m * n;
 
-    let results: Vec<FerrayResult<Vec<f64>>> = (0..num_batches)
+    let results: Vec<FerrayResult<Vec<T>>> = (0..num_batches)
         .into_par_iter()
         .map(|b| {
             let offset = b * mat_size;
@@ -70,10 +73,11 @@ where
 }
 
 /// Apply a scalar-returning function to each 2D matrix in a batched array.
-/// Returns an Array1<f64> with one scalar per batch.
-pub fn apply_batched_scalar<F>(a: &Array<f64, IxDyn>, f: F) -> FerrayResult<Array<f64, Ix1>>
+/// Returns an Array1<T> with one scalar per batch.
+pub fn apply_batched_scalar<T, F>(a: &Array<T, IxDyn>, f: F) -> FerrayResult<Array<T, Ix1>>
 where
-    F: Fn(usize, usize, &[f64]) -> FerrayResult<f64> + Send + Sync,
+    T: LinalgFloat,
+    F: Fn(usize, usize, &[T]) -> FerrayResult<T> + Send + Sync,
 {
     let shape = a.shape();
     if shape.len() < 2 {
@@ -84,10 +88,10 @@ where
     let m = shape[shape.len() - 2];
     let n = shape[shape.len() - 1];
     let num_batches = batch_count(shape, 2)?;
-    let data: Vec<f64> = a.iter().copied().collect();
+    let data: Vec<T> = a.iter().copied().collect();
     let mat_size = m * n;
 
-    let results: Vec<FerrayResult<f64>> = (0..num_batches)
+    let results: Vec<FerrayResult<T>> = (0..num_batches)
         .into_par_iter()
         .map(|b| {
             let offset = b * mat_size;
@@ -96,20 +100,21 @@ where
         })
         .collect();
 
-    let scalars: FerrayResult<Vec<f64>> = results.into_iter().collect();
+    let scalars: FerrayResult<Vec<T>> = results.into_iter().collect();
     let scalars = scalars?;
     Array::from_vec(Ix1::new([scalars.len()]), scalars)
 }
 
 /// Apply a function that takes two 2D matrices (a, b) from batched arrays.
 /// Both arrays must have the same batch dimensions.
-pub fn apply_batched_2d_pair<F>(
-    a: &Array<f64, IxDyn>,
-    b: &Array<f64, IxDyn>,
+pub fn apply_batched_2d_pair<T, F>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
     f: F,
-) -> FerrayResult<Vec<Vec<f64>>>
+) -> FerrayResult<Vec<Vec<T>>>
 where
-    F: Fn(usize, usize, &[f64], usize, usize, &[f64]) -> FerrayResult<Vec<f64>> + Send + Sync,
+    T: LinalgFloat,
+    F: Fn(usize, usize, &[T], usize, usize, &[T]) -> FerrayResult<Vec<T>> + Send + Sync,
 {
     let a_shape = a.shape();
     let b_shape = b.shape();
@@ -131,12 +136,12 @@ where
     let bm = b_shape[b_shape.len() - 2];
     let bn = b_shape[b_shape.len() - 1];
     let num_batches = batch_count(a_shape, 2)?;
-    let a_data: Vec<f64> = a.iter().copied().collect();
-    let b_data: Vec<f64> = b.iter().copied().collect();
+    let a_data: Vec<T> = a.iter().copied().collect();
+    let b_data: Vec<T> = b.iter().copied().collect();
     let a_mat_size = am * an;
     let b_mat_size = bm * bn;
 
-    let results: Vec<FerrayResult<Vec<f64>>> = (0..num_batches)
+    let results: Vec<FerrayResult<Vec<T>>> = (0..num_batches)
         .into_par_iter()
         .map(|idx| {
             let a_offset = idx * a_mat_size;
@@ -151,12 +156,12 @@ where
 }
 
 /// Helper: create a faer::Mat from a flat row-major slice.
-pub fn slice_to_faer(m: usize, n: usize, data: &[f64]) -> faer::Mat<f64> {
+pub fn slice_to_faer<T: LinalgFloat>(m: usize, n: usize, data: &[T]) -> faer::Mat<T> {
     faer::Mat::from_fn(m, n, |i, j| data[i * n + j])
 }
 
 /// Helper: extract flat row-major data from a faer::Mat.
-pub fn faer_to_vec(mat: &faer::Mat<f64>) -> Vec<f64> {
+pub fn faer_to_vec<T: LinalgFloat>(mat: &faer::Mat<T>) -> Vec<T> {
     let (m, n) = mat.shape();
     let mut v = Vec::with_capacity(m * n);
     for i in 0..m {
@@ -190,6 +195,14 @@ mod tests {
     fn slice_faer_roundtrip() {
         let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
         let mat = slice_to_faer(2, 3, &data);
+        let back = faer_to_vec(&mat);
+        assert_eq!(data, back);
+    }
+
+    #[test]
+    fn slice_faer_roundtrip_f32() {
+        let data = vec![1.0f32, 2.0, 3.0, 4.0];
+        let mat = slice_to_faer(2, 2, &data);
         let back = faer_to_vec(&mat);
         assert_eq!(data, back);
     }

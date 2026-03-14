@@ -11,6 +11,8 @@ use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix2, IxDyn};
 use ferray_core::error::{FerrayError, FerrayResult};
 
+use crate::scalar::LinalgFloat;
+
 pub use einsum::einsum;
 pub use tensordot::{TensordotAxes, tensordot};
 
@@ -23,9 +25,13 @@ pub use tensordot::{TensordotAxes, tensordot};
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if dimensions are incompatible.
-pub fn dot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
+pub fn dot<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
+    let zero = T::from_f64_const(0.0);
 
     match (a_shape.len(), b_shape.len()) {
         (1, 1) => {
@@ -36,14 +42,18 @@ pub fn dot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f
                     a_shape[0], b_shape[0]
                 )));
             }
-            let sum: f64 = a.iter().zip(b.iter()).map(|(&x, &y)| x * y).sum();
+            let sum: T = a
+                .iter()
+                .zip(b.iter())
+                .map(|(&x, &y)| x * y)
+                .fold(zero, |acc, v| acc + v);
             Array::from_vec(IxDyn::new(&[]), vec![sum])
                 .or_else(|_| Array::from_vec(IxDyn::new(&[1]), vec![sum]))
         }
         (2, 2) => {
             // Matrix multiplication
             let result = matmul_2d(a, b)?;
-            let data: Vec<f64> = result.iter().copied().collect();
+            let data: Vec<T> = result.iter().copied().collect();
             Array::from_vec(IxDyn::new(result.shape()), data)
         }
         (_, 1) => {
@@ -58,14 +68,14 @@ pub fn dot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f
             let out_shape: Vec<usize> = a_shape[..a_shape.len() - 1].to_vec();
             let out_size: usize = out_shape.iter().product::<usize>().max(1);
 
-            let a_data: Vec<f64> = a.iter().copied().collect();
-            let b_data: Vec<f64> = b.iter().copied().collect();
+            let a_data: Vec<T> = a.iter().copied().collect();
+            let b_data: Vec<T> = b.iter().copied().collect();
 
             let mut result = Vec::with_capacity(out_size);
             for i in 0..out_size {
-                let mut sum = 0.0;
+                let mut sum = zero;
                 for j in 0..k {
-                    sum += a_data[i * k + j] * b_data[j];
+                    sum = sum + a_data[i * k + j] * b_data[j];
                 }
                 result.push(sum);
             }
@@ -90,9 +100,9 @@ pub fn dot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if total element counts differ.
-pub fn vdot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<f64> {
-    let a_flat: Vec<f64> = a.iter().copied().collect();
-    let b_flat: Vec<f64> = b.iter().copied().collect();
+pub fn vdot<T: LinalgFloat>(a: &Array<T, IxDyn>, b: &Array<T, IxDyn>) -> FerrayResult<T> {
+    let a_flat: Vec<T> = a.iter().copied().collect();
+    let b_flat: Vec<T> = b.iter().copied().collect();
     if a_flat.len() != b_flat.len() {
         return Err(FerrayError::shape_mismatch(format!(
             "vdot: arrays have different sizes {} and {}",
@@ -100,7 +110,12 @@ pub fn vdot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<f64> {
             b_flat.len()
         )));
     }
-    Ok(a_flat.iter().zip(b_flat.iter()).map(|(&x, &y)| x * y).sum())
+    let zero = T::from_f64_const(0.0);
+    Ok(a_flat
+        .iter()
+        .zip(b_flat.iter())
+        .map(|(&x, &y)| x * y)
+        .fold(zero, |acc, v| acc + v))
 }
 
 /// Inner product of two arrays.
@@ -110,7 +125,10 @@ pub fn vdot(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<f64> {
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the last dimensions don't match.
-pub fn inner(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
+pub fn inner<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
 
@@ -139,9 +157,12 @@ pub fn inner(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if inputs are not 1D.
-pub fn outer(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
-    let a_flat: Vec<f64> = a.iter().copied().collect();
-    let b_flat: Vec<f64> = b.iter().copied().collect();
+pub fn outer<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
+    let a_flat: Vec<T> = a.iter().copied().collect();
+    let b_flat: Vec<T> = b.iter().copied().collect();
     let m = a_flat.len();
     let n = b_flat.len();
 
@@ -165,9 +186,13 @@ pub fn outer(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if inner dimensions don't match.
-pub fn matmul(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
+pub fn matmul<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
+    let zero = T::from_f64_const(0.0);
 
     match (a_shape.len(), b_shape.len()) {
         (1, 1) => {
@@ -185,12 +210,12 @@ pub fn matmul(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Arra
                     k, b_shape[0], n
                 )));
             }
-            let a_data: Vec<f64> = a.iter().copied().collect();
-            let b_data: Vec<f64> = b.iter().copied().collect();
-            let mut result = vec![0.0; n];
+            let a_data: Vec<T> = a.iter().copied().collect();
+            let b_data: Vec<T> = b.iter().copied().collect();
+            let mut result = vec![zero; n];
             for j in 0..n {
                 for p in 0..k {
-                    result[j] += a_data[p] * b_data[p * n + j];
+                    result[j] = result[j] + a_data[p] * b_data[p * n + j];
                 }
             }
             Array::from_vec(IxDyn::new(&[n]), result)
@@ -204,19 +229,19 @@ pub fn matmul(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Arra
                     m, k, b_shape[0]
                 )));
             }
-            let a_data: Vec<f64> = a.iter().copied().collect();
-            let b_data: Vec<f64> = b.iter().copied().collect();
-            let mut result = vec![0.0; m];
+            let a_data: Vec<T> = a.iter().copied().collect();
+            let b_data: Vec<T> = b.iter().copied().collect();
+            let mut result = vec![zero; m];
             for i in 0..m {
                 for p in 0..k {
-                    result[i] += a_data[i * k + p] * b_data[p];
+                    result[i] = result[i] + a_data[i * k + p] * b_data[p];
                 }
             }
             Array::from_vec(IxDyn::new(&[m]), result)
         }
         (2, 2) => {
             let result = matmul_2d(a, b)?;
-            let data: Vec<f64> = result.iter().copied().collect();
+            let data: Vec<T> = result.iter().copied().collect();
             Array::from_vec(IxDyn::new(result.shape()), data)
         }
         _ => {
@@ -232,7 +257,10 @@ const FAER_MATMUL_THRESHOLD: usize = 64;
 /// Above this threshold, use faer with Rayon parallelism.
 const FAER_PARALLEL_THRESHOLD: usize = 256;
 
-fn matmul_2d(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, Ix2>> {
+fn matmul_2d<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, Ix2>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
     let (m, k1) = (a_shape[0], a_shape[1]);
@@ -246,17 +274,18 @@ fn matmul_2d(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array
 
     let k = k1;
     let max_dim = m.max(n).max(k);
+    let zero = T::from_f64_const(0.0);
 
     // For small matrices, the naive ikj loop avoids faer setup/conversion overhead
     if max_dim <= FAER_MATMUL_THRESHOLD {
-        let a_data: Vec<f64> = a.iter().copied().collect();
-        let b_data: Vec<f64> = b.iter().copied().collect();
-        let mut result = vec![0.0; m * n];
+        let a_data: Vec<T> = a.iter().copied().collect();
+        let b_data: Vec<T> = b.iter().copied().collect();
+        let mut result = vec![zero; m * n];
         for i in 0..m {
             for p in 0..k {
                 let a_ip = a_data[i * k + p];
                 for j in 0..n {
-                    result[i * n + j] += a_ip * b_data[p * n + j];
+                    result[i * n + j] = result[i * n + j] + a_ip * b_data[p * n + j];
                 }
             }
         }
@@ -266,7 +295,7 @@ fn matmul_2d(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array
     // Use faer's optimized matmul with explicit parallelism control
     let a_faer = crate::faer_bridge::array2_to_faer_general(a)?;
     let b_faer = crate::faer_bridge::array2_to_faer_general(b)?;
-    let mut c_faer = faer::Mat::<f64>::zeros(m, n);
+    let mut c_faer = faer::Mat::<T>::zeros(m, n);
 
     let par = if max_dim >= FAER_PARALLEL_THRESHOLD {
         faer::Par::Rayon(
@@ -281,7 +310,7 @@ fn matmul_2d(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array
         faer::Accum::Replace,
         a_faer.as_ref(),
         b_faer.as_ref(),
-        1.0,
+        T::from_f64_const(1.0),
         par,
     );
 
@@ -295,9 +324,13 @@ fn matmul_2d(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array
     Array::from_vec(Ix2::new([m, n]), data)
 }
 
-fn matmul_batched(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
+fn matmul_batched<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
+    let zero = T::from_f64_const(0.0);
 
     if a_shape.len() < 2 || b_shape.len() < 2 {
         return Err(FerrayError::shape_mismatch(
@@ -324,8 +357,8 @@ fn matmul_batched(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<
 
     let batch_size: usize = batch_shape.iter().product::<usize>().max(1);
 
-    let a_data: Vec<f64> = a.iter().copied().collect();
-    let b_data: Vec<f64> = b.iter().copied().collect();
+    let a_data: Vec<T> = a.iter().copied().collect();
+    let b_data: Vec<T> = b.iter().copied().collect();
     let a_mat_size = a_m * a_k;
     let b_mat_size = b_k * b_n;
     let out_mat_size = a_m * b_n;
@@ -333,7 +366,7 @@ fn matmul_batched(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<
     let a_batch_size: usize = a_batch.iter().product::<usize>().max(1);
     let b_batch_size: usize = b_batch.iter().product::<usize>().max(1);
 
-    let mut result = vec![0.0; batch_size * out_mat_size];
+    let mut result = vec![zero; batch_size * out_mat_size];
 
     for batch_idx in 0..batch_size {
         let a_idx = batch_idx % a_batch_size;
@@ -394,7 +427,10 @@ fn broadcast_shapes(a: &[usize], b: &[usize]) -> FerrayResult<Vec<usize>> {
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if inputs are not 2D.
-pub fn kron(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
+pub fn kron<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
     if a_shape.len() != 2 || b_shape.len() != 2 {
@@ -403,12 +439,13 @@ pub fn kron(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<
 
     let (m, n) = (a_shape[0], a_shape[1]);
     let (p, q) = (b_shape[0], b_shape[1]);
-    let a_data: Vec<f64> = a.iter().copied().collect();
-    let b_data: Vec<f64> = b.iter().copied().collect();
+    let a_data: Vec<T> = a.iter().copied().collect();
+    let b_data: Vec<T> = b.iter().copied().collect();
 
     let out_rows = m * p;
     let out_cols = n * q;
-    let mut result = vec![0.0; out_rows * out_cols];
+    let zero = T::from_f64_const(0.0);
+    let mut result = vec![zero; out_rows * out_cols];
 
     for i in 0..m {
         for j in 0..n {
@@ -433,7 +470,7 @@ pub fn kron(a: &Array<f64, IxDyn>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if adjacent matrix dimensions are incompatible.
 /// - `FerrayError::InvalidValue` if fewer than 2 matrices are provided.
-pub fn multi_dot(arrays: &[&Array<f64, IxDyn>]) -> FerrayResult<Array<f64, IxDyn>> {
+pub fn multi_dot<T: LinalgFloat>(arrays: &[&Array<T, IxDyn>]) -> FerrayResult<Array<T, IxDyn>> {
     if arrays.len() < 2 {
         return Err(FerrayError::invalid_value(
             "multi_dot: need at least 2 matrices",
@@ -496,7 +533,6 @@ pub fn multi_dot(arrays: &[&Array<f64, IxDyn>]) -> FerrayResult<Array<f64, IxDyn
     }
 
     // Dynamic programming for optimal parenthesization
-    // m[i][j] = minimum cost to multiply matrices i..=j
     let mut cost = vec![vec![0u64; n]; n];
     let mut split = vec![vec![0usize; n]; n];
 
@@ -517,12 +553,12 @@ pub fn multi_dot(arrays: &[&Array<f64, IxDyn>]) -> FerrayResult<Array<f64, IxDyn
     }
 
     // Recursively multiply according to optimal split
-    fn multiply_chain(
-        arrays: &[&Array<f64, IxDyn>],
+    fn multiply_chain<T: LinalgFloat>(
+        arrays: &[&Array<T, IxDyn>],
         split: &[Vec<usize>],
         i: usize,
         j: usize,
-    ) -> FerrayResult<Array<f64, IxDyn>> {
+    ) -> FerrayResult<Array<T, IxDyn>> {
         if i == j {
             return Ok(arrays[i].clone());
         }
@@ -543,13 +579,14 @@ pub fn multi_dot(arrays: &[&Array<f64, IxDyn>]) -> FerrayResult<Array<f64, IxDyn
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if arrays have incompatible shapes.
 /// - `FerrayError::AxisOutOfBounds` if axis is out of range.
-pub fn vecdot(
-    a: &Array<f64, IxDyn>,
-    b: &Array<f64, IxDyn>,
+pub fn vecdot<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
     axis: Option<isize>,
-) -> FerrayResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
+    let zero = T::from_f64_const(0.0);
 
     if a_shape != b_shape {
         return Err(FerrayError::shape_mismatch(format!(
@@ -597,9 +634,9 @@ pub fn vecdot(
         a_strides[i] = a_strides[i + 1] * a_shape[i + 1];
     }
 
-    let a_data: Vec<f64> = a.iter().copied().collect();
-    let b_data: Vec<f64> = b.iter().copied().collect();
-    let mut result = vec![0.0; out_size];
+    let a_data: Vec<T> = a.iter().copied().collect();
+    let b_data: Vec<T> = b.iter().copied().collect();
+    let mut result = vec![zero; out_size];
 
     // For each output element, sum over the axis
     let mut out_idx = vec![0usize; ndim - 1];
@@ -614,7 +651,7 @@ pub fn vecdot(
         }
 
         // Map out_idx back to full index (inserting axis dim)
-        let mut sum = 0.0;
+        let mut sum = zero;
         for k in 0..axis_len {
             let mut full_flat = 0;
             let mut od = 0;
@@ -628,7 +665,7 @@ pub fn vecdot(
                 };
                 full_flat += idx * a_strides[d];
             }
-            sum += a_data[full_flat] * b_data[full_flat];
+            sum = sum + a_data[full_flat] * b_data[full_flat];
         }
         result[flat] = sum;
     }
@@ -665,6 +702,15 @@ mod tests {
         .unwrap();
         let c = dot(&a, &b).unwrap();
         assert_eq!(c.shape(), &[2, 2]);
+    }
+
+    #[test]
+    fn dot_f32() {
+        let a = Array::<f32, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1.0f32, 2.0, 3.0]).unwrap();
+        let b = Array::<f32, IxDyn>::from_vec(IxDyn::new(&[3]), vec![4.0f32, 5.0, 6.0]).unwrap();
+        let c = dot(&a, &b).unwrap();
+        let d: Vec<f32> = c.iter().copied().collect();
+        assert!((d[0] - 32.0f32).abs() < 1e-5);
     }
 
     #[test]

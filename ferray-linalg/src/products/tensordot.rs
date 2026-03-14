@@ -6,6 +6,8 @@ use ferray_core::array::owned::Array;
 use ferray_core::dimension::IxDyn;
 use ferray_core::error::{FerrayError, FerrayResult};
 
+use crate::scalar::LinalgFloat;
+
 /// Specifies axes for tensordot contraction.
 #[derive(Debug, Clone)]
 pub enum TensordotAxes {
@@ -21,11 +23,11 @@ pub enum TensordotAxes {
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if axes are incompatible.
-pub fn tensordot(
-    a: &Array<f64, IxDyn>,
-    b: &Array<f64, IxDyn>,
+pub fn tensordot<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
     axes: TensordotAxes,
-) -> FerrayResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
 
@@ -115,19 +117,20 @@ pub fn tensordot(
     b_perm.extend_from_slice(&b_free);
 
     // Collect data in permuted order
-    let a_data: Vec<f64> = a.iter().copied().collect();
-    let b_data: Vec<f64> = b.iter().copied().collect();
+    let a_data: Vec<T> = a.iter().copied().collect();
+    let b_data: Vec<T> = b.iter().copied().collect();
 
     let a_perm_data = permute_data(&a_data, a_shape, &a_perm);
     let b_perm_data = permute_data(&b_data, b_shape, &b_perm);
 
     // Matrix multiply: (free_a_size x contract_size) @ (contract_size x free_b_size)
-    let mut result = vec![0.0; out_size];
+    let zero = T::from_f64_const(0.0);
+    let mut result = vec![zero; out_size];
     for i in 0..free_a_size {
         for j in 0..free_b_size {
-            let mut sum = 0.0;
+            let mut sum = zero;
             for k in 0..contract_size {
-                sum += a_perm_data[i * contract_size + k] * b_perm_data[k * free_b_size + j];
+                sum = sum + a_perm_data[i * contract_size + k] * b_perm_data[k * free_b_size + j];
             }
             result[i * free_b_size + j] = sum;
         }
@@ -141,7 +144,7 @@ pub fn tensordot(
 }
 
 /// Permute array data according to a given axis permutation.
-fn permute_data(data: &[f64], shape: &[usize], perm: &[usize]) -> Vec<f64> {
+fn permute_data<T: LinalgFloat>(data: &[T], shape: &[usize], perm: &[usize]) -> Vec<T> {
     let ndim = shape.len();
     let total: usize = shape.iter().product();
     if total == 0 {
@@ -158,7 +161,7 @@ fn permute_data(data: &[f64], shape: &[usize], perm: &[usize]) -> Vec<f64> {
     let perm_shape: Vec<usize> = perm.iter().map(|&p| shape[p]).collect();
     let perm_strides: Vec<usize> = perm.iter().map(|&p| strides[p]).collect();
 
-    let mut result = vec![0.0; total];
+    let mut result = vec![T::from_f64_const(0.0); total];
     let mut idx = vec![0usize; ndim];
 
     for out_flat in 0..total {
@@ -200,7 +203,6 @@ mod tests {
         let c = tensordot(&a, &b, TensordotAxes::Scalar(1)).unwrap();
         assert_eq!(c.shape(), &[2, 2]);
         let cd: Vec<f64> = c.iter().copied().collect();
-        // [1*7+2*9+3*11, 1*8+2*10+3*12, 4*7+5*9+6*11, 4*8+5*10+6*12]
         assert!((cd[0] - 58.0).abs() < 1e-10);
         assert!((cd[1] - 64.0).abs() < 1e-10);
         assert!((cd[2] - 139.0).abs() < 1e-10);

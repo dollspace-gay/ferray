@@ -8,15 +8,16 @@ use ferray_core::error::{FerrayError, FerrayResult};
 use std::collections::HashMap;
 
 use super::parser::{EinsumExpr, Label};
+use crate::scalar::LinalgFloat;
 
 /// Execute the generic contraction for an einsum expression.
 ///
 /// This handles all patterns including trace, diagonal extraction,
 /// multi-operand contractions, etc.
-pub fn generic_contraction(
+pub fn generic_contraction<T: LinalgFloat>(
     expr: &EinsumExpr,
-    operands: &[&Array<f64, IxDyn>],
-) -> FerrayResult<Array<f64, IxDyn>> {
+    operands: &[&Array<T, IxDyn>],
+) -> FerrayResult<Array<T, IxDyn>> {
     // Build a mapping from each label to its size
     let mut label_sizes: HashMap<Label, usize> = HashMap::new();
     for (op_idx, labels) in expr.inputs.iter().enumerate() {
@@ -75,7 +76,7 @@ pub fn generic_contraction(
     };
 
     // Collect operand data and strides
-    let operand_data: Vec<Vec<f64>> = operands
+    let operand_data: Vec<Vec<T>> = operands
         .iter()
         .map(|o| o.iter().copied().collect())
         .collect();
@@ -94,7 +95,9 @@ pub fn generic_contraction(
         .collect();
 
     // For each output index and summation index, compute the contribution
-    let mut result = vec![0.0; out_size];
+    let zero = T::from_f64_const(0.0);
+    let one = T::from_f64_const(1.0);
+    let mut result = vec![zero; out_size];
 
     // Build all labels = output_labels ++ sum_labels
     let all_labels: Vec<Label> = expr
@@ -143,17 +146,17 @@ pub fn generic_contraction(
         }
 
         // Compute product of all operands at current index
-        let mut product = 1.0;
+        let mut product = one;
         for (op_idx, label_dims) in op_label_dims.iter().enumerate() {
             let mut op_flat = 0;
             for &(dim_idx, all_idx) in label_dims {
                 op_flat += multi_idx[all_idx] * operand_strides[op_idx][dim_idx];
             }
-            product *= operand_data[op_idx][op_flat];
+            product = product * operand_data[op_idx][op_flat];
         }
 
         if out_size > 0 {
-            result[out_flat] += product;
+            result[out_flat] = result[out_flat] + product;
         }
 
         // Increment multi_idx (like an odometer)

@@ -51,6 +51,9 @@ pub enum DynArray {
     /// `f16` elements (feature-gated)
     #[cfg(feature = "f16")]
     F16(Array<half::f16, IxDyn>),
+    /// `bf16` (bfloat16) elements (feature-gated)
+    #[cfg(feature = "bf16")]
+    BF16(Array<half::bf16, IxDyn>),
 }
 
 impl DynArray {
@@ -74,6 +77,8 @@ impl DynArray {
             Self::Complex64(_) => DType::Complex64,
             #[cfg(feature = "f16")]
             Self::F16(_) => DType::F16,
+            #[cfg(feature = "bf16")]
+            Self::BF16(_) => DType::BF16,
         }
     }
 
@@ -97,6 +102,8 @@ impl DynArray {
             Self::Complex64(a) => a.shape(),
             #[cfg(feature = "f16")]
             Self::F16(a) => a.shape(),
+            #[cfg(feature = "bf16")]
+            Self::BF16(a) => a.shape(),
         }
     }
 
@@ -204,6 +211,8 @@ impl DynArray {
             DType::Complex64 => Self::Complex64(Array::zeros(dim)?),
             #[cfg(feature = "f16")]
             DType::F16 => Self::F16(Array::zeros(dim)?),
+            #[cfg(feature = "bf16")]
+            DType::BF16 => Self::BF16(Array::zeros(dim)?),
         })
     }
 }
@@ -228,6 +237,8 @@ impl std::fmt::Display for DynArray {
             Self::Complex64(a) => write!(f, "{a}"),
             #[cfg(feature = "f16")]
             Self::F16(a) => write!(f, "{a}"),
+            #[cfg(feature = "bf16")]
+            Self::BF16(a) => write!(f, "{a}"),
         }
     }
 }
@@ -260,6 +271,8 @@ impl_from_array_dyn!(Complex<f32>, Complex32);
 impl_from_array_dyn!(Complex<f64>, Complex64);
 #[cfg(feature = "f16")]
 impl_from_array_dyn!(half::f16, F16);
+#[cfg(feature = "bf16")]
+impl_from_array_dyn!(half::bf16, BF16);
 
 #[cfg(test)]
 mod tests {

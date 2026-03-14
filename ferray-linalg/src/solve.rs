@@ -7,6 +7,7 @@ use ferray_core::dimension::{Ix1, Ix2, IxDyn};
 use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::faer_bridge;
+use crate::scalar::LinalgFloat;
 use faer::linalg::solvers::{DenseSolveCore, Solve, SolveLstsq};
 
 /// Solve the linear equation `A @ x = b` for x.
@@ -17,7 +18,10 @@ use faer::linalg::solvers::{DenseSolveCore, Solve, SolveLstsq};
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if dimensions are incompatible.
 /// - `FerrayError::SingularMatrix` if A is singular.
-pub fn solve(a: &Array<f64, Ix2>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>> {
+pub fn solve<T: LinalgFloat>(
+    a: &Array<T, Ix2>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
     if a_shape[0] != a_shape[1] {
@@ -39,7 +43,7 @@ pub fn solve(a: &Array<f64, Ix2>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f
                     n, n, b_shape[0]
                 )));
             }
-            let b_data: Vec<f64> = b.iter().copied().collect();
+            let b_data: Vec<T> = b.iter().copied().collect();
             let b_mat = faer::Mat::from_fn(n, 1, |i, _| b_data[i]);
             let x = lu.solve(&b_mat);
             let mut result = Vec::with_capacity(n);
@@ -56,7 +60,7 @@ pub fn solve(a: &Array<f64, Ix2>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f
                 )));
             }
             let nrhs = b_shape[1];
-            let b_data: Vec<f64> = b.iter().copied().collect();
+            let b_data: Vec<T> = b.iter().copied().collect();
             let b_mat = faer::Mat::from_fn(n, nrhs, |i, j| b_data[i * nrhs + j]);
             let x = lu.solve(&b_mat);
             let mut result = Vec::with_capacity(n * nrhs);
@@ -81,11 +85,11 @@ pub fn solve(a: &Array<f64, Ix2>, b: &Array<f64, IxDyn>) -> FerrayResult<Array<f
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if dimensions are incompatible.
-pub fn lstsq(
-    a: &Array<f64, Ix2>,
-    b: &Array<f64, IxDyn>,
-    rcond: Option<f64>,
-) -> FerrayResult<(Array<f64, IxDyn>, Array<f64, Ix1>, usize, Array<f64, Ix1>)> {
+pub fn lstsq<T: LinalgFloat>(
+    a: &Array<T, Ix2>,
+    b: &Array<T, IxDyn>,
+    rcond: Option<T>,
+) -> FerrayResult<(Array<T, IxDyn>, Array<T, Ix1>, usize, Array<T, Ix1>)> {
     let a_shape = a.shape();
     let b_shape = b.shape();
     let (m, n) = (a_shape[0], a_shape[1]);
@@ -97,10 +101,14 @@ pub fn lstsq(
     let (_u, sv, _vt) = crate::decomp::svd(a, false)?;
     let svals = sv.as_slice().unwrap();
     let tol = rcond.unwrap_or_else(|| {
-        let max_dim = m.max(n) as f64;
-        max_dim * f64::EPSILON
+        let max_dim = T::from_usize(m.max(n));
+        max_dim * T::machine_epsilon()
     });
-    let max_sv = if svals.is_empty() { 0.0 } else { svals[0] };
+    let max_sv = if svals.is_empty() {
+        T::from_f64_const(0.0)
+    } else {
+        svals[0]
+    };
     let rank = svals.iter().filter(|&&s| s > tol * max_sv).count();
 
     match b_shape.len() {
@@ -111,7 +119,7 @@ pub fn lstsq(
                     m, n, b_shape[0]
                 )));
             }
-            let b_data: Vec<f64> = b.iter().copied().collect();
+            let b_data: Vec<T> = b.iter().copied().collect();
             let b_mat = faer::Mat::from_fn(m, 1, |i, _| b_data[i]);
             let x_mat = qr_decomp.solve_lstsq(&b_mat);
 
@@ -122,15 +130,15 @@ pub fn lstsq(
 
             // Compute residuals
             let residuals = if m > n && rank == n {
-                let a_data: Vec<f64> = a.iter().copied().collect();
-                let mut resid = 0.0;
+                let a_data: Vec<T> = a.iter().copied().collect();
+                let mut resid = T::from_f64_const(0.0);
                 for i in 0..m {
-                    let mut ax_i = 0.0;
+                    let mut ax_i = T::from_f64_const(0.0);
                     for j in 0..n {
-                        ax_i += a_data[i * n + j] * x_vec[j];
+                        ax_i = ax_i + a_data[i * n + j] * x_vec[j];
                     }
                     let diff = ax_i - b_data[i];
-                    resid += diff * diff;
+                    resid = resid + diff * diff;
                 }
                 vec![resid]
             } else {
@@ -149,7 +157,7 @@ pub fn lstsq(
                 )));
             }
             let nrhs = b_shape[1];
-            let b_data: Vec<f64> = b.iter().copied().collect();
+            let b_data: Vec<T> = b.iter().copied().collect();
             let b_mat = faer::Mat::from_fn(m, nrhs, |i, j| b_data[i * nrhs + j]);
             let x_mat = qr_decomp.solve_lstsq(&b_mat);
 
@@ -162,16 +170,16 @@ pub fn lstsq(
 
             // Compute residuals per rhs column
             let residuals = if m > n && rank == n {
-                let a_data: Vec<f64> = a.iter().copied().collect();
-                let mut resids = vec![0.0; nrhs];
+                let a_data: Vec<T> = a.iter().copied().collect();
+                let mut resids = vec![T::from_f64_const(0.0); nrhs];
                 for col in 0..nrhs {
                     for i in 0..m {
-                        let mut ax_i = 0.0;
+                        let mut ax_i = T::from_f64_const(0.0);
                         for j in 0..n {
-                            ax_i += a_data[i * n + j] * x_vec[j * nrhs + col];
+                            ax_i = ax_i + a_data[i * n + j] * x_vec[j * nrhs + col];
                         }
                         let diff = ax_i - b_data[i * nrhs + col];
-                        resids[col] += diff * diff;
+                        resids[col] = resids[col] + diff * diff;
                     }
                 }
                 resids
@@ -192,7 +200,7 @@ pub fn lstsq(
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the matrix is not square.
 /// - `FerrayError::SingularMatrix` if the matrix is singular.
-pub fn inv(a: &Array<f64, Ix2>) -> FerrayResult<Array<f64, Ix2>> {
+pub fn inv<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix2>> {
     let shape = a.shape();
     if shape[0] != shape[1] {
         return Err(FerrayError::shape_mismatch(format!(
@@ -207,8 +215,8 @@ pub fn inv(a: &Array<f64, Ix2>) -> FerrayResult<Array<f64, Ix2>> {
 
     // Check if matrix is singular by computing determinant
     let mat = faer_bridge::array2_to_faer(a);
-    let det_val: f64 = mat.as_ref().determinant();
-    if det_val.abs() < f64::EPSILON * 100.0 * (n as f64) {
+    let det_val: T = mat.as_ref().determinant();
+    if det_val.abs() < T::machine_epsilon() * T::from_f64_const(100.0) * T::from_usize(n) {
         return Err(FerrayError::SingularMatrix {
             message: "matrix is singular and cannot be inverted".to_string(),
         });
@@ -225,7 +233,7 @@ pub fn inv(a: &Array<f64, Ix2>) -> FerrayResult<Array<f64, Ix2>> {
 ///
 /// # Errors
 /// - `FerrayError::InvalidValue` if SVD computation fails.
-pub fn pinv(a: &Array<f64, Ix2>, _rcond: Option<f64>) -> FerrayResult<Array<f64, Ix2>> {
+pub fn pinv<T: LinalgFloat>(a: &Array<T, Ix2>, _rcond: Option<T>) -> FerrayResult<Array<T, Ix2>> {
     let mat = faer_bridge::array2_to_faer(a);
     let decomp = mat
         .as_ref()
@@ -247,7 +255,7 @@ pub fn pinv(a: &Array<f64, Ix2>, _rcond: Option<f64>) -> FerrayResult<Array<f64,
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the matrix is not square.
 /// - `FerrayError::SingularMatrix` if `n < 0` and the matrix is singular.
-pub fn matrix_power(a: &Array<f64, Ix2>, n: i64) -> FerrayResult<Array<f64, Ix2>> {
+pub fn matrix_power<T: LinalgFloat>(a: &Array<T, Ix2>, n: i64) -> FerrayResult<Array<T, Ix2>> {
     let shape = a.shape();
     if shape[0] != shape[1] {
         return Err(FerrayError::shape_mismatch(format!(
@@ -259,9 +267,11 @@ pub fn matrix_power(a: &Array<f64, Ix2>, n: i64) -> FerrayResult<Array<f64, Ix2>
 
     if n == 0 {
         // Return identity
-        let mut data = vec![0.0; sz * sz];
+        let zero = T::from_f64_const(0.0);
+        let one = T::from_f64_const(1.0);
+        let mut data = vec![zero; sz * sz];
         for i in 0..sz {
-            data[i * sz + i] = 1.0;
+            data[i * sz + i] = one;
         }
         return Array::from_vec(Ix2::new([sz, sz]), data);
     }
@@ -270,11 +280,13 @@ pub fn matrix_power(a: &Array<f64, Ix2>, n: i64) -> FerrayResult<Array<f64, Ix2>
     let power = n.unsigned_abs();
 
     // Exponentiation by squaring
-    let mut result_data = vec![0.0; sz * sz];
+    let zero = T::from_f64_const(0.0);
+    let one = T::from_f64_const(1.0);
+    let mut result_data = vec![zero; sz * sz];
     for i in 0..sz {
-        result_data[i * sz + i] = 1.0;
+        result_data[i * sz + i] = one;
     }
-    let mut base_data: Vec<f64> = base.iter().copied().collect();
+    let mut base_data: Vec<T> = base.iter().copied().collect();
     let mut p = power;
 
     while p > 0 {
@@ -288,13 +300,14 @@ pub fn matrix_power(a: &Array<f64, Ix2>, n: i64) -> FerrayResult<Array<f64, Ix2>
     Array::from_vec(Ix2::new([sz, sz]), result_data)
 }
 
-fn mat_mul_flat(a: &[f64], b: &[f64], m: usize, k: usize, n: usize) -> Vec<f64> {
-    let mut c = vec![0.0; m * n];
+fn mat_mul_flat<T: LinalgFloat>(a: &[T], b: &[T], m: usize, k: usize, n: usize) -> Vec<T> {
+    let zero = T::from_f64_const(0.0);
+    let mut c = vec![zero; m * n];
     for i in 0..m {
         for p in 0..k {
             let a_ip = a[i * k + p];
             for j in 0..n {
-                c[i * n + j] += a_ip * b[p * n + j];
+                c[i * n + j] = c[i * n + j] + a_ip * b[p * n + j];
             }
         }
     }
@@ -310,11 +323,11 @@ fn mat_mul_flat(a: &[f64], b: &[f64], m: usize, k: usize, n: usize) -> Vec<f64> 
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the shapes are incompatible.
-pub fn tensorsolve(
-    a: &Array<f64, IxDyn>,
-    b: &Array<f64, IxDyn>,
+pub fn tensorsolve<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
     _axes: Option<&[usize]>,
-) -> FerrayResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>> {
     let a_shape = a.shape();
     let b_shape = b.shape();
 
@@ -332,11 +345,11 @@ pub fn tensorsolve(
     }
 
     // Reshape a to (b_size, x_size) and solve
-    let a_data: Vec<f64> = a.iter().copied().collect();
-    let a2 = Array::<f64, Ix2>::from_vec(Ix2::new([b_size, x_size]), a_data)?;
+    let a_data: Vec<T> = a.iter().copied().collect();
+    let a2 = Array::<T, Ix2>::from_vec(Ix2::new([b_size, x_size]), a_data)?;
 
-    let b_flat: Vec<f64> = b.iter().copied().collect();
-    let b_dyn = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[b_size]), b_flat)?;
+    let b_flat: Vec<T> = b.iter().copied().collect();
+    let b_dyn = Array::<T, IxDyn>::from_vec(IxDyn::new(&[b_size]), b_flat)?;
 
     let x = solve(&a2, &b_dyn)?;
 
@@ -345,7 +358,7 @@ pub fn tensorsolve(
     if x_shape.is_empty() {
         Ok(x)
     } else {
-        let x_data: Vec<f64> = x.iter().copied().collect();
+        let x_data: Vec<T> = x.iter().copied().collect();
         Array::from_vec(IxDyn::new(&x_shape), x_data)
     }
 }
@@ -358,7 +371,7 @@ pub fn tensorsolve(
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the shapes are incompatible.
 /// - `FerrayError::SingularMatrix` if the reshaped matrix is singular.
-pub fn tensorinv(a: &Array<f64, IxDyn>, ind: usize) -> FerrayResult<Array<f64, IxDyn>> {
+pub fn tensorinv<T: LinalgFloat>(a: &Array<T, IxDyn>, ind: usize) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     if ind == 0 || ind > shape.len() {
         return Err(FerrayError::invalid_value(format!(
@@ -380,8 +393,8 @@ pub fn tensorinv(a: &Array<f64, IxDyn>, ind: usize) -> FerrayResult<Array<f64, I
         )));
     }
 
-    let data: Vec<f64> = a.iter().copied().collect();
-    let a2 = Array::<f64, Ix2>::from_vec(Ix2::new([m, n]), data)?;
+    let data: Vec<T> = a.iter().copied().collect();
+    let a2 = Array::<T, Ix2>::from_vec(Ix2::new([m, n]), data)?;
     let inv_a2 = inv(&a2)?;
 
     // Result shape is last_dims ++ first_dims
@@ -389,7 +402,7 @@ pub fn tensorinv(a: &Array<f64, IxDyn>, ind: usize) -> FerrayResult<Array<f64, I
     result_shape.extend_from_slice(last_dims);
     result_shape.extend_from_slice(first_dims);
 
-    let inv_data: Vec<f64> = inv_a2.iter().copied().collect();
+    let inv_data: Vec<T> = inv_a2.iter().copied().collect();
     Array::from_vec(IxDyn::new(&result_shape), inv_data)
 }
 
@@ -407,6 +420,16 @@ mod tests {
         let xs = x.iter().copied().collect::<Vec<f64>>();
         assert!((xs[0] - 1.0).abs() < 1e-10);
         assert!((xs[1] - 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn solve_f32() {
+        let a = Array::<f32, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0f32, 2.0, 3.0, 4.0]).unwrap();
+        let b = Array::<f32, IxDyn>::from_vec(IxDyn::new(&[2]), vec![5.0f32, 11.0]).unwrap();
+        let x = solve(&a, &b).unwrap();
+        let xs = x.iter().copied().collect::<Vec<f32>>();
+        assert!((xs[0] - 1.0f32).abs() < 1e-4);
+        assert!((xs[1] - 2.0f32).abs() < 1e-4);
     }
 
     #[test]

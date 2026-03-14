@@ -7,6 +7,7 @@ use ferray_core::dimension::Ix2;
 use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::faer_bridge;
+use crate::scalar::LinalgFloat;
 
 /// Compute the LU decomposition with partial pivoting.
 ///
@@ -17,9 +18,9 @@ use crate::faer_bridge;
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the matrix is not at least 1x1.
-pub fn lu(
-    a: &Array<f64, Ix2>,
-) -> FerrayResult<(Array<f64, Ix2>, Array<f64, Ix2>, Array<f64, Ix2>)> {
+pub fn lu<T: LinalgFloat>(
+    a: &Array<T, Ix2>,
+) -> FerrayResult<(Array<T, Ix2>, Array<T, Ix2>, Array<T, Ix2>)> {
     let shape = a.shape();
     let (m, n) = (shape[0], shape[1]);
     if m == 0 || n == 0 {
@@ -35,10 +36,10 @@ pub fn lu(
 
     // Build permutation matrix from the permutation
     let perm_fwd = perm.arrays().0;
-    let mut p_data = vec![0.0; m * m];
+    let mut p_data = vec![<T as num_traits::Zero>::zero(); m * m];
     for i in 0..m {
         let j = perm_fwd[i];
-        p_data[i * m + j] = 1.0;
+        p_data[i * m + j] = <T as num_traits::One>::one();
     }
 
     let p_arr = Array::from_vec(Ix2::new([m, m]), p_data)?;
@@ -93,5 +94,14 @@ mod tests {
                 lu_result[i]
             );
         }
+    }
+
+    #[test]
+    fn lu_f32() {
+        let a = Array::<f32, Ix2>::from_vec(Ix2::new([2, 2]), vec![2.0f32, 1.0, 4.0, 3.0]).unwrap();
+        let (p, l, u) = lu(&a).unwrap();
+        assert_eq!(p.shape(), &[2, 2]);
+        assert_eq!(l.shape(), &[2, 2]);
+        assert_eq!(u.shape(), &[2, 2]);
     }
 }

@@ -10,19 +10,23 @@ use ferray_core::error::{FerrayError, FerrayResult};
 use num_complex::Complex;
 
 use crate::faer_bridge;
+use crate::scalar::LinalgFloat;
 
 /// Compute eigenvalues and right eigenvectors of a general square matrix.
 ///
 /// Returns `(eigenvalues, eigenvectors)` where eigenvalues is a 1D array
-/// of Complex<f64> and eigenvectors is a 2D array of Complex<f64>.
+/// of `Complex<T>` and eigenvectors is a 2D array of `Complex<T>`.
 /// The columns of eigenvectors are the right eigenvectors.
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if matrix is not square.
 /// - `FerrayError::InvalidValue` if eigendecomposition fails.
-pub fn eig(
-    a: &Array<f64, Ix2>,
-) -> FerrayResult<(Array<Complex<f64>, Ix1>, Array<Complex<f64>, Ix2>)> {
+pub fn eig<T: LinalgFloat>(
+    a: &Array<T, Ix2>,
+) -> FerrayResult<(Array<Complex<T>, Ix1>, Array<Complex<T>, Ix2>)>
+where
+    Complex<T>: ferray_core::dtype::Element,
+{
     let shape = a.shape();
     if shape[0] != shape[1] {
         return Err(FerrayError::shape_mismatch(format!(
@@ -63,13 +67,13 @@ pub fn eig(
 /// Compute eigenvalues and eigenvectors of a symmetric (Hermitian) matrix.
 ///
 /// Returns `(eigenvalues, eigenvectors)` where eigenvalues is a 1D array
-/// of real f64 in nondecreasing order, and eigenvectors is a 2D real matrix
+/// of real `T` in nondecreasing order, and eigenvectors is a 2D real matrix
 /// whose columns are orthonormal eigenvectors.
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if matrix is not square.
 /// - `FerrayError::InvalidValue` if eigendecomposition fails.
-pub fn eigh(a: &Array<f64, Ix2>) -> FerrayResult<(Array<f64, Ix1>, Array<f64, Ix2>)> {
+pub fn eigh<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<(Array<T, Ix1>, Array<T, Ix2>)> {
     let shape = a.shape();
     if shape[0] != shape[1] {
         return Err(FerrayError::shape_mismatch(format!(
@@ -102,12 +106,15 @@ pub fn eigh(a: &Array<f64, Ix2>) -> FerrayResult<(Array<f64, Ix1>, Array<f64, Ix
 
 /// Compute eigenvalues of a general square matrix.
 ///
-/// Returns a 1D array of Complex<f64> eigenvalues.
+/// Returns a 1D array of `Complex<T>` eigenvalues.
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if matrix is not square.
 /// - `FerrayError::InvalidValue` if computation fails.
-pub fn eigvals(a: &Array<f64, Ix2>) -> FerrayResult<Array<Complex<f64>, Ix1>> {
+pub fn eigvals<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<Complex<T>, Ix1>>
+where
+    Complex<T>: ferray_core::dtype::Element,
+{
     let shape = a.shape();
     if shape[0] != shape[1] {
         return Err(FerrayError::shape_mismatch(format!(
@@ -127,12 +134,12 @@ pub fn eigvals(a: &Array<f64, Ix2>) -> FerrayResult<Array<Complex<f64>, Ix1>> {
 
 /// Compute eigenvalues of a symmetric (Hermitian) matrix.
 ///
-/// Returns a 1D array of real f64 eigenvalues in nondecreasing order.
+/// Returns a 1D array of real `T` eigenvalues in nondecreasing order.
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if matrix is not square.
 /// - `FerrayError::InvalidValue` if computation fails.
-pub fn eigvalsh(a: &Array<f64, Ix2>) -> FerrayResult<Array<f64, Ix1>> {
+pub fn eigvalsh<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix1>> {
     let shape = a.shape();
     if shape[0] != shape[1] {
         return Err(FerrayError::shape_mismatch(format!(
@@ -170,6 +177,15 @@ mod tests {
         let es = vecs.as_slice().unwrap();
         let dot = es[0] * es[1] + es[2] * es[3];
         assert!(dot.abs() < 1e-10);
+    }
+
+    #[test]
+    fn eigh_f32() {
+        let a = Array::<f32, Ix2>::from_vec(Ix2::new([2, 2]), vec![2.0f32, 1.0, 1.0, 2.0]).unwrap();
+        let (vals, _vecs) = eigh(&a).unwrap();
+        let vs = vals.as_slice().unwrap();
+        assert!((vs[0] - 1.0f32).abs() < 1e-5);
+        assert!((vs[1] - 3.0f32).abs() < 1e-5);
     }
 
     #[test]

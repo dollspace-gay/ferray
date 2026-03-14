@@ -12,6 +12,7 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::if_same_then_else)]
 #![allow(clippy::unused_enumerate_index)]
+#![allow(clippy::assign_op_pattern)]
 
 /// Batched dispatch for stacked (3D+) arrays with Rayon parallelism.
 pub mod batch;
@@ -23,6 +24,8 @@ pub mod faer_bridge;
 pub mod norms;
 /// Matrix products: dot, matmul, einsum, tensordot, kron, multi_dot.
 pub mod products;
+/// Sealed trait bounding the float types (f32, f64) supported by linalg.
+pub mod scalar;
 /// Linear solvers: solve, lstsq, inv, pinv, matrix_power, tensorsolve, tensorinv.
 pub mod solve;
 
@@ -31,6 +34,7 @@ pub mod solve;
 pub mod f16_support;
 
 // Re-export key types and functions at the crate root for ergonomic access
+pub use scalar::LinalgFloat;
 
 // Matrix products (Section 8.1)
 pub use products::{
