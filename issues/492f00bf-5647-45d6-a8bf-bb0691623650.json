@@ -1,0 +1,10 @@
+{
+  "uuid": "492f00bf-5647-45d6-a8bf-bb0691623650",
+  "display_id": 47,
+  "title": "Bump oracle fixture tolerance floor to 10 ULP for pure-Rust precision envelope",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-14T01:21:24.448109040Z",
+  "updated_at": "2026-03-14T01:21:24.448109040Z"
+}
