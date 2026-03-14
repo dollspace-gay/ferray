@@ -1,0 +1,10 @@
+{
+  "uuid": "4f1924d0-1f34-477c-a228-a63dc3df5d92",
+  "display_id": 44,
+  "title": "Run cargo tarpaulin code coverage analysis",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-14T00:04:13.205390811Z",
+  "updated_at": "2026-03-14T00:04:13.205390811Z"
+}
