@@ -1,0 +1,10 @@
+{
+  "uuid": "553a7fce-454c-4e75-8077-eebb8500907f",
+  "display_id": 45,
+  "title": "Add oracle test suite that validates all crates against NumPy fixture outputs",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-14T00:21:22.656980884Z",
+  "updated_at": "2026-03-14T00:21:22.656980884Z"
+}
