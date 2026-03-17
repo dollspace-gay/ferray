@@ -14,7 +14,7 @@ A NumPy-equivalent scientific computing library for Rust. Correctly-rounded math
 
 ```toml
 [dependencies]
-ferray = "0.1"
+ferray = "0.2"
 ```
 
 ```rust
@@ -26,11 +26,9 @@ let b = ferray::sin(&a)?;
 
 // Linear algebra
 let m = ferray::eye::<f64>(3, 3, /* k (diagonal offset)= */ 0)?;
-#[cfg(feature = "linalg")]
 let det = ferray::linalg::det(&m)?;
 
 // FFT
-#[cfg(feature = "fft")]
 let spectrum = ferray::fft::rfft(
     &b,
     /* n= */ None,
@@ -41,8 +39,6 @@ let spectrum = ferray::fft::rfft(
 // Statistics
 let mean = ferray::mean(&a, /* axis= */ None)?;
 let std = ferray::std_(&a, /* axis= */ None, /* ddof= */ 0)?;
-
-Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 ## Performance
@@ -78,7 +74,7 @@ Benchmarked against NumPy 2.3.5 on Linux (Rust 1.85, LTO, target-cpu=native).
 
 For throughput-sensitive workloads, ferray offers `exp_fast()` — an Even/Odd Remez decomposition that is **~30% faster than CORE-MATH** while maintaining ≤1 ULP accuracy (faithfully rounded). It auto-vectorizes for SSE/AVX2/AVX-512/NEON with no lookup tables.
 
-```rust ignore
+```rust
 // Default: correctly rounded (≤0.5 ULP, CORE-MATH)
 let result = ferray::exp(&array)?;
 
