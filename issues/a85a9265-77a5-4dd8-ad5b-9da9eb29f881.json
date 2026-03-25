@@ -1,0 +1,11 @@
+{
+  "uuid": "a85a9265-77a5-4dd8-ad5b-9da9eb29f881",
+  "display_id": 199,
+  "title": "ferray-test-oracle: cross-sign ULP distance calculation incorrect",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nlib.rs L278-283: uses two's-complement magnitude instead of sign-magnitude distance for negative floats.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:44:45.574422589Z",
+  "updated_at": "2026-03-25T15:44:45.574422589Z"
+}
