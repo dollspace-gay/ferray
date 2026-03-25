@@ -1,0 +1,11 @@
+{
+  "uuid": "d5d93265-e89b-4476-9816-0622fba6d676",
+  "display_id": 295,
+  "title": "ferray-window: no tests for m=2 or even-length windows",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nSmallest non-trivial and even-length edge cases untested.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:01:32.862300667Z",
+  "updated_at": "2026-03-25T16:01:32.862300667Z"
+}
