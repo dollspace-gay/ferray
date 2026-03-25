@@ -1,0 +1,11 @@
+{
+  "uuid": "9f7e84a4-4aa0-4867-aebb-dabb1b4843a8",
+  "display_id": 88,
+  "title": "ferray-ufunc: basic arithmetic (add/sub/mul/div) don't use SIMD dispatch",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\narithmetic.rs L27-92: iter().zip().map().collect() without SIMD. No try_simd_f64_binary helper.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:25:54.389754076Z",
+  "updated_at": "2026-03-25T15:25:54.389754076Z"
+}
