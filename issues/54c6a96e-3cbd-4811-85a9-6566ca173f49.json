@@ -1,0 +1,11 @@
+{
+  "uuid": "54c6a96e-3cbd-4811-85a9-6566ca173f49",
+  "display_id": 330,
+  "title": "ferray umbrella: no integration tests",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nOnly 7 smoke tests. No cross-crate pipeline tests.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:08:48.134191951Z",
+  "updated_at": "2026-03-25T16:08:48.134191951Z"
+}
