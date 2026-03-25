@@ -1,0 +1,11 @@
+{
+  "uuid": "864fa2a5-80fb-4c02-8a76-019651eca77f",
+  "display_id": 135,
+  "title": "ferray-core: no tests for frombuffer with bool type",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ncreation/mod.rs: invalid byte patterns for bool produce UB. Untested.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:33:56.117207190Z",
+  "updated_at": "2026-03-25T15:33:56.117207190Z"
+}
