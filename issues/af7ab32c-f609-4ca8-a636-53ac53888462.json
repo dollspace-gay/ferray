@@ -1,0 +1,11 @@
+{
+  "uuid": "af7ab32c-f609-4ca8-a636-53ac53888462",
+  "display_id": 301,
+  "title": "ferray-autodiff: missing AddAssign/SubAssign/MulAssign/DivAssign",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nx += y doesn't compile for DualNumber.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:02:19.559700616Z",
+  "updated_at": "2026-03-25T16:02:19.559700616Z"
+}
