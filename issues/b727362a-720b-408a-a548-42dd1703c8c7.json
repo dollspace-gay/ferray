@@ -1,0 +1,11 @@
+{
+  "uuid": "b727362a-720b-408a-a548-42dd1703c8c7",
+  "display_id": 151,
+  "title": "ferray-ma: no tests for 2D or higher-dimensional masked arrays",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nAll tests use Ix1. Code is generic over D: Dimension but multi-dim never verified.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:36:17.186793935Z",
+  "updated_at": "2026-03-25T15:36:17.186793935Z"
+}
