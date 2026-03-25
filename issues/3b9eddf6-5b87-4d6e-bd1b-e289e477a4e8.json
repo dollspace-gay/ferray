@@ -7,9 +7,20 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:25:30.582064021Z",
-  "updated_at": "2026-03-25T15:25:35.050065463Z",
+  "updated_at": "2026-03-25T16:41:09.268027829Z",
   "labels": [
     "bug",
     "qa-audit"
+  ],
+  "comments": [
+    {
+      "id": 59,
+      "author": "phase-4-coordinator",
+      "content": "Documented as intentional deviation from NumPy: return type Array<T, D> prevents returning a different dimensionality. Added doc comments to cumsum/cumprod/nancumsum/nancumprod explaining the difference.",
+      "created_at": "2026-03-25T16:41:09.268027019Z",
+      "kind": "note",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAIaI3TtVmPYtp2+ae6Guph0ONitJJ4tbn/OO6nRYfkaSguRH3KvsauyrkcpMl1MBZqd8fOEKf6bDxoIeAAaGTCg=="
+    }
   ]
 }
