@@ -1,0 +1,11 @@
+{
+  "uuid": "51cf46f8-3a64-4c28-86a3-239c5069deef",
+  "display_id": 259,
+  "title": "ferray-random: splitmix64 duplicated in pcg64.rs and xoshiro256.rs",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nSame function with slightly different names.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:55:18.114601229Z",
+  "updated_at": "2026-03-25T15:55:18.114601229Z"
+}
