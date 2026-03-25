@@ -1,0 +1,11 @@
+{
+  "uuid": "62268047-d015-47dc-90f4-92c2889e1c2b",
+  "display_id": 292,
+  "title": "ferray-window: duplicated boilerplate across all 5 window functions",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nwindows/mod.rs L51-197: identical pattern repeated. Extract gen_window helper.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:01:07.360430044Z",
+  "updated_at": "2026-03-25T16:01:07.360430044Z"
+}
