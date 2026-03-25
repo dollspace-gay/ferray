@@ -1,0 +1,11 @@
+{
+  "uuid": "561cdb08-d5f5-43db-8ac2-59cd784e59eb",
+  "display_id": 129,
+  "title": "ferray-core: no tests for ArcArray with non-C-contiguous source",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\narc.rs: as_standard_layout path untested.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:33:00.294793372Z",
+  "updated_at": "2026-03-25T15:33:00.294793372Z"
+}
