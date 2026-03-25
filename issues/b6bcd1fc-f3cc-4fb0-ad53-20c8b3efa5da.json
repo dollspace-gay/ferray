@@ -1,0 +1,11 @@
+{
+  "uuid": "b6bcd1fc-f3cc-4fb0-ad53-20c8b3efa5da",
+  "display_id": 189,
+  "title": "ferray-linalg: duplicated matmul implementations in 3 places",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nproducts/mod.rs, solve.rs, einsum/mod.rs: three separate naive matmul impls.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:42:51.498039623Z",
+  "updated_at": "2026-03-25T15:42:51.498039623Z"
+}
