@@ -1,0 +1,11 @@
+{
+  "uuid": "2e14d5f2-e2a2-4de3-a736-221414498054",
+  "display_id": 113,
+  "title": "ferray-fft: no tests for fft2/fftn s (shape/padding) parameter",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nresolve_shapes and its integration with fft_along_axes have zero test coverage.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:29:50.868010220Z",
+  "updated_at": "2026-03-25T15:29:50.868010220Z"
+}
