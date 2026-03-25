@@ -1,0 +1,11 @@
+{
+  "uuid": "c7ce4569-1444-405b-b74a-0c34c69c0b23",
+  "display_id": 155,
+  "title": "ferray-ufunc: divmod iterates data twice",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\narithmetic.rs L163: calls floor_divide and remainder separately. Fuse into single pass.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:36:44.799137960Z",
+  "updated_at": "2026-03-25T15:36:44.799137960Z"
+}
