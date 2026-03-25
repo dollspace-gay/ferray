@@ -1,0 +1,11 @@
+{
+  "uuid": "a2792ec6-f067-4a79-8835-cf44294306bf",
+  "display_id": 79,
+  "title": "ferray-core: display formatting uses Relaxed atomic ordering",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ndisplay.rs L18-21: Relaxed ordering means set_print_options may not be visible to format! on other threads.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:25:00.930253577Z",
+  "updated_at": "2026-03-25T15:25:00.930253577Z"
+}
