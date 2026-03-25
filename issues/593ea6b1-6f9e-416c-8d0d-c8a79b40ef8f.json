@@ -1,0 +1,11 @@
+{
+  "uuid": "593ea6b1-6f9e-416c-8d0d-c8a79b40ef8f",
+  "display_id": 119,
+  "title": "ferray-io: save rejects non-contiguous arrays instead of making them contiguous",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nnpy/mod.rs L53-59: NumPy transparently handles non-contiguous. Fix: auto-contiguify or iterate in logical order.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:31:04.588668502Z",
+  "updated_at": "2026-03-25T15:31:04.588668502Z"
+}
