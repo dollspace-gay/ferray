@@ -1,0 +1,11 @@
+{
+  "uuid": "813d3547-c4c4-4d6f-bd85-7108ee4586f2",
+  "display_id": 163,
+  "title": "ferray-strings: add() always returns StringArray<IxDyn>, losing static dimension info",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nconcat.rs L20-34: both inputs Ix1 should return Ix1, not IxDyn.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:38:06.010755269Z",
+  "updated_at": "2026-03-25T15:38:06.010755269Z"
+}
