@@ -1,0 +1,11 @@
+{
+  "uuid": "c04fe868-d584-4daa-8468-e269c5c8d33a",
+  "display_id": 185,
+  "title": "ferray-stats: no f32 tests anywhere",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nAll tests use f64. SIMD f64-only optimizations and generic path never tested separately.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:41:59.774884466Z",
+  "updated_at": "2026-03-25T15:41:59.774884466Z"
+}
