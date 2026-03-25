@@ -1,0 +1,11 @@
+{
+  "uuid": "45f3f008-cc07-440c-a8a3-8a9e5e5b515e",
+  "display_id": 158,
+  "title": "ferray-strings: no Unicode tests for multi-byte characters",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNo tests with CJK, emoji, combining characters. Case conversion byte-length changes untested.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:37:40.269215759Z",
+  "updated_at": "2026-03-25T15:37:40.269215759Z"
+}
