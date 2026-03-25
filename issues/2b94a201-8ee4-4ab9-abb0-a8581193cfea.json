@@ -1,0 +1,11 @@
+{
+  "uuid": "2b94a201-8ee4-4ab9-abb0-a8581193cfea",
+  "display_id": 233,
+  "title": "ferray-io: savez/savez_compressed massive code duplication",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nnpz/mod.rs L22-105: ~80 lines differ only in compression method.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:50:12.494086939Z",
+  "updated_at": "2026-03-25T15:50:12.494086939Z"
+}
