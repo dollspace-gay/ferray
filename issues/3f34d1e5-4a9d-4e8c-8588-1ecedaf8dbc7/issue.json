@@ -3,11 +3,12 @@
   "display_id": 140,
   "title": "ferray-random: binomial powi truncates n to i32 for large n",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ndiscrete.rs L107: q.powi(n as i32) silently wraps for n > i32::MAX. Fix: use q.powf(n as f64).",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:34:31.614720727Z",
-  "updated_at": "2026-03-25T15:34:41.903324964Z",
+  "updated_at": "2026-03-25T17:21:01.386882972Z",
+  "closed_at": "2026-03-25T17:21:01.386882972Z",
   "labels": [
     "bug",
     "qa-audit"
