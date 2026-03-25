@@ -1,0 +1,11 @@
+{
+  "uuid": "322f0daa-ce0a-470d-90bc-b041ebfec786",
+  "display_id": 109,
+  "title": "ferray-fft: plan cache is f64-only; no f32 FFT support",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nplan.rs L28-29: entire pipeline hardcoded to f64. Project conventions require f32/f64 support.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:29:09.106806869Z",
+  "updated_at": "2026-03-25T15:29:09.106806869Z"
+}
