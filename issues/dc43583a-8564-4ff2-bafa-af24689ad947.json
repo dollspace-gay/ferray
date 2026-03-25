@@ -7,8 +7,9 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:38:39.820190958Z",
-  "updated_at": "2026-03-25T15:38:48.600804200Z",
+  "updated_at": "2026-03-25T15:38:53.586954810Z",
   "labels": [
-    "bug"
+    "bug",
+    "qa-audit"
   ]
 }
