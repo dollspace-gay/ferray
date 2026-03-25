@@ -1,0 +1,11 @@
+{
+  "uuid": "1b09ead8-e157-461e-a484-55e102603de7",
+  "display_id": 197,
+  "title": "ferray-linalg: NormOrder::Nuc for vectors silently returns L1",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nnorms.rs L85-92: NumPy raises ValueError.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:44:02.885770331Z",
+  "updated_at": "2026-03-25T15:44:02.885770331Z"
+}
