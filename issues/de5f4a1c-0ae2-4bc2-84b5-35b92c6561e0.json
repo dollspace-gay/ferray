@@ -3,11 +3,12 @@
   "display_id": 179,
   "title": "ferray-window: kaiser rejects negative beta, but NumPy allows it",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nwindows/mod.rs L175: I_0 is even function so kaiser(M, -beta) == kaiser(M, beta). Fix: take abs or remove check.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:40:48.720833502Z",
-  "updated_at": "2026-03-25T15:41:04.364412777Z",
+  "updated_at": "2026-03-25T17:00:15.262827894Z",
+  "closed_at": "2026-03-25T17:00:15.262827894Z",
   "labels": [
     "bug",
     "qa-audit"
