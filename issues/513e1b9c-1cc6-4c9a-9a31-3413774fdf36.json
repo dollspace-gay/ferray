@@ -1,0 +1,11 @@
+{
+  "uuid": "513e1b9c-1cc6-4c9a-9a31-3413774fdf36",
+  "display_id": 214,
+  "title": "ferray-core-macros: triplicated promotion logic risks silent divergence",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nproc macro, runtime function, and Promoted trait impls all independent. No cross-validation test.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:47:28.665564955Z",
+  "updated_at": "2026-03-25T15:47:28.665564955Z"
+}
