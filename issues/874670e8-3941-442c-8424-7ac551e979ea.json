@@ -1,0 +1,11 @@
+{
+  "uuid": "874670e8-3941-442c-8424-7ac551e979ea",
+  "display_id": 303,
+  "title": "ferray-autodiff: no edge-case tests at domain boundaries",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsqrt(0), ln(0), asin(1) derivatives are inf. No tests for boundary behavior.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:02:33.074766525Z",
+  "updated_at": "2026-03-25T16:02:33.074766525Z"
+}
