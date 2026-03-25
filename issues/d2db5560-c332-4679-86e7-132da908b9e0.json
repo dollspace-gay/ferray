@@ -1,0 +1,11 @@
+{
+  "uuid": "d2db5560-c332-4679-86e7-132da908b9e0",
+  "display_id": 61,
+  "title": "ferray-ufunc: logaddexp/logaddexp2 silently drop NaN inputs",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nexplog.rs L147-166: when one input is NaN, comparisons return false, NaN is dropped silently. Fix: add explicit NaN checks.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:22:02.273335282Z",
+  "updated_at": "2026-03-25T15:22:02.273335282Z"
+}
