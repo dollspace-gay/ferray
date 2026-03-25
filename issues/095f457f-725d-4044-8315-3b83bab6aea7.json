@@ -1,0 +1,11 @@
+{
+  "uuid": "095f457f-725d-4044-8315-3b83bab6aea7",
+  "display_id": 115,
+  "title": "ferray-io: no tests for loading big-endian .npy files",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nbyte-swap logic and Endianness::needs_swap never exercised in tests.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:30:04.469746279Z",
+  "updated_at": "2026-03-25T15:30:04.469746279Z"
+}
