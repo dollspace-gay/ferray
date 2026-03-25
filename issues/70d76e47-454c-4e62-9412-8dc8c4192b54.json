@@ -1,0 +1,11 @@
+{
+  "uuid": "70d76e47-454c-4e62-9412-8dc8c4192b54",
+  "display_id": 302,
+  "title": "ferray-autodiff: missing Sum/Product trait impls",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nIterator::sum() and product() don't work on DualNumber iterators.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:02:26.561531002Z",
+  "updated_at": "2026-03-25T16:02:26.561531002Z"
+}
