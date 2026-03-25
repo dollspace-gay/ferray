@@ -1,0 +1,11 @@
+{
+  "uuid": "16d34cd5-1585-4db3-94ab-314f0259d501",
+  "display_id": 149,
+  "title": "ferray-ma: min/max silently ignore NaN in unmasked elements",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nreductions.rs L80-124: PartialOrd comparisons return false for NaN. Behavior depends on iteration order.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:36:00.159741523Z",
+  "updated_at": "2026-03-25T15:36:00.159741523Z"
+}
