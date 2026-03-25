@@ -1,0 +1,11 @@
+{
+  "uuid": "4db646cf-f10c-433c-ac60-1d2acf6476d0",
+  "display_id": 108,
+  "title": "ferray-fft: rfft computes full FFT then discards half",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nreal.rs L188-212: should use rustfft RealFftPlanner for ~2x speedup.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:29:03.168761348Z",
+  "updated_at": "2026-03-25T15:29:03.168761348Z"
+}
