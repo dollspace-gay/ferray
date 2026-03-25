@@ -1,0 +1,11 @@
+{
+  "uuid": "4cd3fb09-1cbc-49c6-9f55-c0c70045818e",
+  "display_id": 183,
+  "title": "ferray-stats: no tests for cov/corrcoef with single observation",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nnobs=1 ddof=1 should error. Constant variable corrcoef untested.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:41:23.733549334Z",
+  "updated_at": "2026-03-25T15:41:23.733549334Z"
+}
