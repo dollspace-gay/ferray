@@ -1,0 +1,11 @@
+{
+  "uuid": "21d2dc8f-a6d6-4ffd-bbf1-cc01df6c0b58",
+  "display_id": 282,
+  "title": "ferray-strings: no tests for empty arrays (zero elements)",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNo test passes zero-length StringArray.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:59:40.833937701Z",
+  "updated_at": "2026-03-25T15:59:40.833937701Z"
+}
