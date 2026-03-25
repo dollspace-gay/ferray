@@ -1,0 +1,11 @@
+{
+  "uuid": "fc852c52-3510-4862-8d78-ced797120f5a",
+  "display_id": 112,
+  "title": "ferray-fft: no tests for rfft/irfft along non-last axes",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nAll tests use default axis. axis=0 on 2-D array untested.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:29:43.884462963Z",
+  "updated_at": "2026-03-25T15:29:43.884462963Z"
+}
