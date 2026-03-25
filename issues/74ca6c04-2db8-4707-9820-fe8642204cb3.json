@@ -1,0 +1,11 @@
+{
+  "uuid": "74ca6c04-2db8-4707-9820-fe8642204cb3",
+  "display_id": 326,
+  "title": "ferray-core-macros: no test for FerrayRecord with generics",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nlib.rs L99: handles generics but untested.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:07:41.948690068Z",
+  "updated_at": "2026-03-25T16:07:41.948690068Z"
+}
