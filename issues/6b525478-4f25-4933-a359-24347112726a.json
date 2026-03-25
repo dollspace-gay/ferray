@@ -1,0 +1,11 @@
+{
+  "uuid": "6b525478-4f25-4933-a359-24347112726a",
+  "display_id": 182,
+  "title": "ferray-window: apply_over_axes hardcoded to f64",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nfunctional.rs L197-218: all other functions generic over T: Element. f32/integer arrays can't use this.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:41:21.722043968Z",
+  "updated_at": "2026-03-25T15:41:21.722043968Z"
+}
