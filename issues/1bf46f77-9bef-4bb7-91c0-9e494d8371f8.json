@@ -1,0 +1,11 @@
+{
+  "uuid": "1bf46f77-9bef-4bb7-91c0-9e494d8371f8",
+  "display_id": 156,
+  "title": "ferray-ufunc: nancumsum/nancumprod allocate cleaned copy then cumsum allocates again",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\narithmetic.rs L586-618: two allocations. Fuse into single pass.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:37:17.259347947Z",
+  "updated_at": "2026-03-25T15:37:17.259347947Z"
+}
