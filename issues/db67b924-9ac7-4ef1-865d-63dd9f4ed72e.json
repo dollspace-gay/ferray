@@ -3,11 +3,12 @@
   "display_id": 90,
   "title": "ferray-stats: min/max inconsistent NaN propagation",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nreductions/mod.rs L287-345: uses <= / >= which return false for NaN. Behavior depends on iteration order.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:26:07.936961308Z",
-  "updated_at": "2026-03-25T15:26:13.821197188Z",
+  "updated_at": "2026-03-25T16:45:05.582384561Z",
+  "closed_at": "2026-03-25T16:45:05.582384561Z",
   "labels": [
     "bug",
     "qa-audit"
