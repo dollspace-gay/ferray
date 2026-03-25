@@ -1,0 +1,11 @@
+{
+  "uuid": "566bdc0f-a4c5-4685-9a15-555555480823",
+  "display_id": 184,
+  "title": "ferray-autodiff: missing T op DualNumber impls (can't write 2.0 * x)",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nOnly DualNumber<T> op T implemented. T op DualNumber<T> missing. Significant ergonomic issue.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:41:39.636517530Z",
+  "updated_at": "2026-03-25T15:41:39.636517530Z"
+}
