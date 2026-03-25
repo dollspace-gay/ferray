@@ -1,0 +1,11 @@
+{
+  "uuid": "5ab02aaa-5bfb-4954-b558-c93cb2e7d977",
+  "display_id": 173,
+  "title": "ferray-stats: SIMD acceleration only for f64, not f32",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nreductions/mod.rs L18-43: f32 workloads fall back to scalar. Add f32 SIMD paths.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:40:00.722970950Z",
+  "updated_at": "2026-03-25T15:40:00.722970950Z"
+}
