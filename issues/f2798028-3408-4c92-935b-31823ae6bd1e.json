@@ -1,0 +1,11 @@
+{
+  "uuid": "f2798028-3408-4c92-935b-31823ae6bd1e",
+  "display_id": 329,
+  "title": "ferray umbrella: no forbid(unsafe_code) attribute",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nPure re-export crate. Codify guarantee.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:08:11.708012812Z",
+  "updated_at": "2026-03-25T16:08:11.708012812Z"
+}
