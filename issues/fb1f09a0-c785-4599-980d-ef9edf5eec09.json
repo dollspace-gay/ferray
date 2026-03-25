@@ -1,0 +1,11 @@
+{
+  "uuid": "fb1f09a0-c785-4599-980d-ef9edf5eec09",
+  "display_id": 307,
+  "title": "ferray-numpy-interop: Arrow/Polars conversions are 1-D only",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nNo Array2 or ArrayD support. Only Array1 conversions.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:03:04.013085488Z",
+  "updated_at": "2026-03-25T16:03:04.013085488Z"
+}
