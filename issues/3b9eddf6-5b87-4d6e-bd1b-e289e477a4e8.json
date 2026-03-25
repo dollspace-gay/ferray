@@ -3,11 +3,12 @@
   "display_id": 84,
   "title": "ferray-ufunc: cumsum/cumprod with axis=None returns original shape, not flattened",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\narithmetic.rs L534-541: NumPy returns 1-D flattened result. Ferray returns original multi-dim shape.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:25:30.582064021Z",
-  "updated_at": "2026-03-25T16:41:09.268027829Z",
+  "updated_at": "2026-03-25T16:41:11.169679146Z",
+  "closed_at": "2026-03-25T16:41:11.169679146Z",
   "labels": [
     "bug",
     "qa-audit"
