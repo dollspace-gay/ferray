@@ -1,0 +1,11 @@
+{
+  "uuid": "eff5fa7b-8528-4204-9b2d-5959e361cf96",
+  "display_id": 211,
+  "title": "ferray-linalg: faer_to_array2 copies element-by-element",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nfaer_bridge.rs L50-59: nested loops. Block transposition better for cache.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:46:47.119472879Z",
+  "updated_at": "2026-03-25T15:46:47.119472879Z"
+}
