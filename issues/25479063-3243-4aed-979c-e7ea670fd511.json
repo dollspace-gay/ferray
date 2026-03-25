@@ -1,0 +1,11 @@
+{
+  "uuid": "25479063-3243-4aed-979c-e7ea670fd511",
+  "display_id": 125,
+  "title": "ferray-core: DynArray massive boilerplate — repeated match over 15+ variants",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\ndynarray.rs L59-244: every method matches 15+ variants identically. Use macro_rules!.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:32:02.429412917Z",
+  "updated_at": "2026-03-25T15:32:02.429412917Z"
+}
