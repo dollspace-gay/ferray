@@ -1,0 +1,11 @@
+{
+  "uuid": "4a57b0ca-3db8-4325-8e51-e8e0751eecfe",
+  "display_id": 117,
+  "title": "ferray-io: no tests for malformed .npy files",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNo negative tests: truncated files, corrupt magic, invalid header, wrong dtype, size mismatch.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:30:26.414911916Z",
+  "updated_at": "2026-03-25T15:30:26.414911916Z"
+}
