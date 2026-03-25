@@ -1,0 +1,11 @@
+{
+  "uuid": "3f34d1e5-4a9d-4e8c-8588-1ecedaf8dbc7",
+  "display_id": 140,
+  "title": "ferray-random: binomial powi truncates n to i32 for large n",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ndiscrete.rs L107: q.powi(n as i32) silently wraps for n > i32::MAX. Fix: use q.powf(n as f64).",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:34:31.614720727Z",
+  "updated_at": "2026-03-25T15:34:31.614720727Z"
+}
