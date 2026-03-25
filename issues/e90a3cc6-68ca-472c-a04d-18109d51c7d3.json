@@ -1,0 +1,11 @@
+{
+  "uuid": "e90a3cc6-68ca-472c-a04d-18109d51c7d3",
+  "display_id": 80,
+  "title": "ferray-core: indexed_iter allocates Vec<usize> per element",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\niter.rs L30-44: every next() allocates Vec for indices. For 1000x1000 array = 1M heap allocs. Use ndarray indexed_iter.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:25:06.985352159Z",
+  "updated_at": "2026-03-25T15:25:06.985352159Z"
+}
