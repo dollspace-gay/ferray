@@ -1,0 +1,11 @@
+{
+  "uuid": "4b0ebca2-3e3a-41f7-9b30-0cc78f419be1",
+  "display_id": 193,
+  "title": "ferray-linalg: broad clippy allows in lib.rs",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nL9-15: crate-wide allow(missing_docs) and allow(if_same_then_else). Narrow to specific items.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:43:38.393825903Z",
+  "updated_at": "2026-03-25T15:43:38.393825903Z"
+}
