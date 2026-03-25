@@ -1,0 +1,11 @@
+{
+  "uuid": "948778e4-51f1-4416-ba65-eb68de870d4e",
+  "display_id": 110,
+  "title": "ferray-fft: unnecessary unsafe impl Send/Sync for FftPlan",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nplan.rs L92-93: Arc<dyn Fft<f64>> is already Send+Sync. Manual unsafe impl hides compiler safety checks.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:29:16.710402229Z",
+  "updated_at": "2026-03-25T15:29:16.710402229Z"
+}
