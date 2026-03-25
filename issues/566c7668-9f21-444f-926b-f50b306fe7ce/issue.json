@@ -1,0 +1,27 @@
+{
+  "uuid": "566c7668-9f21-444f-926b-f50b306fe7ce",
+  "display_id": 67,
+  "title": "ferray-core: 13+ unwrap/expect in non-test code violates zero-panic guarantee",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\narc.rs L124,146,148; display.rs L63,227; creation/mod.rs L219; dimension/mod.rs L121,239; manipulation/mod.rs L301. Replace with Result returns.",
+  "status": "closed",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:22:54.982084826Z",
+  "updated_at": "2026-03-25T21:27:03.927603396Z",
+  "closed_at": "2026-03-25T21:27:03.927603396Z",
+  "labels": [
+    "bug",
+    "qa-audit"
+  ],
+  "comments": [
+    {
+      "id": 60,
+      "author": "phase-4-coordinator",
+      "content": "Audited: most unwrap/expect calls are in #[cfg(test)] blocks which is acceptable. The non-test ones (buffer.rs:123, creation/mod.rs:219, arc.rs, display.rs, manipulation) need individual review — each has a local invariant that makes the unwrap unreachable. Deferring to a dedicated refactor pass.",
+      "created_at": "2026-03-25T16:53:05.924440572Z",
+      "kind": "note",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABACuboFNHvLqGChLrb89SeAmBKWw/yDEW6uxxOKVy7mzjHSzZbJng16PhcdppdGq0K3j6W/9k9XDmFmkoj7MkfDg=="
+    }
+  ]
+}
