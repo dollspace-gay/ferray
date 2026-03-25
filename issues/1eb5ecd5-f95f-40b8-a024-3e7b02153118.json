@@ -1,0 +1,11 @@
+{
+  "uuid": "1eb5ecd5-f95f-40b8-a024-3e7b02153118",
+  "display_id": 325,
+  "title": "ferray-core-macros: no test for promoted_type! with Complex<f32> + Complex<f64>",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nOnly mixed complex+real tested.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:07:36.229046947Z",
+  "updated_at": "2026-03-25T16:07:36.229046947Z"
+}
