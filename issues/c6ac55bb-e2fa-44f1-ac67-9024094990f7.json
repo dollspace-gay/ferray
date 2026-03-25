@@ -1,0 +1,11 @@
+{
+  "uuid": "c6ac55bb-e2fa-44f1-ac67-9024094990f7",
+  "display_id": 120,
+  "title": "ferray-io: TOCTOU race in memmap read_npy_header_with_offset",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nmemmap.rs L254-285: opens file twice. File could change between opens.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:31:14.149765060Z",
+  "updated_at": "2026-03-25T15:31:14.149765060Z"
+}
