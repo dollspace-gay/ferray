@@ -1,0 +1,11 @@
+{
+  "uuid": "c8e0a9ae-15ec-4ade-b174-26d1195f97c6",
+  "display_id": 194,
+  "title": "ferray-linalg: matrix_norm P(_) silently falls back to Frobenius",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nnorms.rs L198-206: NumPy raises ValueError. Silent wrong result is worse.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:43:46.263647080Z",
+  "updated_at": "2026-03-25T15:43:46.263647080Z"
+}
