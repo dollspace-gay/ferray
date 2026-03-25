@@ -3,11 +3,12 @@
   "display_id": 70,
   "title": "ferray-ma: masked_binary_op missing shape validation — silently truncates",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nufunc_support.rs L41-66: no shape check before zip. Mismatched shapes silently truncate. 5 public binary ufuncs affected.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:23:34.692588460Z",
-  "updated_at": "2026-03-25T15:23:41.891606552Z",
+  "updated_at": "2026-03-25T17:14:46.011812065Z",
+  "closed_at": "2026-03-25T17:14:46.011812065Z",
   "labels": [
     "bug",
     "qa-audit"
