@@ -1,0 +1,11 @@
+{
+  "uuid": "3236d606-20f5-4016-bae5-c743c67739da",
+  "display_id": 81,
+  "title": "ferray-core: broadcast_to materializes full copy unnecessarily",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nmanipulation/mod.rs L138-199: copies all data when dimension::broadcast::broadcast_to returns zero-copy view.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:25:12.535062716Z",
+  "updated_at": "2026-03-25T15:25:12.535062716Z"
+}
