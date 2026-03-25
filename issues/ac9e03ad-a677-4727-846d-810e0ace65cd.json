@@ -1,0 +1,11 @@
+{
+  "uuid": "ac9e03ad-a677-4727-846d-810e0ace65cd",
+  "display_id": 95,
+  "title": "ferray-stats: nanvar allocates intermediate vec for squared diffs",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nnan_aware.rs L39-54: two allocations and two passes. Single-pass Welford would be more efficient.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:27:01.008498857Z",
+  "updated_at": "2026-03-25T15:27:01.008498857Z"
+}
