@@ -1,0 +1,11 @@
+{
+  "uuid": "fa22e80c-a5af-4e89-8b3e-7a4969d8a326",
+  "display_id": 169,
+  "title": "ferray-stride-tricks: sliding_window_view casts isize strides to usize without negative check",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsliding_window.rs L92-97: s as usize wraps negative strides to huge values. Add guard or assert contiguity.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:39:12.681934399Z",
+  "updated_at": "2026-03-25T15:39:12.681934399Z"
+}
