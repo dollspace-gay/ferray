@@ -1,0 +1,11 @@
+{
+  "uuid": "566c7668-9f21-444f-926b-f50b306fe7ce",
+  "display_id": 67,
+  "title": "ferray-core: 13+ unwrap/expect in non-test code violates zero-panic guarantee",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\narc.rs L124,146,148; display.rs L63,227; creation/mod.rs L219; dimension/mod.rs L121,239; manipulation/mod.rs L301. Replace with Result returns.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:22:54.982084826Z",
+  "updated_at": "2026-03-25T15:22:54.982084826Z"
+}
