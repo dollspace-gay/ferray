@@ -1,0 +1,11 @@
+{
+  "uuid": "041679bc-d7a8-42ff-acd4-bbff22c0168a",
+  "display_id": 313,
+  "title": "ferray-numpy-interop: no tests for large arrays",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nAll arrays 3-7 elements. No 10K+ scale tests.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:04:09.874501872Z",
+  "updated_at": "2026-03-25T16:04:09.874501872Z"
+}
