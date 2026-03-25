@@ -1,0 +1,11 @@
+{
+  "uuid": "04e04ead-cdd1-4c1f-8035-ced092a21943",
+  "display_id": 127,
+  "title": "ferray-core: duplicated layout() across Array/ArrayView/ArrayViewMut",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nowned.rs L121, view.rs L70, view_mut.rs L79: identical impl in 3 places.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:32:15.900046837Z",
+  "updated_at": "2026-03-25T15:32:15.900046837Z"
+}
