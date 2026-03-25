@@ -1,0 +1,11 @@
+{
+  "uuid": "941eb55a-cfed-41ed-9d36-2d5027dc9f9d",
+  "display_id": 227,
+  "title": "ferray-fft: unused input_shape parameter in compute_lane_output_start",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nnd.rs L307: accepted but discarded with let _ = input_shape.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:49:11.172293334Z",
+  "updated_at": "2026-03-25T15:49:11.172293334Z"
+}
