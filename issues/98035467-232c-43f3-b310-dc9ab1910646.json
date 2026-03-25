@@ -1,0 +1,11 @@
+{
+  "uuid": "98035467-232c-43f3-b310-dc9ab1910646",
+  "display_id": 53,
+  "title": "ferray-linalg: array2_to_faer O((m*n)^2) allocation for non-contiguous arrays",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nfaer_bridge.rs L16-30: from_fn closure collects entire iterator into new Vec on every per-element call. O((m*n)^2) allocations total. Fix: hoist collection outside closure.",
+  "status": "open",
+  "priority": "critical",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:21:11.880068024Z",
+  "updated_at": "2026-03-25T15:21:11.880068024Z"
+}
