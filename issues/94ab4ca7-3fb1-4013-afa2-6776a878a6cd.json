@@ -1,0 +1,11 @@
+{
+  "uuid": "94ab4ca7-3fb1-4013-afa2-6776a878a6cd",
+  "display_id": 261,
+  "title": "ferray-random: Box-Muller is slower than Ziggurat for normal generation",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nnormal.rs L13-25: 2-4x slower than Ziggurat used by NumPy.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:55:39.701282907Z",
+  "updated_at": "2026-03-25T15:55:39.701282907Z"
+}
