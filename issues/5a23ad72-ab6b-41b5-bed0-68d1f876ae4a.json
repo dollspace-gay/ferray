@@ -1,0 +1,11 @@
+{
+  "uuid": "5a23ad72-ab6b-41b5-bed0-68d1f876ae4a",
+  "display_id": 170,
+  "title": "ferray-stats: mean/var/std_ don't support integer input with float output",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nL495,537,606: require T: Float. NumPy mean([1,2,3]) returns 2.0.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:39:34.260552025Z",
+  "updated_at": "2026-03-25T15:39:34.260552025Z"
+}
