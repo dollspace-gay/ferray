@@ -1,0 +1,11 @@
+{
+  "uuid": "c23bf348-b01b-427e-a0fe-596e712f94d7",
+  "display_id": 122,
+  "title": "ferray-polynomial: missing domain/window support for Chebyshev/Legendre fitting",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nAll bases: no domain/window attrs. Fitting on non-[-1,1] domains is numerically useless without input mapping.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:31:29.335881369Z",
+  "updated_at": "2026-03-25T15:31:29.335881369Z"
+}
