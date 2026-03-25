@@ -3,11 +3,12 @@
   "display_id": 136,
   "title": "ferray-random: Laplace sampling produces Inf when u.abs() == 0.5",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nmisc_continuous.rs L39-42: when uniform is exactly 0, u.abs()=0.5, ln(0)=-inf. Fix: guard against boundary.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:34:04.579877459Z",
-  "updated_at": "2026-03-25T15:34:17.635835018Z",
+  "updated_at": "2026-03-25T17:20:56.223483919Z",
+  "closed_at": "2026-03-25T17:20:56.223483919Z",
   "labels": [
     "bug",
     "qa-audit"
