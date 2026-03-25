@@ -1,0 +1,11 @@
+{
+  "uuid": "3ca9e359-b64c-4646-bf5f-6f870eebece0",
+  "display_id": 226,
+  "title": "ferray-fft: fft_1d_along_axis is trivial wrapper adding nothing",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nnd.rs L201-210: one-line delegation to fft_along_axis.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:49:02.341562968Z",
+  "updated_at": "2026-03-25T15:49:02.341562968Z"
+}
