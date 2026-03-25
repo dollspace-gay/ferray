@@ -1,0 +1,11 @@
+{
+  "uuid": "b11b2754-1eef-4111-b542-afd0c93e9c9e",
+  "display_id": 289,
+  "title": "ferray-stride-tricks: no property tests for as_strided",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nproperty_tests.rs: most safety-critical functions without fuzz coverage.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:00:45.733244190Z",
+  "updated_at": "2026-03-25T16:00:45.733244190Z"
+}
