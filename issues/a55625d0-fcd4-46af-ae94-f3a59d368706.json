@@ -1,0 +1,11 @@
+{
+  "uuid": "a55625d0-fcd4-46af-ae94-f3a59d368706",
+  "display_id": 139,
+  "title": "ferray-core: no tests for DynArray with f16/bf16 feature flags",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ndynarray.rs: feature-gated F16/BF16 variants have no test coverage.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:34:25.255000728Z",
+  "updated_at": "2026-03-25T15:34:25.255000728Z"
+}
