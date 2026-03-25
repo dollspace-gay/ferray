@@ -1,0 +1,11 @@
+{
+  "uuid": "5185e9d1-287b-4d3e-a68b-5ddf3f30f2d8",
+  "display_id": 130,
+  "title": "ferray-polynomial: no high-degree root finding tests (degree >= 10)",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nroots.rs tests only up to degree 4. Wilkinson polynomial and clustered roots untested.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:33:02.937014512Z",
+  "updated_at": "2026-03-25T15:33:02.937014512Z"
+}
