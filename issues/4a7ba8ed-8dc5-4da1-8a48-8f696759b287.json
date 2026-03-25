@@ -1,0 +1,11 @@
+{
+  "uuid": "4a7ba8ed-8dc5-4da1-8a48-8f696759b287",
+  "display_id": 273,
+  "title": "ferray-ma: data_mut() allows breaking shape invariant",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nmasked_array.rs L72-75: unrestricted &mut access could resize/reshape data.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:58:40.720467538Z",
+  "updated_at": "2026-03-25T15:58:40.720467538Z"
+}
