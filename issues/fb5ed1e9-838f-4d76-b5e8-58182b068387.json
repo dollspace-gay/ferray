@@ -1,0 +1,11 @@
+{
+  "uuid": "fb5ed1e9-838f-4d76-b5e8-58182b068387",
+  "display_id": 222,
+  "title": "ferray umbrella: const_shapes feature not forwarded from core",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nferray-core has const_shapes feature. Umbrella doesn't expose it.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:48:35.736991574Z",
+  "updated_at": "2026-03-25T15:48:35.736991574Z"
+}
