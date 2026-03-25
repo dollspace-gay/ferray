@@ -1,0 +1,11 @@
+{
+  "uuid": "67ee6652-4140-41c3-8ee2-03fa4a9f2b95",
+  "display_id": 257,
+  "title": "ferray-polynomial: basis conversion allocates O(n) temp vectors per term",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nEach iteration allocates new Vec for t_next. Use two pre-allocated buffers.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:54:57.851206314Z",
+  "updated_at": "2026-03-25T15:54:57.851206314Z"
+}
