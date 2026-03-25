@@ -1,0 +1,11 @@
+{
+  "uuid": "f060535c-588d-4f3a-945e-54432923d36b",
+  "display_id": 145,
+  "title": "ferray-random: no reproducibility tests against known reference values",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nSame-seed-same-output passes even with wrong algorithm. Need known-answer test vectors.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:35:23.014522781Z",
+  "updated_at": "2026-03-25T15:35:23.014522781Z"
+}
