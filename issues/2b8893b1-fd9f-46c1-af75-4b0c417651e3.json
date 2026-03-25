@@ -1,0 +1,11 @@
+{
+  "uuid": "2b8893b1-fd9f-46c1-af75-4b0c417651e3",
+  "display_id": 220,
+  "title": "ferray umbrella: missing trait re-exports (Logical, BitwiseOps, ShiftOps, ArangeNum, LinspaceNum)",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nUsers importing from umbrella can't satisfy trait bounds for custom types or name UninitArray.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:48:05.346845067Z",
+  "updated_at": "2026-03-25T15:48:05.346845067Z"
+}
