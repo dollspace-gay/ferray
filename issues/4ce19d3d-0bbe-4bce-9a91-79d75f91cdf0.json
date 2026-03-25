@@ -1,0 +1,11 @@
+{
+  "uuid": "4ce19d3d-0bbe-4bce-9a91-79d75f91cdf0",
+  "display_id": 172,
+  "title": "ferray-stride-tricks: sliding_window_view has no bounds check on resulting view",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsliding_window.rs L99-106: no all_offsets_in_bounds call unlike as_strided. Off-by-one could cause OOB reads.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:39:46.078228603Z",
+  "updated_at": "2026-03-25T15:39:46.078228603Z"
+}
