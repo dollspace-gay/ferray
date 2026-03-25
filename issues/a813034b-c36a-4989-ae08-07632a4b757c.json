@@ -1,0 +1,11 @@
+{
+  "uuid": "a813034b-c36a-4989-ae08-07632a4b757c",
+  "display_id": 239,
+  "title": "ferray-io: open_memmap copies data, defeating memory mapping purpose",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nmemmap.rs L237-251: immediately calls to_array() which copies all data.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:51:20.936571853Z",
+  "updated_at": "2026-03-25T15:51:20.936571853Z"
+}
