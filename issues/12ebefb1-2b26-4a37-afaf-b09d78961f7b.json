@@ -1,0 +1,11 @@
+{
+  "uuid": "12ebefb1-2b26-4a37-afaf-b09d78961f7b",
+  "display_id": 123,
+  "title": "ferray-core: duplicated AsRawBuffer impls for Array/ArrayView/ArcArray",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nbuffer.rs L34-113: three nearly identical 6-method bodies. Use macro.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:31:46.348163880Z",
+  "updated_at": "2026-03-25T15:31:46.348163880Z"
+}
