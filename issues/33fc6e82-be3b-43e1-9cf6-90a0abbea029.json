@@ -1,0 +1,11 @@
+{
+  "uuid": "33fc6e82-be3b-43e1-9cf6-90a0abbea029",
+  "display_id": 186,
+  "title": "ferray-autodiff: no ferray-core integration — DualNumber standalone",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nNo Element impl for DualNumber. Cannot use in NdArray. gradient function is scalar-only.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:42:23.325859875Z",
+  "updated_at": "2026-03-25T15:42:23.325859875Z"
+}
