@@ -1,0 +1,11 @@
+{
+  "uuid": "d0d20790-58fd-41fc-9117-ce47a76692eb",
+  "display_id": 64,
+  "title": "ferray-linalg: slogdet computes raw determinant first, defeating numerical purpose",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nnorms.rs L326-336: calls det(a) which overflows/underflows for large matrices. Should use LU decomposition to accumulate log-determinant.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:22:31.057681098Z",
+  "updated_at": "2026-03-25T15:22:31.057681098Z"
+}
