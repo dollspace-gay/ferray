@@ -1,0 +1,11 @@
+{
+  "uuid": "b98758ed-b38b-4080-9fbf-c39c3ff2d9e9",
+  "display_id": 59,
+  "title": "ferray-ufunc: nextafter uses float approximation instead of bit manipulation",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nfloatintrinsic.rs L138-151: nextafter(0.0, 1.0) returns MIN_POSITIVE instead of smallest subnormal. Must use to_bits() increment.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:21:47.216981004Z",
+  "updated_at": "2026-03-25T15:21:47.216981004Z"
+}
