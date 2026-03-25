@@ -3,11 +3,12 @@
   "display_id": 63,
   "title": "ferray-stats: histogram density parameter is silently ignored",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nhistogram.rs L121-126: density bool param accepted but never applied. Always returns raw counts regardless.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:22:22.910829638Z",
-  "updated_at": "2026-03-25T15:22:28.618990365Z",
+  "updated_at": "2026-03-25T17:14:38.671647572Z",
+  "closed_at": "2026-03-25T17:14:38.671647572Z",
   "labels": [
     "bug",
     "qa-audit"
