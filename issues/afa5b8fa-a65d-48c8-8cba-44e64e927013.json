@@ -1,0 +1,11 @@
+{
+  "uuid": "afa5b8fa-a65d-48c8-8cba-44e64e927013",
+  "display_id": 195,
+  "title": "ferray-numpy-interop: zero-copy claims are false — every conversion copies",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nlib.rs L22: claims zero-copy. All 6 paths (NumPy/Arrow/Polars in both directions) always copy data.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:43:52.785643698Z",
+  "updated_at": "2026-03-25T15:43:52.785643698Z"
+}
