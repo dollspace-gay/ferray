@@ -1,0 +1,11 @@
+{
+  "uuid": "cb8608dd-d1c1-4b00-b9eb-d3a19bced055",
+  "display_id": 101,
+  "title": "ferray-linalg: batched_matmul not parallelized with Rayon",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nproducts/mod.rs L327-395: sequential for loop. Other batched ops use into_par_iter().",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:28:22.509897465Z",
+  "updated_at": "2026-03-25T15:28:22.509897465Z"
+}
