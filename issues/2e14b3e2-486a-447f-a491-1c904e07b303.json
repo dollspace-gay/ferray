@@ -1,0 +1,11 @@
+{
+  "uuid": "2e14b3e2-486a-447f-a491-1c904e07b303",
+  "display_id": 86,
+  "title": "ferray-ufunc: force_scalar() LazyLock caching makes SIMD/scalar tests ineffective",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ndispatch.rs L13-21: env var read once, cached forever. Tests think they toggle paths but test same path twice.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:25:42.591559243Z",
+  "updated_at": "2026-03-25T15:25:42.591559243Z"
+}
