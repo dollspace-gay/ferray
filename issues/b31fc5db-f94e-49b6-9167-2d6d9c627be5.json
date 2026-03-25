@@ -1,0 +1,11 @@
+{
+  "uuid": "b31fc5db-f94e-49b6-9167-2d6d9c627be5",
+  "display_id": 150,
+  "title": "ferray-ma: duplicated arithmetic.rs and ufunc_support.rs expose same operations",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\n8 functions in arithmetic.rs duplicate masked_binary_op pattern. Mask-union logic also duplicated.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:36:07.318457709Z",
+  "updated_at": "2026-03-25T15:36:07.318457709Z"
+}
