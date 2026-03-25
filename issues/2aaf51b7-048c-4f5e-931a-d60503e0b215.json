@@ -3,11 +3,12 @@
   "display_id": 99,
   "title": "ferray-linalg: solve never returns SingularMatrix error despite documenting it",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsolve.rs L21-76: partial_piv_lu().solve() returns garbage for singular input. No singularity detection.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:27:43.465620309Z",
-  "updated_at": "2026-03-25T15:27:48.144248673Z",
+  "updated_at": "2026-03-25T16:42:31.259189254Z",
+  "closed_at": "2026-03-25T16:42:31.259189254Z",
   "labels": [
     "bug",
     "qa-audit"
