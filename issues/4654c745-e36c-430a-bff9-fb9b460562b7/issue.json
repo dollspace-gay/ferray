@@ -3,11 +3,12 @@
   "display_id": 68,
   "title": "ferray-io: no bounds check on shape product overflow from untrusted .npy files (DoS)",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nnpy/mod.rs L112,144 + memmap.rs L134,139,182: shape.iter().product() can overflow silently. Crafted files cause OOM or corrupted arrays. Fix: use checked_mul.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:23:10.490321764Z",
-  "updated_at": "2026-03-25T15:23:16.629670610Z",
+  "updated_at": "2026-03-25T17:14:42.238612774Z",
+  "closed_at": "2026-03-25T17:14:42.238612774Z",
   "labels": [
     "bug",
     "qa-audit"
