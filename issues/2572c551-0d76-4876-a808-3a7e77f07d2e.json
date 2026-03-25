@@ -1,0 +1,11 @@
+{
+  "uuid": "2572c551-0d76-4876-a808-3a7e77f07d2e",
+  "display_id": 230,
+  "title": "ferray-fft: no negative axis support (accepts usize, not isize)",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nresolve_axis functions: NumPy accepts axis=-1 etc.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:49:48.791442561Z",
+  "updated_at": "2026-03-25T15:49:48.791442561Z"
+}
