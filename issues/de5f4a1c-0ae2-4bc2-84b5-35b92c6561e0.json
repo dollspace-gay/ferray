@@ -1,0 +1,11 @@
+{
+  "uuid": "de5f4a1c-0ae2-4bc2-84b5-35b92c6561e0",
+  "display_id": 179,
+  "title": "ferray-window: kaiser rejects negative beta, but NumPy allows it",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nwindows/mod.rs L175: I_0 is even function so kaiser(M, -beta) == kaiser(M, beta). Fix: take abs or remove check.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:40:48.720833502Z",
+  "updated_at": "2026-03-25T15:40:48.720833502Z"
+}
