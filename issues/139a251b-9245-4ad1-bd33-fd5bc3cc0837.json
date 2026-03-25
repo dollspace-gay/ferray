@@ -3,11 +3,12 @@
   "display_id": 98,
   "title": "ferray-linalg: pinv ignores rcond parameter",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsolve.rs L236: _rcond unused. NumPy uses rcond to threshold small singular values.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:27:37.912261798Z",
-  "updated_at": "2026-03-25T15:27:41.548476529Z",
+  "updated_at": "2026-03-25T16:48:32.628592945Z",
+  "closed_at": "2026-03-25T16:48:32.628592945Z",
   "labels": [
     "bug",
     "qa-audit"
