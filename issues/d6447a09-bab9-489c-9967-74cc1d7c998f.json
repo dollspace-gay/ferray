@@ -1,0 +1,11 @@
+{
+  "uuid": "d6447a09-bab9-489c-9967-74cc1d7c998f",
+  "display_id": 176,
+  "title": "ferray-stride-tricks: no tests for non-contiguous (Fortran-ordered) source arrays",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nAll tests use C-contiguous from_vec. Different stride patterns never verified.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:40:28.818321285Z",
+  "updated_at": "2026-03-25T15:40:28.818321285Z"
+}
