@@ -1,0 +1,11 @@
+{
+  "uuid": "e0db0ce4-1620-4189-971d-0550b3971a46",
+  "display_id": 124,
+  "title": "ferray-polynomial: degree() uses different tolerance than trim()",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\npower.rs L91-98: degree() threshold 2.2e-14, trim(0.0) strips exact zeros. divmod uses both, causing inconsistencies.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:31:42.554504509Z",
+  "updated_at": "2026-03-25T15:31:42.554504509Z"
+}
