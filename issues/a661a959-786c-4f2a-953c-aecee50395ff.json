@@ -1,0 +1,11 @@
+{
+  "uuid": "a661a959-786c-4f2a-953c-aecee50395ff",
+  "display_id": 246,
+  "title": "ferray-polynomial: companion_size is dead code",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\ncompanion.rs L75: pub but never called outside own module.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:52:49.915194726Z",
+  "updated_at": "2026-03-25T15:52:49.915194726Z"
+}
