@@ -1,0 +1,11 @@
+{
+  "uuid": "0fda5513-531a-408f-b228-4eb1c7bd4913",
+  "display_id": 91,
+  "title": "ferray-stats: sort(axis=None) returns wrong shape",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsorting.rs L54: uses original multi-dim shape instead of flat 1-D. NumPy returns flat array.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:26:16.433662378Z",
+  "updated_at": "2026-03-25T15:26:16.433662378Z"
+}
