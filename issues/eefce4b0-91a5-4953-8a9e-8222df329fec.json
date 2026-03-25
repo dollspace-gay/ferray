@@ -1,0 +1,11 @@
+{
+  "uuid": "eefce4b0-91a5-4953-8a9e-8222df329fec",
+  "display_id": 72,
+  "title": "ferray umbrella: f16 feature not forwarded to ferray-ufunc",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nCargo.toml: f16 only enables ferray-core/f16, missing ferray-ufunc/f16. Users get f16 Element but no f16 ufuncs.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:23:50.346603575Z",
+  "updated_at": "2026-03-25T15:23:50.346603575Z"
+}
