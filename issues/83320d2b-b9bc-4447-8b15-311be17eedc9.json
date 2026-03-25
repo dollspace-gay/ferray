@@ -1,0 +1,11 @@
+{
+  "uuid": "83320d2b-b9bc-4447-8b15-311be17eedc9",
+  "display_id": 83,
+  "title": "ferray-ufunc: frexp uses iterative loops instead of bit extraction — O(1074) for subnormals",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nfloatintrinsic.rs L199-242: while loops for normalization. Extremely slow for subnormals.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:25:23.981418024Z",
+  "updated_at": "2026-03-25T15:25:23.981418024Z"
+}
