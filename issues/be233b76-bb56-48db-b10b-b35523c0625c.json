@@ -1,0 +1,11 @@
+{
+  "uuid": "be233b76-bb56-48db-b10b-b35523c0625c",
+  "display_id": 57,
+  "title": "ferray-core: concatenate uses iter().nth(src_flat) — O(n^2) and can panic",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nmanipulation/mod.rs L301: iter().nth(src_flat).unwrap() called per element. O(n) per call for non-contiguous. Fix: collect source data into Vec once.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:21:35.520651595Z",
+  "updated_at": "2026-03-25T15:21:35.520651595Z"
+}
