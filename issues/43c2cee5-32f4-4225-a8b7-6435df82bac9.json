@@ -1,0 +1,11 @@
+{
+  "uuid": "43c2cee5-32f4-4225-a8b7-6435df82bac9",
+  "display_id": 137,
+  "title": "ferray-core: no edge-case tests for pad Reflect/Symmetric on small arrays",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nextended.rs: n<=1 special cases untested.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:34:13.660632285Z",
+  "updated_at": "2026-03-25T15:34:13.660632285Z"
+}
