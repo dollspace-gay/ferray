@@ -3,11 +3,12 @@
   "display_id": 56,
   "title": "ferray-core: iinfo::<u128>().max overflows i128, wraps to -1",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ndtype/finfo.rs L200: u128::MAX as i128 wraps to -1. IntInfo.max stored as i128 cannot represent u128 max.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:21:29.632769408Z",
-  "updated_at": "2026-03-25T15:21:33.225341343Z",
+  "updated_at": "2026-03-25T16:27:41.029413053Z",
+  "closed_at": "2026-03-25T16:27:41.029413053Z",
   "labels": [
     "bug",
     "qa-audit"
