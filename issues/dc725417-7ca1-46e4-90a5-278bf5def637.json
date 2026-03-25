@@ -1,0 +1,11 @@
+{
+  "uuid": "dc725417-7ca1-46e4-90a5-278bf5def637",
+  "display_id": 154,
+  "title": "ferray-ma: set_mask_flat uses iter_mut().nth(n) — O(n) per call",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nmasked_array.rs L124: O(n^2) for repeated calls. Use direct indexing via as_slice_mut().",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:36:31.790698293Z",
+  "updated_at": "2026-03-25T15:36:31.790698293Z"
+}
