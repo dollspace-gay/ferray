@@ -1,0 +1,11 @@
+{
+  "uuid": "d9612e1d-2440-4dd9-9cdd-64ed7af9ba07",
+  "display_id": 111,
+  "title": "ferray-fft: no tests for normalization modes on N-D FFTs",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nacceptance.rs: only 1-D normalization tested. fft2/fftn/rfft2/rfftn with Forward/Ortho untested.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:29:36.978555922Z",
+  "updated_at": "2026-03-25T15:29:36.978555922Z"
+}
