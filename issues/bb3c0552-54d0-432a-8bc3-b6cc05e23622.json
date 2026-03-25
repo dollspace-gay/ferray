@@ -3,11 +3,12 @@
   "display_id": 49,
   "title": "ferray-core: broadcast_to casts negative isize strides to usize — UB for transposed views",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ndimension/broadcast.rs L168,201,273: isize strides cast to usize via 'as usize'. Negative strides from transposed/Fortran views wrap to huge values, causing from_shape_ptr OOB access.",
-  "status": "open",
+  "status": "closed",
   "priority": "critical",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:14:40.435195704Z",
-  "updated_at": "2026-03-25T15:15:23.346075298Z",
+  "updated_at": "2026-03-25T16:24:48.932371237Z",
+  "closed_at": "2026-03-25T16:24:48.932371237Z",
   "labels": [
     "bug",
     "qa-audit"
