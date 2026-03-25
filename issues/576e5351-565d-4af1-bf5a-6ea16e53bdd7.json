@@ -1,0 +1,11 @@
+{
+  "uuid": "576e5351-565d-4af1-bf5a-6ea16e53bdd7",
+  "display_id": 245,
+  "title": "ferray-polynomial: x_pow_prev computed but never used in power_to_chebyshev/legendre",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nchebyshev.rs L162, legendre.rs L132: dead state with let _ = suppression.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:52:36.610178772Z",
+  "updated_at": "2026-03-25T15:52:36.610178772Z"
+}
