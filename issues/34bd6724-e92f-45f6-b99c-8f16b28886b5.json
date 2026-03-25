@@ -1,0 +1,11 @@
+{
+  "uuid": "34bd6724-e92f-45f6-b99c-8f16b28886b5",
+  "display_id": 89,
+  "title": "ferray-ufunc: convolve is O(n*m) with no FFT fallback for large inputs",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nconvolution.rs L47-51: direct nested loop. NumPy switches to FFT for large inputs.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:26:00.530091928Z",
+  "updated_at": "2026-03-25T15:26:00.530091928Z"
+}
