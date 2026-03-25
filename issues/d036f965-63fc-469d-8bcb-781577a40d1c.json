@@ -1,0 +1,11 @@
+{
+  "uuid": "d036f965-63fc-469d-8bcb-781577a40d1c",
+  "display_id": 284,
+  "title": "ferray-strings: oracle tests don't cover alignment/concat/regex ops",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ncenter, ljust, rjust, zfill, add, multiply, match_, extract all missing.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:59:58.517926868Z",
+  "updated_at": "2026-03-25T15:59:58.517926868Z"
+}
