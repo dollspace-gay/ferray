@@ -1,0 +1,11 @@
+{
+  "uuid": "ba515d5f-4c24-4183-be67-8e330264b52a",
+  "display_id": 334,
+  "title": "ferray umbrella: full feature excludes f16 and serde",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nCommonly desired features with minimal cost.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:09:19.650032839Z",
+  "updated_at": "2026-03-25T16:09:19.650032839Z"
+}
