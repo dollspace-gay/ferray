@@ -3,11 +3,12 @@
   "display_id": 60,
   "title": "ferray-ufunc: spacing does not return true ULP",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nfloatintrinsic.rs L155-169: uses x.abs() * epsilon approximation. For x=0 returns MIN_POSITIVE instead of smallest subnormal.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:21:54.113304681Z",
-  "updated_at": "2026-03-25T15:21:59.892534016Z",
+  "updated_at": "2026-03-25T17:14:25.279759728Z",
+  "closed_at": "2026-03-25T17:14:25.279759728Z",
   "labels": [
     "bug",
     "qa-audit"
