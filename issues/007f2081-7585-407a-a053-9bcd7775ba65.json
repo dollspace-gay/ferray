@@ -1,0 +1,11 @@
+{
+  "uuid": "007f2081-7585-407a-a053-9bcd7775ba65",
+  "display_id": 146,
+  "title": "ferray-ufunc: helper naming misleading — binary_float_op used for non-float types",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nhelpers.rs L148: bitwise module uses it for integers. Rename to binary_elementwise_op.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:35:35.224865635Z",
+  "updated_at": "2026-03-25T15:35:35.224865635Z"
+}
