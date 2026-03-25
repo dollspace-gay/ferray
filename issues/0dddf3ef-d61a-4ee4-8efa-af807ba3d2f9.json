@@ -1,0 +1,11 @@
+{
+  "uuid": "0dddf3ef-d61a-4ee4-8efa-af807ba3d2f9",
+  "display_id": 76,
+  "title": "ferray-core: From<ndarray::Array> for Array is public, leaking ndarray into API",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nowned.rs L197-206: public From impls let downstream depend on ndarray types, contradicting stated design goal.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:24:16.670670568Z",
+  "updated_at": "2026-03-25T15:24:16.670670568Z"
+}
