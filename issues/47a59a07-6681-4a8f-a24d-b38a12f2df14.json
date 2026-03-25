@@ -1,0 +1,11 @@
+{
+  "uuid": "47a59a07-6681-4a8f-a24d-b38a12f2df14",
+  "display_id": 235,
+  "title": "ferray-io: npz double-buffers through intermediate Vec<u8>",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nnpz/mod.rs L47-48: each array serialized to Vec then written to zip. Write directly to zip writer.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:50:32.288324834Z",
+  "updated_at": "2026-03-25T15:50:32.288324834Z"
+}
