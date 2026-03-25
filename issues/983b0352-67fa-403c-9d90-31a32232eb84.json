@@ -3,11 +3,12 @@
   "display_id": 74,
   "title": "ferray umbrella: config.rs .expect() can panic in library code",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nconfig.rs L55: with_num_threads uses .expect() on ThreadPoolBuilder::build(). Violates zero-panic guarantee.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:24:02.140975108Z",
-  "updated_at": "2026-03-25T15:24:06.960978131Z",
+  "updated_at": "2026-03-25T16:30:35.954844786Z",
+  "closed_at": "2026-03-25T16:30:35.954844786Z",
   "labels": [
     "bug",
     "qa-audit"
