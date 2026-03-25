@@ -1,0 +1,11 @@
+{
+  "uuid": "be24cd83-3993-40db-a02f-eb84fd83492a",
+  "display_id": 317,
+  "title": "ferray-test-oracle: dead None arm in assert_f64_ulp/assert_f32_ulp",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nL346-348,376-378: unreachable after NaN check above.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:04:53.929782280Z",
+  "updated_at": "2026-03-25T16:04:53.929782280Z"
+}
