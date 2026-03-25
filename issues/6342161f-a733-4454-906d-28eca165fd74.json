@@ -1,0 +1,11 @@
+{
+  "uuid": "6342161f-a733-4454-906d-28eca165fd74",
+  "display_id": 296,
+  "title": "ferray-window: Bessel I0 test tolerances very loose",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nL443-453: 1e-6 to 1e-2 tolerance when actual precision is ~8e-8.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:01:40.808857035Z",
+  "updated_at": "2026-03-25T16:01:40.808857035Z"
+}
