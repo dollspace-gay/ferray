@@ -1,0 +1,11 @@
+{
+  "uuid": "30ef2dd3-c869-4970-840e-5e7a30f3b02a",
+  "display_id": 262,
+  "title": "ferray-random: normal() discards half of Box-Muller pairs",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nstandard_normal_single() called per-sample. Second variate wasted.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:55:48.948978192Z",
+  "updated_at": "2026-03-25T15:55:48.948978192Z"
+}
