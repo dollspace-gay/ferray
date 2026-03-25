@@ -1,0 +1,11 @@
+{
+  "uuid": "45b9357d-4e17-4580-9867-5966ba48efc8",
+  "display_id": 191,
+  "title": "ferray-linalg: NonZeroUsize::new(0).unwrap_or(...) is convoluted",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nproducts/mod.rs L301-302: new(0) always returns None. Simplify.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:43:10.385139403Z",
+  "updated_at": "2026-03-25T15:43:10.385139403Z"
+}
