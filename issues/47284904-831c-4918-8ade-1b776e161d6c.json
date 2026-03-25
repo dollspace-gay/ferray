@@ -1,0 +1,11 @@
+{
+  "uuid": "47284904-831c-4918-8ade-1b776e161d6c",
+  "display_id": 311,
+  "title": "ferray-numpy-interop: duplicate Bool traits (ToArrowBool/FromArrowBool/ToPolarsBool/FromPolarsBool)",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\n4 separate traits for bool. Confusing. Document or unify.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:03:50.924676660Z",
+  "updated_at": "2026-03-25T16:03:50.924676660Z"
+}
