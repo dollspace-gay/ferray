@@ -1,0 +1,11 @@
+{
+  "uuid": "83ede1e7-878c-43a9-8297-e507f76e91a8",
+  "display_id": 100,
+  "title": "ferray-linalg: pervasive full-array copying on every linalg call",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nNearly every function does iter().copied().collect::<Vec<T>>(). Doubles memory. Use as_slice() when contiguous.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:28:03.023949435Z",
+  "updated_at": "2026-03-25T15:28:03.023949435Z"
+}
