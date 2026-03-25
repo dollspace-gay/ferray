@@ -1,0 +1,11 @@
+{
+  "uuid": "af1b2384-a5c5-4172-b407-ecb187270c96",
+  "display_id": 315,
+  "title": "ferray-test-oracle: duplicate near-zero handling between ulp_distance and assert",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nlib.rs: two magic numbers (128*EPSILON and 1e-13) with overlapping purpose.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:04:36.502653397Z",
+  "updated_at": "2026-03-25T16:04:36.502653397Z"
+}
