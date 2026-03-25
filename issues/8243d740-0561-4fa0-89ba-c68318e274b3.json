@@ -1,0 +1,11 @@
+{
+  "uuid": "8243d740-0561-4fa0-89ba-c68318e274b3",
+  "display_id": 138,
+  "title": "ferray-random: Poisson large-lambda squeeze test is dead code",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ndiscrete.rs L47-56: squeeze acceptance test body does nothing. Missing 'return k' inside if block.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:34:20.704854961Z",
+  "updated_at": "2026-03-25T15:34:20.704854961Z"
+}
