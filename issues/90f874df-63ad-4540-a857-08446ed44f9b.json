@@ -1,0 +1,11 @@
+{
+  "uuid": "90f874df-63ad-4540-a857-08446ed44f9b",
+  "display_id": 218,
+  "title": "ferray umbrella: config returns Result<T, String> instead of FerrayResult",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nconfig.rs: inconsistent with rest of API. Users can't use ? with other ferray errors.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:47:50.176291904Z",
+  "updated_at": "2026-03-25T15:47:50.176291904Z"
+}
