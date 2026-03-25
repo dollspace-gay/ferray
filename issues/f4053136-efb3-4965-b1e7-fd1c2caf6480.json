@@ -1,0 +1,11 @@
+{
+  "uuid": "f4053136-efb3-4965-b1e7-fd1c2caf6480",
+  "display_id": 327,
+  "title": "ferray-core-macros: no test for s![] (empty input)",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nL170-175: returns empty Vec but untested.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:07:47.969971198Z",
+  "updated_at": "2026-03-25T16:07:47.969971198Z"
+}
