@@ -1,0 +1,11 @@
+{
+  "uuid": "2798f36d-d5de-446b-869d-5394150b6ef0",
+  "display_id": 93,
+  "title": "ferray-stats: nanquantile is private, no public API",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nquantile.rs L172: NumPy has public nanquantile. Only accessible indirectly through nanmedian/nanpercentile.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:26:32.137308207Z",
+  "updated_at": "2026-03-25T15:26:32.137308207Z"
+}
