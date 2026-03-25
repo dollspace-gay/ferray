@@ -1,0 +1,11 @@
+{
+  "uuid": "c1e2a7be-f357-488e-b492-544bba1fc75a",
+  "display_id": 280,
+  "title": "ferray-strings: duplicated char_set construction in strip functions",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nstrip.rs L24,44,68: identical pattern 3 times.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:59:27.892856324Z",
+  "updated_at": "2026-03-25T15:59:27.892856324Z"
+}
