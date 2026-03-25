@@ -1,0 +1,11 @@
+{
+  "uuid": "12cc87b5-e400-4a11-8db0-250fb223e693",
+  "display_id": 160,
+  "title": "ferray-ufunc: exp_fast transmute_copy on Array is fragile",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nexplog.rs L61,80: transmute_copy on complex Array type. Factor into helper with safety docs.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:37:53.131351232Z",
+  "updated_at": "2026-03-25T15:37:53.131351232Z"
+}
