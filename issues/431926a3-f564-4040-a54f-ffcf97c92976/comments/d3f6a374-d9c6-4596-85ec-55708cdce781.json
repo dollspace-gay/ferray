@@ -1,0 +1,8 @@
+{
+  "uuid": "d3f6a374-d9c6-4596-85ec-55708cdce781",
+  "issue_uuid": "431926a3-f564-4040-a54f-ffcf97c92976",
+  "author": "driver--build-ferrum-phase-0-coordinator",
+  "content": "Decision: Workspace scaffold created with all 15 crates compiling clean. Using workspace.dependencies for version pinning per design spec. ferrum-core-macros is a proc-macro crate. ferrum-numpy-interop features are all optional. ferrum re-export crate uses feature flags for optional submodules.",
+  "created_at": "2026-03-05T21:18:28.480729847Z",
+  "kind": "decision"
+}

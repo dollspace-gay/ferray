@@ -1,0 +1,8 @@
+{
+  "uuid": "50d1d34e-c120-4feb-9065-2fcab35a3d02",
+  "issue_uuid": "cec0f3fb-0676-49cd-9f23-fe65642ee190",
+  "author": "driver--build-ferrum-phase-0-coordinator",
+  "content": "Delivered: ferrum-ma fully implemented — MaskedArray<T,D> type, mask propagation on binary ops (union), masked reductions (mean/sum/min/max/var/std/count), filled/compressed, masking constructors (masked_where/masked_invalid/masked_equal/masked_greater/etc), masked sorting, harden_mask/soften_mask, ufunc support wrappers, is_masked/count_masked. 41 tests passing, clippy clean.",
+  "created_at": "2026-03-06T20:23:14.953695904Z",
+  "kind": "result"
+}

@@ -1,0 +1,10 @@
+{
+  "uuid": "31a84dd8-dc51-4fbd-83a3-480743771131",
+  "issue_uuid": "54a3ee4a-30a7-4fb7-81da-0351b6d57e68",
+  "author": "phase-4-coordinator",
+  "content": "Decision: Implement ops in ferray-core directly to avoid circular dep with ferray-ufunc. For the initial implementation, require same-shape arrays (no broadcasting) — this keeps it simple and avoids needing the full broadcast machinery in the operator impls. Users who need broadcasting can use ferray::add() etc. from ferray-ufunc. Will implement for &Array + &Array (producing new Array), plus owned variants via delegation. Will add ops module to ferray-core.",
+  "created_at": "2026-03-08T01:11:43.984033225Z",
+  "kind": "decision",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAAhI3NX/Vubm1pOAgBVCih/BKEG9y0wSMyfd4hPjBJfLaNz0nJwhcs2ox3XO0sdQxa9faqAzK620pEZnyr1LDCQ=="
+}

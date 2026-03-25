@@ -1,0 +1,10 @@
+{
+  "uuid": "fc9bd809-a3fd-48d7-9eb1-a39970525a94",
+  "issue_uuid": "82d87716-3cbe-4d82-a2bd-f75240049462",
+  "author": "phase-4-coordinator",
+  "content": "Decision: Add ExpFastF64Op/ExpFastF32Op as WithSimd impls in dispatch.rs with dedicated dispatch_exp_fast_f64/f32 functions. Modify exp_fast in explog.rs to call these instead of unary_slice_op_f64/f32. The WithSimd impl just loops calling exp_fast_f64 with #[inline(always)] — pulp compiles the with_simd body for each ISA tier (SSE2, AVX2, AVX-512), so LLVM auto-vectorizes the AVX2+ versions. No explicit SIMD intrinsics needed.",
+  "created_at": "2026-03-08T01:02:43.837932813Z",
+  "kind": "decision",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAdXD3sPrNEEV9dIpPNdhXrwlxesJ3qCj1dMtycXScPbOBX7QTf6LqxX8vAoYsuKCGlN6AFi3rSje0K3UwoUDtCw=="
+}

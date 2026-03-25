@@ -1,0 +1,8 @@
+{
+  "uuid": "44987b09-88da-4c21-bb34-2621fc7bd0a0",
+  "issue_uuid": "431926a3-f564-4040-a54f-ffcf97c92976",
+  "author": "driver--build-ferrum-phase-0-coordinator",
+  "content": "Committed: Add workspace scaffold with 15 crates, design docs, and project conventions [CL-1] | Files: 84 files changed, 9582 insertions(+)",
+  "created_at": "2026-03-05T21:20:25.684292826Z",
+  "kind": "result"
+}

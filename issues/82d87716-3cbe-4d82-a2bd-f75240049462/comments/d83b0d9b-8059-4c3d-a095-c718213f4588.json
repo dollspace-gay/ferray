@@ -1,0 +1,10 @@
+{
+  "uuid": "d83b0d9b-8059-4c3d-a095-c718213f4588",
+  "issue_uuid": "82d87716-3cbe-4d82-a2bd-f75240049462",
+  "author": "phase-4-coordinator",
+  "content": "Delivered: ExpFastF64Op/ExpFastF32Op WithSimd impls added to dispatch.rs. exp_fast in explog.rs now routes through dispatch_exp_fast_f64/f32 instead of calling batch functions directly. pulp compiles the WithSimd body for each ISA tier, so LLVM auto-vectorizes for AVX2+FMA without -C target-cpu=native. All 53 ufunc tests pass, clippy clean.",
+  "created_at": "2026-03-08T01:04:34.287022267Z",
+  "kind": "result",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAhWgqjxMDCHD2JQBEiXk+N50Vs6ewxgLi9yMjDtzYfFg89IjtxxNSJa6TnarqF7EPmp8uWpw5qZkbHZ/A0mTCAw=="
+}

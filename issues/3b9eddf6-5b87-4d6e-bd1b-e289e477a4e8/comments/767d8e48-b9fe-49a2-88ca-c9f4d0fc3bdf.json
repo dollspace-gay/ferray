@@ -1,0 +1,10 @@
+{
+  "uuid": "767d8e48-b9fe-49a2-88ca-c9f4d0fc3bdf",
+  "issue_uuid": "3b9eddf6-5b87-4d6e-bd1b-e289e477a4e8",
+  "author": "phase-4-coordinator",
+  "content": "Documented as intentional deviation from NumPy: return type Array<T, D> prevents returning a different dimensionality. Added doc comments to cumsum/cumprod/nancumsum/nancumprod explaining the difference.",
+  "created_at": "2026-03-25T16:41:09.268027019Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAIaI3TtVmPYtp2+ae6Guph0ONitJJ4tbn/OO6nRYfkaSguRH3KvsauyrkcpMl1MBZqd8fOEKf6bDxoIeAAaGTCg=="
+}

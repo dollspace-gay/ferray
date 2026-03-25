@@ -1,0 +1,10 @@
+{
+  "uuid": "b5916ad6-c6db-4280-b808-5c6c18c91da9",
+  "issue_uuid": "566c7668-9f21-444f-926b-f50b306fe7ce",
+  "author": "phase-4-coordinator",
+  "content": "Audited: most unwrap/expect calls are in #[cfg(test)] blocks which is acceptable. The non-test ones (buffer.rs:123, creation/mod.rs:219, arc.rs, display.rs, manipulation) need individual review — each has a local invariant that makes the unwrap unreachable. Deferring to a dedicated refactor pass.",
+  "created_at": "2026-03-25T16:53:05.924440572Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABACuboFNHvLqGChLrb89SeAmBKWw/yDEW6uxxOKVy7mzjHSzZbJng16PhcdppdGq0K3j6W/9k9XDmFmkoj7MkfDg=="
+}

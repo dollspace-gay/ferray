@@ -1,0 +1,8 @@
+{
+  "uuid": "4c969e59-50f1-4027-801c-5078bbee1b03",
+  "issue_uuid": "0c076202-ce08-44cb-a7ea-51956e795a39",
+  "author": "driver--build-ferrum-phase-0-coordinator",
+  "content": "Agent implemented self-contained QR eigenvalue solver in roots.rs instead of depending on ferrum-linalg::eigvals. This avoids the cross-crate dependency timing issue (linalg still being built). The polynomial Cargo.toml still lists ferrum-linalg as a dependency but it's only used transitively — roots.rs is self-contained.",
+  "created_at": "2026-03-06T19:52:00.630721013Z",
+  "kind": "observation"
+}

@@ -1,0 +1,8 @@
+{
+  "uuid": "4669c205-494c-405c-b663-018a1df2da30",
+  "issue_uuid": "2513bf15-cc3c-4694-9ddf-c12290fe733f",
+  "author": "driver--build-ferrum-phase-0-coordinator",
+  "content": "Delivered: ferrum-window fully implemented — 5 window functions (bartlett, blackman, hamming, hanning, kaiser), vectorize, vectorize_nd, piecewise, apply_along_axis, apply_over_axes. 41 tests passing, clippy clean.",
+  "created_at": "2026-03-06T19:35:48.335869528Z",
+  "kind": "result"
+}

@@ -1,0 +1,8 @@
+{
+  "uuid": "bd9bba18-83be-4d54-8d6b-26f487d259e5",
+  "issue_uuid": "3fb34702-9aa5-452a-a612-52205de03159",
+  "author": "driver--build-ferrum-phase-0-coordinator",
+  "content": "Execution plan: 1) ufunc + io in parallel (different dirs, no conflicts), 2) stats (after ufunc done), 3) reexport (after all done). Agents work directly on worktree, no git isolation (merge blocked by policy). I commit after each agent.",
+  "created_at": "2026-03-06T03:05:32.219716745Z",
+  "kind": "decision"
+}

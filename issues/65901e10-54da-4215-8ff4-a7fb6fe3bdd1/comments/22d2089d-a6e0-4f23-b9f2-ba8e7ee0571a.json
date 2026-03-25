@@ -1,0 +1,10 @@
+{
+  "uuid": "22d2089d-a6e0-4f23-b9f2-ba8e7ee0571a",
+  "issue_uuid": "65901e10-54da-4215-8ff4-a7fb6fe3bdd1",
+  "author": "phase-4-coordinator",
+  "content": "Adding proptest suites for the 6 crates without them: ferray-io, ferray-strings, ferray-ma, ferray-window, ferray-stride-tricks, ferray-autodiff. Skipping ferray-numpy-interop since it requires a Python runtime. Each suite will use ProptestConfig::with_cases(256) per project convention.",
+  "created_at": "2026-03-07T21:00:09.930127265Z",
+  "kind": "plan",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAldslufnF4PaF2+wr6lKLFmJRIm+Bi71WFRmVaj6HWOMdksfFpoQcrS7f+babREyMgQqZxA0l7H0ZtQEGzBCeAA=="
+}

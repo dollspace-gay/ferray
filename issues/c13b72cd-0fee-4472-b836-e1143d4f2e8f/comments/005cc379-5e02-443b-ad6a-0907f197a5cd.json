@@ -1,0 +1,8 @@
+{
+  "uuid": "005cc379-5e02-443b-ad6a-0907f197a5cd",
+  "issue_uuid": "c13b72cd-0fee-4472-b836-e1143d4f2e8f",
+  "author": "driver--build-ferrum-phase-0-coordinator",
+  "content": "Plan: Agent 1a implements ferrum-core types layer per .design/ferrum-core.md. Scope: REQ-1 through REQ-8 (NdArray, ownership model, Element/DType), REQ-27-28 (errors), REQ-29-30 (buffer/DynArray), REQ-35-36 (introspection), REQ-37-38 (iterators), REQ-39 (Display). Files: ferrum-core/src/{lib.rs, error.rs, layout.rs, constants.rs, buffer.rs, dynarray.rs, record.rs, prelude.rs, array/*, dimension/*, dtype/*}. Agent must NOT implement indexing (1b), creation/manipulation (1c), or macros (1d).",
+  "created_at": "2026-03-05T21:21:05.688104217Z",
+  "kind": "plan"
+}

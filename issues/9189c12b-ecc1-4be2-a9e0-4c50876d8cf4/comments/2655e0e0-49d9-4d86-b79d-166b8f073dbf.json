@@ -1,0 +1,10 @@
+{
+  "uuid": "2655e0e0-49d9-4d86-b79d-166b8f073dbf",
+  "issue_uuid": "9189c12b-ecc1-4be2-a9e0-4c50876d8cf4",
+  "author": "phase-4-coordinator",
+  "content": "Revised approach: The cc crate reads CFLAGS from the process environment. A downstream build.rs cannot inject env vars into upstream -sys crate builds. The correct fix is: (1) Create a compat header at a known project path, (2) Add .cargo/config.toml with [env] CFLAGS for Windows targets pointing to that header, (3) Document for CI. The header declares 'extern int signgam;' only on _WIN32.",
+  "created_at": "2026-03-07T23:07:21.457116120Z",
+  "kind": "decision",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAs9Jh8YRn+Nb6yzFJZXmI1XOobUAp/krFVkGOvWjKLa6PbANOqygHMjNPG7P19kAs3moL/U7OXEq5f3tbtgdmCg=="
+}

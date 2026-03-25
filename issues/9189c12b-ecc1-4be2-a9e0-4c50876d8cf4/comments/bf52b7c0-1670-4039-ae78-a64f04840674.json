@@ -1,0 +1,10 @@
+{
+  "uuid": "bf52b7c0-1670-4039-ae78-a64f04840674",
+  "issue_uuid": "9189c12b-ecc1-4be2-a9e0-4c50876d8cf4",
+  "author": "phase-4-coordinator",
+  "content": "After further analysis: build.rs env vars don't propagate to upstream -sys crate builds. The cc crate reads CFLAGS from the process env at build time. Best approach: create .cargo/config.toml with [target.'cfg(windows)'.env] CFLAGS setting. But cargo's [env] table doesn't support per-target filtering. So instead: use a build.rs in ferray-ufunc that writes the header to OUT_DIR and prints cargo:rerun-if-changed, plus document that Windows users need to set CFLAGS. Actually simplest: use cargo's [env] unconditionally — the header has #if _WIN32 guards so it's a no-op on other platforms.",
+  "created_at": "2026-03-07T23:07:59.984297087Z",
+  "kind": "decision",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAan+Re53WvzqdEUeHyDt5BZH9G8BqkAlaivIsp6DyUMtPz7FesxI7/A6dYELwEhXLbkBZD0c3ToHWXvsM1D6dBA=="
+}

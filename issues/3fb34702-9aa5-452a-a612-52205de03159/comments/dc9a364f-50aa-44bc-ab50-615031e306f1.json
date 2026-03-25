@@ -1,0 +1,8 @@
+{
+  "uuid": "dc9a364f-50aa-44bc-ab50-615031e306f1",
+  "issue_uuid": "3fb34702-9aa5-452a-a612-52205de03159",
+  "author": "driver--build-ferrum-phase-0-coordinator",
+  "content": "Driver performed manual merge: feature/build-ferrum-phase-0-coordinator → dev branch. Untracked files on main were removed first to resolve conflict.",
+  "created_at": "2026-03-06T19:26:56.347519211Z",
+  "kind": "observation"
+}

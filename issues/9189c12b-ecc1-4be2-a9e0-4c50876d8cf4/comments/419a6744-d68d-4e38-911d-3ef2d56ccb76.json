@@ -1,0 +1,10 @@
+{
+  "uuid": "419a6744-d68d-4e38-911d-3ef2d56ccb76",
+  "issue_uuid": "9189c12b-ecc1-4be2-a9e0-4c50876d8cf4",
+  "author": "phase-4-coordinator",
+  "content": "Solution: CPATH with relative=true resolves to absolute workspace path for the compat/ include dir. CFLAGS=-include signgam_compat.h force-includes the header. The cc crate picks up both env vars when building core-math-sys. Header has #if _WIN32 guard so it's a no-op on POSIX. All 48 test suites pass on Linux.",
+  "created_at": "2026-03-07T23:10:07.163257989Z",
+  "kind": "result",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA+qO1t9yEXxZh3BVy5Zm/E8g00Uf+9YtP6hm1MTiSZm6avmlhVxK24M6CoobQDLyH18H+qUv3NAYPjtZae4tsDg=="
+}

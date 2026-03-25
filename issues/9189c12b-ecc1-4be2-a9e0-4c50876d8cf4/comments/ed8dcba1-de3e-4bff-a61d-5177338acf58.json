@@ -1,0 +1,10 @@
+{
+  "uuid": "ed8dcba1-de3e-4bff-a61d-5177338acf58",
+  "issue_uuid": "9189c12b-ecc1-4be2-a9e0-4c50876d8cf4",
+  "author": "phase-4-coordinator",
+  "content": "Plan: Add a build.rs to ferray-ufunc that detects Windows target and injects a compat header declaring signgam via CFLAGS/DEP_CORE_MATH_* env. Also add the compat header file itself. This works around core-math-sys vendored lgamma.c using POSIX-only signgam global. Ref: GitHub issue dollspace-gay/ferray#5",
+  "created_at": "2026-03-07T23:05:31.531565701Z",
+  "kind": "plan",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAn0Vsp9dGn86mwaigLZ2wH+LTbLVJ7ACkbx7T7mlravfHeQLAL0ZImoMBNZPWuTuZ3F9V0/bxCTM/l5L19E8kBQ=="
+}

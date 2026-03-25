@@ -1,0 +1,10 @@
+{
+  "uuid": "1fefd264-78e3-40e6-a69c-19a3f82645a6",
+  "issue_uuid": "9189c12b-ecc1-4be2-a9e0-4c50876d8cf4",
+  "author": "phase-4-coordinator",
+  "content": "Actually, CFLAGS set in a downstream build.rs won't affect an upstream -sys crate's cc::Build. The cc crate reads CFLAGS from the environment at cargo invocation time, not from DEP_ vars. The correct approach: set CFLAGS='-include signgam_compat.h' as a cargo config env var for Windows targets. We'll create a .cargo/config.toml entry and document the workaround, plus create the compat header.",
+  "created_at": "2026-03-07T23:06:41.036658353Z",
+  "kind": "decision",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAj/BkJSpHjPE0JFYCOJUph5TvVfFi1tcsXZFprVu7jfOHtWYt1oM7Rkgo7WR8P5kqXcQUp3LX+xvo9XUcJLv3BQ=="
+}
