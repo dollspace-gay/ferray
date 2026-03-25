@@ -1,0 +1,11 @@
+{
+  "uuid": "946028c5-364a-429c-8cfd-1f1cc98341fb",
+  "display_id": 318,
+  "title": "ferray-test-oracle: is_scalar_expected is dead code",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nL249-256: pub but never called.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:05:00.539221379Z",
+  "updated_at": "2026-03-25T16:05:00.539221379Z"
+}
