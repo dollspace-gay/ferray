@@ -1,0 +1,11 @@
+{
+  "uuid": "55061e19-ee46-4d38-a254-995519bf8895",
+  "display_id": 291,
+  "title": "ferray-stride-tricks: overlap_check functions unnecessarily pub",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\noverlap_check.rs L23,106: implementation details in public API.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:01:00.057618879Z",
+  "updated_at": "2026-03-25T16:01:00.057618879Z"
+}
