@@ -1,0 +1,11 @@
+{
+  "uuid": "9df05c2d-28e3-4fe7-b4fd-880eafe10480",
+  "display_id": 320,
+  "title": "ferray-test-oracle: run_real_to_complex_oracle silently passes with 0 test cases",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nL659-661: no assertion that at least one case tested.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:05:13.159782458Z",
+  "updated_at": "2026-03-25T16:05:13.159782458Z"
+}
