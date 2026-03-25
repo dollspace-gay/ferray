@@ -1,0 +1,11 @@
+{
+  "uuid": "94270576-9a3d-4ad9-86a9-da5afbddca46",
+  "display_id": 278,
+  "title": "ferray-strings: no Display or IntoIterator for StringArray",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nstring_array.rs: missing standard Rust trait impls.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:59:13.861764205Z",
+  "updated_at": "2026-03-25T15:59:13.861764205Z"
+}
