@@ -1,0 +1,11 @@
+{
+  "uuid": "1da66570-a1e4-4c2a-b17b-ab70121d79a5",
+  "display_id": 118,
+  "title": "ferray-io: no f16/bf16 support in npy I/O even with feature enabled",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nf16 feature flag exists but NpyElement not implemented for half types. dtype_parse has no f2/V2 handling.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:30:43.045939882Z",
+  "updated_at": "2026-03-25T15:30:43.045939882Z"
+}
