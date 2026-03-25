@@ -1,0 +1,11 @@
+{
+  "uuid": "784d6164-f69d-429b-a5f7-fd6ad09e02cc",
+  "display_id": 263,
+  "title": "ferray-random: no NaN/Inf parameter input tests",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nWhat happens with normal(NaN, 1.0, 10)? Untested.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:55:58.303695932Z",
+  "updated_at": "2026-03-25T15:55:58.303695932Z"
+}
