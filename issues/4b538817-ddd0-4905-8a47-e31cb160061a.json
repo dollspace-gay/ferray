@@ -1,0 +1,11 @@
+{
+  "uuid": "4b538817-ddd0-4905-8a47-e31cb160061a",
+  "display_id": 252,
+  "title": "ferray-polynomial: no NaN/Inf input validation",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNo validation anywhere. NaN coefficients silently produce garbage.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:53:53.661269895Z",
+  "updated_at": "2026-03-25T15:53:53.661269895Z"
+}
