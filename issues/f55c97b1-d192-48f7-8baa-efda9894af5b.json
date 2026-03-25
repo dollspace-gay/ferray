@@ -1,0 +1,11 @@
+{
+  "uuid": "f55c97b1-d192-48f7-8baa-efda9894af5b",
+  "display_id": 147,
+  "title": "ferray-random: README references nonexistent types (SFC64, MT19937, wrong API)",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nREADME claims types/APIs that don't exist. Fix: update to match actual API.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:35:39.160521516Z",
+  "updated_at": "2026-03-25T15:35:39.160521516Z"
+}
