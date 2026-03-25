@@ -7,5 +7,8 @@
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:54:57.851206314Z",
-  "updated_at": "2026-03-25T15:54:57.851206314Z"
+  "updated_at": "2026-03-25T15:55:00.794909403Z",
+  "labels": [
+    "refactor"
+  ]
 }
