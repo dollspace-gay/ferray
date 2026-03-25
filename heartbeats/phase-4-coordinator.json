@@ -1,6 +1,6 @@
 {
   "agent_id": "phase-4-coordinator",
-  "last_heartbeat": "2026-03-25T16:57:20.970174441Z",
-  "active_issue_id": null,
+  "last_heartbeat": "2026-03-25T16:59:59.683641777Z",
+  "active_issue_id": 179,
   "machine_id": "dollspace"
 }
