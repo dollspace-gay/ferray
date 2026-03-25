@@ -1,0 +1,11 @@
+{
+  "uuid": "33ae21fc-15a3-43be-996a-948a4905641f",
+  "display_id": 174,
+  "title": "ferray-stride-tricks: as_strided only accepts owned Array, not ArrayView",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nas_strided.rs L49,154: NumPy works on any array-like. Users must .to_owned() first, defeating zero-copy.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:40:13.601945632Z",
+  "updated_at": "2026-03-25T15:40:13.601945632Z"
+}
