@@ -1,0 +1,11 @@
+{
+  "uuid": "67bf468a-4e5f-4e13-808d-21b78c90be3f",
+  "display_id": 322,
+  "title": "ferray-core-macros: s! macro string-based parsing is fragile",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nlib.rs L153-332: TokenStream::to_string() formatting varies across compilers.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:05:31.497378734Z",
+  "updated_at": "2026-03-25T16:05:31.497378734Z"
+}
