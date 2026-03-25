@@ -15,6 +15,7 @@ description = "Random number generation and distributions for ferray"
 ferray-core = { workspace = true }
 rayon = { workspace = true }
 rand_core = { workspace = true }
+getrandom = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

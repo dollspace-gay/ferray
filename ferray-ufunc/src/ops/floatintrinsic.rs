@@ -288,53 +288,111 @@ where
     Array::from_vec(x.dim().clone(), data)
 }
 
+/// Decompose f64 into mantissa and exponent via IEEE 754 bit extraction.
+///
+/// Returns (mantissa, exponent) where mantissa is in [0.5, 1.0) and x = mantissa * 2^exponent.
+#[inline]
+fn frexp_f64(x: f64) -> (f64, i32) {
+    if x == 0.0 || x.is_nan() || x.is_infinite() {
+        return (x, 0);
+    }
+    let bits = x.to_bits();
+    let sign = bits & (1u64 << 63);
+    let mut exp = ((bits >> 52) & 0x7FF) as i32;
+    if exp == 0 {
+        // Subnormal: multiply by 2^64 to normalize, then adjust exponent
+        let nx = x * (1u64 << 63) as f64 * 2.0;
+        let nbits = nx.to_bits();
+        exp = ((nbits >> 52) & 0x7FF) as i32 - 64;
+        let frac = f64::from_bits((nbits & !(0x7FFu64 << 52)) | (0x3FEu64 << 52));
+        return (if sign != 0 { -frac.abs() } else { frac }, exp - 0x3FE);
+    }
+    // Set exponent to -1 (biased: 0x3FE) to place mantissa in [0.5, 1.0)
+    let frac = f64::from_bits((bits & !(0x7FFu64 << 52)) | (0x3FEu64 << 52));
+    // exponent = (biased_exp - 1023) + 1 = biased_exp - 0x3FE
+    (frac, exp - 0x3FE)
+}
+
+/// Decompose f32 into mantissa and exponent via IEEE 754 bit extraction.
+///
+/// Returns (mantissa, exponent) where mantissa is in [0.5, 1.0) and x = mantissa * 2^exponent.
+#[inline]
+fn frexp_f32(x: f32) -> (f32, i32) {
+    if x == 0.0 || x.is_nan() || x.is_infinite() {
+        return (x, 0);
+    }
+    let bits = x.to_bits();
+    let sign = bits & (1u32 << 31);
+    let mut exp = ((bits >> 23) & 0xFF) as i32;
+    if exp == 0 {
+        // Subnormal: multiply by 2^32 to normalize, then adjust exponent
+        let nx = x * (1u32 << 31) as f32 * 2.0;
+        let nbits = nx.to_bits();
+        exp = ((nbits >> 23) & 0xFF) as i32 - 32;
+        let frac = f32::from_bits((nbits & !(0xFFu32 << 23)) | (0x7Eu32 << 23));
+        return (if sign != 0 { -frac.abs() } else { frac }, exp - 0x7E);
+    }
+    let frac = f32::from_bits((bits & !(0xFFu32 << 23)) | (0x7Eu32 << 23));
+    (frac, exp - 0x7E)
+}
+
 /// Decompose into mantissa and exponent: x = m * 2^e.
 ///
 /// Returns (mantissa_array, exponent_array) where mantissa is in [0.5, 1.0).
 /// This matches C's `frexp`: for x=4.0, returns (0.5, 3) since 0.5 * 2^3 = 4.
+///
+/// Uses IEEE 754 bit extraction for f64 and f32 (O(1) per element), with
+/// f64 round-trip fallback for other float types.
 pub fn frexp<T, D>(input: &Array<T, D>) -> FerrayResult<(Array<T, D>, Array<i32, D>)>
 where
     T: Element + Float,
     D: Dimension,
 {
-    let mut mantissas = Vec::with_capacity(input.size());
-    let mut exponents = Vec::with_capacity(input.size());
+    use std::any::TypeId;
 
-    let zero = <T as Element>::zero();
-    let half = T::from(0.5).unwrap();
-    let two = T::from(2.0).unwrap();
-
-    for &x in input.iter() {
-        if x == zero || x.is_nan() || x.is_infinite() {
-            mantissas.push(x);
-            exponents.push(0);
-            continue;
+    if TypeId::of::<T>() == TypeId::of::<f64>() {
+        // SAFETY: T is f64, verified by TypeId check above.
+        let f64_input = unsafe { &*(input as *const Array<T, D> as *const Array<f64, D>) };
+        let mut mantissas = Vec::with_capacity(f64_input.size());
+        let mut exponents = Vec::with_capacity(f64_input.size());
+        for &x in f64_input.iter() {
+            let (m, e) = frexp_f64(x);
+            mantissas.push(m);
+            exponents.push(e);
         }
-        let mut abs_x = x.abs();
-        let mut exp: i32 = 0;
-
-        // Normalize to [0.5, 1.0)
-        while abs_x >= T::from(1.0).unwrap() {
-            abs_x = abs_x / two;
-            exp += 1;
+        let m_arr: Array<f64, D> = Array::from_vec(f64_input.dim().clone(), mantissas)?;
+        let e_arr = Array::from_vec(f64_input.dim().clone(), exponents)?;
+        let m_result = unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(m_arr)) };
+        Ok((m_result, e_arr))
+    } else if TypeId::of::<T>() == TypeId::of::<f32>() {
+        // SAFETY: T is f32, verified by TypeId check above.
+        let f32_input = unsafe { &*(input as *const Array<T, D> as *const Array<f32, D>) };
+        let mut mantissas = Vec::with_capacity(f32_input.size());
+        let mut exponents = Vec::with_capacity(f32_input.size());
+        for &x in f32_input.iter() {
+            let (m, e) = frexp_f32(x);
+            mantissas.push(m);
+            exponents.push(e);
         }
-        while abs_x < half {
-            abs_x = abs_x * two;
-            exp -= 1;
+        let m_arr: Array<f32, D> = Array::from_vec(f32_input.dim().clone(), mantissas)?;
+        let e_arr = Array::from_vec(f32_input.dim().clone(), exponents)?;
+        let m_result = unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(m_arr)) };
+        Ok((m_result, e_arr))
+    } else {
+        // Fallback for other float types: use f64 round-trip
+        let mut mantissas = Vec::with_capacity(input.size());
+        let mut exponents = Vec::with_capacity(input.size());
+        for &x in input.iter() {
+            let x64 = x.to_f64().unwrap();
+            let (m64, e) = frexp_f64(x64);
+            mantissas.push(T::from(m64).unwrap());
+            exponents.push(e);
         }
-
-        if x.is_sign_negative() {
-            mantissas.push(-abs_x);
-        } else {
-            mantissas.push(abs_x);
-        }
-        exponents.push(exp);
+        Ok((
+            Array::from_vec(input.dim().clone(), mantissas)?,
+            Array::from_vec(input.dim().clone(), exponents)?,
+        ))
     }
-
-    Ok((
-        Array::from_vec(input.dim().clone(), mantissas)?,
-        Array::from_vec(input.dim().clone(), exponents)?,
-    ))
 }
 
 /// Elementwise copysign: magnitude of x1, sign of x2.

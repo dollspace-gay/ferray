@@ -66,6 +66,18 @@ pub fn frombuffer<T: Element, D: Dimension>(dim: D, buf: &[u8]) -> FerrayResult<
             expected,
         )));
     }
+    // Validate bytes for types where not all bit patterns are valid.
+    // bool only permits 0x00 and 0x01.
+    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<bool>() {
+        for &byte in buf {
+            if byte > 1 {
+                return Err(FerrayError::invalid_value(format!(
+                    "invalid byte {byte:#04x} for bool (must be 0x00 or 0x01)"
+                )));
+            }
+        }
+    }
+
     // Copy bytes element-by-element via from_ne_bytes equivalent
     let mut data = Vec::with_capacity(n_elems);
     for i in 0..n_elems {
@@ -73,8 +85,8 @@ pub fn frombuffer<T: Element, D: Dimension>(dim: D, buf: &[u8]) -> FerrayResult<
         let end = start + elem_size;
         let slice = &buf[start..end];
         // SAFETY: We're reading elem_size bytes and interpreting as T.
-        // T: Element implies T: Clone + 'static, and we're copying from
-        // a properly-sized byte buffer.
+        // For bool, we validated above that all bytes are 0 or 1.
+        // For numeric types, all bit patterns are valid.
         let val = unsafe {
             let mut val = MaybeUninit::<T>::uninit();
             std::ptr::copy_nonoverlapping(slice.as_ptr(), val.as_mut_ptr() as *mut u8, elem_size);

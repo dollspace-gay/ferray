@@ -75,21 +75,25 @@ impl<B: BitGenerator> Generator<B> {
 /// assert!((0.0..1.0).contains(&val));
 /// ```
 pub fn default_rng() -> Generator<Xoshiro256StarStar> {
-    // Use a combination of time-based entropy sources
+    // Use OS entropy via getrandom for proper seeding.
+    // Falls back to time-based entropy if getrandom fails.
     let seed = {
-        use std::time::SystemTime;
-        let dur = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default();
-        let nanos = dur.as_nanos();
-        // Mix bits for better distribution
-        let mut s = nanos as u64;
-        s ^= (nanos >> 64) as u64;
-        // Mix in address of a stack variable as additional entropy
-        let stack_var: u8 = 0;
-        let addr = &stack_var as *const u8 as u64;
-        s ^= addr;
-        s
+        let mut buf = [0u8; 8];
+        if getrandom::getrandom(&mut buf).is_ok() {
+            u64::from_ne_bytes(buf)
+        } else {
+            // Fallback: time + stack address
+            use std::time::SystemTime;
+            let dur = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default();
+            let nanos = dur.as_nanos();
+            let mut s = nanos as u64;
+            s ^= (nanos >> 64) as u64;
+            let stack_var: u8 = 0;
+            s ^= &stack_var as *const u8 as u64;
+            s
+        }
     };
     default_rng_seeded(seed)
 }

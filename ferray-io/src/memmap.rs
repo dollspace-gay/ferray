@@ -4,7 +4,7 @@
 // REQ-11: Memory-mapped arrays are views into file memory, not owned copies
 
 use std::fs::{File, OpenOptions};
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Seek};
 use std::marker::PhantomData;
 use std::path::Path;
 
@@ -251,35 +251,20 @@ pub fn open_memmap<T: Element + NpyElement, P: AsRef<Path>>(
 }
 
 /// Read the npy header and compute the data byte offset.
+///
+/// Uses `stream_position()` after parsing the header to determine the data
+/// offset in a single open, avoiding a TOCTOU race from re-opening the file.
 fn read_npy_header_with_offset(path: &Path) -> FerrayResult<(NpyHeader, usize)> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     let hdr = header::read_header(&mut reader)?;
 
-    // Compute data offset: the reader has consumed the header, so we compute
-    // the offset from the version and header_len.
-    let preamble_len = crate::format::NPY_MAGIC_LEN + 2; // magic + version bytes
-    let header_len_field_size = if hdr.version.0 == 1 { 2 } else { 4 };
-
-    // We need to figure out the total bytes consumed.
-    // Re-read the file to get the header length from the raw bytes.
-    let file2 = File::open(path)?;
-    let mut reader2 = BufReader::new(file2);
-    let mut skip = vec![0u8; preamble_len + header_len_field_size];
-    reader2.read_exact(&mut skip)?;
-
-    let header_len = if hdr.version.0 == 1 {
-        u16::from_le_bytes([skip[preamble_len], skip[preamble_len + 1]]) as usize
-    } else {
-        u32::from_le_bytes([
-            skip[preamble_len],
-            skip[preamble_len + 1],
-            skip[preamble_len + 2],
-            skip[preamble_len + 3],
-        ]) as usize
-    };
-
-    let data_offset = preamble_len + header_len_field_size + header_len;
+    // read_header consumes exactly the header bytes; the reader is now
+    // positioned at the start of the data section.
+    let data_offset = reader
+        .stream_position()
+        .map_err(|e| FerrayError::io_error(format!("failed to get stream position: {e}")))?
+        as usize;
 
     Ok((hdr, data_offset))
 }

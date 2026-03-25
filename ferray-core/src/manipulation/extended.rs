@@ -169,7 +169,8 @@ pub fn pad<T: Element, D: Dimension>(
             if i < pad_width.len() {
                 pad_width[i]
             } else {
-                *pad_width.last().unwrap()
+                // pad_width is non-empty (checked above), so last() is always Some
+                *pad_width.last().unwrap_or_else(|| unreachable!())
             }
         })
         .collect();

@@ -57,7 +57,11 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// Return the raw bytes of the array data.
     ///
     /// Only succeeds if the array is contiguous; returns an error otherwise.
-    pub fn to_bytes(&self) -> FerrayResult<&[u8]> {
+    /// Requires `T: Copy` to guarantee no padding bytes exist.
+    pub fn to_bytes(&self) -> FerrayResult<&[u8]>
+    where
+        T: Copy,
+    {
         let slice = self.inner.as_slice().ok_or_else(|| {
             FerrayError::invalid_value("array is not contiguous; cannot produce byte slice")
         })?;

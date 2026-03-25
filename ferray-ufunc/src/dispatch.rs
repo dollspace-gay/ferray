@@ -6,18 +6,33 @@
 
 use pulp::Arch;
 
+use std::sync::atomic::{AtomicU8, Ordering};
+
+/// Cached value of `FERRAY_FORCE_SCALAR`: 0 = uninitialized, 1 = false, 2 = true.
+static FORCE_SCALAR_CACHED: AtomicU8 = AtomicU8::new(0);
+
 /// Check if SIMD is forcibly disabled via `FERRAY_FORCE_SCALAR=1`.
 ///
-/// The env var is read once and cached for the lifetime of the process.
+/// The env var is read once and cached. Call [`reset_force_scalar`] to
+/// re-read the env var (useful for testing).
 #[inline]
 pub fn force_scalar() -> bool {
-    use std::sync::LazyLock;
-    static CACHED: LazyLock<bool> = LazyLock::new(|| {
-        std::env::var("FERRAY_FORCE_SCALAR")
-            .ok()
-            .is_some_and(|v| v == "1")
-    });
-    *CACHED
+    let val = FORCE_SCALAR_CACHED.load(Ordering::Relaxed);
+    if val != 0 {
+        return val == 2;
+    }
+    let result = std::env::var("FERRAY_FORCE_SCALAR")
+        .ok()
+        .is_some_and(|v| v == "1");
+    FORCE_SCALAR_CACHED.store(if result { 2 } else { 1 }, Ordering::Relaxed);
+    result
+}
+
+/// Re-read `FERRAY_FORCE_SCALAR` on the next call to [`force_scalar`].
+///
+/// Useful in tests that need to toggle between SIMD and scalar paths.
+pub fn reset_force_scalar() {
+    FORCE_SCALAR_CACHED.store(0, Ordering::SeqCst);
 }
 
 /// Apply a unary SIMD kernel over contiguous `f32` slices, falling back to

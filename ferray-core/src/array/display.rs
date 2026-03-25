@@ -28,19 +28,19 @@ static PRINT_EDGEITEMS: AtomicUsize = AtomicUsize::new(3);
 /// - `linewidth`: max characters per line (default 75)
 /// - `edgeitems`: number of items shown at each edge when truncated (default 3)
 pub fn set_print_options(precision: usize, threshold: usize, linewidth: usize, edgeitems: usize) {
-    PRINT_PRECISION.store(precision, Ordering::Relaxed);
-    PRINT_THRESHOLD.store(threshold, Ordering::Relaxed);
-    PRINT_LINEWIDTH.store(linewidth, Ordering::Relaxed);
-    PRINT_EDGEITEMS.store(edgeitems, Ordering::Relaxed);
+    PRINT_PRECISION.store(precision, Ordering::SeqCst);
+    PRINT_THRESHOLD.store(threshold, Ordering::SeqCst);
+    PRINT_LINEWIDTH.store(linewidth, Ordering::SeqCst);
+    PRINT_EDGEITEMS.store(edgeitems, Ordering::SeqCst);
 }
 
 /// Get current print options as `(precision, threshold, linewidth, edgeitems)`.
 pub fn get_print_options() -> (usize, usize, usize, usize) {
     (
-        PRINT_PRECISION.load(Ordering::Relaxed),
-        PRINT_THRESHOLD.load(Ordering::Relaxed),
-        PRINT_LINEWIDTH.load(Ordering::Relaxed),
-        PRINT_EDGEITEMS.load(Ordering::Relaxed),
+        PRINT_PRECISION.load(Ordering::SeqCst),
+        PRINT_THRESHOLD.load(Ordering::SeqCst),
+        PRINT_LINEWIDTH.load(Ordering::SeqCst),
+        PRINT_EDGEITEMS.load(Ordering::SeqCst),
     )
 }
 
@@ -60,7 +60,8 @@ fn format_array_data<T: Element, D: Dimension>(
 
     if ndim == 0 {
         // Scalar
-        let val = inner.iter().next().unwrap();
+        // 0-d arrays always have exactly one element
+        let val = inner.iter().next().unwrap_or_else(|| unreachable!());
         write!(f, "{val}")?;
         return Ok(());
     }

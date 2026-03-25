@@ -253,6 +253,9 @@ pub fn concatenate<T: Element>(
     let total: usize = new_shape.iter().product();
     let mut data = Vec::with_capacity(total);
 
+    // Pre-collect each source array into a contiguous Vec to avoid O(n) iter().nth() per element
+    let src_vecs: Vec<Vec<T>> = arrays.iter().map(|a| a.iter().cloned().collect()).collect();
+
     // Compute strides for the output array (C-order)
     let mut out_strides = vec![1usize; ndim];
     for i in (0..ndim - 1).rev() {
@@ -283,9 +286,8 @@ pub fn concatenate<T: Element>(
         }
         let local_concat_idx = concat_idx - offset;
 
-        // Build source flat index
-        let src = &arrays[src_arr_idx];
-        let src_shape = src.shape();
+        // Build source flat index (C-order)
+        let src_shape = arrays[src_arr_idx].shape();
         let mut src_flat = 0usize;
         let mut src_mul = 1usize;
         for i in (0..ndim).rev() {
@@ -298,8 +300,14 @@ pub fn concatenate<T: Element>(
             src_mul *= src_shape[i];
         }
 
-        let src_data: &T = src.iter().nth(src_flat).unwrap();
-        data.push(src_data.clone());
+        let elem = src_vecs[src_arr_idx].get(src_flat).ok_or_else(|| {
+            FerrayError::invalid_value(format!(
+                "concatenate: internal index {} out of range for source array of length {}",
+                src_flat,
+                src_vecs[src_arr_idx].len(),
+            ))
+        })?;
+        data.push(elem.clone());
     }
 
     Array::from_vec(IxDyn::new(&new_shape), data)
@@ -450,7 +458,8 @@ pub fn block<T: Element>(blocks: &[Vec<Array<T, IxDyn>>]) -> FerrayResult<Array<
         rows.push(row_arr);
     }
     if rows.len() == 1 {
-        Ok(rows.into_iter().next().unwrap())
+        // SAFETY: just checked len() == 1, so pop() always returns Some
+        Ok(rows.pop().unwrap_or_else(|| unreachable!()))
     } else {
         vstack(&rows)
     }

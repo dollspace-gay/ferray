@@ -221,11 +221,26 @@ fn split_top_level_commas(s: &str) -> Vec<String> {
     result
 }
 
+/// Find the last top-level semicolon (not inside brackets/braces/parens).
+fn rfind_top_level_semicolon(s: &str) -> Option<usize> {
+    let mut depth = 0i32;
+    let mut last_idx = None;
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth -= 1,
+            ';' if depth == 0 => last_idx = Some(i),
+            _ => {}
+        }
+    }
+    last_idx
+}
+
 fn parse_slice_component(s: &str) -> syn::Result<proc_macro2::TokenStream> {
     let trimmed = s.trim();
 
-    // Check for step suffix: `expr;step`
-    let (range_part, step_part) = if let Some(idx) = trimmed.rfind(';') {
+    // Check for step suffix: `expr;step` (depth-aware to handle block expressions)
+    let (range_part, step_part) = if let Some(idx) = rfind_top_level_semicolon(trimmed) {
         let (rp, sp) = trimmed.split_at(idx);
         (rp.trim(), Some(sp[1..].trim()))
     } else {
@@ -492,6 +507,14 @@ fn type_rank(s: &str) -> Option<TypeRank> {
             kind: TypeKind::Complex,
             bits: 64,
         },
+        "f16" | "half::f16" => TypeRank {
+            kind: TypeKind::Float,
+            bits: 16,
+        },
+        "bf16" | "half::bf16" => TypeRank {
+            kind: TypeKind::Float,
+            bits: 16,
+        },
         _ => return None,
     };
     Some(result)
@@ -607,7 +630,9 @@ fn rank_to_type(r: TypeRank) -> &'static str {
         TypeKind::Unsigned => uint_type(r.bits),
         TypeKind::Signed => int_type(r.bits),
         TypeKind::Float => {
-            if r.bits <= 32 {
+            if r.bits <= 16 {
+                "half::f16"
+            } else if r.bits <= 32 {
                 "f32"
             } else {
                 "f64"
