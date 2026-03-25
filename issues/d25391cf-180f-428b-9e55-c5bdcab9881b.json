@@ -1,0 +1,11 @@
+{
+  "uuid": "d25391cf-180f-428b-9e55-c5bdcab9881b",
+  "display_id": 121,
+  "title": "ferray-core: duplicated normalize_index in 3 indexing submodules",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nbasic.rs L21, advanced.rs L220, extended.rs L18: identical function 3 times.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:31:17.266419480Z",
+  "updated_at": "2026-03-25T15:31:17.266419480Z"
+}
