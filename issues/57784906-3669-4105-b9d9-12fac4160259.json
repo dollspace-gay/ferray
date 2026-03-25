@@ -1,0 +1,11 @@
+{
+  "uuid": "57784906-3669-4105-b9d9-12fac4160259",
+  "display_id": 132,
+  "title": "ferray-polynomial: oracle/property tests only cover power basis",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\noracle.rs and property_tests.rs: zero coverage for Chebyshev/Legendre/Laguerre/Hermite operations.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:33:30.664726259Z",
+  "updated_at": "2026-03-25T15:33:30.664726259Z"
+}
