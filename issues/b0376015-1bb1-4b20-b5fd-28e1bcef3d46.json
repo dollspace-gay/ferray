@@ -1,0 +1,11 @@
+{
+  "uuid": "b0376015-1bb1-4b20-b5fd-28e1bcef3d46",
+  "display_id": 237,
+  "title": "ferray-io: write_padding writes one byte at a time",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nheader.rs L161-166: single write_all call would suffice.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:50:50.449517623Z",
+  "updated_at": "2026-03-25T15:50:50.449517623Z"
+}
