@@ -1,0 +1,11 @@
+{
+  "uuid": "efdf300d-d6ee-4064-895b-ab626492f2bd",
+  "display_id": 297,
+  "title": "ferray-window: piecewise requires Box<dyn Fn> instead of &dyn Fn",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nfunctional.rs L78: forces callers to heap-allocate closures.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:01:48.374685099Z",
+  "updated_at": "2026-03-25T16:01:48.374685099Z"
+}
