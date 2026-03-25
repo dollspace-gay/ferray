@@ -1,0 +1,11 @@
+{
+  "uuid": "27e8f903-c83d-4755-ba57-98e3f8497219",
+  "display_id": 229,
+  "title": "ferray-fft: no test for length-1 FFT",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nSingle-element edge case untested.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:49:38.355004654Z",
+  "updated_at": "2026-03-25T15:49:38.355004654Z"
+}
