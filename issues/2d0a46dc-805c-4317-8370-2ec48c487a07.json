@@ -1,0 +1,11 @@
+{
+  "uuid": "2d0a46dc-805c-4317-8370-2ec48c487a07",
+  "display_id": 286,
+  "title": "ferray-stride-tricks: has_overlapping_strides dead branching at 1M threshold",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\noverlap_check.rs L52-59: both branches call same function.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:00:20.775499090Z",
+  "updated_at": "2026-03-25T16:00:20.775499090Z"
+}
