@@ -3,11 +3,12 @@
   "display_id": 77,
   "title": "ferray-core: to_bytes() is unsound for types with padding bytes",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nintrospect.rs L60-68: reinterprets &[T] as &[u8]. T: Element doesn't require Copy. Padding bytes reading is UB.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:24:38.809459545Z",
-  "updated_at": "2026-03-25T15:24:51.486372840Z",
+  "updated_at": "2026-03-25T21:27:06.137110292Z",
+  "closed_at": "2026-03-25T21:27:06.137110292Z",
   "labels": [
     "bug",
     "qa-audit"
