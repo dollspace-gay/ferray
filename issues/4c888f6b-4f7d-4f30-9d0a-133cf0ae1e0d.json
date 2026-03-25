@@ -1,0 +1,11 @@
+{
+  "uuid": "4c888f6b-4f7d-4f30-9d0a-133cf0ae1e0d",
+  "display_id": 78,
+  "title": "ferray-core: frombuffer creates arbitrary T from bytes without validity check",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ncreation/mod.rs L47-86: for bool, arbitrary bytes produce invalid values (UB). Fix: restrict to types where all bit patterns valid.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:24:54.032968321Z",
+  "updated_at": "2026-03-25T15:24:54.032968321Z"
+}
