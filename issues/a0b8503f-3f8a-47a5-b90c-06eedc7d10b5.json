@@ -1,0 +1,11 @@
+{
+  "uuid": "a0b8503f-3f8a-47a5-b90c-06eedc7d10b5",
+  "display_id": 82,
+  "title": "ferray-core: reshape/flatten/transpose all copy data unnecessarily",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nmanipulation/mod.rs: iter().cloned().collect() where views would suffice for contiguous arrays.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:25:17.970383264Z",
+  "updated_at": "2026-03-25T15:25:17.970383264Z"
+}
