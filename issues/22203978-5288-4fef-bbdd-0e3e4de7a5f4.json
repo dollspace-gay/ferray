@@ -1,0 +1,11 @@
+{
+  "uuid": "22203978-5288-4fef-bbdd-0e3e4de7a5f4",
+  "display_id": 134,
+  "title": "ferray-random: no statistical goodness-of-fit tests (KS, chi-squared)",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nAll tests check mean/variance but never distribution shape. Could have correct moments but wrong distribution.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:33:44.894881532Z",
+  "updated_at": "2026-03-25T15:33:44.894881532Z"
+}
