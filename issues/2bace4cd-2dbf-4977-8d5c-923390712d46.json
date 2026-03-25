@@ -1,0 +1,11 @@
+{
+  "uuid": "2bace4cd-2dbf-4977-8d5c-923390712d46",
+  "display_id": 300,
+  "title": "ferray-autodiff: free functions duplicate method API without adding value",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nL638-736: 16 one-line delegations. Inconsistent coverage.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:02:11.529447504Z",
+  "updated_at": "2026-03-25T16:02:11.529447504Z"
+}
