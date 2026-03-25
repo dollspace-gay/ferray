@@ -1,0 +1,11 @@
+{
+  "uuid": "3d8564e6-5b5e-4a21-9ab5-3a531b2a95e7",
+  "display_id": 65,
+  "title": "ferray-linalg: inv uses unreliable determinant-based singularity check",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsolve.rs L217-223: det_val.abs() < eps*100*n is scale-dependent. Scaled identity matrix falsely detected as singular. Fix: remove det check, use LU result.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:22:38.227939254Z",
+  "updated_at": "2026-03-25T15:22:38.227939254Z"
+}
