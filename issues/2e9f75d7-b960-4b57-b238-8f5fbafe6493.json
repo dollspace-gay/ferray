@@ -1,0 +1,11 @@
+{
+  "uuid": "2e9f75d7-b960-4b57-b238-8f5fbafe6493",
+  "display_id": 131,
+  "title": "ferray-polynomial: non-power basis ops do unnecessary roundtrip conversions",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nderiv/integ/mul for Legendre/Hermite etc convert to power, operate, convert back. Direct recurrences exist.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T15:33:19.457702373Z",
+  "updated_at": "2026-03-25T15:33:19.457702373Z"
+}
