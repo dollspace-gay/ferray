@@ -3,11 +3,12 @@
   "display_id": 124,
   "title": "ferray-polynomial: degree() uses different tolerance than trim()",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\npower.rs L91-98: degree() threshold 2.2e-14, trim(0.0) strips exact zeros. divmod uses both, causing inconsistencies.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:31:42.554504509Z",
-  "updated_at": "2026-03-25T15:32:02.424270277Z",
+  "updated_at": "2026-03-25T16:55:21.959403777Z",
+  "closed_at": "2026-03-25T16:55:21.959403777Z",
   "labels": [
     "bug",
     "qa-audit"
