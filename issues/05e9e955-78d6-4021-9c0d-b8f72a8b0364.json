@@ -1,0 +1,11 @@
+{
+  "uuid": "05e9e955-78d6-4021-9c0d-b8f72a8b0364",
+  "display_id": 332,
+  "title": "ferray umbrella: FerrayRecord derive alias as DeriveFerrayRecord is confusing",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nlib.rs L41: unnecessary alias. derive(FerrayRecord) already works.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-25T16:09:02.275674127Z",
+  "updated_at": "2026-03-25T16:09:02.275674127Z"
+}
