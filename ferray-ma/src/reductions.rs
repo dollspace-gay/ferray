@@ -75,6 +75,8 @@ where
 
     /// Compute the minimum of unmasked elements.
     ///
+    /// NaN values in unmasked elements are propagated (returns NaN), matching NumPy.
+    ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if no elements are unmasked.
     pub fn min(&self) -> FerrayResult<T> {
@@ -86,11 +88,8 @@ where
             .fold(None, |acc: Option<T>, v| {
                 Some(match acc {
                     Some(a) => {
-                        if v < a {
-                            v
-                        } else {
-                            a
-                        }
+                        // NaN-propagating: if comparison is unordered, propagate NaN
+                        if a <= v { a } else if a > v { v } else { a }
                     }
                     None => v,
                 })
@@ -99,6 +98,8 @@ where
     }
 
     /// Compute the maximum of unmasked elements.
+    ///
+    /// NaN values in unmasked elements are propagated (returns NaN), matching NumPy.
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if no elements are unmasked.
@@ -111,11 +112,7 @@ where
             .fold(None, |acc: Option<T>, v| {
                 Some(match acc {
                     Some(a) => {
-                        if v > a {
-                            v
-                        } else {
-                            a
-                        }
+                        if a >= v { a } else if a < v { v } else { a }
                     }
                     None => v,
                 })

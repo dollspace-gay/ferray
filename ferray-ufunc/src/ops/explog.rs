@@ -145,6 +145,9 @@ where
     D: Dimension,
 {
     binary_float_op(a, b, |x, y| {
+        if x.is_nan() || y.is_nan() {
+            return T::nan();
+        }
         let max = if x > y { x } else { y };
         let min = if x > y { y } else { x };
         max + (min - max).cr_exp().cr_ln_1p()
@@ -159,6 +162,9 @@ where
 {
     let ln2 = T::from(std::f64::consts::LN_2).unwrap_or_else(|| <T as Element>::one());
     binary_float_op(a, b, |x, y| {
+        if x.is_nan() || y.is_nan() {
+            return T::nan();
+        }
         let max = if x > y { x } else { y };
         let min = if x > y { y } else { x };
         max + ((min - max) * ln2).cr_exp().cr_ln_1p() / ln2

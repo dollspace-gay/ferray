@@ -7,7 +7,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::FerrayResult;
+use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
 use crate::MaskedArray;
@@ -47,6 +47,14 @@ where
     T: Element + Copy,
     D: Dimension,
 {
+    if a.shape() != b.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "operand shapes {:?} and {:?} do not match",
+            a.shape(),
+            b.shape(),
+        )));
+    }
+
     let mask_data: Vec<bool> = a
         .mask()
         .iter()

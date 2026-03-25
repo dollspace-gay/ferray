@@ -216,7 +216,7 @@ fn binomial_for_multinomial<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> u64 
         let q = 1.0 - pp;
         let s = pp / q;
         let a = (n as f64 + 1.0) * s;
-        let mut r = q.powi(n as i32);
+        let mut r = q.powf(n as f64);
         let mut u = bg.next_f64();
         let mut x: u64 = 0;
         while u > r {

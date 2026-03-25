@@ -74,8 +74,8 @@ impl fmt::Display for FloatInfo {
 pub struct IntInfo {
     /// The smallest representable value.
     pub min: i128,
-    /// The largest representable value.
-    pub max: i128,
+    /// The largest representable value (u128 to accommodate u128::MAX).
+    pub max: u128,
     /// Number of bits in the type.
     pub bits: u32,
 }
@@ -180,7 +180,7 @@ macro_rules! impl_int_type {
             fn int_info() -> IntInfo {
                 IntInfo {
                     min: <$ty>::MIN as i128,
-                    max: <$ty>::MAX as i128,
+                    max: <$ty>::MAX as u128,
                     bits: $bits,
                 }
             }
@@ -239,7 +239,7 @@ pub fn finfo<T: FloatType>() -> FloatInfo {
 /// use ferray_core::dtype::finfo::iinfo;
 /// let info = iinfo::<i32>();
 /// assert_eq!(info.min, i32::MIN as i128);
-/// assert_eq!(info.max, i32::MAX as i128);
+/// assert_eq!(info.max, i32::MAX as u128);
 /// ```
 pub fn iinfo<T: IntType>() -> IntInfo {
     T::int_info()
@@ -282,7 +282,7 @@ mod tests {
     fn iinfo_i32() {
         let info = iinfo::<i32>();
         assert_eq!(info.min, i32::MIN as i128);
-        assert_eq!(info.max, i32::MAX as i128);
+        assert_eq!(info.max, i32::MAX as u128);
         assert_eq!(info.bits, 32);
     }
 
@@ -298,7 +298,7 @@ mod tests {
     fn iinfo_i64() {
         let info = iinfo::<i64>();
         assert_eq!(info.min, i64::MIN as i128);
-        assert_eq!(info.max, i64::MAX as i128);
+        assert_eq!(info.max, i64::MAX as u128);
         assert_eq!(info.bits, 64);
     }
 
@@ -314,7 +314,7 @@ mod tests {
     fn iinfo_u128() {
         let info = iinfo::<u128>();
         assert_eq!(info.min, 0);
-        assert_eq!(info.max, u128::MAX as i128);
+        assert_eq!(info.max, u128::MAX);
         assert_eq!(info.bits, 128);
     }
 

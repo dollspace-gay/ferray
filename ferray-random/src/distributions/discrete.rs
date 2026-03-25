@@ -52,7 +52,7 @@ fn poisson_single<B: BitGenerator>(bg: &mut B, lam: f64) -> i64 {
                     .exp()
                     * inv_alpha
             {
-                // Removed the fast path — fall through to full test
+                return k;
             }
             if us < 0.013 && v > us {
                 continue;
@@ -104,7 +104,7 @@ fn binomial_single<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> i64 {
         let q = 1.0 - pp;
         let s = pp / q;
         let a = (n as f64 + 1.0) * s;
-        let mut r = q.powi(n as i32);
+        let mut r = q.powf(n as f64);
         let mut u = bg.next_f64();
         let mut x: i64 = 0;
         while u > r {

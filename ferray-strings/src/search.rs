@@ -3,19 +3,19 @@
 // Implements find, count, startswith, endswith, replace — elementwise on StringArray.
 
 use ferray_core::Array;
-use ferray_core::dimension::{Dimension, Ix1};
+use ferray_core::dimension::Dimension;
 use ferray_core::error::FerrayResult;
 
 use crate::string_array::StringArray;
 
 /// Find the lowest index of `sub` in each string element.
 ///
-/// Returns an `Array<i64>` where each element is the index of the first
-/// occurrence of `sub`, or -1 if not found.
+/// Returns an `Array<i64, D>` preserving the input shape, where each element
+/// is the index of the first occurrence of `sub`, or -1 if not found.
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn find<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<i64, Ix1>> {
+pub fn find<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<i64, D>> {
     let data: Vec<i64> = a.map_to_vec(|s| {
         match s.find(sub) {
             Some(byte_idx) => {
@@ -25,47 +25,43 @@ pub fn find<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<i
             None => -1,
         }
     });
-    let dim = Ix1::new([data.len()]);
-    Array::from_vec(dim, data)
+    Array::from_vec(a.dim().clone(), data)
 }
 
 /// Count non-overlapping occurrences of `sub` in each string element.
 ///
-/// Returns an `Array<u64>` with the count for each element.
+/// Returns an `Array<u64, D>` preserving the input shape.
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn count<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<u64, Ix1>> {
+pub fn count<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<u64, D>> {
     let data: Vec<u64> = a.map_to_vec(|s| s.matches(sub).count() as u64);
-    let dim = Ix1::new([data.len()]);
-    Array::from_vec(dim, data)
+    Array::from_vec(a.dim().clone(), data)
 }
 
 /// Test whether each string element starts with the given prefix.
 ///
-/// Returns an `Array<bool>` indicating the result for each element.
+/// Returns an `Array<bool, D>` preserving the input shape.
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
 pub fn startswith<D: Dimension>(
     a: &StringArray<D>,
     prefix: &str,
-) -> FerrayResult<Array<bool, Ix1>> {
+) -> FerrayResult<Array<bool, D>> {
     let data: Vec<bool> = a.map_to_vec(|s| s.starts_with(prefix));
-    let dim = Ix1::new([data.len()]);
-    Array::from_vec(dim, data)
+    Array::from_vec(a.dim().clone(), data)
 }
 
 /// Test whether each string element ends with the given suffix.
 ///
-/// Returns an `Array<bool>` indicating the result for each element.
+/// Returns an `Array<bool, D>` preserving the input shape.
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn endswith<D: Dimension>(a: &StringArray<D>, suffix: &str) -> FerrayResult<Array<bool, Ix1>> {
+pub fn endswith<D: Dimension>(a: &StringArray<D>, suffix: &str) -> FerrayResult<Array<bool, D>> {
     let data: Vec<bool> = a.map_to_vec(|s| s.ends_with(suffix));
-    let dim = Ix1::new([data.len()]);
-    Array::from_vec(dim, data)
+    Array::from_vec(a.dim().clone(), data)
 }
 
 /// Replace occurrences of `old` with `new` in each string element.

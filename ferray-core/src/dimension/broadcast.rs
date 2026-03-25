@@ -162,15 +162,28 @@ pub fn broadcast_to<'a, T: Element, D: Dimension>(
 
     let new_strides = broadcast_strides(src_shape, src_strides, target_shape)?;
 
+    // Validate all strides are non-negative before casting to usize.
+    // Negative strides (from reversed/transposed views) cannot be represented
+    // as usize and would wrap to huge values, causing out-of-bounds access.
+    for (i, &s) in new_strides.iter().enumerate() {
+        if s < 0 {
+            return Err(FerrayError::shape_mismatch(format!(
+                "cannot broadcast array with negative stride {} on axis {}; \
+                 make the array contiguous first",
+                s, i
+            )));
+        }
+    }
+
     // Build ndarray view with computed strides
-    // We need to create an IxDyn view with the broadcast strides
     let nd_shape = ndarray::IxDyn(target_shape);
     let nd_strides = ndarray::IxDyn(&new_strides.iter().map(|&s| s as usize).collect::<Vec<_>>());
 
     // Use from_shape_ptr with the broadcast strides
     let ptr = array.as_ptr();
-    // SAFETY: the broadcast strides ensure we only access valid memory
-    // from the source array. Stride-0 dimensions repeat the same element.
+    // SAFETY: broadcast strides are validated non-negative above and ensure
+    // we only access valid memory from the source array. Stride-0 dimensions
+    // repeat the same element.
     let nd_view = unsafe { ndarray::ArrayView::from_shape_ptr(nd_shape.strides(nd_strides), ptr) };
 
     Ok(ArrayView::from_ndarray(nd_view))
@@ -197,10 +210,22 @@ pub fn broadcast_view_to<'a, T: Element, D: Dimension>(
 
     let new_strides = broadcast_strides(src_shape, src_strides, target_shape)?;
 
+    for (i, &s) in new_strides.iter().enumerate() {
+        if s < 0 {
+            return Err(FerrayError::shape_mismatch(format!(
+                "cannot broadcast view with negative stride {} on axis {}; \
+                 make the array contiguous first",
+                s, i
+            )));
+        }
+    }
+
     let nd_shape = ndarray::IxDyn(target_shape);
     let nd_strides = ndarray::IxDyn(&new_strides.iter().map(|&s| s as usize).collect::<Vec<_>>());
 
     let ptr = view.as_ptr();
+    // SAFETY: strides validated non-negative above; broadcast strides ensure
+    // only valid source memory is accessed.
     let nd_view = unsafe { ndarray::ArrayView::from_shape_ptr(nd_shape.strides(nd_strides), ptr) };
 
     Ok(ArrayView::from_ndarray(nd_view))
@@ -268,11 +293,23 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
 
         let new_strides = broadcast_strides(src_shape, src_strides, target_shape)?;
 
+        for (i, &s) in new_strides.iter().enumerate() {
+            if s < 0 {
+                return Err(FerrayError::shape_mismatch(format!(
+                    "cannot broadcast view with negative stride {} on axis {}; \
+                     make the array contiguous first",
+                    s, i
+                )));
+            }
+        }
+
         let nd_shape = ndarray::IxDyn(target_shape);
         let nd_strides =
             ndarray::IxDyn(&new_strides.iter().map(|&s| s as usize).collect::<Vec<_>>());
 
         let ptr = self.as_ptr();
+        // SAFETY: strides validated non-negative above; broadcast strides ensure
+        // only valid source memory is accessed.
         let nd_view =
             unsafe { ndarray::ArrayView::from_shape_ptr(nd_shape.strides(nd_strides), ptr) };
 

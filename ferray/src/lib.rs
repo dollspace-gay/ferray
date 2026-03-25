@@ -76,6 +76,13 @@ pub use ferray_core::manipulation::extended::{
     append, delete, insert, pad, repeat, resize, tile, trim_zeros,
 };
 
+// Indexing
+pub use ferray_core::indexing::extended::{
+    choose, compress, diag_indices, diag_indices_from, flatnonzero, indices, ix_,
+    ndenumerate, ndindex, ravel_multi_index, select, take, take_along_axis, tril_indices,
+    tril_indices_from, triu_indices, triu_indices_from, unravel_index,
+};
+
 // ---------------------------------------------------------------------------
 // REQ-1: Ufunc functions at top level
 // ---------------------------------------------------------------------------

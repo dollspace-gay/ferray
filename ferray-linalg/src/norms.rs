@@ -208,24 +208,18 @@ fn matrix_norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayRes
 
 /// Compute the condition number of a matrix.
 ///
-/// Uses the ratio of the largest to smallest singular value (for L2 norm).
+/// For L2 and Frobenius norms, non-square matrices are accepted (uses SVD).
+/// For other norms, a square matrix is required (uses `inv`).
 ///
 /// # Errors
-/// - `FerrayError::ShapeMismatch` if not a square matrix.
+/// - `FerrayError::ShapeMismatch` if a square matrix is required but not provided.
 pub fn cond<T: LinalgFloat>(a: &Array<T, Ix2>, p: NormOrder) -> FerrayResult<T> {
     let shape = a.shape();
-    if shape[0] != shape[1] {
-        return Err(FerrayError::shape_mismatch(format!(
-            "cond requires a square matrix, got {}x{}",
-            shape[0], shape[1]
-        )));
-    }
 
     match p {
         NormOrder::L2 | NormOrder::Fro => {
-            let n = shape[0];
-            // For 2x2, use the closed-form singular value formula
-            if n == 2 {
+            // For square 2x2, use the closed-form singular value formula
+            if shape[0] == 2 && shape[1] == 2 {
                 let s = a.as_slice().unwrap();
                 let (a11, a12, a21, a22) = (s[0], s[1], s[2], s[3]);
                 let det_a = a11 * a22 - a12 * a21;
@@ -262,6 +256,12 @@ pub fn cond<T: LinalgFloat>(a: &Array<T, Ix2>, p: NormOrder) -> FerrayResult<T> 
             }
         }
         _ => {
+            if shape[0] != shape[1] {
+                return Err(FerrayError::shape_mismatch(format!(
+                    "cond with {:?} norm requires a square matrix, got {}x{}",
+                    p, shape[0], shape[1]
+                )));
+            }
             let a_dyn =
                 Array::<T, IxDyn>::from_vec(IxDyn::new(shape), a.iter().copied().collect())?;
             let norm_a = norm(&a_dyn, p)?;
@@ -324,15 +324,63 @@ pub fn det_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Array<T,
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the matrix is not square.
 pub fn slogdet<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<(T, T)> {
-    let d = det(a)?;
-    let zero = T::from_f64_const(0.0);
-    if d == zero {
-        Ok((zero, <T as num_traits::Float>::neg_infinity()))
-    } else if d > zero {
-        Ok((T::from_f64_const(1.0), d.ln()))
-    } else {
-        Ok((T::from_f64_const(-1.0), (-d).ln()))
+    let shape = a.shape();
+    if shape[0] != shape[1] {
+        return Err(FerrayError::shape_mismatch(format!(
+            "slogdet requires square matrices, got {}x{}",
+            shape[0], shape[1]
+        )));
     }
+    let n = shape[0];
+    let zero = T::from_f64_const(0.0);
+    let one = T::from_f64_const(1.0);
+    let neg_one = T::from_f64_const(-1.0);
+
+    if n == 0 {
+        return Ok((one, zero));
+    }
+
+    // Use LU decomposition to compute log|det| without overflow/underflow.
+    // det(A) = det(P)^-1 * det(L) * det(U) = (-1)^swaps * product(U_ii)
+    let mat = faer_bridge::array2_to_faer(a);
+    let lu = mat.as_ref().partial_piv_lu();
+    let u_mat = lu.U().to_owned();
+
+    // Accumulate log|det| = sum(log|U_ii|) and sign = product(sign(U_ii))
+    let mut log_abs_det = zero;
+    let mut sign = one;
+    for i in 0..n {
+        let diag = u_mat[(i, i)];
+        if diag == zero {
+            return Ok((zero, <T as num_traits::Float>::neg_infinity()));
+        }
+        log_abs_det = log_abs_det + diag.abs().ln();
+        if diag < zero {
+            sign = sign * neg_one;
+        }
+    }
+
+    // Account for permutation sign by counting transpositions via cycle decomposition.
+    // Each cycle of length k contributes (k-1) transpositions.
+    let perm_fwd = lu.P().arrays().0;
+    let mut visited = vec![false; n];
+    let mut num_swaps = 0usize;
+    for i in 0..n {
+        if !visited[i] {
+            visited[i] = true;
+            let mut j = perm_fwd[i];
+            while j != i {
+                visited[j] = true;
+                num_swaps += 1;
+                j = perm_fwd[j];
+            }
+        }
+    }
+    if num_swaps % 2 == 1 {
+        sign = sign * neg_one;
+    }
+
+    Ok((sign, log_abs_det))
 }
 
 /// Compute the rank of a matrix using SVD.

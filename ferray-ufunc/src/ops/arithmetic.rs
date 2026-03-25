@@ -312,6 +312,9 @@ where
     D: Dimension,
 {
     binary_float_op(a, b, |mut x, mut y| {
+        if x.is_nan() || y.is_nan() {
+            return T::nan();
+        }
         x = x.abs();
         y = y.abs();
         while y != <T as Element>::zero() {
@@ -330,6 +333,9 @@ where
     D: Dimension,
 {
     binary_float_op(a, b, |x, y| {
+        if x.is_nan() || y.is_nan() {
+            return T::nan();
+        }
         let ax = x.abs();
         let ay = y.abs();
         if ax == <T as Element>::zero() || ay == <T as Element>::zero() {
@@ -497,6 +503,10 @@ where
 
 /// Cumulative sum along an axis (or flattened if axis is None).
 ///
+/// When `axis=None`, data is flattened and accumulated, but the result retains
+/// the original shape (unlike NumPy which returns a 1-D array). This is due to
+/// the generic return type `Array<T, D>`.
+///
 /// AC-11: `cumsum([1,2,3,4]) == [1,3,6,10]`.
 pub fn cumsum<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
@@ -542,6 +552,10 @@ where
 }
 
 /// Cumulative product along an axis (or flattened if axis is None).
+///
+/// When `axis=None`, data is flattened and accumulated, but the result retains
+/// the original shape (unlike NumPy which returns a 1-D array). This is due to
+/// the generic return type `Array<T, D>`.
 pub fn cumprod<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,

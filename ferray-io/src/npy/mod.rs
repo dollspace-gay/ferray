@@ -21,6 +21,15 @@ use ferray_core::error::{FerrayError, FerrayResult};
 
 use self::dtype_parse::Endianness;
 
+/// Compute the total number of elements from a shape, using checked
+/// multiplication to guard against overflow from untrusted `.npy` files.
+pub(crate) fn checked_total_elements(shape: &[usize]) -> FerrayResult<usize> {
+    shape.iter().try_fold(1usize, |acc, &dim| {
+        acc.checked_mul(dim)
+            .ok_or_else(|| FerrayError::io_error("shape overflow: total elements exceed usize::MAX"))
+    })
+}
+
 /// Save an array to a `.npy` file.
 ///
 /// The file is written in native byte order with C (row-major) layout.
@@ -109,7 +118,7 @@ pub fn load_from_reader<T: Element + NpyElement, D: Dimension, R: Read>(
         }
     }
 
-    let total_elements: usize = hdr.shape.iter().product();
+    let total_elements = checked_total_elements(&hdr.shape)?;
     let data = T::read_vec(reader, total_elements, hdr.endianness)?;
 
     let dim = build_dimension::<D>(&hdr.shape)?;
@@ -141,7 +150,7 @@ pub fn load_dynamic<P: AsRef<Path>>(path: P) -> FerrayResult<DynArray> {
 /// Load a `.npy` from a reader with runtime type dispatch.
 pub fn load_dynamic_from_reader<R: Read>(reader: &mut R) -> FerrayResult<DynArray> {
     let hdr = header::read_header(reader)?;
-    let total: usize = hdr.shape.iter().product();
+    let total = checked_total_elements(&hdr.shape)?;
     let dim = IxDyn::new(&hdr.shape);
 
     macro_rules! load_typed {
@@ -183,7 +192,7 @@ pub fn load_dynamic_from_reader<R: Read>(reader: &mut R) -> FerrayResult<DynArra
     }
 }
 
-/// Read complex64 (Complex<f32>) data via raw bytes, without naming the Complex type.
+/// Read complex64 (Complex<f32>) data via raw bytes.
 fn load_complex32_dynamic<R: Read>(
     reader: &mut R,
     total: usize,
@@ -191,96 +200,42 @@ fn load_complex32_dynamic<R: Read>(
     fortran_order: bool,
     endian: Endianness,
 ) -> FerrayResult<DynArray> {
-    // Complex<f32> is 8 bytes: two f32 (re, im)
     let byte_count = total * 8;
     let mut raw = vec![0u8; byte_count];
     reader.read_exact(&mut raw)?;
 
     if endian.needs_swap() {
-        // Swap each 4-byte float component
         for chunk in raw.chunks_exact_mut(4) {
             chunk.reverse();
         }
     }
 
-    // Use raw bytes to construct DynArray via DynArray::zeros and then write bytes.
-    // Actually, we can construct the array properly. The representation of
-    // Complex<f32> is two f32 in sequence (re, im) - same as the raw bytes.
-    // We transmute the byte vector.
-    //
-    // First verify alignment and size:
-    // Complex<f32> has size 8 and alignment 4 on all platforms.
-    assert_eq!(std::mem::size_of::<[f32; 2]>(), 8);
-
-    // Build a Vec<Complex<f32>> from raw bytes by going through Vec<u8>
-    // We need to use the actual type which we can reference through DynArray.
-    // Since DynArray::Complex32 wraps Array<Complex<f32>, IxDyn>, we need to
-    // provide a Vec<Complex<f32>>.
-    //
-    // The safe way: reinterpret the raw bytes as f32 pairs.
-    let mut data: Vec<u8> = raw;
-
-    // Verify length
-    if data.len() != total * 8 {
-        return Err(FerrayError::io_error(
-            "unexpected data length for complex32",
-        ));
-    }
-
-    // Use ptr::cast and Vec::from_raw_parts to reinterpret.
-    // This is safe because Complex<f32> has the same layout as [f32; 2].
-    let ptr = data.as_mut_ptr();
-    let cap = data.capacity();
-    std::mem::forget(data);
-
-    // SAFETY: Complex<f32> has size 8 and align 4. u8 has align 1.
-    // The vec was allocated with u8 layout, which is compatible.
-    // We must ensure the pointer is aligned for f32.
-    if (ptr as usize) % std::mem::align_of::<f32>() != 0 {
-        // If not aligned (shouldn't happen for heap allocs), fall back to copy
-        let data_bytes = unsafe { Vec::from_raw_parts(ptr, total * 8, cap) };
-        return load_complex32_from_bytes_copy(&data_bytes, total, dim, fortran_order);
-    }
-
-    // Reconstruct as a Vec of the right length for the complex type.
-    // We know that size_of::<Complex<f32>>() == 8 and Vec<u8> with len=total*8
-    // can be reinterpreted as Vec<[f32; 2]> with len=total.
-    // Then from that we can create Array<Complex<f32>, IxDyn>.
-    //
-    // Actually, let's just do a safe copy approach since this is cleaner.
-    let bytes = unsafe { Vec::from_raw_parts(ptr, total * 8, cap) };
-    load_complex32_from_bytes_copy(&bytes, total, dim, fortran_order)
+    load_complex32_from_bytes_copy(&raw, total, dim, fortran_order)
 }
 
-/// Build a Complex32 DynArray from raw bytes using safe copy.
+/// Build a Complex32 DynArray from raw bytes, respecting Fortran order.
 fn load_complex32_from_bytes_copy(
     bytes: &[u8],
     total: usize,
     dim: IxDyn,
     fortran_order: bool,
 ) -> FerrayResult<DynArray> {
-    // Create a DynArray::zeros and fill it from bytes
-    let mut arr_dyn = DynArray::zeros(DType::Complex32, dim.as_slice())?;
-    if let DynArray::Complex32(ref mut arr) = arr_dyn {
-        if let Some(slice) = arr.as_slice_mut() {
-            // slice is &mut [Complex<f32>], each 8 bytes
-            let dst =
-                unsafe { std::slice::from_raw_parts_mut(slice.as_mut_ptr() as *mut u8, total * 8) };
-            dst.copy_from_slice(bytes);
-        }
+    use num_complex::Complex;
 
-        // If fortran_order, we'd need to handle that.
-        // For now, the data is stored in the correct order since we read it sequentially.
-        if fortran_order {
-            // Fortran order would need the from_vec_f constructor, but we already
-            // wrote into a C-order array. For complex types loaded dynamically,
-            // we handle this by reading the data in order and noting that
-            // from_vec already places it in the buffer correctly.
-            // A proper implementation would need to re-create with from_vec_f,
-            // but that requires the concrete Complex type.
-        }
+    // Parse raw bytes into Vec<Complex<f32>> by reading f32 pairs
+    let mut data = Vec::with_capacity(total);
+    for chunk in bytes.chunks_exact(8) {
+        let re = f32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        let im = f32::from_ne_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
+        data.push(Complex::new(re, im));
     }
-    Ok(arr_dyn)
+
+    let arr = if fortran_order {
+        Array::<Complex<f32>, IxDyn>::from_vec_f(dim, data)?
+    } else {
+        Array::<Complex<f32>, IxDyn>::from_vec(dim, data)?
+    };
+    Ok(DynArray::Complex32(arr))
 }
 
 /// Read complex128 (Complex<f64>) data via raw bytes.
@@ -308,18 +263,28 @@ fn load_complex64_from_bytes_copy(
     bytes: &[u8],
     total: usize,
     dim: IxDyn,
-    _fortran_order: bool,
+    fortran_order: bool,
 ) -> FerrayResult<DynArray> {
-    let mut arr_dyn = DynArray::zeros(DType::Complex64, dim.as_slice())?;
-    if let DynArray::Complex64(ref mut arr) = arr_dyn {
-        if let Some(slice) = arr.as_slice_mut() {
-            let dst = unsafe {
-                std::slice::from_raw_parts_mut(slice.as_mut_ptr() as *mut u8, total * 16)
-            };
-            dst.copy_from_slice(bytes);
-        }
+    use num_complex::Complex;
+
+    // Parse raw bytes into Vec<Complex<f64>> by reading f64 pairs
+    let mut data = Vec::with_capacity(total);
+    for chunk in bytes.chunks_exact(16) {
+        let re = f64::from_ne_bytes([
+            chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7],
+        ]);
+        let im = f64::from_ne_bytes([
+            chunk[8], chunk[9], chunk[10], chunk[11], chunk[12], chunk[13], chunk[14], chunk[15],
+        ]);
+        data.push(Complex::new(re, im));
     }
-    Ok(arr_dyn)
+
+    let arr = if fortran_order {
+        Array::<Complex<f64>, IxDyn>::from_vec_f(dim, data)?
+    } else {
+        Array::<Complex<f64>, IxDyn>::from_vec(dim, data)?
+    };
+    Ok(DynArray::Complex64(arr))
 }
 
 /// Save a `DynArray` to a `.npy` file.

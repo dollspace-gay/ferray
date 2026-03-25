@@ -16,17 +16,9 @@ use crate::scalar::LinalgFloat;
 pub fn array2_to_faer<T: LinalgFloat>(a: &Array<T, Ix2>) -> faer::Mat<T> {
     let shape = a.shape();
     let (m, n) = (shape[0], shape[1]);
-    faer::Mat::from_fn(m, n, |i, j| {
-        // Use iterator-based access for safety with any layout
-        let idx = i * n + j;
-        let flat: Vec<T> = if let Some(s) = a.as_slice() {
-            // Fast path: contiguous data
-            return s[idx];
-        } else {
-            a.iter().copied().collect()
-        };
-        flat[idx]
-    })
+    // Collect data once upfront to avoid per-element allocation in the closure.
+    let data: Vec<T> = a.iter().copied().collect();
+    faer::Mat::from_fn(m, n, |i, j| data[i * n + j])
 }
 
 /// Convert a 2D ferray Array<T, D> to a faer::Mat<T> using iter-based

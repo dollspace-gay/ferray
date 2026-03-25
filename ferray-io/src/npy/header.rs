@@ -69,7 +69,16 @@ pub fn read_header<R: std::io::Read>(reader: &mut R) -> FerrayResult<NpyHeader> 
         reader
             .read_exact(&mut buf)
             .map_err(|e| FerrayError::io_error(format!("failed to read header length: {e}")))?;
-        u32::from_le_bytes(buf) as usize
+        let raw_len = u32::from_le_bytes(buf) as usize;
+        // Cap header length at 1 MB to prevent unbounded allocation from
+        // untrusted files. Legitimate .npy headers are typically < 1 KB.
+        const MAX_HEADER_LEN: usize = 1_048_576;
+        if raw_len > MAX_HEADER_LEN {
+            return Err(FerrayError::io_error(format!(
+                "header length {raw_len} exceeds maximum allowed size ({MAX_HEADER_LEN} bytes)"
+            )));
+        }
+        raw_len
     };
 
     // Read header string

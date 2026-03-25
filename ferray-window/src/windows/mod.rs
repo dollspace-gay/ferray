@@ -170,13 +170,16 @@ pub fn hanning(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 /// - `m == 1`: returns `[1.0]`.
 ///
 /// # Errors
-/// Returns `FerrayError::InvalidValue` if `beta` is negative or NaN.
+/// Returns `FerrayError::InvalidValue` if `beta` is NaN.
 pub fn kaiser(m: usize, beta: f64) -> FerrayResult<Array<f64, Ix1>> {
-    if beta.is_nan() || beta < 0.0 {
-        return Err(FerrayError::invalid_value(format!(
-            "kaiser: beta must be non-negative, got {beta}"
-        )));
+    if beta.is_nan() {
+        return Err(FerrayError::invalid_value(
+            "kaiser: beta must not be NaN",
+        ));
     }
+    // I_0 is an even function, so kaiser(m, -beta) == kaiser(m, beta).
+    // Accept negative beta for NumPy compatibility.
+    let beta = beta.abs();
 
     if m == 0 {
         return Array::from_vec(Ix1::new([0]), vec![]);
@@ -284,7 +287,10 @@ mod tests {
 
     #[test]
     fn kaiser_negative_beta() {
-        assert!(kaiser(5, -1.0).is_err());
+        // Negative beta should produce the same result as positive beta (I0 is even)
+        let pos = kaiser(5, 1.0).unwrap();
+        let neg = kaiser(5, -1.0).unwrap();
+        assert_eq!(pos.as_slice().unwrap(), neg.as_slice().unwrap());
     }
 
     #[test]

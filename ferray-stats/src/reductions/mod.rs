@@ -17,11 +17,12 @@ use crate::parallel;
 #[inline]
 fn try_simd_sum_sq_diff<T: Element + Copy + 'static>(data: &[T], mean: T) -> Option<T> {
     if TypeId::of::<T>() == TypeId::of::<f64>() {
+        // SAFETY: TypeId check guarantees T is f64. size_of::<T>() == size_of::<f64>().
         let f64_slice =
             unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f64, data.len()) };
-        let mean_f64 = unsafe { *(&mean as *const T as *const f64) };
+        let mean_f64: f64 = unsafe { std::mem::transmute_copy(&mean) };
         let result = parallel::simd_sum_sq_diff_f64(f64_slice, mean_f64);
-        Some(unsafe { *(&result as *const f64 as *const T) })
+        Some(unsafe { std::mem::transmute_copy(&result) })
     } else {
         None
     }
@@ -32,11 +33,11 @@ fn try_simd_sum_sq_diff<T: Element + Copy + 'static>(data: &[T], mean: T) -> Opt
 #[inline]
 fn try_simd_pairwise_sum<T: Element + Copy + 'static>(data: &[T]) -> Option<T> {
     if TypeId::of::<T>() == TypeId::of::<f64>() {
+        // SAFETY: TypeId check guarantees T is f64. size_of::<T>() == size_of::<f64>().
         let f64_slice =
             unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f64, data.len()) };
         let result = parallel::pairwise_sum_f64(f64_slice);
-        // Safe: we verified T is f64
-        Some(unsafe { *(&result as *const f64 as *const T) })
+        Some(unsafe { std::mem::transmute_copy(&result) })
     } else {
         None
     }
@@ -281,14 +282,23 @@ where
             "cannot compute min of empty array",
         ));
     }
+    // NaN-propagating min: if either operand is NaN (comparison returns false
+    // for both orderings), propagate NaN to match NumPy behavior.
+    let nan_min = |a: T, b: T| -> T {
+        if a <= b {
+            a
+        } else if a > b {
+            b
+        } else {
+            // One of them is NaN — return whichever is unordered
+            // (if a is NaN, a <= b and a > b are both false; return a)
+            a
+        }
+    };
     let data = borrow_data(a);
     match axis {
         None => {
-            let m = data
-                .iter()
-                .copied()
-                .reduce(|a, b| if a <= b { a } else { b })
-                .unwrap();
+            let m = data.iter().copied().reduce(nan_min).unwrap();
             make_result(&[], vec![m])
         }
         Some(ax) => {
@@ -296,10 +306,7 @@ where
             let shape = a.shape();
             let out_s = output_shape(shape, ax);
             let result = reduce_axis_general(&data, shape, ax, |lane| {
-                lane.iter()
-                    .copied()
-                    .reduce(|a, b| if a <= b { a } else { b })
-                    .unwrap()
+                lane.iter().copied().reduce(nan_min).unwrap()
             });
             make_result(&out_s, result)
         }
@@ -319,14 +326,20 @@ where
             "cannot compute max of empty array",
         ));
     }
+    // NaN-propagating max: same logic as min but reversed ordering.
+    let nan_max = |a: T, b: T| -> T {
+        if a >= b {
+            a
+        } else if a < b {
+            b
+        } else {
+            a
+        }
+    };
     let data = borrow_data(a);
     match axis {
         None => {
-            let m = data
-                .iter()
-                .copied()
-                .reduce(|a, b| if a >= b { a } else { b })
-                .unwrap();
+            let m = data.iter().copied().reduce(nan_max).unwrap();
             make_result(&[], vec![m])
         }
         Some(ax) => {
@@ -334,10 +347,7 @@ where
             let shape = a.shape();
             let out_s = output_shape(shape, ax);
             let result = reduce_axis_general(&data, shape, ax, |lane| {
-                lane.iter()
-                    .copied()
-                    .reduce(|a, b| if a >= b { a } else { b })
-                    .unwrap()
+                lane.iter().copied().reduce(nan_max).unwrap()
             });
             make_result(&out_s, result)
         }

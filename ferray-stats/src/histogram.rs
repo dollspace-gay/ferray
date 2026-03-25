@@ -35,7 +35,7 @@ pub fn histogram<T>(
     bins: Bins<T>,
     range: Option<(T, T)>,
     density: bool,
-) -> FerrayResult<(Array<u64, Ix1>, Array<T, Ix1>)>
+) -> FerrayResult<(Array<f64, Ix1>, Array<T, Ix1>)>
 where
     T: Element + Float,
 {
@@ -116,15 +116,30 @@ where
         counts[bin] += 1;
     }
 
-    let counts_arr = Array::from_vec(Ix1::new([nbins]), counts.clone())?;
-
-    if density {
+    let result: Vec<f64> = if density {
         // Normalize: density[i] = counts[i] / (total * bin_width[i])
-        // NumPy returns float counts in density mode, but we keep the u64 counts
-        // and the user can compute density from (counts, edges).
-        let _total = T::from(data.iter().filter(|x| !x.is_nan()).count()).unwrap();
-    }
+        let total: f64 = counts.iter().sum::<u64>() as f64;
+        if total == 0.0 {
+            vec![0.0; nbins]
+        } else {
+            counts
+                .iter()
+                .enumerate()
+                .map(|(i, &c)| {
+                    let bin_width = (edges[i + 1] - edges[i]).to_f64().unwrap();
+                    if bin_width == 0.0 {
+                        0.0
+                    } else {
+                        (c as f64) / (total * bin_width)
+                    }
+                })
+                .collect()
+        }
+    } else {
+        counts.iter().map(|&c| c as f64).collect()
+    };
 
+    let counts_arr = Array::from_vec(Ix1::new([nbins]), result)?;
     let edges_arr = Array::from_vec(Ix1::new([edges.len()]), edges)?;
     Ok((counts_arr, edges_arr))
 }
@@ -476,8 +491,8 @@ mod tests {
         let (counts, edges) = histogram(&a, Bins::Count(3), None, false).unwrap();
         assert_eq!(counts.shape(), &[3]);
         assert_eq!(edges.shape(), &[4]);
-        let c: Vec<u64> = counts.iter().copied().collect();
-        assert_eq!(c.iter().sum::<u64>(), 6);
+        let c: Vec<f64> = counts.iter().copied().collect();
+        assert!((c.iter().sum::<f64>() - 6.0).abs() < 1e-12);
     }
 
     #[test]
@@ -498,8 +513,73 @@ mod tests {
             false,
         )
         .unwrap();
-        let c: Vec<u64> = counts.iter().copied().collect();
-        assert_eq!(c, vec![1, 1, 1, 1, 1]);
+        let c: Vec<f64> = counts.iter().copied().collect();
+        assert_eq!(c, vec![1.0, 1.0, 1.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn test_histogram_density() {
+        // 5 values in [0, 5) with equal-width bins of width 1.0
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![0.5, 1.5, 2.5, 3.5, 4.5]).unwrap();
+        let (density, edges) = histogram(
+            &a,
+            Bins::Edges(vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0]),
+            None,
+            true,
+        )
+        .unwrap();
+        let d: Vec<f64> = density.iter().copied().collect();
+        let e: Vec<f64> = edges.iter().copied().collect();
+        // Each bin has count=1, total=5, bin_width=1.0
+        // density[i] = 1 / (5 * 1.0) = 0.2
+        for &v in &d {
+            assert!((v - 0.2).abs() < 1e-12, "expected 0.2, got {}", v);
+        }
+        // Integral over all bins should equal 1: sum(density[i] * width[i]) = 1
+        let integral: f64 = d
+            .iter()
+            .enumerate()
+            .map(|(i, &di)| di * (e[i + 1] - e[i]))
+            .sum();
+        assert!(
+            (integral - 1.0).abs() < 1e-12,
+            "density integral should be 1.0, got {}",
+            integral
+        );
+    }
+
+    #[test]
+    fn test_histogram_density_unequal_bins() {
+        // Test with unequal bin widths
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![0.5, 1.5, 3.0, 4.0]).unwrap();
+        let (density, edges) = histogram(
+            &a,
+            Bins::Edges(vec![0.0, 2.0, 5.0]),
+            None,
+            true,
+        )
+        .unwrap();
+        let d: Vec<f64> = density.iter().copied().collect();
+        let e: Vec<f64> = edges.iter().copied().collect();
+        // Bin [0,2): count=2, width=2, density = 2/(4*2) = 0.25
+        // Bin [2,5]: count=2, width=3, density = 2/(4*3) = 0.1667
+        assert!((d[0] - 0.25).abs() < 1e-12, "expected 0.25, got {}", d[0]);
+        assert!(
+            (d[1] - 2.0 / 12.0).abs() < 1e-12,
+            "expected 1/6, got {}",
+            d[1]
+        );
+        // Integral should equal 1
+        let integral: f64 = d
+            .iter()
+            .enumerate()
+            .map(|(i, &di)| di * (e[i + 1] - e[i]))
+            .sum();
+        assert!(
+            (integral - 1.0).abs() < 1e-12,
+            "density integral should be 1.0, got {}",
+            integral
+        );
     }
 
     #[test]

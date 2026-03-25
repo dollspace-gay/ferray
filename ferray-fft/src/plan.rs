@@ -88,9 +88,8 @@ pub struct FftPlan {
     size: usize,
 }
 
-// Arc<dyn Fft<f64>> is Send + Sync because rustfft plans are thread-safe
-unsafe impl Send for FftPlan {}
-unsafe impl Sync for FftPlan {}
+// FftPlan is Send + Sync because Arc<dyn Fft<f64>> is Send + Sync
+// (rustfft plans are thread-safe). No manual unsafe impl needed.
 
 impl FftPlan {
     /// Create a new FFT plan for the given transform size.

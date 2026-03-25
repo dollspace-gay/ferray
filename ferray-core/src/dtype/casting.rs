@@ -302,11 +302,24 @@ pub fn view_cast<T: Element, U: Element, D: Dimension>(
         )));
     }
 
-    // Both types have the same size, so we can safely reinterpret
+    let t_align = core::mem::align_of::<T>();
+    let u_align = core::mem::align_of::<U>();
+    if u_align > t_align {
+        return Err(FerrayError::invalid_dtype(format!(
+            "view cast requires compatible alignment: {} (align {}) -> {} (align {})",
+            T::dtype(),
+            t_align,
+            U::dtype(),
+            u_align,
+        )));
+    }
+
+    // Both types have the same size and compatible alignment
     let data: Vec<T> = arr.inner.iter().cloned().collect();
     let len = data.len();
 
-    // Safety: T and U have the same size, we're doing a byte-level reinterpret
+    // SAFETY: T and U have the same size and U's alignment <= T's alignment.
+    // The Vec<T> allocation satisfies U's alignment requirement.
     let reinterpreted: Vec<U> = unsafe {
         let mut data = core::mem::ManuallyDrop::new(data);
         Vec::from_raw_parts(data.as_mut_ptr() as *mut U, len, len)

@@ -11,19 +11,18 @@ use crate::string_array::{StringArray, StringArray1};
 
 /// Test whether each string element matches the given regex pattern.
 ///
-/// Returns an `Array<bool>` where each element indicates whether the
-/// corresponding string contains a match for the pattern.
+/// Returns an `Array<bool, D>` preserving the input shape, where each element
+/// indicates whether the corresponding string contains a match for the pattern.
 ///
 /// # Errors
 /// Returns `FerrayError::InvalidValue` if the regex pattern is invalid.
 /// Returns an error if the internal array construction fails.
-pub fn match_<D: Dimension>(a: &StringArray<D>, pattern: &str) -> FerrayResult<Array<bool, Ix1>> {
+pub fn match_<D: Dimension>(a: &StringArray<D>, pattern: &str) -> FerrayResult<Array<bool, D>> {
     let re = Regex::new(pattern)
         .map_err(|e| FerrayError::invalid_value(format!("invalid regex pattern: {e}")))?;
 
     let data: Vec<bool> = a.map_to_vec(|s| re.is_match(s));
-    let dim = Ix1::new([data.len()]);
-    Array::from_vec(dim, data)
+    Array::from_vec(a.dim().clone(), data)
 }
 
 /// Extract the first capture group from each string element.

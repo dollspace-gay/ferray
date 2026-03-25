@@ -210,14 +210,8 @@ where
 
     for i in 1..data.len() {
         let mut diff = data[i] - data[i - 1];
-        if diff > discont {
-            while diff > pi {
-                diff = diff - two_pi;
-            }
-        } else if diff < -discont {
-            while diff < -pi {
-                diff = diff + two_pi;
-            }
+        if diff > discont || diff < -discont {
+            diff = diff - two_pi * ((diff + pi) / two_pi).floor();
         }
         cumulative = cumulative + diff - (data[i] - data[i - 1]);
         result.push(data[i] + cumulative);

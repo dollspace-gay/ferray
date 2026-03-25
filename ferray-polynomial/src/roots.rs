@@ -46,15 +46,18 @@ pub fn find_roots_from_power_coeffs(coeffs: &[f64]) -> Result<Vec<Complex<f64>>,
             Ok(vec![Complex::new(root, 0.0)])
         }
         2 => {
-            // Quadratic formula: c[0] + c[1]*x + c[2]*x^2 = 0
+            // Numerically stable quadratic formula: c[0] + c[1]*x + c[2]*x^2 = 0
+            // Uses q = -(b + sign(b)*sqrt(disc))/2 to avoid catastrophic cancellation.
             let a = coeffs[2];
             let b = coeffs[1];
             let c = coeffs[0];
             let disc = b * b - 4.0 * a * c;
             if disc >= 0.0 {
                 let sqrt_disc = disc.sqrt();
-                let r1 = (-b + sqrt_disc) / (2.0 * a);
-                let r2 = (-b - sqrt_disc) / (2.0 * a);
+                let sign_b = if b >= 0.0 { 1.0 } else { -1.0 };
+                let q = -0.5 * (b + sign_b * sqrt_disc);
+                let r1 = q / a;
+                let r2 = c / q;
                 Ok(vec![Complex::new(r1, 0.0), Complex::new(r2, 0.0)])
             } else {
                 let sqrt_disc = (-disc).sqrt();

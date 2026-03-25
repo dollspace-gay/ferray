@@ -35,7 +35,7 @@ pub fn solve<T: LinalgFloat>(
     let a_mat = faer_bridge::array2_to_faer(a);
     let lu = a_mat.as_ref().partial_piv_lu();
 
-    match b_shape.len() {
+    let result = match b_shape.len() {
         1 => {
             if b_shape[0] != n {
                 return Err(FerrayError::shape_mismatch(format!(
@@ -50,7 +50,7 @@ pub fn solve<T: LinalgFloat>(
             for i in 0..n {
                 result.push(x[(i, 0)]);
             }
-            Array::from_vec(IxDyn::new(&[n]), result)
+            Array::from_vec(IxDyn::new(&[n]), result)?
         }
         2 => {
             if b_shape[0] != n {
@@ -69,10 +69,21 @@ pub fn solve<T: LinalgFloat>(
                     result.push(x[(i, j)]);
                 }
             }
-            Array::from_vec(IxDyn::new(&[n, nrhs]), result)
+            Array::from_vec(IxDyn::new(&[n, nrhs]), result)?
         }
-        _ => Err(FerrayError::shape_mismatch("solve: b must be 1D or 2D")),
+        _ => return Err(FerrayError::shape_mismatch("solve: b must be 1D or 2D")),
+    };
+
+    // Check for NaN/Inf in result, which indicates a singular matrix
+    for &val in result.iter() {
+        if val.is_nan() || val.is_infinite() {
+            return Err(FerrayError::SingularMatrix {
+                message: "matrix is singular; solve produced non-finite values".to_string(),
+            });
+        }
     }
+
+    Ok(result)
 }
 
 /// Compute the least-squares solution to `A @ x = b`.
@@ -213,18 +224,20 @@ pub fn inv<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix2>> {
         return Array::from_vec(Ix2::new([0, 0]), vec![]);
     }
 
-    // Check if matrix is singular by computing determinant
     let mat = faer_bridge::array2_to_faer(a);
-    let det_val: T = mat.as_ref().determinant();
-    if det_val.abs() < T::machine_epsilon() * T::from_f64_const(100.0) * T::from_usize(n) {
-        return Err(FerrayError::SingularMatrix {
-            message: "matrix is singular and cannot be inverted".to_string(),
-        });
-    }
-
     let lu = mat.as_ref().partial_piv_lu();
     let inv_mat = lu.inverse();
-    faer_bridge::faer_to_array2(&inv_mat)
+
+    // Check for NaN/Inf in the result, which indicates a singular matrix
+    let result = faer_bridge::faer_to_array2(&inv_mat)?;
+    for &val in result.iter() {
+        if val.is_nan() || val.is_infinite() {
+            return Err(FerrayError::SingularMatrix {
+                message: "matrix is singular and cannot be inverted".to_string(),
+            });
+        }
+    }
+    Ok(result)
 }
 
 /// Compute the Moore-Penrose pseudoinverse of a matrix.

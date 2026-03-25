@@ -89,9 +89,11 @@ impl Poly for Polynomial {
     }
 
     fn degree(&self) -> usize {
-        // Trim trailing zeros to find actual degree
+        // Find actual degree by skipping trailing exact zeros.
+        // Uses exact zero check for consistency with trim(0.0).
+        // Call trim(tol) first for fuzzy degree computation.
         let mut deg = self.coeffs.len().saturating_sub(1);
-        while deg > 0 && self.coeffs[deg].abs() < f64::EPSILON * 100.0 {
+        while deg > 0 && self.coeffs[deg] == 0.0 {
             deg -= 1;
         }
         deg

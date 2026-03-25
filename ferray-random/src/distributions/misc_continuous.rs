@@ -37,7 +37,11 @@ impl<B: BitGenerator> Generator<B> {
             )));
         }
         let data = generate_vec(self, size, |bg| {
-            let u = bg.next_f64() - 0.5;
+            let mut u = bg.next_f64() - 0.5;
+            // Reject u.abs() >= 0.5 to avoid ln(0) = -inf
+            while u.abs() >= 0.5 {
+                u = bg.next_f64() - 0.5;
+            }
             loc - scale * u.signum() * (1.0 - 2.0 * u.abs()).ln()
         });
         vec_to_array1(data)

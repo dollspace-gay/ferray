@@ -90,6 +90,13 @@ pub fn sliding_window_view<'a, T: Element, D: Dimension>(
     // the window).
     let mut out_strides = Vec::with_capacity(2 * ndim);
     for &s in src_strides {
+        if s < 0 {
+            return Err(FerrayError::invalid_value(format!(
+                "sliding_window_view does not support negative strides (got {}); \
+                 make the array contiguous first",
+                s
+            )));
+        }
         out_strides.push(s as usize);
     }
     for &s in src_strides {

@@ -218,7 +218,7 @@ impl Poly for Hermite {
 
     fn degree(&self) -> usize {
         let mut deg = self.coeffs.len().saturating_sub(1);
-        while deg > 0 && self.coeffs[deg].abs() < f64::EPSILON * 100.0 {
+        while deg > 0 && self.coeffs[deg] == 0.0 {
             deg -= 1;
         }
         deg

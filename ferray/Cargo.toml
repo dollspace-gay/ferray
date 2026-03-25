@@ -63,7 +63,8 @@ full = ["default", "linalg", "fft", "random", "polynomial", "stride-tricks"]
 rayon = []
 simd = []
 complex = []
-f16 = ["ferray-core/f16"]
+f16 = ["ferray-core/f16", "ferray-ufunc/f16"]
+bf16 = ["ferray-core/bf16"]
 strings = ["dep:ferray-strings"]
 ma = ["dep:ferray-ma"]
 io = ["dep:ferray-io"]
@@ -75,7 +76,9 @@ window = ["dep:ferray-window"]
 stride-tricks = ["dep:ferray-stride-tricks"]
 numpy = ["dep:ferray-numpy-interop"]
 serde = ["ferray-core/serde"]
-no_std = ["ferray-core/no_std"]
+# no_std is not supported by the umbrella crate because ferray-ufunc and
+# ferray-stats require std. Use ferray-core directly with its no_std feature
+# for no_std environments.
 
 [dev-dependencies]
 proptest = { workspace = true }

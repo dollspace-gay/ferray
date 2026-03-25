@@ -1056,6 +1056,7 @@ dependencies = [
  "flate2",
  "half",
  "memmap2",
+ "num-complex",
  "proptest",
  "zip",
 ]

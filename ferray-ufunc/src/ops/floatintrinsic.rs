@@ -129,43 +129,139 @@ where
 // Float manipulation
 // ---------------------------------------------------------------------------
 
-/// Return the next floating-point value after x1 towards x2.
+/// IEEE 754 nextafter for f64: return the next representable value after `a` towards `b`.
+#[inline]
+fn nextafter_f64(a: f64, b: f64) -> f64 {
+    if a.is_nan() || b.is_nan() {
+        return f64::NAN;
+    }
+    if a == b {
+        return b;
+    }
+    if a == 0.0 {
+        // Return smallest subnormal with the sign of (b - a)
+        return if b > 0.0 {
+            f64::from_bits(1)
+        } else {
+            f64::from_bits(1u64 | (1u64 << 63))
+        };
+    }
+    let bits = a.to_bits();
+    let new_bits = if (a < b) == (a > 0.0) {
+        // Moving away from zero: increment magnitude
+        bits + 1
+    } else {
+        // Moving toward zero: decrement magnitude
+        bits - 1
+    };
+    f64::from_bits(new_bits)
+}
+
+/// IEEE 754 nextafter for f32: return the next representable value after `a` towards `b`.
+#[inline]
+fn nextafter_f32(a: f32, b: f32) -> f32 {
+    if a.is_nan() || b.is_nan() {
+        return f32::NAN;
+    }
+    if a == b {
+        return b;
+    }
+    if a == 0.0 {
+        return if b > 0.0 {
+            f32::from_bits(1)
+        } else {
+            f32::from_bits(1u32 | (1u32 << 31))
+        };
+    }
+    let bits = a.to_bits();
+    let new_bits = if (a < b) == (a > 0.0) {
+        bits + 1
+    } else {
+        bits - 1
+    };
+    f32::from_bits(new_bits)
+}
+
+/// Return the next floating-point value after x1 towards x2, using IEEE 754 bit manipulation.
 pub fn nextafter<T, D>(x1: &Array<T, D>, x2: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(x1, x2, |a, b| {
-        if a == b {
-            b
-        } else if a < b {
-            // Move toward positive infinity
-            let tiny = T::min_positive_value();
-            let eps = a.abs() * T::epsilon();
-            a + if eps > tiny { eps } else { tiny }
-        } else {
-            let tiny = T::min_positive_value();
-            let eps = a.abs() * T::epsilon();
-            a - if eps > tiny { eps } else { tiny }
-        }
-    })
+    use std::any::TypeId;
+
+    if TypeId::of::<T>() == TypeId::of::<f64>() {
+        // SAFETY: T is f64, verified by TypeId check above.
+        let a_f64 = unsafe { &*(x1 as *const Array<T, D> as *const Array<f64, D>) };
+        let b_f64 = unsafe { &*(x2 as *const Array<T, D> as *const Array<f64, D>) };
+        let result = binary_float_op(a_f64, b_f64, nextafter_f64)?;
+        Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
+    } else if TypeId::of::<T>() == TypeId::of::<f32>() {
+        // SAFETY: T is f32, verified by TypeId check above.
+        let a_f32 = unsafe { &*(x1 as *const Array<T, D> as *const Array<f32, D>) };
+        let b_f32 = unsafe { &*(x2 as *const Array<T, D> as *const Array<f32, D>) };
+        let result = binary_float_op(a_f32, b_f32, nextafter_f32)?;
+        Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
+    } else {
+        // Fallback for other float types: use f64 round-trip
+        binary_float_op(x1, x2, |a, b| {
+            let a64 = a.to_f64().unwrap();
+            let b64 = b.to_f64().unwrap();
+            T::from(nextafter_f64(a64, b64)).unwrap()
+        })
+    }
 }
 
-/// Return the spacing of values: the ULP (unit in the last place).
+/// IEEE 754 spacing (ULP) for f64.
+#[inline]
+fn spacing_f64(x: f64) -> f64 {
+    if x.is_nan() || x.is_infinite() {
+        return f64::NAN;
+    }
+    let ax = x.abs();
+    if ax == 0.0 {
+        return f64::from_bits(1); // smallest positive subnormal
+    }
+    nextafter_f64(ax, f64::INFINITY) - ax
+}
+
+/// IEEE 754 spacing (ULP) for f32.
+#[inline]
+fn spacing_f32(x: f32) -> f32 {
+    if x.is_nan() || x.is_infinite() {
+        return f32::NAN;
+    }
+    let ax = x.abs();
+    if ax == 0.0 {
+        return f32::from_bits(1); // smallest positive subnormal
+    }
+    nextafter_f32(ax, f32::INFINITY) - ax
+}
+
+/// Return the spacing of values: the ULP (unit in the last place),
+/// computed via IEEE 754 bit manipulation.
 pub fn spacing<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
 {
-    unary_float_op(input, |x| {
-        if x.is_nan() || x.is_infinite() {
-            <T as Float>::nan()
-        } else {
-            let tiny = T::min_positive_value();
-            let eps = x.abs() * T::epsilon();
-            if eps > tiny { eps } else { tiny }
-        }
-    })
+    use std::any::TypeId;
+
+    if TypeId::of::<T>() == TypeId::of::<f64>() {
+        let f64_input = unsafe { &*(input as *const Array<T, D> as *const Array<f64, D>) };
+        let result = unary_float_op(f64_input, spacing_f64)?;
+        Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
+    } else if TypeId::of::<T>() == TypeId::of::<f32>() {
+        let f32_input = unsafe { &*(input as *const Array<T, D> as *const Array<f32, D>) };
+        let result = unary_float_op(f32_input, spacing_f32)?;
+        Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
+    } else {
+        // Fallback for other float types: use f64 round-trip
+        unary_float_op(input, |x| {
+            let x64 = x.to_f64().unwrap();
+            T::from(spacing_f64(x64)).unwrap()
+        })
+    }
 }
 
 /// Multiply x by 2^n (ldexp).
@@ -594,7 +690,27 @@ mod tests {
         let a = arr1(vec![1.0]);
         let r = spacing(&a).unwrap();
         let s = r.as_slice().unwrap();
-        assert!(s[0] > 0.0 && s[0] < 1e-10);
+        // spacing(1.0) == f64::EPSILON (2^-52)
+        assert_eq!(s[0], f64::EPSILON);
+    }
+
+    #[test]
+    fn test_spacing_zero() {
+        let a = arr1(vec![0.0]);
+        let r = spacing(&a).unwrap();
+        let s = r.as_slice().unwrap();
+        // spacing(0.0) == smallest positive subnormal = 5e-324
+        assert_eq!(s[0], f64::from_bits(1));
+    }
+
+    #[test]
+    fn test_spacing_nan_inf() {
+        let a = arr1(vec![f64::NAN, f64::INFINITY, f64::NEG_INFINITY]);
+        let r = spacing(&a).unwrap();
+        let s = r.as_slice().unwrap();
+        assert!(s[0].is_nan());
+        assert!(s[1].is_nan());
+        assert!(s[2].is_nan());
     }
 
     #[test]
@@ -619,12 +735,62 @@ mod tests {
     }
 
     #[test]
-    fn test_nextafter() {
+    fn test_nextafter_zero_toward_positive() {
         let a = arr1(vec![0.0]);
         let b = arr1(vec![1.0]);
         let r = nextafter(&a, &b).unwrap();
         let s = r.as_slice().unwrap();
-        assert!(s[0] > 0.0);
+        // nextafter(0, 1) == smallest positive subnormal = 5e-324
+        assert_eq!(s[0], f64::from_bits(1));
+    }
+
+    #[test]
+    fn test_nextafter_zero_toward_negative() {
+        let a = arr1(vec![0.0]);
+        let b = arr1(vec![-1.0]);
+        let r = nextafter(&a, &b).unwrap();
+        let s = r.as_slice().unwrap();
+        // nextafter(0, -1) == smallest negative subnormal = -5e-324
+        assert_eq!(s[0], f64::from_bits(1u64 | (1u64 << 63)));
+    }
+
+    #[test]
+    fn test_nextafter_equal() {
+        let a = arr1(vec![1.0]);
+        let b = arr1(vec![1.0]);
+        let r = nextafter(&a, &b).unwrap();
+        let s = r.as_slice().unwrap();
+        assert_eq!(s[0], 1.0);
+    }
+
+    #[test]
+    fn test_nextafter_nan() {
+        let a = arr1(vec![f64::NAN, 1.0]);
+        let b = arr1(vec![1.0, f64::NAN]);
+        let r = nextafter(&a, &b).unwrap();
+        let s = r.as_slice().unwrap();
+        assert!(s[0].is_nan());
+        assert!(s[1].is_nan());
+    }
+
+    #[test]
+    fn test_nextafter_one_toward_two() {
+        let a = arr1(vec![1.0]);
+        let b = arr1(vec![2.0]);
+        let r = nextafter(&a, &b).unwrap();
+        let s = r.as_slice().unwrap();
+        // nextafter(1.0, 2.0) == 1.0 + epsilon
+        assert_eq!(s[0], 1.0 + f64::EPSILON);
+    }
+
+    #[test]
+    fn test_nextafter_negative() {
+        let a = arr1(vec![-1.0]);
+        let b = arr1(vec![-2.0]);
+        let r = nextafter(&a, &b).unwrap();
+        let s = r.as_slice().unwrap();
+        // nextafter(-1.0, -2.0) == -1.0 - epsilon
+        assert_eq!(s[0], -1.0 - f64::EPSILON);
     }
 
     #[cfg(feature = "f16")]

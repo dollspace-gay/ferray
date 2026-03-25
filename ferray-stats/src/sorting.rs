@@ -1,7 +1,7 @@
 // ferray-stats: Sorting and searching — sort, argsort, searchsorted (REQ-11, REQ-12, REQ-13)
 
 use ferray_core::error::{FerrayError, FerrayResult};
-use ferray_core::{Array, Dimension, Element, Ix1};
+use ferray_core::{Array, Dimension, Element, Ix1, IxDyn};
 
 use crate::parallel;
 use crate::reductions::{compute_strides, flat_index, increment_multi_index};
@@ -38,20 +38,27 @@ pub enum Side {
 
 /// Sort an array along the given axis (or flattened if axis is None).
 ///
-/// Returns a new sorted array with the same shape.
+/// When `axis` is `None`, the array is flattened before sorting and a 1-D
+/// array is returned (matching NumPy behaviour). When an axis is given, the
+/// returned array has the same shape as the input.
 ///
 /// Equivalent to `numpy.sort`.
-pub fn sort<T, D>(a: &Array<T, D>, axis: Option<usize>, kind: SortKind) -> FerrayResult<Array<T, D>>
+pub fn sort<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    kind: SortKind,
+) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + PartialOrd + Copy + Send + Sync,
     D: Dimension,
 {
     match axis {
         None => {
-            // Flatten and sort
+            // Flatten and sort — return a 1-D array (NumPy behaviour)
             let mut data: Vec<T> = a.iter().copied().collect();
+            let n = data.len();
             sort_slice(&mut data, kind);
-            Array::from_vec(a.dim().clone(), data)
+            Array::from_vec(IxDyn::new(&[n]), data)
         }
         Some(ax) => {
             if ax >= a.ndim() {
@@ -113,7 +120,7 @@ where
                 }
             }
 
-            Array::from_vec(a.dim().clone(), result)
+            Array::from_vec(IxDyn::new(&shape), result)
         }
     }
 }
@@ -136,10 +143,13 @@ fn sort_slice<T: PartialOrd + Copy + Send + Sync>(data: &mut [T], kind: SortKind
 
 /// Return the indices that would sort an array along the given axis.
 ///
+/// When `axis` is `None`, the array is flattened before computing
+/// indices and a 1-D array is returned (matching NumPy behaviour).
+///
 /// Returns u64 indices.
 ///
 /// Equivalent to `numpy.argsort`.
-pub fn argsort<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<u64, D>>
+pub fn argsort<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<u64, IxDyn>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
@@ -147,14 +157,15 @@ where
     match axis {
         None => {
             let data: Vec<T> = a.iter().copied().collect();
-            let mut indices: Vec<usize> = (0..data.len()).collect();
+            let n = data.len();
+            let mut indices: Vec<usize> = (0..n).collect();
             indices.sort_by(|&i, &j| {
                 data[i]
                     .partial_cmp(&data[j])
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
             let result: Vec<u64> = indices.into_iter().map(|i| i as u64).collect();
-            Array::from_vec(a.dim().clone(), result)
+            Array::from_vec(IxDyn::new(&[n]), result)
         }
         Some(ax) => {
             if ax >= a.ndim() {
@@ -216,7 +227,7 @@ where
                 }
             }
 
-            Array::from_vec(a.dim().clone(), result)
+            Array::from_vec(IxDyn::new(&shape), result)
         }
     }
 }
@@ -269,14 +280,30 @@ mod tests {
     fn test_sort_1d() {
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![3.0, 1.0, 4.0, 1.0, 5.0]).unwrap();
         let s = sort(&a, None, SortKind::Quick).unwrap();
-        assert_eq!(s.as_slice().unwrap(), &[1.0, 1.0, 3.0, 4.0, 5.0]);
+        assert_eq!(s.shape(), &[5]);
+        let data: Vec<f64> = s.iter().copied().collect();
+        assert_eq!(data, vec![1.0, 1.0, 3.0, 4.0, 5.0]);
     }
 
     #[test]
     fn test_sort_stable_preserves_order() {
         let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![3, 1, 4, 1, 5]).unwrap();
         let s = sort(&a, None, SortKind::Stable).unwrap();
-        assert_eq!(s.as_slice().unwrap(), &[1, 1, 3, 4, 5]);
+        assert_eq!(s.shape(), &[5]);
+        let data: Vec<i32> = s.iter().copied().collect();
+        assert_eq!(data, vec![1, 1, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_sort_2d_axis_none_returns_flat() {
+        // Issue #91: sort(axis=None) should return a flat 1-D array
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![6.0, 4.0, 5.0, 3.0, 1.0, 2.0])
+            .unwrap();
+        let s = sort(&a, None, SortKind::Quick).unwrap();
+        // Must be 1-D with 6 elements, not [2, 3]
+        assert_eq!(s.shape(), &[6]);
+        let data: Vec<f64> = s.iter().copied().collect();
+        assert_eq!(data, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     }
 
     #[test]
@@ -284,6 +311,7 @@ mod tests {
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![3.0, 1.0, 2.0, 6.0, 4.0, 5.0])
             .unwrap();
         let s = sort(&a, Some(1), SortKind::Quick).unwrap();
+        assert_eq!(s.shape(), &[2, 3]);
         let data: Vec<f64> = s.iter().copied().collect();
         assert_eq!(data, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     }
@@ -293,6 +321,7 @@ mod tests {
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![4.0, 5.0, 6.0, 1.0, 2.0, 3.0])
             .unwrap();
         let s = sort(&a, Some(0), SortKind::Quick).unwrap();
+        assert_eq!(s.shape(), &[2, 3]);
         let data: Vec<f64> = s.iter().copied().collect();
         assert_eq!(data, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     }
@@ -301,6 +330,7 @@ mod tests {
     fn test_argsort_1d() {
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![3.0, 1.0, 4.0, 2.0]).unwrap();
         let idx = argsort(&a, None).unwrap();
+        assert_eq!(idx.shape(), &[4]);
         let data: Vec<u64> = idx.iter().copied().collect();
         assert_eq!(data, vec![1, 3, 0, 2]);
     }
@@ -310,6 +340,7 @@ mod tests {
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![3.0, 1.0, 2.0, 6.0, 4.0, 5.0])
             .unwrap();
         let idx = argsort(&a, Some(1)).unwrap();
+        assert_eq!(idx.shape(), &[2, 3]);
         let data: Vec<u64> = idx.iter().copied().collect();
         assert_eq!(data, vec![1, 2, 0, 1, 2, 0]);
     }

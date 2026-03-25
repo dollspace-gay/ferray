@@ -17,6 +17,7 @@ use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::format::MemmapMode;
 use crate::npy::NpyElement;
+use crate::npy::checked_total_elements;
 use crate::npy::header::{self, NpyHeader};
 
 /// A read-only memory-mapped array backed by a `.npy` file.
@@ -127,16 +128,15 @@ pub fn memmap_readonly<T: Element + NpyElement, P: AsRef<Path>>(
     validate_dtype::<T>(&header)?;
     validate_native_endian(&header)?;
 
+    let len = checked_total_elements(&header.shape)?;
     let file = File::open(path.as_ref())?;
     let mmap = unsafe {
         MmapOptions::new()
             .offset(data_offset as u64)
-            .len(header.shape.iter().product::<usize>() * std::mem::size_of::<T>())
+            .len(len * std::mem::size_of::<T>())
             .map(&file)
             .map_err(|e| FerrayError::io_error(format!("mmap failed: {e}")))?
     };
-
-    let len: usize = header.shape.iter().product();
     let data_ptr = mmap.as_ptr() as *const T;
 
     // Validate alignment
@@ -179,7 +179,7 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
     validate_dtype::<T>(&header)?;
     validate_native_endian(&header)?;
 
-    let len: usize = header.shape.iter().product();
+    let len = checked_total_elements(&header.shape)?;
     let data_bytes = len * std::mem::size_of::<T>();
 
     let mmap = match mode {

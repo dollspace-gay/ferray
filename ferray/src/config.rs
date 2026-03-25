@@ -45,17 +45,17 @@ where
     let mut cache = POOL_CACHE
         .lock()
         .map_err(|e| format!("pool cache lock poisoned: {e}"))?;
-    let pool = cache
-        .entry(n)
-        .or_insert_with(|| {
-            std::sync::Arc::new(
-                rayon::ThreadPoolBuilder::new()
-                    .num_threads(n)
-                    .build()
-                    .expect("failed to create cached thread pool"),
-            )
-        })
-        .clone();
+    let pool = if let Some(existing) = cache.get(&n) {
+        existing.clone()
+    } else {
+        let new_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(n)
+            .build()
+            .map_err(|e| format!("failed to create cached thread pool: {e}"))?;
+        let arc = std::sync::Arc::new(new_pool);
+        cache.insert(n, arc.clone());
+        arc
+    };
     drop(cache); // release lock before running user code
     Ok(pool.install(f))
 }
