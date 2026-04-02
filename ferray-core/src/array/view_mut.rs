@@ -92,6 +92,11 @@ impl<'a, T: Element, D: Dimension> ArrayViewMut<'a, T, D> {
         &self.dim
     }
 
+    /// Convert to a flat `Vec<T>` in logical (row-major) order.
+    pub fn to_vec_flat(&self) -> Vec<T> {
+        self.inner.iter().cloned().collect()
+    }
+
     /// Array flags for this mutable view.
     pub fn flags(&self) -> ArrayFlags {
         let layout = self.layout();

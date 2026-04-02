@@ -88,6 +88,14 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
         Array::from_ndarray(self.inner.to_owned())
     }
 
+    /// Convert to a flat `Vec<T>` in logical (row-major) order.
+    ///
+    /// Unlike `as_slice()` which requires contiguous memory, this works on
+    /// strided/non-contiguous views by iterating elements in logical order.
+    pub fn to_vec_flat(&self) -> Vec<T> {
+        self.inner.iter().cloned().collect()
+    }
+
     /// Array flags for this view.
     pub fn flags(&self) -> ArrayFlags {
         let layout = self.layout();
