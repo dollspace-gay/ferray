@@ -1,0 +1,10 @@
+{
+  "uuid": "0de8ec99-36d3-441f-a0ed-102f6bf95436",
+  "issue_uuid": "beb3d01b-2452-489a-b526-b1bb94ae1e8b",
+  "author": "phase-4-coordinator",
+  "content": "Delivered: Serialize/Deserialize impls for Array<T, D> behind serde feature. Serializes as {shape, data}. 7 tests (1D-3D, dynamic, empty, rank mismatch, size mismatch).",
+  "created_at": "2026-04-02T14:54:56.840607685Z",
+  "kind": "result",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAe1LTniTzlggmoDurfn857P7z7JGSFc9Snebz31PU2zf59uo/q7bcGtRzC/EAMvAzxNpBbJc8rv98VG30b2ttAA=="
+}
