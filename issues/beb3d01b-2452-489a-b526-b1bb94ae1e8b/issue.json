@@ -1,0 +1,10 @@
+{
+  "uuid": "beb3d01b-2452-489a-b526-b1bb94ae1e8b",
+  "display_id": 338,
+  "title": "Add Serialize/Deserialize impls for Array<T, D> behind serde feature",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-02T14:49:17.766058898Z",
+  "updated_at": "2026-04-02T14:49:17.766058898Z"
+}
