@@ -10,7 +10,10 @@ pub mod display;
 pub mod introspect;
 pub mod iter;
 pub mod methods;
+mod index_impl;
 pub mod owned;
+#[cfg(feature = "serde")]
+mod serde_impl;
 pub mod view;
 pub mod view_mut;
 

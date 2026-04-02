@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn broadcast_shapes_multi_empty() {
-        assert_eq!(broadcast_shapes_multi(&[]).unwrap(), vec![]);
+        assert_eq!(broadcast_shapes_multi(&[]).unwrap(), Vec::<usize>::new());
     }
 
     // -----------------------------------------------------------------------
