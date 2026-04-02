@@ -1,0 +1,10 @@
+{
+  "uuid": "5d67e88e-15f5-4717-8a2a-66cd619eaa0d",
+  "issue_uuid": "014c23dd-22f2-4414-aec3-381bbe49b557",
+  "author": "phase-4-coordinator",
+  "content": "Delivered: Index<[usize; N]> and IndexMut<[usize; N]> for Array<T, Ix1-Ix6>, plus Index/IndexMut<&[usize]> for IxDyn. 9 tests including bounds checking and panic tests.",
+  "created_at": "2026-04-02T14:55:03.150345437Z",
+  "kind": "result",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABATIrvvRnKMDOQhMSmH4iQq0Pa96Le6sfY4QU2do4K3TpI8awTU9fK1ZBtFo0cYz1NUkXg/YrV366G9HABkT96CA=="
+}
