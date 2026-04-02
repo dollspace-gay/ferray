@@ -1,0 +1,10 @@
+{
+  "uuid": "86a8fc4e-ca8e-4f83-8b2d-a6af41a9029b",
+  "issue_uuid": "beb3d01b-2452-489a-b526-b1bb94ae1e8b",
+  "author": "phase-4-coordinator",
+  "content": "Plan: Implement Serialize and Deserialize for Array<T, D> in ferray-core behind the existing serde feature flag. Serialize as {shape: Vec<usize>, data: Vec<T>}. Use to_vec_flat() for ser and from_vec(dim, data) for deser. Requires D: Dimension with from_slice or similar reconstruction. Will add serde impls for fixed-rank dimensions (Ix1-Ix6) and IxDyn.",
+  "created_at": "2026-04-02T14:50:04.252155232Z",
+  "kind": "plan",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAd6/KptSc76yOLQTWCFZdhba2aBojG/JT+eODCm/H8PgsbzR/k84hN5b+ouwH0wZrb833HDo3VhowaZ4vUuUUAA=="
+}
