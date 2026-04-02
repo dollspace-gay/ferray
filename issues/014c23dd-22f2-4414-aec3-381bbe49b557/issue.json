@@ -1,0 +1,10 @@
+{
+  "uuid": "014c23dd-22f2-4414-aec3-381bbe49b557",
+  "display_id": 339,
+  "title": "Add Index/IndexMut trait impls for Array with fixed-size array indices",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-02T14:49:48.329046756Z",
+  "updated_at": "2026-04-02T14:49:48.329046756Z"
+}
