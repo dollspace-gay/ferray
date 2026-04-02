@@ -4,5 +4,7 @@
   "author": "driver--build-ferrum-phase-0-coordinator",
   "content": "Delivered: ferrum-random fully implemented — 3 BitGenerators (Xoshiro256**, PCG64, Philox 4x32-10), Generator API, 34 distributions (24 continuous + 10 discrete/multivariate), permutations/choice, deterministic parallel generation. 110 tests passing, clippy clean.",
   "created_at": "2026-03-06T19:48:43.734857079Z",
-  "kind": "result"
+  "kind": "result",
+  "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+  "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGMAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEgAAAAgeGvi/szXyECnTrunFrC3GC/eh0pSGrYJieiEs9NtVnwAAAAgOy1NqkhqcwOpgs2HbW5DdYRfc3B2k1GnQdC7WA/gMlk="
 }

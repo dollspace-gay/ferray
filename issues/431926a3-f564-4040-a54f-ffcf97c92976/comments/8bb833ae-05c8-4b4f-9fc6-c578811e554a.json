@@ -4,5 +4,7 @@
   "author": "driver--build-ferrum-phase-0-coordinator",
   "content": "Plan: While agents 1b/1c/1d run in parallel, preparing crosslink issues for Phase 1 tier 2 agents (ufunc, stats, io, workspace+reexport). These will start after 1b/1c/1d complete and their work is integrated.",
   "created_at": "2026-03-05T21:40:16.064931115Z",
-  "kind": "plan"
+  "kind": "plan",
+  "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+  "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAgd9GH1JfmyC5CB1CPrV1QMd700Cc+U7uo+DcNV6zYQacAAAAhANFpd2WpVT1UsrpNQCTv6hKJLPUZRz/X7NiAWeyRBtl5"
 }

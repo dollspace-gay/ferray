@@ -4,5 +4,7 @@
   "author": "driver--build-ferrum-phase-0-coordinator",
   "content": "Phase 2 coordinator plan: Launch 5 parallel agents for linalg, fft, random, polynomial, window. All work directly on files (no worktree isolation — git merge blocked by hooks). Agents edit independent crate directories so no conflicts. Note: ferrum-polynomial depends on ferrum-linalg eigvals for root-finding — polynomial agent will implement companion matrix construction assuming linalg provides eigvals. Integration step will verify cross-crate compilation.",
   "created_at": "2026-03-06T19:28:46.822697527Z",
-  "kind": "plan"
+  "kind": "plan",
+  "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+  "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAgV96GYlsKDKUFCqJkhJn4mCmk2OJ4jlMhFfRVv7oqLjAAAAAhAM6R4UJWKXSl6tqOfkscUPEpCQjFRVLVOP2E3XBV8S78"
 }

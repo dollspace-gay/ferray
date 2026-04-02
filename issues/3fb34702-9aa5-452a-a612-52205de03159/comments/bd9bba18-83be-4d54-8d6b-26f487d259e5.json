@@ -4,5 +4,7 @@
   "author": "driver--build-ferrum-phase-0-coordinator",
   "content": "Execution plan: 1) ufunc + io in parallel (different dirs, no conflicts), 2) stats (after ufunc done), 3) reexport (after all done). Agents work directly on worktree, no git isolation (merge blocked by policy). I commit after each agent.",
   "created_at": "2026-03-06T03:05:32.219716745Z",
-  "kind": "decision"
+  "kind": "decision",
+  "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+  "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAgZNwRyRVO1LKUnDTifucXx1+oEBn3HKmjahTwzVjn2OYAAAAhANNpKNveiJXDD2WPQFfa0YaqjOkyXKYSsSllATXzHgwJ"
 }

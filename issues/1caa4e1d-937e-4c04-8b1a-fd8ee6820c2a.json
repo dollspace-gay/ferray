@@ -17,21 +17,27 @@
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Phase 2 coordinator plan: Launch 5 parallel agents for linalg, fft, random, polynomial, window. All work directly on files (no worktree isolation — git merge blocked by hooks). Agents edit independent crate directories so no conflicts. Note: ferrum-polynomial depends on ferrum-linalg eigvals for root-finding — polynomial agent will implement companion matrix construction assuming linalg provides eigvals. Integration step will verify cross-crate compilation.",
       "created_at": "2026-03-06T19:28:46.822697527Z",
-      "kind": "plan"
+      "kind": "plan",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAhAMhIdhvEemQmgfO3mlzM3w4d4nFtX7GKngzEBY8XTK8yAAAAIDdjJixKfcIdfBacDVmJ3LkRjjkxx8XpLSeWQTnB+MMF"
     },
     {
       "id": 21,
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Decision: Running agents without worktree isolation (deviating from REQ-2) because git merge is blocked by project hooks. The 5 Phase 2 crates are in independent directories so parallel file edits won't conflict. Will commit after each agent completes.",
       "created_at": "2026-03-06T19:29:12.679343191Z",
-      "kind": "decision"
+      "kind": "decision",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGUAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEoAAAAhAKRBgCziq/B/0iyumDe2XT+VxUlnuJgFyMWYnQgAChjZAAAAIQC+6VfDSqY6rPskpZZfknJtAAjam3OOWsNgFoJt+weVCA=="
     },
     {
       "id": 28,
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "PHASE 2 GATE PASSED:\n- cargo build --workspace: SUCCESS\n- cargo clippy --workspace -- -D warnings: SUCCESS (zero warnings)\n- cargo test --workspace: SUCCESS — 1086 tests passed, 0 failed\n\nBreakdown by crate (Phase 2 new):\n  ferrum-linalg: 73 tests (einsum, matmul, decompositions, solvers, batched ops)\n  ferrum-fft: 81 tests (53 unit + 28 acceptance)\n  ferrum-random: 102 tests (3 BitGenerators, 34 distributions, permutations)\n  ferrum-polynomial: 73 tests (6 basis classes, fitting, root-finding)\n  ferrum-window: 41 tests (5 window fns, vectorize, apply_along_axis)\n  Phase 1 (unchanged): 701 tests still passing\n  Doctests: 15 passing",
       "created_at": "2026-03-06T19:53:11.167919009Z",
-      "kind": "result"
+      "kind": "result",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAhALR+l5Dz2t6MLclkfHGwOWaRQs2EdyyXNUPk7cydxFp1AAAAIFKJ5Gjwo7HRO7RHlO7+VAxvaweVzQYZu5G3cqjQUsL3"
     }
   ]
 }

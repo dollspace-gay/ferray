@@ -4,5 +4,7 @@
   "author": "driver--build-ferrum-phase-0-coordinator",
   "content": "PHASE 3 GATE PASSED:\n- cargo build --workspace: SUCCESS\n- cargo clippy --workspace -- -D warnings: SUCCESS (zero warnings)\n- cargo test --workspace: SUCCESS — 1260 tests passed, 0 failed\n\nPhase 3 new tests:\n  ferrum-strings: 77 tests\n  ferrum-ma: 41 tests\n  ferrum-stride-tricks: 49 unit + 7 doctests = 56 tests\n  ferrum-numpy-interop: 0 (default features) + 19 arrow + 21 polars = 40 with features\n\nAll 15 workspace crates compile and pass.",
   "created_at": "2026-03-06T20:24:10.663782749Z",
-  "kind": "result"
+  "kind": "result",
+  "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+  "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAgVB7Zc5Z21D8U/bZFIqoWmiOHTWNUDaWo99Niw4VfSUIAAAAhALHTcLSYrDdXiwbO4wTlNpQDaaFXpSczPME22G2k20HF"
 }

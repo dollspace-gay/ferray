@@ -15,7 +15,9 @@
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Delivered: ferrum-stride-tricks fully implemented — sliding_window_view (zero-copy), as_strided (safe with overlap validation), as_strided_unchecked (unsafe with Safety docs), broadcast_to/broadcast_arrays/broadcast_shapes (delegating to ferrum-core). Added from_shape_ptr escape hatch to ferrum-core ArrayView. 56 tests passing, clippy clean.",
       "created_at": "2026-03-06T20:18:54.826433804Z",
-      "kind": "result"
+      "kind": "result",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGUAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEoAAAAhAJgPyBe8MfA+SEVKpAoTGMPfgw0ddhbyjnbHOzTEJHSPAAAAIQDVKhDM9hde2kjvIAIpv5ge/9oAjNxEdeu+XCW3Kk/0vg=="
     }
   ]
 }

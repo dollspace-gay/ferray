@@ -17,42 +17,54 @@
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Phase 1 is NOT complete. Only ferrum-core sub-agents (1a-1d) were executed. Agents 2-5 (ufunc, stats, io, workspace+reexport) are empty stubs.",
       "created_at": "2026-03-06T03:01:46.216522868Z",
-      "kind": "observation"
+      "kind": "observation",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAgVm+ib7citNhP+B8wuJz6ys/SsKyB4S0m3YTp625vV0EAAAAhAOv5mrLB++IpngMXBRjcljeQ05lEiN8LaCTvImEyYEl+"
     },
     {
       "id": 11,
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Transitioning from review to execution. Will now act as Phase 0 coordinator to complete Phase 1. Remaining agents: 2 (ufunc), 3 (stats), 4 (io), 5 (workspace+reexport). Core (1a-1d) already merged.",
       "created_at": "2026-03-06T03:02:55.988816795Z",
-      "kind": "plan"
+      "kind": "plan",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAhAKw3PTt9+9e0OKjhz4drJMim6bHoEZNHHqr6jZqwI5KaAAAAIBzBYJ0hYGFRvV7Fk+MpBg4uqLskiIQtSw4qSe6eg+v+"
     },
     {
       "id": 12,
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Execution plan: 1) ufunc + io in parallel (different dirs, no conflicts), 2) stats (after ufunc done), 3) reexport (after all done). Agents work directly on worktree, no git isolation (merge blocked by policy). I commit after each agent.",
       "created_at": "2026-03-06T03:05:32.219716745Z",
-      "kind": "decision"
+      "kind": "decision",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAhANo3kvTTeUOrfNfLUwa8lwLG6e+/zgCgyf88UH5nPUxfAAAAIEJ+uT3EbYueKZ7d/U3etZc9jzWHaEKeSI4yX2sPSzfZ"
     },
     {
       "id": 15,
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Phase 1 review results — all three gates PASS:\n\n**cargo build --workspace**: SUCCESS (clean build, no warnings)\n**cargo clippy --workspace -- -D warnings**: SUCCESS (clean, zero warnings)\n**cargo test --workspace**: SUCCESS — 701 tests passed, 0 failed, 2 ignored\n\nTest breakdown by crate:\n- ferrum (reexport): 7 passed\n- ferrum-core: 365 passed\n- ferrum-core (integration/macro_tests): 25 passed\n- ferrum-core (doctests): 4 passed\n- ferrum-io: 59 passed\n- ferrum-ufunc: 164 passed\n- ferrum-stats: 81 passed\n- ferrum-core-macros (doctests): 1 ignored\n- ferrum-stats (doctests): 1 ignored\n- Phase 2/3 stub crates: 0 tests (expected — empty stubs)\n\nNo stubs, no TODOs, no unimplemented!() found. All Phase 1 acceptance criteria met.",
       "created_at": "2026-03-06T19:21:25.995917113Z",
-      "kind": "result"
+      "kind": "result",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGUAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEoAAAAhALk2xwK3gIixpoWSKcEyZbiV+EI77CopEgWDkQfbJTSxAAAAIQCEuq0LtLCSwPerHQpXNK0b1yKdOZAbg9jrCXGpxjmuSg=="
     },
     {
       "id": 16,
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Observation: The Phase 1 agents left significant uncommitted work — modified lib.rs files for ferrum-io, ferrum-stats, ferrum-ufunc, ferrum, plus ~30 untracked source files. All compiles and passes 701 tests, but needs to be committed before merging to dev.",
       "created_at": "2026-03-06T19:23:05.258379142Z",
-      "kind": "observation"
+      "kind": "observation",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAgF6MMCIJMgz5IWWJ5sXWUFF26+CBOdFk/nKGmt3y23dkAAAAhAPfA5ZpZcWn7P4LTU4KLpGXV2EvIc5YSXyB6akg6vFcW"
     },
     {
       "id": 17,
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Driver performed manual merge: feature/build-ferrum-phase-0-coordinator → dev branch. Untracked files on main were removed first to resolve conflict.",
       "created_at": "2026-03-06T19:26:56.347519211Z",
-      "kind": "observation"
+      "kind": "observation",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGMAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEgAAAAgM9exRrxzrqaevdQ1nPCmprvnaB6taxV4XwsZ6pUyFEUAAAAgBD/IyvONHhsBPpRfi/q53QFtIDxo+XuLqAyvQsznMS8="
     },
     {
       "id": 18,
@@ -61,14 +73,18 @@
       "created_at": "2026-03-06T19:26:58.058740364Z",
       "kind": "intervention",
       "trigger_type": "manual_action",
-      "intervention_context": "git merge is blocked for agents; driver merged feature/build-ferrum-phase-0-coordinator into dev"
+      "intervention_context": "git merge is blocked for agents; driver merged feature/build-ferrum-phase-0-coordinator into dev",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGMAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEgAAAAgcut0YzK9DpDUpW6OjByOjo/e6OTtIQqhCKec64ebo0wAAAAgVRCoQGfMUoPEhIjMm4dDtp94P8QEU6RAZKvc9nIchFk="
     },
     {
       "id": 19,
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Phase 1 review complete. Build/test/clippy all pass (701 tests, 0 failures). Code committed and merged to dev by driver. Phase 1 gate PASSED.",
       "created_at": "2026-03-06T19:27:44.352902904Z",
-      "kind": "result"
+      "kind": "result",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGUAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEoAAAAhANs38vkYF4e5A7l/SSCJAOQ4qgYGS2Wft6N1qwLH4pr7AAAAIQCDO9wilJSMOl4SDoXc558E47JwyyYD84+2UbEyiLj5bA=="
     }
   ]
 }

@@ -4,5 +4,7 @@
   "author": "driver--build-ferrum-phase-0-coordinator",
   "content": "Delivered: ferrum-polynomial fully implemented — 6 basis classes (Polynomial, Chebyshev, Legendre, Laguerre, Hermite, HermiteE), Poly trait with eval/deriv/integ/roots/fit/divmod, Clenshaw evaluation, self-contained QR eigenvalue solver for root-finding (avoids ferrum-linalg dependency), Vandermonde fitting with Cholesky/LU. 73 tests passing, clippy clean.",
   "created_at": "2026-03-06T19:51:53.203289916Z",
-  "kind": "result"
+  "kind": "result",
+  "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+  "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAgLBX6dmFUvCeXejQ61WUnFoNSRBPkypAs1WneCoWysiwAAAAhAIEB5P0bZb5jQWdo6WxrqsA0B0pjJonepQRc2Va7MdEs"
 }

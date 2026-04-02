@@ -15,7 +15,9 @@
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Delivered: ferrum-linalg fully implemented — matrix products (dot, vdot, inner, outer, matmul, tensordot, einsum, kron, multi_dot, vecdot), decompositions (cholesky, QR, SVD, LU, eig, eigh, eigvals, eigvalsh), solvers (solve, lstsq, inv, pinv, matrix_power, tensorsolve, tensorinv), norms (norm, cond, det, slogdet, matrix_rank, trace), batched operations, faer bridge. Einsum with full parser (implicit/explicit/trace/batch/ellipsis). 73 tests passing, clippy clean.",
       "created_at": "2026-03-06T19:52:22.831362675Z",
-      "kind": "result"
+      "kind": "result",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGMAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEgAAAAgXiZlBlCNXV09nnzakU6C9n0nC8jP4j1kgUUYknO0EvoAAAAgA4Fx1tcHMdfsYW80iG/t0T+zLszOshy0aMcwIiF0KdQ="
     }
   ]
 }

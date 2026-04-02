@@ -4,5 +4,7 @@
   "author": "driver--build-ferrum-phase-0-coordinator",
   "content": "Delivered: ferrum-strings fully implemented — StringArray<D> type with shape metadata, case ops (upper/lower/capitalize/title), alignment (center/ljust/rjust/zfill), stripping, find/count/startswith/endswith/replace, split/join, add with broadcasting, multiply, regex match_/extract. 77 tests passing, clippy clean.",
   "created_at": "2026-03-06T20:19:18.884388338Z",
-  "kind": "result"
+  "kind": "result",
+  "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+  "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAgP23t6KDExvGIYWHBhXH/5dnc3pfa1b0FBjbSpeilC9sAAAAhAMifGDxm2lHZBxSbdJg1SWvvHyJ77tJOtcJHCe1EArb3"
 }

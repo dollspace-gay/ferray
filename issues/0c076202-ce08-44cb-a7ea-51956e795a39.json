@@ -15,14 +15,18 @@
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Delivered: ferrum-polynomial fully implemented — 6 basis classes (Polynomial, Chebyshev, Legendre, Laguerre, Hermite, HermiteE), Poly trait with eval/deriv/integ/roots/fit/divmod, Clenshaw evaluation, self-contained QR eigenvalue solver for root-finding (avoids ferrum-linalg dependency), Vandermonde fitting with Cholesky/LU. 73 tests passing, clippy clean.",
       "created_at": "2026-03-06T19:51:53.203289916Z",
-      "kind": "result"
+      "kind": "result",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGMAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEgAAAAgb5sDjx/usxCzyU3VJhYIB2kPc5ArCCp/DkBfE35gZN8AAAAgVAnZ1NeeYWhXW0WlmTNp9slv4gLnJahnTkg47JBMHYE="
     },
     {
       "id": 26,
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Agent implemented self-contained QR eigenvalue solver in roots.rs instead of depending on ferrum-linalg::eigvals. This avoids the cross-crate dependency timing issue (linalg still being built). The polynomial Cargo.toml still lists ferrum-linalg as a dependency but it's only used transitively — roots.rs is self-contained.",
       "created_at": "2026-03-06T19:52:00.630721013Z",
-      "kind": "observation"
+      "kind": "observation",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGQAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEkAAAAgMXcsxH1oCpP6zhw18oE+d6CutRW5vgdKRCGJG+Ett64AAAAhAI+oIpM6uyJmmSCejtUjgiyHkc+1ZFd9StCoKSNj7v0Q"
     }
   ]
 }

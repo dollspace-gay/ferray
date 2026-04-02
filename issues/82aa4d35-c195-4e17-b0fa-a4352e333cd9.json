@@ -17,7 +17,9 @@
       "author": "driver--build-ferrum-phase-0-coordinator",
       "content": "Spawning opus agent to implement full ferrum-ufunc crate. Agent will work directly on worktree, I will commit after review.",
       "created_at": "2026-03-06T03:05:55.889269914Z",
-      "kind": "plan"
+      "kind": "plan",
+      "signed_by": "SHA256:eHpbrpU/tOUroPHQwwGZTQKY+0tU0E2rZw5zFEs1jHE",
+      "signature": "U1NIU0lHAAAAAQAAAGgAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAAhuaXN0cDI1NgAAAEEEe0KY4l/Z7G/vfkx00kFwZtY3FjD8lde6VcPNSNT06kyL5ZUnzQGbJUMzOdlFd65s/RCzZhVJQVonLQ3yKzipGAAAABJjcm9zc2xpbmstYmFja2ZpbGwAAAAAAAAABnNoYTUxMgAAAGMAAAATZWNkc2Etc2hhMi1uaXN0cDI1NgAAAEgAAAAgNCJTOu8aKGw8EU8akEyuUAh0kTL7Lq8d91uBbP0bQ/UAAAAgfrrNnRmwmid8NBGDSwYhw4e6734VpBAwTmFhXW8WXiM="
     }
   ]
 }
