@@ -1,0 +1,10 @@
+{
+  "uuid": "b1285830-22fc-4d7d-8f88-c82f652e70e7",
+  "issue_uuid": "014c23dd-22f2-4414-aec3-381bbe49b557",
+  "author": "phase-4-coordinator",
+  "content": "Plan: Implement Index<[usize; N]> and IndexMut<[usize; N]> for Array<T, IxN> for N=1..6. Uses as_slice() fast path when available, falls back to manual stride computation. Panics on out-of-bounds (standard Index semantics).",
+  "created_at": "2026-04-02T14:53:19.732940746Z",
+  "kind": "plan",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAR3fygm/x0ubFNRLglmU9oN7v1x0+sH9PSAH/p7NEWEgrrUT2gr4QiJ3Wll+cir5cAfc8gTtf+TiMYwR0g/4TAg=="
+}
