@@ -1,0 +1,11 @@
+{
+  "uuid": "3f632c95-1e8d-418e-a7d1-53a6ce098b1f",
+  "display_id": 403,
+  "title": "ferray-ufunc: maximum/minimum have no nan propagation control",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy has both np.maximum (propagates NaN) and np.fmax (ignores NaN), and likewise np.minimum vs np.fmin. ferray-ufunc has all four: maximum, minimum, fmax, fmin. However, NumPy 2.0 also added np.max/np.min with a nan_policy parameter. Check that ferray's maximum/minimum correctly propagate NaN per IEEE 754 semantics (if either input is NaN, output is NaN) and that fmax/fmin correctly ignore NaN.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:53:43.706647801Z",
+  "updated_at": "2026-04-04T17:53:43.706647801Z"
+}
