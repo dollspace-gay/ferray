@@ -1,0 +1,11 @@
+{
+  "uuid": "3be083a1-6c2d-4947-a430-c3412fe109fc",
+  "display_id": 360,
+  "title": "ferray-core: ArcArray only supports C-contiguous layout",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nArcArray::from_owned() in arc.rs forces the array to standard (C) layout via as_standard_layout().into_owned() if it isn't already C-contiguous. This silently discards Fortran layout. NumPy's base-pointer mechanism preserves the original layout for views. ArcArray should either: (1) preserve the original layout and store strides properly, or (2) at minimum document that it normalizes to C order. Currently it computes strides via compute_c_strides() regardless, which would be wrong if the data were F-ordered after the force.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:42:18.100397771Z",
+  "updated_at": "2026-04-04T17:42:18.100397771Z"
+}
