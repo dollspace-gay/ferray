@@ -1,0 +1,11 @@
+{
+  "uuid": "65db4cc6-23b6-4812-8a8f-947f674603fd",
+  "display_id": 419,
+  "title": "ferray-linalg: lstsq computes full SVD just for rank/singular values",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nlstsq() in solve.rs calls crate::decomp::svd(a, false) to get singular values for rank computation, but then separately uses QR for the actual solve via qr_decomp.solve_lstsq(). This means the input matrix is decomposed twice (QR + SVD). NumPy uses LAPACK's dgelsd which computes the least-squares solution and singular values in one pass using SVD. Either use SVD for both (like NumPy) or compute only singular values (svdvals) for the rank estimation without full U/Vt.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:15:34.741409974Z",
+  "updated_at": "2026-04-04T18:15:34.741409974Z"
+}
