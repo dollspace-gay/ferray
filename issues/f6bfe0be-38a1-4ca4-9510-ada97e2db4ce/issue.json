@@ -1,0 +1,11 @@
+{
+  "uuid": "f6bfe0be-38a1-4ca4-9510-ada97e2db4ce",
+  "display_id": 350,
+  "title": "ferray-core: flat_index uses .iter().nth() — O(n) for non-contiguous arrays",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nflat_index() in basic.rs iterates through elements with self.inner.iter().nth(idx), which is O(n) for non-contiguous (strided) arrays. NumPy's flat indexing computes the physical offset directly from shape and strides in O(ndim) time using unravel_index. The current implementation is correct but degrades to O(n) for large non-contiguous arrays (e.g., transposed or sliced). Fix: compute the multi-dimensional index from the flat index (unravel), then use stride arithmetic to get the offset in O(ndim).",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:40:02.339582818Z",
+  "updated_at": "2026-04-04T17:40:02.339582818Z"
+}
