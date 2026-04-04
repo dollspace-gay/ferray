@@ -1,0 +1,11 @@
+{
+  "uuid": "ea6f705b-5a55-4204-80ed-635437b5e828",
+  "display_id": 367,
+  "title": "ferray-core: no unravel_index / ravel_multi_index",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.unravel_index(flat_index, shape) and np.ravel_multi_index(multi_index, shape) convert between flat and multi-dimensional indices. These are in numpy._core.multiarray. ferray-core uses flat indexing internally (flat_index method) but doesn't expose the index conversion utilities. These are needed for: argmin/argmax returning multi-dim positions, custom iteration patterns, sparse array construction, and fixing the O(n) flat_index issue (#350).",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:43:27.090077685Z",
+  "updated_at": "2026-04-04T17:43:27.090077685Z"
+}
