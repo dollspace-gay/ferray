@@ -1,0 +1,11 @@
+{
+  "uuid": "ab3aca2f-de1c-4747-a38c-b655358e231a",
+  "display_id": 469,
+  "title": "ferray-stats: no lexsort (sort by multiple keys)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.lexsort(keys) sorts by multiple keys — the last key is the primary sort key. This is essential for structured data sorting (sort by column A, break ties by column B). ferray-stats has sort and argsort but no lexsort. Implementation: argsort with a composite comparator, or use the standard library's sort_by with a key chain.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T22:01:49.636199896Z",
+  "updated_at": "2026-04-04T22:01:49.636199896Z"
+}
