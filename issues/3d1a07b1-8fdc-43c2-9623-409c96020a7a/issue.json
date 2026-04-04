@@ -1,0 +1,11 @@
+{
+  "uuid": "3d1a07b1-8fdc-43c2-9623-409c96020a7a",
+  "display_id": 366,
+  "title": "ferray-core: no lexsort, argsort, or sort methods",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.sort(), np.argsort(), np.lexsort(), ndarray.sort() are core operations living in numpy._core (item_selection.c, compiled_base.c). They support multiple algorithms (quicksort, mergesort, heapsort, stable) and axis parameters. ferray-core has no sorting functionality. Sorting is needed for: median computation, percentile/quantile, unique values, searchsorted, set operations. At minimum argsort() and sort_axis() should be in ferray-core since higher crates (stats, etc.) depend on them.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:43:12.638434658Z",
+  "updated_at": "2026-04-04T17:43:12.638434658Z"
+}
