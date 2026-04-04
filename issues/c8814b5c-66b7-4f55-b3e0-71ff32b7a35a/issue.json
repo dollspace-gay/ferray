@@ -1,0 +1,11 @@
+{
+  "uuid": "c8814b5c-66b7-4f55-b3e0-71ff32b7a35a",
+  "display_id": 397,
+  "title": "ferray-ufunc: no matmul/vecdot/matvec ufuncs (gufuncs)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy 2.0 includes matmul, vecdot, matvec, vecmat as ufuncs with generalized ufunc (gufunc) signatures like '(m,k),(k,n)->(m,n)'. These support batched operation and broadcasting over leading dimensions. ferray has ferray-linalg for matrix operations, but there are no gufunc-style operations in ferray-ufunc that automatically batch over leading dimensions. Research whether a gufunc abstraction (with signature-based shape inference) would be valuable for ferray.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:52:50.094036961Z",
+  "updated_at": "2026-04-04T17:52:50.094036961Z"
+}
