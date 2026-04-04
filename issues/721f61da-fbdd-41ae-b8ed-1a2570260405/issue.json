@@ -7,8 +7,9 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-04T17:53:37.675128190Z",
-  "updated_at": "2026-04-04T17:53:39.335673690Z",
+  "updated_at": "2026-04-04T17:53:40.720000586Z",
   "labels": [
-    "bug"
+    "bug",
+    "ferray-ufunc"
   ]
 }
