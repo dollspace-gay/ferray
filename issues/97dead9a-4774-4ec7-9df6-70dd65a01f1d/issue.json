@@ -1,0 +1,11 @@
+{
+  "uuid": "97dead9a-4774-4ec7-9df6-70dd65a01f1d",
+  "display_id": 412,
+  "title": "ferray-linalg: no batched solve/inv/det — only cholesky has batched variant",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's linalg functions automatically handle stacked (batched) arrays: np.linalg.solve(A_batch, b_batch) where A has shape (..., M, M) and b has shape (..., M). All functions in numpy.linalg support this via umath_linalg gufunc machinery. ferray-linalg has batch.rs infrastructure (apply_batched_2d, apply_batched_scalar) and cholesky_batched/det_batched, but solve, inv, pinv, lstsq, qr, svd, eig, eigh, eigvals, eigvalsh, matrix_rank, cond, slogdet, matrix_power all only accept 2D arrays. Add batched variants or make the main functions accept IxDyn and auto-dispatch to batched mode for 3D+ inputs.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:14:36.918640117Z",
+  "updated_at": "2026-04-04T18:14:36.918640117Z"
+}
