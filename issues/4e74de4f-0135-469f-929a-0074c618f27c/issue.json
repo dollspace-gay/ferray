@@ -1,0 +1,11 @@
+{
+  "uuid": "4e74de4f-0135-469f-929a-0074c618f27c",
+  "display_id": 463,
+  "title": "ferray-stats: unique missing return_inverse — can't reconstruct original from uniques",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.unique has return_inverse=True which returns an index array such that unique_values[inverse] reconstructs the original. This is essential for label encoding in ML. ferray-stats unique() supports return_index and return_counts but not return_inverse. Add return_inverse: bool to UniqueResult.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T22:00:46.403865759Z",
+  "updated_at": "2026-04-04T22:00:46.403865759Z"
+}
