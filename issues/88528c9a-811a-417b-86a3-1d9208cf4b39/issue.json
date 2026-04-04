@@ -1,0 +1,11 @@
+{
+  "uuid": "88528c9a-811a-417b-86a3-1d9208cf4b39",
+  "display_id": 380,
+  "title": "ferray-ufunc: no mixed-type operations (type promotion at ufunc level)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's ufunc type resolution (ufunc_type_resolution.c) automatically promotes operands: np.add(int32_arr, float64_arr) promotes the int32 to float64 before computation. ferray-ufunc requires both operands to have the same T. There's no way to add an Array<i32, D> and Array<f64, D> — it's a compile error. ferray-core has the promotion machinery (Promoted trait, PromoteTo, result_type), but ferray-ufunc doesn't use it. Add promoted variants that accept (Array<A,D>, Array<B,D>) where A: Promoted<B>, cast both to Output type, then compute.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:50:10.435677681Z",
+  "updated_at": "2026-04-04T17:50:10.435677681Z"
+}
