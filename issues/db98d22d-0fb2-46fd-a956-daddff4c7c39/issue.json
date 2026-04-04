@@ -7,9 +7,10 @@
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-04T23:50:46.303368870Z",
-  "updated_at": "2026-04-04T23:50:48.928934410Z",
+  "updated_at": "2026-04-04T23:50:50.242046357Z",
   "labels": [
     "feature",
-    "ferray-polynomial"
+    "ferray-polynomial",
+    "numpy-parity"
   ]
 }
