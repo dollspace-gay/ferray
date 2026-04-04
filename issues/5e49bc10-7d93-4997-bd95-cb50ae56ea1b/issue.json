@@ -1,0 +1,11 @@
+{
+  "uuid": "5e49bc10-7d93-4997-bd95-cb50ae56ea1b",
+  "display_id": 460,
+  "title": "ferray-stats: no dtype= parameter on sum/prod — integer overflow risk",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.sum(int32_arr) automatically promotes to int64 to avoid overflow. np.sum(arr, dtype=np.float64) allows explicit output type control. ferray-stats sum/prod return the same type as input. Summing a large i32 array can silently overflow. At minimum, document the overflow behavior. Better: add a dtype-like mechanism or auto-promote integer sums to the next wider type.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T22:00:19.390127454Z",
+  "updated_at": "2026-04-04T22:00:19.390127454Z"
+}
