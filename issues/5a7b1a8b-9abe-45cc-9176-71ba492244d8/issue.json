@@ -1,0 +1,11 @@
+{
+  "uuid": "5a7b1a8b-9abe-45cc-9176-71ba492244d8",
+  "display_id": 417,
+  "title": "ferray-linalg: no cross product function",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy 2.0 added np.linalg.cross(x1, x2, axis=-1) as part of the Array API standard. ferray-ufunc has cross() in arithmetic.rs, but it's not in ferray-linalg. NumPy's version supports an axis parameter and stacked arrays. Check if ferray-ufunc's cross() is feature-complete or if the linalg version needs additional axis/batching support.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:15:14.058631890Z",
+  "updated_at": "2026-04-04T18:15:14.058631890Z"
+}
