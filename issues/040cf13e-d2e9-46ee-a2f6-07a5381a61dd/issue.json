@@ -1,0 +1,11 @@
+{
+  "uuid": "040cf13e-d2e9-46ee-a2f6-07a5381a61dd",
+  "display_id": 372,
+  "title": "ferray-core: no np.where equivalent (ternary selection)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.where(condition, x, y) returns elements chosen from x or y depending on condition. It's one of the most-used NumPy functions — essential for conditional array logic without Python loops. ferray has no equivalent. Implementation: where(condition: &Array<bool, D>, x: &Array<T, D>, y: &Array<T, D>) -> Array<T, D>, with broadcasting support. The single-argument form np.where(condition) (returning indices of True values) is also needed — it's equivalent to np.nonzero.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:44:08.609656293Z",
+  "updated_at": "2026-04-04T17:44:08.609656293Z"
+}
