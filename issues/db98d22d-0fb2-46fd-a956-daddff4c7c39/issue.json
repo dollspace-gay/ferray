@@ -1,0 +1,11 @@
+{
+  "uuid": "db98d22d-0fb2-46fd-a956-daddff4c7c39",
+  "display_id": 478,
+  "title": "ferray-polynomial: no identity or basis class methods",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's polynomial classes have identity(domain, window) (returns p(x) = x) and basis(deg, domain, window) (returns the deg-th basis polynomial). ferray-polynomial has no way to construct specific basis polynomials. These are useful for building custom polynomial expressions and for testing.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T23:50:46.303368870Z",
+  "updated_at": "2026-04-04T23:50:46.303368870Z"
+}
