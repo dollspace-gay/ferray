@@ -1,0 +1,11 @@
+{
+  "uuid": "c63e9903-fa00-4186-96dd-e8cbd72fb30e",
+  "display_id": 425,
+  "title": "ferray-linalg: dot/matmul/outer all flatten via iter().copied().collect() before computing",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nThroughout products/mod.rs, every function starts with 'let a_data: Vec<T> = a.iter().copied().collect()' and 'let b_data: Vec<T> = b.iter().copied().collect()' to flatten the array into a Vec, then does manual indexing into the flat data. This: (1) allocates O(n) temporary memory, (2) destroys any SIMD-friendly layout, (3) ignores that the data may already be contiguous (as_slice()). At minimum, check as_slice() first and only collect if needed. Better: use faer's matmul for 2D cases (see #413) and work with stride-aware indexing for ND cases.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:16:29.624747553Z",
+  "updated_at": "2026-04-04T18:16:29.624747553Z"
+}
