@@ -1,0 +1,11 @@
+{
+  "uuid": "abe180f1-1410-41d8-9286-69d279b68918",
+  "display_id": 392,
+  "title": "ferray-ufunc: multiply_outer copies data twice (into Ix2, then into IxDyn)",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nmultiply_outer() in arithmetic.rs builds the result as Array<T, Ix2>, then immediately copies all data again to convert to Array<T, IxDyn>: 'let dyn_data: Vec<T> = arr.iter().copied().collect(); Array::from_vec(IxDyn::from(...), dyn_data)'. This is a pointless second allocation and copy. Either build directly as IxDyn, or add a zero-copy dimension conversion method (Ix2 -> IxDyn should just reinterpret the metadata without touching the data buffer).",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:51:57.185016075Z",
+  "updated_at": "2026-04-04T17:51:57.185016075Z"
+}
