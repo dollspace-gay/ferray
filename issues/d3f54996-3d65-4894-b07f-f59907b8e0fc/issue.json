@@ -1,0 +1,11 @@
+{
+  "uuid": "d3f54996-3d65-4894-b07f-f59907b8e0fc",
+  "display_id": 375,
+  "title": "ferray-core: promotion of u128+i128 to f64 is lossy — document or find better fallback",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nIn dtype/promotion.rs, u128+i128 promotes to f64. But f64 has a 52-bit mantissa, so values above 2^53 lose precision. NumPy doesn't have this problem because it doesn't have 128-bit integers. This is a known consequence of supporting u128/i128 (which is a ferray-specific extension beyond NumPy), but it should be documented. Consider: (1) adding a doc warning on result_type for these pairs, (2) returning an error instead of a lossy promotion, or (3) adding a DType::F128 if/when Rust stabilizes f128.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:44:37.029938432Z",
+  "updated_at": "2026-04-04T17:44:37.029938432Z"
+}
