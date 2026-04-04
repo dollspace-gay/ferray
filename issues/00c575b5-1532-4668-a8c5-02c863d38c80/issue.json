@@ -1,0 +1,11 @@
+{
+  "uuid": "00c575b5-1532-4668-a8c5-02c863d38c80",
+  "display_id": 414,
+  "title": "ferray-linalg: solve detects singularity via NaN check instead of pivot analysis",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsolve() in solve.rs checks for singularity by scanning the result for NaN/Inf after the solve: 'for &val in result.iter() { if val.is_nan() || val.is_infinite() { return Err(SingularMatrix) } }'. This is unreliable — a near-singular matrix may produce very large but finite values that are numerically garbage. NumPy checks the LU factorization's pivot diagonal for zeros (the info return value from LAPACK dgesv). faer's LU decomposition likely provides a way to detect singularity from the factorization itself. Check faer's API for a singularity/rank indicator.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:14:49.260220745Z",
+  "updated_at": "2026-04-04T18:14:49.260220745Z"
+}
