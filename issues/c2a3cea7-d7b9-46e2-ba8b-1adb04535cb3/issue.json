@@ -7,8 +7,9 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-04T23:50:09.498705232Z",
-  "updated_at": "2026-04-04T23:50:11.691306647Z",
+  "updated_at": "2026-04-04T23:50:13.102883403Z",
   "labels": [
-    "feature"
+    "feature",
+    "ferray-polynomial"
   ]
 }
