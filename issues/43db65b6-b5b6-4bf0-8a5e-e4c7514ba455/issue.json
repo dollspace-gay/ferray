@@ -1,0 +1,11 @@
+{
+  "uuid": "43db65b6-b5b6-4bf0-8a5e-e4c7514ba455",
+  "display_id": 471,
+  "title": "ferray-stats: nan_aware allocates per-lane filter Vec — could use in-place NaN compaction",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNaN-aware reductions in nan_aware.rs do 'let non_nan: Vec<T> = lane.iter().copied().filter(|x| !x.is_nan()).collect()' for every lane. For a reduction along axis 0 of a (1000, 1000) array, this creates 1000 temporary Vecs. An in-place NaN compaction (partition NaN to end, track count) would avoid allocation. NumPy's nansum etc. use masked iteration via ufunc where= machinery without extra allocation.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T22:02:00.969106255Z",
+  "updated_at": "2026-04-04T22:02:00.969106255Z"
+}
