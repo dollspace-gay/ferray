@@ -7,9 +7,10 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-04T17:51:57.185016075Z",
-  "updated_at": "2026-04-04T17:51:59.854458584Z",
+  "updated_at": "2026-04-04T17:52:01.085400491Z",
   "labels": [
     "bug",
-    "ferray-ufunc"
+    "ferray-ufunc",
+    "numpy-parity"
   ]
 }
