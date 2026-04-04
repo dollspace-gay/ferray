@@ -1,0 +1,11 @@
+{
+  "uuid": "db122d65-4d69-4a01-aae0-62b65420d647",
+  "display_id": 340,
+  "title": "ferray-core: no nditer equivalent — missing general-purpose strided iterator",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's nditer (implemented in nditer_constr.c / nditer_api.c) is a general-purpose multi-array iterator that handles broadcasting, buffering, external loops, and operand casting in a single pass. ferray-core has no equivalent. Array iteration is done via ndarray's built-in iterators, which are single-array only. For ufunc-style operations across 2+ arrays with broadcasting, ferray-ufunc must manually broadcast_to() then zip iterators. An nditer-like facility would: (1) fuse broadcast shape computation with iteration, (2) enable external-loop optimization (hand SIMD code a contiguous chunk), (3) support multi-output operations, (4) reduce temporary allocations. This is the single biggest architectural gap between ferray-core and numpy._core.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:38:31.519867153Z",
+  "updated_at": "2026-04-04T17:38:31.519867153Z"
+}
