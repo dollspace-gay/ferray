@@ -1,0 +1,11 @@
+{
+  "uuid": "b87f999c-b0f2-456e-a930-0d8a7af9f622",
+  "display_id": 434,
+  "title": "ferray-fft: no negative axis support — NumPy allows axis=-1",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's FFT functions accept negative axis indices: np.fft.fft(a, axis=-1) means the last axis, axis=-2 means second-to-last. ferray-fft's resolve_axis() only accepts usize (non-negative). Passing a negative axis is a type error at compile time. While the default (None -> last axis) covers the most common case, explicit negative indexing is common in NumPy code. Either accept isize for axis parameters and normalize, or document the difference.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:31:15.202046757Z",
+  "updated_at": "2026-04-04T18:31:15.202046757Z"
+}
