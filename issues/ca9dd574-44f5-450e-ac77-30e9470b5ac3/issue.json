@@ -1,0 +1,11 @@
+{
+  "uuid": "ca9dd574-44f5-450e-ac77-30e9470b5ac3",
+  "display_id": 437,
+  "title": "ferray-fft: irfft output is Complex<f64> instead of f64 — should return real array",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNumPy's np.fft.irfft returns a real (float64) array — the whole point of the real FFT pair is that the output is guaranteed real. Check ferray-fft's irfft return type: if it returns Array<Complex<f64>, IxDyn> with near-zero imaginary parts instead of Array<f64, IxDyn>, that's a correctness issue. The function should strip the imaginary component and return a real array. Similarly, hfft should return real output (it does — hfft returns Array<f64, IxDyn>). Verify irfft, irfft2, irfftn all return real arrays.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:31:43.792345704Z",
+  "updated_at": "2026-04-04T18:31:43.792345704Z"
+}
