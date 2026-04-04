@@ -1,0 +1,11 @@
+{
+  "uuid": "12bcece8-c2bb-42f2-9266-9550a1ec9ed3",
+  "display_id": 439,
+  "title": "ferray-fft: ND FFT applies transforms sequentially per axis — no simultaneous multi-axis transform",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nfftn_impl applies 1D FFTs sequentially along each axis: for a 3D FFT, it does axis-0, then axis-1, then axis-2, creating intermediate full-size arrays at each step. NumPy's pocketfft also does this (separable ND FFT via iterated 1D), so this is at parity. However, for specific shapes, algorithms like row-column decomposition with shared memory or Bluestein's could be faster. Low priority since the sequential approach is correct and standard.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:32:00.478234311Z",
+  "updated_at": "2026-04-04T18:32:00.478234311Z"
+}
