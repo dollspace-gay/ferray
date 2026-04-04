@@ -1,0 +1,11 @@
+{
+  "uuid": "223c6fcf-87b7-4165-a824-e19ea83b23ff",
+  "display_id": 362,
+  "title": "ferray-core: no concatenate/stack/split in core",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.concatenate, np.stack, np.vstack, np.hstack, np.split, np.array_split are in numpy._core (shape_base.py, fromnumeric.py). These are fundamental array assembly/disassembly operations. ferray-core has manipulation/mod.rs and manipulation/extended.rs but check whether concatenate, stack, and split are fully implemented with broadcasting and dtype promotion. If they're missing or incomplete, they should be in ferray-core since they're needed before any higher-level crate.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:42:39.239230375Z",
+  "updated_at": "2026-04-04T17:42:39.239230375Z"
+}
