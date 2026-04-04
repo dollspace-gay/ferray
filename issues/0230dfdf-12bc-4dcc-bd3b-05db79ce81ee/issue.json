@@ -1,0 +1,11 @@
+{
+  "uuid": "0230dfdf-12bc-4dcc-bd3b-05db79ce81ee",
+  "display_id": 386,
+  "title": "ferray-ufunc: no floating-point error state handling (errstate/seterr)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy tracks floating-point errors (divide-by-zero, overflow, underflow, invalid) and allows users to control behavior via np.seterr() and np.errstate() context manager. The ufunc infrastructure checks FP exception flags after each operation (extobj.c). ferray-ufunc silently produces NaN/Inf without any error state tracking. While Rust's approach is generally to check for NaN explicitly, NumPy users expect to be able to catch division-by-zero as a warning or error. At minimum, document the difference. Optionally, add an error state mechanism for FP exceptions.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:51:05.055233929Z",
+  "updated_at": "2026-04-04T17:51:05.055233929Z"
+}
