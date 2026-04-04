@@ -1,0 +1,11 @@
+{
+  "uuid": "47537209-51c1-41e5-b45c-8544602cff69",
+  "display_id": 413,
+  "title": "ferray-linalg: matmul/dot use naive O(n^3) loops — not using faer/BLAS for matrix multiply",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nmatmul's 2D x 2D path in products/mod.rs (the matmul_2d function) and the matmul shortcut in einsum both use a hand-written triple loop: for i..m { for p..k { for j..n { c[i*n+j] += a[i*k+p] * b[p*n+j] } } }. Similarly, mat_mul_flat in solve.rs (used by matrix_power) is a naive triple loop. NumPy delegates matrix multiplication to BLAS dgemm/sgemm which is highly optimized (cache-blocking, SIMD, multi-threaded). faer also has optimized matmul. These hot loops should delegate to faer's matmul or link against BLAS, not use scalar triple loops. For a 1000x1000 matmul, this is the difference between ~0.1s (BLAS) and ~10s (naive).",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:14:43.786891893Z",
+  "updated_at": "2026-04-04T18:14:43.786891893Z"
+}
