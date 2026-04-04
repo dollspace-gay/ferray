@@ -1,0 +1,11 @@
+{
+  "uuid": "f3712aaa-e782-40e3-9b0d-b14395d94c48",
+  "display_id": 352,
+  "title": "ferray-core: no copyto() equivalent for broadcasting assignment",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.copyto(dst, src, casting='same_kind', where=mask) copies values from src to dst with broadcasting. It handles dtype casting, a boolean mask, and broadcasting in a single operation. ferray-core has boolean_index_assign for masked scalar assignment but no general copyto that broadcasts src into dst shape. This is a fundamental building block — used internally by NumPy for setitem, ufunc output, and masked operations.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:40:31.615808441Z",
+  "updated_at": "2026-04-04T17:40:31.615808441Z"
+}
