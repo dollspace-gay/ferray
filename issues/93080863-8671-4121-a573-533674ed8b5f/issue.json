@@ -1,0 +1,11 @@
+{
+  "uuid": "93080863-8671-4121-a573-533674ed8b5f",
+  "display_id": 388,
+  "title": "ferray-ufunc: no nan-aware reductions (nansum, nanmean, nanmin, nanmax, nanstd, nanvar, nanprod)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy provides np.nansum, np.nanmean, np.nanmin, np.nanmax, np.nanstd, np.nanvar, np.nanprod — reductions that treat NaN as missing and skip it. ferray-ufunc has nancumsum and nancumprod (cumulative variants) but no nan-aware reductions. These are critical for real-world data which commonly contains NaN. They should be implemented as reduce operations with a NaN-skipping accumulator.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:51:24.668860204Z",
+  "updated_at": "2026-04-04T17:51:24.668860204Z"
+}
