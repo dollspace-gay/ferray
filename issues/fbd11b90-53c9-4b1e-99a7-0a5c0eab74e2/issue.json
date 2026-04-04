@@ -1,0 +1,11 @@
+{
+  "uuid": "fbd11b90-53c9-4b1e-99a7-0a5c0eab74e2",
+  "display_id": 343,
+  "title": "ferray-core: no datetime/timedelta dtype support",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy has datetime64 and timedelta64 dtypes with configurable time units (ns, us, ms, s, m, h, D, etc.), backed by int64 storage. These are essential for time series data. ferray-core has no datetime support at all. At minimum, a DType::DateTime64 and DType::Timedelta64 with a TimeUnit enum would allow round-tripping .npy files containing time data. The chrono crate could back the Rust-side representation.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:39:00.208569461Z",
+  "updated_at": "2026-04-04T17:39:00.208569461Z"
+}
