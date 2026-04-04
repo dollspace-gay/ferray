@@ -1,0 +1,11 @@
+{
+  "uuid": "2cd26131-6927-4887-a69c-4853bbc49592",
+  "display_id": 374,
+  "title": "ferray-core: no unique/searchsorted/set operations",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy provides np.unique (with return_index, return_inverse, return_counts options), np.searchsorted, np.in1d, np.intersect1d, np.union1d, np.setdiff1d. These are in numpy._core and are essential for data processing pipelines. ferray has none of these. They depend on sorting (#366) and would provide the building blocks for categorical data handling, label encoding, and data deduplication.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:44:30.201351100Z",
+  "updated_at": "2026-04-04T17:44:30.201351100Z"
+}
