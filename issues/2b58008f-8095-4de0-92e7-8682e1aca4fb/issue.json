@@ -1,0 +1,11 @@
+{
+  "uuid": "2b58008f-8095-4de0-92e7-8682e1aca4fb",
+  "display_id": 346,
+  "title": "ferray-core: ops.rs operators don't broadcast — diverges from NumPy behavior",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nIn NumPy, a + b broadcasts automatically: np.array([1,2,3]) + np.array([[10],[20]]) produces shape (2,3). In ferray-core, the std::ops overloads (Add, Sub, Mul, Div, Rem) require identical shapes and return an error otherwise. Broadcasting is deferred to ferray-ufunc as separate functions. This is a deliberate design choice but it means the most natural syntax (a + b) doesn't work for the most common NumPy pattern. Consider: (1) making operators broadcast by delegating to ferray-ufunc, or (2) at minimum providing a broadcasting_add(&a, &b) method on Array itself, so users don't need to import ferray-ufunc for basic arithmetic.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:39:28.965397203Z",
+  "updated_at": "2026-04-04T17:39:28.965397203Z"
+}
