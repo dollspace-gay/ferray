@@ -7,9 +7,10 @@
   "priority": "medium",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-04T18:29:50.254137581Z",
-  "updated_at": "2026-04-04T18:29:52.711729904Z",
+  "updated_at": "2026-04-04T18:29:55.244220044Z",
   "labels": [
     "feature",
-    "ferray-fft"
+    "ferray-fft",
+    "numpy-parity"
   ]
 }
