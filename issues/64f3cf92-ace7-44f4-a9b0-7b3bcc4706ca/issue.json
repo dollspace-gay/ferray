@@ -1,0 +1,11 @@
+{
+  "uuid": "64f3cf92-ace7-44f4-a9b0-7b3bcc4706ca",
+  "display_id": 465,
+  "title": "ferray-stats: sort/argsort axis defaults to None (flatten) — NumPy defaults to -1 (last axis)",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNumPy's np.sort(arr) sorts along the last axis by default (axis=-1). ferray-stats sort() takes axis: Option<usize> where None means 'flatten and sort'. This is a semantic difference: NumPy users expect np.sort(matrix) to sort each row independently, but ferray users get a flattened 1D result. The default should be Some(ndim-1) for the last axis, with explicit None to flatten. Also, no negative axis support (#434 pattern).",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T22:01:01.948881411Z",
+  "updated_at": "2026-04-04T22:01:01.948881411Z"
+}
