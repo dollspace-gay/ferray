@@ -1,0 +1,11 @@
+{
+  "uuid": "92d8e58d-ec3f-4f90-a0ed-9bb12296b026",
+  "display_id": 398,
+  "title": "ferray-ufunc: complex transcendentals missing (complex exp, log, sin, cos, sqrt, power)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's umath provides transcendental functions for complex types: np.exp(complex_arr), np.log(complex_arr), np.sin(complex_arr), etc. These use separate C loops for complex types (loops_unary_complex.dispatch.c.src). ferray-ufunc's transcendentals (sin, cos, exp, log, etc.) all require T: Float, which excludes Complex<f32> and Complex<f64>. The complex module only has real/imag/conj/angle/abs. Add complex transcendentals — the num_complex crate already provides Complex::sin(), Complex::exp(), etc.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:52:56.867989126Z",
+  "updated_at": "2026-04-04T17:52:56.867989126Z"
+}
