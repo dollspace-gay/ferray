@@ -7,9 +7,10 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-04T18:14:36.918640117Z",
-  "updated_at": "2026-04-04T18:14:39.511977217Z",
+  "updated_at": "2026-04-04T18:14:40.835830568Z",
   "labels": [
     "feature",
-    "ferray-linalg"
+    "ferray-linalg",
+    "numpy-parity"
   ]
 }
