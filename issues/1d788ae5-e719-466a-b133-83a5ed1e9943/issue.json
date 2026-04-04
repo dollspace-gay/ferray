@@ -1,0 +1,11 @@
+{
+  "uuid": "1d788ae5-e719-466a-b133-83a5ed1e9943",
+  "display_id": 430,
+  "title": "ferray-fft: fftshift/ifftshift allocate and copy the entire array",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nfftshift() and ifftshift() in shift.rs do a full collect of the input, then iterate over all elements computing source indices for each output element. NumPy's fftshift uses np.roll() which itself uses concatenate of slices — also copies, but more cache-friendly. More importantly, for fftshift the result could be a view (via stride manipulation) for even-length axes, since it's just swapping two halves. At minimum, the current element-by-element index computation is O(n * ndim) per element; a block-copy approach (roll via slice concatenation) would be O(n) with better cache behavior.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:29:57.288852663Z",
+  "updated_at": "2026-04-04T18:29:57.288852663Z"
+}
