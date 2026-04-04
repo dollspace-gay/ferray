@@ -1,0 +1,11 @@
+{
+  "uuid": "deb267ee-9436-477f-af59-5ddc5d5fb8e0",
+  "display_id": 467,
+  "title": "ferray-stats: no out= parameter on any function",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's reductions and sort support out= for pre-allocated output. ferray-stats always allocates new output arrays. This matters for repeated reductions on same-shaped data (e.g., computing statistics in a streaming loop).",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T22:01:28.422723489Z",
+  "updated_at": "2026-04-04T22:01:28.422723489Z"
+}
