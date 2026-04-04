@@ -1,0 +1,11 @@
+{
+  "uuid": "f72f3885-c488-4aad-a1ed-f669224b3f6b",
+  "display_id": 361,
+  "title": "ferray-core: no safe casting functions (can_cast, astype equivalent)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy provides np.can_cast(from, to, casting='safe') and arr.astype(dtype) for explicit type casting with safety levels: 'no', 'equiv', 'safe', 'same_kind', 'unsafe'. ferray-core has dtype/casting.rs and dtype/promotion.rs for type promotion rules, but no public API to actually cast an array from one dtype to another. map_to() exists for typed closures but there's no astype(DType) on DynArray or a safe_cast<U>() on Array<T,D>. This is essential for: loading data as one type and converting to another, matching dtypes before operations, implementing NumPy-compatible casting semantics.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:42:33.603099255Z",
+  "updated_at": "2026-04-04T17:42:33.603099255Z"
+}
