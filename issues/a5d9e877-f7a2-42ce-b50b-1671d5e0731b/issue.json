@@ -1,0 +1,11 @@
+{
+  "uuid": "a5d9e877-f7a2-42ce-b50b-1671d5e0731b",
+  "display_id": 486,
+  "title": "ferray-polynomial: no Display/Debug formatting matching NumPy's polynomial printing",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's polynomial classes have rich formatting: str(p) shows the polynomial expression with proper Unicode symbols. ferray-polynomial derives Debug but has no Display impl showing the polynomial in human-readable form (e.g., '1.0 + 2.0·x + 3.0·x²' or '1.0·T₀ + 2.0·T₁'). This is a quality-of-life feature for debugging and notebook-style usage.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T23:52:04.189805784Z",
+  "updated_at": "2026-04-04T23:52:04.189805784Z"
+}
