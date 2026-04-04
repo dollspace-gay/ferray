@@ -1,0 +1,11 @@
+{
+  "uuid": "e9bfdb10-085d-43e5-b041-7f95d4f84d5f",
+  "display_id": 416,
+  "title": "ferray-linalg: no diagonal() or matrix_transpose() functions",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy 2.0's linalg module includes np.linalg.diagonal(x, offset=0) and np.linalg.matrix_transpose(x) as part of the Array API standard. ferray-linalg has trace() (which sums the diagonal) but no function to extract the diagonal itself. matrix_transpose could be a zero-copy view operation. These are listed in numpy.linalg.__all__ and are part of the array API standard compliance.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:15:08.325258015Z",
+  "updated_at": "2026-04-04T18:15:08.325258015Z"
+}
