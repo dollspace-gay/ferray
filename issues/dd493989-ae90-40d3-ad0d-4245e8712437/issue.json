@@ -1,0 +1,11 @@
+{
+  "uuid": "dd493989-ae90-40d3-ad0d-4245e8712437",
+  "display_id": 390,
+  "title": "ferray-ufunc: gcd/lcm use Float trait — should work on actual integers",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ngcd() and lcm() in arithmetic.rs are bounded on T: Element + Float, which means they only work on f32/f64, not on actual integer types (i32, u64, etc.). They even check for NaN. NumPy's gcd/lcm work on integer types directly and don't produce NaN. These should have separate integer implementations using the Euclidean algorithm on integer types, plus the existing float version for compatibility.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:51:44.768948759Z",
+  "updated_at": "2026-04-04T17:51:44.768948759Z"
+}
