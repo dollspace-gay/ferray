@@ -1,0 +1,11 @@
+{
+  "uuid": "0aae4fa7-92f8-49ae-a308-9f1f29ef128a",
+  "display_id": 483,
+  "title": "ferray-polynomial: no convert/cast methods for cross-basis conversion with domain",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's polynomial classes have convert(domain, kind, window) to change basis while preserving the polynomial function, and cast(series, domain, window) to reinterpret coefficients in a new domain. ferray-polynomial has ToPowerBasis and FromPowerBasis traits for basis conversion but no domain-aware conversion. Without domain/window (#474), cross-basis conversion loses the mapping context.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T23:51:37.815250078Z",
+  "updated_at": "2026-04-04T23:51:37.815250078Z"
+}
