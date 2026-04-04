@@ -1,0 +1,11 @@
+{
+  "uuid": "8a73ae88-d8d9-411a-955a-9b92fd4b3122",
+  "display_id": 400,
+  "title": "ferray-ufunc: no frompyfunc equivalent (user-defined ufunc from closure)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.frompyfunc(func, nin, nout) creates a ufunc from an arbitrary Python callable. This gives it broadcasting, type dispatch, and reduction methods for free. ferray-ufunc has no equivalent. Users who want a custom elementwise operation must use mapv() (unary) or zip_mut_with() (binary), which don't broadcast and don't get reduce/accumulate/outer. A make_ufunc(f: Fn(T,T) -> T, identity: T) builder would be the Rust equivalent, producing a struct with .call(), .reduce(), .accumulate(), .outer() methods.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:53:18.251275328Z",
+  "updated_at": "2026-04-04T17:53:18.251275328Z"
+}
