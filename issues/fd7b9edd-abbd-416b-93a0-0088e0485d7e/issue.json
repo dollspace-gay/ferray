@@ -1,0 +1,11 @@
+{
+  "uuid": "fd7b9edd-abbd-416b-93a0-0088e0485d7e",
+  "display_id": 409,
+  "title": "ferray-linalg: cholesky missing upper= parameter",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.linalg.cholesky(a, upper=True) can return the upper triangular factor U where A = U^T U. ferray-linalg's cholesky() always returns the lower triangular L (hardcoded faer::Side::Lower). Add an upper parameter. Simple fix: transpose L if upper=True, or pass faer::Side::Upper.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:14:06.427971227Z",
+  "updated_at": "2026-04-04T18:14:06.427971227Z"
+}
