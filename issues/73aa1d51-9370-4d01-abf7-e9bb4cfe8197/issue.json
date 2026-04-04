@@ -1,0 +1,11 @@
+{
+  "uuid": "73aa1d51-9370-4d01-abf7-e9bb4cfe8197",
+  "display_id": 446,
+  "title": "ferray-random: no bytes() method for raw random bytes",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's Generator.bytes(length) returns raw random bytes as a Python bytes object. ferray-random's BitGenerator trait has fill_bytes(&mut [u8]) but there's no Generator-level method that returns an array of random bytes or a Vec<u8>. This is useful for cryptographic-adjacent applications, testing, and generating random binary data. Simple to add: delegate to bg.fill_bytes().",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T21:36:00.465050628Z",
+  "updated_at": "2026-04-04T21:36:00.465050628Z"
+}
