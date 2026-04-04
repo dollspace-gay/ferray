@@ -1,0 +1,11 @@
+{
+  "uuid": "c8d4e7f6-df89-4bb5-af7e-36e5b9685b2f",
+  "display_id": 455,
+  "title": "ferray-random: size=0 returns error instead of empty array",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nEvery distribution method in ferray-random returns an error when size is 0: 'size must be > 0'. NumPy returns a zero-length array for size=0, which is useful for conditional generation (generate n samples where n might be 0). This is a minor divergence but can cause issues when porting NumPy code.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T21:37:27.554126431Z",
+  "updated_at": "2026-04-04T21:37:27.554126431Z"
+}
