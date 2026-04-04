@@ -1,0 +1,11 @@
+{
+  "uuid": "4db91650-93f4-40e4-933c-9133207af40c",
+  "display_id": 377,
+  "title": "ferray-ufunc: SIMD dispatch via pulp doesn't actually use SIMD for transcendentals",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nThe WithSimd impls for UnaryF32Op, UnaryF64Op, BinaryF32Op, BinaryF64Op in dispatch.rs all ignore the simd parameter and run scalar loops: 'for (o, &i) in self.output.iter_mut().zip(self.input.iter()) { *o = f(i); }'. The pulp dispatch detects the CPU ISA but the actual computation is scalar. Only SqrtF64Op, AbsF64Op, NegF64Op, SquareF64Op, ReciprocalF64Op use real SIMD intrinsics (simd.sqrt_f64s, simd.abs_f64s, etc.). This means sin, cos, exp, log, and all other transcendentals run at scalar speed despite the SIMD dispatch infrastructure. NumPy uses Intel SVML or hand-written vectorized loops for these. Either: (1) write vectorized kernels for the key transcendentals using pulp SIMD intrinsics, (2) use a vectorized math library like sleef-rs/libmvec, or (3) remove the misleading SIMD dispatch for operations that don't actually vectorize.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:49:31.942828194Z",
+  "updated_at": "2026-04-04T17:49:31.942828194Z"
+}
