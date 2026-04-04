@@ -1,0 +1,11 @@
+{
+  "uuid": "9a355c8a-315b-4ccd-9628-a339f2365adb",
+  "display_id": 389,
+  "title": "ferray-ufunc: all/any don't support axis= parameter",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.all(arr, axis=0) and np.any(arr, axis=1) reduce along a specific axis. ferray-ufunc's all() and any() in logical.rs only support whole-array reduction (return a single bool). There's no axis-aware version that returns an array of bools. This is needed for conditional logic on sub-dimensions, e.g., 'which rows have all positive values'.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:51:30.245002561Z",
+  "updated_at": "2026-04-04T17:51:30.245002561Z"
+}
