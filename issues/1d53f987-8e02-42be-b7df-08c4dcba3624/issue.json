@@ -1,0 +1,11 @@
+{
+  "uuid": "1d53f987-8e02-42be-b7df-08c4dcba3624",
+  "display_id": 387,
+  "title": "ferray-ufunc: comparison ops don't broadcast and return same-D instead of IxDyn",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's comparison ufuncs (equal, less, greater, etc.) broadcast automatically and return boolean arrays. ferray-ufunc's comparison ops require same shape and same D. There's no way to compare an Ix2 array against an Ix1 array. Add broadcasting comparison variants, matching the pattern used for add_broadcast/subtract_broadcast. Also consider making the default comparison functions broadcast like NumPy does, since comparison with broadcasting is one of the most common NumPy patterns (arr > threshold where threshold is a scalar or lower-rank array).",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:51:18.880219142Z",
+  "updated_at": "2026-04-04T17:51:18.880219142Z"
+}
