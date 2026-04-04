@@ -7,8 +7,9 @@
   "priority": "medium",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-04T18:13:50.746219847Z",
-  "updated_at": "2026-04-04T18:13:54.456375612Z",
+  "updated_at": "2026-04-04T18:13:55.747893763Z",
   "labels": [
-    "feature"
+    "feature",
+    "ferray-linalg"
   ]
 }
