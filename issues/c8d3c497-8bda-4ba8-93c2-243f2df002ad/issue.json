@@ -1,0 +1,11 @@
+{
+  "uuid": "c8d3c497-8bda-4ba8-93c2-243f2df002ad",
+  "display_id": 484,
+  "title": "ferray-polynomial: fit doesn't support weights parameter",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's polynomial fit(x, y, deg, w=weights) supports weighted least-squares fitting via a weight array. ferray-polynomial's Poly::fit takes x, y, deg but no weights. The fitting.rs least_squares_fit function has a weights parameter internally, but check whether it's plumbed through to the public API. Weighted fitting is important for heteroscedastic data and robust fitting.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T23:51:44.487770803Z",
+  "updated_at": "2026-04-04T23:51:44.487770803Z"
+}
