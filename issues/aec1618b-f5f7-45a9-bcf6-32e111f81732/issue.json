@@ -1,0 +1,11 @@
+{
+  "uuid": "aec1618b-f5f7-45a9-bcf6-32e111f81732",
+  "display_id": 355,
+  "title": "ferray-core: DynArray requires exhaustive match for every operation — needs macro or trait-object dispatch",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nDynArray in dynarray.rs requires a 15-arm match for every operation (shape, dtype, display, zeros, etc.). Adding a new dtype variant means touching every match. NumPy solves this with function pointers in PyArray_Descr (arrfuncs) — each dtype registers its own copy/compare/cast/fill functions. ferray could improve this with: (1) a macro_rules that generates match arms for all variants given a closure, (2) a DynArrayOps trait object that each Element type registers, or (3) a dispatch table similar to NumPy's arrfuncs. Issue #125 notes the boilerplate; this issue is about the architectural fix.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:41:03.059962574Z",
+  "updated_at": "2026-04-04T17:41:03.059962574Z"
+}
