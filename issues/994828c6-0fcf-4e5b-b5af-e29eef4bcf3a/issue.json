@@ -7,9 +7,10 @@
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-04T17:38:37.285631433Z",
-  "updated_at": "2026-04-04T17:38:40.790800161Z",
+  "updated_at": "2026-04-04T17:38:42.964044242Z",
   "labels": [
     "research",
-    "ferray-core"
+    "ferray-core",
+    "numpy-parity"
   ]
 }
