@@ -1,0 +1,11 @@
+{
+  "uuid": "95af18f3-1541-47fe-ad65-51fb2a1777cc",
+  "display_id": 473,
+  "title": "ferray-stats: searchsorted missing sorter= parameter",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.searchsorted(a, v, sorter=indices) allows searching in an array that isn't sorted directly, by providing a permutation index array. ferray-stats searchsorted requires the array to be pre-sorted. The sorter parameter is useful for avoiding a copy when you have argsort output.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T22:02:21.510455910Z",
+  "updated_at": "2026-04-04T22:02:21.510455910Z"
+}
