@@ -1,0 +1,11 @@
+{
+  "uuid": "2a70f90a-4b89-4161-891f-66ee4920acf9",
+  "display_id": 447,
+  "title": "ferray-random: shuffle/permuted only work on 1D arrays",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's Generator.shuffle(x, axis=0) shuffles rows of a 2D array (or slices along any axis). Generator.permuted(x, axis=0) independently permutes along an axis. ferray-random's shuffle and permuted only accept Array<T, Ix1>. The permuted method takes _axis: usize but ignores it (underscore prefix). For ND arrays, users need row/column shuffling — e.g., shuffling training examples that are rows of a feature matrix. Extend to accept Array<T, IxDyn> with an axis parameter.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T21:36:07.692550395Z",
+  "updated_at": "2026-04-04T21:36:07.692550395Z"
+}
