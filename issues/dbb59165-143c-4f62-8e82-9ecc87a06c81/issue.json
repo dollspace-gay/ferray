@@ -1,0 +1,11 @@
+{
+  "uuid": "dbb59165-143c-4f62-8e82-9ecc87a06c81",
+  "display_id": 420,
+  "title": "ferray-linalg: norm P(p) for matrices silently falls back to Frobenius",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nmatrix_norm() in norms.rs has NormOrder::P(_) which silently computes the Frobenius norm instead of the actual p-norm. NumPy raises a ValueError for invalid matrix norm orders. The comment says '// General p-norm not standard for matrices; use Frobenius'. But NumPy does support matrix norms for p=1, p=2, p=inf, p=-1, p=-2, p=-inf — these are the standard induced norms. The P(p) case should either: (1) raise an error for unsupported p values, or (2) support the standard induced norms p=1,2,inf.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:15:40.690342152Z",
+  "updated_at": "2026-04-04T18:15:40.690342152Z"
+}
