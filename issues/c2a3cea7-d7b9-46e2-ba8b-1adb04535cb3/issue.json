@@ -1,0 +1,11 @@
+{
+  "uuid": "c2a3cea7-d7b9-46e2-ba8b-1adb04535cb3",
+  "display_id": 474,
+  "title": "ferray-polynomial: no domain/window mapping — polynomials operate on raw x values",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's polynomial classes carry domain and window attributes. When evaluating or fitting, x values are mapped from domain to window via a linear transformation. This is critical for numerical stability — fitting a Chebyshev polynomial to data on [0, 1000] without mapping to [-1, 1] produces catastrophic cancellation. ferray-polynomial has no domain/window concept — evaluation and fitting use raw x values. All Poly trait methods (eval, fit, etc.) operate directly on the provided x without any mapping. Add domain: [f64; 2] and window: [f64; 2] fields to each polynomial type, with mapparms() and convert() methods.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T23:50:09.498705232Z",
+  "updated_at": "2026-04-04T23:50:09.498705232Z"
+}
