@@ -1,0 +1,11 @@
+{
+  "uuid": "58dc4d1d-2c4a-4f23-a776-2f6e5137c632",
+  "display_id": 370,
+  "title": "ferray-core: no WRITEBACKIFCOPY pattern for safe out-parameter mutation",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's WRITEBACKIFCOPY flag allows a function to work on a temporary contiguous copy and automatically write it back to the original non-contiguous array on completion (or discard on error). This is how ufuncs handle non-contiguous output arrays safely. ferray has no equivalent — functions either require contiguous input or silently return a new allocation. A writeback guard type (like a Drop-based scope guard that copies the temporary back to the original on success) would enable safe out-parameter patterns for non-contiguous arrays.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:43:52.559923643Z",
+  "updated_at": "2026-04-04T17:43:52.559923643Z"
+}
