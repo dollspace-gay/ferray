@@ -1,0 +1,11 @@
+{
+  "uuid": "db59f115-9d68-4004-8859-8f15295020b4",
+  "display_id": 363,
+  "title": "ferray-core: no empty/empty_like constructors (uninitialized arrays)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.empty() and np.empty_like() allocate arrays without initializing their contents, which is faster than zeros() when you're about to overwrite every element anyway. ferray-core's creation module has zeros(), ones(), from_elem(), from_vec() — all require initialization. For performance-critical paths (ufunc output buffers, temporary workspace), an uninit constructor using MaybeUninit<T> would avoid redundant memsets. This needs careful unsafe code but is a meaningful optimization for large arrays.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:42:44.756158066Z",
+  "updated_at": "2026-04-04T17:42:44.756158066Z"
+}
