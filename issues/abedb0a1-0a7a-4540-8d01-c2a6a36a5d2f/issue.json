@@ -1,0 +1,11 @@
+{
+  "uuid": "abedb0a1-0a7a-4540-8d01-c2a6a36a5d2f",
+  "display_id": 429,
+  "title": "ferray-fft: no out= parameter on any FFT function",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's FFT functions accept out= to write results into a pre-allocated array: np.fft.fft(a, out=result). This avoids allocation on repeated transforms of same-sized data (common in real-time signal processing). ferray-fft always allocates a new output array. The FftPlan type partially addresses this (plan reuse) but still allocates output. Add out= variants or _into methods for at least fft/ifft/rfft/irfft.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:29:50.254137581Z",
+  "updated_at": "2026-04-04T18:29:50.254137581Z"
+}
