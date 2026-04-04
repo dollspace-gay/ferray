@@ -1,0 +1,11 @@
+{
+  "uuid": "b5266329-0c46-48d7-8b93-023b0ff8b4ad",
+  "display_id": 348,
+  "title": "ferray-core: no in-place operators (AddAssign, SubAssign, etc.)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy supports arr += 5, arr *= other_arr — in-place operations that avoid allocation. ferray-core has no std::ops::AddAssign etc. impls. Users must do arr = (&arr + &other)?; which allocates a new buffer every time. For large arrays this is a significant performance gap. Implement AddAssign, SubAssign, MulAssign, DivAssign, RemAssign for Array<T,D> (both array-array and array-scalar). These should modify the data buffer in-place using zip_mut_with or mapv_inplace.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:39:39.787930517Z",
+  "updated_at": "2026-04-04T17:39:39.787930517Z"
+}
