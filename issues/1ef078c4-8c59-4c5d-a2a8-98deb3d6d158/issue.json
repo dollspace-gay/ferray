@@ -1,0 +1,11 @@
+{
+  "uuid": "1ef078c4-8c59-4c5d-a2a8-98deb3d6d158",
+  "display_id": 459,
+  "title": "ferray-stats: no initial= or where= parameters on reductions",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's reductions support initial= (starting value for the accumulator) and where= (boolean mask for conditional reduction). ferray-stats has neither. initial= is useful for empty-array behavior and for reductions where the identity element matters. where= enables masked computation without materializing a masked array: np.sum(arr, where=mask).",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T21:59:57.956819403Z",
+  "updated_at": "2026-04-04T21:59:57.956819403Z"
+}
