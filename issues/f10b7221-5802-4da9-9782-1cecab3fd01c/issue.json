@@ -1,0 +1,11 @@
+{
+  "uuid": "f10b7221-5802-4da9-9782-1cecab3fd01c",
+  "display_id": 376,
+  "title": "ferray-ufunc: no ufunc object — functions are standalone, not composable abstractions",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's ufunc is a first-class object (PyUFuncObject) with identity, nin/nout, registered loops per dtype, and methods: .reduce(), .accumulate(), .outer(), .at(), .reduceat(). This means np.add.reduce(arr) and np.add.outer(a,b) work automatically for any ufunc. ferray-ufunc has standalone functions (add, multiply, etc.) plus manually-written add_reduce, add_accumulate, multiply_outer. There's no generic ufunc type that composes reduction/accumulation/outer-product for free. A Ufunc<F> struct with registered identity element and methods would eliminate the need to hand-write reduce/accumulate/outer for each operation and enable user-defined ufuncs.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:49:24.203789682Z",
+  "updated_at": "2026-04-04T17:49:24.203789682Z"
+}
