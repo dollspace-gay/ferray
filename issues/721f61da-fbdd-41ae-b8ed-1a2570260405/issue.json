@@ -1,0 +1,11 @@
+{
+  "uuid": "721f61da-fbdd-41ae-b8ed-1a2570260405",
+  "display_id": 402,
+  "title": "ferray-ufunc: no clip for integer types — requires Float bound",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nclip() in floatintrinsic.rs requires T: Element + Float. NumPy's np.clip works on any ordered type including integers: np.clip(int_arr, 0, 255). The implementation only uses comparison operators (< and >), not any float-specific operations. Relax the bound to T: Element + PartialOrd + Copy.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:53:37.675128190Z",
+  "updated_at": "2026-04-04T17:53:37.675128190Z"
+}
