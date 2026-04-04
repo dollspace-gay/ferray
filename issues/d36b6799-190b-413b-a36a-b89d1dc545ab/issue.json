@@ -1,0 +1,11 @@
+{
+  "uuid": "d36b6799-190b-413b-a36a-b89d1dc545ab",
+  "display_id": 364,
+  "title": "ferray-core: no frombuffer / from_raw_parts constructor",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.frombuffer() creates an array from a bytes object without copying. This is essential for zero-copy interop with mmap, shared memory, network buffers, and other languages. ferray-core has ArrayView::from_shape_ptr() (unsafe) for views, but no owned-array constructor that takes ownership of an existing allocation (like Vec::from_raw_parts). A safe from_buffer(bytes: &[u8], dtype: DType, shape) -> ArrayView and an unsafe from_raw_parts(ptr, shape, strides) -> Array would round out the construction API.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:42:59.399239579Z",
+  "updated_at": "2026-04-04T17:42:59.399239579Z"
+}
