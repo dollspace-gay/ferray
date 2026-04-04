@@ -1,0 +1,11 @@
+{
+  "uuid": "5e05cd52-8c4a-462e-be50-67f076b84bde",
+  "display_id": 476,
+  "title": "ferray-polynomial: no fromroots constructor",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's polynomial classes have a fromroots(roots) classmethod that constructs the polynomial with the given roots. ferray-polynomial has roots() (root-finding) but no inverse operation. fromroots is useful for constructing interpolation polynomials, filter design, and testing. Implementation: for power basis, expand (x - r1)(x - r2)...(x - rn) via convolution. For other bases, construct in power basis and convert.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T23:50:34.778827160Z",
+  "updated_at": "2026-04-04T23:50:34.778827160Z"
+}
