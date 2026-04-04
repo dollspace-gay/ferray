@@ -1,0 +1,11 @@
+{
+  "uuid": "100c066f-cda1-41e0-85a0-c24bd7768ac6",
+  "display_id": 379,
+  "title": "ferray-ufunc: binary ops require same shape — broadcast variants are separate functions",
+  "description": "Current state: \n\nDesired state: \n\nReason: \n\nIn NumPy, np.add(a, b) broadcasts automatically. In ferray-ufunc, add() requires same shape and errors otherwise. Broadcasting requires calling add_broadcast() instead, which returns IxDyn. Only add, subtract, multiply, divide have _broadcast variants. All other binary ops (power, remainder, fmod, arctan2, hypot, heaviside, gcd, lcm, all comparisons, all logical ops, all bitwise ops) have no broadcasting at all — they require exact shape match. Either: (1) make all binary ops broadcast by default (like NumPy), or (2) systematically add _broadcast variants for every binary function.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:50:03.360192262Z",
+  "updated_at": "2026-04-04T17:50:03.360192262Z"
+}
