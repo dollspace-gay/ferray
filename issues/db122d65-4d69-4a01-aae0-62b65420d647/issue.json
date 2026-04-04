@@ -7,8 +7,9 @@
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-04T17:38:31.519867153Z",
-  "updated_at": "2026-04-04T17:38:33.024632336Z",
+  "updated_at": "2026-04-04T17:38:34.351515040Z",
   "labels": [
-    "feature"
+    "feature",
+    "ferray-core"
   ]
 }
