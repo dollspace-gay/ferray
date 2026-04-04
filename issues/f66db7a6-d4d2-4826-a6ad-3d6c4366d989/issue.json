@@ -1,0 +1,11 @@
+{
+  "uuid": "f66db7a6-d4d2-4826-a6ad-3d6c4366d989",
+  "display_id": 433,
+  "title": "ferray-fft: nd.rs lane extraction copies each lane individually — O(n) allocations for ND FFT",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nfft_along_axis in nd.rs extracts each 1D lane via 'let mut buffer = Vec::with_capacity(fft_len); for i in 0..axis_len { buffer.push(data[start_offset + i * stride]); }'. For an (M, N) array with FFT along axis 1, this does M separate Vec allocations. NumPy's pocketfft uses stride-aware in-place transforms that don't extract lanes at all. While the per-lane extraction enables Rayon parallelism (which is good), the allocation overhead is significant for many short lanes. Consider pre-allocating a lane buffer per thread (map_init already does this for scratch, extend it to the lane buffer).",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T18:30:28.646521284Z",
+  "updated_at": "2026-04-04T18:30:28.646521284Z"
+}
