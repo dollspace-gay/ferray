@@ -1,0 +1,11 @@
+{
+  "uuid": "038183f7-4541-4bf1-957a-ff6fecd38f01",
+  "display_id": 359,
+  "title": "ferray-core: broadcast_to rejects negative strides — NumPy handles them",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nbroadcast_to() in broadcast.rs explicitly rejects arrays with negative strides (from reversed/transposed views) with 'make the array contiguous first'. NumPy handles negative strides natively during broadcasting. This means in ferray, if you reverse an array (negative stride) and then try to broadcast it, you get an error instead of it working. The fix should handle negative strides correctly in the broadcast stride computation, or at minimum auto-contiguify the input before broadcasting rather than erroring.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:42:12.524155430Z",
+  "updated_at": "2026-04-04T17:42:12.524155430Z"
+}
