@@ -1,0 +1,11 @@
+{
+  "uuid": "77ce0737-41f2-4640-a2a6-a2ef35c7d17e",
+  "display_id": 399,
+  "title": "ferray-ufunc: divmod computes floor_divide and remainder separately — double work",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\ndivmod() in arithmetic.rs calls floor_divide(a, b) and remainder(a, b) independently, iterating over both arrays twice and doing the division twice. NumPy's divmod ufunc computes both results in a single pass. Fix: single iteration that computes both quot = floor(x/y) and rem in one pass.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-04T17:53:12.260944134Z",
+  "updated_at": "2026-04-04T17:53:12.260944134Z"
+}
