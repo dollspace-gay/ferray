@@ -1,0 +1,11 @@
+{
+  "uuid": "f2b27049-fbb0-4433-b76c-737e6273e896",
+  "display_id": 510,
+  "title": "ferray-ma: no fix_invalid (auto-mask NaN + replace with fill_value)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's ma.fix_invalid(a, fill_value) masks NaN/Inf values AND replaces them with the fill_value in the data. ferray-ma has masked_invalid (which masks NaN/Inf) but doesn't replace the underlying data values. fix_invalid is useful for cleaning data in a single call.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:10:21.486779428Z",
+  "updated_at": "2026-04-05T00:10:21.486779428Z"
+}
