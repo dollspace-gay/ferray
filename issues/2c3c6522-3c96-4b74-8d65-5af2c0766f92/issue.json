@@ -1,0 +1,11 @@
+{
+  "uuid": "2c3c6522-3c96-4b74-8d65-5af2c0766f92",
+  "display_id": 545,
+  "title": "ferray-autodiff: abs() subgradient convention at x=0 undocumented",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nabs() uses signum(x) as derivative, giving 0 at x=0. This is the conventional subgradient choice but it's not the only valid one (some AD systems use NaN for non-differentiable points). The behavior is correct but should be documented: 'At x = 0, the derivative is 0 (subgradient convention). The function is not differentiable at this point.'",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T03:06:36.862469010Z",
+  "updated_at": "2026-04-05T03:06:36.862469010Z"
+}
