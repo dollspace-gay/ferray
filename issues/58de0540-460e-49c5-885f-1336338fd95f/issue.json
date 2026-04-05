@@ -1,0 +1,11 @@
+{
+  "uuid": "58de0540-460e-49c5-885f-1336338fd95f",
+  "display_id": 540,
+  "title": "ferray-autodiff: no tests for mathematical singularities (sqrt(0), ln(0), tan(pi/2), asin(1))",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNo tests cover behavior at mathematical singularities where the derivative is infinite or undefined: sqrt(0) -> derivative is +inf, ln(0) -> derivative is +inf, tan(pi/2) -> undefined, asin(1) -> derivative is +inf, acosh(1) -> derivative is +inf, 1/0 -> derivative is -inf. These are precisely where forward-mode AD produces NaN/Inf silently. Add tests documenting the expected behavior (even if it's NaN/Inf).",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T03:05:50.166073047Z",
+  "updated_at": "2026-04-05T03:05:50.166073047Z"
+}
