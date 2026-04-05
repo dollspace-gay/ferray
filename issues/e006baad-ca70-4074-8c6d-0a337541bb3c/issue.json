@@ -1,0 +1,11 @@
+{
+  "uuid": "e006baad-ca70-4074-8c6d-0a337541bb3c",
+  "display_id": 544,
+  "title": "ferray-autodiff: higher-order derivatives (nested DualNumber) untested",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nForward-mode AD theoretically supports higher-order derivatives by nesting: DualNumber<DualNumber<f64>>. Since DualNumber<T> is generic over T: Float and implements Float itself, this should work. However it's completely untested. The T::from(2.0).unwrap() calls in sqrt, cbrt, exp2, log2, log10, to_degrees, to_radians may behave unexpectedly for nested dual numbers. Add explicit tests for second derivatives via nesting, or document that nesting is unsupported.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T03:06:24.470518796Z",
+  "updated_at": "2026-04-05T03:06:24.470518796Z"
+}
