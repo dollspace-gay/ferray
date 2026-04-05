@@ -1,0 +1,11 @@
+{
+  "uuid": "4edb4480-c25c-4f74-a1ea-d63f6c0e0cc6",
+  "display_id": 503,
+  "title": "ferray-ma: no domain-aware ufunc wrapping (e.g., log of negative masked, sqrt of negative masked)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's masked ufuncs have domain checking: ma.log(masked_array) automatically masks elements that are out of domain (negative values). Similarly, ma.sqrt masks negative inputs, ma.divide masks zeros in the denominator. This is implemented via _DomainCheckInterval, _DomainGreater, _DomainSafeDivide classes in core.py. ferray-ma's ufunc_support applies the function blindly to unmasked elements — log of a negative value produces NaN but doesn't set the mask. Add domain-aware wrapping at least for log, sqrt, divide, arcsin, arccos.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:09:18.676762190Z",
+  "updated_at": "2026-04-05T00:09:18.676762190Z"
+}
