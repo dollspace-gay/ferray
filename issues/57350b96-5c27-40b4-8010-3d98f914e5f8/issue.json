@@ -1,0 +1,11 @@
+{
+  "uuid": "57350b96-5c27-40b4-8010-3d98f914e5f8",
+  "display_id": 543,
+  "title": "ferray-autodiff: no jacobian() function for vector-valued functions",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\ngradient() computes the gradient of a scalar-valued multivariate function. But there's no jacobian() for vector-valued functions f: R^n -> R^m. The Jacobian matrix J[i][j] = df_i/dx_j is needed for: (1) neural network layer derivatives, (2) optimization with vector outputs, (3) sensitivity analysis. Forward-mode computes one column of J per evaluation, so jacobian(f, point) would call f n times (same as gradient but collecting all m output duals per call).",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T03:06:17.132879788Z",
+  "updated_at": "2026-04-05T03:06:17.132879788Z"
+}
