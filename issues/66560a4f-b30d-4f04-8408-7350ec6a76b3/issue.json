@@ -1,0 +1,11 @@
+{
+  "uuid": "66560a4f-b30d-4f04-8408-7350ec6a76b3",
+  "display_id": 493,
+  "title": "ferray-io: savez/savez_compressed buffer each .npy in memory before writing to zip",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsavez() does 'let mut npy_buf = Vec::new(); npy::save_dynamic_to_writer(&mut npy_buf, array)?; zip_writer.write_all(&npy_buf)' — serializes each array into an in-memory buffer, then writes the buffer to the zip entry. For large arrays, this doubles memory usage. The npy serialization could write directly to the zip writer instead. This requires making save_dynamic_to_writer work with the zip writer directly (which implements Write).",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:04:30.084895568Z",
+  "updated_at": "2026-04-05T00:04:30.084895568Z"
+}
