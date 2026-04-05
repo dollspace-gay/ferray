@@ -1,0 +1,11 @@
+{
+  "uuid": "4ba3bab1-9163-4f0e-92b0-1f3c184bb9f5",
+  "display_id": 551,
+  "title": "ferray-numpy-interop: no f16/bf16 support in any backend",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nferray-core supports f16 and bf16 via the half crate, and Arrow has Float16Type. NumPy supports float16. But none of the interop traits (ArrowElement, NpElement, PolarsElement) are implemented for half::f16 or half::bf16. ML pipelines frequently use float16 for model weights. Add f16 support behind the f16 feature flag at least for Arrow (which has native Float16Type) and NumPy (which supports float16).",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T03:11:38.550426266Z",
+  "updated_at": "2026-04-05T03:11:38.550426266Z"
+}
