@@ -1,0 +1,11 @@
+{
+  "uuid": "bf3330ac-a0dd-419c-b51b-cbb685db1753",
+  "display_id": 507,
+  "title": "ferray-ma: no indexing/slicing support on MaskedArray",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's MaskedArray supports all ndarray indexing: integer indexing, slicing, fancy indexing, boolean indexing. All return MaskedArrays with appropriate mask slices. ferray-ma has no indexing methods — you can't slice a MaskedArray or get a single element. Users must index data() and mask() separately and recombine. Add at least: index_axis, slice_axis, get, and boolean_index that return MaskedArrays with corresponding mask slices.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:09:54.144597272Z",
+  "updated_at": "2026-04-05T00:09:54.144597272Z"
+}
