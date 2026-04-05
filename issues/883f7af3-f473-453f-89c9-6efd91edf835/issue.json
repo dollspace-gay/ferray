@@ -3,11 +3,12 @@
   "display_id": 114,
   "title": "ferray-fft: no property tests for rfft/irfft family",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nproperty_tests.rs: only fft/ifft/fftfreq/fftshift covered. Real/Hermitian FFTs missing.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:29:57.297264882Z",
-  "updated_at": "2026-03-25T15:30:01.930619482Z",
+  "updated_at": "2026-04-05T21:02:37.673897555Z",
+  "closed_at": "2026-04-05T21:02:37.673897555Z",
   "labels": [
     "bug",
     "qa-audit"
