@@ -1,0 +1,11 @@
+{
+  "uuid": "31656c64-2354-4bb6-ac3c-19bc7ebb2207",
+  "display_id": 547,
+  "title": "ferray-numpy-interop: to_arrow always copies — claims zero-copy but never achieves it",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nThe doc claims 'Zero-copy when the ferray array is C-contiguous' but to_arrow() in arrow_conv.rs always copies: 'let data: Vec<T> = match self.as_slice() { Some(slice) => slice.to_vec(), None => self.to_vec_flat() }'. Even when as_slice() succeeds (C-contiguous), it calls .to_vec() which allocates and copies. Arrow's Buffer::from_vec then takes ownership of that Vec. True zero-copy would use unsafe pointer sharing or Arrow's Buffer::from_custom_allocation to point at the ferray array's memory. The comment 'SAFETY: buffer length is exactly self.size() * size_of::<T>()' is misleading — there's no unsafe here, just a copy.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T03:10:49.851453332Z",
+  "updated_at": "2026-04-05T03:10:49.851453332Z"
+}
