@@ -1,0 +1,11 @@
+{
+  "uuid": "a1c38017-e4e2-440f-b15e-50b8c0483927",
+  "display_id": 520,
+  "title": "ferray-strings: operations return flat StringArray — don't preserve higher-D shape correctly",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nThe integration test string_array_2d shows: upper on a (2,2) StringArray returns a StringArray with shape [2,2] and data ['A','B','C','D']. Verify that all operations correctly preserve the input shape for ND arrays and don't accidentally flatten. The map() method on StringArray preserves dim, but check that search operations (find, count, etc.) which return Array<i64, D> or Array<bool, D> also correctly pass through the dimension.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:37:30.186148714Z",
+  "updated_at": "2026-04-05T00:37:30.186148714Z"
+}
