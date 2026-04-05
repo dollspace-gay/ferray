@@ -1,0 +1,11 @@
+{
+  "uuid": "2a3e8321-0bf9-40e3-ac8b-72208f4a8748",
+  "display_id": 527,
+  "title": "ferray-stride-tricks: sliding_window_view rejects negative strides — can't window reversed arrays",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsliding_window_view() explicitly rejects arrays with negative strides: 'sliding_window_view does not support negative strides; make the array contiguous first'. NumPy handles this by requiring the array to be writeable=False (which it is for views). If you reverse an array and try to take a sliding window, ferray errors. The fix should either handle negative strides correctly in the stride computation or auto-contiguify the input.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:40:20.539911133Z",
+  "updated_at": "2026-04-05T00:40:20.539911133Z"
+}
