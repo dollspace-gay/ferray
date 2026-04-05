@@ -1,0 +1,11 @@
+{
+  "uuid": "e1522a3a-98cd-43b4-8a94-7668cef6f33e",
+  "display_id": 501,
+  "title": "ferray-ma: no fill_value concept — masked elements get T::zero() in operations",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's MaskedArray has a fill_value attribute that's used as the replacement value for masked elements during operations. Different dtypes have different default fill_values (1e20 for float, 999999 for int, etc.). ferray-ma hardcodes T::zero() for masked elements in ufunc_support.rs: 'if *m { T::zero() } else { f(*v) }'. This means: (1) no customizable fill, (2) operations like log/sqrt on masked data may produce 0 in masked positions instead of a sentinel, (3) filled() must be called with an explicit value. Add a fill_value: T field to MaskedArray and use it as the default for filled() and operation outputs.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:08:56.048231877Z",
+  "updated_at": "2026-04-05T00:08:56.048231877Z"
+}
