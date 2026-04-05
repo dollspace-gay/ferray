@@ -1,0 +1,11 @@
+{
+  "uuid": "6a61ced9-46f4-44ab-825d-7722b5e3d909",
+  "display_id": 512,
+  "title": "ferray-ma: no shared mask support (NumPy's sharedmask property)",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's MaskedArray can share its mask with views — modifying the mask of a view modifies the parent's mask too (when sharedmask=True). This is analogous to array views sharing data. ferray-ma always clones the mask (it's a separate Array<bool, D>). Shared masks reduce memory for large arrays and enable in-place mask operations through views. Low priority since it requires significant architecture changes.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:10:43.578872956Z",
+  "updated_at": "2026-04-05T00:10:43.578872956Z"
+}
