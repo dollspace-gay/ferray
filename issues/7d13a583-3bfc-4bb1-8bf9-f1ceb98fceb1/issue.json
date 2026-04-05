@@ -1,0 +1,11 @@
+{
+  "uuid": "7d13a583-3bfc-4bb1-8bf9-f1ceb98fceb1",
+  "display_id": 500,
+  "title": "ferray-ma: reductions are whole-array only — no axis parameter",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's MaskedArray.sum(axis=0), .mean(axis=1), .min(axis=0), .max(axis=0), .var(axis=0), .std(axis=0), .count(axis=0) all support an axis parameter for per-axis reduction. ferray-ma's reductions (sum, mean, min, max, var, std, count) all reduce over the entire array — there's no axis parameter. This means you can't compute per-row or per-column statistics on a masked 2D array. Add axis: Option<usize> to all reduction methods.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:08:50.329514009Z",
+  "updated_at": "2026-04-05T00:08:50.329514009Z"
+}
