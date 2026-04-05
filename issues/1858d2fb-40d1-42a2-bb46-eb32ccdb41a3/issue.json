@@ -1,0 +1,11 @@
+{
+  "uuid": "1858d2fb-40d1-42a2-bb46-eb32ccdb41a3",
+  "display_id": 559,
+  "title": "ferray-numpy-interop: no Arrow RecordBatch interop",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nArrow's primary data container is RecordBatch (multiple named columns). ferray interop only converts individual PrimitiveArrays. For IPC, Parquet, and Flight data exchange, RecordBatch is the standard unit. Add to_record_batch(arrays: &[(&str, &Array1<T>)]) and from_record_batch(batch) -> Vec<DynArray> conversions.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T03:12:56.005045609Z",
+  "updated_at": "2026-04-05T03:12:56.005045609Z"
+}
