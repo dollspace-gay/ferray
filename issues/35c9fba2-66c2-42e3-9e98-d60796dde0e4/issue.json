@@ -1,0 +1,11 @@
+{
+  "uuid": "35c9fba2-66c2-42e3-9e98-d60796dde0e4",
+  "display_id": 505,
+  "title": "ferray-ma: MaskedArray is not interoperable with ferray Array functions",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's MaskedArray subclasses ndarray, so any function that accepts ndarray also accepts MaskedArray (with mask propagation via __array_ufunc__). ferray's MaskedArray is a separate struct with no trait relationship to Array. You can't pass a MaskedArray to ferray-stats::sum, ferray-ufunc::sin, or ferray-linalg::solve. Users must extract .data(), operate, then reconstruct the mask. NumPy's design where MaskedArray IS-A ndarray is the key feature of numpy.ma. In Rust, this could be modeled via: (1) a trait that both Array and MaskedArray implement, (2) AsRef<Array> on MaskedArray, or (3) making ufunc/stats functions generic over a MaskAware trait.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:09:42.484505336Z",
+  "updated_at": "2026-04-05T00:09:42.484505336Z"
+}
