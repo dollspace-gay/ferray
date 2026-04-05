@@ -7,8 +7,9 @@
   "priority": "medium",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-05T03:11:38.550426266Z",
-  "updated_at": "2026-04-05T03:11:39.928429331Z",
+  "updated_at": "2026-04-05T03:11:41.321602570Z",
   "labels": [
-    "feature"
+    "feature",
+    "ferray-numpy-interop"
   ]
 }
