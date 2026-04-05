@@ -3,11 +3,12 @@
   "display_id": 134,
   "title": "ferray-random: no statistical goodness-of-fit tests (KS, chi-squared)",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nAll tests check mean/variance but never distribution shape. Could have correct moments but wrong distribution.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:33:44.894881532Z",
-  "updated_at": "2026-03-25T15:34:01.688259861Z",
+  "updated_at": "2026-04-05T20:57:09.345050681Z",
+  "closed_at": "2026-04-05T20:57:09.345050681Z",
   "labels": [
     "bug",
     "qa-audit"
