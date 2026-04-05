@@ -1,0 +1,11 @@
+{
+  "uuid": "89f9183d-2dfb-43b2-b1de-bce5ea39e53b",
+  "display_id": 514,
+  "title": "ferray-strings: StringArray is completely separate from Array — no trait interop",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy 2.0's string operations (numpy.strings) work on standard ndarray with fixed-width string dtype (U or S). The strings are stored directly in the ndarray's data buffer. ferray-strings uses a completely separate StringArray<D> type backed by Vec<String>. This means: (1) you can't mix string arrays with numeric arrays in the same data structure, (2) no .npy I/O support for string arrays, (3) no broadcasting with numeric arrays, (4) no shared infrastructure for indexing, slicing, or reshaping. Consider whether StringArray could use Array<String, D> (would require making String implement Element or a separate trait) or if a wrapper that delegates to Array for shape operations is feasible.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:36:28.427962434Z",
+  "updated_at": "2026-04-05T00:36:28.427962434Z"
+}
