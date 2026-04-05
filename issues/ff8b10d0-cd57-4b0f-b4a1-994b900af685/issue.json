@@ -3,11 +3,12 @@
   "display_id": 180,
   "title": "ferray-window: apply_along_axis returns wrong shape for 1-D input",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nfunctional.rs L172-175: creates 1-D shape [1] instead of NumPy's 0-D scalar.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:41:07.127455937Z",
-  "updated_at": "2026-03-25T15:41:19.369944477Z",
+  "updated_at": "2026-04-05T16:06:18.693469145Z",
+  "closed_at": "2026-04-05T16:06:18.693469145Z",
   "labels": [
     "bug",
     "qa-audit"
