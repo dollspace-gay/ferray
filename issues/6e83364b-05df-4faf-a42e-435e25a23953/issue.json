@@ -3,11 +3,12 @@
   "display_id": 188,
   "title": "ferray-autodiff: no numerical gradient comparison tests (finite-difference)",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nAll tests compare against hand-computed formulas. Same wrong formula in impl and test would pass.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:42:40.147833569Z",
-  "updated_at": "2026-03-25T15:42:56.943119285Z",
+  "updated_at": "2026-04-05T20:05:18.661503708Z",
+  "closed_at": "2026-04-05T20:05:18.661503708Z",
   "labels": [
     "bug",
     "qa-audit"
