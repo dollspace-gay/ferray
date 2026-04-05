@@ -1,0 +1,11 @@
+{
+  "uuid": "975d9721-588a-42fd-8f48-ee1155b32478",
+  "display_id": 496,
+  "title": "ferray-io: memmap returns raw MemmapArray — no ArrayView integration",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's np.load(file, mmap_mode='r') returns an ndarray backed by memory-mapped file — it's a normal array you can use with any NumPy function. ferray-io's MemmapArray has as_slice() and to_array() but isn't an ArrayView — you can't pass it to ferray functions that expect &Array<T, D> or ArrayView<T, D>. Add a .view() method that returns an ArrayView<T, IxDyn> backed by the mmap, or implement Deref to ArrayView.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:05:01.840687055Z",
+  "updated_at": "2026-04-05T00:05:01.840687055Z"
+}
