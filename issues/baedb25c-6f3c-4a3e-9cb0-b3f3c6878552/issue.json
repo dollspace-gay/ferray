@@ -1,0 +1,11 @@
+{
+  "uuid": "baedb25c-6f3c-4a3e-9cb0-b3f3c6878552",
+  "display_id": 504,
+  "title": "ferray-ma: no masked array broadcasting in arithmetic ops",
+  "description": "Goal: \n\nAcceptance criteria:\n- \n\nNumPy's MaskedArray arithmetic broadcasts automatically: a masked (3,4) array + a masked (4,) array works. ferray-ma's masked_add, masked_sub, etc. all require identical shapes: 'if a.shape() != b.shape() { return Err }'. This means basic patterns like centering (data - data.mean()) or normalizing are impossible without manual broadcast. Add broadcasting to masked binary operations.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T00:09:24.347589365Z",
+  "updated_at": "2026-04-05T00:09:24.347589365Z"
+}
