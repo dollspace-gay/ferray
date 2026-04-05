@@ -1,0 +1,11 @@
+{
+  "uuid": "b7c9aa17-7ef8-4809-a050-9ed9a3fc8be7",
+  "display_id": 548,
+  "title": "ferray-numpy-interop: AsFerray always copies — doc claims zero-copy borrow but implementation copies",
+  "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nAsFerray::as_ferray() in numpy_conv.rs is documented as: 'zero-copy borrow as a ferray ArrayView if C-contiguous, otherwise copy'. But the implementation always copies: 'let data: Vec<T> = py_arr.iter().cloned().collect()' for all three impls (Ix1, Ix2, IxDyn). It returns an owned Array, not an ArrayView. The trait signature returns Array<T, D>, not ArrayView. The doc says 'returning an ArrayView when the array is C-contiguous' but the code never creates a view. Either implement actual zero-copy via ArrayView::from_shape_ptr (for C-contiguous NumPy arrays) or fix the documentation.",
+  "status": "open",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-05T03:10:59.205299818Z",
+  "updated_at": "2026-04-05T03:10:59.205299818Z"
+}
