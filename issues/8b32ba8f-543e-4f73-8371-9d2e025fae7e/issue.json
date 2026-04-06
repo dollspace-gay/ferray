@@ -3,11 +3,12 @@
   "display_id": 104,
   "title": "ferray-linalg: lstsq 2D b code path untested",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsolve.rs L172-188: 2D residual computation never tested. All tests use 1D b.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:28:40.017143267Z",
-  "updated_at": "2026-03-25T15:28:44.503514124Z",
+  "updated_at": "2026-04-06T03:39:27.220851014Z",
+  "closed_at": "2026-04-06T03:39:27.220851014Z",
   "labels": [
     "bug",
     "qa-audit"
