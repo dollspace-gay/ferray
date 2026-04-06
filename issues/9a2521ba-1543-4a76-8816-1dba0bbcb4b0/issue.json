@@ -3,11 +3,12 @@
   "display_id": 106,
   "title": "ferray-linalg: matmul_batched (ND x ND) has zero tests",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nproducts/mod.rs L327-395: batched broadcasting path untested. Only 1D and 2D tested.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:28:52.568948912Z",
-  "updated_at": "2026-03-25T15:28:56.439046785Z",
+  "updated_at": "2026-04-06T03:41:03.136837836Z",
+  "closed_at": "2026-04-06T03:41:03.136837836Z",
   "labels": [
     "bug",
     "qa-audit"
