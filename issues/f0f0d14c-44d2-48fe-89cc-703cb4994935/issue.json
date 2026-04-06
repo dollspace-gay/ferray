@@ -2,11 +2,12 @@
   "uuid": "f0f0d14c-44d2-48fe-89cc-703cb4994935",
   "display_id": 560,
   "title": "ferray-core: NdIter — restore and complete BinaryBroadcastIter Iterator impl and binary_map_to",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-06T04:19:33.660252382Z",
-  "updated_at": "2026-04-06T04:19:35.168777351Z",
+  "updated_at": "2026-04-06T14:05:04.844081590Z",
+  "closed_at": "2026-04-06T14:05:04.844081590Z",
   "labels": [
     "ferray-core"
   ]
