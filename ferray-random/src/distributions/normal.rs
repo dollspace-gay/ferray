@@ -3,56 +3,37 @@
 use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
+use crate::distributions::ziggurat::{standard_normal_ziggurat, standard_normal_ziggurat_f32};
 use crate::generator::{
     Generator, generate_vec, generate_vec_f32, shape_size, vec_to_array_f32, vec_to_array_f64,
 };
 use crate::shape::IntoShape;
 
-/// Generate a single standard normal variate using the Box-Muller transform.
+/// Generate a single standard normal variate via the Ziggurat algorithm.
 ///
-/// Consumes two uniform [0,1) variates and produces two normal variates.
-/// We use both and cache the second, but for simplicity here we just use
-/// the Ziggurat-free approach generating one pair at a time.
-pub(crate) fn standard_normal_pair<B: BitGenerator>(bg: &mut B) -> (f64, f64) {
-    loop {
-        let u1 = bg.next_f64();
-        let u2 = bg.next_f64();
-        // Avoid log(0)
-        if u1 < f64::EPSILON {
-            continue;
-        }
-        let r = (-2.0 * u1.ln()).sqrt();
-        let theta = std::f64::consts::TAU * u2;
-        return (r * theta.cos(), r * theta.sin());
-    }
-}
-
-/// Generate a single standard normal variate.
+/// Ziggurat is ~3× faster than Box-Muller because ~98% of calls take a fast
+/// path that uses only one `next_u64`, a multiplication and a comparison.
+/// See [`ziggurat`](super::ziggurat) for the layer-table construction and
+/// the slow-path rejection logic.
 pub(crate) fn standard_normal_single<B: BitGenerator>(bg: &mut B) -> f64 {
-    standard_normal_pair(bg).0
+    standard_normal_ziggurat(bg)
 }
 
-/// Generate a pair of standard normal variates in f32 via Box-Muller.
+/// Generate a single f32 standard normal variate via Ziggurat.
 ///
-/// The computation is performed in f64 to avoid the accumulated rounding
-/// error of doing log/sqrt/sincos in f32 (which would degrade the tail
-/// distribution noticeably), then cast back to f32. This matches NumPy's
-/// approach for `dtype=np.float32`.
-pub(crate) fn standard_normal_pair_f32<B: BitGenerator>(bg: &mut B) -> (f32, f32) {
-    let (a, b) = standard_normal_pair(bg);
-    (a as f32, b as f32)
-}
-
-/// Generate a single f32 standard normal variate.
+/// The sampling is performed in f64 (Ziggurat tables are f64) and cast to
+/// f32. This costs essentially nothing on modern CPUs and preserves the full
+/// tail accuracy of the f64 path.
 pub(crate) fn standard_normal_single_f32<B: BitGenerator>(bg: &mut B) -> f32 {
-    standard_normal_pair_f32(bg).0
+    standard_normal_ziggurat_f32(bg)
 }
 
 impl<B: BitGenerator> Generator<B> {
     /// Generate an array of standard normal (mean=0, std=1) variates.
     ///
-    /// Uses the Box-Muller transform. `shape` accepts `usize`, `[usize; N]`,
-    /// `&[usize]`, or `Vec<usize>` via [`IntoShape`].
+    /// Uses the Marsaglia–Tsang Ziggurat algorithm (256 layers), which is
+    /// roughly 3× faster than Box–Muller for large draws. `shape` accepts
+    /// `usize`, `[usize; N]`, `&[usize]`, or `Vec<usize>` via [`IntoShape`].
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `shape` is invalid.
@@ -62,14 +43,7 @@ impl<B: BitGenerator> Generator<B> {
     ) -> Result<Array<f64, IxDyn>, FerrayError> {
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
-        let mut data = Vec::with_capacity(n);
-        while data.len() < n {
-            let (a, b) = standard_normal_pair(&mut self.bg);
-            data.push(a);
-            if data.len() < n {
-                data.push(b);
-            }
-        }
+        let data = generate_vec(self, n, standard_normal_single);
         vec_to_array_f64(data, &shape)
     }
 
@@ -98,8 +72,8 @@ impl<B: BitGenerator> Generator<B> {
     /// Generate an array of standard normal (mean=0, std=1) `f32` variates.
     ///
     /// The f32 analogue of [`standard_normal`](Self::standard_normal). Equivalent
-    /// to NumPy's `Generator.standard_normal(size, dtype=np.float32)`. The
-    /// generation is done in f64 and cast to f32 to preserve tail accuracy.
+    /// to NumPy's `Generator.standard_normal(size, dtype=np.float32)`. Uses the
+    /// same Ziggurat f64 tables, then casts to f32 to preserve tail accuracy.
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `shape` is invalid.
@@ -109,14 +83,7 @@ impl<B: BitGenerator> Generator<B> {
     ) -> Result<Array<f32, IxDyn>, FerrayError> {
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
-        let mut data = Vec::with_capacity(n);
-        while data.len() < n {
-            let (a, b) = standard_normal_pair_f32(&mut self.bg);
-            data.push(a);
-            if data.len() < n {
-                data.push(b);
-            }
-        }
+        let data = generate_vec_f32(self, n, standard_normal_single_f32);
         vec_to_array_f32(data, &shape)
     }
 

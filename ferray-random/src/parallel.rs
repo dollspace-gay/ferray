@@ -6,7 +6,7 @@
 use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
-use crate::distributions::normal::standard_normal_pair;
+use crate::distributions::normal::standard_normal_single;
 use crate::generator::{Generator, shape_size, vec_to_array_f64};
 use crate::shape::IntoShape;
 
@@ -36,12 +36,8 @@ impl<B: BitGenerator + Clone> Generator<B> {
         if n < 10_000 || num_threads <= 1 {
             // Sequential fallback
             let mut data = Vec::with_capacity(n);
-            while data.len() < n {
-                let (a, b) = standard_normal_pair(&mut self.bg);
-                data.push(a);
-                if data.len() < n {
-                    data.push(b);
-                }
+            for _ in 0..n {
+                data.push(standard_normal_single(&mut self.bg));
             }
             return vec_to_array_f64(data, &shape_vec);
         }
@@ -60,12 +56,8 @@ impl<B: BitGenerator + Clone> Generator<B> {
                 let end = (start + chunk_size).min(n);
                 let count = end - start;
                 let mut chunk = Vec::with_capacity(count);
-                while chunk.len() < count {
-                    let (a, b) = standard_normal_pair(&mut child.bg);
-                    chunk.push(a);
-                    if chunk.len() < count {
-                        chunk.push(b);
-                    }
+                for _ in 0..count {
+                    chunk.push(standard_normal_single(&mut child.bg));
                 }
                 chunk
             })

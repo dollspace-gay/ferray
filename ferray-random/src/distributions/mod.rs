@@ -9,3 +9,4 @@ pub mod misc_continuous;
 pub mod multivariate;
 pub mod normal;
 pub mod uniform;
+pub(crate) mod ziggurat;
