@@ -383,6 +383,65 @@ pub fn slogdet<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<(T, T)> {
     Ok((sign, log_abs_det))
 }
 
+/// Batched sign-and-log-determinant for arrays of shape `(..., N, N)`.
+///
+/// Returns `(signs, log_abs_dets)` as two 1-D arrays flattened over the
+/// leading batch dimensions (matching `det_batched`'s convention).
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if matrices are not square.
+pub fn slogdet_batched<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+) -> FerrayResult<(Array<T, Ix1>, Array<T, Ix1>)> {
+    let shape = a.shape();
+    if shape.len() == 2 {
+        let a2 = Array::<T, Ix2>::from_vec(
+            Ix2::new([shape[0], shape[1]]),
+            a.iter().copied().collect(),
+        )?;
+        let (sign, logdet) = slogdet(&a2)?;
+        return Ok((
+            Array::from_vec(Ix1::new([1]), vec![sign])?,
+            Array::from_vec(Ix1::new([1]), vec![logdet])?,
+        ));
+    }
+
+    let num_batches = batch::batch_count(shape, 2)?;
+    let m = shape[shape.len() - 2];
+    let n = shape[shape.len() - 1];
+    if m != n {
+        return Err(FerrayError::shape_mismatch(format!(
+            "slogdet requires square matrices, got {}x{}",
+            m, n
+        )));
+    }
+
+    let data: Vec<T> = a.iter().copied().collect();
+    let mat_size = m * n;
+
+    use rayon::prelude::*;
+    let pairs: Vec<FerrayResult<(T, T)>> = (0..num_batches)
+        .into_par_iter()
+        .map(|b| {
+            let slice = &data[b * mat_size..(b + 1) * mat_size];
+            let mat = Array::<T, Ix2>::from_vec(Ix2::new([m, n]), slice.to_vec())?;
+            slogdet(&mat)
+        })
+        .collect();
+
+    let mut signs = Vec::with_capacity(num_batches);
+    let mut logdets = Vec::with_capacity(num_batches);
+    for p in pairs {
+        let (s, l) = p?;
+        signs.push(s);
+        logdets.push(l);
+    }
+    Ok((
+        Array::from_vec(Ix1::new([num_batches]), signs)?,
+        Array::from_vec(Ix1::new([num_batches]), logdets)?,
+    ))
+}
+
 /// Compute the rank of a matrix using SVD.
 ///
 /// Elements of the singular value array that are below `tol` are considered zero.
@@ -407,6 +466,47 @@ pub fn matrix_rank<T: LinalgFloat>(a: &Array<T, Ix2>, tol: Option<T>) -> FerrayR
     });
 
     Ok(svals.iter().filter(|&&s_val| s_val > threshold).count())
+}
+
+/// Batched matrix rank for arrays of shape `(..., M, N)`.
+///
+/// Returns a flat array of ranks (length = number of batches), matching
+/// NumPy's `numpy.linalg.matrix_rank` which returns `int64` per batch.
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if SVD fails for any batch element.
+pub fn matrix_rank_batched<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    tol: Option<T>,
+) -> FerrayResult<Array<i64, Ix1>> {
+    let shape = a.shape();
+    if shape.len() == 2 {
+        let a2 = Array::<T, Ix2>::from_vec(
+            Ix2::new([shape[0], shape[1]]),
+            a.iter().copied().collect(),
+        )?;
+        let r = matrix_rank(&a2, tol)? as i64;
+        return Array::from_vec(Ix1::new([1]), vec![r]);
+    }
+
+    let num_batches = batch::batch_count(shape, 2)?;
+    let m = shape[shape.len() - 2];
+    let n = shape[shape.len() - 1];
+    let data: Vec<T> = a.iter().copied().collect();
+    let mat_size = m * n;
+
+    use rayon::prelude::*;
+    let ranks: Vec<FerrayResult<i64>> = (0..num_batches)
+        .into_par_iter()
+        .map(|b| {
+            let slice = &data[b * mat_size..(b + 1) * mat_size];
+            let mat = Array::<T, Ix2>::from_vec(Ix2::new([m, n]), slice.to_vec())?;
+            matrix_rank(&mat, tol).map(|r| r as i64)
+        })
+        .collect();
+
+    let ranks: Vec<i64> = ranks.into_iter().collect::<FerrayResult<Vec<i64>>>()?;
+    Array::from_vec(Ix1::new([num_batches]), ranks)
 }
 
 /// Compute the trace of a matrix (sum of diagonal elements).
@@ -546,5 +646,44 @@ mod tests {
         .unwrap();
         let c = cond(&a, NormOrder::L2).unwrap();
         assert!((c - 1.0).abs() < 1e-10);
+    }
+
+    // ---- Batched variants (#412) ----
+
+    #[test]
+    fn slogdet_batched_test() {
+        // Batch 0: identity -> sign=1, log|det|=0
+        // Batch 1: [[2,0],[0,3]] -> det=6, sign=1, log|det|=ln(6)
+        // Batch 2: [[1,2],[3,4]] -> det=-2, sign=-1, log|det|=ln(2)
+        let data: Vec<f64> = vec![
+            1.0, 0.0, 0.0, 1.0, //
+            2.0, 0.0, 0.0, 3.0, //
+            1.0, 2.0, 3.0, 4.0,
+        ];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 2, 2]), data).unwrap();
+        let (signs, logdets) = slogdet_batched(&a).unwrap();
+        let s = signs.as_slice().unwrap();
+        let l = logdets.as_slice().unwrap();
+        assert!((s[0] - 1.0).abs() < 1e-10);
+        assert!(l[0].abs() < 1e-10);
+        assert!((s[1] - 1.0).abs() < 1e-10);
+        assert!((l[1] - 6.0_f64.ln()).abs() < 1e-10);
+        assert!((s[2] - (-1.0)).abs() < 1e-10);
+        assert!((l[2] - 2.0_f64.ln()).abs() < 1e-10);
+    }
+
+    #[test]
+    fn matrix_rank_batched_test() {
+        // Batch 0: full rank 2
+        // Batch 1: rank 1 (two identical rows)
+        let data: Vec<f64> = vec![
+            1.0, 0.0, 0.0, 1.0, //
+            1.0, 2.0, 2.0, 4.0, //
+        ];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let ranks = matrix_rank_batched(&a, None).unwrap();
+        let r = ranks.as_slice().unwrap();
+        assert_eq!(r[0], 2);
+        assert_eq!(r[1], 1);
     }
 }

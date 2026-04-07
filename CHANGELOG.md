@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-03-07
 
 ### Added
+- ferray-linalg: no batched solve/inv/det — only cholesky has batched variant (#412)
 - ferray-random: standard_normal uses Box-Muller instead of Ziggurat — slower (#442)
 - ferray-random: only f64 output — no f32 random generation (#441)
 - ferray-fft: complex FFTs require Complex<f64> input — no auto-promotion from real arrays (#427)

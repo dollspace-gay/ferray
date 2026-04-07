@@ -5,10 +5,11 @@
 // eigh returns real eigenvalues for symmetric/Hermitian matrices.
 
 use ferray_core::array::owned::Array;
-use ferray_core::dimension::{Ix1, Ix2};
+use ferray_core::dimension::{Ix1, Ix2, IxDyn};
 use ferray_core::error::{FerrayError, FerrayResult};
 use num_complex::Complex;
 
+use crate::batch;
 use crate::faer_bridge;
 use crate::scalar::LinalgFloat;
 
@@ -157,6 +158,137 @@ pub fn eigvalsh<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix1>
     Array::from_vec(Ix1::new([vals.len()]), vals)
 }
 
+/// Batched symmetric eigendecomposition for arrays of shape `(..., N, N)`.
+///
+/// Returns `(eigenvalues, eigenvectors)` where eigenvalues has shape
+/// `(..., N)` and eigenvectors has shape `(..., N, N)`, matching NumPy.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if the last two dims are not square.
+/// - `FerrayError::InvalidValue` if decomposition fails for any batch.
+pub fn eigh_batched<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+) -> FerrayResult<(Array<T, IxDyn>, Array<T, IxDyn>)> {
+    let shape = a.shape();
+    if shape.len() < 2 {
+        return Err(FerrayError::shape_mismatch(
+            "eigh_batched: a must have at least 2 dimensions",
+        ));
+    }
+    if shape.len() == 2 {
+        let a2 = Array::<T, Ix2>::from_vec(
+            Ix2::new([shape[0], shape[1]]),
+            a.iter().copied().collect(),
+        )?;
+        let (vals, vecs) = eigh(&a2)?;
+        return Ok((
+            Array::from_vec(IxDyn::new(vals.shape()), vals.iter().copied().collect())?,
+            Array::from_vec(IxDyn::new(vecs.shape()), vecs.iter().copied().collect())?,
+        ));
+    }
+
+    let num_batches = batch::batch_count(shape, 2)?;
+    let n = shape[shape.len() - 1];
+    if shape[shape.len() - 2] != n {
+        return Err(FerrayError::shape_mismatch(format!(
+            "eigh_batched: matrices must be square, got {}x{}",
+            shape[shape.len() - 2],
+            n
+        )));
+    }
+
+    let data: Vec<T> = a.iter().copied().collect();
+    let mat_size = n * n;
+
+    use rayon::prelude::*;
+    let results: Vec<FerrayResult<(Vec<T>, Vec<T>)>> = (0..num_batches)
+        .into_par_iter()
+        .map(|b| {
+            let slice = &data[b * mat_size..(b + 1) * mat_size];
+            let mat = Array::<T, Ix2>::from_vec(Ix2::new([n, n]), slice.to_vec())?;
+            let (vals, vecs) = eigh(&mat)?;
+            Ok((
+                vals.iter().copied().collect::<Vec<T>>(),
+                vecs.iter().copied().collect::<Vec<T>>(),
+            ))
+        })
+        .collect();
+
+    let mut vals_flat: Vec<T> = Vec::with_capacity(num_batches * n);
+    let mut vecs_flat: Vec<T> = Vec::with_capacity(num_batches * n * n);
+    for res in results {
+        let (vs, ve) = res?;
+        vals_flat.extend(vs);
+        vecs_flat.extend(ve);
+    }
+
+    let mut vals_shape: Vec<usize> = shape[..shape.len() - 2].to_vec();
+    vals_shape.push(n);
+    let vecs_shape: Vec<usize> = shape.to_vec();
+    Ok((
+        Array::from_vec(IxDyn::new(&vals_shape), vals_flat)?,
+        Array::from_vec(IxDyn::new(&vecs_shape), vecs_flat)?,
+    ))
+}
+
+/// Batched symmetric eigenvalues-only for arrays of shape `(..., N, N)`.
+///
+/// Returns an array with shape `(..., N)` containing eigenvalues in
+/// ascending order per batch element.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if the last two dims are not square.
+/// - `FerrayError::InvalidValue` if computation fails for any batch.
+pub fn eigvalsh_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Array<T, IxDyn>> {
+    let shape = a.shape();
+    if shape.len() < 2 {
+        return Err(FerrayError::shape_mismatch(
+            "eigvalsh_batched: a must have at least 2 dimensions",
+        ));
+    }
+    if shape.len() == 2 {
+        let a2 = Array::<T, Ix2>::from_vec(
+            Ix2::new([shape[0], shape[1]]),
+            a.iter().copied().collect(),
+        )?;
+        let vals = eigvalsh(&a2)?;
+        return Array::from_vec(IxDyn::new(vals.shape()), vals.iter().copied().collect());
+    }
+
+    let num_batches = batch::batch_count(shape, 2)?;
+    let n = shape[shape.len() - 1];
+    if shape[shape.len() - 2] != n {
+        return Err(FerrayError::shape_mismatch(format!(
+            "eigvalsh_batched: matrices must be square, got {}x{}",
+            shape[shape.len() - 2],
+            n
+        )));
+    }
+
+    let data: Vec<T> = a.iter().copied().collect();
+    let mat_size = n * n;
+
+    use rayon::prelude::*;
+    let results: Vec<FerrayResult<Vec<T>>> = (0..num_batches)
+        .into_par_iter()
+        .map(|b| {
+            let slice = &data[b * mat_size..(b + 1) * mat_size];
+            let mat = Array::<T, Ix2>::from_vec(Ix2::new([n, n]), slice.to_vec())?;
+            let vals = eigvalsh(&mat)?;
+            Ok(vals.iter().copied().collect::<Vec<T>>())
+        })
+        .collect();
+
+    let mut flat: Vec<T> = Vec::with_capacity(num_batches * n);
+    for res in results {
+        flat.extend(res?);
+    }
+
+    let mut out_shape: Vec<usize> = shape[..shape.len() - 2].to_vec();
+    out_shape.push(n);
+    Array::from_vec(IxDyn::new(&out_shape), flat)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,5 +353,38 @@ mod tests {
     fn eig_non_square_error() {
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
         assert!(eig(&a).is_err());
+    }
+
+    // ---- Batched variants (#412) ----
+
+    #[test]
+    fn eigh_batched_stack() {
+        // Two 2x2 symmetric matrices.
+        // [[2,1],[1,2]] -> eigenvalues {1, 3}
+        // [[4,0],[0,5]] -> eigenvalues {4, 5}
+        let data = vec![2.0, 1.0, 1.0, 2.0, 4.0, 0.0, 0.0, 5.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let (vals, vecs) = eigh_batched(&a).unwrap();
+        assert_eq!(vals.shape(), &[2, 2]);
+        assert_eq!(vecs.shape(), &[2, 2, 2]);
+
+        let v = vals.as_slice().unwrap();
+        assert!((v[0] - 1.0).abs() < 1e-10);
+        assert!((v[1] - 3.0).abs() < 1e-10);
+        assert!((v[2] - 4.0).abs() < 1e-10);
+        assert!((v[3] - 5.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn eigvalsh_batched_stack() {
+        let data = vec![1.0, 0.0, 0.0, 2.0, 3.0, 0.0, 0.0, 4.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let vals = eigvalsh_batched(&a).unwrap();
+        assert_eq!(vals.shape(), &[2, 2]);
+        let v: Vec<f64> = vals.iter().copied().collect();
+        assert!((v[0] - 1.0).abs() < 1e-10);
+        assert!((v[1] - 2.0).abs() < 1e-10);
+        assert!((v[2] - 3.0).abs() < 1e-10);
+        assert!((v[3] - 4.0).abs() < 1e-10);
     }
 }

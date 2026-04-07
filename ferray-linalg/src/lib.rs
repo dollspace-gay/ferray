@@ -42,10 +42,19 @@ pub use products::{
 };
 
 // Decompositions (Section 8.2)
-pub use decomp::{QrMode, cholesky, eig, eigh, eigvals, eigvalsh, lu, qr, svd};
+pub use decomp::{
+    QrMode, cholesky, cholesky_batched, eig, eigh, eigh_batched, eigvals, eigvalsh,
+    eigvalsh_batched, lu, qr, qr_batched, svd, svd_batched,
+};
 
 // Solving and inversion (Section 8.3)
-pub use solve::{inv, lstsq, matrix_power, pinv, solve, tensorinv, tensorsolve};
+pub use solve::{
+    inv, inv_batched, lstsq, matrix_power, matrix_power_batched, pinv, pinv_batched, solve,
+    solve_batched, tensorinv, tensorsolve,
+};
 
 // Norms and measures (Section 8.4)
-pub use norms::{NormOrder, cond, det, det_batched, matrix_rank, norm, slogdet, trace};
+pub use norms::{
+    NormOrder, cond, det, det_batched, matrix_rank, matrix_rank_batched, norm, slogdet,
+    slogdet_batched, trace,
+};

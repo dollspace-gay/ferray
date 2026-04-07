@@ -6,6 +6,7 @@ use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix1, Ix2, IxDyn};
 use ferray_core::error::{FerrayError, FerrayResult};
 
+use crate::batch::{self, faer_to_vec, slice_to_faer};
 use crate::faer_bridge;
 use crate::scalar::LinalgFloat;
 use faer::linalg::solvers::{DenseSolveCore, Solve};
@@ -395,6 +396,256 @@ pub fn matrix_power<T: LinalgFloat>(a: &Array<T, Ix2>, n: i64) -> FerrayResult<A
     Array::from_vec(Ix2::new([sz, sz]), result_data)
 }
 
+// ---------------------------------------------------------------------------
+// Batched variants (#412) — dispatch along the leading (batch) axes and
+// parallelize via Rayon. All of these preserve the input batch shape and
+// apply the operation independently along the last two axes (the matrix
+// dimensions), matching NumPy's gufunc semantics for `numpy.linalg`.
+// ---------------------------------------------------------------------------
+
+/// Batched linear solve: `solve(A, b)` along the last two axes of `a` and
+/// (optionally) the last one or two axes of `b`.
+///
+/// `a` must have shape `(..., M, M)` and `b` must have shape `(..., M)` or
+/// `(..., M, K)`. The leading batch dimensions must match exactly (no
+/// broadcasting). Returns the stack of solutions with the same batch shape
+/// as the inputs.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if `A` is not square or dimensions are
+///   incompatible.
+/// - `FerrayError::SingularMatrix` if any matrix in the batch is singular.
+pub fn solve_batched<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
+    let a_shape = a.shape();
+    let b_shape = b.shape();
+    if a_shape.len() < 2 {
+        return Err(FerrayError::shape_mismatch(
+            "solve_batched: a must have at least 2 dimensions",
+        ));
+    }
+
+    // Fast path: non-batched inputs — just forward to the 2-D solver.
+    if a_shape.len() == 2 && b_shape.len() <= 2 {
+        let a2 = Array::<T, Ix2>::from_vec(
+            Ix2::new([a_shape[0], a_shape[1]]),
+            a.iter().copied().collect(),
+        )?;
+        return solve(&a2, b);
+    }
+
+    let n = a_shape[a_shape.len() - 1];
+    if a_shape[a_shape.len() - 2] != n {
+        return Err(FerrayError::shape_mismatch(format!(
+            "solve_batched: A must be square in the last two axes, got {}x{}",
+            a_shape[a_shape.len() - 2],
+            n
+        )));
+    }
+
+    let a_batch = &a_shape[..a_shape.len() - 2];
+
+    // Decide whether b is vector-stacked `(..., M)` or matrix-stacked
+    // `(..., M, K)` by matching batch prefix lengths against `a`.
+    let (b_is_vec, b_batch, nrhs) = if b_shape.len() == a_batch.len() + 1 {
+        // b has shape (..., M): one right-hand-side per batch.
+        (true, &b_shape[..b_shape.len() - 1], 1usize)
+    } else if b_shape.len() == a_batch.len() + 2 {
+        // b has shape (..., M, K): K right-hand sides per batch.
+        (false, &b_shape[..b_shape.len() - 2], b_shape[b_shape.len() - 1])
+    } else {
+        return Err(FerrayError::shape_mismatch(format!(
+            "solve_batched: b has incompatible rank ({} dims) for a ({} dims)",
+            b_shape.len(),
+            a_shape.len()
+        )));
+    };
+
+    if b_batch != a_batch {
+        return Err(FerrayError::shape_mismatch(format!(
+            "solve_batched: batch dimensions must match: {:?} vs {:?}",
+            a_batch, b_batch
+        )));
+    }
+    let b_m = if b_is_vec {
+        b_shape[b_shape.len() - 1]
+    } else {
+        b_shape[b_shape.len() - 2]
+    };
+    if b_m != n {
+        return Err(FerrayError::shape_mismatch(format!(
+            "solve_batched: A is {}x{} but b has leading dim {}",
+            n, n, b_m
+        )));
+    }
+
+    let num_batches = batch::batch_count(a_shape, 2)?;
+    let a_data: Vec<T> = a.iter().copied().collect();
+    let b_data: Vec<T> = b.iter().copied().collect();
+    let a_mat_size = n * n;
+    let b_mat_size = n * nrhs;
+
+    use rayon::prelude::*;
+    let results: Vec<FerrayResult<Vec<T>>> = (0..num_batches)
+        .into_par_iter()
+        .map(|idx| {
+            let a_slice = &a_data[idx * a_mat_size..(idx + 1) * a_mat_size];
+            let b_slice = &b_data[idx * b_mat_size..(idx + 1) * b_mat_size];
+            let a_faer = slice_to_faer(n, n, a_slice);
+            let lu = a_faer.as_ref().partial_piv_lu();
+            let b_faer = faer::Mat::<T>::from_fn(n, nrhs, |i, j| b_slice[i * nrhs + j]);
+            let x = lu.solve(&b_faer);
+            let mut out = Vec::with_capacity(b_mat_size);
+            for i in 0..n {
+                for j in 0..nrhs {
+                    let v = x[(i, j)];
+                    if v.is_nan() || v.is_infinite() {
+                        return Err(FerrayError::SingularMatrix {
+                            message: "matrix is singular or nearly singular; solve produced non-finite values".to_string(),
+                        });
+                    }
+                    out.push(v);
+                }
+            }
+            Ok(out)
+        })
+        .collect();
+
+    let flat: Vec<T> = results
+        .into_iter()
+        .collect::<FerrayResult<Vec<Vec<T>>>>()?
+        .into_iter()
+        .flatten()
+        .collect();
+
+    Array::from_vec(IxDyn::new(b_shape), flat)
+}
+
+/// Batched matrix inverse for arrays of shape `(..., N, N)`.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if the last two dims are not square.
+/// - `FerrayError::SingularMatrix` if any matrix in the batch is singular.
+pub fn inv_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Array<T, IxDyn>> {
+    let shape = a.shape();
+    if shape.len() == 2 {
+        let a2 = Array::<T, Ix2>::from_vec(
+            Ix2::new([shape[0], shape[1]]),
+            a.iter().copied().collect(),
+        )?;
+        let result = inv(&a2)?;
+        return Array::from_vec(IxDyn::new(shape), result.iter().copied().collect());
+    }
+
+    let results = batch::apply_batched_2d(a, |m, n, data| {
+        if m != n {
+            return Err(FerrayError::shape_mismatch(format!(
+                "inv requires square matrices, got {}x{}",
+                m, n
+            )));
+        }
+        if n == 0 {
+            return Ok(Vec::new());
+        }
+        let mat = slice_to_faer(m, n, data);
+        let lu = mat.as_ref().partial_piv_lu();
+        let inv_mat = lu.inverse();
+        let out = faer_to_vec(&inv_mat);
+        for &v in &out {
+            if v.is_nan() || v.is_infinite() {
+                return Err(FerrayError::SingularMatrix {
+                    message: "matrix is singular and cannot be inverted".to_string(),
+                });
+            }
+        }
+        Ok(out)
+    })?;
+
+    let flat: Vec<T> = results.into_iter().flatten().collect();
+    Array::from_vec(IxDyn::new(shape), flat)
+}
+
+/// Batched Moore-Penrose pseudoinverse for arrays of shape `(..., M, N)`.
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if SVD fails for any batch element.
+pub fn pinv_batched<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    rcond: Option<T>,
+) -> FerrayResult<Array<T, IxDyn>> {
+    let shape = a.shape();
+    if shape.len() < 2 {
+        return Err(FerrayError::shape_mismatch(
+            "pinv_batched: a must have at least 2 dimensions",
+        ));
+    }
+    if shape.len() == 2 {
+        let a2 = Array::<T, Ix2>::from_vec(
+            Ix2::new([shape[0], shape[1]]),
+            a.iter().copied().collect(),
+        )?;
+        let result = pinv(&a2, rcond)?;
+        return Array::from_vec(
+            IxDyn::new(&[shape[1], shape[0]]),
+            result.iter().copied().collect(),
+        );
+    }
+
+    let m = shape[shape.len() - 2];
+    let n = shape[shape.len() - 1];
+
+    let results = batch::apply_batched_2d(a, |bm, bn, data| {
+        let mat = Array::<T, Ix2>::from_vec(Ix2::new([bm, bn]), data.to_vec())?;
+        let out = pinv(&mat, rcond)?;
+        Ok(out.iter().copied().collect())
+    })?;
+
+    let flat: Vec<T> = results.into_iter().flatten().collect();
+    // Output shape: leading batch dims + (n, m) — pinv transposes the last two.
+    let mut out_shape: Vec<usize> = shape[..shape.len() - 2].to_vec();
+    out_shape.push(n);
+    out_shape.push(m);
+    Array::from_vec(IxDyn::new(&out_shape), flat)
+}
+
+/// Batched matrix power for arrays of shape `(..., N, N)`.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if matrices are not square.
+/// - `FerrayError::SingularMatrix` if `power < 0` and a batch element is
+///   singular.
+pub fn matrix_power_batched<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    power: i64,
+) -> FerrayResult<Array<T, IxDyn>> {
+    let shape = a.shape();
+    if shape.len() == 2 {
+        let a2 = Array::<T, Ix2>::from_vec(
+            Ix2::new([shape[0], shape[1]]),
+            a.iter().copied().collect(),
+        )?;
+        let result = matrix_power(&a2, power)?;
+        return Array::from_vec(IxDyn::new(shape), result.iter().copied().collect());
+    }
+
+    let results = batch::apply_batched_2d(a, |m, n, data| {
+        if m != n {
+            return Err(FerrayError::shape_mismatch(format!(
+                "matrix_power requires square matrices, got {}x{}",
+                m, n
+            )));
+        }
+        let mat = Array::<T, Ix2>::from_vec(Ix2::new([m, n]), data.to_vec())?;
+        let out = matrix_power(&mat, power)?;
+        Ok(out.iter().copied().collect())
+    })?;
+
+    let flat: Vec<T> = results.into_iter().flatten().collect();
+    Array::from_vec(IxDyn::new(shape), flat)
+}
+
 /// Solve the tensor equation `a x = b` for x.
 ///
 /// `a` is reshaped according to `axes` to form a square matrix equation.
@@ -776,5 +1027,172 @@ mod tests {
         assert!((data[1] - 0.0).abs() < 1e-10);
         assert!((data[2] - 0.0).abs() < 1e-10);
         assert!((data[3] - 0.5).abs() < 1e-10);
+    }
+
+    // -----------------------------------------------------------------------
+    // Batched variants (#412)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn inv_batched_3d() {
+        // Two 2x2 matrices stacked.
+        let data = vec![
+            4.0, 7.0, 2.0, 6.0, // first: inv = [[0.6,-0.7],[-0.2,0.4]]
+            1.0, 2.0, 3.0, 4.0, // second: inv = [[-2,1],[1.5,-0.5]]
+        ];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let inv = inv_batched(&a).unwrap();
+        assert_eq!(inv.shape(), &[2, 2, 2]);
+
+        // Verify A @ A^-1 = I per batch.
+        let a_data: Vec<f64> = a.iter().copied().collect();
+        let inv_data: Vec<f64> = inv.iter().copied().collect();
+        for b in 0..2 {
+            for i in 0..2 {
+                for j in 0..2 {
+                    let mut sum = 0.0;
+                    for p in 0..2 {
+                        sum += a_data[b * 4 + i * 2 + p] * inv_data[b * 4 + p * 2 + j];
+                    }
+                    let expected = if i == j { 1.0 } else { 0.0 };
+                    assert!(
+                        (sum - expected).abs() < 1e-10,
+                        "batch {b} [{i},{j}] = {sum}, expected {expected}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn solve_batched_vec_rhs() {
+        // Two 2x2 systems, each with a vector RHS.
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2, 2]),
+            vec![1.0, 2.0, 3.0, 4.0, 2.0, 0.0, 0.0, 3.0],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![5.0, 11.0, 4.0, 9.0],
+        )
+        .unwrap();
+        let x = solve_batched(&a, &b).unwrap();
+        assert_eq!(x.shape(), &[2, 2]);
+
+        // Verify A @ x = b per batch.
+        let a_data: Vec<f64> = a.iter().copied().collect();
+        let x_data: Vec<f64> = x.iter().copied().collect();
+        let b_data: Vec<f64> = b.iter().copied().collect();
+        for batch in 0..2 {
+            for i in 0..2 {
+                let mut sum = 0.0;
+                for j in 0..2 {
+                    sum += a_data[batch * 4 + i * 2 + j] * x_data[batch * 2 + j];
+                }
+                assert!(
+                    (sum - b_data[batch * 2 + i]).abs() < 1e-10,
+                    "A @ x != b at batch {batch} row {i}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn solve_batched_matrix_rhs() {
+        // Single batch, 2 RHS columns.
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[1, 2, 2]),
+            vec![1.0, 0.0, 0.0, 2.0],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[1, 2, 2]),
+            vec![1.0, 3.0, 4.0, 8.0],
+        )
+        .unwrap();
+        let x = solve_batched(&a, &b).unwrap();
+        assert_eq!(x.shape(), &[1, 2, 2]);
+        // x = [[1, 3], [2, 4]]
+        let d: Vec<f64> = x.iter().copied().collect();
+        assert!((d[0] - 1.0).abs() < 1e-10);
+        assert!((d[1] - 3.0).abs() < 1e-10);
+        assert!((d[2] - 2.0).abs() < 1e-10);
+        assert!((d[3] - 4.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn inv_batched_singular_errors() {
+        // Second matrix is singular.
+        let data = vec![1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 2.0, 4.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        assert!(inv_batched(&a).is_err());
+    }
+
+    #[test]
+    fn matrix_power_batched_identity() {
+        // Any matrix^0 = identity.
+        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let result = matrix_power_batched(&a, 0).unwrap();
+        assert_eq!(result.shape(), &[2, 2, 2]);
+        let d: Vec<f64> = result.iter().copied().collect();
+        assert_eq!(d, vec![1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn matrix_power_batched_square() {
+        // A^2 per batch.
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2, 2]),
+            vec![1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 0.0, 3.0],
+        )
+        .unwrap();
+        let result = matrix_power_batched(&a, 2).unwrap();
+        let d: Vec<f64> = result.iter().copied().collect();
+        // [[1,2],[0,1]]^2 = [[1,4],[0,1]]
+        assert!((d[0] - 1.0).abs() < 1e-10);
+        assert!((d[1] - 4.0).abs() < 1e-10);
+        assert!((d[2] - 0.0).abs() < 1e-10);
+        assert!((d[3] - 1.0).abs() < 1e-10);
+        // [[2,0],[0,3]]^2 = [[4,0],[0,9]]
+        assert!((d[4] - 4.0).abs() < 1e-10);
+        assert!((d[5] - 0.0).abs() < 1e-10);
+        assert!((d[6] - 0.0).abs() < 1e-10);
+        assert!((d[7] - 9.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn pinv_batched_square() {
+        // pinv of invertible matrices equals inv.
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2, 2]),
+            vec![1.0, 0.0, 0.0, 2.0, 2.0, 0.0, 0.0, 4.0],
+        )
+        .unwrap();
+        let pinv_a = pinv_batched(&a, None).unwrap();
+        assert_eq!(pinv_a.shape(), &[2, 2, 2]);
+        let d: Vec<f64> = pinv_a.iter().copied().collect();
+        // diag(1, 0.5), diag(0.5, 0.25)
+        assert!((d[0] - 1.0).abs() < 1e-10);
+        assert!((d[3] - 0.5).abs() < 1e-10);
+        assert!((d[4] - 0.5).abs() < 1e-10);
+        assert!((d[7] - 0.25).abs() < 1e-10);
+    }
+
+    #[test]
+    fn solve_batched_forwards_2d_to_solve() {
+        // 2-D input should just call through to solve without error.
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![1.0, 0.0, 0.0, 2.0],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
+        let x = solve_batched(&a, &b).unwrap();
+        assert_eq!(x.shape(), &[2]);
+        let d: Vec<f64> = x.iter().copied().collect();
+        assert!((d[0] - 3.0).abs() < 1e-10);
+        assert!((d[1] - 4.0).abs() < 1e-10);
     }
 }
