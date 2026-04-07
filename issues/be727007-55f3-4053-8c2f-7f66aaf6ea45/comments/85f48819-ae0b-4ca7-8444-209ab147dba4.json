@@ -1,0 +1,10 @@
+{
+  "uuid": "85f48819-ae0b-4ca7-8444-209ab147dba4",
+  "issue_uuid": "be727007-55f3-4053-8c2f-7f66aaf6ea45",
+  "author": "phase-4-coordinator",
+  "content": "Resolved by adding real-input convenience wrappers: fft_real, ifft_real, fft_real2, fft_realn in ferray-fft/src/complex.rs. These auto-promote a real Array<T, D> to Vec<Complex<T>> and delegate to the generic fft/fft2/fftn entry points, producing the full complex spectrum (use rfft/rfftn for the Hermitian-folded half-spectrum form). Works for both f32 and f64 thanks to the FftFloat trait from #426. Tests: fft_real_ifft_real_roundtrip_f64, fft_real_ifft_real_roundtrip_f32, fft_real_dc_component, fft_real2_roundtrip, fft_realn_3d_roundtrip.",
+  "created_at": "2026-04-07T20:42:10.565062924Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAwpXEcp7Zqocjh+cWj5S3aSUfTGN3ua6vIGV+d6M0rY+x1rkYiNsJtA0tM+51mOXVXVtVyZTUtNBl8SPKDD6zBg=="
+}
