@@ -1,0 +1,79 @@
+{
+  "uuid": "9189c12b-ecc1-4be2-a9e0-4c50876d8cf4",
+  "display_id": 41,
+  "title": "Fix Windows compilation: add signgam compat header for core-math lgamma.c",
+  "status": "closed",
+  "priority": "high",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-03-07T23:05:19.647891889Z",
+  "updated_at": "2026-04-07T12:34:43.721850989Z",
+  "closed_at": "2026-04-07T12:34:43.721850989Z",
+  "labels": [
+    "fix"
+  ],
+  "comments": [
+    {
+      "id": 46,
+      "author": "phase-4-coordinator",
+      "content": "Plan: Add a build.rs to ferray-ufunc that detects Windows target and injects a compat header declaring signgam via CFLAGS/DEP_CORE_MATH_* env. Also add the compat header file itself. This works around core-math-sys vendored lgamma.c using POSIX-only signgam global. Ref: GitHub issue dollspace-gay/ferray#5",
+      "created_at": "2026-03-07T23:05:31.531565701Z",
+      "kind": "plan",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAn0Vsp9dGn86mwaigLZ2wH+LTbLVJ7ACkbx7T7mlravfHeQLAL0ZImoMBNZPWuTuZ3F9V0/bxCTM/l5L19E8kBQ=="
+    },
+    {
+      "id": 47,
+      "author": "phase-4-coordinator",
+      "content": "core-math-sys already ships lib/signgam.c with 'int signgam;' and compiles it into the static lib. The issue is that lgamma.c does '#include <math.h> // for signgam' which declares signgam on POSIX but not on Windows. The fix is to declare signgam as extern in a compat header and inject it via CFLAGS. But since core-math-sys is an upstream dep with its own build.rs, we can't modify its compilation. Instead, we need to add the compat header at the ferray-ufunc level using a build.rs that sets the CFLAGS env var before core-math-sys compiles.",
+      "created_at": "2026-03-07T23:06:32.339560767Z",
+      "kind": "observation",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAgDzVdpPF2dwlw1rcRU2WY1jakzVbWKHUFLftj99mU+4v0EoT1pW39h2o9cMkHa6dm0QKthZREGBq//d14H3tCA=="
+    },
+    {
+      "id": 48,
+      "author": "phase-4-coordinator",
+      "content": "Actually, CFLAGS set in a downstream build.rs won't affect an upstream -sys crate's cc::Build. The cc crate reads CFLAGS from the environment at cargo invocation time, not from DEP_ vars. The correct approach: set CFLAGS='-include signgam_compat.h' as a cargo config env var for Windows targets. We'll create a .cargo/config.toml entry and document the workaround, plus create the compat header.",
+      "created_at": "2026-03-07T23:06:41.036658353Z",
+      "kind": "decision",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAj/BkJSpHjPE0JFYCOJUph5TvVfFi1tcsXZFprVu7jfOHtWYt1oM7Rkgo7WR8P5kqXcQUp3LX+xvo9XUcJLv3BQ=="
+    },
+    {
+      "id": 49,
+      "author": "phase-4-coordinator",
+      "content": "Revised approach: The cc crate reads CFLAGS from the process environment. A downstream build.rs cannot inject env vars into upstream -sys crate builds. The correct fix is: (1) Create a compat header at a known project path, (2) Add .cargo/config.toml with [env] CFLAGS for Windows targets pointing to that header, (3) Document for CI. The header declares 'extern int signgam;' only on _WIN32.",
+      "created_at": "2026-03-07T23:07:21.457116120Z",
+      "kind": "decision",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAs9Jh8YRn+Nb6yzFJZXmI1XOobUAp/krFVkGOvWjKLa6PbANOqygHMjNPG7P19kAs3moL/U7OXEq5f3tbtgdmCg=="
+    },
+    {
+      "id": 50,
+      "author": "phase-4-coordinator",
+      "content": "After further analysis: build.rs env vars don't propagate to upstream -sys crate builds. The cc crate reads CFLAGS from the process env at build time. Best approach: create .cargo/config.toml with [target.'cfg(windows)'.env] CFLAGS setting. But cargo's [env] table doesn't support per-target filtering. So instead: use a build.rs in ferray-ufunc that writes the header to OUT_DIR and prints cargo:rerun-if-changed, plus document that Windows users need to set CFLAGS. Actually simplest: use cargo's [env] unconditionally — the header has #if _WIN32 guards so it's a no-op on other platforms.",
+      "created_at": "2026-03-07T23:07:59.984297087Z",
+      "kind": "decision",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAan+Re53WvzqdEUeHyDt5BZH9G8BqkAlaivIsp6DyUMtPz7FesxI7/A6dYELwEhXLbkBZD0c3ToHWXvsM1D6dBA=="
+    },
+    {
+      "id": 51,
+      "author": "phase-4-coordinator",
+      "content": "cargo config.toml [env] with relative=true prepends the workspace path to the ENTIRE value, not just the file path portion. This turns '-include compat/signgam_compat.h' into '/abs/path/-include compat/signgam_compat.h' which cc interprets wrong. Need a different approach.",
+      "created_at": "2026-03-07T23:08:46.187972390Z",
+      "kind": "observation",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAwfwmTpNa1Y3gU+t9f02IXnuhFHjb6G0VCUc61tQk0vZ7MzphnAn1mL6YpERfoEc9yVKEVGa0vaF1/n9+UsD1CQ=="
+    },
+    {
+      "id": 52,
+      "author": "phase-4-coordinator",
+      "content": "Solution: CPATH with relative=true resolves to absolute workspace path for the compat/ include dir. CFLAGS=-include signgam_compat.h force-includes the header. The cc crate picks up both env vars when building core-math-sys. Header has #if _WIN32 guard so it's a no-op on POSIX. All 48 test suites pass on Linux.",
+      "created_at": "2026-03-07T23:10:07.163257989Z",
+      "kind": "result",
+      "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+      "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA+qO1t9yEXxZh3BVy5Zm/E8g00Uf+9YtP6hm1MTiSZm6avmlhVxK24M6CoobQDLyH18H+qUv3NAYPjtZae4tsDg=="
+    }
+  ]
+}
