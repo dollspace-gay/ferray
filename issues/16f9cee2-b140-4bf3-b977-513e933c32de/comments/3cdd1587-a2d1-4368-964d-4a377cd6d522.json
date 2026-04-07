@@ -1,0 +1,10 @@
+{
+  "uuid": "3cdd1587-a2d1-4368-964d-4a377cd6d522",
+  "issue_uuid": "16f9cee2-b140-4bf3-b977-513e933c32de",
+  "author": "phase-4-coordinator",
+  "content": "Added generic ufunc methods in new ferray-ufunc/src/ufunc_methods.rs module:\\n\\n- reduce_axis(arr, axis, identity, op) -> Array<T, IxDyn> — collapse axis by folding with any Fn(T, T) -> T, seeded by identity\\n- accumulate_axis(arr, axis, op) -> Array<T, D> — running fold along axis, output shape matches input\\n- outer(a, b, op) -> Array<T, IxDyn> — 1D x 1D outer product with any binary op\\n- at(arr, indices, values, op) -> in-place unbuffered scatter-reduce (matches NumPy's duplicate-index semantics — duplicate indices are applied in order, not just the last write)\\n\\nThe existing hand-written specializations (add_reduce, multiply_outer) now delegate to the new generic functions, so there's no duplicated traversal code. Callers who want subtract.reduce or power.outer or max.accumulate can now build them in one line:\\n\\n    reduce_axis(&a, 0, f64::NEG_INFINITY, f64::max)   // np.max\\n    accumulate_axis(&a, 0, |acc, x| acc - x)           // subtract.accumulate\\n    outer(&a, &b, |x, y| x.powf(y))                    // power.outer\\n\\n18 new unit tests cover: 1D/2D reductions (add/multiply/max) along both axes, running add/multiply/subtract, multiply/add/power outer products, unbuffered scatter-reduce with duplicate indices, and edge cases (axis out of bounds, length mismatch, index out of range).\\n\\n236 lib tests + 50/19/53 integration pass. Clippy clean. Full workspace builds.\\n\\nReduceat and the truly-general N-D at() are deferred; they need either a ufunc object (#376) or a more elaborate indexing API and are lower priority than the common cases covered here.",
+  "created_at": "2026-04-07T23:44:35.696383718Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAVwpNPVDPQRkMvlxBfXzx4ci6FlGK6PPpO3SErU2Gbpa78xPmeNh95BY2PuGwZrNvq5EasdHnITSsogRnWXtTBg=="
+}
