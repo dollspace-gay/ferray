@@ -3,11 +3,12 @@
   "display_id": 198,
   "title": "ferray-numpy-interop: no NaN roundtrip test for Polars",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nPolars bit_identical_f64_roundtrip (L291) does not include f64::NAN. Arrow version does.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:44:15.612943484Z",
-  "updated_at": "2026-03-25T15:44:42.736165879Z",
+  "updated_at": "2026-04-07T23:59:19.623031596Z",
+  "closed_at": "2026-04-07T23:59:19.623031596Z",
   "labels": [
     "bug",
     "qa-audit"
