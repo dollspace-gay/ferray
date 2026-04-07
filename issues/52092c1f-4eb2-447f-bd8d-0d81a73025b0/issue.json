@@ -2,11 +2,12 @@
   "uuid": "52092c1f-4eb2-447f-bd8d-0d81a73025b0",
   "display_id": 561,
   "title": "ferray-ufunc oracle.rs: replace closure-suppression with macro type pinning",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-07T13:26:14.821048869Z",
-  "updated_at": "2026-04-07T13:26:16.279541111Z",
+  "updated_at": "2026-04-07T13:27:49.281051258Z",
+  "closed_at": "2026-04-07T13:27:49.281051258Z",
   "labels": [
     "refactor"
   ]
