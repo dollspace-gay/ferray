@@ -1,0 +1,10 @@
+{
+  "uuid": "0cebd3fd-4d0d-4739-b58b-10b32d43f1ff",
+  "issue_uuid": "ffca2c6f-a849-423b-81c9-676e6d96cb1c",
+  "author": "phase-4-coordinator",
+  "content": "Resolved. parse_complex_data now routes both re and im fields through parse_f64_value, which already handles the NaN/Inf string forms (NaN, Inf, Infinity, -Inf, -Infinity) that Python's JSON serializer emits because the JSON grammar has no NaN/Inf literal. Previously the function called as_f64().unwrap() on both fields and panicked on every complex oracle fixture case that contained a non-finite value. 9 new unit tests cover finite, NaN in re, NaN in im, +/-Inf in re, mixed string+number fields, and the single-Object form of the input. Also added 3 tests for the pre-existing parse_f64_value helper that previously had no test coverage. Clippy clean; all tests pass.",
+  "created_at": "2026-04-07T23:48:30.960264425Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAUO1XiSsGG7kn3ei6chRWOdRZNtp6d2wSJ6FPieDck6y71SgitZ+tNercnrH5E3ZHM6gmGIKIhTTmnekAj8kCCQ=="
+}
