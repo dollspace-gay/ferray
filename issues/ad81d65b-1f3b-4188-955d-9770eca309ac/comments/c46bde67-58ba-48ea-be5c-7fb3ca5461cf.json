@@ -1,0 +1,10 @@
+{
+  "uuid": "c46bde67-58ba-48ea-be5c-7fb3ca5461cf",
+  "issue_uuid": "ad81d65b-1f3b-4188-955d-9770eca309ac",
+  "author": "phase-4-coordinator",
+  "content": "NpElement now implements bool — turns out numpy::Element already did, so the exclusion was arbitrary. Added bool to the impl_np_element! macro invocation and added 1D and 2D bool roundtrip tests (Array1<bool> ↔ PyArray1<bool>, Array2<bool> ↔ PyArray2<bool>). 12 python-feature tests pass including the two new bool ones.",
+  "created_at": "2026-04-07T23:59:31.469789499Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA1BlDiXsw6HSIdYqWtijq+v1ZoDukQfupo6INI5zRP2vZ/4VagbJrPHvMMx8jUPkuUSHdoZu6CnNMXpCN8txwDQ=="
+}
