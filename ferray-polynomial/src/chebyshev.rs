@@ -7,31 +7,117 @@ use ferray_core::error::FerrayError;
 use num_complex::Complex;
 
 use crate::fitting::{chebyshev_vandermonde, least_squares_fit};
+use crate::mapping::{auto_domain, map_x, mapparms, validate_domain_window};
 use crate::roots::find_roots_from_power_coeffs;
 use crate::traits::{FromPowerBasis, Poly, ToPowerBasis};
 
+/// Default domain and window for the Chebyshev basis.
+///
+/// The Chebyshev polynomials are well-conditioned on `[-1, 1]`. NumPy uses
+/// this same window by default; the domain defaults to `[-1, 1]` so that
+/// no mapping is applied unless the user opts in.
+const CHEBYSHEV_DEFAULT_DOMAIN: [f64; 2] = [-1.0, 1.0];
+const CHEBYSHEV_DEFAULT_WINDOW: [f64; 2] = [-1.0, 1.0];
+
 /// A polynomial in the Chebyshev basis (first kind).
 ///
-/// Represents p(x) = c[0]*T_0(x) + c[1]*T_1(x) + ... + c[n]*T_n(x)
-/// where T_k are the Chebyshev polynomials of the first kind.
+/// Represents p(x) = c[0]*T_0(u) + c[1]*T_1(u) + ... + c[n]*T_n(u) where
+/// `u = offset + scale * x` is the affine map from `domain` to `window`.
+/// By default the mapping is identity.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chebyshev {
     /// Coefficients in the Chebyshev basis.
     coeffs: Vec<f64>,
+    /// Input domain `[a, b]`. Defaults to `[-1, 1]`.
+    domain: [f64; 2],
+    /// Canonical window `[c, d]`. Defaults to `[-1, 1]`.
+    window: [f64; 2],
 }
 
 impl Chebyshev {
     /// Create a new Chebyshev polynomial from coefficients.
     ///
-    /// `coeffs[i]` is the coefficient of T_i(x).
+    /// `coeffs[i]` is the coefficient of T_i(x). The domain and window
+    /// default to `[-1, 1]` (identity mapping).
     pub fn new(coeffs: &[f64]) -> Self {
-        if coeffs.is_empty() {
-            Self { coeffs: vec![0.0] }
+        let coeffs = if coeffs.is_empty() {
+            vec![0.0]
         } else {
-            Self {
-                coeffs: coeffs.to_vec(),
-            }
+            coeffs.to_vec()
+        };
+        Self {
+            coeffs,
+            domain: CHEBYSHEV_DEFAULT_DOMAIN,
+            window: CHEBYSHEV_DEFAULT_WINDOW,
         }
+    }
+
+    /// Set the input domain, returning a new polynomial.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `domain[0] == domain[1]`.
+    pub fn with_domain(mut self, domain: [f64; 2]) -> Result<Self, FerrayError> {
+        validate_domain_window(domain, self.window)?;
+        self.domain = domain;
+        Ok(self)
+    }
+
+    /// Set the canonical window, returning a new polynomial.
+    pub fn with_window(mut self, window: [f64; 2]) -> Result<Self, FerrayError> {
+        validate_domain_window(self.domain, window)?;
+        self.window = window;
+        Ok(self)
+    }
+
+    /// Auto-domain fit: like [`Chebyshev::fit`] but computes `domain` from
+    /// the data range and fits in the canonical window. Critical for
+    /// numerical stability when fitting on non-canonical intervals.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` for length mismatches, empty
+    /// input, or rank-deficient fits.
+    pub fn fit_with_domain(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrayError> {
+        if x.len() != y.len() {
+            return Err(FerrayError::invalid_value(
+                "x and y must have the same length",
+            ));
+        }
+        if x.is_empty() {
+            return Err(FerrayError::invalid_value("x and y must not be empty"));
+        }
+        let domain = auto_domain(x);
+        let window = CHEBYSHEV_DEFAULT_WINDOW;
+        let (offset, scale) = mapparms(domain, window)?;
+        let u: Vec<f64> = x.iter().map(|&xi| map_x(xi, offset, scale)).collect();
+        let v = chebyshev_vandermonde(&u, deg);
+        let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, None)?;
+        Ok(Self {
+            coeffs,
+            domain,
+            window,
+        })
+    }
+
+    /// Internal: build a new Chebyshev with the same domain/window as self.
+    #[inline]
+    fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
+        Self {
+            coeffs,
+            domain: self.domain,
+            window: self.window,
+        }
+    }
+
+    /// Internal: verify two Chebyshev polynomials share the same mapping.
+    fn check_same_mapping(&self, other: &Self) -> Result<(), FerrayError> {
+        if self.domain != other.domain || self.window != other.window {
+            return Err(FerrayError::invalid_value(format!(
+                "polynomials must share the same domain and window: \
+                 self has domain={:?} window={:?}, other has domain={:?} window={:?}",
+                self.domain, self.window, other.domain, other.window
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -203,7 +289,9 @@ fn power_to_chebyshev(power_coeffs: &[f64]) -> Vec<f64> {
 
 impl Poly for Chebyshev {
     fn eval(&self, x: f64) -> Result<f64, FerrayError> {
-        Ok(clenshaw_chebyshev(&self.coeffs, x))
+        let (offset, scale) = self.mapparms()?;
+        let u = map_x(x, offset, scale);
+        Ok(clenshaw_chebyshev(&self.coeffs, u))
     }
 
     fn deriv(&self, m: usize) -> Result<Self, FerrayError> {
@@ -250,7 +338,7 @@ impl Poly for Chebyshev {
         if coeffs.is_empty() {
             coeffs = vec![0.0];
         }
-        Ok(Self { coeffs })
+        Ok(self.with_same_mapping(coeffs))
     }
 
     fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrayError> {
@@ -301,7 +389,7 @@ impl Poly for Chebyshev {
 
             coeffs = new_coeffs;
         }
-        Ok(Self { coeffs })
+        Ok(self.with_same_mapping(coeffs))
     }
 
     fn roots(&self) -> Result<Vec<Complex<f64>>, FerrayError> {
@@ -330,9 +418,7 @@ impl Poly for Chebyshev {
         while last > 1 && self.coeffs[last - 1].abs() <= tol {
             last -= 1;
         }
-        Ok(Self {
-            coeffs: self.coeffs[..last].to_vec(),
-        })
+        Ok(self.with_same_mapping(self.coeffs[..last].to_vec()))
     }
 
     fn truncate(&self, size: usize) -> Result<Self, FerrayError> {
@@ -342,12 +428,11 @@ impl Poly for Chebyshev {
             ));
         }
         let len = size.min(self.coeffs.len());
-        Ok(Self {
-            coeffs: self.coeffs[..len].to_vec(),
-        })
+        Ok(self.with_same_mapping(self.coeffs[..len].to_vec()))
     }
 
     fn add(&self, other: &Self) -> Result<Self, FerrayError> {
+        self.check_same_mapping(other)?;
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -356,10 +441,11 @@ impl Poly for Chebyshev {
         for (i, &c) in other.coeffs.iter().enumerate() {
             result[i] += c;
         }
-        Ok(Self { coeffs: result })
+        Ok(self.with_same_mapping(result))
     }
 
     fn sub(&self, other: &Self) -> Result<Self, FerrayError> {
+        self.check_same_mapping(other)?;
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -368,18 +454,17 @@ impl Poly for Chebyshev {
         for (i, &c) in other.coeffs.iter().enumerate() {
             result[i] -= c;
         }
-        Ok(Self { coeffs: result })
+        Ok(self.with_same_mapping(result))
     }
 
     fn mul(&self, other: &Self) -> Result<Self, FerrayError> {
-        Ok(Self {
-            coeffs: mul_chebyshev(&self.coeffs, &other.coeffs),
-        })
+        self.check_same_mapping(other)?;
+        Ok(self.with_same_mapping(mul_chebyshev(&self.coeffs, &other.coeffs)))
     }
 
     fn pow(&self, n: usize) -> Result<Self, FerrayError> {
         if n == 0 {
-            return Ok(Self { coeffs: vec![1.0] });
+            return Ok(self.with_same_mapping(vec![1.0]));
         }
         let mut result = self.clone();
         for _ in 1..n {
@@ -389,6 +474,7 @@ impl Poly for Chebyshev {
     }
 
     fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrayError> {
+        self.check_same_mapping(other)?;
         // Convert to power basis, perform divmod, convert back
         let a_power = chebyshev_to_power(&self.coeffs);
         let b_power = chebyshev_to_power(&other.coeffs);
@@ -400,7 +486,10 @@ impl Poly for Chebyshev {
         let q_cheb = power_to_chebyshev(q_poly.coeffs());
         let r_cheb = power_to_chebyshev(r_poly.coeffs());
 
-        Ok((Self { coeffs: q_cheb }, Self { coeffs: r_cheb }))
+        Ok((
+            self.with_same_mapping(q_cheb),
+            self.with_same_mapping(r_cheb),
+        ))
     }
 
     fn fit(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrayError> {
@@ -414,7 +503,7 @@ impl Poly for Chebyshev {
         }
         let v = chebyshev_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, None)?;
-        Ok(Self { coeffs })
+        Ok(Self::new(&coeffs))
     }
 
     fn fit_weighted(x: &[f64], y: &[f64], deg: usize, w: &[f64]) -> Result<Self, FerrayError> {
@@ -428,11 +517,19 @@ impl Poly for Chebyshev {
         }
         let v = chebyshev_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, Some(w))?;
-        Ok(Self { coeffs })
+        Ok(Self::new(&coeffs))
     }
 
     fn from_coeffs(coeffs: &[f64]) -> Self {
         Self::new(coeffs)
+    }
+
+    fn domain(&self) -> [f64; 2] {
+        self.domain
+    }
+
+    fn window(&self) -> [f64; 2] {
+        self.window
     }
 }
 
@@ -444,18 +541,14 @@ impl ToPowerBasis for Chebyshev {
 
 impl FromPowerBasis for Chebyshev {
     fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrayError> {
-        Ok(Self {
-            coeffs: power_to_chebyshev(coeffs),
-        })
+        Ok(Self::new(&power_to_chebyshev(coeffs)))
     }
 }
 
 // Pairwise From impls for basis conversion
 impl From<crate::power::Polynomial> for Chebyshev {
     fn from(p: crate::power::Polynomial) -> Self {
-        Self {
-            coeffs: power_to_chebyshev(p.coeffs()),
-        }
+        Self::new(&power_to_chebyshev(p.coeffs()))
     }
 }
 
@@ -608,5 +701,58 @@ mod tests {
                 rec
             );
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Domain / window mapping tests (issue #474)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn chebyshev_default_mapping_is_identity() {
+        let p = Chebyshev::new(&[1.0, 2.0, 3.0]);
+        let (offset, scale) = p.mapparms().unwrap();
+        assert_eq!(offset, 0.0);
+        assert_eq!(scale, 1.0);
+    }
+
+    #[test]
+    fn chebyshev_with_domain_evaluates_via_mapping() {
+        // T_1(u) = u with domain [0, 4] mapped to canonical [-1, 1]:
+        // u = -1 + 0.5*x, so x=0->u=-1, x=2->u=0, x=4->u=1.
+        let p = Chebyshev::new(&[0.0, 1.0])
+            .with_domain([0.0, 4.0])
+            .unwrap();
+        assert!((p.eval(0.0).unwrap() - (-1.0)).abs() < 1e-12);
+        assert!((p.eval(2.0).unwrap() - 0.0).abs() < 1e-12);
+        assert!((p.eval(4.0).unwrap() - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn chebyshev_fit_with_domain_recovers_function_values_on_wide_interval() {
+        // Fit y = x^2 on x ∈ [0, 100] — without auto-domain this would be
+        // ill-conditioned because Chebyshev expects x in [-1, 1].
+        let x: Vec<f64> = (0..=20).map(|i| i as f64 * 5.0).collect();
+        let y: Vec<f64> = x.iter().map(|&xi| xi * xi).collect();
+        let cheb = Chebyshev::fit_with_domain(&x, &y, 5).unwrap();
+        assert_eq!(cheb.domain(), [0.0, 100.0]);
+        assert_eq!(cheb.window(), [-1.0, 1.0]);
+        for (&xi, &yi) in x.iter().zip(y.iter()) {
+            assert!(
+                (cheb.eval(xi).unwrap() - yi).abs() < 1e-6,
+                "at x={xi}: expected {yi}, got {}",
+                cheb.eval(xi).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn chebyshev_binary_op_rejects_mismatched_mapping() {
+        let a = Chebyshev::new(&[1.0, 2.0])
+            .with_domain([0.0, 1.0])
+            .unwrap();
+        let b = Chebyshev::new(&[3.0, 4.0])
+            .with_domain([0.0, 2.0])
+            .unwrap();
+        assert!(a.add(&b).is_err());
     }
 }

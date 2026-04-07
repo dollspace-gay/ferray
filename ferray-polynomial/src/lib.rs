@@ -34,6 +34,7 @@ pub mod hermite;
 pub mod hermite_e;
 pub mod laguerre;
 pub mod legendre;
+pub mod mapping;
 pub mod power;
 pub mod roots;
 pub mod traits;

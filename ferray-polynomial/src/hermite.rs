@@ -8,29 +8,103 @@ use ferray_core::error::FerrayError;
 use num_complex::Complex;
 
 use crate::fitting::{hermite_vandermonde, least_squares_fit};
+use crate::mapping::{auto_domain, map_x, mapparms, validate_domain_window};
 use crate::roots::find_roots_from_power_coeffs;
 use crate::traits::{FromPowerBasis, Poly, ToPowerBasis};
 
+/// Default domain and window for the Hermite basis. NumPy uses `[-1, 1]` for both.
+const HERMITE_DEFAULT_DOMAIN: [f64; 2] = [-1.0, 1.0];
+const HERMITE_DEFAULT_WINDOW: [f64; 2] = [-1.0, 1.0];
+
 /// A polynomial in the physicist's Hermite basis.
 ///
-/// Represents p(x) = c[0]*H_0(x) + c[1]*H_1(x) + ... + c[n]*H_n(x)
-/// where H_k are the physicist's Hermite polynomials.
+/// Represents p(x) = c[0]*H_0(u) + c[1]*H_1(u) + ... + c[n]*H_n(u) where
+/// `u = offset + scale * x` is the affine map from `domain` to `window`.
+/// By default the mapping is identity.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Hermite {
     /// Coefficients in the Hermite basis.
     coeffs: Vec<f64>,
+    /// Input domain `[a, b]`. Defaults to `[-1, 1]`.
+    domain: [f64; 2],
+    /// Canonical window `[c, d]`. Defaults to `[-1, 1]`.
+    window: [f64; 2],
 }
 
 impl Hermite {
-    /// Create a new Hermite polynomial from coefficients.
+    /// Create a new Hermite polynomial from coefficients. Defaults to
+    /// identity mapping (`domain = window = [-1, 1]`).
     pub fn new(coeffs: &[f64]) -> Self {
-        if coeffs.is_empty() {
-            Self { coeffs: vec![0.0] }
+        let coeffs = if coeffs.is_empty() {
+            vec![0.0]
         } else {
-            Self {
-                coeffs: coeffs.to_vec(),
-            }
+            coeffs.to_vec()
+        };
+        Self {
+            coeffs,
+            domain: HERMITE_DEFAULT_DOMAIN,
+            window: HERMITE_DEFAULT_WINDOW,
         }
+    }
+
+    /// Set the input domain, returning a new polynomial.
+    pub fn with_domain(mut self, domain: [f64; 2]) -> Result<Self, FerrayError> {
+        validate_domain_window(domain, self.window)?;
+        self.domain = domain;
+        Ok(self)
+    }
+
+    /// Set the canonical window, returning a new polynomial.
+    pub fn with_window(mut self, window: [f64; 2]) -> Result<Self, FerrayError> {
+        validate_domain_window(self.domain, window)?;
+        self.window = window;
+        Ok(self)
+    }
+
+    /// Auto-domain fit: like [`Hermite::fit`] but computes `domain` from
+    /// the data range and fits in the canonical window.
+    pub fn fit_with_domain(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrayError> {
+        if x.len() != y.len() {
+            return Err(FerrayError::invalid_value(
+                "x and y must have the same length",
+            ));
+        }
+        if x.is_empty() {
+            return Err(FerrayError::invalid_value("x and y must not be empty"));
+        }
+        let domain = auto_domain(x);
+        let window = HERMITE_DEFAULT_WINDOW;
+        let (offset, scale) = mapparms(domain, window)?;
+        let u: Vec<f64> = x.iter().map(|&xi| map_x(xi, offset, scale)).collect();
+        let v = hermite_vandermonde(&u, deg);
+        let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, None)?;
+        Ok(Self {
+            coeffs,
+            domain,
+            window,
+        })
+    }
+
+    /// Internal: build a new Hermite with the same mapping as self.
+    #[inline]
+    fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
+        Self {
+            coeffs,
+            domain: self.domain,
+            window: self.window,
+        }
+    }
+
+    /// Internal: verify two Hermite polynomials share the same mapping.
+    fn check_same_mapping(&self, other: &Self) -> Result<(), FerrayError> {
+        if self.domain != other.domain || self.window != other.window {
+            return Err(FerrayError::invalid_value(format!(
+                "polynomials must share the same domain and window: \
+                 self has domain={:?} window={:?}, other has domain={:?} window={:?}",
+                self.domain, self.window, other.domain, other.window
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -165,7 +239,9 @@ fn power_to_hermite(power_coeffs: &[f64]) -> Vec<f64> {
 
 impl Poly for Hermite {
     fn eval(&self, x: f64) -> Result<f64, FerrayError> {
-        Ok(clenshaw_hermite(&self.coeffs, x))
+        let (offset, scale) = self.mapparms()?;
+        let u = map_x(x, offset, scale);
+        Ok(clenshaw_hermite(&self.coeffs, u))
     }
 
     fn deriv(&self, m: usize) -> Result<Self, FerrayError> {
@@ -187,9 +263,7 @@ impl Poly for Hermite {
         if power.is_empty() {
             power = vec![0.0];
         }
-        Ok(Self {
-            coeffs: power_to_hermite(&power),
-        })
+        Ok(self.with_same_mapping(power_to_hermite(&power)))
     }
 
     fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrayError> {
@@ -206,9 +280,7 @@ impl Poly for Hermite {
             }
             power = new_power;
         }
-        Ok(Self {
-            coeffs: power_to_hermite(&power),
-        })
+        Ok(self.with_same_mapping(power_to_hermite(&power)))
     }
 
     fn roots(&self) -> Result<Vec<Complex<f64>>, FerrayError> {
@@ -236,9 +308,7 @@ impl Poly for Hermite {
         while last > 1 && self.coeffs[last - 1].abs() <= tol {
             last -= 1;
         }
-        Ok(Self {
-            coeffs: self.coeffs[..last].to_vec(),
-        })
+        Ok(self.with_same_mapping(self.coeffs[..last].to_vec()))
     }
 
     fn truncate(&self, size: usize) -> Result<Self, FerrayError> {
@@ -248,12 +318,11 @@ impl Poly for Hermite {
             ));
         }
         let len = size.min(self.coeffs.len());
-        Ok(Self {
-            coeffs: self.coeffs[..len].to_vec(),
-        })
+        Ok(self.with_same_mapping(self.coeffs[..len].to_vec()))
     }
 
     fn add(&self, other: &Self) -> Result<Self, FerrayError> {
+        self.check_same_mapping(other)?;
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -262,10 +331,11 @@ impl Poly for Hermite {
         for (i, &c) in other.coeffs.iter().enumerate() {
             result[i] += c;
         }
-        Ok(Self { coeffs: result })
+        Ok(self.with_same_mapping(result))
     }
 
     fn sub(&self, other: &Self) -> Result<Self, FerrayError> {
+        self.check_same_mapping(other)?;
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -274,10 +344,11 @@ impl Poly for Hermite {
         for (i, &c) in other.coeffs.iter().enumerate() {
             result[i] -= c;
         }
-        Ok(Self { coeffs: result })
+        Ok(self.with_same_mapping(result))
     }
 
     fn mul(&self, other: &Self) -> Result<Self, FerrayError> {
+        self.check_same_mapping(other)?;
         let a_power = hermite_to_power(&self.coeffs);
         let b_power = hermite_to_power(&other.coeffs);
 
@@ -289,14 +360,12 @@ impl Poly for Hermite {
             }
         }
 
-        Ok(Self {
-            coeffs: power_to_hermite(&product),
-        })
+        Ok(self.with_same_mapping(power_to_hermite(&product)))
     }
 
     fn pow(&self, n: usize) -> Result<Self, FerrayError> {
         if n == 0 {
-            return Ok(Self { coeffs: vec![1.0] });
+            return Ok(self.with_same_mapping(vec![1.0]));
         }
         let mut result = self.clone();
         for _ in 1..n {
@@ -306,6 +375,7 @@ impl Poly for Hermite {
     }
 
     fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrayError> {
+        self.check_same_mapping(other)?;
         let a_power = hermite_to_power(&self.coeffs);
         let b_power = hermite_to_power(&other.coeffs);
 
@@ -314,12 +384,8 @@ impl Poly for Hermite {
         let (q_poly, r_poly) = a_poly.divmod(&b_poly)?;
 
         Ok((
-            Self {
-                coeffs: power_to_hermite(q_poly.coeffs()),
-            },
-            Self {
-                coeffs: power_to_hermite(r_poly.coeffs()),
-            },
+            self.with_same_mapping(power_to_hermite(q_poly.coeffs())),
+            self.with_same_mapping(power_to_hermite(r_poly.coeffs())),
         ))
     }
 
@@ -334,7 +400,7 @@ impl Poly for Hermite {
         }
         let v = hermite_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, None)?;
-        Ok(Self { coeffs })
+        Ok(Self::new(&coeffs))
     }
 
     fn fit_weighted(x: &[f64], y: &[f64], deg: usize, w: &[f64]) -> Result<Self, FerrayError> {
@@ -348,11 +414,19 @@ impl Poly for Hermite {
         }
         let v = hermite_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, Some(w))?;
-        Ok(Self { coeffs })
+        Ok(Self::new(&coeffs))
     }
 
     fn from_coeffs(coeffs: &[f64]) -> Self {
         Self::new(coeffs)
+    }
+
+    fn domain(&self) -> [f64; 2] {
+        self.domain
+    }
+
+    fn window(&self) -> [f64; 2] {
+        self.window
     }
 }
 
@@ -364,17 +438,13 @@ impl ToPowerBasis for Hermite {
 
 impl FromPowerBasis for Hermite {
     fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrayError> {
-        Ok(Self {
-            coeffs: power_to_hermite(coeffs),
-        })
+        Ok(Self::new(&power_to_hermite(coeffs)))
     }
 }
 
 impl From<crate::power::Polynomial> for Hermite {
     fn from(p: crate::power::Polynomial) -> Self {
-        Self {
-            coeffs: power_to_hermite(p.coeffs()),
-        }
+        Self::new(&power_to_hermite(p.coeffs()))
     }
 }
 

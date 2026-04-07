@@ -3,6 +3,8 @@
 use ferray_core::error::FerrayError;
 use num_complex::Complex;
 
+use crate::mapping::mapparms;
+
 /// Common trait for polynomial types in all bases.
 ///
 /// Every polynomial class (power, Chebyshev, Legendre, Laguerre, Hermite,
@@ -108,6 +110,40 @@ pub trait Poly: Clone + Sized {
 
     /// Construct the polynomial from the given coefficients.
     fn from_coeffs(coeffs: &[f64]) -> Self;
+
+    // -----------------------------------------------------------------------
+    // Domain / window mapping (issue #474)
+    //
+    // NumPy's polynomial classes carry a `domain` (where x lives) and a
+    // `window` (the canonical interval for the basis). When evaluating, x is
+    // affine-mapped from `domain` to `window` first. This is critical for
+    // numerical stability when fitting on non-canonical intervals.
+    // -----------------------------------------------------------------------
+
+    /// Return the input domain `[a, b]` for this polynomial.
+    ///
+    /// `eval(x)` for `x` outside `[a, b]` is still defined (the affine
+    /// extrapolation is applied) but may be ill-conditioned.
+    fn domain(&self) -> [f64; 2];
+
+    /// Return the canonical window `[c, d]` for this basis.
+    ///
+    /// For most bases this is `[-1, 1]`. Laguerre uses `[0, 1]`. The Power
+    /// basis nominally uses `[-1, 1]` but in practice many users leave the
+    /// domain identical to the window for an identity mapping.
+    fn window(&self) -> [f64; 2];
+
+    /// Compute the affine map parameters `(offset, scale)` such that
+    /// evaluating the polynomial at `x` is the same as evaluating its
+    /// canonical-basis form at `u = offset + scale * x`.
+    ///
+    /// Returns `(0, 1)` when `domain == window` (the default mapping).
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if the domain is degenerate.
+    fn mapparms(&self) -> Result<(f64, f64), FerrayError> {
+        mapparms(self.domain(), self.window())
+    }
 }
 
 /// Trait for converting a polynomial to its power basis representation.

@@ -6,17 +6,30 @@ use ferray_core::error::FerrayError;
 use num_complex::Complex;
 
 use crate::fitting::{least_squares_fit, power_vandermonde};
+use crate::mapping::{auto_domain, map_x, mapparms, validate_domain_window};
 use crate::roots::find_roots_from_power_coeffs;
 use crate::traits::{FromPowerBasis, Poly, ToPowerBasis};
 
+/// Default domain and window for the power basis.
+///
+/// NumPy uses `[-1, 1]` for both, giving an identity mapping by default.
+const POWER_DEFAULT_DOMAIN: [f64; 2] = [-1.0, 1.0];
+const POWER_DEFAULT_WINDOW: [f64; 2] = [-1.0, 1.0];
+
 /// A polynomial in the standard power (monomial) basis.
 ///
-/// Represents p(x) = c[0] + c[1]*x + c[2]*x^2 + ... + c[n]*x^n
-/// where `coeffs[i]` is the coefficient of x^i.
+/// Represents p(x) = c[0] + c[1]*u + c[2]*u^2 + ... + c[n]*u^n where
+/// `u = offset + scale * x` is the affine map from `domain` to `window`.
+/// By default `domain == window == [-1, 1]`, giving an identity map so
+/// that `eval(x)` reduces to the standard Horner evaluation at x.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Polynomial {
     /// Coefficients in ascending power order: c[0], c[1], ..., c[n].
     coeffs: Vec<f64>,
+    /// Input domain `[a, b]`. Defaults to `[-1, 1]`.
+    domain: [f64; 2],
+    /// Canonical window `[c, d]`. Defaults to `[-1, 1]`.
+    window: [f64; 2],
 }
 
 impl Polynomial {
@@ -24,25 +37,126 @@ impl Polynomial {
     ///
     /// Coefficients are in ascending order: `coeffs[i]` is the coefficient of x^i.
     /// An empty coefficient slice produces the zero polynomial `[0.0]`.
+    /// The domain and window default to `[-1, 1]` (identity mapping).
     pub fn new(coeffs: &[f64]) -> Self {
-        if coeffs.is_empty() {
-            Self { coeffs: vec![0.0] }
+        let coeffs = if coeffs.is_empty() {
+            vec![0.0]
         } else {
-            Self {
-                coeffs: coeffs.to_vec(),
-            }
+            coeffs.to_vec()
+        };
+        Self {
+            coeffs,
+            domain: POWER_DEFAULT_DOMAIN,
+            window: POWER_DEFAULT_WINDOW,
         }
+    }
+
+    /// Set the input domain, returning a new polynomial.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `domain[0] == domain[1]`.
+    pub fn with_domain(mut self, domain: [f64; 2]) -> Result<Self, FerrayError> {
+        validate_domain_window(domain, self.window)?;
+        self.domain = domain;
+        Ok(self)
+    }
+
+    /// Set the canonical window, returning a new polynomial.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `window[0] == window[1]`.
+    pub fn with_window(mut self, window: [f64; 2]) -> Result<Self, FerrayError> {
+        validate_domain_window(self.domain, window)?;
+        self.window = window;
+        Ok(self)
+    }
+
+    /// Raw Horner-form evaluation in the canonical window (no mapping).
+    ///
+    /// Used internally and as a building block for the public `eval()`,
+    /// which applies the domain→window affine map first.
+    fn eval_canonical(&self, u: f64) -> f64 {
+        let mut result = 0.0;
+        for &c in self.coeffs.iter().rev() {
+            result = result * u + c;
+        }
+        result
+    }
+
+    /// Internal: build a new `Polynomial` with the same domain/window as `self`.
+    ///
+    /// All coefficient-only operations (deriv, integ, trim, truncate, ...)
+    /// route through this so the receiver's mapping propagates to the
+    /// result. Operations that combine two polynomials (add/sub/mul/divmod)
+    /// must explicitly verify both mappings match before calling this.
+    #[inline]
+    fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
+        Self {
+            coeffs,
+            domain: self.domain,
+            window: self.window,
+        }
+    }
+
+    /// Internal: verify that two polynomials share the same domain/window
+    /// before combining them via add/sub/mul/divmod. Matches NumPy's
+    /// behavior of raising on mismatched mappings.
+    fn check_same_mapping(&self, other: &Self) -> Result<(), FerrayError> {
+        if self.domain != other.domain || self.window != other.window {
+            return Err(FerrayError::invalid_value(format!(
+                "polynomials must share the same domain and window: \
+                 self has domain={:?} window={:?}, other has domain={:?} window={:?}",
+                self.domain, self.window, other.domain, other.window
+            )));
+        }
+        Ok(())
+    }
+
+    /// Auto-domain fit: like [`Polynomial::fit`] but computes `domain` from
+    /// the data range, fits in the canonical window, and stores the
+    /// resulting mapping. Matches `numpy.polynomial.Polynomial.fit`.
+    ///
+    /// Use this instead of [`Polynomial::fit`] when fitting data on a
+    /// non-canonical interval (e.g. `x = [0, 1000]`) to avoid the
+    /// catastrophic cancellation that comes from raw-x conditioning.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` for length mismatches, empty
+    /// input, or rank-deficient fits.
+    pub fn fit_with_domain(x: &[f64], y: &[f64], deg: usize) -> Result<Self, FerrayError> {
+        if x.len() != y.len() {
+            return Err(FerrayError::invalid_value(format!(
+                "x and y must have the same length, got {} and {}",
+                x.len(),
+                y.len()
+            )));
+        }
+        if x.is_empty() {
+            return Err(FerrayError::invalid_value("x and y must not be empty"));
+        }
+        let domain = auto_domain(x);
+        let window = POWER_DEFAULT_WINDOW;
+        let (offset, scale) = mapparms(domain, window)?;
+        let u: Vec<f64> = x.iter().map(|&xi| map_x(xi, offset, scale)).collect();
+        let v = power_vandermonde(&u, deg);
+        let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, None)?;
+        Ok(Self {
+            coeffs,
+            domain,
+            window,
+        })
     }
 }
 
 impl Poly for Polynomial {
     fn eval(&self, x: f64) -> Result<f64, FerrayError> {
-        // Horner's method
-        let mut result = 0.0;
-        for &c in self.coeffs.iter().rev() {
-            result = result * x + c;
-        }
-        Ok(result)
+        // Apply the domain -> window affine map, then Horner-evaluate.
+        // For the default identity mapping (domain == window), this reduces
+        // to a plain Horner evaluation at x with no overhead beyond a
+        // single multiply and add.
+        let (offset, scale) = self.mapparms()?;
+        let u = map_x(x, offset, scale);
+        Ok(self.eval_canonical(u))
     }
 
     fn deriv(&self, m: usize) -> Result<Self, FerrayError> {
@@ -64,7 +178,7 @@ impl Poly for Polynomial {
         if coeffs.is_empty() {
             coeffs = vec![0.0];
         }
-        Ok(Self { coeffs })
+        Ok(self.with_same_mapping(coeffs))
     }
 
     fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrayError> {
@@ -81,7 +195,7 @@ impl Poly for Polynomial {
             }
             coeffs = new_coeffs;
         }
-        Ok(Self { coeffs })
+        Ok(self.with_same_mapping(coeffs))
     }
 
     fn roots(&self) -> Result<Vec<Complex<f64>>, FerrayError> {
@@ -111,9 +225,7 @@ impl Poly for Polynomial {
         while last > 1 && self.coeffs[last - 1].abs() <= tol {
             last -= 1;
         }
-        Ok(Self {
-            coeffs: self.coeffs[..last].to_vec(),
-        })
+        Ok(self.with_same_mapping(self.coeffs[..last].to_vec()))
     }
 
     fn truncate(&self, size: usize) -> Result<Self, FerrayError> {
@@ -123,12 +235,11 @@ impl Poly for Polynomial {
             ));
         }
         let len = size.min(self.coeffs.len());
-        Ok(Self {
-            coeffs: self.coeffs[..len].to_vec(),
-        })
+        Ok(self.with_same_mapping(self.coeffs[..len].to_vec()))
     }
 
     fn add(&self, other: &Self) -> Result<Self, FerrayError> {
+        self.check_same_mapping(other)?;
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -137,10 +248,11 @@ impl Poly for Polynomial {
         for (i, &c) in other.coeffs.iter().enumerate() {
             result[i] += c;
         }
-        Ok(Self { coeffs: result })
+        Ok(self.with_same_mapping(result))
     }
 
     fn sub(&self, other: &Self) -> Result<Self, FerrayError> {
+        self.check_same_mapping(other)?;
         let len = self.coeffs.len().max(other.coeffs.len());
         let mut result = vec![0.0; len];
         for (i, &c) in self.coeffs.iter().enumerate() {
@@ -149,12 +261,13 @@ impl Poly for Polynomial {
         for (i, &c) in other.coeffs.iter().enumerate() {
             result[i] -= c;
         }
-        Ok(Self { coeffs: result })
+        Ok(self.with_same_mapping(result))
     }
 
     fn mul(&self, other: &Self) -> Result<Self, FerrayError> {
+        self.check_same_mapping(other)?;
         if self.coeffs.is_empty() || other.coeffs.is_empty() {
-            return Ok(Self { coeffs: vec![0.0] });
+            return Ok(self.with_same_mapping(vec![0.0]));
         }
         let len = self.coeffs.len() + other.coeffs.len() - 1;
         let mut result = vec![0.0; len];
@@ -163,12 +276,12 @@ impl Poly for Polynomial {
                 result[i + j] += a * b;
             }
         }
-        Ok(Self { coeffs: result })
+        Ok(self.with_same_mapping(result))
     }
 
     fn pow(&self, n: usize) -> Result<Self, FerrayError> {
         if n == 0 {
-            return Ok(Self { coeffs: vec![1.0] });
+            return Ok(self.with_same_mapping(vec![1.0]));
         }
         let mut result = self.clone();
         for _ in 1..n {
@@ -178,6 +291,7 @@ impl Poly for Polynomial {
     }
 
     fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrayError> {
+        self.check_same_mapping(other)?;
         let other_trimmed = other.trim(0.0)?;
         if other_trimmed.degree() == 0 && other_trimmed.coeffs[0].abs() < f64::EPSILON * 100.0 {
             return Err(FerrayError::invalid_value("division by zero polynomial"));
@@ -189,7 +303,7 @@ impl Poly for Polynomial {
 
         if n < m {
             // Quotient is zero, remainder is self
-            return Ok((Self { coeffs: vec![0.0] }, self_trimmed));
+            return Ok((self.with_same_mapping(vec![0.0]), self_trimmed));
         }
 
         let mut remainder = self_trimmed.coeffs.clone();
@@ -212,10 +326,8 @@ impl Poly for Polynomial {
         }
 
         Ok((
-            Self { coeffs: quotient },
-            Self {
-                coeffs: remainder[..rem_len.max(1)].to_vec(),
-            },
+            self.with_same_mapping(quotient),
+            self.with_same_mapping(remainder[..rem_len.max(1)].to_vec()),
         ))
     }
 
@@ -232,7 +344,7 @@ impl Poly for Polynomial {
         }
         let v = power_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, None)?;
-        Ok(Self { coeffs })
+        Ok(Self::new(&coeffs))
     }
 
     fn fit_weighted(x: &[f64], y: &[f64], deg: usize, w: &[f64]) -> Result<Self, FerrayError> {
@@ -246,11 +358,19 @@ impl Poly for Polynomial {
         }
         let v = power_vandermonde(x, deg);
         let coeffs = least_squares_fit(&v, x.len(), deg + 1, y, Some(w))?;
-        Ok(Self { coeffs })
+        Ok(Self::new(&coeffs))
     }
 
     fn from_coeffs(coeffs: &[f64]) -> Self {
         Self::new(coeffs)
+    }
+
+    fn domain(&self) -> [f64; 2] {
+        self.domain
+    }
+
+    fn window(&self) -> [f64; 2] {
+        self.window
     }
 }
 
@@ -498,5 +618,107 @@ mod tests {
     fn from_coeffs_empty() {
         let p = Polynomial::from_coeffs(&[]);
         assert_eq!(p.coeffs, vec![0.0]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Domain / window mapping tests (issue #474)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn default_domain_window_is_identity() {
+        let p = Polynomial::new(&[1.0, 2.0, 3.0]);
+        assert_eq!(p.domain(), [-1.0, 1.0]);
+        assert_eq!(p.window(), [-1.0, 1.0]);
+        let (offset, scale) = p.mapparms().unwrap();
+        assert_eq!(offset, 0.0);
+        assert_eq!(scale, 1.0);
+    }
+
+    #[test]
+    fn with_domain_changes_eval_via_mapping() {
+        // p(u) = 1 + 2u in canonical [-1, 1]. Setting domain=[0, 4] means
+        // x is mapped: u = -1 + 0.5*(x-0) = -1 + 0.5*x.
+        // So p(x) at x=0 is p_canonical(-1) = 1 - 2 = -1
+        //         at x=4 is p_canonical(1)  = 1 + 2 = 3
+        let p = Polynomial::new(&[1.0, 2.0])
+            .with_domain([0.0, 4.0])
+            .unwrap();
+        assert!((p.eval(0.0).unwrap() - (-1.0)).abs() < 1e-12);
+        assert!((p.eval(2.0).unwrap() - 1.0).abs() < 1e-12);
+        assert!((p.eval(4.0).unwrap() - 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn fit_with_domain_recovers_function_values() {
+        // Fit y = 2x + 1 on x ∈ [0, 4] with auto-domain.
+        // The inner coefficients differ from fit(), but eval(x) recovers y(x).
+        let x = vec![0.0, 1.0, 2.0, 3.0, 4.0];
+        let y: Vec<f64> = x.iter().map(|&xi| 2.0 * xi + 1.0).collect();
+        let p = Polynomial::fit_with_domain(&x, &y, 1).unwrap();
+        assert_eq!(p.domain(), [0.0, 4.0]);
+        assert_eq!(p.window(), [-1.0, 1.0]);
+        for (&xi, &yi) in x.iter().zip(y.iter()) {
+            assert!(
+                (p.eval(xi).unwrap() - yi).abs() < 1e-10,
+                "at x={xi}: expected {yi}, got {}",
+                p.eval(xi).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn fit_with_domain_avoids_catastrophic_cancellation() {
+        // Fit y = 1 + x on x ∈ [1000, 1010] (large offset). Without auto-domain,
+        // the Vandermonde matrix is ill-conditioned. With auto-domain, x is
+        // mapped to [-1, 1] and the fit is well-conditioned.
+        let x: Vec<f64> = (0..=10).map(|i| 1000.0 + i as f64).collect();
+        let y: Vec<f64> = x.iter().map(|&xi| 1.0 + xi).collect();
+        let p = Polynomial::fit_with_domain(&x, &y, 1).unwrap();
+        for (&xi, &yi) in x.iter().zip(y.iter()) {
+            assert!(
+                (p.eval(xi).unwrap() - yi).abs() < 1e-8,
+                "at x={xi}: expected {yi}, got {}",
+                p.eval(xi).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn with_domain_rejects_degenerate_domain() {
+        let p = Polynomial::new(&[1.0]);
+        assert!(p.with_domain([5.0, 5.0]).is_err());
+    }
+
+    #[test]
+    fn binary_op_rejects_mismatched_mapping() {
+        let a = Polynomial::new(&[1.0, 2.0])
+            .with_domain([0.0, 1.0])
+            .unwrap();
+        let b = Polynomial::new(&[3.0, 4.0])
+            .with_domain([0.0, 2.0])
+            .unwrap();
+        assert!(a.add(&b).is_err());
+        assert!(a.mul(&b).is_err());
+    }
+
+    #[test]
+    fn unary_ops_preserve_mapping() {
+        let p = Polynomial::new(&[1.0, 2.0, 3.0])
+            .with_domain([0.0, 4.0])
+            .unwrap();
+        let dp = p.deriv(1).unwrap();
+        assert_eq!(dp.domain(), [0.0, 4.0]);
+        let ip = p.integ(1, &[]).unwrap();
+        assert_eq!(ip.domain(), [0.0, 4.0]);
+    }
+
+    #[test]
+    fn mapparms_basic() {
+        let p = Polynomial::new(&[1.0])
+            .with_domain([0.0, 4.0])
+            .unwrap();
+        let (offset, scale) = p.mapparms().unwrap();
+        assert_eq!(scale, 0.5);
+        assert_eq!(offset, -1.0);
     }
 }

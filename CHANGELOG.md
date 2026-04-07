@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-03-07
 
 ### Added
+- ferray-polynomial: no domain/window mapping — polynomials operate on raw x values (#474)
+- Add oracle test suite that validates all crates against NumPy fixture outputs (#45)
 - ferray-random: all distributions return 1D arrays only — no shape parameter for ND output (#440)
 - ferray-stats: no multi-axis reductions — axis only accepts single usize (#458)
 - ferray-stats: no keepdims= parameter on any reduction (#457)
@@ -114,6 +116,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Slower: transcendentals at scale 1.4-2.1x (CORE-MATH accuracy tradeoff), matmul medium 4x (faer vs BLAS)
 
 ### Fixed
+- Fix bugs found by oracle test suite (#46)
 - Fix exp_fast SIMD dispatch so it auto-vectorizes without target-cpu=native (#42)
 - Fix Windows compilation: add signgam compat header for core-math lgamma.c (#41)
 - ferray-linalg: tensorsolve and tensorinv have zero tests (#105)

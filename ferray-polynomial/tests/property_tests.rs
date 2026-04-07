@@ -54,10 +54,10 @@ proptest! {
         // Ensure leading coefficients are nonzero
         let mut a_c = a_coeffs;
         let mut b_c = b_coeffs;
-        if a_c.last().map_or(true, |&v| v.abs() < 0.01) {
+        if a_c.last().is_none_or(|&v| v.abs() < 0.01) {
             *a_c.last_mut().unwrap() = 1.0;
         }
-        if b_c.last().map_or(true, |&v| v.abs() < 0.01) {
+        if b_c.last().is_none_or(|&v| v.abs() < 0.01) {
             *b_c.last_mut().unwrap() = 1.0;
         }
 
@@ -219,7 +219,7 @@ proptest! {
     ) {
         let mut b_c = b_coeffs;
         // Ensure leading coefficient is nonzero
-        if b_c.last().map_or(true, |&v| v.abs() < 0.1) {
+        if b_c.last().is_none_or(|&v| v.abs() < 0.1) {
             *b_c.last_mut().unwrap() = 1.0;
         }
 
