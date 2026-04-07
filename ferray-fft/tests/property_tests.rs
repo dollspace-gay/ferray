@@ -3,7 +3,7 @@
 // Tests mathematical invariants of FFT operations using proptest.
 
 use ferray_core::Array;
-use ferray_core::dimension::{Ix1, IxDyn};
+use ferray_core::dimension::Ix1;
 use num_complex::Complex;
 
 use ferray_fft::norm::FftNorm;

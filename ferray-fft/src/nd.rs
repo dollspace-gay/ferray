@@ -82,42 +82,57 @@ pub(crate) fn fft_along_axis(
     // Pre-compute scratch size once
     let scratch_len = plan.get_inplace_scratch_len();
 
-    // Process all lanes in parallel, using thread-local scratch buffers
-    let lane_results: Vec<Vec<Complex<f64>>> = lane_starts
-        .par_iter()
-        .map_init(
+    // Process all lanes in parallel.
+    //
+    // Old approach allocated a fresh `Vec<Complex<f64>>` per lane and
+    // collected them into a `Vec<Vec<Complex<f64>>>` — `num_lanes` separate
+    // heap allocations plus `num_lanes` Vec headers. For an (M, N) array
+    // with FFT along axis 1, that's M allocations.
+    //
+    // New approach: a single contiguous buffer of `num_lanes * fft_len`
+    // complex values (one allocation total), partitioned via
+    // `par_chunks_mut(fft_len)` so each rayon worker writes directly into
+    // its assigned chunk. The lane buffer for the FFT is the chunk itself,
+    // so there's zero per-lane allocation. Scratch for the FFT is reused
+    // per-thread via `for_each_init`.
+    let stride = strides[axis] as usize;
+    let copy_len = axis_len.min(fft_len);
+    let mut lane_outputs = vec![Complex::new(0.0, 0.0); num_lanes * fft_len];
+    lane_outputs
+        .par_chunks_mut(fft_len)
+        .zip(lane_starts.par_iter())
+        .for_each_init(
             || vec![Complex::new(0.0, 0.0); scratch_len],
-            |scratch, &start_offset| {
-                // Extract lane from input
-                let mut buffer = Vec::with_capacity(fft_len);
-                let stride = strides[axis] as usize;
-                for i in 0..axis_len.min(fft_len) {
-                    buffer.push(data[start_offset + i * stride]);
+            |scratch, (out_chunk, &start_offset)| {
+                // Copy this lane's strided slice into the contiguous output
+                // chunk. The chunk is already zero-initialized by the
+                // `vec![]` allocation above, so positions beyond `copy_len`
+                // act as zero-padding when `fft_len > axis_len`.
+                for i in 0..copy_len {
+                    out_chunk[i] = data[start_offset + i * stride];
                 }
-                // Zero-pad if needed
-                buffer.resize(fft_len, Complex::new(0.0, 0.0));
+                // The remaining positions (copy_len..fft_len) are already
+                // zero from the initial allocation.
 
-                // Execute FFT reusing thread-local scratch
-                plan.process_with_scratch(&mut buffer, scratch);
+                // Execute FFT in-place on the chunk, reusing thread-local scratch.
+                plan.process_with_scratch(out_chunk, scratch);
 
-                // Apply normalization
+                // Apply normalization in place.
                 if (scale - 1.0).abs() > f64::EPSILON {
-                    for c in &mut buffer {
+                    for c in out_chunk.iter_mut() {
                         *c *= scale;
                     }
                 }
-
-                buffer
             },
-        )
-        .collect();
+        );
 
-    // Write results back into a flat output array
+    // Scatter step: copy each lane's contiguous chunk into the final output
+    // buffer at its strided position. This is sequential but is essentially
+    // a series of indexed writes — no allocation, no compute.
     let mut output = vec![Complex::new(0.0, 0.0); new_total];
     let out_stride = new_strides[axis] as usize;
 
-    for (lane_idx, lane_data) in lane_results.iter().enumerate() {
-        // Compute the start offset in the output array for this lane
+    for (lane_idx, lane_chunk) in lane_outputs.chunks(fft_len).enumerate() {
         let out_start = compute_lane_output_start(
             &new_shape,
             &new_strides,
@@ -127,7 +142,7 @@ pub(crate) fn fft_along_axis(
             shape,
         );
 
-        for (i, &val) in lane_data.iter().enumerate() {
+        for (i, &val) in lane_chunk.iter().enumerate() {
             output[out_start + i * out_stride] = val;
         }
     }
@@ -381,5 +396,89 @@ mod tests {
         assert_eq!(result.len(), 4);
         // FFT of [1, 1, 0, 0]
         assert!((result[0].re - 2.0).abs() < 1e-12);
+    }
+
+    /// Exercises the multi-lane parallel path with enough lanes to actually
+    /// hit the par_chunks_mut codegen and verify the lane→output scatter
+    /// step lines up. Regression guard for the #433 refactor.
+    #[test]
+    fn fft_2d_many_lanes_along_axis1() {
+        // 4×8 array. FFT along axis 1 → 4 lanes of length 8 each.
+        // Use a pattern where each row has a single 1.0 at column `row % 8`,
+        // so the FFT of each row is e^{-2πi k r / 8} for k = 0..8.
+        let rows = 4usize;
+        let cols = 8usize;
+        let mut data = vec![Complex::new(0.0, 0.0); rows * cols];
+        for r in 0..rows {
+            data[r * cols + r] = Complex::new(1.0, 0.0);
+        }
+        let (shape, result) =
+            fft_along_axis(&data, &[rows, cols], 1, None, false, FftNorm::Backward).unwrap();
+        assert_eq!(shape, vec![rows, cols]);
+        // For row 0 (delta at col 0), result is all 1.0+0.0j across the lane.
+        for c in result.iter().take(cols) {
+            assert!((c.re - 1.0).abs() < 1e-12);
+            assert!(c.im.abs() < 1e-12);
+        }
+        // For row r, the first bin (k=0) is always 1.0 (sum of input).
+        for r in 0..rows {
+            assert!((result[r * cols].re - 1.0).abs() < 1e-12);
+        }
+    }
+
+    /// Same array, FFT along axis 0 (the strided lanes case). Verifies the
+    /// scatter back to non-contiguous output positions works after
+    /// switching to par_chunks_mut on a separate buffer.
+    #[test]
+    fn fft_2d_many_lanes_along_axis0() {
+        // 8×4 array, FFT along axis 0 → 4 lanes of length 8, each strided
+        // by `cols` in the input layout.
+        let rows = 8usize;
+        let cols = 4usize;
+        let mut data = vec![Complex::new(0.0, 0.0); rows * cols];
+        // Put a 1.0 at row 0 of every column.
+        for slot in data.iter_mut().take(cols) {
+            *slot = Complex::new(1.0, 0.0);
+        }
+        let (shape, result) =
+            fft_along_axis(&data, &[rows, cols], 0, None, false, FftNorm::Backward).unwrap();
+        assert_eq!(shape, vec![rows, cols]);
+        // Each column had [1, 0, 0, 0, 0, 0, 0, 0] → FFT gives all 1.0+0.0j.
+        for r in 0..rows {
+            for c in 0..cols {
+                let idx = r * cols + c;
+                assert!(
+                    (result[idx].re - 1.0).abs() < 1e-12,
+                    "result[{r},{c}].re = {}",
+                    result[idx].re
+                );
+                assert!(result[idx].im.abs() < 1e-12);
+            }
+        }
+    }
+
+    /// Exercise zero-padding through the multi-lane path.
+    #[test]
+    fn fft_2d_zero_padding_multi_lane() {
+        // 3×2 input, FFT along axis 1 with n=4 → 3 lanes of length 4 each
+        // (each input lane padded from 2 to 4 elements).
+        let data = vec![
+            Complex::new(1.0, 0.0), Complex::new(1.0, 0.0),
+            Complex::new(2.0, 0.0), Complex::new(0.0, 0.0),
+            Complex::new(0.0, 0.0), Complex::new(3.0, 0.0),
+        ];
+        let (shape, result) =
+            fft_along_axis(&data, &[3, 2], 1, Some(4), false, FftNorm::Backward).unwrap();
+        assert_eq!(shape, vec![3, 4]);
+        assert_eq!(result.len(), 12);
+        // Row 0: [1, 1, 0, 0] → DC = 2, others computed by FFT.
+        assert!((result[0].re - 2.0).abs() < 1e-12);
+        // Row 1: [2, 0, 0, 0] → all bins = 2.
+        assert!((result[4].re - 2.0).abs() < 1e-12);
+        assert!((result[5].re - 2.0).abs() < 1e-12);
+        assert!((result[6].re - 2.0).abs() < 1e-12);
+        assert!((result[7].re - 2.0).abs() < 1e-12);
+        // Row 2: [0, 3, 0, 0] → DC = 3.
+        assert!((result[8].re - 3.0).abs() < 1e-12);
     }
 }
