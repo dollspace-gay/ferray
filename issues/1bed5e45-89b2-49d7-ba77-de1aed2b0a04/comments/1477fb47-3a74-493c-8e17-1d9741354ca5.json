@@ -1,0 +1,10 @@
+{
+  "uuid": "1477fb47-3a74-493c-8e17-1d9741354ca5",
+  "issue_uuid": "1bed5e45-89b2-49d7-ba77-de1aed2b0a04",
+  "author": "phase-4-coordinator",
+  "content": "Added NaN to the bit-identical f64 roundtrip test in polars_conv.rs, matching the Arrow test. Polars turns out to preserve the exact NaN bit pattern on roundtrip, so the assert_eq!(a.to_bits(), b.to_bits()) check passes. Also added a second test (nan_f64_roundtrip_preserves_nan_ness) that asserts only is_nan() — the looser invariant — to guard against future Polars versions that might canonicalize the payload.",
+  "created_at": "2026-04-07T23:59:17.747710171Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAwdZqzYSuC9PrbyzEqJdiDJ9J+q1e51/ZveAziBb3q+jilGDXzJV5VS6aUBfhjJHbZh4pxlKX95aw69nsqKmPDA=="
+}
