@@ -1,0 +1,10 @@
+{
+  "uuid": "33b3e4a3-51f0-4f79-8bc9-1ae04bcbd987",
+  "issue_uuid": "a4b184b3-bb97-41d7-88a3-ada516c0fbfb",
+  "author": "phase-4-coordinator",
+  "content": "Resolved. Parallel dispatch is now actually wired into compute-bound ufuncs instead of being dead code. Key changes: (1) ditched the custom ferray-owned rayon ThreadPool — ThreadPool::install across separate pools costs hundreds of microseconds per call and dominates any speedup at reasonable sizes; all parallel paths now use rayon's global pool via par_chunks_mut so the dispatch is effectively free on an already-hot pool. (2) Raised thresholds empirically: compute-bound 50k->100k, memory-bound 100k->1M (but memory-bound ops end up NOT parallelized — see below). (3) New helpers::unary_float_op_compute parallelizes at the compute-bound threshold; all transcendentals in explog.rs (exp/exp2/expm1/log/log2/log10/log1p), trig.rs (sin/cos/tan/arcsin/arccos/arctan/sinh/cosh/tanh/arcsinh/arccosh/arctanh), and arithmetic.rs (cbrt) now route through it. (4) SIMD slice kernels (unary_slice_op_f64/f32, try_simd_f64_unary) parallelize via par_chunks_mut at the compute-bound threshold, benefiting sqrt/square/exp_fast/etc. (5) Memory-bound binary ops (add/sub/mul/div via binary_float_op) are intentionally kept serial — benchmarking showed DRAM bandwidth saturates from a single core, and parallelism is counterproductive below 100M elements. Benchmark (release, bench_parallel example): exp at 200k is ~2x faster (646 vs 323 us), at 1M ~3.4x (2.9 vs 0.85 ms), at 10M ~4.4x (33 vs 6.5 ms). sqrt at 2M ~1.2x (1.25 vs 1.04 ms). add stays at ~7.5 Gelem/s in L1, 1.94 at DRAM — uncontested by parallelism. 204 lib + 50 + 19 + 53 integration tests pass. Clippy clean. Full workspace builds.",
+  "created_at": "2026-04-07T23:27:59.079107291Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAuXc/IEkWAXuFXMMyifHYyiESKB1F/UasRgjwKPT6uHsJtApoAmDSMS7i4d4ExBoXN01SUmDQbT1oSzic8uc7AA=="
+}
