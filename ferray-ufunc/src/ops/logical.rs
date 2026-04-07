@@ -196,4 +196,38 @@ mod tests {
         let b = arr1_i32(vec![1, 0, 3]);
         assert!(!all(&b));
     }
+
+    // -----------------------------------------------------------------------
+    // Broadcasting tests for logical ops (issue #379)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_logical_and_broadcasts() {
+        use ferray_core::dimension::Ix2;
+        let a =
+            Array::<bool, Ix2>::from_vec(Ix2::new([2, 1]), vec![true, false]).unwrap();
+        let b = Array::<bool, Ix2>::from_vec(Ix2::new([1, 3]), vec![true, false, true])
+            .unwrap();
+        let r = logical_and(&a, &b).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![true, false, true, false, false, false]
+        );
+    }
+
+    #[test]
+    fn test_logical_or_broadcasts() {
+        use ferray_core::dimension::Ix2;
+        let a =
+            Array::<bool, Ix2>::from_vec(Ix2::new([2, 1]), vec![true, false]).unwrap();
+        let b = Array::<bool, Ix2>::from_vec(Ix2::new([1, 3]), vec![true, false, true])
+            .unwrap();
+        let r = logical_or(&a, &b).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![true, true, true, true, false, true]
+        );
+    }
 }

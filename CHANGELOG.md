@@ -86,6 +86,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Pinned memory transfers, 6 fused kernels, auto-dispatch
 
 ### Changed
+- ferray-ufunc: binary ops require same shape — broadcast variants are separate functions (#379)
 - Prepare all crates for crates.io publishing with GitHub URLs (#35)
 - ferray-core: NdIter — restore and complete BinaryBroadcastIter Iterator impl and binary_map_to (#560)
 

@@ -194,7 +194,7 @@ proptest! {
         let input = scalar_arr(x);
         let s = sin(&input).unwrap();
         let val = *s.iter().next().unwrap();
-        prop_assert!(val >= -1.0 && val <= 1.0, "sin({}) = {} out of [-1, 1]", x, val);
+        prop_assert!((-1.0..=1.0).contains(&val), "sin({}) = {} out of [-1, 1]", x, val);
     }
 
     // -----------------------------------------------------------------------
@@ -205,7 +205,8 @@ proptest! {
         let input = scalar_arr(x);
         let e = exp(&input).unwrap();
         let val = *e.iter().next().unwrap();
-        prop_assert!(val > 0.0 || val == 0.0, "exp({}) = {} should be > 0", x, val);
+        // exp can underflow to 0 for very negative x; >= covers both cases.
+        prop_assert!(val >= 0.0, "exp({}) = {} should be >= 0", x, val);
     }
 
     // -----------------------------------------------------------------------

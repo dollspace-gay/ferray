@@ -1,11 +1,15 @@
-/// Oracle tests: validate ferray-ufunc against NumPy fixture outputs.
-///
-/// Each test loads a JSON fixture from `fixtures/ufunc/`, constructs input
-/// arrays, calls the corresponding ferray function, and compares the output
-/// to NumPy's result within the fixture's ULP tolerance.
-use ferray_core::Array;
-use ferray_core::dimension::IxDyn;
-use ferray_core::error::FerrayResult;
+//! Oracle tests: validate ferray-ufunc against NumPy fixture outputs.
+//!
+//! Each test loads a JSON fixture from `fixtures/ufunc/`, constructs input
+//! arrays, calls the corresponding ferray function, and compares the output
+//! to NumPy's result within the fixture's ULP tolerance.
+//!
+//! The closures in the macro invocations below (`|x| ferray_ufunc::sin(x)`)
+//! are intentionally not replaced with bare function paths — they provide
+//! the type-inference context needed by the generic ufunc signatures.
+
+#![allow(clippy::redundant_closure)]
+
 use ferray_test_oracle::*;
 
 fn ufunc_path(name: &str) -> std::path::PathBuf {

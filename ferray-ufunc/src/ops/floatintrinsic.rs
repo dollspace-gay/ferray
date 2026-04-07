@@ -10,7 +10,7 @@ use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
-use crate::helpers::{binary_float_op, unary_float_op, unary_map_op};
+use crate::helpers::{binary_float_op, binary_mixed_op, unary_float_op, unary_map_op};
 
 // ---------------------------------------------------------------------------
 // Classification
@@ -293,28 +293,16 @@ where
     }
 }
 
-/// Multiply x by 2^n (ldexp).
+/// Multiply `x` by `2^n` (ldexp), with NumPy broadcasting.
 ///
-/// `n` is provided as an integer array of same shape.
+/// `n` is provided as an integer array; broadcast-compatible with `x`.
 pub fn ldexp<T, D>(x: &Array<T, D>, n: &Array<i32, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
 {
-    if x.shape() != n.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "ldexp: shapes {:?} and {:?} do not match",
-            x.shape(),
-            n.shape()
-        )));
-    }
     let two = <T as Element>::one() + <T as Element>::one();
-    let data: Vec<T> = x
-        .iter()
-        .zip(n.iter())
-        .map(|(&xi, &ni)| xi * two.powi(ni))
-        .collect();
-    Array::from_vec(x.dim().clone(), data)
+    binary_mixed_op(x, n, move |xi, ni| xi * two.powi(ni))
 }
 
 /// Decompose f64 into mantissa and exponent via IEEE 754 bit extraction.
@@ -822,6 +810,18 @@ mod tests {
         let s = r.as_slice().unwrap();
         assert!((s[0] - 4.0).abs() < 1e-12);
         assert!((s[1] - 16.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_ldexp_broadcasts() {
+        use ferray_core::dimension::Ix2;
+        let x = Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![1.0, 3.0]).unwrap();
+        let n = Array::<i32, Ix2>::from_vec(Ix2::new([1, 3]), vec![1, 2, 3]).unwrap();
+        let r = ldexp(&x, &n).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        // 1*2^{1,2,3} = {2,4,8}, 3*2^{1,2,3} = {6,12,24}
+        let v: Vec<f64> = r.iter().copied().collect();
+        assert_eq!(v, vec![2.0, 4.0, 8.0, 6.0, 12.0, 24.0]);
     }
 
     #[test]

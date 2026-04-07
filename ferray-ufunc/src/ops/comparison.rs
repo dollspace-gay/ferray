@@ -237,4 +237,55 @@ mod tests {
         let r = isclose(&a, &b, 1e-5, 1e-8, true).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[true, true]);
     }
+
+    // -----------------------------------------------------------------------
+    // Broadcasting tests for comparison ops (issue #379)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_equal_broadcasts() {
+        use ferray_core::dimension::Ix2;
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 2, 6]).unwrap();
+        let b = Array::<i32, Ix2>::from_vec(Ix2::new([1, 3]), vec![1, 2, 3]).unwrap();
+        let r = equal(&a, &b).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![true, true, true, false, true, false]
+        );
+    }
+
+    #[test]
+    fn test_less_broadcasts() {
+        use ferray_core::dimension::Ix2;
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![1.0, 5.0, 10.0]).unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![3.0, 5.0, 7.0]).unwrap();
+        let r = less(&a, &b).unwrap();
+        assert_eq!(r.shape(), &[3, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![
+                true, true, true, // 1 < {3,5,7}
+                false, false, true, // 5 < {3,5,7}
+                false, false, false, // 10 < {3,5,7}
+            ]
+        );
+    }
+
+    #[test]
+    fn test_isclose_broadcasts() {
+        use ferray_core::dimension::Ix2;
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 1.0001, 2.0001, 3.0001],
+        )
+        .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let r = isclose(&a, &b, 1e-3, 1e-8, false).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![true, true, true, true, true, true]
+        );
+    }
 }

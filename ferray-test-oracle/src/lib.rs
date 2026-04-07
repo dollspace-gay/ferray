@@ -471,7 +471,10 @@ where
 
 /// Run a binary f64 oracle test: `fn(Array<f64>, Array<f64>) -> Array<f64>`.
 ///
-/// Expects inputs "a" and "b" in the fixture.
+/// Expects inputs "a" and "b" in the fixture. As of ferray 0.2.10 broadcast
+/// cases are exercised directly (binary ufuncs broadcast by default per
+/// issue #379), so a fixture row with mismatched but broadcast-compatible
+/// shapes is still tested.
 pub fn run_binary_f64_oracle<F>(path: &Path, func: F)
 where
     F: Fn(&Array<f64, IxDyn>, &Array<f64, IxDyn>) -> FerrayResult<Array<f64, IxDyn>>,
@@ -487,10 +490,6 @@ where
         let shape_a = parse_shape(&input_a["shape"]);
         let shape_b = parse_shape(&input_b["shape"]);
         if shape_a.is_empty() || shape_b.is_empty() {
-            continue;
-        }
-        // Skip broadcast cases — ferray uses separate _broadcast functions
-        if shape_a != shape_b {
             continue;
         }
         let arr_a =

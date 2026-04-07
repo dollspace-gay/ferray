@@ -23,72 +23,40 @@ use crate::helpers::{binary_broadcast_op, binary_float_op, unary_float_op};
 // Basic arithmetic (binary, same-shape)
 // ---------------------------------------------------------------------------
 
-/// Elementwise addition.
+/// Elementwise addition with NumPy broadcasting.
 pub fn add<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "add: shapes {:?} and {:?} do not match",
-            a.shape(),
-            b.shape()
-        )));
-    }
-    let data: Vec<T> = a.iter().zip(b.iter()).map(|(&x, &y)| x + y).collect();
-    Array::from_vec(a.dim().clone(), data)
+    binary_float_op(a, b, |x, y| x + y)
 }
 
-/// Elementwise subtraction.
+/// Elementwise subtraction with NumPy broadcasting.
 pub fn subtract<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Sub<Output = T> + Copy,
     D: Dimension,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "subtract: shapes {:?} and {:?} do not match",
-            a.shape(),
-            b.shape()
-        )));
-    }
-    let data: Vec<T> = a.iter().zip(b.iter()).map(|(&x, &y)| x - y).collect();
-    Array::from_vec(a.dim().clone(), data)
+    binary_float_op(a, b, |x, y| x - y)
 }
 
-/// Elementwise multiplication.
+/// Elementwise multiplication with NumPy broadcasting.
 pub fn multiply<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
     D: Dimension,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "multiply: shapes {:?} and {:?} do not match",
-            a.shape(),
-            b.shape()
-        )));
-    }
-    let data: Vec<T> = a.iter().zip(b.iter()).map(|(&x, &y)| x * y).collect();
-    Array::from_vec(a.dim().clone(), data)
+    binary_float_op(a, b, |x, y| x * y)
 }
 
-/// Elementwise division.
+/// Elementwise division with NumPy broadcasting.
 pub fn divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Div<Output = T> + Copy,
     D: Dimension,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "divide: shapes {:?} and {:?} do not match",
-            a.shape(),
-            b.shape()
-        )));
-    }
-    let data: Vec<T> = a.iter().zip(b.iter()).map(|(&x, &y)| x / y).collect();
-    Array::from_vec(a.dim().clone(), data)
+    binary_float_op(a, b, |x, y| x / y)
 }
 
 /// Alias for [`divide`] — true division (float).
@@ -154,38 +122,71 @@ where
     binary_float_op(a, b, |x, y| x % y)
 }
 
-/// Return (floor_divide, remainder) as a tuple of arrays.
+/// Return `(floor_divide, remainder)` as a tuple of arrays, with broadcasting.
 ///
-/// Computes both results in a single pass over the data, avoiding the
-/// redundant division that would occur from calling `floor_divide` and
-/// `remainder` separately.
+/// Computes both results in a single pass over the (broadcast) data,
+/// avoiding the redundant division that would occur from calling
+/// `floor_divide` and `remainder` separately.
 pub fn divmod<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<(Array<T, D>, Array<T, D>)>
 where
     T: Element + Float,
     D: Dimension,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "divmod: shapes {:?} and {:?} do not match",
-            a.shape(),
-            b.shape()
-        )));
-    }
+    use ferray_core::dimension::broadcast::{broadcast_shapes, broadcast_to};
+
     let z = <T as Element>::zero();
-    let mut quot_data = Vec::with_capacity(a.size());
-    let mut rem_data = Vec::with_capacity(a.size());
-    for (&x, &y) in a.iter().zip(b.iter()) {
+
+    // Inline the divmod kernel so we can route both fast and broadcast
+    // paths through a single closure body.
+    let kernel = |x: T, y: T| -> (T, T) {
         let q = (x / y).floor();
         let mut r = x - q * y;
-        // Python/NumPy mod: result has same sign as divisor
         if (r < z && y > z) || (r > z && y < z) {
             r = r + y;
         }
+        (q, r)
+    };
+
+    // Fast path: identical shapes.
+    if a.shape() == b.shape() {
+        let mut quot_data = Vec::with_capacity(a.size());
+        let mut rem_data = Vec::with_capacity(a.size());
+        for (&x, &y) in a.iter().zip(b.iter()) {
+            let (q, r) = kernel(x, y);
+            quot_data.push(q);
+            rem_data.push(r);
+        }
+        let quot = Array::from_vec(a.dim().clone(), quot_data)?;
+        let rem = Array::from_vec(a.dim().clone(), rem_data)?;
+        return Ok((quot, rem));
+    }
+
+    // Broadcasting path.
+    let target_shape = broadcast_shapes(a.shape(), b.shape()).map_err(|_| {
+        FerrayError::shape_mismatch(format!(
+            "divmod: shapes {:?} and {:?} are not broadcast-compatible",
+            a.shape(),
+            b.shape()
+        ))
+    })?;
+    let a_view = broadcast_to(a, &target_shape)?;
+    let b_view = broadcast_to(b, &target_shape)?;
+    let n: usize = target_shape.iter().product();
+    let mut quot_data = Vec::with_capacity(n);
+    let mut rem_data = Vec::with_capacity(n);
+    for (&x, &y) in a_view.iter().zip(b_view.iter()) {
+        let (q, r) = kernel(x, y);
         quot_data.push(q);
         rem_data.push(r);
     }
-    let quot = Array::from_vec(a.dim().clone(), quot_data)?;
-    let rem = Array::from_vec(a.dim().clone(), rem_data)?;
+    let result_dim = D::from_dim_slice(&target_shape).ok_or_else(|| {
+        FerrayError::shape_mismatch(format!(
+            "divmod: cannot represent broadcast result shape {:?} as the input dimension type",
+            target_shape
+        ))
+    })?;
+    let quot = Array::from_vec(result_dim.clone(), quot_data)?;
+    let rem = Array::from_vec(result_dim, rem_data)?;
     Ok((quot, rem))
 }
 
@@ -392,28 +393,16 @@ where
         + num_traits::Signed,
     D: Dimension,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "gcd_int: shapes {:?} and {:?} do not match",
-            a.shape(),
-            b.shape()
-        )));
-    }
-    let data: Vec<T> = a
-        .iter()
-        .zip(b.iter())
-        .map(|(&x, &y)| {
-            let mut ax = x.abs();
-            let mut ay = y.abs();
-            while ay != <T as Element>::zero() {
-                let t = ay;
-                ay = ax % ay;
-                ax = t;
-            }
-            ax
-        })
-        .collect();
-    Array::from_vec(a.dim().clone(), data)
+    binary_float_op(a, b, |x, y| {
+        let mut ax = x.abs();
+        let mut ay = y.abs();
+        while ay != <T as Element>::zero() {
+            let t = ay;
+            ay = ax % ay;
+            ax = t;
+        }
+        ax
+    })
 }
 
 /// Integer LCM using the Euclidean GCD algorithm.
@@ -430,33 +419,21 @@ where
         + num_traits::Signed,
     D: Dimension,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "lcm_int: shapes {:?} and {:?} do not match",
-            a.shape(),
-            b.shape()
-        )));
-    }
-    let data: Vec<T> = a
-        .iter()
-        .zip(b.iter())
-        .map(|(&x, &y)| {
-            let ax = x.abs();
-            let ay = y.abs();
-            if ax == <T as Element>::zero() || ay == <T as Element>::zero() {
-                return <T as Element>::zero();
-            }
-            let mut gx = ax;
-            let mut gy = ay;
-            while gy != <T as Element>::zero() {
-                let t = gy;
-                gy = gx % gy;
-                gx = t;
-            }
-            ax / gx * ay
-        })
-        .collect();
-    Array::from_vec(a.dim().clone(), data)
+    binary_float_op(a, b, |x, y| {
+        let ax = x.abs();
+        let ay = y.abs();
+        if ax == <T as Element>::zero() || ay == <T as Element>::zero() {
+            return <T as Element>::zero();
+        }
+        let mut gx = ax;
+        let mut gy = ay;
+        while gy != <T as Element>::zero() {
+            let t = gy;
+            gy = gx % gy;
+            gx = t;
+        }
+        ax / gx * ay
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1408,6 +1385,147 @@ mod tests {
         let s = r.as_slice().unwrap();
         assert!((s[0] - 10.0 / 3.0).abs() < 1e-12);
         assert!((s[1] - 20.0 / 7.0).abs() < 1e-12);
+    }
+
+    // -----------------------------------------------------------------------
+    // Broadcasting tests for arithmetic ops (issue #379)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_add_broadcasts_within_same_rank() {
+        // (3, 1) + (1, 4) -> (3, 4) — both Ix2
+        let col =
+            Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![1.0, 2.0, 3.0]).unwrap();
+        let row =
+            Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![10.0, 20.0, 30.0, 40.0]).unwrap();
+        let r = add(&col, &row).unwrap();
+        assert_eq!(r.shape(), &[3, 4]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![
+                11.0, 21.0, 31.0, 41.0, 12.0, 22.0, 32.0, 42.0, 13.0, 23.0, 33.0, 43.0,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_subtract_broadcasts() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+        )
+        .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let r = subtract(&a, &b).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![9.0, 18.0, 27.0, 39.0, 48.0, 57.0]
+        );
+    }
+
+    #[test]
+    fn test_multiply_broadcasts() {
+        let col = Array::<i32, Ix2>::from_vec(Ix2::new([3, 1]), vec![1, 2, 3]).unwrap();
+        let row = Array::<i32, Ix2>::from_vec(Ix2::new([1, 3]), vec![10, 20, 30]).unwrap();
+        let r = multiply(&col, &row).unwrap();
+        assert_eq!(r.shape(), &[3, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![10, 20, 30, 20, 40, 60, 30, 60, 90]
+        );
+    }
+
+    #[test]
+    fn test_divide_broadcasts() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+        )
+        .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![10.0, 5.0, 2.0]).unwrap();
+        let r = divide(&a, &b).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![1.0, 4.0, 15.0, 4.0, 10.0, 30.0]
+        );
+    }
+
+    #[test]
+    fn test_power_broadcasts() {
+        let bases = Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![2.0, 3.0, 4.0]).unwrap();
+        let exps = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let r = power(&bases, &exps).unwrap();
+        assert_eq!(r.shape(), &[3, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![2.0, 4.0, 8.0, 3.0, 9.0, 27.0, 4.0, 16.0, 64.0]
+        );
+    }
+
+    #[test]
+    fn test_remainder_broadcasts() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+            .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![3.0, 4.0, 5.0]).unwrap();
+        let r = remainder(&a, &b).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![1.0, 0.0, 4.0, 1.0, 3.0, 2.0]
+        );
+    }
+
+    #[test]
+    fn test_divmod_broadcasts() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![7.0, 13.0]).unwrap();
+        let b = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![2.0, 3.0, 4.0]).unwrap();
+        // Need both inputs to have the same D for the typed divmod entry point.
+        // Use the cross-rank broadcast helper instead — but divmod is typed,
+        // so route via an explicit Ix2 reshape of b.
+        let b2 = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![2.0, 3.0, 4.0]).unwrap();
+        let (q, r) = divmod(&a, &b2).unwrap();
+        assert_eq!(q.shape(), &[2, 3]);
+        assert_eq!(r.shape(), &[2, 3]);
+        // a broadcasts to [[7,7,7],[13,13,13]], b broadcasts to [[2,3,4],[2,3,4]]
+        // divmod(7,2)=(3,1), divmod(7,3)=(2,1), divmod(7,4)=(1,3)
+        // divmod(13,2)=(6,1), divmod(13,3)=(4,1), divmod(13,4)=(3,1)
+        let q_vec: Vec<f64> = q.iter().copied().collect();
+        let r_vec: Vec<f64> = r.iter().copied().collect();
+        assert_eq!(q_vec, vec![3.0, 2.0, 1.0, 6.0, 4.0, 3.0]);
+        assert_eq!(r_vec, vec![1.0, 1.0, 3.0, 1.0, 1.0, 1.0]);
+        let _ = b; // silence unused
+    }
+
+    #[test]
+    fn test_gcd_int_broadcasts() {
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([3, 1]), vec![12, 18, 24]).unwrap();
+        let b = Array::<i32, Ix2>::from_vec(Ix2::new([1, 2]), vec![8, 9]).unwrap();
+        let r = gcd_int(&a, &b).unwrap();
+        assert_eq!(r.shape(), &[3, 2]);
+        // gcd(12,8)=4, gcd(12,9)=3, gcd(18,8)=2, gcd(18,9)=9, gcd(24,8)=8, gcd(24,9)=3
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![4, 3, 2, 9, 8, 3]
+        );
+    }
+
+    #[test]
+    fn test_lcm_int_broadcasts() {
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 1]), vec![4, 6]).unwrap();
+        let b = Array::<i32, Ix2>::from_vec(Ix2::new([1, 2]), vec![6, 8]).unwrap();
+        let r = lcm_int(&a, &b).unwrap();
+        assert_eq!(r.shape(), &[2, 2]);
+        // lcm(4,6)=12, lcm(4,8)=8, lcm(6,6)=6, lcm(6,8)=24
+        assert_eq!(r.iter().copied().collect::<Vec<_>>(), vec![12, 8, 6, 24]);
+    }
+
+    #[test]
+    fn test_add_incompatible_shapes_errors() {
+        let a = arr1(vec![1.0, 2.0, 3.0]);
+        let b = arr1(vec![1.0, 2.0, 3.0, 4.0]);
+        assert!(add(&a, &b).is_err());
     }
 
     #[cfg(feature = "f16")]

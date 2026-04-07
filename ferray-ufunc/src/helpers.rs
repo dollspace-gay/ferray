@@ -143,7 +143,19 @@ where
     Array::from_vec(input.dim().clone(), data)
 }
 
-/// Apply a binary function elementwise on same-shape arrays.
+/// Apply a binary function elementwise with NumPy broadcasting.
+///
+/// When `a` and `b` have identical shapes, takes the fast path (zip iter).
+/// Otherwise, broadcasts both inputs to the common shape and reconstructs
+/// the result `Dimension` via [`Dimension::from_dim_slice`]. Both inputs
+/// share dimension type `D`, so the broadcast result has the same rank
+/// (or, for `IxDyn`, the maximum of the two ranks).
+///
+/// For cross-rank broadcasting (e.g. `Ix1` + `Ix2`), use
+/// [`binary_broadcast_op`] which returns `Array<T, IxDyn>`.
+///
+/// # Errors
+/// Returns `FerrayError::ShapeMismatch` if the shapes are not broadcast-compatible.
 #[inline]
 pub fn binary_float_op<T, D>(
     a: &Array<T, D>,
@@ -154,18 +166,41 @@ where
     T: Element + Copy,
     D: Dimension,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "binary op: shapes {:?} and {:?} do not match",
+    // Fast path: identical shapes — no broadcasting needed.
+    if a.shape() == b.shape() {
+        let data: Vec<T> = a.iter().zip(b.iter()).map(|(&x, &y)| f(x, y)).collect();
+        return Array::from_vec(a.dim().clone(), data);
+    }
+
+    // Broadcasting path.
+    let target_shape = broadcast_shapes(a.shape(), b.shape()).map_err(|_| {
+        FerrayError::shape_mismatch(format!(
+            "binary op: shapes {:?} and {:?} are not broadcast-compatible",
             a.shape(),
             b.shape()
-        )));
-    }
-    let data: Vec<T> = a.iter().zip(b.iter()).map(|(&x, &y)| f(x, y)).collect();
-    Array::from_vec(a.dim().clone(), data)
+        ))
+    })?;
+    let a_view = a.broadcast_to(&target_shape)?;
+    let b_view = b.broadcast_to(&target_shape)?;
+    let data: Vec<T> = a_view
+        .iter()
+        .zip(b_view.iter())
+        .map(|(&x, &y)| f(x, y))
+        .collect();
+    let result_dim = D::from_dim_slice(&target_shape).ok_or_else(|| {
+        FerrayError::shape_mismatch(format!(
+            "binary op: cannot represent broadcast result shape {:?} as the input dimension type",
+            target_shape
+        ))
+    })?;
+    Array::from_vec(result_dim, data)
 }
 
-/// Apply a binary function that maps (T, T) -> U, preserving dimension.
+/// Apply a binary function that maps `(T, T) -> U` with NumPy broadcasting.
+///
+/// Same shape semantics as [`binary_float_op`] but allows the output element
+/// type to differ from the inputs. Used by comparison ops (`(T, T) -> bool`),
+/// logical ops, and `isclose`/`isfinite`-style functions.
 #[inline]
 pub fn binary_map_op<T, U, D>(
     a: &Array<T, D>,
@@ -177,15 +212,79 @@ where
     U: Element,
     D: Dimension,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "binary op: shapes {:?} and {:?} do not match",
+    // Fast path: identical shapes — no broadcasting needed.
+    if a.shape() == b.shape() {
+        let data: Vec<U> = a.iter().zip(b.iter()).map(|(&x, &y)| f(x, y)).collect();
+        return Array::from_vec(a.dim().clone(), data);
+    }
+
+    // Broadcasting path.
+    let target_shape = broadcast_shapes(a.shape(), b.shape()).map_err(|_| {
+        FerrayError::shape_mismatch(format!(
+            "binary op: shapes {:?} and {:?} are not broadcast-compatible",
             a.shape(),
             b.shape()
-        )));
+        ))
+    })?;
+    let a_view = a.broadcast_to(&target_shape)?;
+    let b_view = b.broadcast_to(&target_shape)?;
+    let data: Vec<U> = a_view
+        .iter()
+        .zip(b_view.iter())
+        .map(|(&x, &y)| f(x, y))
+        .collect();
+    let result_dim = D::from_dim_slice(&target_shape).ok_or_else(|| {
+        FerrayError::shape_mismatch(format!(
+            "binary op: cannot represent broadcast result shape {:?} as the input dimension type",
+            target_shape
+        ))
+    })?;
+    Array::from_vec(result_dim, data)
+}
+
+/// Apply a binary function on two arrays of different element types with
+/// broadcasting. Used for ops where the operands have distinct types
+/// (e.g. `left_shift::<T, u32>`, `ldexp::<T, i32>`).
+#[inline]
+pub fn binary_mixed_op<T, U, V, D>(
+    a: &Array<T, D>,
+    b: &Array<U, D>,
+    f: impl Fn(T, U) -> V,
+) -> FerrayResult<Array<V, D>>
+where
+    T: Element + Copy,
+    U: Element + Copy,
+    V: Element,
+    D: Dimension,
+{
+    // Fast path: identical shapes.
+    if a.shape() == b.shape() {
+        let data: Vec<V> = a.iter().zip(b.iter()).map(|(&x, &y)| f(x, y)).collect();
+        return Array::from_vec(a.dim().clone(), data);
     }
-    let data: Vec<U> = a.iter().zip(b.iter()).map(|(&x, &y)| f(x, y)).collect();
-    Array::from_vec(a.dim().clone(), data)
+
+    // Broadcasting path.
+    let target_shape = broadcast_shapes(a.shape(), b.shape()).map_err(|_| {
+        FerrayError::shape_mismatch(format!(
+            "binary mixed op: shapes {:?} and {:?} are not broadcast-compatible",
+            a.shape(),
+            b.shape()
+        ))
+    })?;
+    let a_view = a.broadcast_to(&target_shape)?;
+    let b_view = b.broadcast_to(&target_shape)?;
+    let data: Vec<V> = a_view
+        .iter()
+        .zip(b_view.iter())
+        .map(|(&x, &y)| f(x, y))
+        .collect();
+    let result_dim = D::from_dim_slice(&target_shape).ok_or_else(|| {
+        FerrayError::shape_mismatch(format!(
+            "binary mixed op: cannot represent broadcast result shape {:?} as the input dimension type",
+            target_shape
+        ))
+    })?;
+    Array::from_vec(result_dim, data)
 }
 
 /// Apply a binary function with broadcasting support.
@@ -272,7 +371,7 @@ where
     Array::from_vec(input.dim().clone(), data)
 }
 
-/// Apply a binary f32 function to two f16 arrays via promotion.
+/// Apply a binary f32 function to two f16 arrays via promotion, with broadcasting.
 #[cfg(feature = "f16")]
 #[inline]
 pub fn binary_f16_op<D>(
@@ -283,22 +382,10 @@ pub fn binary_f16_op<D>(
 where
     D: Dimension,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "binary op: shapes {:?} and {:?} do not match",
-            a.shape(),
-            b.shape()
-        )));
-    }
-    let data: Vec<half::f16> = a
-        .iter()
-        .zip(b.iter())
-        .map(|(&x, &y)| half::f16::from_f32(f(x.to_f32(), y.to_f32())))
-        .collect();
-    Array::from_vec(a.dim().clone(), data)
+    binary_float_op(a, b, |x, y| half::f16::from_f32(f(x.to_f32(), y.to_f32())))
 }
 
-/// Apply a binary f32 function to two f16 arrays, returning a bool array.
+/// Apply a binary f32 function to two f16 arrays, returning a bool array, with broadcasting.
 #[cfg(feature = "f16")]
 #[inline]
 pub fn binary_f16_to_bool_op<D>(
@@ -309,19 +396,7 @@ pub fn binary_f16_to_bool_op<D>(
 where
     D: Dimension,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "binary op: shapes {:?} and {:?} do not match",
-            a.shape(),
-            b.shape()
-        )));
-    }
-    let data: Vec<bool> = a
-        .iter()
-        .zip(b.iter())
-        .map(|(&x, &y)| f(x.to_f32(), y.to_f32()))
-        .collect();
-    Array::from_vec(a.dim().clone(), data)
+    binary_map_op(a, b, |x, y| f(x.to_f32(), y.to_f32()))
 }
 
 #[cfg(test)]
@@ -359,5 +434,52 @@ mod tests {
         assert_eq!(r.shape(), &[2, 3]);
         let s: Vec<f64> = r.iter().copied().collect();
         assert_eq!(s, vec![11.0, 21.0, 31.0, 12.0, 22.0, 32.0]);
+    }
+
+    #[test]
+    fn binary_float_op_broadcasts_within_same_rank() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![1.0, 2.0, 3.0]).unwrap();
+        let b =
+            Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![10.0, 20.0, 30.0, 40.0]).unwrap();
+        let r = binary_float_op(&a, &b, |x, y| x + y).unwrap();
+        assert_eq!(r.shape(), &[3, 4]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![
+                11.0, 21.0, 31.0, 41.0, 12.0, 22.0, 32.0, 42.0, 13.0, 23.0, 33.0, 43.0,
+            ]
+        );
+    }
+
+    #[test]
+    fn binary_map_op_broadcasts_within_same_rank() {
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 1]), vec![1, 5]).unwrap();
+        let b = Array::<i32, Ix2>::from_vec(Ix2::new([1, 3]), vec![3, 5, 7]).unwrap();
+        let r = binary_map_op(&a, &b, |x, y| x < y).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![true, true, true, false, false, true]
+        );
+    }
+
+    #[test]
+    fn binary_mixed_op_broadcasts() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![1.0, 4.0]).unwrap();
+        let b = Array::<i32, Ix2>::from_vec(Ix2::new([1, 3]), vec![1, 2, 3]).unwrap();
+        let r = binary_mixed_op(&a, &b, |x, n| x * (1 << n) as f64).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![2.0, 4.0, 8.0, 8.0, 16.0, 32.0]
+        );
+    }
+
+    #[test]
+    fn binary_op_incompatible_shapes_error() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let b = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        assert!(binary_float_op(&a, &b, |x, y| x + y).is_err());
+        assert!(binary_map_op(&a, &b, |x, y| x == y).is_err());
     }
 }
