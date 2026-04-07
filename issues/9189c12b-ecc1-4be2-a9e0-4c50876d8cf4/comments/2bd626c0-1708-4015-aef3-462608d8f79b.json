@@ -1,0 +1,10 @@
+{
+  "uuid": "2bd626c0-1708-4015-aef3-462608d8f79b",
+  "issue_uuid": "9189c12b-ecc1-4be2-a9e0-4c50876d8cf4",
+  "author": "phase-4-coordinator",
+  "content": "Windows compat header at compat/signgam_compat.h with #if _WIN32 guard. CFLAGS/CPATH wired through .cargo/config.toml. Verified compat/signgam_compat.h exists. Closing as completed.",
+  "created_at": "2026-04-07T12:34:41.912105775Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAkLiFMSlSRpQ/7MLoKItUZGawxBdco6uj0CgAhXfw8/j77r2IsYG45CX1Rbu5wpQx5I6ze/P4LwucOTRgn1ZCBw=="
+}
