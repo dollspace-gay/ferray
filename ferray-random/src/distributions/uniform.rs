@@ -1,95 +1,84 @@
 // ferray-random: Uniform distribution sampling — random, uniform, integers
 
-use ferray_core::{Array, FerrayError, Ix1};
+use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
 use crate::generator::{
-    Generator, generate_vec, generate_vec_i64, vec_to_array1, vec_to_array1_i64,
+    Generator, generate_vec, generate_vec_i64, shape_size, vec_to_array_f64, vec_to_array_i64,
 };
+use crate::shape::IntoShape;
 
 impl<B: BitGenerator> Generator<B> {
     /// Generate an array of uniformly distributed `f64` values in [0, 1).
     ///
-    /// Equivalent to NumPy's `Generator.random(size)`.
-    ///
-    /// # Arguments
-    /// * `size` - Number of values to generate.
+    /// Equivalent to NumPy's `Generator.random(size)`. `shape` may be a
+    /// `usize` for a 1-D result, or any `[usize; N]` / `&[usize]` / `Vec<usize>`
+    /// for N-dimensional output (via [`IntoShape`]).
     ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `shape` contains a zero-sized axis.
     ///
     /// # Example
     /// ```
     /// let mut rng = ferray_random::default_rng_seeded(42);
-    /// let arr = rng.random(10).unwrap();
-    /// assert_eq!(arr.shape(), &[10]);
+    /// let v = rng.random(10).unwrap();
+    /// assert_eq!(v.shape(), &[10]);
+    /// let m = rng.random([3, 4]).unwrap();
+    /// assert_eq!(m.shape(), &[3, 4]);
     /// ```
-    pub fn random(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
-        let data = generate_vec(self, size, |bg| bg.next_f64());
-        vec_to_array1(data)
+    pub fn random(&mut self, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
+        let data = generate_vec(self, n, |bg| bg.next_f64());
+        vec_to_array_f64(data, &shape)
     }
 
     /// Generate an array of uniformly distributed `f64` values in [low, high).
     ///
     /// Equivalent to NumPy's `Generator.uniform(low, high, size)`.
     ///
-    /// # Arguments
-    /// * `low` - Lower bound (inclusive).
-    /// * `high` - Upper bound (exclusive).
-    /// * `size` - Number of values to generate.
-    ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `low >= high` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `low >= high` or `shape` is invalid.
     pub fn uniform(
         &mut self,
         low: f64,
         high: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if low >= high {
             return Err(FerrayError::invalid_value(format!(
                 "low ({low}) must be less than high ({high})"
             )));
         }
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
         let range = high - low;
-        let data = generate_vec(self, size, |bg| low + bg.next_f64() * range);
-        vec_to_array1(data)
+        let data = generate_vec(self, n, |bg| low + bg.next_f64() * range);
+        vec_to_array_f64(data, &shape)
     }
 
     /// Generate an array of uniformly distributed random integers in [low, high).
     ///
     /// Equivalent to NumPy's `Generator.integers(low, high, size)`.
     ///
-    /// # Arguments
-    /// * `low` - Lower bound (inclusive).
-    /// * `high` - Upper bound (exclusive).
-    /// * `size` - Number of values to generate.
-    ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `low >= high` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `low >= high` or `shape` is invalid.
     pub fn integers(
         &mut self,
         low: i64,
         high: i64,
-        size: usize,
-    ) -> Result<Array<i64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<i64, IxDyn>, FerrayError> {
         if low >= high {
             return Err(FerrayError::invalid_value(format!(
                 "low ({low}) must be less than high ({high})"
             )));
         }
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
         let range = (high - low) as u64;
-        let data = generate_vec_i64(self, size, |bg| low + bg.next_u64_bounded(range) as i64);
-        vec_to_array1_i64(data)
+        let data = generate_vec_i64(self, n, |bg| low + bg.next_u64_bounded(range) as i64);
+        vec_to_array_i64(data, &shape)
     }
 }
 
@@ -122,7 +111,7 @@ mod tests {
         let arr = rng.uniform(5.0, 10.0, 10_000).unwrap();
         let slice = arr.as_slice().unwrap();
         for &v in slice {
-            assert!(v >= 5.0 && v < 10.0, "value {v} out of range");
+            assert!((5.0..10.0).contains(&v), "value {v} out of range");
         }
     }
 
@@ -221,5 +210,75 @@ mod tests {
             .filter(|(x, y)| x != y)
             .count();
         assert!(diffs > 50, "seeds 42 and 123 produced too-similar output");
+    }
+
+    // -----------------------------------------------------------------------
+    // N-D shape tests (issue #440)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn random_nd_shape_from_array() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.random([3, 4]).unwrap();
+        assert_eq!(arr.shape(), &[3, 4]);
+        assert_eq!(arr.size(), 12);
+    }
+
+    #[test]
+    fn random_nd_shape_from_slice() {
+        let mut rng = default_rng_seeded(42);
+        let shape: &[usize] = &[2, 3, 4];
+        let arr = rng.random(shape).unwrap();
+        assert_eq!(arr.shape(), &[2, 3, 4]);
+        assert_eq!(arr.size(), 24);
+    }
+
+    #[test]
+    fn random_nd_shape_from_vec() {
+        let mut rng = default_rng_seeded(42);
+        let shape = vec![5, 5];
+        let arr = rng.random(shape).unwrap();
+        assert_eq!(arr.shape(), &[5, 5]);
+    }
+
+    #[test]
+    fn random_nd_rejects_zero_axis() {
+        let mut rng = default_rng_seeded(42);
+        assert!(rng.random([3, 0]).is_err());
+        assert!(rng.random(0usize).is_err());
+    }
+
+    #[test]
+    fn random_nd_equivalent_to_reshape() {
+        // Generating shape [3,4] should produce the same 12 values as size=12
+        // because the underlying BitGenerator state advances identically.
+        let mut rng1 = default_rng_seeded(42);
+        let mut rng2 = default_rng_seeded(42);
+        let a = rng1.random(12).unwrap();
+        let b = rng2.random([3, 4]).unwrap();
+        assert_eq!(a.size(), b.size());
+        let a_data: Vec<f64> = a.iter().copied().collect();
+        let b_data: Vec<f64> = b.iter().copied().collect();
+        assert_eq!(a_data, b_data);
+    }
+
+    #[test]
+    fn uniform_nd_shape() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.uniform(0.0, 10.0, [2, 5]).unwrap();
+        assert_eq!(arr.shape(), &[2, 5]);
+        for &v in arr.iter() {
+            assert!((0.0..10.0).contains(&v));
+        }
+    }
+
+    #[test]
+    fn integers_nd_shape() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.integers(0, 100, [4, 3]).unwrap();
+        assert_eq!(arr.shape(), &[4, 3]);
+        for &v in arr.iter() {
+            assert!((0..100).contains(&v));
+        }
     }
 }

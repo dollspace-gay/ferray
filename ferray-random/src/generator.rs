@@ -3,7 +3,7 @@
 // Wraps a BitGenerator and provides distribution sampling methods.
 // Takes &mut self — stateful, NOT Sync.
 
-use ferray_core::{Array, FerrayError, Ix1};
+use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::{BitGenerator, Xoshiro256StarStar};
 
@@ -167,7 +167,7 @@ pub fn spawn_generators<B: BitGenerator + Clone>(
     Ok(children)
 }
 
-// Helper: generate a Vec<f64> of given size using a closure
+// Helper: generate a Vec<f64> of given total size using a closure.
 pub(crate) fn generate_vec<B: BitGenerator>(
     rng: &mut Generator<B>,
     size: usize,
@@ -180,7 +180,7 @@ pub(crate) fn generate_vec<B: BitGenerator>(
     data
 }
 
-// Helper: generate a Vec<i64> of given size using a closure
+// Helper: generate a Vec<i64> of given total size using a closure.
 pub(crate) fn generate_vec_i64<B: BitGenerator>(
     rng: &mut Generator<B>,
     size: usize,
@@ -193,16 +193,30 @@ pub(crate) fn generate_vec_i64<B: BitGenerator>(
     data
 }
 
-// Helper: wrap a Vec<f64> into an Array1<f64>
-pub(crate) fn vec_to_array1(data: Vec<f64>) -> Result<Array<f64, Ix1>, FerrayError> {
-    let n = data.len();
-    Array::<f64, Ix1>::from_vec(Ix1::new([n]), data)
+/// Total element count for a shape, returning 0 for an empty shape.
+#[inline]
+pub(crate) fn shape_size(shape: &[usize]) -> usize {
+    if shape.is_empty() {
+        0
+    } else {
+        shape.iter().product()
+    }
 }
 
-// Helper: wrap a Vec<i64> into an Array1<i64>
-pub(crate) fn vec_to_array1_i64(data: Vec<i64>) -> Result<Array<i64, Ix1>, FerrayError> {
-    let n = data.len();
-    Array::<i64, Ix1>::from_vec(Ix1::new([n]), data)
+/// Wrap a `Vec<f64>` into an `Array<f64, IxDyn>` with the given shape.
+pub(crate) fn vec_to_array_f64(
+    data: Vec<f64>,
+    shape: &[usize],
+) -> Result<Array<f64, IxDyn>, FerrayError> {
+    Array::<f64, IxDyn>::from_vec(IxDyn::new(shape), data)
+}
+
+/// Wrap a `Vec<i64>` into an `Array<i64, IxDyn>` with the given shape.
+pub(crate) fn vec_to_array_i64(
+    data: Vec<i64>,
+    shape: &[usize],
+) -> Result<Array<i64, IxDyn>, FerrayError> {
+    Array::<i64, IxDyn>::from_vec(IxDyn::new(shape), data)
 }
 
 #[cfg(test)]

@@ -3,11 +3,12 @@
 // Provides deterministic parallel generation that produces the same output
 // regardless of thread count, by using fixed index-range assignment.
 
-use ferray_core::{Array, FerrayError, Ix1};
+use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
 use crate::distributions::normal::standard_normal_pair;
-use crate::generator::Generator;
+use crate::generator::{Generator, shape_size, vec_to_array_f64};
+use crate::shape::IntoShape;
 
 impl<B: BitGenerator + Clone> Generator<B> {
     /// Generate standard normal variates in parallel, deterministically.
@@ -21,37 +22,33 @@ impl<B: BitGenerator + Clone> Generator<B> {
     /// The parallel version produces different values because the child
     /// generators have different internal states.
     ///
-    /// # Arguments
-    /// * `size` - Number of values to generate.
-    ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `shape` is invalid.
     pub fn standard_normal_parallel(
         &mut self,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
 
         // For small sizes, sequential is faster (no spawn/thread overhead)
         let num_threads = rayon::current_num_threads().max(1);
-        if size < 10_000 || num_threads <= 1 {
+        if n < 10_000 || num_threads <= 1 {
             // Sequential fallback
-            let mut data = Vec::with_capacity(size);
-            while data.len() < size {
+            let mut data = Vec::with_capacity(n);
+            while data.len() < n {
                 let (a, b) = standard_normal_pair(&mut self.bg);
                 data.push(a);
-                if data.len() < size {
+                if data.len() < n {
                     data.push(b);
                 }
             }
-            return Array::<f64, Ix1>::from_vec(Ix1::new([size]), data);
+            return vec_to_array_f64(data, &shape_vec);
         }
 
         // Spawn independent child generators
         let mut children = self.spawn(num_threads)?;
-        let chunk_size = size.div_ceil(num_threads);
+        let chunk_size = n.div_ceil(num_threads);
 
         // Generate chunks in parallel
         use rayon::prelude::*;
@@ -60,7 +57,7 @@ impl<B: BitGenerator + Clone> Generator<B> {
             .enumerate()
             .map(|(i, child)| {
                 let start = i * chunk_size;
-                let end = (start + chunk_size).min(size);
+                let end = (start + chunk_size).min(n);
                 let count = end - start;
                 let mut chunk = Vec::with_capacity(count);
                 while chunk.len() < count {
@@ -75,13 +72,13 @@ impl<B: BitGenerator + Clone> Generator<B> {
             .collect();
 
         // Concatenate chunks
-        let mut data = Vec::with_capacity(size);
+        let mut data = Vec::with_capacity(n);
         for chunk in chunks {
             data.extend_from_slice(&chunk);
         }
-        data.truncate(size);
+        data.truncate(n);
 
-        Array::<f64, Ix1>::from_vec(Ix1::new([size]), data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Spawn `n` independent child generators for manual parallel use.

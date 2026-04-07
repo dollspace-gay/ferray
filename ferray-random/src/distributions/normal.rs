@@ -1,9 +1,10 @@
 // ferray-random: Normal distribution sampling — standard_normal, normal, lognormal
 
-use ferray_core::{Array, FerrayError, Ix1};
+use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
-use crate::generator::{Generator, generate_vec, vec_to_array1};
+use crate::generator::{Generator, generate_vec, shape_size, vec_to_array_f64};
+use crate::shape::IntoShape;
 
 /// Generate a single standard normal variate using the Box-Muller transform.
 ///
@@ -32,84 +33,73 @@ pub(crate) fn standard_normal_single<B: BitGenerator>(bg: &mut B) -> f64 {
 impl<B: BitGenerator> Generator<B> {
     /// Generate an array of standard normal (mean=0, std=1) variates.
     ///
-    /// Uses the Box-Muller transform for generation.
-    ///
-    /// # Arguments
-    /// * `size` - Number of values to generate.
+    /// Uses the Box-Muller transform. `shape` accepts `usize`, `[usize; N]`,
+    /// `&[usize]`, or `Vec<usize>` via [`IntoShape`].
     ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `size` is zero.
-    pub fn standard_normal(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
-        let mut data = Vec::with_capacity(size);
-        while data.len() < size {
+    /// Returns `FerrayError::InvalidValue` if `shape` is invalid.
+    pub fn standard_normal(
+        &mut self,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
+        let mut data = Vec::with_capacity(n);
+        while data.len() < n {
             let (a, b) = standard_normal_pair(&mut self.bg);
             data.push(a);
-            if data.len() < size {
+            if data.len() < n {
                 data.push(b);
             }
         }
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape)
     }
 
-    /// Generate an array of normal (Gaussian) variates with given mean and standard deviation.
-    ///
-    /// # Arguments
-    /// * `loc` - Mean of the distribution.
-    /// * `scale` - Standard deviation (must be positive).
-    /// * `size` - Number of values to generate.
+    /// Generate an array of normal (Gaussian) variates with given mean and
+    /// standard deviation. Equivalent to `numpy.random.Generator.normal`.
     ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `shape` is invalid.
     pub fn normal(
         &mut self,
         loc: f64,
         scale: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if scale <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
-        let data = generate_vec(self, size, |bg| loc + scale * standard_normal_single(bg));
-        vec_to_array1(data)
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
+        let data = generate_vec(self, n, |bg| loc + scale * standard_normal_single(bg));
+        vec_to_array_f64(data, &shape)
     }
 
     /// Generate an array of log-normal variates.
     ///
     /// If X ~ Normal(mean, sigma), then exp(X) ~ LogNormal(mean, sigma).
     ///
-    /// # Arguments
-    /// * `mean` - Mean of the underlying normal distribution.
-    /// * `sigma` - Standard deviation of the underlying normal distribution (must be positive).
-    /// * `size` - Number of values to generate.
-    ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `sigma <= 0` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `sigma <= 0` or `shape` is invalid.
     pub fn lognormal(
         &mut self,
         mean: f64,
         sigma: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if sigma <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "sigma must be positive, got {sigma}"
             )));
         }
-        let data = generate_vec(self, size, |bg| {
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
+        let data = generate_vec(self, n, |bg| {
             (mean + sigma * standard_normal_single(bg)).exp()
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape)
     }
 }
 
@@ -219,7 +209,7 @@ mod tests {
         let loc = 5.0;
         let scale = 2.0;
         let arr = rng.normal(loc, scale, n).unwrap();
-        let s = arr.as_slice().unwrap();
+        let s: Vec<f64> = arr.iter().copied().collect();
         let mean: f64 = s.iter().sum::<f64>() / n as f64;
         let var: f64 = s.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / n as f64;
         assert!(
@@ -231,5 +221,31 @@ mod tests {
             "normal variance {var} too far from {}",
             scale * scale
         );
+    }
+
+    // ----- N-D shape tests (issue #440) -----
+
+    #[test]
+    fn standard_normal_nd_shape() {
+        let mut rng = crate::default_rng_seeded(42);
+        let arr = rng.standard_normal([3, 4]).unwrap();
+        assert_eq!(arr.shape(), &[3, 4]);
+    }
+
+    #[test]
+    fn normal_nd_shape() {
+        let mut rng = crate::default_rng_seeded(42);
+        let arr = rng.normal(10.0, 2.0, [2, 3, 4]).unwrap();
+        assert_eq!(arr.shape(), &[2, 3, 4]);
+    }
+
+    #[test]
+    fn lognormal_nd_shape() {
+        let mut rng = crate::default_rng_seeded(42);
+        let arr = rng.lognormal(0.0, 1.0, [5, 5]).unwrap();
+        assert_eq!(arr.shape(), &[5, 5]);
+        for &v in arr.iter() {
+            assert!(v > 0.0);
+        }
     }
 }

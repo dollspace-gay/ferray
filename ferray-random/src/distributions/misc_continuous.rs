@@ -3,12 +3,13 @@
 // laplace, logistic, rayleigh, weibull, pareto, gumbel, power, triangular,
 // vonmises, wald, standard_cauchy
 
-use ferray_core::{Array, FerrayError, Ix1};
+use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
 use crate::distributions::exponential::standard_exponential_single;
 use crate::distributions::normal::standard_normal_single;
-use crate::generator::{Generator, generate_vec, vec_to_array1};
+use crate::generator::{Generator, generate_vec, shape_size, vec_to_array_f64};
+use crate::shape::IntoShape;
 
 impl<B: BitGenerator> Generator<B> {
     /// Generate an array of Laplace-distributed variates.
@@ -26,17 +27,16 @@ impl<B: BitGenerator> Generator<B> {
         &mut self,
         loc: f64,
         scale: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if scale <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             let mut u = bg.next_f64() - 0.5;
             // Reject u.abs() >= 0.5 to avoid ln(0) = -inf
             while u.abs() >= 0.5 {
@@ -44,7 +44,7 @@ impl<B: BitGenerator> Generator<B> {
             }
             loc - scale * u.signum() * (1.0 - 2.0 * u.abs()).ln()
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of logistic-distributed variates.
@@ -62,17 +62,16 @@ impl<B: BitGenerator> Generator<B> {
         &mut self,
         loc: f64,
         scale: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if scale <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             loop {
                 let u = bg.next_f64();
                 if u > f64::EPSILON && u < 1.0 - f64::EPSILON {
@@ -80,7 +79,7 @@ impl<B: BitGenerator> Generator<B> {
                 }
             }
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of Rayleigh-distributed variates.
@@ -93,19 +92,18 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `size` is zero.
-    pub fn rayleigh(&mut self, scale: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+    pub fn rayleigh(&mut self, scale: f64, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
         if scale <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             scale * (2.0 * standard_exponential_single(bg)).sqrt()
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of Weibull-distributed variates.
@@ -118,19 +116,18 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `a <= 0` or `size` is zero.
-    pub fn weibull(&mut self, a: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+    pub fn weibull(&mut self, a: f64, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
         if a <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "a must be positive, got {a}"
             )));
         }
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             standard_exponential_single(bg).powf(1.0 / a)
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of Pareto (type II / Lomax) distributed variates.
@@ -144,20 +141,19 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `a <= 0` or `size` is zero.
-    pub fn pareto(&mut self, a: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+    pub fn pareto(&mut self, a: f64, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
         if a <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "a must be positive, got {a}"
             )));
         }
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             let e = standard_exponential_single(bg);
             (e / a).exp() - 1.0
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of Gumbel-distributed variates.
@@ -175,17 +171,16 @@ impl<B: BitGenerator> Generator<B> {
         &mut self,
         loc: f64,
         scale: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if scale <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             loop {
                 let u = bg.next_f64();
                 if u > f64::EPSILON && u < 1.0 - f64::EPSILON {
@@ -193,7 +188,7 @@ impl<B: BitGenerator> Generator<B> {
                 }
             }
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of power-distributed variates.
@@ -207,23 +202,22 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `a <= 0` or `size` is zero.
-    pub fn power(&mut self, a: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+    pub fn power(&mut self, a: f64, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
         if a <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "a must be positive, got {a}"
             )));
         }
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             let e = standard_exponential_single(bg);
             // 1 - exp(-e) gives a U(0,1), then raise to 1/a
             // More precisely: u^(1/a) where u ~ U(0,1)
             // Using exponential: (1 - exp(-e))^(1/a)
             (1.0 - (-e).exp()).powf(1.0 / a)
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of triangular-distributed variates.
@@ -241,11 +235,8 @@ impl<B: BitGenerator> Generator<B> {
         left: f64,
         mode: f64,
         right: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if left >= right {
             return Err(FerrayError::invalid_value(format!(
                 "left ({left}) must be less than right ({right})"
@@ -257,7 +248,9 @@ impl<B: BitGenerator> Generator<B> {
             )));
         }
         let fc = (mode - left) / (right - left);
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             let u = bg.next_f64();
             if u < fc {
                 left + ((right - left) * (mode - left) * u).sqrt()
@@ -265,7 +258,7 @@ impl<B: BitGenerator> Generator<B> {
                 right - ((right - left) * (right - mode) * (1.0 - u)).sqrt()
             }
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of von Mises distributed variates.
@@ -284,22 +277,22 @@ impl<B: BitGenerator> Generator<B> {
         &mut self,
         mu: f64,
         kappa: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if kappa < 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "kappa must be non-negative, got {kappa}"
             )));
         }
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+
         if kappa < 1e-6 {
             // For very small kappa, the distribution is nearly uniform on [-pi, pi)
-            let data = generate_vec(self, size, |bg| {
+            let data = generate_vec(self, n, |bg| {
                 mu + (bg.next_f64() * std::f64::consts::TAU - std::f64::consts::PI)
             });
-            return vec_to_array1(data);
+            return vec_to_array_f64(data, &shape_vec);
         }
 
         // Best & Fisher algorithm
@@ -307,7 +300,7 @@ impl<B: BitGenerator> Generator<B> {
         let rho = (tau - (2.0 * tau).sqrt()) / (2.0 * kappa);
         let r = (1.0 + rho * rho) / (2.0 * rho);
 
-        let data = generate_vec(self, size, |bg| {
+        let data = generate_vec(self, n, |bg| {
             loop {
                 let u1 = bg.next_f64();
                 let z = (std::f64::consts::TAU * u1 - std::f64::consts::PI).cos();
@@ -325,7 +318,7 @@ impl<B: BitGenerator> Generator<B> {
                 }
             }
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of Wald (inverse Gaussian) distributed variates.
@@ -341,11 +334,8 @@ impl<B: BitGenerator> Generator<B> {
         &mut self,
         mean: f64,
         scale: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if mean <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "mean must be positive, got {mean}"
@@ -357,7 +347,9 @@ impl<B: BitGenerator> Generator<B> {
             )));
         }
         // Michael, Schucany & Haas algorithm
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             let z = standard_normal_single(bg);
             let v = z * z;
             let mu = mean;
@@ -367,7 +359,7 @@ impl<B: BitGenerator> Generator<B> {
             let u = bg.next_f64();
             if u <= mu / (mu + x) { x } else { mu * mu / x }
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of standard Cauchy distributed variates.
@@ -379,11 +371,10 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `size` is zero.
-    pub fn standard_cauchy(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
-        let data = generate_vec(self, size, |bg| {
+    pub fn standard_cauchy(&mut self, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             loop {
                 let u = bg.next_f64();
                 // Avoid u = 0.5 exactly (tan(0) = 0, which is fine, but avoid edge)
@@ -392,7 +383,7 @@ impl<B: BitGenerator> Generator<B> {
                 }
             }
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 }
 
@@ -510,7 +501,7 @@ mod tests {
         let mut rng = default_rng_seeded(42);
         let arr = rng.power(2.0, 10_000).unwrap();
         for &v in arr.as_slice().unwrap() {
-            assert!(v >= 0.0 && v <= 1.0, "power value {v} out of [0,1]");
+            assert!((0.0..=1.0).contains(&v), "power value {v} out of [0,1]");
         }
     }
 
@@ -519,7 +510,7 @@ mod tests {
         let mut rng = default_rng_seeded(42);
         let arr = rng.triangular(1.0, 3.0, 5.0, 10_000).unwrap();
         for &v in arr.as_slice().unwrap() {
-            assert!(v >= 1.0 && v <= 5.0, "triangular value {v} out of [1,5]");
+            assert!((1.0..=5.0).contains(&v), "triangular value {v} out of [1,5]");
         }
     }
 

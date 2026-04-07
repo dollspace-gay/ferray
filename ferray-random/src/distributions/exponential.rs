@@ -1,9 +1,10 @@
 // ferray-random: Exponential distribution sampling — standard_exponential, exponential
 
-use ferray_core::{Array, FerrayError, Ix1};
+use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
-use crate::generator::{Generator, generate_vec, vec_to_array1};
+use crate::generator::{Generator, generate_vec, shape_size, vec_to_array_f64};
+use crate::shape::IntoShape;
 
 /// Generate a single standard exponential variate (rate=1) via inverse CDF.
 pub(crate) fn standard_exponential_single<B: BitGenerator>(bg: &mut B) -> f64 {
@@ -20,40 +21,38 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// Uses the inverse CDF method: -ln(U) where U ~ Uniform(0,1).
     ///
-    /// # Arguments
-    /// * `size` - Number of values to generate.
-    ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `size` is zero.
-    pub fn standard_exponential(&mut self, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
-        let data = generate_vec(self, size, standard_exponential_single);
-        vec_to_array1(data)
+    /// Returns `FerrayError::InvalidValue` if `shape` is invalid.
+    pub fn standard_exponential(
+        &mut self,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
+        let data = generate_vec(self, n, standard_exponential_single);
+        vec_to_array_f64(data, &shape)
     }
 
     /// Generate an array of exponential variates with the given scale.
     ///
     /// The exponential distribution has PDF: f(x) = (1/scale) * exp(-x/scale).
     ///
-    /// # Arguments
-    /// * `scale` - Scale parameter (1/rate), must be positive.
-    /// * `size` - Number of values to generate.
-    ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `size` is zero.
-    pub fn exponential(&mut self, scale: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+    /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `shape` is invalid.
+    pub fn exponential(
+        &mut self,
+        scale: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if scale <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
             )));
         }
-        let data = generate_vec(self, size, |bg| scale * standard_exponential_single(bg));
-        vec_to_array1(data)
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
+        let data = generate_vec(self, n, |bg| scale * standard_exponential_single(bg));
+        vec_to_array_f64(data, &shape)
     }
 }
 

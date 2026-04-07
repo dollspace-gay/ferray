@@ -3,11 +3,12 @@
 // Gamma sampling uses Marsaglia & Tsang's method (shape >= 1) with
 // Ahrens-Dieter transformation for shape < 1.
 
-use ferray_core::{Array, FerrayError, Ix1};
+use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
 use crate::distributions::normal::standard_normal_single;
-use crate::generator::{Generator, generate_vec, vec_to_array1};
+use crate::generator::{Generator, generate_vec, shape_size, vec_to_array_f64};
+use crate::shape::IntoShape;
 
 /// Generate a single standard gamma variate with shape parameter `alpha`.
 ///
@@ -55,55 +56,42 @@ fn standard_gamma_ge1<B: BitGenerator>(bg: &mut B, alpha: f64) -> f64 {
 }
 
 impl<B: BitGenerator> Generator<B> {
-    /// Generate an array of standard gamma variates with shape `shape`.
-    ///
-    /// # Arguments
-    /// * `shape` - Shape parameter (alpha), must be positive.
-    /// * `size` - Number of values to generate.
+    /// Generate an array of standard gamma variates with shape parameter `alpha`.
     ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `shape <= 0` or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `alpha <= 0` or `size` is invalid.
     pub fn standard_gamma(
         &mut self,
-        shape: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
-        if shape <= 0.0 {
+        alpha: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
+        if alpha <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
-                "shape must be positive, got {shape}"
+                "alpha must be positive, got {alpha}"
             )));
         }
-        let data = generate_vec(self, size, |bg| standard_gamma_single(bg, shape));
-        vec_to_array1(data)
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| standard_gamma_single(bg, alpha));
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of gamma-distributed variates.
     ///
-    /// The gamma distribution with shape `shape` and scale `scale` has
-    /// PDF: f(x) = x^(shape-1) * exp(-x/scale) / (scale^shape * Gamma(shape)).
-    ///
-    /// # Arguments
-    /// * `shape` - Shape parameter (alpha), must be positive.
-    /// * `scale` - Scale parameter (beta), must be positive.
-    /// * `size` - Number of values to generate.
+    /// The gamma distribution with shape `alpha` and scale `scale` has
+    /// PDF: f(x) = x^(alpha-1) * exp(-x/scale) / (scale^alpha * Gamma(alpha)).
     ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `shape <= 0`, `scale <= 0`, or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if `alpha <= 0`, `scale <= 0`, or `size` is invalid.
     pub fn gamma(
         &mut self,
-        shape: f64,
+        alpha: f64,
         scale: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
-        if shape <= 0.0 {
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
+        if alpha <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
-                "shape must be positive, got {shape}"
+                "alpha must be positive, got {alpha}"
             )));
         }
         if scale <= 0.0 {
@@ -111,25 +99,24 @@ impl<B: BitGenerator> Generator<B> {
                 "scale must be positive, got {scale}"
             )));
         }
-        let data = generate_vec(self, size, |bg| scale * standard_gamma_single(bg, shape));
-        vec_to_array1(data)
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| scale * standard_gamma_single(bg, alpha));
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of beta-distributed variates in (0, 1).
     ///
     /// Uses the relationship: if X ~ Gamma(a), Y ~ Gamma(b), then X/(X+Y) ~ Beta(a,b).
     ///
-    /// # Arguments
-    /// * `a` - First shape parameter, must be positive.
-    /// * `b` - Second shape parameter, must be positive.
-    /// * `size` - Number of values to generate.
-    ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `a <= 0`, `b <= 0`, or `size` is zero.
-    pub fn beta(&mut self, a: f64, b: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+    /// Returns `FerrayError::InvalidValue` if `a <= 0`, `b <= 0`, or `size` is invalid.
+    pub fn beta(
+        &mut self,
+        a: f64,
+        b: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if a <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "a must be positive, got {a}"
@@ -140,7 +127,9 @@ impl<B: BitGenerator> Generator<B> {
                 "b must be positive, got {b}"
             )));
         }
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             let x = standard_gamma_single(bg, a);
             let y = standard_gamma_single(bg, b);
             if x + y == 0.0 {
@@ -149,52 +138,43 @@ impl<B: BitGenerator> Generator<B> {
                 x / (x + y)
             }
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of chi-squared distributed variates.
     ///
     /// Chi-squared(df) = Gamma(df/2, 2).
     ///
-    /// # Arguments
-    /// * `df` - Degrees of freedom, must be positive.
-    /// * `size` - Number of values to generate.
-    ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `df <= 0` or `size` is zero.
-    pub fn chisquare(&mut self, df: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+    /// Returns `FerrayError::InvalidValue` if `df <= 0` or `size` is invalid.
+    pub fn chisquare(
+        &mut self,
+        df: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if df <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "df must be positive, got {df}"
             )));
         }
-        let data = generate_vec(self, size, |bg| 2.0 * standard_gamma_single(bg, df / 2.0));
-        vec_to_array1(data)
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| 2.0 * standard_gamma_single(bg, df / 2.0));
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of F-distributed variates.
     ///
     /// F(d1, d2) = (Chi2(d1)/d1) / (Chi2(d2)/d2).
     ///
-    /// # Arguments
-    /// * `dfnum` - Numerator degrees of freedom, must be positive.
-    /// * `dfden` - Denominator degrees of freedom, must be positive.
-    /// * `size` - Number of values to generate.
-    ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if either df is non-positive or `size` is zero.
+    /// Returns `FerrayError::InvalidValue` if either df is non-positive or `size` is invalid.
     pub fn f(
         &mut self,
         dfnum: f64,
         dfden: f64,
-        size: usize,
-    ) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if dfnum <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "dfnum must be positive, got {dfnum}"
@@ -205,7 +185,9 @@ impl<B: BitGenerator> Generator<B> {
                 "dfden must be positive, got {dfden}"
             )));
         }
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             let x1 = standard_gamma_single(bg, dfnum / 2.0);
             let x2 = standard_gamma_single(bg, dfden / 2.0);
             if x2 == 0.0 {
@@ -214,34 +196,33 @@ impl<B: BitGenerator> Generator<B> {
                 (x1 / dfnum) / (x2 / dfden)
             }
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 
     /// Generate an array of Student's t-distributed variates.
     ///
     /// t(df) = Normal(0,1) / sqrt(Chi2(df)/df).
     ///
-    /// # Arguments
-    /// * `df` - Degrees of freedom, must be positive.
-    /// * `size` - Number of values to generate.
-    ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if `df <= 0` or `size` is zero.
-    pub fn student_t(&mut self, df: f64, size: usize) -> Result<Array<f64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+    /// Returns `FerrayError::InvalidValue` if `df <= 0` or `size` is invalid.
+    pub fn student_t(
+        &mut self,
+        df: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if df <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "df must be positive, got {df}"
             )));
         }
-        let data = generate_vec(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
             let z = standard_normal_single(bg);
             let chi2 = 2.0 * standard_gamma_single(bg, df / 2.0);
             z / (chi2 / df).sqrt()
         });
-        vec_to_array1(data)
+        vec_to_array_f64(data, &shape_vec)
     }
 }
 

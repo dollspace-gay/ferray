@@ -2,11 +2,12 @@
 //
 // binomial, negative_binomial, poisson, geometric, hypergeometric, logseries
 
-use ferray_core::{Array, FerrayError, Ix1};
+use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
 use crate::distributions::gamma::standard_gamma_single;
-use crate::generator::{Generator, generate_vec_i64, vec_to_array1_i64};
+use crate::generator::{Generator, generate_vec_i64, shape_size, vec_to_array_i64};
+use crate::shape::IntoShape;
 
 /// Generate a single Poisson variate using Knuth's algorithm for small lambda,
 /// or the transformed rejection method (Hormann) for large lambda.
@@ -214,18 +215,17 @@ impl<B: BitGenerator> Generator<B> {
         &mut self,
         n: u64,
         p: f64,
-        size: usize,
-    ) -> Result<Array<i64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<i64, IxDyn>, FerrayError> {
         if !(0.0..=1.0).contains(&p) {
             return Err(FerrayError::invalid_value(format!(
                 "p must be in [0, 1], got {p}"
             )));
         }
-        let data = generate_vec_i64(self, size, |bg| binomial_single(bg, n, p));
-        vec_to_array1_i64(data)
+        let shape_vec = size.into_shape()?;
+        let total = shape_size(&shape_vec);
+        let data = generate_vec_i64(self, total, |bg| binomial_single(bg, n, p));
+        vec_to_array_i64(data, &shape_vec)
     }
 
     /// Generate an array of negative binomial distributed variates.
@@ -244,11 +244,8 @@ impl<B: BitGenerator> Generator<B> {
         &mut self,
         n: f64,
         p: f64,
-        size: usize,
-    ) -> Result<Array<i64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<i64, IxDyn>, FerrayError> {
         if n <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "n must be positive, got {n}"
@@ -259,13 +256,15 @@ impl<B: BitGenerator> Generator<B> {
                 "p must be in (0, 1], got {p}"
             )));
         }
-        let data = generate_vec_i64(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let total = shape_size(&shape_vec);
+        let data = generate_vec_i64(self, total, |bg| {
             // Gamma-Poisson mixture:
             // Y ~ Gamma(n, (1-p)/p), then X ~ Poisson(Y)
             let y = standard_gamma_single(bg, n) * (1.0 - p) / p;
             poisson_single(bg, y)
         });
-        vec_to_array1_i64(data)
+        vec_to_array_i64(data, &shape_vec)
     }
 
     /// Generate an array of Poisson-distributed variates.
@@ -276,21 +275,24 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `lam < 0` or `size` is zero.
-    pub fn poisson(&mut self, lam: f64, size: usize) -> Result<Array<i64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+    pub fn poisson(
+        &mut self,
+        lam: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<i64, IxDyn>, FerrayError> {
         if lam < 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "lam must be non-negative, got {lam}"
             )));
         }
+        let shape_vec = size.into_shape()?;
+        let total = shape_size(&shape_vec);
         if lam == 0.0 {
-            let data = vec![0i64; size];
-            return vec_to_array1_i64(data);
+            let data = vec![0i64; total];
+            return vec_to_array_i64(data, &shape_vec);
         }
-        let data = generate_vec_i64(self, size, |bg| poisson_single(bg, lam));
-        vec_to_array1_i64(data)
+        let data = generate_vec_i64(self, total, |bg| poisson_single(bg, lam));
+        vec_to_array_i64(data, &shape_vec)
     }
 
     /// Generate an array of geometric-distributed variates.
@@ -303,21 +305,24 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `p` not in (0, 1] or `size` is zero.
-    pub fn geometric(&mut self, p: f64, size: usize) -> Result<Array<i64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+    pub fn geometric(
+        &mut self,
+        p: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<i64, IxDyn>, FerrayError> {
         if p <= 0.0 || p > 1.0 {
             return Err(FerrayError::invalid_value(format!(
                 "p must be in (0, 1], got {p}"
             )));
         }
+        let shape_vec = size.into_shape()?;
+        let total = shape_size(&shape_vec);
         if (p - 1.0).abs() < f64::EPSILON {
-            let data = vec![1i64; size];
-            return vec_to_array1_i64(data);
+            let data = vec![1i64; total];
+            return vec_to_array_i64(data, &shape_vec);
         }
         let log_q = (1.0 - p).ln();
-        let data = generate_vec_i64(self, size, |bg| {
+        let data = generate_vec_i64(self, total, |bg| {
             loop {
                 let u = bg.next_f64();
                 if u > f64::EPSILON {
@@ -325,7 +330,7 @@ impl<B: BitGenerator> Generator<B> {
                 }
             }
         });
-        vec_to_array1_i64(data)
+        vec_to_array_i64(data, &shape_vec)
     }
 
     /// Generate an array of hypergeometric-distributed variates.
@@ -346,21 +351,20 @@ impl<B: BitGenerator> Generator<B> {
         ngood: u64,
         nbad: u64,
         nsample: u64,
-        size: usize,
-    ) -> Result<Array<i64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+        size: impl IntoShape,
+    ) -> Result<Array<i64, IxDyn>, FerrayError> {
         let total = ngood + nbad;
         if nsample > total {
             return Err(FerrayError::invalid_value(format!(
                 "nsample ({nsample}) > ngood + nbad ({total})"
             )));
         }
-        let data = generate_vec_i64(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let total_n = shape_size(&shape_vec);
+        let data = generate_vec_i64(self, total_n, |bg| {
             hypergeometric_single(bg, ngood, nbad, nsample)
         });
-        vec_to_array1_i64(data)
+        vec_to_array_i64(data, &shape_vec)
     }
 
     /// Generate an array of logarithmic series distributed variates.
@@ -371,17 +375,20 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `p` not in (0, 1) or `size` is zero.
-    pub fn logseries(&mut self, p: f64, size: usize) -> Result<Array<i64, Ix1>, FerrayError> {
-        if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
-        }
+    pub fn logseries(
+        &mut self,
+        p: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<i64, IxDyn>, FerrayError> {
         if p <= 0.0 || p >= 1.0 {
             return Err(FerrayError::invalid_value(format!(
                 "p must be in (0, 1), got {p}"
             )));
         }
         let r = (-(-p).ln_1p()).recip();
-        let data = generate_vec_i64(self, size, |bg| {
+        let shape_vec = size.into_shape()?;
+        let total = shape_size(&shape_vec);
+        let data = generate_vec_i64(self, total, |bg| {
             // Kemp's "second" algorithm for the logarithmic distribution.
             // See Devroye, "Non-Uniform Random Variate Generation", p. 548.
             loop {
@@ -404,7 +411,7 @@ impl<B: BitGenerator> Generator<B> {
                 return 1;
             }
         });
-        vec_to_array1_i64(data)
+        vec_to_array_i64(data, &shape_vec)
     }
 }
 

@@ -2,7 +2,7 @@
 //
 // Tests mathematical invariants of random number generation using proptest.
 
-use ferray_random::{Generator, default_rng_seeded};
+use ferray_random::default_rng_seeded;
 
 use proptest::prelude::*;
 
@@ -45,7 +45,7 @@ proptest! {
         let arr = rng.random(500).unwrap();
         for &v in arr.iter() {
             prop_assert!(
-                v >= 0.0 && v < 1.0,
+                (0.0..1.0).contains(&v),
                 "random() value {} outside [0, 1)",
                 v
             );

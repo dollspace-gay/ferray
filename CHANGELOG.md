@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-03-07
 
 ### Added
+- ferray-random: all distributions return 1D arrays only — no shape parameter for ND output (#440)
 - ferray-stats: no multi-axis reductions — axis only accepts single usize (#458)
 - ferray-stats: no keepdims= parameter on any reduction (#457)
 - ferray-core: no concatenate/stack/split in core (#362)
