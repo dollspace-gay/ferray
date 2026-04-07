@@ -1,0 +1,10 @@
+{
+  "uuid": "f930799b-7b33-4535-9e3f-677392bbcea9",
+  "issue_uuid": "baedb25c-6f3c-4a3e-9cb0-b3f3c6878552",
+  "author": "phase-4-coordinator",
+  "content": "Added NumPy broadcasting to masked arithmetic operations within the same dimension type. Same-shape inputs take the existing fast path; mismatched shapes go through ferray-core's broadcast_shapes + broadcast_to and reconstruct the result Dimension via Dimension::from_dim_slice (the helper added in #346).\n\nRefactored masked_add/sub/mul/div in arithmetic.rs to share a generic masked_binary_op<T, D, F> helper that handles:\n1. Fast path on identical shapes (zip iter)\n2. Broadcasting path that materializes broadcast (data, mask) views into flat Vecs and zip-folds them\n3. Mask union: result mask is the OR of broadcast operand masks\n4. Fill propagation: masked positions in the result use the receiver's fill_value\n\nmasked_*_array variants similarly refactored via masked_array_op which broadcasts the (masked, regular) pair using the receiver's mask.\n\nCross-rank broadcasting (e.g. Ix1 + Ix2) is unavailable through the std::ops operators since both sides must share D — users with mixed-rank arrays should call ferray-core's broadcast_to() on the shorter array first to align ranks.\n\n3 new tests: (3,1) + (1,4) -> (3,4) within Ix2, mask union after broadcast (a single masked element in (3,1) becomes a fully-masked row in (3,4)), and incompatible shape error.\n\nCloses #504.",
+  "created_at": "2026-04-07T18:25:42.862498155Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAJLbaygyyFSN97l0GpBU7ONlPBZquyBWIr001R3wQDOaFN09RqipeDv7F/wc6dIeLDQLGeiZmsyaIy5nmCXmxDQ=="
+}
