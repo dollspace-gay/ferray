@@ -1,0 +1,10 @@
+{
+  "uuid": "eb421083-b79f-44b8-a42c-c164b3f285ef",
+  "issue_uuid": "f72f3885-c488-4aad-a1ed-f669224b3f6b",
+  "author": "phase-4-coordinator",
+  "content": "Implemented unsafe/lossy casting (issue #361). Changes:\n\n1. New module ferray-core/src/dtype/unsafe_cast.rs with the CastTo<U> trait — a superset of PromoteTo that covers every Element pair: 15 identity casts, 132 numeric primitive cross-casts via 'as', bool↔int/float/Complex, numeric→bool (nonzero check), real→Complex, Complex→real (take .re), and Complex<f32>↔Complex<f64>. Conversion semantics match Rust's 'as' operator and NumPy's casting='unsafe'. f16/bf16 not yet wired.\n\n2. New Array::cast<U>(casting: CastKind) method in dtype/casting.rs that uses CastTo to perform the conversion after validating with can_cast() at the chosen safety level. This is the general-purpose method matching NumPy's arr.astype(dtype, casting=...). The pre-existing AsType::astype<U>() (PromoteTo-bound) remains as the safe-only fast path.\n\n3. New DynArray::astype(target: DType, casting: CastKind) for runtime-typed conversion. Uses an inner cast_into! macro to dispatch on the source variant, then an outer match on the target dtype to wrap the result. Handles all 15² = 225 element pairs (excluding f16/bf16 which return InvalidDtype).\n\n4. Tests:\n- 14 unsafe_cast tests covering int widening/narrowing, float→int truncation, bool↔numeric, real↔Complex, NaN, identity\n- 9 Array::cast tests covering Unsafe/Safe/SameKind/No, narrowing errors, complex→real, real→complex, int→bool\n- 6 DynArray::astype tests covering all four CastKind levels, complex→real, bool→u8\n\nResult: 476 ferray-core tests pass (was 447), full workspace tests + clippy clean. Closing as completed.",
+  "created_at": "2026-04-07T13:02:26.367988544Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABANAYJyMOxDdHrWRksp8nvHp1BVugrMGXcKGIA6bmtVZ2W+PEV/MFuxW0gHpWTaaYGBBtkX7pya/ifa6sNFI3+Bw=="
+}
