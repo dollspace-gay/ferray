@@ -1,0 +1,10 @@
+{
+  "uuid": "88824bda-a391-46af-b813-309cb7e3cb5c",
+  "issue_uuid": "223c6fcf-87b7-4165-a824-e19ea83b23ff",
+  "author": "phase-4-coordinator",
+  "content": "Audited ferray-core/src/manipulation/mod.rs against NumPy. concatenate, stack, vstack, hstack, dstack, block, split, array_split, vsplit, hsplit, dsplit are all already implemented. Filled the actual gaps:\n\n1. Array::to_dyn() and Array::into_dyn() in ferray-core/src/array/methods.rs — converts a typed Array<T,D> to Array<T,IxDyn>. Without this, users with statically-typed arrays couldn't even call concatenate (which takes &[Array<T,IxDyn>]).\n\n2. column_stack(arrays) — stacks 1-D arrays as columns of a 2-D array. For 2-D+ inputs, equivalent to hstack. Validates length matches across 1-D inputs.\n\n3. row_stack(arrays) — alias for vstack to match NumPy's row_stack.\n\n4. array_split_n(a, n, axis) — NumPy's array_split with integer sections (allows uneven division). The first (axis_len % n) sections get one extra element. Existing split() requires even division (matches numpy.split); existing array_split() requires explicit indices. This fills the gap for the int-sections variant of array_split.\n\n5. 9 new tests covering: column_stack 1D→2D, column_stack 2D fall-through, length mismatch error, row_stack=vstack equivalence, array_split_n uneven (7÷3), array_split_n even (6÷3), array_split_n more sections than elements (3÷5 → empty trailing parts), to_dyn round-trip, end-to-end concatenate of typed Ix2 arrays via to_dyn().\n\nResult: 75 manipulation tests pass (was 66), workspace tests + clippy clean. Closing as completed.",
+  "created_at": "2026-04-07T13:06:32.280225735Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAXYLlGIMszbUaE/7mUJFRibQL2Zvil/FUrmw60AUzZdHOmAfnBg1EmCjFAcfhf6aN5f/l3XJFC6ub3J8cCpKsCA=="
+}
