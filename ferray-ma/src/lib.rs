@@ -18,6 +18,7 @@
 pub mod arithmetic;
 pub mod constructors;
 pub mod filled;
+pub mod interop;
 pub mod mask_ops;
 pub mod masked_array;
 pub mod reductions;
