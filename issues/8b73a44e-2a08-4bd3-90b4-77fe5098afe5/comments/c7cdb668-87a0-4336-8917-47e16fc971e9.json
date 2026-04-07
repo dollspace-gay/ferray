@@ -1,0 +1,10 @@
+{
+  "uuid": "c7cdb668-87a0-4336-8917-47e16fc971e9",
+  "issue_uuid": "8b73a44e-2a08-4bd3-90b4-77fe5098afe5",
+  "author": "phase-4-coordinator",
+  "content": "Rename ferrum→ferray complete (per existing comments). Yanking the legacy ferrum crates from crates.io is a manual user action requiring crates.io credentials and cannot be done from this codebase. Closing as the code-side work is complete.",
+  "created_at": "2026-04-07T12:34:29.928160463Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA6BSFBxJ7vs78hc2fpQYwWMwkAhdOcMiPfO9iSHUJtu7PLVo9KyxO4pfQ3w3YrZN5IChukrARcZHVC35tKMS6AQ=="
+}
