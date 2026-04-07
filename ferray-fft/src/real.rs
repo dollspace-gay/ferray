@@ -1,8 +1,13 @@
 // ferray-fft: Real FFTs — rfft, irfft, rfft2, irfft2, rfftn, irfftn (REQ-5..REQ-7)
 //
-// Real FFTs exploit Hermitian symmetry: for a real input of length n,
-// the output has only n/2+1 unique complex values. The inverse operation
-// takes n/2+1 complex values and produces n real values.
+// Real FFTs exploit Hermitian symmetry: for a real input of length n, the
+// output has only n/2+1 unique complex values. The inverse operation takes
+// n/2+1 complex values and produces n real values.
+//
+// The 1-D real→complex transform is delegated to the `realfft` crate (via
+// `rfft_along_axis` in nd.rs) which implements the half-size complex FFT
+// trick — roughly 2× faster than promoting to complex and running a full
+// complex FFT. See issue #432 for background.
 
 use num_complex::Complex;
 
@@ -10,17 +15,12 @@ use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::error::{FerrayError, FerrayResult};
 
-use crate::nd::fft_along_axis;
+use crate::nd::{fft_along_axis, irfft_along_axis, rfft_along_axis};
 use crate::norm::FftNorm;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/// Convert a real f64 array to flat Complex<f64> data.
-fn real_to_complex_flat<D: Dimension>(a: &Array<f64, D>) -> Vec<Complex<f64>> {
-    a.iter().map(|&v| Complex::new(v, 0.0)).collect()
-}
 
 fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrayResult<usize> {
     match axis {
@@ -57,116 +57,6 @@ fn resolve_axes(ndim: usize, axes: Option<&[usize]>) -> FerrayResult<Vec<usize>>
     }
 }
 
-/// Truncate the FFT output along `axis` from `n` to `n/2+1` (Hermitian symmetry).
-fn truncate_hermitian(
-    data: &[Complex<f64>],
-    shape: &[usize],
-    axis: usize,
-) -> (Vec<usize>, Vec<Complex<f64>>) {
-    let full_len = shape[axis];
-    let half_len = full_len / 2 + 1;
-
-    let mut new_shape = shape.to_vec();
-    new_shape[axis] = half_len;
-
-    let strides = compute_strides(shape);
-    let new_strides = compute_strides(&new_shape);
-    let new_total: usize = new_shape.iter().product();
-
-    let output: Vec<Complex<f64>> = (0..new_total)
-        .map(|flat_idx| {
-            let multi = flat_to_multi(flat_idx, &new_shape, &new_strides);
-            // Same multi-index in the source (only axis dimension is truncated)
-            let src_idx: usize = multi
-                .iter()
-                .zip(strides.iter())
-                .map(|(&m, &s)| m * s as usize)
-                .sum();
-            data[src_idx]
-        })
-        .collect();
-
-    (new_shape, output)
-}
-
-/// Extend Hermitian-symmetric data from n/2+1 complex values back to n.
-fn extend_hermitian(
-    data: &[Complex<f64>],
-    shape: &[usize],
-    axis: usize,
-    n: usize,
-) -> (Vec<usize>, Vec<Complex<f64>>) {
-    let half_len = shape[axis];
-
-    let mut new_shape = shape.to_vec();
-    new_shape[axis] = n;
-
-    let strides = compute_strides(shape);
-    let new_strides = compute_strides(&new_shape);
-    let new_total: usize = new_shape.iter().product();
-
-    let output: Vec<Complex<f64>> = (0..new_total)
-        .map(|flat_idx| {
-            let multi = flat_to_multi(flat_idx, &new_shape, &new_strides);
-            let axis_idx = multi[axis];
-
-            if axis_idx < half_len {
-                // Direct copy
-                let src_idx: usize = multi
-                    .iter()
-                    .zip(strides.iter())
-                    .map(|(&m, &s)| m * s as usize)
-                    .sum();
-                data[src_idx]
-            } else {
-                // Hermitian symmetry: X[n-k] = conj(X[k])
-                let mirror_axis_idx = n - axis_idx;
-                if mirror_axis_idx < half_len {
-                    let mut src_multi = multi;
-                    src_multi[axis] = mirror_axis_idx;
-                    let src_idx: usize = src_multi
-                        .iter()
-                        .zip(strides.iter())
-                        .map(|(&m, &s)| m * s as usize)
-                        .sum();
-                    data[src_idx].conj()
-                } else {
-                    // Zero (shouldn't happen for valid Hermitian data)
-                    Complex::new(0.0, 0.0)
-                }
-            }
-        })
-        .collect();
-
-    (new_shape, output)
-}
-
-fn compute_strides(shape: &[usize]) -> Vec<isize> {
-    let ndim = shape.len();
-    let mut strides = vec![0isize; ndim];
-    if ndim == 0 {
-        return strides;
-    }
-    strides[ndim - 1] = 1;
-    for i in (0..ndim - 1).rev() {
-        strides[i] = strides[i + 1] * shape[i + 1] as isize;
-    }
-    strides
-}
-
-fn flat_to_multi(flat_idx: usize, shape: &[usize], strides: &[isize]) -> Vec<usize> {
-    let ndim = shape.len();
-    let mut multi = vec![0usize; ndim];
-    let mut remaining = flat_idx;
-    for d in 0..ndim {
-        if strides[d] != 0 {
-            multi[d] = remaining / strides[d] as usize;
-            remaining %= strides[d] as usize;
-        }
-    }
-    multi
-}
-
 // ---------------------------------------------------------------------------
 // 1-D real FFT (REQ-5)
 // ---------------------------------------------------------------------------
@@ -176,6 +66,9 @@ fn flat_to_multi(flat_idx: usize, shape: &[usize], strides: &[isize]) -> Vec<usi
 /// Analogous to `numpy.fft.rfft`. Since the input is real, the output
 /// exhibits Hermitian symmetry and only the first `n/2 + 1` complex
 /// coefficients are returned.
+///
+/// Uses the dedicated real-to-complex FFT from the `realfft` crate
+/// (issue #432), which is ~2× faster than promoting to complex first.
 ///
 /// # Parameters
 /// - `a`: Input real-valued array.
@@ -195,19 +88,15 @@ pub fn rfft<D: Dimension>(
     let ndim = shape.len();
     let ax = resolve_axis(ndim, axis)?;
 
-    let fft_len = n.unwrap_or(shape[ax]);
-    if fft_len == 0 {
-        return Err(FerrayError::invalid_value("FFT length must be > 0"));
-    }
+    // Materialize the input data as a flat `&[f64]`. The underlying array
+    // may already be contiguous — if so we could borrow it, but `iter()`
+    // handles non-contiguous views too.
+    let real_data: Vec<f64> = a.iter().copied().collect();
 
-    // Convert real to complex and compute full FFT
-    let complex_data = real_to_complex_flat(a);
-    let (full_shape, full_result) =
-        fft_along_axis(&complex_data, &shape, ax, Some(fft_len), false, norm)?;
-
-    // Truncate to n/2+1 along the transform axis
-    let (out_shape, out_data) = truncate_hermitian(&full_result, &full_shape, ax);
-
+    // Delegate to the realfft-backed lane helper, which produces the
+    // n/2+1 Hermitian-folded output directly — no full-size complex FFT
+    // followed by truncation.
+    let (out_shape, out_data) = rfft_along_axis(&real_data, &shape, ax, n, norm)?;
     Array::from_vec(IxDyn::new(&out_shape), out_data)
 }
 
@@ -215,6 +104,10 @@ pub fn rfft<D: Dimension>(
 ///
 /// Analogous to `numpy.fft.irfft`. Takes `n/2 + 1` complex values and
 /// produces `n` real values by exploiting Hermitian symmetry.
+///
+/// Uses the dedicated complex-to-real FFT from the `realfft` crate
+/// (issue #432), which is ~2× faster than extending to full Hermitian
+/// length and running a full inverse complex FFT.
 ///
 /// # Parameters
 /// - `a`: Input complex array (Hermitian-symmetric spectrum, typically n/2+1 values).
@@ -243,18 +136,12 @@ pub fn irfft<D: Dimension>(
         ));
     }
 
-    // Extend Hermitian-symmetric data to full length
+    // Delegate to the realfft-backed lane helper, which runs the
+    // complex-to-real transform directly without extending to full length.
     let complex_data: Vec<Complex<f64>> = a.iter().copied().collect();
-    let (extended_shape, extended_data) = extend_hermitian(&complex_data, &shape, ax, output_len);
-
-    // Compute inverse FFT on the full-length data
-    let (result_shape, result_data) =
-        fft_along_axis(&extended_data, &extended_shape, ax, None, true, norm)?;
-
-    // Extract real parts
-    let real_data: Vec<f64> = result_data.iter().map(|c| c.re).collect();
-
-    Array::from_vec(IxDyn::new(&result_shape), real_data)
+    let (out_shape, out_data) =
+        irfft_along_axis(&complex_data, &shape, ax, output_len, norm)?;
+    Array::from_vec(IxDyn::new(&out_shape), out_data)
 }
 
 // ---------------------------------------------------------------------------
@@ -408,34 +295,27 @@ fn rfftn_impl<D: Dimension>(
         None => axes.iter().map(|&ax| Some(input_shape[ax])).collect(),
     };
 
-    let complex_data = real_to_complex_flat(a);
-    let mut current_data = complex_data;
-    let mut current_shape = input_shape;
+    // NumPy's rfftn runs a real→complex transform on the LAST axis first
+    // (producing the Hermitian-folded dimension) and then complex transforms
+    // on the remaining axes. We do the same: start with the real input,
+    // apply rfft_along_axis on the final axis, then iterate the remaining
+    // axes with the complex path.
+    let last_idx = axes.len() - 1;
+    let last_ax = axes[last_idx];
+    let last_n = sizes[last_idx];
 
-    // For all axes except the last: do a full complex FFT
-    for (i, &ax) in axes.iter().enumerate() {
+    let real_data: Vec<f64> = a.iter().copied().collect();
+    let (mut current_shape, mut current_data) =
+        rfft_along_axis(&real_data, &input_shape, last_ax, last_n, norm)?;
+
+    // Remaining axes run as complex forward FFTs on the intermediate.
+    for i in 0..last_idx {
+        let ax = axes[i];
         let n = sizes[i];
-        if i < axes.len() - 1 {
-            // Full complex FFT
-            let (new_shape, new_data) =
-                fft_along_axis(&current_data, &current_shape, ax, n, false, norm)?;
-            current_shape = new_shape;
-            current_data = new_data;
-        } else {
-            // Last axis: full FFT then truncate
-            let fft_len = n.unwrap_or(current_shape[ax]);
-            let (full_shape, full_data) = fft_along_axis(
-                &current_data,
-                &current_shape,
-                ax,
-                Some(fft_len),
-                false,
-                norm,
-            )?;
-            let (out_shape, out_data) = truncate_hermitian(&full_data, &full_shape, ax);
-            current_shape = out_shape;
-            current_data = out_data;
-        }
+        let (new_shape, new_data) =
+            fft_along_axis(&current_data, &current_shape, ax, n, false, norm)?;
+        current_shape = new_shape;
+        current_data = new_data;
     }
 
     Array::from_vec(IxDyn::new(&current_shape), current_data)
@@ -453,9 +333,10 @@ fn irfftn_impl<D: Dimension>(
     }
 
     let input_shape = a.shape().to_vec();
+    let last_idx = axes.len() - 1;
 
-    // Determine the output sizes for each axis
-    let sizes: Vec<Option<usize>> = match s {
+    // Determine the output sizes for each axis.
+    let sizes: Vec<usize> = match s {
         Some(sizes) => {
             if sizes.len() != axes.len() {
                 return Err(FerrayError::invalid_value(format!(
@@ -464,51 +345,48 @@ fn irfftn_impl<D: Dimension>(
                     axes.len(),
                 )));
             }
-            sizes.iter().map(|&sz| Some(sz)).collect()
+            sizes.to_vec()
         }
         None => {
-            // For all axes except the last: use input shape
-            // For the last axis: n = 2*(input_len - 1)
+            // For all axes except the last: use input shape (complex FFT
+            // is shape-preserving along each axis unless overridden).
+            // For the last axis: output is `2 * (input_len - 1)`.
             let mut result = Vec::with_capacity(axes.len());
             for (i, &ax) in axes.iter().enumerate() {
-                if i < axes.len() - 1 {
-                    result.push(Some(input_shape[ax]));
+                if i < last_idx {
+                    result.push(input_shape[ax]);
                 } else {
-                    result.push(Some(2 * (input_shape[ax] - 1)));
+                    result.push(2 * (input_shape[ax] - 1));
                 }
             }
             result
         }
     };
 
-    let complex_data: Vec<Complex<f64>> = a.iter().copied().collect();
-    let mut current_data = complex_data;
+    // NumPy's irfftn runs complex inverse FFTs on axes[0..last] first, then
+    // the complex-to-real inverse transform on axes[last]. We match that
+    // order so the Hermitian-folded axis stays folded through the other
+    // transforms and is only un-folded (to real) at the very end.
+    let mut current_data: Vec<Complex<f64>> = a.iter().copied().collect();
     let mut current_shape = input_shape;
 
-    // Process axes in order
-    for (i, &ax) in axes.iter().enumerate() {
-        let n = sizes[i];
-        if i < axes.len() - 1 {
-            // All but last axis: inverse complex FFT
-            let (new_shape, new_data) =
-                fft_along_axis(&current_data, &current_shape, ax, n, true, norm)?;
-            current_shape = new_shape;
-            current_data = new_data;
-        } else {
-            // Last axis: extend Hermitian then inverse FFT
-            let output_len = n.unwrap_or(2 * (current_shape[ax] - 1));
-            let (ext_shape, ext_data) =
-                extend_hermitian(&current_data, &current_shape, ax, output_len);
-            let (result_shape, result_data) =
-                fft_along_axis(&ext_data, &ext_shape, ax, None, true, norm)?;
-            current_shape = result_shape;
-            current_data = result_data;
-        }
+    for i in 0..last_idx {
+        let ax = axes[i];
+        let n = Some(sizes[i]);
+        let (new_shape, new_data) =
+            fft_along_axis(&current_data, &current_shape, ax, n, true, norm)?;
+        current_shape = new_shape;
+        current_data = new_data;
     }
 
-    // Extract real parts
-    let real_data: Vec<f64> = current_data.iter().map(|c| c.re).collect();
-    Array::from_vec(IxDyn::new(&current_shape), real_data)
+    // Final step: complex-to-real inverse transform on the last axis via
+    // the realfft-backed lane helper.
+    let last_ax = axes[last_idx];
+    let output_len = sizes[last_idx];
+    let (final_shape, final_data) =
+        irfft_along_axis(&current_data, &current_shape, last_ax, output_len, norm)?;
+
+    Array::from_vec(IxDyn::new(&final_shape), final_data)
 }
 
 #[cfg(test)]
@@ -636,6 +514,170 @@ mod tests {
             assert!(
                 (o - r).abs() < 1e-9,
                 "axis1 roundtrip: {} vs {}",
+                o,
+                r
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Regression guards for the realfft-backed rfft path (#432)
+    //
+    // These test the multi-lane par_chunks_mut code path in rfft_along_axis
+    // with specific mathematical invariants that let us verify the
+    // realfft-backed implementation matches the previous promote-to-complex
+    // approach.
+    // -----------------------------------------------------------------------
+
+    /// Spectrum of a real sinusoid should have a single pair of spikes.
+    /// For a cosine at frequency k in a signal of length n, rfft(cos) has:
+    ///   - bin k: n/2 + 0j (real, positive)
+    ///   - all other bins: ~0
+    #[test]
+    fn rfft_single_cosine_matches_analytical() {
+        let n = 16;
+        let k = 3; // frequency
+        let data: Vec<f64> = (0..n)
+            .map(|i| (2.0 * std::f64::consts::PI * k as f64 * i as f64 / n as f64).cos())
+            .collect();
+        let a = make_real_1d(data);
+        let spectrum = rfft(&a, None, None, FftNorm::Backward).unwrap();
+        assert_eq!(spectrum.shape(), &[n / 2 + 1]);
+
+        let bins: Vec<Complex<f64>> = spectrum.iter().copied().collect();
+        for (i, bin) in bins.iter().enumerate() {
+            if i == k {
+                // Bin k should have magnitude n/2 (real, positive).
+                assert!(
+                    (bin.re - (n as f64 / 2.0)).abs() < 1e-10,
+                    "bin {} real part = {}, expected {}",
+                    i,
+                    bin.re,
+                    n as f64 / 2.0
+                );
+                assert!(bin.im.abs() < 1e-10);
+            } else {
+                // All other bins should be near zero.
+                assert!(
+                    bin.norm() < 1e-10,
+                    "bin {} should be ~0, got {:?}",
+                    i,
+                    bin
+                );
+            }
+        }
+    }
+
+    /// Parseval's theorem: sum of |x[i]|^2 equals sum of |X[k]|^2 / n for
+    /// "backward" normalization (the default NumPy/ferray convention).
+    /// For rfft we need to account for the folded representation: bins 0 and
+    /// n/2 (if present) contribute once; others contribute twice (since
+    /// X[n-k] = conj(X[k]) is not stored but carries the same magnitude).
+    #[test]
+    fn rfft_parseval_holds_for_multi_lane() {
+        use ferray_core::dimension::Ix2;
+        // 4 lanes of length 16 each. Each lane is a different signal.
+        let rows = 4usize;
+        let cols = 16usize;
+        let data: Vec<f64> = (0..rows * cols)
+            .map(|i| ((i as f64).sin() + (i as f64 * 0.3).cos()) * 2.0)
+            .collect();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([rows, cols]), data.clone()).unwrap();
+        let spectrum = rfft(&a, None, Some(1), FftNorm::Backward).unwrap();
+        assert_eq!(spectrum.shape(), &[rows, cols / 2 + 1]);
+
+        for row in 0..rows {
+            // Sum of |x[i]|^2 for this lane.
+            let lane_start = row * cols;
+            let time_energy: f64 =
+                data[lane_start..lane_start + cols].iter().map(|&v| v * v).sum();
+
+            // Sum of |X[k]|^2 for this lane in the folded representation.
+            let spec_row = row * (cols / 2 + 1);
+            let half_len = cols / 2 + 1;
+            let mut freq_energy = 0.0;
+            for k in 0..half_len {
+                let bin = spectrum
+                    .iter()
+                    .nth(spec_row + k)
+                    .copied()
+                    .unwrap();
+                let mag_sq = bin.norm_sqr();
+                // Bins 0 and cols/2 (for even n) count once; others count
+                // twice to account for their unstored conjugate.
+                if k == 0 || (cols % 2 == 0 && k == cols / 2) {
+                    freq_energy += mag_sq;
+                } else {
+                    freq_energy += 2.0 * mag_sq;
+                }
+            }
+            // Parseval: sum |X[k]|^2 = n * sum |x[i]|^2 for "backward" norm.
+            let expected = cols as f64 * time_energy;
+            assert!(
+                ((freq_energy - expected) / expected).abs() < 1e-9,
+                "lane {}: freq energy {} vs expected {} (time energy = {})",
+                row,
+                freq_energy,
+                expected,
+                time_energy
+            );
+        }
+    }
+
+    /// Odd-length signal: realfft handles odd n via the halved representation
+    /// `n/2 + 1 = (n+1)/2`. Validate against a delta input.
+    #[test]
+    fn rfft_odd_length_impulse() {
+        // Odd-length impulse [1, 0, 0, 0, 0] → all 3 bins are 1.0+0j
+        let a = make_real_1d(vec![1.0, 0.0, 0.0, 0.0, 0.0]);
+        let spectrum = rfft(&a, None, None, FftNorm::Backward).unwrap();
+        assert_eq!(spectrum.shape(), &[3]);
+        for bin in spectrum.iter() {
+            assert!((bin.re - 1.0).abs() < 1e-12);
+            assert!(bin.im.abs() < 1e-12);
+        }
+    }
+
+    /// Zero-padding through the multi-lane path.
+    #[test]
+    fn rfft_multi_lane_with_zero_padding() {
+        use ferray_core::dimension::Ix2;
+        // 3 lanes of length 2, padded to 8 → output shape (3, 5).
+        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 2]), data).unwrap();
+        let spectrum = rfft(&a, Some(8), Some(1), FftNorm::Backward).unwrap();
+        assert_eq!(spectrum.shape(), &[3, 5]);
+
+        // DC bin of row r is (data[2r] + data[2r+1]) since other positions
+        // are zero-padded.
+        let bins: Vec<Complex<f64>> = spectrum.iter().copied().collect();
+        assert!((bins[0].re - (1.0 + 2.0)).abs() < 1e-12);
+        assert!((bins[5].re - (3.0 + 4.0)).abs() < 1e-12);
+        assert!((bins[10].re - (5.0 + 6.0)).abs() < 1e-12);
+    }
+
+    /// Roundtrip through the multi-lane inverse path (irfft along axis 0).
+    #[test]
+    fn irfft_multi_lane_axis0_roundtrip() {
+        use ferray_core::dimension::Ix2;
+        // 6×4 array, rfft/irfft along axis 0 → lanes of length 6.
+        let rows = 6usize;
+        let cols = 4usize;
+        let data: Vec<f64> = (0..rows * cols).map(|i| (i as f64).sqrt()).collect();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([rows, cols]), data.clone()).unwrap();
+
+        let spectrum = rfft(&a, None, Some(0), FftNorm::Backward).unwrap();
+        // rfft along axis 0 with n=6 → output shape (4, 4) since 6/2+1 = 4
+        assert_eq!(spectrum.shape(), &[4, 4]);
+
+        let recovered = irfft(&spectrum, Some(rows), Some(0), FftNorm::Backward).unwrap();
+        assert_eq!(recovered.shape(), &[rows, cols]);
+        let rec_data: Vec<f64> = recovered.iter().copied().collect();
+        for (i, (o, r)) in data.iter().zip(rec_data.iter()).enumerate() {
+            assert!(
+                (o - r).abs() < 1e-10,
+                "index {}: expected {}, got {}",
+                i,
                 o,
                 r
             );

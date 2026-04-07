@@ -984,7 +984,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "ferray"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "ferray-core",
  "ferray-fft",
@@ -1005,7 +1005,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-autodiff"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "num-traits",
  "proptest",
@@ -1013,7 +1013,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-core"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "ferray-core-macros",
  "ferray-test-oracle",
@@ -1029,7 +1029,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-core-macros"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1038,19 +1038,20 @@ dependencies = [
 
 [[package]]
 name = "ferray-fft"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "ferray-core",
  "ferray-test-oracle",
  "num-complex",
  "proptest",
  "rayon",
+ "realfft",
  "rustfft",
 ]
 
 [[package]]
 name = "ferray-io"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "byteorder",
  "ferray-core",
@@ -1064,7 +1065,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-linalg"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "faer",
  "faer-traits",
@@ -1080,7 +1081,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-ma"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "ferray-core",
  "ferray-stats",
@@ -1092,7 +1093,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-numpy-interop"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "arrow",
  "ferray-core",
@@ -1104,7 +1105,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-polynomial"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "ferray-core",
  "ferray-linalg",
@@ -1116,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-random"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "ferray-core",
  "getrandom 0.2.17",
@@ -1127,7 +1128,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-stats"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "ferray-core",
  "ferray-test-oracle",
@@ -1140,7 +1141,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-stride-tricks"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "ferray-core",
  "proptest",
@@ -1148,7 +1149,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-strings"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "ferray-core",
  "ferray-test-oracle",
@@ -1158,7 +1159,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-test-oracle"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "ferray-core",
  "num-complex",
@@ -1168,7 +1169,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-ufunc"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "core-math",
  "ferray-core",
@@ -1183,7 +1184,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-window"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "ferray-core",
  "ferray-ufunc",
@@ -2993,6 +2994,15 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "realfft"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f821338fddb99d089116342c46e9f1fbf3828dba077674613e734e01d6ea8677"
+dependencies = [
+ "rustfft",
 ]
 
 [[package]]

@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::norm::FftNorm;
-use crate::plan::get_cached_plan;
+use crate::plan::{get_cached_plan, get_cached_real_forward, get_cached_real_inverse};
 
 /// Apply a 1-D FFT along a single axis of a multi-dimensional array
 /// stored in row-major (C) order.
@@ -222,6 +222,264 @@ pub(crate) fn fft_1d_along_axis(
     norm: FftNorm,
 ) -> FerrayResult<(Vec<usize>, Vec<Complex<f64>>)> {
     fft_along_axis(data, shape, axis, n, inverse, norm)
+}
+
+// ---------------------------------------------------------------------------
+// Real-input FFT (issue #432)
+//
+// Dedicated real-to-complex transform via the realfft crate. The output
+// has length `fft_len/2 + 1` along the transformed axis (Hermitian
+// symmetry — the second half is the conjugate of the first and would be
+// redundant). This avoids the 2× overhead of promoting to complex first
+// and running a full complex FFT.
+// ---------------------------------------------------------------------------
+
+/// Apply a 1-D real-to-complex FFT along a single axis. The output axis
+/// length is `fft_len / 2 + 1` (Hermitian-folded representation).
+///
+/// `data` is a flat real array in row-major order, `shape` describes its
+/// nominal multi-dimensional layout, and `axis` is the transform axis.
+/// Optional `n` truncates or zero-pads the input axis to `n` real values
+/// before the transform; if `None`, the existing axis length is used.
+///
+/// Mirrors [`fft_along_axis`] but uses the cached real plan and the
+/// par_chunks_mut allocation pattern from #433.
+pub(crate) fn rfft_along_axis(
+    data: &[f64],
+    shape: &[usize],
+    axis: usize,
+    n: Option<usize>,
+    norm: FftNorm,
+) -> FerrayResult<(Vec<usize>, Vec<Complex<f64>>)> {
+    let ndim = shape.len();
+    if axis >= ndim {
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
+    }
+
+    let axis_len = shape[axis];
+    let fft_len = n.unwrap_or(axis_len);
+    if fft_len == 0 {
+        return Err(FerrayError::invalid_value("FFT length must be > 0"));
+    }
+
+    let half_len = fft_len / 2 + 1;
+
+    // Output shape: same as input but with `half_len` along the transform axis.
+    let mut new_shape = shape.to_vec();
+    new_shape[axis] = half_len;
+    let new_total: usize = new_shape.iter().product();
+
+    let total = shape.iter().product::<usize>();
+    if total == 0 {
+        return Ok((new_shape, vec![Complex::new(0.0, 0.0); new_total]));
+    }
+
+    let plan = get_cached_real_forward(fft_len);
+    let scratch_len = plan.get_scratch_len();
+
+    // Compute normalization scale (forward direction).
+    let scale = norm.scale_factor(fft_len, crate::norm::FftDirection::Forward);
+
+    let strides = compute_strides(shape);
+    let new_strides = compute_strides(&new_shape);
+    let stride = strides[axis] as usize;
+    let copy_len = axis_len.min(fft_len);
+
+    // 1-D fast path: skip lane machinery entirely.
+    if ndim == 1 {
+        let mut input_buf = vec![0.0f64; fft_len];
+        input_buf[..copy_len].copy_from_slice(&data[..copy_len]);
+        // input_buf[copy_len..] already zero from the initial vec! allocation.
+        let mut output_buf = vec![Complex::new(0.0, 0.0); half_len];
+        let mut scratch = plan.make_scratch_vec();
+        plan.process_with_scratch(&mut input_buf, &mut output_buf, &mut scratch)
+            .map_err(|e| {
+                FerrayError::invalid_value(format!("real FFT process failed: {e}"))
+            })?;
+        if (scale - 1.0).abs() > f64::EPSILON {
+            for c in &mut output_buf {
+                *c *= scale;
+            }
+        }
+        return Ok((new_shape, output_buf));
+    }
+
+    let num_lanes = total / axis_len;
+    let lane_starts = compute_lane_starts(shape, &strides, axis, num_lanes);
+
+    // Pre-allocate one contiguous buffer for all lane outputs (#433 pattern).
+    // Each chunk is `half_len` complex values; total is num_lanes * half_len.
+    let mut lane_outputs = vec![Complex::new(0.0, 0.0); num_lanes * half_len];
+
+    lane_outputs
+        .par_chunks_mut(half_len)
+        .zip(lane_starts.par_iter())
+        .for_each_init(
+            || (vec![0.0f64; fft_len], vec![Complex::new(0.0, 0.0); scratch_len]),
+            |(input_buf, scratch), (out_chunk, &start_offset)| {
+                // Copy this lane's strided real values into the contiguous
+                // input buffer; pad the rest with zeros.
+                for (i, slot) in input_buf.iter_mut().take(copy_len).enumerate() {
+                    *slot = data[start_offset + i * stride];
+                }
+                for slot in input_buf.iter_mut().skip(copy_len) {
+                    *slot = 0.0;
+                }
+                // Run the real-to-complex transform directly into the
+                // chunk's slice of the contiguous lane_outputs buffer.
+                plan.process_with_scratch(input_buf, out_chunk, scratch)
+                    .expect("real FFT process failed");
+                if (scale - 1.0).abs() > f64::EPSILON {
+                    for c in out_chunk.iter_mut() {
+                        *c *= scale;
+                    }
+                }
+            },
+        );
+
+    // Scatter the contiguous chunks into the strided positions in the final
+    // output buffer.
+    let mut output = vec![Complex::new(0.0, 0.0); new_total];
+    let out_stride = new_strides[axis] as usize;
+
+    for (lane_idx, lane_chunk) in lane_outputs.chunks(half_len).enumerate() {
+        let out_start = compute_lane_output_start(
+            &new_shape,
+            &new_strides,
+            axis,
+            &lane_starts[lane_idx],
+            &strides,
+            shape,
+        );
+        for (i, &val) in lane_chunk.iter().enumerate() {
+            output[out_start + i * out_stride] = val;
+        }
+    }
+
+    Ok((new_shape, output))
+}
+
+/// Apply a 1-D complex-to-real FFT along a single axis. The input has
+/// `half_len = output_len/2 + 1` complex values along the transform axis;
+/// the output has `output_len` real values.
+///
+/// `data` is a flat complex array, `shape` is its multi-dimensional
+/// layout (with `shape[axis] == half_len`), and `output_len` is the
+/// desired length of the real output along that axis.
+pub(crate) fn irfft_along_axis(
+    data: &[Complex<f64>],
+    shape: &[usize],
+    axis: usize,
+    output_len: usize,
+    norm: FftNorm,
+) -> FerrayResult<(Vec<usize>, Vec<f64>)> {
+    let ndim = shape.len();
+    if axis >= ndim {
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
+    }
+    if output_len == 0 {
+        return Err(FerrayError::invalid_value("irfft output length must be > 0"));
+    }
+
+    let half_len = output_len / 2 + 1;
+    let input_axis_len = shape[axis];
+
+    // realfft requires exactly `output_len/2 + 1` complex bins. If the user
+    // supplied a different number, we truncate or pad with zeros to fit.
+    // (This matches numpy.fft.irfft semantics where extra bins beyond
+    // n/2+1 are ignored.)
+
+    let mut new_shape = shape.to_vec();
+    new_shape[axis] = output_len;
+    let new_total: usize = new_shape.iter().product();
+
+    let total = shape.iter().product::<usize>();
+    if total == 0 {
+        return Ok((new_shape, vec![0.0f64; new_total]));
+    }
+
+    let plan = get_cached_real_inverse(output_len);
+    let scratch_len = plan.get_scratch_len();
+
+    let scale = norm.scale_factor(output_len, crate::norm::FftDirection::Inverse);
+
+    let strides = compute_strides(shape);
+    let new_strides = compute_strides(&new_shape);
+    let stride = strides[axis] as usize;
+    let copy_len = input_axis_len.min(half_len);
+
+    // 1-D fast path.
+    if ndim == 1 {
+        let mut input_buf = vec![Complex::new(0.0, 0.0); half_len];
+        input_buf[..copy_len].copy_from_slice(&data[..copy_len]);
+        // input_buf[copy_len..] already zero — pads with zero bins.
+        let mut output_buf = vec![0.0f64; output_len];
+        let mut scratch = plan.make_scratch_vec();
+        plan.process_with_scratch(&mut input_buf, &mut output_buf, &mut scratch)
+            .map_err(|e| {
+                FerrayError::invalid_value(format!("inverse real FFT process failed: {e}"))
+            })?;
+        if (scale - 1.0).abs() > f64::EPSILON {
+            for v in &mut output_buf {
+                *v *= scale;
+            }
+        }
+        return Ok((new_shape, output_buf));
+    }
+
+    let num_lanes = total / input_axis_len;
+    let lane_starts = compute_lane_starts(shape, &strides, axis, num_lanes);
+
+    // Per-lane output is `output_len` real values, packed contiguously.
+    let mut lane_outputs = vec![0.0f64; num_lanes * output_len];
+
+    lane_outputs
+        .par_chunks_mut(output_len)
+        .zip(lane_starts.par_iter())
+        .for_each_init(
+            || {
+                (
+                    vec![Complex::new(0.0, 0.0); half_len],
+                    vec![Complex::new(0.0, 0.0); scratch_len],
+                )
+            },
+            |(input_buf, scratch), (out_chunk, &start_offset)| {
+                // Copy this lane's strided complex bins into the input buffer.
+                for (i, slot) in input_buf.iter_mut().take(copy_len).enumerate() {
+                    *slot = data[start_offset + i * stride];
+                }
+                for slot in input_buf.iter_mut().skip(copy_len) {
+                    *slot = Complex::new(0.0, 0.0);
+                }
+                plan.process_with_scratch(input_buf, out_chunk, scratch)
+                    .expect("inverse real FFT process failed");
+                if (scale - 1.0).abs() > f64::EPSILON {
+                    for v in out_chunk.iter_mut() {
+                        *v *= scale;
+                    }
+                }
+            },
+        );
+
+    // Scatter into strided output positions.
+    let mut output = vec![0.0f64; new_total];
+    let out_stride = new_strides[axis] as usize;
+
+    for (lane_idx, lane_chunk) in lane_outputs.chunks(output_len).enumerate() {
+        let out_start = compute_lane_output_start(
+            &new_shape,
+            &new_strides,
+            axis,
+            &lane_starts[lane_idx],
+            &strides,
+            shape,
+        );
+        for (i, &val) in lane_chunk.iter().enumerate() {
+            output[out_start + i * out_stride] = val;
+        }
+    }
+
+    Ok((new_shape, output))
 }
 
 // ---------------------------------------------------------------------------

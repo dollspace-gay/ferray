@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 
 use num_complex::Complex;
+use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use rustfft::{Fft, FftPlanner};
 
 use ferray_core::error::{FerrayError, FerrayResult};
@@ -60,6 +61,69 @@ impl PlanCache {
 pub(crate) fn get_cached_plan(size: usize, inverse: bool) -> Arc<dyn Fft<f64>> {
     let mut cache = GLOBAL_CACHE.lock().expect("FFT plan cache lock poisoned");
     cache.get_plan(size, inverse)
+}
+
+// ---------------------------------------------------------------------------
+// Real-FFT plan cache (issue #432)
+//
+// realfft uses a separate planner type from rustfft because real-to-complex
+// (RealToComplex<f64>) and complex-to-real (ComplexToReal<f64>) are distinct
+// trait objects. We give them their own LazyLock so the complex cache is
+// untouched, and the real planner is only constructed if rfft/irfft is used.
+// ---------------------------------------------------------------------------
+
+static REAL_CACHE: LazyLock<Mutex<RealPlanCache>> =
+    LazyLock::new(|| Mutex::new(RealPlanCache::new()));
+
+struct RealPlanCache {
+    planner: RealFftPlanner<f64>,
+    forward_plans: HashMap<usize, Arc<dyn RealToComplex<f64>>>,
+    inverse_plans: HashMap<usize, Arc<dyn ComplexToReal<f64>>>,
+}
+
+impl RealPlanCache {
+    fn new() -> Self {
+        Self {
+            planner: RealFftPlanner::new(),
+            forward_plans: HashMap::new(),
+            inverse_plans: HashMap::new(),
+        }
+    }
+
+    fn forward(&mut self, size: usize) -> Arc<dyn RealToComplex<f64>> {
+        let planner = &mut self.planner;
+        self.forward_plans
+            .entry(size)
+            .or_insert_with(|| planner.plan_fft_forward(size))
+            .clone()
+    }
+
+    fn inverse(&mut self, size: usize) -> Arc<dyn ComplexToReal<f64>> {
+        let planner = &mut self.planner;
+        self.inverse_plans
+            .entry(size)
+            .or_insert_with(|| planner.plan_fft_inverse(size))
+            .clone()
+    }
+}
+
+/// Obtain a cached real-to-complex FFT plan for the given size.
+///
+/// Used by `rfft` / `rfft2` / `rfftn`. Returns a plan that consumes a
+/// real input of length `size` and produces `size/2 + 1` complex values.
+pub(crate) fn get_cached_real_forward(size: usize) -> Arc<dyn RealToComplex<f64>> {
+    let mut cache = REAL_CACHE.lock().expect("real FFT plan cache lock poisoned");
+    cache.forward(size)
+}
+
+/// Obtain a cached complex-to-real FFT plan for the given output size.
+///
+/// Used by `irfft` / `irfft2` / `irfftn`. The argument `size` is the
+/// **real-output** length (not the complex input length, which is
+/// `size/2 + 1`).
+pub(crate) fn get_cached_real_inverse(size: usize) -> Arc<dyn ComplexToReal<f64>> {
+    let mut cache = REAL_CACHE.lock().expect("real FFT plan cache lock poisoned");
+    cache.inverse(size)
 }
 
 /// A reusable FFT plan for a specific transform size.
