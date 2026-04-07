@@ -1,0 +1,10 @@
+{
+  "uuid": "46416493-4a25-40b9-b17f-e6c04bd6913c",
+  "issue_uuid": "04faa703-463f-4acd-b1d5-09d32cbf1a43",
+  "author": "phase-4-coordinator",
+  "content": "All 16 crates published on crates.io at 0.2.9 with repository/homepage URLs in workspace Cargo.toml. Closing as completed.",
+  "created_at": "2026-04-07T12:34:03.062641669Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABACoIqFuMKVx5B16e0tsGmuJa2yl8KE4dZBw+HZ0vSxglcx9bp0MMliNUmUjGOOCGXCV9gDBbR8R6MVJNdwbLmCg=="
+}
