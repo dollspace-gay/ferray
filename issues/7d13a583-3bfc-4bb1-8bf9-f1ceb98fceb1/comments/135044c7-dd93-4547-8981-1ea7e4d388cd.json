@@ -1,0 +1,10 @@
+{
+  "uuid": "135044c7-dd93-4547-8981-1ea7e4d388cd",
+  "issue_uuid": "7d13a583-3bfc-4bb1-8bf9-f1ceb98fceb1",
+  "author": "phase-4-coordinator",
+  "content": "Implemented per-axis reductions in ferray-ma. New methods on MaskedArray:\n- sum_axis(axis), mean_axis(axis), min_axis(axis), max_axis(axis), var_axis(axis), std_axis(axis) — return MaskedArray<T, IxDyn> with the reduced axis dropped\n- count_axis(axis) — returns Array<u64, IxDyn> (not masked, since count is always defined)\n\nAll-masked lanes produce a masked output position holding fill_value. min_axis/max_axis are NaN-propagating per NumPy. Existing scalar methods (sum, mean, etc.) stay unchanged.\n\nInternal helper reduce_axis<T, D, F>: walks the lanes via row-major flat-index computation, calls the kernel with a (T, bool) slice for each lane, and masks the output position when the kernel returns None (i.e., all-masked lane).\n\n8 new tests covering: shape contraction, masked-element skipping, all-masked-lane masking, count, axis bounds errors, var/std consistency.\n\nCloses #500.",
+  "created_at": "2026-04-07T18:24:57.321765451Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAvxrGZBVLflmwt+FePhMPXqBaBcjIm6ZkOZcp7n/O6f8L4YyVuOwImkqMPEY8W+vkPFlonPSbiXL6/gts/ZhWCQ=="
+}
