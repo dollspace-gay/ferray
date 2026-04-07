@@ -271,6 +271,72 @@ where
 }
 
 // ---------------------------------------------------------------------------
+// cast() — explicit type casting with safety check (issue #361)
+//
+// `astype<U>` above is restricted to safe (PromoteTo) conversions. NumPy
+// users want to be able to cast lossily as well: `arr.astype(np.int8)` works
+// even when the source is f64. To support that, we provide `cast::<U>(kind)`
+// which uses the `CastTo` trait (covers every Element pair) and validates
+// the cast against the chosen safety level via `can_cast`.
+// ---------------------------------------------------------------------------
+
+#[cfg(not(feature = "no_std"))]
+impl<T, D> crate::array::owned::Array<T, D>
+where
+    T: Element,
+    D: Dimension,
+{
+    /// Cast this array to element type `U` with the given safety check.
+    ///
+    /// This is the general-purpose casting method matching NumPy's
+    /// `arr.astype(dtype, casting=...)`. Unlike [`AsType::astype`] (which is
+    /// restricted to safe widening), this method permits any cast as long
+    /// as `can_cast(T::dtype(), U::dtype(), casting)` returns `true`.
+    ///
+    /// # Arguments
+    /// * `casting` — controls which casts are permitted:
+    ///   - [`CastKind::No`] / [`CastKind::Equiv`]: only `T == U` allowed
+    ///   - [`CastKind::Safe`]: information-preserving widening only
+    ///   - [`CastKind::SameKind`]: int↔int, float↔float, etc. (may narrow)
+    ///   - [`CastKind::Unsafe`]: any cast (the NumPy default)
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidDtype` if the requested cast is not
+    /// permitted at the chosen safety level.
+    ///
+    /// # Examples
+    /// ```
+    /// # use ferray_core::Array;
+    /// # use ferray_core::dimension::Ix1;
+    /// # use ferray_core::dtype::casting::CastKind;
+    /// let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.5, 2.7, -3.9]).unwrap();
+    /// // f64 -> i32 truncates per `as` semantics
+    /// let b = a.cast::<i32>(CastKind::Unsafe).unwrap();
+    /// assert_eq!(b.as_slice().unwrap(), &[1, 2, -3]);
+    /// ```
+    pub fn cast<U: Element>(
+        &self,
+        casting: CastKind,
+    ) -> FerrayResult<crate::array::owned::Array<U, D>>
+    where
+        T: super::unsafe_cast::CastTo<U>,
+    {
+        if !can_cast(T::dtype(), U::dtype(), casting)? {
+            return Err(FerrayError::invalid_dtype(format!(
+                "cannot cast {} -> {} with casting={:?}",
+                T::dtype(),
+                U::dtype(),
+                casting
+            )));
+        }
+        let mapped = self
+            .inner
+            .mapv(|x| <T as super::unsafe_cast::CastTo<U>>::cast_to(x));
+        Ok(crate::array::owned::Array::from_ndarray(mapped))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // view_cast() — reinterpret cast (zero-copy where possible)
 // ---------------------------------------------------------------------------
 
@@ -590,5 +656,111 @@ mod tests {
         let result = a.sub_promoted(&b).unwrap();
         assert_eq!(result.dtype(), DType::F64);
         assert_eq!(result.as_slice().unwrap(), &[9.0, 18.0]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Array::cast<U>(casting) — issue #361
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn cast_unsafe_f64_to_i32_truncates() {
+        let a = crate::array::owned::Array::<f64, Ix1>::from_vec(
+            Ix1::new([4]),
+            vec![1.5, 2.7, -3.9, 4.2],
+        )
+        .unwrap();
+        let b = a.cast::<i32>(CastKind::Unsafe).unwrap();
+        assert_eq!(b.as_slice().unwrap(), &[1, 2, -3, 4]);
+        assert_eq!(b.dtype(), DType::I32);
+    }
+
+    #[test]
+    fn cast_safe_widening_succeeds() {
+        let a =
+            crate::array::owned::Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        let b = a.cast::<i64>(CastKind::Safe).unwrap();
+        assert_eq!(b.as_slice().unwrap(), &[1i64, 2, 3]);
+    }
+
+    #[test]
+    fn cast_safe_narrowing_errors() {
+        let a = crate::array::owned::Array::<f64, Ix1>::from_vec(
+            Ix1::new([3]),
+            vec![1.0, 2.0, 3.0],
+        )
+        .unwrap();
+        let result = a.cast::<i32>(CastKind::Safe);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cast_same_kind_int_narrowing_succeeds() {
+        let a = crate::array::owned::Array::<i64, Ix1>::from_vec(
+            Ix1::new([3]),
+            vec![1, 2, 3],
+        )
+        .unwrap();
+        let b = a.cast::<i32>(CastKind::SameKind).unwrap();
+        assert_eq!(b.as_slice().unwrap(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn cast_same_kind_float_to_int_errors() {
+        let a = crate::array::owned::Array::<f64, Ix1>::from_vec(
+            Ix1::new([2]),
+            vec![1.0, 2.0],
+        )
+        .unwrap();
+        let result = a.cast::<i32>(CastKind::SameKind);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cast_no_requires_identity() {
+        let a = crate::array::owned::Array::<f64, Ix1>::from_vec(
+            Ix1::new([2]),
+            vec![1.0, 2.0],
+        )
+        .unwrap();
+        // Same type allowed
+        assert!(a.cast::<f64>(CastKind::No).is_ok());
+        // Different type rejected
+        assert!(a.cast::<f32>(CastKind::No).is_err());
+    }
+
+    #[test]
+    fn cast_complex_to_real_unsafe() {
+        let a = crate::array::owned::Array::<Complex<f64>, Ix1>::from_vec(
+            Ix1::new([2]),
+            vec![Complex::new(1.5, 2.0), Complex::new(3.5, -1.0)],
+        )
+        .unwrap();
+        let b = a.cast::<f64>(CastKind::Unsafe).unwrap();
+        assert_eq!(b.as_slice().unwrap(), &[1.5, 3.5]);
+    }
+
+    #[test]
+    fn cast_real_to_complex_safe() {
+        let a = crate::array::owned::Array::<f32, Ix1>::from_vec(
+            Ix1::new([2]),
+            vec![1.0, 2.0],
+        )
+        .unwrap();
+        let b = a.cast::<Complex<f64>>(CastKind::Safe).unwrap();
+        assert_eq!(
+            b.as_slice().unwrap(),
+            &[Complex::new(1.0_f64, 0.0), Complex::new(2.0, 0.0)]
+        );
+    }
+
+    #[test]
+    fn cast_int_to_bool_unsafe() {
+        let a = crate::array::owned::Array::<i32, Ix1>::from_vec(
+            Ix1::new([4]),
+            vec![0, 1, -3, 0],
+        )
+        .unwrap();
+        let b = a.cast::<bool>(CastKind::Unsafe).unwrap();
+        assert_eq!(b.as_slice().unwrap(), &[false, true, true, false]);
     }
 }

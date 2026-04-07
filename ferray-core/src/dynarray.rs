@@ -5,6 +5,7 @@ use num_complex::Complex;
 use crate::array::owned::Array;
 use crate::dimension::IxDyn;
 use crate::dtype::DType;
+use crate::dtype::casting::CastKind;
 use crate::error::{FerrayError, FerrayResult};
 
 /// A runtime-typed array whose element type is determined at runtime.
@@ -190,6 +191,86 @@ impl DynArray {
         }
     }
 
+    /// Cast this array to a different element dtype at the requested safety level.
+    ///
+    /// Mirrors NumPy's `arr.astype(dtype, casting=...)`. The conversion routes
+    /// through [`crate::dtype::unsafe_cast::CastTo`] for the underlying typed
+    /// arrays, so it supports the same set of element pairs (every primitive
+    /// numeric, bool, and Complex<f32>/Complex<f64> in any combination).
+    ///
+    /// `f16` / `bf16` are not yet supported in this dispatch and will return
+    /// `FerrayError::InvalidDtype` — track via the umbrella casting issue.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidDtype` if:
+    /// - The cast is not permitted at the chosen `casting` level, or
+    /// - either source or target dtype is `f16`/`bf16` (not yet wired).
+    pub fn astype(&self, target: DType, casting: CastKind) -> FerrayResult<Self> {
+        // Reject f16/bf16 — see method docs.
+        #[cfg(feature = "f16")]
+        if matches!(self, Self::F16(_)) || target == DType::F16 {
+            return Err(FerrayError::invalid_dtype(
+                "DynArray::astype does not yet support f16",
+            ));
+        }
+        #[cfg(feature = "bf16")]
+        if matches!(self, Self::BF16(_)) || target == DType::BF16 {
+            return Err(FerrayError::invalid_dtype(
+                "DynArray::astype does not yet support bf16",
+            ));
+        }
+
+        // Inner macro: dispatch on the *source* variant. The target type `$U`
+        // is fixed by the outer match below.
+        macro_rules! cast_into {
+            ($U:ty) => {
+                match self {
+                    Self::Bool(a) => a.cast::<$U>(casting),
+                    Self::U8(a) => a.cast::<$U>(casting),
+                    Self::U16(a) => a.cast::<$U>(casting),
+                    Self::U32(a) => a.cast::<$U>(casting),
+                    Self::U64(a) => a.cast::<$U>(casting),
+                    Self::U128(a) => a.cast::<$U>(casting),
+                    Self::I8(a) => a.cast::<$U>(casting),
+                    Self::I16(a) => a.cast::<$U>(casting),
+                    Self::I32(a) => a.cast::<$U>(casting),
+                    Self::I64(a) => a.cast::<$U>(casting),
+                    Self::I128(a) => a.cast::<$U>(casting),
+                    Self::F32(a) => a.cast::<$U>(casting),
+                    Self::F64(a) => a.cast::<$U>(casting),
+                    Self::Complex32(a) => a.cast::<$U>(casting),
+                    Self::Complex64(a) => a.cast::<$U>(casting),
+                    #[cfg(feature = "f16")]
+                    Self::F16(_) => unreachable!("f16 source rejected above"),
+                    #[cfg(feature = "bf16")]
+                    Self::BF16(_) => unreachable!("bf16 source rejected above"),
+                }
+            };
+        }
+
+        Ok(match target {
+            DType::Bool => Self::Bool(cast_into!(bool)?),
+            DType::U8 => Self::U8(cast_into!(u8)?),
+            DType::U16 => Self::U16(cast_into!(u16)?),
+            DType::U32 => Self::U32(cast_into!(u32)?),
+            DType::U64 => Self::U64(cast_into!(u64)?),
+            DType::U128 => Self::U128(cast_into!(u128)?),
+            DType::I8 => Self::I8(cast_into!(i8)?),
+            DType::I16 => Self::I16(cast_into!(i16)?),
+            DType::I32 => Self::I32(cast_into!(i32)?),
+            DType::I64 => Self::I64(cast_into!(i64)?),
+            DType::I128 => Self::I128(cast_into!(i128)?),
+            DType::F32 => Self::F32(cast_into!(f32)?),
+            DType::F64 => Self::F64(cast_into!(f64)?),
+            DType::Complex32 => Self::Complex32(cast_into!(Complex<f32>)?),
+            DType::Complex64 => Self::Complex64(cast_into!(Complex<f64>)?),
+            #[cfg(feature = "f16")]
+            DType::F16 => unreachable!("f16 target rejected above"),
+            #[cfg(feature = "bf16")]
+            DType::BF16 => unreachable!("bf16 target rejected above"),
+        })
+    }
+
     /// Create a `DynArray` of zeros with the given dtype and shape.
     pub fn zeros(dtype: DType, shape: &[usize]) -> FerrayResult<Self> {
         let dim = IxDyn::new(shape);
@@ -307,6 +388,74 @@ mod tests {
     fn dynarray_try_into_wrong_type() {
         let da = DynArray::zeros(DType::I32, &[3]).unwrap();
         assert!(da.try_into_f64().is_err());
+    }
+
+    // ----- DynArray::astype tests (issue #361) -----
+
+    #[test]
+    fn dynarray_astype_f64_to_i32_unsafe() {
+        let arr = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1.5, 2.7, -3.9]).unwrap();
+        let dy = DynArray::F64(arr);
+        let casted = dy.astype(DType::I32, CastKind::Unsafe).unwrap();
+        assert_eq!(casted.dtype(), DType::I32);
+        match casted {
+            DynArray::I32(a) => assert_eq!(a.as_slice().unwrap(), &[1, 2, -3]),
+            _ => panic!("expected I32"),
+        }
+    }
+
+    #[test]
+    fn dynarray_astype_safe_widening() {
+        let arr = Array::<i32, IxDyn>::from_vec(IxDyn::new(&[3]), vec![10, 20, 30]).unwrap();
+        let dy = DynArray::I32(arr);
+        let casted = dy.astype(DType::I64, CastKind::Safe).unwrap();
+        assert_eq!(casted.dtype(), DType::I64);
+        match casted {
+            DynArray::I64(a) => assert_eq!(a.as_slice().unwrap(), &[10i64, 20, 30]),
+            _ => panic!("expected I64"),
+        }
+    }
+
+    #[test]
+    fn dynarray_astype_safe_narrowing_errors() {
+        let arr = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0, 2.0]).unwrap();
+        let dy = DynArray::F64(arr);
+        assert!(dy.astype(DType::F32, CastKind::Safe).is_err());
+    }
+
+    #[test]
+    fn dynarray_astype_complex_to_real_unsafe() {
+        let arr = Array::<Complex<f64>, IxDyn>::from_vec(
+            IxDyn::new(&[2]),
+            vec![Complex::new(1.5, 9.0), Complex::new(2.5, -1.0)],
+        )
+        .unwrap();
+        let dy = DynArray::Complex64(arr);
+        let casted = dy.astype(DType::F64, CastKind::Unsafe).unwrap();
+        match casted {
+            DynArray::F64(a) => assert_eq!(a.as_slice().unwrap(), &[1.5, 2.5]),
+            _ => panic!("expected F64"),
+        }
+    }
+
+    #[test]
+    fn dynarray_astype_bool_to_u8_safe() {
+        let arr = Array::<bool, IxDyn>::from_vec(IxDyn::new(&[3]), vec![true, false, true])
+            .unwrap();
+        let dy = DynArray::Bool(arr);
+        let casted = dy.astype(DType::U8, CastKind::Safe).unwrap();
+        match casted {
+            DynArray::U8(a) => assert_eq!(a.as_slice().unwrap(), &[1u8, 0, 1]),
+            _ => panic!("expected U8"),
+        }
+    }
+
+    #[test]
+    fn dynarray_astype_no_kind_requires_identity() {
+        let arr = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0, 2.0]).unwrap();
+        let dy = DynArray::F64(arr);
+        assert!(dy.astype(DType::F64, CastKind::No).is_ok());
+        assert!(dy.astype(DType::F32, CastKind::No).is_err());
     }
 
     #[test]

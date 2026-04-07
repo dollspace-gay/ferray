@@ -7,6 +7,7 @@ use num_complex::Complex;
 pub mod casting;
 pub mod finfo;
 pub mod promotion;
+pub mod unsafe_cast;
 
 // ---------------------------------------------------------------------------
 // SliceInfoElem — used by the s![] macro
