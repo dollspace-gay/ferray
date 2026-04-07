@@ -136,19 +136,27 @@ pub fn parse_f32_data(value: &serde_json::Value) -> Vec<f32> {
 }
 
 /// Parse complex data from `[{"re": ..., "im": ...}, ...]` format.
+///
+/// The `re` and `im` fields may be numeric literals OR JSON strings
+/// like `"NaN"`, `"Inf"`, or `"-Inf"` — Python's JSON serializer writes
+/// non-finite floats as strings because the JSON grammar has no NaN/Inf
+/// tokens. Previously this function called `as_f64().unwrap()` which
+/// panicked on those string values; we now route both fields through
+/// [`parse_f64_value`] so NaN/Inf round-trip cleanly through the oracle
+/// fixtures.
 pub fn parse_complex_data(value: &serde_json::Value) -> Vec<Complex<f64>> {
     match value {
         serde_json::Value::Array(arr) => arr
             .iter()
             .map(|v| {
-                let re = v["re"].as_f64().unwrap();
-                let im = v["im"].as_f64().unwrap();
+                let re = parse_f64_value(&v["re"]);
+                let im = parse_f64_value(&v["im"]);
                 Complex::new(re, im)
             })
             .collect(),
         serde_json::Value::Object(obj) => {
-            let re = obj["re"].as_f64().unwrap();
-            let im = obj["im"].as_f64().unwrap();
+            let re = parse_f64_value(&obj["re"]);
+            let im = parse_f64_value(&obj["im"]);
             vec![Complex::new(re, im)]
         }
         _ => panic!("unexpected complex format: {value}"),
@@ -701,6 +709,9 @@ where
     assert!(tested > 0, "no test cases found in {}", path.display());
 }
 
+// Note: the second (matrix-scalar) run-oracle lives below; keep the
+// comment anchor so the file structure is easy to find.
+
 /// Run oracle for a matrix->scalar operation (det, trace, etc.).
 pub fn run_matrix_scalar_oracle<F>(path: &Path, func: F)
 where
@@ -731,4 +742,94 @@ where
         tested += 1;
     }
     assert!(tested > 0, "no test cases found in {}", path.display());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // ---- parse_f64_value / parse_f64_special ----
+
+    #[test]
+    fn parse_f64_value_numeric() {
+        assert_eq!(parse_f64_value(&json!(1.5)), 1.5);
+        assert_eq!(parse_f64_value(&json!(-3.0)), -3.0);
+        assert_eq!(parse_f64_value(&json!(0)), 0.0);
+    }
+
+    #[test]
+    fn parse_f64_value_nan_string() {
+        assert!(parse_f64_value(&json!("NaN")).is_nan());
+    }
+
+    #[test]
+    fn parse_f64_value_inf_strings() {
+        assert_eq!(parse_f64_value(&json!("Inf")), f64::INFINITY);
+        assert_eq!(parse_f64_value(&json!("Infinity")), f64::INFINITY);
+        assert_eq!(parse_f64_value(&json!("-Inf")), f64::NEG_INFINITY);
+        assert_eq!(parse_f64_value(&json!("-Infinity")), f64::NEG_INFINITY);
+    }
+
+    // ---- parse_complex_data (#202) ----
+
+    #[test]
+    fn parse_complex_data_finite_numbers() {
+        let v = json!([
+            {"re": 1.0, "im": 2.0},
+            {"re": -3.0, "im": 0.5},
+        ]);
+        let cs = parse_complex_data(&v);
+        assert_eq!(cs.len(), 2);
+        assert_eq!(cs[0], Complex::new(1.0, 2.0));
+        assert_eq!(cs[1], Complex::new(-3.0, 0.5));
+    }
+
+    #[test]
+    fn parse_complex_data_nan_in_real_part() {
+        // Python's JSON serializer writes NaN as the string "NaN" because
+        // the JSON grammar doesn't have a NaN literal. Previously this
+        // panicked; now it parses cleanly.
+        let v = json!([{"re": "NaN", "im": 0.0}]);
+        let cs = parse_complex_data(&v);
+        assert!(cs[0].re.is_nan());
+        assert_eq!(cs[0].im, 0.0);
+    }
+
+    #[test]
+    fn parse_complex_data_nan_in_imaginary_part() {
+        let v = json!([{"re": 0.0, "im": "NaN"}]);
+        let cs = parse_complex_data(&v);
+        assert_eq!(cs[0].re, 0.0);
+        assert!(cs[0].im.is_nan());
+    }
+
+    #[test]
+    fn parse_complex_data_inf_in_real_part() {
+        let v = json!([{"re": "Inf", "im": 0.0}, {"re": "-Inf", "im": 0.0}]);
+        let cs = parse_complex_data(&v);
+        assert_eq!(cs[0].re, f64::INFINITY);
+        assert_eq!(cs[1].re, f64::NEG_INFINITY);
+    }
+
+    #[test]
+    fn parse_complex_data_mixed_fields() {
+        // One string, one number — both fields must be handled independently.
+        let v = json!([{"re": "Inf", "im": 3.5}, {"re": -1.25, "im": "NaN"}]);
+        let cs = parse_complex_data(&v);
+        assert_eq!(cs[0].re, f64::INFINITY);
+        assert_eq!(cs[0].im, 3.5);
+        assert_eq!(cs[1].re, -1.25);
+        assert!(cs[1].im.is_nan());
+    }
+
+    #[test]
+    fn parse_complex_data_single_object_form() {
+        // The Object branch also needs to handle NaN/Inf strings.
+        let v = json!({"re": "NaN", "im": "Inf"});
+        let cs = parse_complex_data(&v);
+        assert_eq!(cs.len(), 1);
+        assert!(cs[0].re.is_nan());
+        assert_eq!(cs[0].im, f64::INFINITY);
+    }
 }

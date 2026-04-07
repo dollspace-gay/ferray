@@ -130,6 +130,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Slower: transcendentals at scale 1.4-2.1x (CORE-MATH accuracy tradeoff), matmul medium 4x (faer vs BLAS)
 
 ### Fixed
+- ferray-test-oracle: parse_complex_data panics on NaN/Inf string values (#202)
 - ferray-ufunc: rayon parallelism is defined but never used in ops (#382)
 - ferray-linalg: matmul/dot use naive O(n^3) loops — not using faer/BLAS for matrix multiply (#413)
 - ferray-io: no f16/bf16 support in npy I/O even with feature enabled (#118)
