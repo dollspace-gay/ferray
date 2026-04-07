@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-03-07
 
 ### Added
+- ferray-random: only f64 output — no f32 random generation (#441)
 - ferray-fft: complex FFTs require Complex<f64> input — no auto-promotion from real arrays (#427)
 - ferray-fft: complex FFTs only support Complex<f64> — no f32 FFT (#426)
 - ferray-fft: rfft doesn't use rustfft's real-to-complex FFT — promotes to complex first (#432)
@@ -98,6 +99,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Pinned memory transfers, 6 fused kernels, auto-dispatch
 
 ### Changed
+- ferray-fft: plan cache is f64-only; no f32 FFT support (#109)
+- ferray-fft: rfft computes full FFT then discards half (#108)
 - ferray-ufunc oracle.rs: replace closure-suppression with macro type pinning (#561)
 - ferray-ufunc: binary ops require same shape — broadcast variants are separate functions (#379)
 - Prepare all crates for crates.io publishing with GitHub URLs (#35)

@@ -3,7 +3,9 @@
 use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
-use crate::generator::{Generator, generate_vec, shape_size, vec_to_array_f64};
+use crate::generator::{
+    Generator, generate_vec, generate_vec_f32, shape_size, vec_to_array_f32, vec_to_array_f64,
+};
 use crate::shape::IntoShape;
 
 /// Generate a single standard normal variate using the Box-Muller transform.
@@ -28,6 +30,22 @@ pub(crate) fn standard_normal_pair<B: BitGenerator>(bg: &mut B) -> (f64, f64) {
 /// Generate a single standard normal variate.
 pub(crate) fn standard_normal_single<B: BitGenerator>(bg: &mut B) -> f64 {
     standard_normal_pair(bg).0
+}
+
+/// Generate a pair of standard normal variates in f32 via Box-Muller.
+///
+/// The computation is performed in f64 to avoid the accumulated rounding
+/// error of doing log/sqrt/sincos in f32 (which would degrade the tail
+/// distribution noticeably), then cast back to f32. This matches NumPy's
+/// approach for `dtype=np.float32`.
+pub(crate) fn standard_normal_pair_f32<B: BitGenerator>(bg: &mut B) -> (f32, f32) {
+    let (a, b) = standard_normal_pair(bg);
+    (a as f32, b as f32)
+}
+
+/// Generate a single f32 standard normal variate.
+pub(crate) fn standard_normal_single_f32<B: BitGenerator>(bg: &mut B) -> f32 {
+    standard_normal_pair_f32(bg).0
 }
 
 impl<B: BitGenerator> Generator<B> {
@@ -75,6 +93,78 @@ impl<B: BitGenerator> Generator<B> {
         let n = shape_size(&shape);
         let data = generate_vec(self, n, |bg| loc + scale * standard_normal_single(bg));
         vec_to_array_f64(data, &shape)
+    }
+
+    /// Generate an array of standard normal (mean=0, std=1) `f32` variates.
+    ///
+    /// The f32 analogue of [`standard_normal`](Self::standard_normal). Equivalent
+    /// to NumPy's `Generator.standard_normal(size, dtype=np.float32)`. The
+    /// generation is done in f64 and cast to f32 to preserve tail accuracy.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `shape` is invalid.
+    pub fn standard_normal_f32(
+        &mut self,
+        size: impl IntoShape,
+    ) -> Result<Array<f32, IxDyn>, FerrayError> {
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
+        let mut data = Vec::with_capacity(n);
+        while data.len() < n {
+            let (a, b) = standard_normal_pair_f32(&mut self.bg);
+            data.push(a);
+            if data.len() < n {
+                data.push(b);
+            }
+        }
+        vec_to_array_f32(data, &shape)
+    }
+
+    /// Generate an array of `f32` normal (Gaussian) variates with given mean
+    /// and standard deviation. The f32 analogue of [`normal`](Self::normal).
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `shape` is invalid.
+    pub fn normal_f32(
+        &mut self,
+        loc: f32,
+        scale: f32,
+        size: impl IntoShape,
+    ) -> Result<Array<f32, IxDyn>, FerrayError> {
+        if scale <= 0.0 {
+            return Err(FerrayError::invalid_value(format!(
+                "scale must be positive, got {scale}"
+            )));
+        }
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
+        let data =
+            generate_vec_f32(self, n, |bg| loc + scale * standard_normal_single_f32(bg));
+        vec_to_array_f32(data, &shape)
+    }
+
+    /// Generate an array of `f32` log-normal variates. The f32 analogue of
+    /// [`lognormal`](Self::lognormal).
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `sigma <= 0` or `shape` is invalid.
+    pub fn lognormal_f32(
+        &mut self,
+        mean: f32,
+        sigma: f32,
+        size: impl IntoShape,
+    ) -> Result<Array<f32, IxDyn>, FerrayError> {
+        if sigma <= 0.0 {
+            return Err(FerrayError::invalid_value(format!(
+                "sigma must be positive, got {sigma}"
+            )));
+        }
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
+        let data = generate_vec_f32(self, n, |bg| {
+            (mean + sigma * standard_normal_single_f32(bg)).exp()
+        });
+        vec_to_array_f32(data, &shape)
     }
 
     /// Generate an array of log-normal variates.
@@ -247,5 +337,84 @@ mod tests {
         for &v in arr.iter() {
             assert!(v > 0.0);
         }
+    }
+
+    // ---------------------------------------------------------------
+    // f32 variants (issue #441)
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn standard_normal_f32_deterministic() {
+        let mut rng1 = default_rng_seeded(42);
+        let mut rng2 = default_rng_seeded(42);
+        let a = rng1.standard_normal_f32(1000).unwrap();
+        let b = rng2.standard_normal_f32(1000).unwrap();
+        assert_eq!(a.as_slice().unwrap(), b.as_slice().unwrap());
+    }
+
+    #[test]
+    fn standard_normal_f32_mean_variance() {
+        let mut rng = default_rng_seeded(42);
+        let n = 100_000usize;
+        let arr = rng.standard_normal_f32(n).unwrap();
+        let slice = arr.as_slice().unwrap();
+        // Accumulate in f64 to avoid compounding f32 error.
+        let mean: f64 = slice.iter().map(|&x| x as f64).sum::<f64>() / n as f64;
+        let var: f64 = slice
+            .iter()
+            .map(|&x| {
+                let d = x as f64 - mean;
+                d * d
+            })
+            .sum::<f64>()
+            / n as f64;
+        let se = (1.0 / n as f64).sqrt();
+        assert!(mean.abs() < 5.0 * se, "f32 mean {mean} too far from 0");
+        assert!((var - 1.0).abs() < 0.05, "f32 variance {var} too far from 1");
+    }
+
+    #[test]
+    fn standard_normal_f32_nd_shape() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.standard_normal_f32([3, 4]).unwrap();
+        assert_eq!(arr.shape(), &[3, 4]);
+    }
+
+    #[test]
+    fn normal_f32_mean() {
+        let mut rng = default_rng_seeded(42);
+        let n = 100_000usize;
+        let loc = 5.0f32;
+        let scale = 2.0f32;
+        let arr = rng.normal_f32(loc, scale, n).unwrap();
+        let slice = arr.as_slice().unwrap();
+        let mean: f64 = slice.iter().map(|&x| x as f64).sum::<f64>() / n as f64;
+        assert!(
+            (mean - loc as f64).abs() < 0.05,
+            "f32 normal mean {mean} too far from {loc}"
+        );
+    }
+
+    #[test]
+    fn normal_f32_bad_scale() {
+        let mut rng = default_rng_seeded(42);
+        assert!(rng.normal_f32(0.0, 0.0, 100).is_err());
+        assert!(rng.normal_f32(0.0, -1.0, 100).is_err());
+    }
+
+    #[test]
+    fn lognormal_f32_positive() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.lognormal_f32(0.0, 1.0, 10_000).unwrap();
+        for &v in arr.as_slice().unwrap() {
+            assert!(v > 0.0, "lognormal_f32 produced non-positive value: {v}");
+        }
+    }
+
+    #[test]
+    fn lognormal_f32_bad_sigma() {
+        let mut rng = default_rng_seeded(42);
+        assert!(rng.lognormal_f32(0.0, 0.0, 100).is_err());
+        assert!(rng.lognormal_f32(0.0, -0.5, 100).is_err());
     }
 }

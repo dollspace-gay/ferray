@@ -4,7 +4,8 @@ use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
 use crate::generator::{
-    Generator, generate_vec, generate_vec_i64, shape_size, vec_to_array_f64, vec_to_array_i64,
+    Generator, generate_vec, generate_vec_f32, generate_vec_i64, shape_size, vec_to_array_f32,
+    vec_to_array_f64, vec_to_array_i64,
 };
 use crate::shape::IntoShape;
 
@@ -55,6 +56,57 @@ impl<B: BitGenerator> Generator<B> {
         let range = high - low;
         let data = generate_vec(self, n, |bg| low + bg.next_f64() * range);
         vec_to_array_f64(data, &shape)
+    }
+
+    /// Generate an array of uniformly distributed `f32` values in [0, 1).
+    ///
+    /// The f32 analogue of [`random`](Self::random). Equivalent to
+    /// NumPy's `Generator.random(size, dtype=np.float32)`.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `shape` contains a zero-sized axis.
+    ///
+    /// # Example
+    /// ```
+    /// let mut rng = ferray_random::default_rng_seeded(42);
+    /// let v = rng.random_f32(10).unwrap();
+    /// assert_eq!(v.shape(), &[10]);
+    /// for &x in v.iter() {
+    ///     assert!((0.0..1.0).contains(&x));
+    /// }
+    /// ```
+    pub fn random_f32(
+        &mut self,
+        size: impl IntoShape,
+    ) -> Result<Array<f32, IxDyn>, FerrayError> {
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
+        let data = generate_vec_f32(self, n, |bg| bg.next_f32());
+        vec_to_array_f32(data, &shape)
+    }
+
+    /// Generate an array of uniformly distributed `f32` values in [low, high).
+    ///
+    /// The f32 analogue of [`uniform`](Self::uniform).
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `low >= high` or `shape` is invalid.
+    pub fn uniform_f32(
+        &mut self,
+        low: f32,
+        high: f32,
+        size: impl IntoShape,
+    ) -> Result<Array<f32, IxDyn>, FerrayError> {
+        if low >= high {
+            return Err(FerrayError::invalid_value(format!(
+                "low ({low}) must be less than high ({high})"
+            )));
+        }
+        let shape = size.into_shape()?;
+        let n = shape_size(&shape);
+        let range = high - low;
+        let data = generate_vec_f32(self, n, |bg| low + bg.next_f32() * range);
+        vec_to_array_f32(data, &shape)
     }
 
     /// Generate an array of uniformly distributed random integers in [low, high).
@@ -280,5 +332,77 @@ mod tests {
         for &v in arr.iter() {
             assert!((0..100).contains(&v));
         }
+    }
+
+    // ---------------------------------------------------------------
+    // f32 variants (issue #441)
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn random_f32_in_range() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.random_f32(10_000).unwrap();
+        for &v in arr.as_slice().unwrap() {
+            assert!((0.0..1.0).contains(&v), "f32 value out of range: {v}");
+        }
+    }
+
+    #[test]
+    fn random_f32_deterministic() {
+        let mut rng1 = default_rng_seeded(42);
+        let mut rng2 = default_rng_seeded(42);
+        let a = rng1.random_f32(100).unwrap();
+        let b = rng2.random_f32(100).unwrap();
+        assert_eq!(a.as_slice().unwrap(), b.as_slice().unwrap());
+    }
+
+    #[test]
+    fn random_f32_nd_shape() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.random_f32([3, 4]).unwrap();
+        assert_eq!(arr.shape(), &[3, 4]);
+    }
+
+    #[test]
+    fn random_f32_mean() {
+        // For Uniform(0,1), mean should be ~0.5 with f32 precision.
+        let mut rng = default_rng_seeded(42);
+        let n = 100_000usize;
+        let arr = rng.random_f32(n).unwrap();
+        let sum: f64 = arr.as_slice().unwrap().iter().map(|&v| v as f64).sum();
+        let mean = sum / n as f64;
+        assert!((mean - 0.5).abs() < 0.01, "f32 random mean {mean} too far from 0.5");
+    }
+
+    #[test]
+    fn uniform_f32_in_range() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.uniform_f32(5.0, 10.0, 10_000).unwrap();
+        for &v in arr.as_slice().unwrap() {
+            assert!((5.0..10.0).contains(&v), "f32 uniform value out of range: {v}");
+        }
+    }
+
+    #[test]
+    fn uniform_f32_bad_range() {
+        let mut rng = default_rng_seeded(42);
+        assert!(rng.uniform_f32(10.0, 5.0, 100).is_err());
+        assert!(rng.uniform_f32(5.0, 5.0, 100).is_err());
+    }
+
+    #[test]
+    fn uniform_f32_nd_shape() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.uniform_f32(-1.0, 1.0, [2, 5]).unwrap();
+        assert_eq!(arr.shape(), &[2, 5]);
+        for &v in arr.iter() {
+            assert!((-1.0..1.0).contains(&v));
+        }
+    }
+
+    #[test]
+    fn random_f32_rejects_zero_axis() {
+        let mut rng = default_rng_seeded(42);
+        assert!(rng.random_f32([3, 0]).is_err());
     }
 }

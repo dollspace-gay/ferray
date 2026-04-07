@@ -57,6 +57,12 @@ impl<B: BitGenerator> Generator<B> {
         self.bg.next_f64()
     }
 
+    /// Generate the next random `f32` in [0, 1).
+    #[inline]
+    pub fn next_f32(&mut self) -> f32 {
+        self.bg.next_f32()
+    }
+
     /// Generate a `u64` in [0, bound).
     #[inline]
     pub fn next_u64_bounded(&mut self, bound: u64) -> u64 {
@@ -180,6 +186,19 @@ pub(crate) fn generate_vec<B: BitGenerator>(
     data
 }
 
+// Helper: generate a Vec<f32> of given total size using a closure.
+pub(crate) fn generate_vec_f32<B: BitGenerator>(
+    rng: &mut Generator<B>,
+    size: usize,
+    mut f: impl FnMut(&mut B) -> f32,
+) -> Vec<f32> {
+    let mut data = Vec::with_capacity(size);
+    for _ in 0..size {
+        data.push(f(&mut rng.bg));
+    }
+    data
+}
+
 // Helper: generate a Vec<i64> of given total size using a closure.
 pub(crate) fn generate_vec_i64<B: BitGenerator>(
     rng: &mut Generator<B>,
@@ -209,6 +228,14 @@ pub(crate) fn vec_to_array_f64(
     shape: &[usize],
 ) -> Result<Array<f64, IxDyn>, FerrayError> {
     Array::<f64, IxDyn>::from_vec(IxDyn::new(shape), data)
+}
+
+/// Wrap a `Vec<f32>` into an `Array<f32, IxDyn>` with the given shape.
+pub(crate) fn vec_to_array_f32(
+    data: Vec<f32>,
+    shape: &[usize],
+) -> Result<Array<f32, IxDyn>, FerrayError> {
+    Array::<f32, IxDyn>::from_vec(IxDyn::new(shape), data)
 }
 
 /// Wrap a `Vec<i64>` into an `Array<i64, IxDyn>` with the given shape.
