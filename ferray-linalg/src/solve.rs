@@ -386,27 +386,13 @@ pub fn matrix_power<T: LinalgFloat>(a: &Array<T, Ix2>, n: i64) -> FerrayResult<A
 
     while p > 0 {
         if p & 1 == 1 {
-            result_data = mat_mul_flat(&result_data, &base_data, sz, sz, sz);
+            result_data = crate::products::matmul_raw::<T>(&result_data, &base_data, sz, sz, sz);
         }
-        base_data = mat_mul_flat(&base_data, &base_data, sz, sz, sz);
+        base_data = crate::products::matmul_raw::<T>(&base_data, &base_data, sz, sz, sz);
         p >>= 1;
     }
 
     Array::from_vec(Ix2::new([sz, sz]), result_data)
-}
-
-fn mat_mul_flat<T: LinalgFloat>(a: &[T], b: &[T], m: usize, k: usize, n: usize) -> Vec<T> {
-    let zero = T::from_f64_const(0.0);
-    let mut c = vec![zero; m * n];
-    for i in 0..m {
-        for p in 0..k {
-            let a_ip = a[i * k + p];
-            for j in 0..n {
-                c[i * n + j] = c[i * n + j] + a_ip * b[p * n + j];
-            }
-        }
-    }
-    c
 }
 
 /// Solve the tensor equation `a x = b` for x.

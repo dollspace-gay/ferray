@@ -439,7 +439,7 @@ fn oracle_qr() {
         if should_skip_f64(input) {
             continue;
         }
-        let shape = parse_shape(&input["shape"]);
+        let _ = parse_shape(&input["shape"]);
         let arr = to_ix2(&make_f64_array(input));
         let (q, r) = ferray_linalg::qr(&arr, ferray_linalg::QrMode::Reduced).unwrap();
         // Verify Q*R = A within tolerance (decomposition correctness)

@@ -67,26 +67,26 @@ fn execute_matmul<T: LinalgFloat>(
     b: &Array<T, IxDyn>,
     expr: &parser::EinsumExpr,
 ) -> FerrayResult<Array<T, IxDyn>> {
-    // For simple 2D matmul, delegate to our matmul
     let a_shape = a.shape();
     let b_shape = b.shape();
 
+    // Simple 2-D matmul: use the shared faer-backed helper so we get the
+    // same small/large dispatch and BLAS-quality performance as the
+    // top-level `matmul` entry point.
     if a_shape.len() == 2 && b_shape.len() == 2 {
-        let a_data: Vec<T> = a.iter().copied().collect();
-        let b_data: Vec<T> = b.iter().copied().collect();
         let (m, k) = (a_shape[0], a_shape[1]);
         let n = b_shape[1];
-
-        let zero = T::from_f64_const(0.0);
-        let mut result = vec![zero; m * n];
-        for i in 0..m {
-            for p in 0..k {
-                let a_ip = a_data[i * k + p];
-                for j in 0..n {
-                    result[i * n + j] = result[i * n + j] + a_ip * b_data[p * n + j];
-                }
-            }
-        }
+        let a_data: Vec<T> = if let Some(s) = a.as_slice() {
+            s.to_vec()
+        } else {
+            a.iter().copied().collect()
+        };
+        let b_data: Vec<T> = if let Some(s) = b.as_slice() {
+            s.to_vec()
+        } else {
+            b.iter().copied().collect()
+        };
+        let result = crate::products::matmul_raw::<T>(&a_data, &b_data, m, k, n);
         return Array::from_vec(IxDyn::new(&[m, n]), result);
     }
 

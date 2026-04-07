@@ -282,44 +282,52 @@ const FAER_MATMUL_THRESHOLD: usize = 64;
 /// Above this threshold, use faer with Rayon parallelism.
 const FAER_PARALLEL_THRESHOLD: usize = 256;
 
-fn matmul_2d<T: LinalgFloat>(
-    a: &Array<T, IxDyn>,
-    b: &Array<T, IxDyn>,
-) -> FerrayResult<Array<T, Ix2>> {
-    let a_shape = a.shape();
-    let b_shape = b.shape();
-    let (m, k1) = (a_shape[0], a_shape[1]);
-    let (k2, n) = (b_shape[0], b_shape[1]);
-    if k1 != k2 {
-        return Err(FerrayError::shape_mismatch(format!(
-            "matmul: inner dimensions don't match ({}x{} @ {}x{})",
-            m, k1, k2, n
-        )));
+/// Compute C = A @ B where A is m×k (row-major), B is k×n (row-major),
+/// and returns C as a row-major flat Vec of length m×n.
+///
+/// Dispatches to a naive ikj loop for small problems (avoiding faer setup
+/// overhead) and to faer's optimized matmul otherwise, with Rayon
+/// parallelism enabled for larger sizes. Used by every 2-D matmul site in
+/// this crate (`matmul_2d`, `einsum` matmul shortcut, `matrix_power`) so
+/// they all share the same small/large dispatch policy.
+pub(crate) fn matmul_raw<T: LinalgFloat>(
+    a: &[T],
+    b: &[T],
+    m: usize,
+    k: usize,
+    n: usize,
+) -> Vec<T> {
+    debug_assert_eq!(a.len(), m * k);
+    debug_assert_eq!(b.len(), k * n);
+
+    let zero = T::from_f64_const(0.0);
+    let max_dim = m.max(n).max(k);
+
+    // Degenerate shapes: nothing to do.
+    if m == 0 || n == 0 {
+        return vec![zero; m * n];
+    }
+    if k == 0 {
+        return vec![zero; m * n];
     }
 
-    let k = k1;
-    let max_dim = m.max(n).max(k);
-    let zero = T::from_f64_const(0.0);
-
-    // For small matrices, the naive ikj loop avoids faer setup/conversion overhead
+    // Small matrices: naive ikj loop is faster than paying faer's setup cost.
     if max_dim <= FAER_MATMUL_THRESHOLD {
-        let a_data: Vec<T> = a.iter().copied().collect();
-        let b_data: Vec<T> = b.iter().copied().collect();
         let mut result = vec![zero; m * n];
         for i in 0..m {
             for p in 0..k {
-                let a_ip = a_data[i * k + p];
+                let a_ip = a[i * k + p];
                 for j in 0..n {
-                    result[i * n + j] = result[i * n + j] + a_ip * b_data[p * n + j];
+                    result[i * n + j] = result[i * n + j] + a_ip * b[p * n + j];
                 }
             }
         }
-        return Array::from_vec(Ix2::new([m, n]), result);
+        return result;
     }
 
-    // Use faer's optimized matmul with explicit parallelism control
-    let a_faer = crate::faer_bridge::array2_to_faer_general(a)?;
-    let b_faer = crate::faer_bridge::array2_to_faer_general(b)?;
+    // Faer's column-major Mat fed directly from the row-major slices.
+    let a_faer = faer::Mat::<T>::from_fn(m, k, |i, j| a[i * k + j]);
+    let b_faer = faer::Mat::<T>::from_fn(k, n, |i, j| b[i * n + j]);
     let mut c_faer = faer::Mat::<T>::zeros(m, n);
 
     let par = if max_dim >= FAER_PARALLEL_THRESHOLD {
@@ -339,14 +347,36 @@ fn matmul_2d<T: LinalgFloat>(
         par,
     );
 
-    // Convert back to ferray array
-    let mut data = Vec::with_capacity(m * n);
+    // Faer is column-major; transcribe back to row-major.
+    let mut result = Vec::with_capacity(m * n);
     for i in 0..m {
         for j in 0..n {
-            data.push(c_faer[(i, j)]);
+            result.push(c_faer[(i, j)]);
         }
     }
-    Array::from_vec(Ix2::new([m, n]), data)
+    result
+}
+
+fn matmul_2d<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, Ix2>> {
+    let a_shape = a.shape();
+    let b_shape = b.shape();
+    let (m, k1) = (a_shape[0], a_shape[1]);
+    let (k2, n) = (b_shape[0], b_shape[1]);
+    if k1 != k2 {
+        return Err(FerrayError::shape_mismatch(format!(
+            "matmul: inner dimensions don't match ({}x{} @ {}x{})",
+            m, k1, k2, n
+        )));
+    }
+
+    let k = k1;
+    let a_data = borrow_data(a);
+    let b_data = borrow_data(b);
+    let result = matmul_raw::<T>(&a_data, &b_data, m, k, n);
+    Array::from_vec(Ix2::new([m, n]), result)
 }
 
 fn matmul_batched<T: LinalgFloat>(
@@ -400,17 +430,10 @@ fn matmul_batched<T: LinalgFloat>(
         let b_offset = b_idx * b_mat_size;
         let out_offset = batch_idx * out_mat_size;
 
-        // Use faer for each batch element's matmul
         let a_slice = &a_data[a_offset..a_offset + a_mat_size];
         let b_slice = &b_data[b_offset..b_offset + b_mat_size];
-        let a_faer = faer::Mat::from_fn(a_m, a_k, |i, j| a_slice[i * a_k + j]);
-        let b_faer = faer::Mat::from_fn(b_k, b_n, |i, j| b_slice[i * b_n + j]);
-        let c_faer = a_faer * b_faer;
-        for i in 0..a_m {
-            for j in 0..b_n {
-                result[out_offset + i * b_n + j] = c_faer[(i, j)];
-            }
-        }
+        let c = matmul_raw::<T>(a_slice, b_slice, a_m, a_k, b_n);
+        result[out_offset..out_offset + out_mat_size].copy_from_slice(&c);
     }
 
     let mut out_shape: Vec<usize> = batch_shape;
