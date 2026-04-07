@@ -3,11 +3,12 @@
   "display_id": 108,
   "title": "ferray-fft: rfft computes full FFT then discards half",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nreal.rs L188-212: should use rustfft RealFftPlanner for ~2x speedup.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:29:03.168761348Z",
-  "updated_at": "2026-03-25T15:29:07.111111524Z",
+  "updated_at": "2026-04-07T21:57:28.040886385Z",
+  "closed_at": "2026-04-07T21:57:28.040886385Z",
   "labels": [
     "refactor",
     "qa-audit"
