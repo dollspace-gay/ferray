@@ -1,4 +1,7 @@
 // ferray-fft: Complex FFTs — fft, ifft, fft2, ifft2, fftn, ifftn (REQ-1..REQ-4)
+//
+// Generic over the scalar precision via [`FftFloat`] — works for both
+// `Complex<f64>` and `Complex<f32>` arrays. See issue #426.
 
 use num_complex::Complex;
 
@@ -6,23 +9,30 @@ use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::error::{FerrayError, FerrayResult};
 
+use crate::float::FftFloat;
 use crate::nd::{fft_1d_along_axis, fft_along_axes};
 use crate::norm::FftNorm;
 
 // ---------------------------------------------------------------------------
-// Helpers to convert input to Complex<f64> flat data
+// Helpers to convert input to flat complex data
 // ---------------------------------------------------------------------------
 
-/// Convert an Array<Complex<f64>, D> to flat row-major data.
-/// Get contiguous data, borrowing if C-contiguous, copying otherwise.
-enum ComplexData<'a> {
-    Borrowed(&'a [Complex<f64>]),
-    Owned(Vec<Complex<f64>>),
+/// Borrowed or owned contiguous complex data. Borrows when the input
+/// array is C-contiguous; otherwise materializes into an owned `Vec`.
+enum ComplexData<'a, T: FftFloat>
+where
+    Complex<T>: ferray_core::Element,
+{
+    Borrowed(&'a [Complex<T>]),
+    Owned(Vec<Complex<T>>),
 }
 
-impl std::ops::Deref for ComplexData<'_> {
-    type Target = [Complex<f64>];
-    fn deref(&self) -> &[Complex<f64>] {
+impl<T: FftFloat> std::ops::Deref for ComplexData<'_, T>
+where
+    Complex<T>: ferray_core::Element,
+{
+    type Target = [Complex<T>];
+    fn deref(&self) -> &[Complex<T>] {
         match self {
             ComplexData::Borrowed(s) => s,
             ComplexData::Owned(v) => v,
@@ -30,7 +40,12 @@ impl std::ops::Deref for ComplexData<'_> {
     }
 }
 
-fn borrow_complex_flat<D: Dimension>(a: &Array<Complex<f64>, D>) -> ComplexData<'_> {
+fn borrow_complex_flat<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
+) -> ComplexData<'_, T>
+where
+    Complex<T>: ferray_core::Element,
+{
     if let Some(s) = a.as_slice() {
         ComplexData::Borrowed(s)
     } else {
@@ -114,18 +129,21 @@ fn resolve_shapes(
 ///
 /// # Errors
 /// Returns an error if `axis` is out of bounds or `n` is 0.
-pub fn fft<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+pub fn fft<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: ferray_core::Element,
+{
     let shape = a.shape().to_vec();
     let ndim = shape.len();
     let ax = resolve_axis(ndim, axis)?;
     let data = borrow_complex_flat(a);
 
-    let (new_shape, result) = fft_1d_along_axis(&data, &shape, ax, n, false, norm)?;
+    let (new_shape, result) = fft_1d_along_axis::<T>(&data, &shape, ax, n, false, norm)?;
 
     Array::from_vec(IxDyn::new(&new_shape), result)
 }
@@ -142,18 +160,21 @@ pub fn fft<D: Dimension>(
 ///
 /// # Errors
 /// Returns an error if `axis` is out of bounds or `n` is 0.
-pub fn ifft<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+pub fn ifft<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: ferray_core::Element,
+{
     let shape = a.shape().to_vec();
     let ndim = shape.len();
     let ax = resolve_axis(ndim, axis)?;
     let data = borrow_complex_flat(a);
 
-    let (new_shape, result) = fft_1d_along_axis(&data, &shape, ax, n, true, norm)?;
+    let (new_shape, result) = fft_1d_along_axis::<T>(&data, &shape, ax, n, true, norm)?;
 
     Array::from_vec(IxDyn::new(&new_shape), result)
 }
@@ -177,12 +198,15 @@ pub fn ifft<D: Dimension>(
 /// # Errors
 /// Returns an error if the array has fewer than 2 dimensions, axes are
 /// out of bounds, or shape parameters are invalid.
-pub fn fft2<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+pub fn fft2<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: ferray_core::Element,
+{
     let ndim = a.shape().len();
     let axes = match axes {
         Some(ax) => ax.to_vec(),
@@ -195,7 +219,7 @@ pub fn fft2<D: Dimension>(
             vec![ndim - 2, ndim - 1]
         }
     };
-    fftn_impl(a, s, &axes, false, norm)
+    fftn_impl::<T, D>(a, s, &axes, false, norm)
 }
 
 /// Compute the 2-dimensional inverse discrete Fourier Transform.
@@ -211,12 +235,15 @@ pub fn fft2<D: Dimension>(
 /// # Errors
 /// Returns an error if the array has fewer than 2 dimensions, axes are
 /// out of bounds, or shape parameters are invalid.
-pub fn ifft2<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+pub fn ifft2<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: ferray_core::Element,
+{
     let ndim = a.shape().len();
     let axes = match axes {
         Some(ax) => ax.to_vec(),
@@ -229,7 +256,7 @@ pub fn ifft2<D: Dimension>(
             vec![ndim - 2, ndim - 1]
         }
     };
-    fftn_impl(a, s, &axes, true, norm)
+    fftn_impl::<T, D>(a, s, &axes, true, norm)
 }
 
 // ---------------------------------------------------------------------------
@@ -251,14 +278,17 @@ pub fn ifft2<D: Dimension>(
 /// # Errors
 /// Returns an error if axes are out of bounds or shape parameters
 /// are inconsistent.
-pub fn fftn<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+pub fn fftn<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: ferray_core::Element,
+{
     let ax = resolve_axes(a.shape().len(), axes)?;
-    fftn_impl(a, s, &ax, false, norm)
+    fftn_impl::<T, D>(a, s, &ax, false, norm)
 }
 
 /// Compute the N-dimensional inverse discrete Fourier Transform.
@@ -275,34 +305,150 @@ pub fn fftn<D: Dimension>(
 /// # Errors
 /// Returns an error if axes are out of bounds or shape parameters
 /// are inconsistent.
-pub fn ifftn<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+pub fn ifftn<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: ferray_core::Element,
+{
     let ax = resolve_axes(a.shape().len(), axes)?;
-    fftn_impl(a, s, &ax, true, norm)
+    fftn_impl::<T, D>(a, s, &ax, true, norm)
+}
+
+// ---------------------------------------------------------------------------
+// Real-input convenience wrappers (issue #427)
+//
+// NumPy's `np.fft.fft(real_array)` accepts real arrays directly and
+// promotes them to complex. ferray-fft's native `fft` requires
+// `Array<Complex<T>, D>`, so these wrappers bridge real → complex by
+// wrapping each element in `Complex::new(v, 0)` before calling the
+// generic complex path.
+//
+// For the half-spectrum (Hermitian) form of a real transform use
+// `rfft` / `rfftn` from `real.rs` instead — those return n/2+1 complex
+// values and are ~2× faster for the real-input case.
+// ---------------------------------------------------------------------------
+
+/// Promote a real array to a `Vec<Complex<T>>` with zero imaginary parts.
+fn real_to_complex_vec<T: FftFloat, D: Dimension>(a: &Array<T, D>) -> Vec<Complex<T>>
+where
+    Complex<T>: ferray_core::Element,
+{
+    a.iter()
+        .map(|&v| Complex::new(v, <T as num_traits::Zero>::zero()))
+        .collect()
+}
+
+/// 1-D FFT of a real-valued array. Equivalent to `np.fft.fft(real_array)`.
+///
+/// Auto-promotes the input to complex and delegates to [`fft`]. The
+/// returned spectrum is the full-length complex FFT, not the
+/// Hermitian-folded half-spectrum — use [`crate::rfft`] for that.
+///
+/// # Errors
+/// Forwards any error from [`fft`].
+pub fn fft_real<T: FftFloat, D: Dimension>(
+    a: &Array<T, D>,
+    n: Option<usize>,
+    axis: Option<usize>,
+    norm: FftNorm,
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: ferray_core::Element,
+{
+    let shape = a.shape().to_vec();
+    let complex_data = real_to_complex_vec(a);
+    let complex_arr = Array::<Complex<T>, IxDyn>::from_vec(IxDyn::new(&shape), complex_data)?;
+    fft::<T, IxDyn>(&complex_arr, n, axis, norm)
+}
+
+/// 1-D inverse FFT returning only the real part. Equivalent to
+/// `np.fft.ifft(arr).real` for the common case where the caller knows
+/// the result is real-valued (e.g. the inverse of a real FFT done via
+/// the full complex path).
+///
+/// For the Hermitian-folded inverse use [`crate::irfft`] instead.
+///
+/// # Errors
+/// Forwards any error from [`ifft`].
+pub fn ifft_real<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
+    n: Option<usize>,
+    axis: Option<usize>,
+    norm: FftNorm,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    Complex<T>: ferray_core::Element,
+{
+    let spectrum = ifft::<T, D>(a, n, axis, norm)?;
+    let shape = spectrum.shape().to_vec();
+    let real_data: Vec<T> = spectrum.iter().map(|c| c.re).collect();
+    Array::from_vec(IxDyn::new(&shape), real_data)
+}
+
+/// 2-D FFT of a real-valued array.
+///
+/// Auto-promotes the input to complex and delegates to [`fft2`]. For the
+/// Hermitian-folded form use [`crate::rfft2`].
+pub fn fft_real2<T: FftFloat, D: Dimension>(
+    a: &Array<T, D>,
+    s: Option<&[usize]>,
+    axes: Option<&[usize]>,
+    norm: FftNorm,
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: ferray_core::Element,
+{
+    let shape = a.shape().to_vec();
+    let complex_data = real_to_complex_vec(a);
+    let complex_arr = Array::<Complex<T>, IxDyn>::from_vec(IxDyn::new(&shape), complex_data)?;
+    fft2::<T, IxDyn>(&complex_arr, s, axes, norm)
+}
+
+/// N-D FFT of a real-valued array.
+///
+/// Auto-promotes the input to complex and delegates to [`fftn`]. For the
+/// Hermitian-folded form use [`crate::rfftn`].
+pub fn fft_realn<T: FftFloat, D: Dimension>(
+    a: &Array<T, D>,
+    s: Option<&[usize]>,
+    axes: Option<&[usize]>,
+    norm: FftNorm,
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: ferray_core::Element,
+{
+    let shape = a.shape().to_vec();
+    let complex_data = real_to_complex_vec(a);
+    let complex_arr = Array::<Complex<T>, IxDyn>::from_vec(IxDyn::new(&shape), complex_data)?;
+    fftn::<T, IxDyn>(&complex_arr, s, axes, norm)
 }
 
 // ---------------------------------------------------------------------------
 // Internal N-D implementation
 // ---------------------------------------------------------------------------
 
-fn fftn_impl<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+fn fftn_impl<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
     axes: &[usize],
     inverse: bool,
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: ferray_core::Element,
+{
     let shape = a.shape().to_vec();
     let sizes = resolve_shapes(&shape, axes, s)?;
     let data = borrow_complex_flat(a);
 
     let axes_and_sizes: Vec<(usize, Option<usize>)> = axes.iter().copied().zip(sizes).collect();
 
-    let (new_shape, result) = fft_along_axes(&data, &shape, &axes_and_sizes, inverse, norm)?;
+    let (new_shape, result) =
+        fft_along_axes::<T>(&data, &shape, &axes_and_sizes, inverse, norm)?;
 
     Array::from_vec(IxDyn::new(&new_shape), result)
 }
@@ -552,6 +698,135 @@ mod tests {
         for v in &vals[1..] {
             assert!(v.re.abs() < 1e-12);
             assert!(v.im.abs() < 1e-12);
+        }
+    }
+
+    // --- f32 generic path (#426) ---
+
+    #[test]
+    fn fft_ifft_f32_roundtrip() {
+        // AC-426: The FFT functions must work for f32 as well as f64.
+        let data: Vec<Complex<f32>> = (0..16)
+            .map(|i| Complex::new(i as f32 * 0.25, (i as f32).sin()))
+            .collect();
+        let a = Array::from_vec(Ix1::new([16]), data.clone()).unwrap();
+        let spectrum = fft::<f32, Ix1>(&a, None, None, FftNorm::Backward).unwrap();
+        assert_eq!(spectrum.shape(), &[16]);
+        let recovered = ifft::<f32, IxDyn>(&spectrum, None, None, FftNorm::Backward).unwrap();
+        for (orig, rec) in data.iter().zip(recovered.iter()) {
+            assert!(
+                (orig.re - rec.re).abs() < 1e-4,
+                "f32 re mismatch: {} vs {}",
+                orig.re,
+                rec.re
+            );
+            assert!(
+                (orig.im - rec.im).abs() < 1e-4,
+                "f32 im mismatch: {} vs {}",
+                orig.im,
+                rec.im
+            );
+        }
+    }
+
+    #[test]
+    fn fft_f32_impulse() {
+        // FFT of [1, 0, 0, 0] in f32 = [1, 1, 1, 1]
+        let data = vec![
+            Complex::<f32>::new(1.0, 0.0),
+            Complex::<f32>::new(0.0, 0.0),
+            Complex::<f32>::new(0.0, 0.0),
+            Complex::<f32>::new(0.0, 0.0),
+        ];
+        let a = Array::from_vec(Ix1::new([4]), data).unwrap();
+        let result = fft::<f32, Ix1>(&a, None, None, FftNorm::Backward).unwrap();
+        for val in result.iter() {
+            assert!((val.re - 1.0).abs() < 1e-6);
+            assert!(val.im.abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn fft2_f32_roundtrip() {
+        use ferray_core::dimension::Ix2;
+        let data: Vec<Complex<f32>> = (0..16)
+            .map(|i| Complex::new(i as f32, -(i as f32) * 0.25))
+            .collect();
+        let a = Array::from_vec(Ix2::new([4, 4]), data.clone()).unwrap();
+        let spectrum = fft2::<f32, Ix2>(&a, None, None, FftNorm::Backward).unwrap();
+        let recovered = ifft2::<f32, IxDyn>(&spectrum, None, None, FftNorm::Backward).unwrap();
+        for (o, r) in data.iter().zip(recovered.iter()) {
+            assert!((o.re - r.re).abs() < 1e-4);
+            assert!((o.im - r.im).abs() < 1e-4);
+        }
+    }
+
+    // --- Real-input convenience wrappers (#427) ---
+
+    #[test]
+    fn fft_real_ifft_real_roundtrip_f64() {
+        // AC-427: Real array should be transformable without manual promotion to Complex.
+        let original = vec![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([8]), original.clone()).unwrap();
+        let spectrum = fft_real::<f64, Ix1>(&a, None, None, FftNorm::Backward).unwrap();
+        assert_eq!(spectrum.shape(), &[8]);
+        let recovered = ifft_real::<f64, IxDyn>(&spectrum, None, None, FftNorm::Backward).unwrap();
+        for (o, r) in original.iter().zip(recovered.iter()) {
+            assert!((o - r).abs() < 1e-10, "mismatch: {} vs {}", o, r);
+        }
+    }
+
+    #[test]
+    fn fft_real_ifft_real_roundtrip_f32() {
+        // Same real-input convenience, but on f32 to verify both layers work together.
+        let original: Vec<f32> = (0..16).map(|i| i as f32 * 0.5 - 2.0).collect();
+        let a = Array::<f32, Ix1>::from_vec(Ix1::new([16]), original.clone()).unwrap();
+        let spectrum = fft_real::<f32, Ix1>(&a, None, None, FftNorm::Backward).unwrap();
+        let recovered = ifft_real::<f32, IxDyn>(&spectrum, None, None, FftNorm::Backward).unwrap();
+        for (o, r) in original.iter().zip(recovered.iter()) {
+            assert!((o - r).abs() < 1e-4, "f32 mismatch: {} vs {}", o, r);
+        }
+    }
+
+    #[test]
+    fn fft_real_dc_component() {
+        // FFT of real constant [1,1,1,1] should have DC = 4, rest zero.
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 1.0, 1.0, 1.0]).unwrap();
+        let spectrum = fft_real::<f64, Ix1>(&a, None, None, FftNorm::Backward).unwrap();
+        let vals: Vec<_> = spectrum.iter().copied().collect();
+        assert!((vals[0].re - 4.0).abs() < 1e-12);
+        assert!(vals[0].im.abs() < 1e-12);
+        for v in &vals[1..] {
+            assert!(v.re.abs() < 1e-12);
+            assert!(v.im.abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn fft_real2_roundtrip() {
+        use ferray_core::dimension::Ix2;
+        let data: Vec<f64> = (0..12).map(|i| i as f64 * 0.3).collect();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 4]), data.clone()).unwrap();
+        let spectrum = fft_real2::<f64, Ix2>(&a, None, None, FftNorm::Backward).unwrap();
+        assert_eq!(spectrum.shape(), &[3, 4]);
+        let recovered = ifft2::<f64, IxDyn>(&spectrum, None, None, FftNorm::Backward).unwrap();
+        for (o, r) in data.iter().zip(recovered.iter()) {
+            assert!((o - r.re).abs() < 1e-10);
+            assert!(r.im.abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn fft_realn_3d_roundtrip() {
+        use ferray_core::dimension::Ix3;
+        let data: Vec<f64> = (0..24).map(|i| (i as f64).sin()).collect();
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data.clone()).unwrap();
+        let spectrum = fft_realn::<f64, Ix3>(&a, None, None, FftNorm::Backward).unwrap();
+        assert_eq!(spectrum.shape(), &[2, 3, 4]);
+        let recovered = ifftn::<f64, IxDyn>(&spectrum, None, None, FftNorm::Backward).unwrap();
+        for (o, r) in data.iter().zip(recovered.iter()) {
+            assert!((o - r.re).abs() < 1e-10);
+            assert!(r.im.abs() < 1e-10);
         }
     }
 }

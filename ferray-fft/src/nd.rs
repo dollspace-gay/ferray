@@ -6,12 +6,13 @@
 // within an axis are processed in parallel via Rayon.
 
 use num_complex::Complex;
+use num_traits::{One, Zero};
 use rayon::prelude::*;
 
 use ferray_core::error::{FerrayError, FerrayResult};
 
+use crate::float::FftFloat;
 use crate::norm::FftNorm;
-use crate::plan::{get_cached_plan, get_cached_real_forward, get_cached_real_inverse};
 
 /// Apply a 1-D FFT along a single axis of a multi-dimensional array
 /// stored in row-major (C) order.
@@ -19,15 +20,19 @@ use crate::plan::{get_cached_plan, get_cached_real_forward, get_cached_real_inve
 /// `shape` and `data` describe the array. The transform is applied
 /// along `axis`, optionally with zero-padding/truncation to `n` points.
 /// The returned `(new_shape, new_data)` reflect the (possibly changed)
-/// size along the transformed axis.
-pub(crate) fn fft_along_axis(
-    data: &[Complex<f64>],
+/// size along the transformed axis. Generic over the scalar precision
+/// via [`FftFloat`].
+pub(crate) fn fft_along_axis<T: FftFloat>(
+    data: &[Complex<T>],
     shape: &[usize],
     axis: usize,
     n: Option<usize>,
     inverse: bool,
     norm: FftNorm,
-) -> FerrayResult<(Vec<usize>, Vec<Complex<f64>>)> {
+) -> FerrayResult<(Vec<usize>, Vec<Complex<T>>)>
+where
+    Complex<T>: ferray_core::Element,
+{
     let ndim = shape.len();
     if axis >= ndim {
         return Err(FerrayError::axis_out_of_bounds(axis, ndim));
@@ -45,7 +50,7 @@ pub(crate) fn fft_along_axis(
         let mut new_shape = shape.to_vec();
         new_shape[axis] = fft_len;
         let new_total: usize = new_shape.iter().product();
-        return Ok((new_shape, vec![Complex::new(0.0, 0.0); new_total]));
+        return Ok((new_shape, vec![Complex::zero(); new_total]));
     }
 
     // Fast path: 1D array — skip all lane machinery
@@ -68,16 +73,17 @@ pub(crate) fn fft_along_axis(
     // (with axis dimension = 0), then iterate along axis.
     let lane_starts = compute_lane_starts(shape, &strides, axis, num_lanes);
 
-    // Get the cached plan once for this size
-    let plan = get_cached_plan(fft_len, inverse);
+    // Get the cached plan once for this size (dispatched by precision).
+    let plan = T::cached_plan(fft_len, inverse);
 
-    // Compute normalization scale
+    // Compute normalization scale in the target precision.
     let direction = if inverse {
         crate::norm::FftDirection::Inverse
     } else {
         crate::norm::FftDirection::Forward
     };
-    let scale = norm.scale_factor(fft_len, direction);
+    let scale = T::scale_factor(norm, fft_len, direction);
+    let one = <T as One>::one();
 
     // Pre-compute scratch size once
     let scratch_len = plan.get_inplace_scratch_len();
@@ -97,19 +103,19 @@ pub(crate) fn fft_along_axis(
     // per-thread via `for_each_init`.
     let stride = strides[axis] as usize;
     let copy_len = axis_len.min(fft_len);
-    let mut lane_outputs = vec![Complex::new(0.0, 0.0); num_lanes * fft_len];
+    let mut lane_outputs: Vec<Complex<T>> = vec![Complex::zero(); num_lanes * fft_len];
     lane_outputs
         .par_chunks_mut(fft_len)
         .zip(lane_starts.par_iter())
         .for_each_init(
-            || vec![Complex::new(0.0, 0.0); scratch_len],
+            || vec![Complex::zero(); scratch_len],
             |scratch, (out_chunk, &start_offset)| {
                 // Copy this lane's strided slice into the contiguous output
-                // chunk. The chunk is already zero-initialized by the
-                // `vec![]` allocation above, so positions beyond `copy_len`
-                // act as zero-padding when `fft_len > axis_len`.
-                for i in 0..copy_len {
-                    out_chunk[i] = data[start_offset + i * stride];
+                // chunk. The chunk is already zero-initialized above, so
+                // positions beyond `copy_len` act as zero-padding when
+                // `fft_len > axis_len`.
+                for (i, slot) in out_chunk.iter_mut().take(copy_len).enumerate() {
+                    *slot = data[start_offset + i * stride];
                 }
                 // The remaining positions (copy_len..fft_len) are already
                 // zero from the initial allocation.
@@ -118,9 +124,9 @@ pub(crate) fn fft_along_axis(
                 plan.process_with_scratch(out_chunk, scratch);
 
                 // Apply normalization in place.
-                if (scale - 1.0).abs() > f64::EPSILON {
+                if scale != one {
                     for c in out_chunk.iter_mut() {
-                        *c *= scale;
+                        *c = *c * scale;
                     }
                 }
             },
@@ -129,7 +135,7 @@ pub(crate) fn fft_along_axis(
     // Scatter step: copy each lane's contiguous chunk into the final output
     // buffer at its strided position. This is sequential but is essentially
     // a series of indexed writes — no allocation, no compute.
-    let mut output = vec![Complex::new(0.0, 0.0); new_total];
+    let mut output: Vec<Complex<T>> = vec![Complex::zero(); new_total];
     let out_stride = new_strides[axis] as usize;
 
     for (lane_idx, lane_chunk) in lane_outputs.chunks(fft_len).enumerate() {
@@ -152,22 +158,25 @@ pub(crate) fn fft_along_axis(
 
 /// Fast path for 1D FFT: no lane extraction, no parallel overhead.
 /// Operates directly on a contiguous buffer in-place.
-fn fft_1d_fast(
-    data: &[Complex<f64>],
+fn fft_1d_fast<T: FftFloat>(
+    data: &[Complex<T>],
     fft_len: usize,
     input_len: usize,
     inverse: bool,
     norm: FftNorm,
-) -> FerrayResult<(Vec<usize>, Vec<Complex<f64>>)> {
+) -> FerrayResult<(Vec<usize>, Vec<Complex<T>>)>
+where
+    Complex<T>: ferray_core::Element,
+{
     // Build buffer: copy input (truncated or padded)
-    let mut buffer = Vec::with_capacity(fft_len);
+    let mut buffer: Vec<Complex<T>> = Vec::with_capacity(fft_len);
     let copy_len = input_len.min(fft_len);
     buffer.extend_from_slice(&data[..copy_len]);
-    buffer.resize(fft_len, Complex::new(0.0, 0.0));
+    buffer.resize(fft_len, Complex::zero());
 
     // Get cached plan and execute in-place
-    let plan = get_cached_plan(fft_len, inverse);
-    let mut scratch = vec![Complex::new(0.0, 0.0); plan.get_inplace_scratch_len()];
+    let plan = T::cached_plan(fft_len, inverse);
+    let mut scratch: Vec<Complex<T>> = vec![Complex::zero(); plan.get_inplace_scratch_len()];
     plan.process_with_scratch(&mut buffer, &mut scratch);
 
     // Apply normalization
@@ -176,10 +185,11 @@ fn fft_1d_fast(
     } else {
         crate::norm::FftDirection::Forward
     };
-    let scale = norm.scale_factor(fft_len, direction);
-    if (scale - 1.0).abs() > f64::EPSILON {
+    let scale = T::scale_factor(norm, fft_len, direction);
+    let one = <T as One>::one();
+    if scale != one {
         for c in &mut buffer {
-            *c *= scale;
+            *c = *c * scale;
         }
     }
 
@@ -191,13 +201,16 @@ fn fft_1d_fast(
 /// `shapes_and_sizes` is a list of `(axis, optional_n)` pairs.
 /// Each axis is transformed in order, feeding the output of one
 /// as the input to the next.
-pub(crate) fn fft_along_axes(
-    data: &[Complex<f64>],
+pub(crate) fn fft_along_axes<T: FftFloat>(
+    data: &[Complex<T>],
     shape: &[usize],
     axes_and_sizes: &[(usize, Option<usize>)],
     inverse: bool,
     norm: FftNorm,
-) -> FerrayResult<(Vec<usize>, Vec<Complex<f64>>)> {
+) -> FerrayResult<(Vec<usize>, Vec<Complex<T>>)>
+where
+    Complex<T>: ferray_core::Element,
+{
     let mut current_data = data.to_vec();
     let mut current_shape = shape.to_vec();
 
@@ -213,14 +226,17 @@ pub(crate) fn fft_along_axes(
 
 /// Simpler entry point: FFT along a single axis using raw execute_fft_1d.
 /// Used by the 1-D fft/ifft functions that don't need multi-axis iteration.
-pub(crate) fn fft_1d_along_axis(
-    data: &[Complex<f64>],
+pub(crate) fn fft_1d_along_axis<T: FftFloat>(
+    data: &[Complex<T>],
     shape: &[usize],
     axis: usize,
     n: Option<usize>,
     inverse: bool,
     norm: FftNorm,
-) -> FerrayResult<(Vec<usize>, Vec<Complex<f64>>)> {
+) -> FerrayResult<(Vec<usize>, Vec<Complex<T>>)>
+where
+    Complex<T>: ferray_core::Element,
+{
     fft_along_axis(data, shape, axis, n, inverse, norm)
 }
 
@@ -243,14 +259,18 @@ pub(crate) fn fft_1d_along_axis(
 /// before the transform; if `None`, the existing axis length is used.
 ///
 /// Mirrors [`fft_along_axis`] but uses the cached real plan and the
-/// par_chunks_mut allocation pattern from #433.
-pub(crate) fn rfft_along_axis(
-    data: &[f64],
+/// par_chunks_mut allocation pattern from #433. Generic over the scalar
+/// precision via [`FftFloat`].
+pub(crate) fn rfft_along_axis<T: FftFloat>(
+    data: &[T],
     shape: &[usize],
     axis: usize,
     n: Option<usize>,
     norm: FftNorm,
-) -> FerrayResult<(Vec<usize>, Vec<Complex<f64>>)> {
+) -> FerrayResult<(Vec<usize>, Vec<Complex<T>>)>
+where
+    Complex<T>: ferray_core::Element,
+{
     let ndim = shape.len();
     if axis >= ndim {
         return Err(FerrayError::axis_out_of_bounds(axis, ndim));
@@ -271,14 +291,16 @@ pub(crate) fn rfft_along_axis(
 
     let total = shape.iter().product::<usize>();
     if total == 0 {
-        return Ok((new_shape, vec![Complex::new(0.0, 0.0); new_total]));
+        return Ok((new_shape, vec![Complex::zero(); new_total]));
     }
 
-    let plan = get_cached_real_forward(fft_len);
+    let plan = T::cached_real_forward(fft_len);
     let scratch_len = plan.get_scratch_len();
 
     // Compute normalization scale (forward direction).
-    let scale = norm.scale_factor(fft_len, crate::norm::FftDirection::Forward);
+    let scale = T::scale_factor(norm, fft_len, crate::norm::FftDirection::Forward);
+    let one = <T as One>::one();
+    let t_zero = <T as Zero>::zero();
 
     let strides = compute_strides(shape);
     let new_strides = compute_strides(&new_shape);
@@ -287,18 +309,18 @@ pub(crate) fn rfft_along_axis(
 
     // 1-D fast path: skip lane machinery entirely.
     if ndim == 1 {
-        let mut input_buf = vec![0.0f64; fft_len];
+        let mut input_buf: Vec<T> = vec![t_zero; fft_len];
         input_buf[..copy_len].copy_from_slice(&data[..copy_len]);
         // input_buf[copy_len..] already zero from the initial vec! allocation.
-        let mut output_buf = vec![Complex::new(0.0, 0.0); half_len];
+        let mut output_buf: Vec<Complex<T>> = vec![Complex::zero(); half_len];
         let mut scratch = plan.make_scratch_vec();
         plan.process_with_scratch(&mut input_buf, &mut output_buf, &mut scratch)
             .map_err(|e| {
                 FerrayError::invalid_value(format!("real FFT process failed: {e}"))
             })?;
-        if (scale - 1.0).abs() > f64::EPSILON {
+        if scale != one {
             for c in &mut output_buf {
-                *c *= scale;
+                *c = *c * scale;
             }
         }
         return Ok((new_shape, output_buf));
@@ -309,13 +331,13 @@ pub(crate) fn rfft_along_axis(
 
     // Pre-allocate one contiguous buffer for all lane outputs (#433 pattern).
     // Each chunk is `half_len` complex values; total is num_lanes * half_len.
-    let mut lane_outputs = vec![Complex::new(0.0, 0.0); num_lanes * half_len];
+    let mut lane_outputs: Vec<Complex<T>> = vec![Complex::zero(); num_lanes * half_len];
 
     lane_outputs
         .par_chunks_mut(half_len)
         .zip(lane_starts.par_iter())
         .for_each_init(
-            || (vec![0.0f64; fft_len], vec![Complex::new(0.0, 0.0); scratch_len]),
+            || (vec![t_zero; fft_len], vec![Complex::zero(); scratch_len]),
             |(input_buf, scratch), (out_chunk, &start_offset)| {
                 // Copy this lane's strided real values into the contiguous
                 // input buffer; pad the rest with zeros.
@@ -323,15 +345,15 @@ pub(crate) fn rfft_along_axis(
                     *slot = data[start_offset + i * stride];
                 }
                 for slot in input_buf.iter_mut().skip(copy_len) {
-                    *slot = 0.0;
+                    *slot = t_zero;
                 }
                 // Run the real-to-complex transform directly into the
                 // chunk's slice of the contiguous lane_outputs buffer.
                 plan.process_with_scratch(input_buf, out_chunk, scratch)
                     .expect("real FFT process failed");
-                if (scale - 1.0).abs() > f64::EPSILON {
+                if scale != one {
                     for c in out_chunk.iter_mut() {
-                        *c *= scale;
+                        *c = *c * scale;
                     }
                 }
             },
@@ -339,7 +361,7 @@ pub(crate) fn rfft_along_axis(
 
     // Scatter the contiguous chunks into the strided positions in the final
     // output buffer.
-    let mut output = vec![Complex::new(0.0, 0.0); new_total];
+    let mut output: Vec<Complex<T>> = vec![Complex::zero(); new_total];
     let out_stride = new_strides[axis] as usize;
 
     for (lane_idx, lane_chunk) in lane_outputs.chunks(half_len).enumerate() {
@@ -365,14 +387,18 @@ pub(crate) fn rfft_along_axis(
 ///
 /// `data` is a flat complex array, `shape` is its multi-dimensional
 /// layout (with `shape[axis] == half_len`), and `output_len` is the
-/// desired length of the real output along that axis.
-pub(crate) fn irfft_along_axis(
-    data: &[Complex<f64>],
+/// desired length of the real output along that axis. Generic over the
+/// scalar precision via [`FftFloat`].
+pub(crate) fn irfft_along_axis<T: FftFloat>(
+    data: &[Complex<T>],
     shape: &[usize],
     axis: usize,
     output_len: usize,
     norm: FftNorm,
-) -> FerrayResult<(Vec<usize>, Vec<f64>)> {
+) -> FerrayResult<(Vec<usize>, Vec<T>)>
+where
+    Complex<T>: ferray_core::Element,
+{
     let ndim = shape.len();
     if axis >= ndim {
         return Err(FerrayError::axis_out_of_bounds(axis, ndim));
@@ -394,14 +420,16 @@ pub(crate) fn irfft_along_axis(
     let new_total: usize = new_shape.iter().product();
 
     let total = shape.iter().product::<usize>();
+    let t_zero = <T as Zero>::zero();
     if total == 0 {
-        return Ok((new_shape, vec![0.0f64; new_total]));
+        return Ok((new_shape, vec![t_zero; new_total]));
     }
 
-    let plan = get_cached_real_inverse(output_len);
+    let plan = T::cached_real_inverse(output_len);
     let scratch_len = plan.get_scratch_len();
 
-    let scale = norm.scale_factor(output_len, crate::norm::FftDirection::Inverse);
+    let scale = T::scale_factor(norm, output_len, crate::norm::FftDirection::Inverse);
+    let one = <T as One>::one();
 
     let strides = compute_strides(shape);
     let new_strides = compute_strides(&new_shape);
@@ -410,18 +438,18 @@ pub(crate) fn irfft_along_axis(
 
     // 1-D fast path.
     if ndim == 1 {
-        let mut input_buf = vec![Complex::new(0.0, 0.0); half_len];
+        let mut input_buf: Vec<Complex<T>> = vec![Complex::zero(); half_len];
         input_buf[..copy_len].copy_from_slice(&data[..copy_len]);
         // input_buf[copy_len..] already zero — pads with zero bins.
-        let mut output_buf = vec![0.0f64; output_len];
+        let mut output_buf: Vec<T> = vec![t_zero; output_len];
         let mut scratch = plan.make_scratch_vec();
         plan.process_with_scratch(&mut input_buf, &mut output_buf, &mut scratch)
             .map_err(|e| {
                 FerrayError::invalid_value(format!("inverse real FFT process failed: {e}"))
             })?;
-        if (scale - 1.0).abs() > f64::EPSILON {
+        if scale != one {
             for v in &mut output_buf {
-                *v *= scale;
+                *v = *v * scale;
             }
         }
         return Ok((new_shape, output_buf));
@@ -431,7 +459,7 @@ pub(crate) fn irfft_along_axis(
     let lane_starts = compute_lane_starts(shape, &strides, axis, num_lanes);
 
     // Per-lane output is `output_len` real values, packed contiguously.
-    let mut lane_outputs = vec![0.0f64; num_lanes * output_len];
+    let mut lane_outputs: Vec<T> = vec![t_zero; num_lanes * output_len];
 
     lane_outputs
         .par_chunks_mut(output_len)
@@ -439,8 +467,8 @@ pub(crate) fn irfft_along_axis(
         .for_each_init(
             || {
                 (
-                    vec![Complex::new(0.0, 0.0); half_len],
-                    vec![Complex::new(0.0, 0.0); scratch_len],
+                    vec![Complex::zero(); half_len],
+                    vec![Complex::zero(); scratch_len],
                 )
             },
             |(input_buf, scratch), (out_chunk, &start_offset)| {
@@ -449,20 +477,20 @@ pub(crate) fn irfft_along_axis(
                     *slot = data[start_offset + i * stride];
                 }
                 for slot in input_buf.iter_mut().skip(copy_len) {
-                    *slot = Complex::new(0.0, 0.0);
+                    *slot = Complex::zero();
                 }
                 plan.process_with_scratch(input_buf, out_chunk, scratch)
                     .expect("inverse real FFT process failed");
-                if (scale - 1.0).abs() > f64::EPSILON {
+                if scale != one {
                     for v in out_chunk.iter_mut() {
-                        *v *= scale;
+                        *v = *v * scale;
                     }
                 }
             },
         );
 
     // Scatter into strided output positions.
-    let mut output = vec![0.0f64; new_total];
+    let mut output: Vec<T> = vec![t_zero; new_total];
     let out_stride = new_strides[axis] as usize;
 
     for (lane_idx, lane_chunk) in lane_outputs.chunks(output_len).enumerate() {
@@ -604,10 +632,10 @@ mod tests {
     fn fft_1d_simple() {
         // FFT of [1, 0, 0, 0] should give [1, 1, 1, 1]
         let data = vec![
-            Complex::new(1.0, 0.0),
-            Complex::new(0.0, 0.0),
-            Complex::new(0.0, 0.0),
-            Complex::new(0.0, 0.0),
+            Complex::<f64>::new(1.0, 0.0),
+            Complex::<f64>::new(0.0, 0.0),
+            Complex::<f64>::new(0.0, 0.0),
+            Complex::<f64>::new(0.0, 0.0),
         ];
         let (shape, result) =
             fft_along_axis(&data, &[4], 0, None, false, FftNorm::Backward).unwrap();
@@ -622,10 +650,10 @@ mod tests {
     fn fft_2d_along_axis0() {
         // 2x2 identity-ish test
         let data = vec![
-            Complex::new(1.0, 0.0),
-            Complex::new(0.0, 0.0),
-            Complex::new(0.0, 0.0),
-            Complex::new(1.0, 0.0),
+            Complex::<f64>::new(1.0, 0.0),
+            Complex::<f64>::new(0.0, 0.0),
+            Complex::<f64>::new(0.0, 0.0),
+            Complex::<f64>::new(1.0, 0.0),
         ];
         let (shape, result) =
             fft_along_axis(&data, &[2, 2], 0, None, false, FftNorm::Backward).unwrap();
@@ -640,14 +668,14 @@ mod tests {
 
     #[test]
     fn fft_axis_out_of_bounds() {
-        let data = vec![Complex::new(1.0, 0.0)];
+        let data = vec![Complex::<f64>::new(1.0, 0.0)];
         assert!(fft_along_axis(&data, &[1], 1, None, false, FftNorm::Backward).is_err());
     }
 
     #[test]
     fn fft_with_zero_padding() {
         // Input of length 2, padded to 4
-        let data = vec![Complex::new(1.0, 0.0), Complex::new(1.0, 0.0)];
+        let data = vec![Complex::<f64>::new(1.0, 0.0), Complex::<f64>::new(1.0, 0.0)];
         let (shape, result) =
             fft_along_axis(&data, &[2], 0, Some(4), false, FftNorm::Backward).unwrap();
         assert_eq!(shape, vec![4]);
@@ -666,9 +694,9 @@ mod tests {
         // so the FFT of each row is e^{-2πi k r / 8} for k = 0..8.
         let rows = 4usize;
         let cols = 8usize;
-        let mut data = vec![Complex::new(0.0, 0.0); rows * cols];
+        let mut data = vec![Complex::<f64>::new(0.0, 0.0); rows * cols];
         for r in 0..rows {
-            data[r * cols + r] = Complex::new(1.0, 0.0);
+            data[r * cols + r] = Complex::<f64>::new(1.0, 0.0);
         }
         let (shape, result) =
             fft_along_axis(&data, &[rows, cols], 1, None, false, FftNorm::Backward).unwrap();
@@ -693,10 +721,10 @@ mod tests {
         // by `cols` in the input layout.
         let rows = 8usize;
         let cols = 4usize;
-        let mut data = vec![Complex::new(0.0, 0.0); rows * cols];
+        let mut data = vec![Complex::<f64>::new(0.0, 0.0); rows * cols];
         // Put a 1.0 at row 0 of every column.
         for slot in data.iter_mut().take(cols) {
-            *slot = Complex::new(1.0, 0.0);
+            *slot = Complex::<f64>::new(1.0, 0.0);
         }
         let (shape, result) =
             fft_along_axis(&data, &[rows, cols], 0, None, false, FftNorm::Backward).unwrap();
@@ -721,9 +749,9 @@ mod tests {
         // 3×2 input, FFT along axis 1 with n=4 → 3 lanes of length 4 each
         // (each input lane padded from 2 to 4 elements).
         let data = vec![
-            Complex::new(1.0, 0.0), Complex::new(1.0, 0.0),
-            Complex::new(2.0, 0.0), Complex::new(0.0, 0.0),
-            Complex::new(0.0, 0.0), Complex::new(3.0, 0.0),
+            Complex::<f64>::new(1.0, 0.0), Complex::<f64>::new(1.0, 0.0),
+            Complex::<f64>::new(2.0, 0.0), Complex::<f64>::new(0.0, 0.0),
+            Complex::<f64>::new(0.0, 0.0), Complex::<f64>::new(3.0, 0.0),
         ];
         let (shape, result) =
             fft_along_axis(&data, &[3, 2], 1, Some(4), false, FftNorm::Backward).unwrap();

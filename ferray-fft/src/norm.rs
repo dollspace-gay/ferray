@@ -19,16 +19,21 @@ pub enum FftNorm {
 
 /// Direction of the FFT transform, used to determine the normalization factor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FftDirection {
+pub enum FftDirection {
+    /// Forward transform (time → frequency).
     Forward,
+    /// Inverse transform (frequency → time).
     Inverse,
 }
 
 impl FftNorm {
-    /// Compute the normalization scale factor for a given FFT size and direction.
+    /// Compute the normalization scale factor for a given FFT size and
+    /// direction, as an `f64`.
     ///
-    /// Returns 1.0 when no normalization is needed.
-    pub(crate) fn scale_factor(self, n: usize, direction: FftDirection) -> f64 {
+    /// Returns `1.0` when no normalization is needed. The generic FFT
+    /// code path uses [`crate::float::FftFloat::scale_factor`] which
+    /// wraps this and casts to the correct precision.
+    pub fn scale_factor_f64(self, n: usize, direction: FftDirection) -> f64 {
         let nf = n as f64;
         match (self, direction) {
             // Backward: no scaling on forward, 1/n on inverse
@@ -40,6 +45,15 @@ impl FftNorm {
             // Ortho: 1/sqrt(n) in both directions
             (FftNorm::Ortho, _) => 1.0 / nf.sqrt(),
         }
+    }
+
+    /// Legacy alias preserved for internal f64-only code paths.
+    ///
+    /// New code should prefer [`crate::float::FftFloat::scale_factor`]
+    /// so it works for both f32 and f64 without an extra cast.
+    #[inline]
+    pub(crate) fn scale_factor(self, n: usize, direction: FftDirection) -> f64 {
+        self.scale_factor_f64(n, direction)
     }
 }
 

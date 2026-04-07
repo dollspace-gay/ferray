@@ -13,8 +13,10 @@ use num_complex::Complex;
 
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};
+use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 
+use crate::float::FftFloat;
 use crate::nd::{fft_along_axis, irfft_along_axis, rfft_along_axis};
 use crate::norm::FftNorm;
 
@@ -78,25 +80,28 @@ fn resolve_axes(ndim: usize, axes: Option<&[usize]>) -> FerrayResult<Vec<usize>>
 ///
 /// # Errors
 /// Returns an error if `axis` is out of bounds or `n` is 0.
-pub fn rfft<D: Dimension>(
-    a: &Array<f64, D>,
+pub fn rfft<T: FftFloat, D: Dimension>(
+    a: &Array<T, D>,
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: Element,
+{
     let shape = a.shape().to_vec();
     let ndim = shape.len();
     let ax = resolve_axis(ndim, axis)?;
 
-    // Materialize the input data as a flat `&[f64]`. The underlying array
+    // Materialize the input data as a flat `&[T]`. The underlying array
     // may already be contiguous — if so we could borrow it, but `iter()`
     // handles non-contiguous views too.
-    let real_data: Vec<f64> = a.iter().copied().collect();
+    let real_data: Vec<T> = a.iter().copied().collect();
 
     // Delegate to the realfft-backed lane helper, which produces the
     // n/2+1 Hermitian-folded output directly — no full-size complex FFT
     // followed by truncation.
-    let (out_shape, out_data) = rfft_along_axis(&real_data, &shape, ax, n, norm)?;
+    let (out_shape, out_data) = rfft_along_axis::<T>(&real_data, &shape, ax, n, norm)?;
     Array::from_vec(IxDyn::new(&out_shape), out_data)
 }
 
@@ -118,12 +123,15 @@ pub fn rfft<D: Dimension>(
 ///
 /// # Errors
 /// Returns an error if `axis` is out of bounds or `n` is 0.
-pub fn irfft<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+pub fn irfft<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrayResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    Complex<T>: Element,
+{
     let shape = a.shape().to_vec();
     let ndim = shape.len();
     let ax = resolve_axis(ndim, axis)?;
@@ -138,9 +146,9 @@ pub fn irfft<D: Dimension>(
 
     // Delegate to the realfft-backed lane helper, which runs the
     // complex-to-real transform directly without extending to full length.
-    let complex_data: Vec<Complex<f64>> = a.iter().copied().collect();
+    let complex_data: Vec<Complex<T>> = a.iter().copied().collect();
     let (out_shape, out_data) =
-        irfft_along_axis(&complex_data, &shape, ax, output_len, norm)?;
+        irfft_along_axis::<T>(&complex_data, &shape, ax, output_len, norm)?;
     Array::from_vec(IxDyn::new(&out_shape), out_data)
 }
 
@@ -161,12 +169,15 @@ pub fn irfft<D: Dimension>(
 ///
 /// # Errors
 /// Returns an error if axes are invalid or the array has fewer than 2 dimensions.
-pub fn rfft2<D: Dimension>(
-    a: &Array<f64, D>,
+pub fn rfft2<T: FftFloat, D: Dimension>(
+    a: &Array<T, D>,
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: Element,
+{
     let ndim = a.shape().len();
     let axes = match axes {
         Some(ax) => ax.to_vec(),
@@ -179,7 +190,7 @@ pub fn rfft2<D: Dimension>(
             vec![ndim - 2, ndim - 1]
         }
     };
-    rfftn_impl(a, s, &axes, norm)
+    rfftn_impl::<T, D>(a, s, &axes, norm)
 }
 
 /// Compute the 2-dimensional inverse real FFT.
@@ -194,12 +205,15 @@ pub fn rfft2<D: Dimension>(
 ///
 /// # Errors
 /// Returns an error if axes are invalid or the array has fewer than 2 dimensions.
-pub fn irfft2<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+pub fn irfft2<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrayResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    Complex<T>: Element,
+{
     let ndim = a.shape().len();
     let axes = match axes {
         Some(ax) => ax.to_vec(),
@@ -212,7 +226,7 @@ pub fn irfft2<D: Dimension>(
             vec![ndim - 2, ndim - 1]
         }
     };
-    irfftn_impl(a, s, &axes, norm)
+    irfftn_impl::<T, D>(a, s, &axes, norm)
 }
 
 // ---------------------------------------------------------------------------
@@ -232,14 +246,17 @@ pub fn irfft2<D: Dimension>(
 ///
 /// # Errors
 /// Returns an error if axes are invalid.
-pub fn rfftn<D: Dimension>(
-    a: &Array<f64, D>,
+pub fn rfftn<T: FftFloat, D: Dimension>(
+    a: &Array<T, D>,
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: Element,
+{
     let ax = resolve_axes(a.shape().len(), axes)?;
-    rfftn_impl(a, s, &ax, norm)
+    rfftn_impl::<T, D>(a, s, &ax, norm)
 }
 
 /// Compute the N-dimensional inverse real FFT.
@@ -254,29 +271,38 @@ pub fn rfftn<D: Dimension>(
 ///
 /// # Errors
 /// Returns an error if axes are invalid.
-pub fn irfftn<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+pub fn irfftn<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
     axes: Option<&[usize]>,
     norm: FftNorm,
-) -> FerrayResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    Complex<T>: Element,
+{
     let ax = resolve_axes(a.shape().len(), axes)?;
-    irfftn_impl(a, s, &ax, norm)
+    irfftn_impl::<T, D>(a, s, &ax, norm)
 }
 
 // ---------------------------------------------------------------------------
 // Internal N-D implementations
 // ---------------------------------------------------------------------------
 
-fn rfftn_impl<D: Dimension>(
-    a: &Array<f64, D>,
+fn rfftn_impl<T: FftFloat, D: Dimension>(
+    a: &Array<T, D>,
     s: Option<&[usize]>,
     axes: &[usize],
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: Element,
+{
     if axes.is_empty() {
         // No axes to transform — just convert to complex
-        let data: Vec<Complex<f64>> = a.iter().map(|&v| Complex::new(v, 0.0)).collect();
+        let data: Vec<Complex<T>> = a
+            .iter()
+            .map(|&v| Complex::new(v, <T as num_traits::Zero>::zero()))
+            .collect();
         return Array::from_vec(IxDyn::new(a.shape()), data);
     }
 
@@ -304,16 +330,16 @@ fn rfftn_impl<D: Dimension>(
     let last_ax = axes[last_idx];
     let last_n = sizes[last_idx];
 
-    let real_data: Vec<f64> = a.iter().copied().collect();
+    let real_data: Vec<T> = a.iter().copied().collect();
     let (mut current_shape, mut current_data) =
-        rfft_along_axis(&real_data, &input_shape, last_ax, last_n, norm)?;
+        rfft_along_axis::<T>(&real_data, &input_shape, last_ax, last_n, norm)?;
 
     // Remaining axes run as complex forward FFTs on the intermediate.
     for i in 0..last_idx {
         let ax = axes[i];
         let n = sizes[i];
         let (new_shape, new_data) =
-            fft_along_axis(&current_data, &current_shape, ax, n, false, norm)?;
+            fft_along_axis::<T>(&current_data, &current_shape, ax, n, false, norm)?;
         current_shape = new_shape;
         current_data = new_data;
     }
@@ -321,14 +347,17 @@ fn rfftn_impl<D: Dimension>(
     Array::from_vec(IxDyn::new(&current_shape), current_data)
 }
 
-fn irfftn_impl<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+fn irfftn_impl<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
     axes: &[usize],
     norm: FftNorm,
-) -> FerrayResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    Complex<T>: Element,
+{
     if axes.is_empty() {
-        let data: Vec<f64> = a.iter().map(|c| c.re).collect();
+        let data: Vec<T> = a.iter().map(|c| c.re).collect();
         return Array::from_vec(IxDyn::new(a.shape()), data);
     }
 
@@ -367,14 +396,14 @@ fn irfftn_impl<D: Dimension>(
     // the complex-to-real inverse transform on axes[last]. We match that
     // order so the Hermitian-folded axis stays folded through the other
     // transforms and is only un-folded (to real) at the very end.
-    let mut current_data: Vec<Complex<f64>> = a.iter().copied().collect();
+    let mut current_data: Vec<Complex<T>> = a.iter().copied().collect();
     let mut current_shape = input_shape;
 
     for i in 0..last_idx {
         let ax = axes[i];
         let n = Some(sizes[i]);
         let (new_shape, new_data) =
-            fft_along_axis(&current_data, &current_shape, ax, n, true, norm)?;
+            fft_along_axis::<T>(&current_data, &current_shape, ax, n, true, norm)?;
         current_shape = new_shape;
         current_data = new_data;
     }
@@ -384,7 +413,7 @@ fn irfftn_impl<D: Dimension>(
     let last_ax = axes[last_idx];
     let output_len = sizes[last_idx];
     let (final_shape, final_data) =
-        irfft_along_axis(&current_data, &current_shape, last_ax, output_len, norm)?;
+        irfft_along_axis::<T>(&current_data, &current_shape, last_ax, output_len, norm)?;
 
     Array::from_vec(IxDyn::new(&final_shape), final_data)
 }
@@ -681,6 +710,44 @@ mod tests {
                 o,
                 r
             );
+        }
+    }
+
+    // --- f32 generic path (#426) ---
+
+    #[test]
+    fn rfft_irfft_f32_roundtrip() {
+        // Real FFT should work for f32 as well as f64.
+        let original: Vec<f32> = (0..16).map(|i| (i as f32 * 0.1).cos()).collect();
+        let a = Array::<f32, Ix1>::from_vec(Ix1::new([16]), original.clone()).unwrap();
+        let spectrum = rfft::<f32, Ix1>(&a, None, None, FftNorm::Backward).unwrap();
+        // n/2+1 = 9
+        assert_eq!(spectrum.shape(), &[9]);
+        let recovered = irfft::<f32, IxDyn>(&spectrum, Some(16), None, FftNorm::Backward).unwrap();
+        assert_eq!(recovered.shape(), &[16]);
+        for (o, r) in original.iter().zip(recovered.iter()) {
+            assert!(
+                (o - r).abs() < 1e-5,
+                "f32 rfft/irfft mismatch: {} vs {}",
+                o,
+                r
+            );
+        }
+    }
+
+    #[test]
+    fn rfft2_f32_roundtrip() {
+        use ferray_core::dimension::Ix2;
+        let data: Vec<f32> = (0..16).map(|i| (i as f32) * 0.25).collect();
+        let a = Array::<f32, Ix2>::from_vec(Ix2::new([4, 4]), data.clone()).unwrap();
+        let spectrum = rfft2::<f32, Ix2>(&a, None, None, FftNorm::Backward).unwrap();
+        // rfft2 on 4×4 → 4 × (4/2+1) = 4 × 3
+        assert_eq!(spectrum.shape(), &[4, 3]);
+        let recovered =
+            irfft2::<f32, IxDyn>(&spectrum, Some(&[4, 4]), None, FftNorm::Backward).unwrap();
+        assert_eq!(recovered.shape(), &[4, 4]);
+        for (o, r) in data.iter().zip(recovered.iter()) {
+            assert!((o - r).abs() < 1e-5);
         }
     }
 }

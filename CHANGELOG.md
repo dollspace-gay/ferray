@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-03-07
 
 ### Added
+- ferray-fft: complex FFTs require Complex<f64> input — no auto-promotion from real arrays (#427)
+- ferray-fft: complex FFTs only support Complex<f64> — no f32 FFT (#426)
 - ferray-fft: rfft doesn't use rustfft's real-to-complex FFT — promotes to complex first (#432)
 - ferray-ma: MaskedArray is not interoperable with ferray Array functions (#505)
 - ferray-ma: no masked array broadcasting in arithmetic ops (#504)

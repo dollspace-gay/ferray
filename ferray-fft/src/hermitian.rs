@@ -12,8 +12,10 @@ use num_complex::Complex;
 
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};
+use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 
+use crate::float::FftFloat;
 use crate::norm::FftNorm;
 
 // ---------------------------------------------------------------------------
@@ -38,12 +40,15 @@ use crate::norm::FftNorm;
 ///
 /// # Errors
 /// Returns an error if `axis` is out of bounds or `n` is 0.
-pub fn hfft<D: Dimension>(
-    a: &Array<Complex<f64>, D>,
+pub fn hfft<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrayResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    Complex<T>: Element,
+{
     // hfft is essentially irfft with Forward normalization swapped:
     // numpy defines hfft as the inverse of ihfft.
     // hfft(a, n) = irfft(conj(a), n) * n  (with backward norm)
@@ -60,8 +65,8 @@ pub fn hfft<D: Dimension>(
     }
 
     // Conjugate the input (hfft = ifft(conj(a)) * n effectively)
-    let conj_data: Vec<Complex<f64>> = a.iter().map(|c| c.conj()).collect();
-    let conj_arr = Array::<Complex<f64>, IxDyn>::from_vec(IxDyn::new(&shape), conj_data)?;
+    let conj_data: Vec<Complex<T>> = a.iter().map(|c| c.conj()).collect();
+    let conj_arr = Array::<Complex<T>, IxDyn>::from_vec(IxDyn::new(&shape), conj_data)?;
 
     // Use irfft on the conjugated data
     // For hfft with Backward norm: no scaling on forward, so we scale by n
@@ -72,7 +77,7 @@ pub fn hfft<D: Dimension>(
         FftNorm::Ortho => FftNorm::Ortho,
     };
 
-    crate::real::irfft(&conj_arr, Some(output_len), Some(ax), hfft_norm)
+    crate::real::irfft::<T, IxDyn>(&conj_arr, Some(output_len), Some(ax), hfft_norm)
 }
 
 /// Compute the inverse FFT of a real-valued signal, returning
@@ -91,12 +96,15 @@ pub fn hfft<D: Dimension>(
 ///
 /// # Errors
 /// Returns an error if `axis` is out of bounds or `n` is 0.
-pub fn ihfft<D: Dimension>(
-    a: &Array<f64, D>,
+pub fn ihfft<T: FftFloat, D: Dimension>(
+    a: &Array<T, D>,
     n: Option<usize>,
     axis: Option<usize>,
     norm: FftNorm,
-) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
+) -> FerrayResult<Array<Complex<T>, IxDyn>>
+where
+    Complex<T>: Element,
+{
     // ihfft is essentially rfft with swapped normalization and conjugation
     // numpy: ihfft(a) = conj(rfft(a)) / n  (with backward norm)
 
@@ -111,10 +119,10 @@ pub fn ihfft<D: Dimension>(
         FftNorm::Ortho => FftNorm::Ortho,
     };
 
-    let result = crate::real::rfft(a, n, Some(ax), ihfft_norm)?;
+    let result = crate::real::rfft::<T, D>(a, n, Some(ax), ihfft_norm)?;
 
     // Conjugate the output
-    let conj_data: Vec<Complex<f64>> = result.iter().map(|c| c.conj()).collect();
+    let conj_data: Vec<Complex<T>> = result.iter().map(|c| c.conj()).collect();
     let out_shape = result.shape().to_vec();
     Array::from_vec(IxDyn::new(&out_shape), conj_data)
 }
