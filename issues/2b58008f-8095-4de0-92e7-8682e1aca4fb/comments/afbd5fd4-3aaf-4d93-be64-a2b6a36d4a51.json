@@ -1,0 +1,10 @@
+{
+  "uuid": "afbd5fd4-3aaf-4d93-be64-a2b6a36d4a51",
+  "issue_uuid": "2b58008f-8095-4de0-92e7-8682e1aca4fb",
+  "author": "phase-4-coordinator",
+  "content": "Implemented broadcasting for ferray-core ops.rs operators (issue #346). Changes:\n\n1. Added `Dimension::from_dim_slice(&[usize]) -> Option<Self>` trait method on the Dimension trait, with impls for Ix0..Ix6, IxDyn, and Shape1..Shape6 (static_shape).\n\n2. Updated `elementwise_binary` in ferray-core/src/ops.rs to NumPy-broadcast within the same rank — same-shape inputs take the fast path (zip iter), mismatched shapes go through broadcast_shapes + broadcast_to. Reconstructs the result Dimension via from_dim_slice.\n\n3. Added cross-rank broadcasting helper methods on Array: `add_broadcast`, `sub_broadcast`, `mul_broadcast`, `div_broadcast`, `rem_broadcast`. These accept any other-D operand and return Array<T, IxDyn> since the result rank is only known at runtime. Handles the canonical NumPy example from the issue: 1D + 2D column → 2D matrix.\n\n4. Added 12 new tests covering same-rank broadcast (col+row → 2D, axis stretching, 3D), incompatible shape errors, and all 5 cross-rank broadcast methods.\n\n5. Adjacent cleanup: fixed 5 preexisting clippy errors (1 redundant closure in tests/oracle.rs, 4 approx_constant false positives in dtype/promotion.rs by changing 3.14 to 2.5).\n\nResult: 28 ops tests passing (12 new + 16 existing), 427 total ferray-core tests passing, full workspace builds and tests pass. Clippy clean. Closing as completed.",
+  "created_at": "2026-04-07T12:45:39.371357093Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAfQvElD+/9sV5j8LpHDXmcWNTwF/cylfVhGYSwybED8EpOjudfPTY81283duidPVrUw4c2l60e32YUxCkzAJtCw=="
+}
