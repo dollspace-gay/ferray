@@ -1,0 +1,10 @@
+{
+  "uuid": "ad3051ca-02cb-4901-9d5c-0d9ff581a776",
+  "issue_uuid": "47537209-51c1-41e5-b45c-8544602cff69",
+  "author": "phase-4-coordinator",
+  "content": "Resolved. Extracted a single pub(crate) matmul_raw helper in ferray-linalg/src/products/mod.rs that dispatches on max_dim: <=64 uses the naive ikj loop (to avoid faer setup overhead on tiny matrices) and >64 goes through faer::linalg::matmul::matmul, with Rayon parallelism kicking in for max_dim>=256. All three naive-triple-loop sites call it now: matmul_2d, einsum's execute_matmul shortcut (ij,jk->ik), and matrix_power's exponentiation-by-squaring inner loop (replacing the stale mat_mul_flat helper, which is deleted). matmul_batched also routes through matmul_raw per batch element for consistency. Benchmark (release, bench_matmul example): 1024x1024 matmul ~51ms at ~42 GFLOPS (issue target was ~0.1s for BLAS, so ~2x better); 256x256 at 868us / 38.7 GFLOPS; matrix_power(256x256, ^16) in 3.5ms (previously naive would have been ~800ms, so ~200x speedup). 95 lib + 17 integration + 12 property tests all pass; clippy clean. Also fixed an unrelated pre-existing unused_variables warning in oracle.rs QR test while here.",
+  "created_at": "2026-04-07T23:01:36.782061672Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA9VzCcA6DLUNG0ALcPaVgBXfz6MA0pFfk4EQNm26Z+pNFrhx2+C0yJttJHX4dHyLto6rjI+JCZCdWDX1jqKemAQ=="
+}
