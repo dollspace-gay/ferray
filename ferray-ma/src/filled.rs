@@ -28,6 +28,18 @@ where
         Array::from_vec(self.dim().clone(), data)
     }
 
+    /// Return a regular array with masked positions replaced by the array's
+    /// stored [`MaskedArray::fill_value`].
+    ///
+    /// Equivalent to NumPy's `arr.filled()` with no argument. Use [`MaskedArray::filled`]
+    /// to override the fill value for a single call.
+    ///
+    /// # Errors
+    /// Returns an error only for internal failures.
+    pub fn filled_default(&self) -> FerrayResult<Array<T, D>> {
+        self.filled(self.fill_value)
+    }
+
     /// Return a 1-D array containing only the unmasked elements.
     ///
     /// The order is the logical (row-major) iteration order of the

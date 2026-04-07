@@ -1,8 +1,8 @@
 // ferray-ma: Ufunc support wrappers (REQ-12)
 //
 // Wrapper functions that accept MaskedArray and call underlying ferray-ufunc
-// operations on the data, then propagate masks. Masked elements are skipped
-// (their output positions retain zero/default values).
+// operations on the data, then propagate masks. Masked elements are skipped;
+// their output positions retain the masked array's `fill_value`.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
@@ -17,7 +17,7 @@ use crate::MaskedArray;
 // ---------------------------------------------------------------------------
 
 /// Apply a unary function only on unmasked elements, keeping masked positions
-/// at `T::zero()`.
+/// at the masked array's `fill_value`.
 fn masked_unary_op<T, D>(
     ma: &MaskedArray<T, D>,
     f: impl Fn(T) -> T,
@@ -26,18 +26,21 @@ where
     T: Element + Copy,
     D: Dimension,
 {
+    let fill = ma.fill_value();
     let data: Vec<T> = ma
         .data()
         .iter()
         .zip(ma.mask().iter())
-        .map(|(v, m)| if *m { T::zero() } else { f(*v) })
+        .map(|(v, m)| if *m { fill } else { f(*v) })
         .collect();
     let result_data = Array::from_vec(ma.dim().clone(), data)?;
-    MaskedArray::new(result_data, ma.mask().clone())
+    let mut out = MaskedArray::new(result_data, ma.mask().clone())?;
+    out.set_fill_value(fill);
+    Ok(out)
 }
 
 /// Apply a binary ufunc on two masked arrays, producing the mask union.
-/// Masked positions get `T::zero()`.
+/// Masked positions get the receiver's `fill_value`.
 fn masked_binary_op<T, D>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,
@@ -55,6 +58,7 @@ where
         )));
     }
 
+    let fill = a.fill_value();
     let mask_data: Vec<bool> = a
         .mask()
         .iter()
@@ -67,10 +71,12 @@ where
         .iter()
         .zip(b.data().iter())
         .zip(result_mask.iter())
-        .map(|((x, y), m)| if *m { T::zero() } else { f(*x, *y) })
+        .map(|((x, y), m)| if *m { fill } else { f(*x, *y) })
         .collect();
     let result_data = Array::from_vec(a.dim().clone(), data)?;
-    MaskedArray::new(result_data, result_mask)
+    let mut out = MaskedArray::new(result_data, result_mask)?;
+    out.set_fill_value(fill);
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-03-07
 
 ### Added
+- ferray-ma: no masked array broadcasting in arithmetic ops (#504)
+- ferray-ma: no fill_value concept — masked elements get T::zero() in operations (#501)
+- ferray-ma: reductions are whole-array only — no axis parameter (#500)
 - ferray-polynomial: no domain/window mapping — polynomials operate on raw x values (#474)
 - Add oracle test suite that validates all crates against NumPy fixture outputs (#45)
 - ferray-random: all distributions return 1D arrays only — no shape parameter for ND output (#440)

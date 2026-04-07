@@ -13,6 +13,10 @@ use ferray_core::error::{FerrayError, FerrayResult};
 ///
 /// All operations (arithmetic, reductions, ufuncs) respect the mask by
 /// skipping masked elements.
+///
+/// The `fill_value` field is the replacement value for masked positions when
+/// the masked array participates in operations or when [`MaskedArray::filled`]
+/// is called without an explicit override. It defaults to `T::zero()`.
 #[derive(Debug, Clone)]
 pub struct MaskedArray<T: Element, D: Dimension> {
     /// The underlying data array.
@@ -21,10 +25,16 @@ pub struct MaskedArray<T: Element, D: Dimension> {
     mask: Array<bool, D>,
     /// Whether the mask is hardened (cannot be cleared by assignment).
     pub(crate) hard_mask: bool,
+    /// Replacement value for masked positions during operations and filling.
+    /// Defaults to `T::zero()`.
+    pub(crate) fill_value: T,
 }
 
 impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// Create a new masked array from data and mask arrays.
+    ///
+    /// The `fill_value` defaults to `T::zero()`. Use [`MaskedArray::with_fill_value`]
+    /// to set a custom replacement value.
     ///
     /// # Errors
     /// Returns `FerrayError::ShapeMismatch` if data and mask shapes differ.
@@ -40,6 +50,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
             data,
             mask,
             hard_mask: false,
+            fill_value: T::zero(),
         })
     }
 
@@ -53,7 +64,34 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
             data,
             mask,
             hard_mask: false,
+            fill_value: T::zero(),
         })
+    }
+
+    /// Return the fill value used to replace masked positions.
+    ///
+    /// See [`MaskedArray::with_fill_value`] for setting it.
+    #[inline]
+    pub fn fill_value(&self) -> T
+    where
+        T: Copy,
+    {
+        self.fill_value
+    }
+
+    /// Set the fill value, returning the modified array.
+    ///
+    /// The fill value is used by [`MaskedArray::filled`] (when called
+    /// without an explicit override) and by arithmetic operations as the
+    /// replacement for masked positions in the result data.
+    pub fn with_fill_value(mut self, fill_value: T) -> Self {
+        self.fill_value = fill_value;
+        self
+    }
+
+    /// Replace the fill value in place.
+    pub fn set_fill_value(&mut self, fill_value: T) {
+        self.fill_value = fill_value;
     }
 
     /// Return a reference to the underlying data array.

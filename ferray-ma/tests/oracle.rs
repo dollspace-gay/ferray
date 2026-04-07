@@ -1,6 +1,6 @@
-/// Oracle tests: validate ferray-ma (masked arrays) against NumPy fixture outputs.
-use ferray_core::Array;
-use ferray_core::dimension::{Ix1, IxDyn};
+//! Oracle tests: validate ferray-ma (masked arrays) against NumPy fixture outputs.
+
+use ferray_core::dimension::IxDyn;
 use ferray_ma::MaskedArray;
 use ferray_test_oracle::*;
 

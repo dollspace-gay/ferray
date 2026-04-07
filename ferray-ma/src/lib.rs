@@ -383,7 +383,7 @@ mod tests {
                 .unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
         let indices = ma.argsort().unwrap();
-        let idx_vals: Vec<usize> = indices.iter().copied().collect();
+        let idx_vals: Vec<usize> = indices.to_vec();
         // Unmasked: index 1 (1.0), 3 (2.0), 4 (4.0), 0 (5.0); masked: 2
         assert_eq!(idx_vals, vec![1, 3, 4, 0, 2]);
     }
