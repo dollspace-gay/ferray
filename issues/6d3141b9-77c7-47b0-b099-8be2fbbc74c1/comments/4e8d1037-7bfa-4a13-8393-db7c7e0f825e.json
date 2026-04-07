@@ -1,0 +1,10 @@
+{
+  "uuid": "4e8d1037-7bfa-4a13-8393-db7c7e0f825e",
+  "issue_uuid": "6d3141b9-77c7-47b0-b099-8be2fbbc74c1",
+  "author": "phase-4-coordinator",
+  "content": "Resolved by generic refactor: all FFT functions (fft, ifft, fft2, ifft2, fftn, ifftn, rfft, irfft, rfft2, irfft2, rfftn, irfftn, hfft, ihfft) are now generic over a new FftFloat trait implemented for f32 and f64. Per-precision plan caches are lazily constructed, so using only f64 costs nothing for f32 (and vice-versa). Added f32 round-trip tests: fft_ifft_f32_roundtrip, fft_f32_impulse, fft2_f32_roundtrip, rfft_irfft_f32_roundtrip, rfft2_f32_roundtrip, fft_real_ifft_real_roundtrip_f32.",
+  "created_at": "2026-04-07T20:41:45.625829527Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAXLV60oIv/BaDz2EnECMC8Xae6cwbcunKs+j29AEFgTf0S3TuqkQBw1MWWEi0SWJqVR0w0VAeSRnuUuMwTYpeDw=="
+}
