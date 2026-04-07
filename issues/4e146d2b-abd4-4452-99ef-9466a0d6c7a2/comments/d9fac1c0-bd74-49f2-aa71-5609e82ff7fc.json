@@ -1,0 +1,10 @@
+{
+  "uuid": "d9fac1c0-bd74-49f2-aa71-5609e82ff7fc",
+  "issue_uuid": "4e146d2b-abd4-4452-99ef-9466a0d6c7a2",
+  "author": "phase-4-coordinator",
+  "content": "Implemented reduction methods on Array<T,D> and ArrayView (issue #368). New file ferray-core/src/array/reductions.rs adds:\n\nWhole-array reductions:\n- sum() / prod() — for any T: Element + Add/Mul, using Element::zero()/one()\n- min() / max() — for T: PartialOrd, with NaN propagation per NumPy via self-comparison reduce_step helper\n- mean() — for T: Float\n- var(ddof) / std(ddof) — for T: Float, returns None if empty or ddof >= n\n- any() / all() — for Array<bool, D>, vacuous truth for empty\n\nAxis reductions (return Array<T, IxDyn>):\n- sum_axis(Axis) / prod_axis(Axis) — built on existing fold_axis\n- min_axis(Axis) / max_axis(Axis) — manual lane iteration via inner.lanes() because PartialOrd has no neutral element (no T::infinity for ints), so fold_axis with an init value would bias the result\n- mean_axis(Axis) — computes sum_axis then divides by axis length\n\nArrayView mirror impls for sum/prod/min/max/mean.\n\n20 unit tests covering: 1D/2D sum/prod/min/max/mean, axis variants, empty edge cases, integer types, Bessel-corrected variance, std, NaN propagation in three positions (start/middle/end), bool any/all (incl. vacuous truth), and ArrayView dispatch.\n\nResult: 447 ferray-core tests passing (up from 427), full workspace tests pass, clippy clean. Closing as completed.",
+  "created_at": "2026-04-07T12:53:49.659896431Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAVHMnBfc9GhNOrfF2e5SV2c/7MlCxq8RSHESvFSjAShbUzWGjKHzUzKDgMUmm5XgPv+4ytCsYK61c3d1QdoXcDA=="
+}
