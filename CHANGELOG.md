@@ -127,6 +127,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Slower: transcendentals at scale 1.4-2.1x (CORE-MATH accuracy tradeoff), matmul medium 4x (faer vs BLAS)
 
 ### Fixed
+- ferray-io: no f16/bf16 support in npy I/O even with feature enabled (#118)
 - ferray-fft: nd.rs lane extraction copies each lane individually — O(n) allocations for ND FFT (#433)
 - Fix bugs found by oracle test suite (#46)
 - Fix exp_fast SIMD dispatch so it auto-vectorizes without target-cpu=native (#42)

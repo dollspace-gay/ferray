@@ -182,8 +182,12 @@ pub fn load_dynamic_from_reader<R: Read>(reader: &mut R) -> FerrayResult<DynArra
         DType::I32 => load_typed!(i32, I32),
         DType::I64 => load_typed!(i64, I64),
         DType::I128 => load_typed!(i128, I128),
+        #[cfg(feature = "f16")]
+        DType::F16 => load_typed!(half::f16, F16),
         DType::F32 => load_typed!(f32, F32),
         DType::F64 => load_typed!(f64, F64),
+        #[cfg(feature = "bf16")]
+        DType::BF16 => load_typed!(half::bf16, BF16),
         DType::Complex32 => {
             load_complex32_dynamic(reader, total, dim, hdr.fortran_order, hdr.endianness)
         }
@@ -330,8 +334,12 @@ pub fn save_dynamic_to_writer<W: Write>(writer: &mut W, array: &DynArray) -> Fer
         DynArray::I32(a) => save_typed!(a, DType::I32, i32),
         DynArray::I64(a) => save_typed!(a, DType::I64, i64),
         DynArray::I128(a) => save_typed!(a, DType::I128, i128),
+        #[cfg(feature = "f16")]
+        DynArray::F16(a) => save_typed!(a, DType::F16, half::f16),
         DynArray::F32(a) => save_typed!(a, DType::F32, f32),
         DynArray::F64(a) => save_typed!(a, DType::F64, f64),
+        #[cfg(feature = "bf16")]
+        DynArray::BF16(a) => save_typed!(a, DType::BF16, half::bf16),
         DynArray::Complex32(a) => {
             header::write_header(writer, DType::Complex32, a.shape(), false)?;
             save_complex_raw(a.as_slice(), 8, writer)?;
@@ -555,6 +563,11 @@ impl_npy_element!(i128, 16);
 impl_npy_element!(f32, 4);
 impl_npy_element!(f64, 8);
 
+#[cfg(feature = "f16")]
+impl_npy_element!(half::f16, 2);
+#[cfg(feature = "bf16")]
+impl_npy_element!(half::bf16, 2);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -761,9 +774,7 @@ mod tests {
         // Header string
         buf.extend_from_slice(header_str.as_bytes());
         // Padding (spaces + newline)
-        for _ in 0..padding - 1 {
-            buf.push(b' ');
-        }
+        buf.extend(std::iter::repeat_n(b' ', padding - 1));
         buf.push(b'\n');
 
         // Data: 6 f64 values in Fortran (column-major) order
@@ -841,9 +852,7 @@ mod tests {
         buf.push(0);
         buf.extend_from_slice(&(padded_len as u16).to_le_bytes());
         buf.extend_from_slice(header_str.as_bytes());
-        for _ in 0..padding - 1 {
-            buf.push(b' ');
-        }
+        buf.extend(std::iter::repeat_n(b' ', padding - 1));
         buf.push(b'\n');
         // Only write 3 f64 values instead of 100
         for &v in &[1.0_f64, 2.0, 3.0] {
@@ -892,13 +901,11 @@ mod tests {
         buf.push(0);
         buf.extend_from_slice(&(padded_len as u16).to_le_bytes());
         buf.extend_from_slice(header_str.as_bytes());
-        for _ in 0..padding - 1 {
-            buf.push(b' ');
-        }
+        buf.extend(std::iter::repeat_n(b' ', padding - 1));
         buf.push(b'\n');
 
         // Write 3 f64 values in BIG-endian byte order
-        for &v in &[1.0_f64, 2.5, -3.14] {
+        for &v in &[1.0_f64, 2.5, -4.75] {
             buf.extend_from_slice(&v.to_be_bytes());
         }
 
@@ -908,7 +915,7 @@ mod tests {
         let data = loaded.as_slice().unwrap();
         assert!((data[0] - 1.0).abs() < 1e-15);
         assert!((data[1] - 2.5).abs() < 1e-15);
-        assert!((data[2] - (-3.14)).abs() < 1e-15);
+        assert!((data[2] - (-4.75)).abs() < 1e-15);
     }
 
     #[test]
@@ -926,9 +933,7 @@ mod tests {
         buf.push(0);
         buf.extend_from_slice(&(padded_len as u16).to_le_bytes());
         buf.extend_from_slice(header_str.as_bytes());
-        for _ in 0..padding - 1 {
-            buf.push(b' ');
-        }
+        buf.extend(std::iter::repeat_n(b' ', padding - 1));
         buf.push(b'\n');
 
         for &v in &[1_i32, -2, 1000, i32::MAX] {
@@ -940,5 +945,140 @@ mod tests {
         assert_eq!(loaded.shape(), &[4]);
         let data = loaded.as_slice().unwrap();
         assert_eq!(data, &[1, -2, 1000, i32::MAX]);
+    }
+
+    // -----------------------------------------------------------------------
+    // f16 / bf16 round-trip tests (issue #118)
+    // -----------------------------------------------------------------------
+
+    #[cfg(feature = "f16")]
+    #[test]
+    fn roundtrip_f16_1d() {
+        use half::f16;
+        let data: Vec<f16> = [0.0, 1.0, -1.5, 2.25, 3.5, -0.125]
+            .iter()
+            .map(|&v: &f32| f16::from_f32(v))
+            .collect();
+        let arr = Array::<f16, Ix1>::from_vec(Ix1::new([6]), data.clone()).unwrap();
+
+        let path = test_file("rt_f16_1d.npy");
+        save(&path, &arr).unwrap();
+        let loaded: Array<f16, Ix1> = load(&path).unwrap();
+        assert_eq!(loaded.shape(), &[6]);
+        assert_eq!(loaded.as_slice().unwrap(), &data[..]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(feature = "f16")]
+    #[test]
+    fn roundtrip_f16_2d() {
+        use half::f16;
+        let data: Vec<f16> = (0..12)
+            .map(|i| f16::from_f32(i as f32 * 0.25 - 1.0))
+            .collect();
+        let arr = Array::<f16, Ix2>::from_vec(Ix2::new([3, 4]), data.clone()).unwrap();
+
+        let path = test_file("rt_f16_2d.npy");
+        save(&path, &arr).unwrap();
+        let loaded: Array<f16, Ix2> = load(&path).unwrap();
+        assert_eq!(loaded.shape(), &[3, 4]);
+        assert_eq!(loaded.as_slice().unwrap(), &data[..]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(feature = "f16")]
+    #[test]
+    fn roundtrip_f16_dynamic() {
+        use half::f16;
+        let data: Vec<f16> = (0..8).map(|i| f16::from_f32(i as f32)).collect();
+        let arr =
+            Array::<f16, IxDyn>::from_vec(IxDyn::new(&[2, 4]), data.clone()).unwrap();
+        let dyn_in = DynArray::F16(arr);
+
+        let path = test_file("rt_f16_dyn.npy");
+        save_dynamic(&path, &dyn_in).unwrap();
+        let loaded = load_dynamic(&path).unwrap();
+        assert_eq!(loaded.dtype(), DType::F16);
+        assert_eq!(loaded.shape(), &[2, 4]);
+        match loaded {
+            DynArray::F16(a) => assert_eq!(a.as_slice().unwrap(), &data[..]),
+            _ => panic!("expected F16 variant"),
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(feature = "f16")]
+    #[test]
+    fn f16_descriptor_is_f2() {
+        use half::f16;
+        let arr = Array::<f16, Ix1>::from_vec(Ix1::new([2]), vec![f16::ZERO, f16::ONE])
+            .unwrap();
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+        // The header must contain the standard NumPy `f2` dtype descriptor
+        // so files are interoperable with vanilla NumPy. Inspect only the
+        // header region — trailing bytes are raw data, not text.
+        let header_len = buf.len().saturating_sub(4); // strip the 4 data bytes
+        let header = String::from_utf8_lossy(&buf[..header_len]);
+        assert!(
+            header.contains("f2"),
+            "expected 'f2' in header, got: {header}"
+        );
+    }
+
+    #[cfg(feature = "bf16")]
+    #[test]
+    fn roundtrip_bf16_1d() {
+        use half::bf16;
+        let data: Vec<bf16> = [0.0, 1.0, -1.5, 2.25, 3.5, -0.125]
+            .iter()
+            .map(|&v: &f32| bf16::from_f32(v))
+            .collect();
+        let arr = Array::<bf16, Ix1>::from_vec(Ix1::new([6]), data.clone()).unwrap();
+
+        let path = test_file("rt_bf16_1d.npy");
+        save(&path, &arr).unwrap();
+        let loaded: Array<bf16, Ix1> = load(&path).unwrap();
+        assert_eq!(loaded.shape(), &[6]);
+        assert_eq!(loaded.as_slice().unwrap(), &data[..]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(feature = "bf16")]
+    #[test]
+    fn roundtrip_bf16_dynamic() {
+        use half::bf16;
+        let data: Vec<bf16> = (0..6).map(|i| bf16::from_f32(i as f32 * 0.5)).collect();
+        let arr =
+            Array::<bf16, IxDyn>::from_vec(IxDyn::new(&[2, 3]), data.clone()).unwrap();
+        let dyn_in = DynArray::BF16(arr);
+
+        let path = test_file("rt_bf16_dyn.npy");
+        save_dynamic(&path, &dyn_in).unwrap();
+        let loaded = load_dynamic(&path).unwrap();
+        assert_eq!(loaded.dtype(), DType::BF16);
+        assert_eq!(loaded.shape(), &[2, 3]);
+        match loaded {
+            DynArray::BF16(a) => assert_eq!(a.as_slice().unwrap(), &data[..]),
+            _ => panic!("expected BF16 variant"),
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(feature = "bf16")]
+    #[test]
+    fn bf16_descriptor_is_bf16_tag() {
+        use half::bf16;
+        let arr = Array::<bf16, Ix1>::from_vec(Ix1::new([2]), vec![bf16::ZERO, bf16::ONE])
+            .unwrap();
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+        // ferray-specific non-NumPy tag for bfloat16.
+        let header_len = buf.len().saturating_sub(4); // strip the 4 data bytes
+        let header = String::from_utf8_lossy(&buf[..header_len]);
+        assert!(
+            header.contains("bf16"),
+            "expected 'bf16' in header, got: {header}"
+        );
     }
 }

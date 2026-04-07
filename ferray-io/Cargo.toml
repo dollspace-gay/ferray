@@ -26,6 +26,7 @@ optional = true
 [features]
 default = []
 f16 = ["dep:half", "ferray-core/f16"]
+bf16 = ["dep:half", "ferray-core/bf16"]
 
 [dev-dependencies]
 proptest = { workspace = true }

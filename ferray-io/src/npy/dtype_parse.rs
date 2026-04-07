@@ -63,8 +63,16 @@ pub fn parse_dtype_str(s: &str) -> FerrayResult<(DType, Endianness)> {
         "i4" => DType::I32,
         "i8" => DType::I64,
         "i16" => DType::I128,
+        // IEEE 754 binary16 — standard NumPy `np.float16` descriptor.
+        #[cfg(feature = "f16")]
+        "f2" => DType::F16,
         "f4" => DType::F32,
         "f8" => DType::F64,
+        // bfloat16 — non-standard NumPy descriptor. We use the ferray-specific
+        // tag `"bf16"` so ferray round-trip is lossless; files saved this way
+        // are NOT loadable by vanilla NumPy (which has no native bf16 dtype).
+        #[cfg(feature = "bf16")]
+        "bf16" => DType::BF16,
         "c8" => DType::Complex32,
         "c16" => DType::Complex64,
         _ => {
@@ -100,8 +108,12 @@ pub fn dtype_to_descr(dtype: DType, endian: Endianness) -> FerrayResult<String> 
         DType::I32 => "i4",
         DType::I64 => "i8",
         DType::I128 => "i16",
+        #[cfg(feature = "f16")]
+        DType::F16 => "f2",
         DType::F32 => "f4",
         DType::F64 => "f8",
+        #[cfg(feature = "bf16")]
+        DType::BF16 => "bf16",
         DType::Complex32 => "c8",
         DType::Complex64 => "c16",
         _ => {
@@ -233,6 +245,44 @@ mod tests {
                 "roundtrip failed for {dt:?}: descr='{descr}'"
             );
         }
+    }
+
+    #[cfg(feature = "f16")]
+    #[test]
+    fn parse_f16_descriptor() {
+        assert_eq!(
+            parse_dtype_str("<f2").unwrap(),
+            (DType::F16, Endianness::Little)
+        );
+        assert_eq!(
+            parse_dtype_str(">f2").unwrap(),
+            (DType::F16, Endianness::Big)
+        );
+    }
+
+    #[cfg(feature = "f16")]
+    #[test]
+    fn f16_roundtrip_descr() {
+        let d = dtype_to_native_descr(DType::F16).unwrap();
+        let (parsed, _) = parse_dtype_str(&d).unwrap();
+        assert_eq!(parsed, DType::F16);
+    }
+
+    #[cfg(feature = "bf16")]
+    #[test]
+    fn parse_bf16_descriptor() {
+        assert_eq!(
+            parse_dtype_str("<bf16").unwrap(),
+            (DType::BF16, Endianness::Little)
+        );
+    }
+
+    #[cfg(feature = "bf16")]
+    #[test]
+    fn bf16_roundtrip_descr() {
+        let d = dtype_to_native_descr(DType::BF16).unwrap();
+        let (parsed, _) = parse_dtype_str(&d).unwrap();
+        assert_eq!(parsed, DType::BF16);
     }
 
     #[test]
