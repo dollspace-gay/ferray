@@ -11,7 +11,7 @@ use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::cr_math::CrMath;
-use crate::helpers::{binary_float_op, unary_float_op};
+use crate::helpers::{binary_float_op, unary_float_op, unary_float_op_compute};
 
 // ---------------------------------------------------------------------------
 // Unary trig
@@ -23,7 +23,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_sin)
+    unary_float_op_compute(input, T::cr_sin)
 }
 
 /// Elementwise cosine.
@@ -32,7 +32,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_cos)
+    unary_float_op_compute(input, T::cr_cos)
 }
 
 /// Elementwise tangent.
@@ -41,7 +41,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_tan)
+    unary_float_op_compute(input, T::cr_tan)
 }
 
 /// Elementwise arc sine.
@@ -50,7 +50,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_asin)
+    unary_float_op_compute(input, T::cr_asin)
 }
 
 /// Elementwise arc cosine.
@@ -59,7 +59,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_acos)
+    unary_float_op_compute(input, T::cr_acos)
 }
 
 /// Elementwise arc tangent.
@@ -68,7 +68,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_atan)
+    unary_float_op_compute(input, T::cr_atan)
 }
 
 /// Elementwise two-argument arc tangent (atan2).
@@ -99,7 +99,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_sinh)
+    unary_float_op_compute(input, T::cr_sinh)
 }
 
 /// Elementwise hyperbolic cosine.
@@ -108,7 +108,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_cosh)
+    unary_float_op_compute(input, T::cr_cosh)
 }
 
 /// Elementwise hyperbolic tangent.
@@ -117,7 +117,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_tanh)
+    unary_float_op_compute(input, T::cr_tanh)
 }
 
 /// Elementwise inverse hyperbolic sine.
@@ -126,7 +126,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_asinh)
+    unary_float_op_compute(input, T::cr_asinh)
 }
 
 /// Elementwise inverse hyperbolic cosine.
@@ -135,7 +135,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_acosh)
+    unary_float_op_compute(input, T::cr_acosh)
 }
 
 /// Elementwise inverse hyperbolic tangent.
@@ -144,7 +144,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_atanh)
+    unary_float_op_compute(input, T::cr_atanh)
 }
 
 // ---------------------------------------------------------------------------

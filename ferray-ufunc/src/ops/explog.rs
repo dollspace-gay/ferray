@@ -9,7 +9,7 @@ use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::cr_math::CrMath;
-use crate::helpers::{binary_float_op, unary_float_op};
+use crate::helpers::{binary_float_op, unary_float_op, unary_float_op_compute};
 
 /// Elementwise exponential (e^x).
 pub fn exp<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
@@ -17,7 +17,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_exp)
+    unary_float_op_compute(input, T::cr_exp)
 }
 
 /// Fast elementwise exponential (e^x) with ≤1 ULP accuracy.
@@ -90,7 +90,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_exp2)
+    unary_float_op_compute(input, T::cr_exp2)
 }
 
 /// Elementwise exp(x) - 1, accurate near zero.
@@ -99,7 +99,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_exp_m1)
+    unary_float_op_compute(input, T::cr_exp_m1)
 }
 
 /// Elementwise natural logarithm.
@@ -108,7 +108,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_ln)
+    unary_float_op_compute(input, T::cr_ln)
 }
 
 /// Elementwise base-2 logarithm.
@@ -117,7 +117,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_log2)
+    unary_float_op_compute(input, T::cr_log2)
 }
 
 /// Elementwise base-10 logarithm.
@@ -126,7 +126,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_log10)
+    unary_float_op_compute(input, T::cr_log10)
 }
 
 /// Elementwise ln(1 + x), accurate near zero.
@@ -135,7 +135,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_ln_1p)
+    unary_float_op_compute(input, T::cr_ln_1p)
 }
 
 /// log(exp(a) + exp(b)), computed in a numerically stable way.

@@ -17,7 +17,7 @@ use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
-use crate::helpers::{binary_broadcast_op, binary_float_op, unary_float_op};
+use crate::helpers::{binary_broadcast_op, binary_float_op, unary_float_op, unary_float_op_compute};
 
 // ---------------------------------------------------------------------------
 // Basic arithmetic (binary, same-shape)
@@ -294,7 +294,7 @@ where
     T: Element + Float + crate::cr_math::CrMath,
     D: Dimension,
 {
-    unary_float_op(input, T::cr_cbrt)
+    unary_float_op_compute(input, T::cr_cbrt)
 }
 
 /// Elementwise square: x^2.

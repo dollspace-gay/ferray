@@ -8,23 +8,78 @@ use ferray_core::dimension::broadcast::broadcast_shapes;
 use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
+use rayon::prelude::*;
+
+use crate::parallel::THRESHOLD_COMPUTE_BOUND;
+
+/// Target chunk size for parallel splits. Large enough that per-chunk
+/// overhead (thread handoff, cache warmup) stays below a few percent of
+/// the useful compute, small enough that work distributes evenly across
+/// available cores. Empirically 64k elements is a good plateau.
+const PARALLEL_CHUNK: usize = 65_536;
+
+/// Fill `out` from `src` in parallel, applying `f` to each element, when
+/// the total element count exceeds `threshold`. Falls through to a plain
+/// serial loop below it.
+///
+/// Uses rayon's **global** pool via `par_chunks_mut`, not a custom ferray
+/// pool — installing into a separate pool from outside its worker threads
+/// adds hundreds of microseconds of fixed overhead per call, which
+/// completely dominates the arithmetic for typical memory-bound ops.
+#[inline]
+fn parallel_unary_fill_threshold<T, U, F>(src: &[T], out: &mut [U], threshold: usize, f: F)
+where
+    T: Copy + Sync,
+    U: Send,
+    F: Fn(T) -> U + Sync + Send,
+{
+    let n = src.len();
+    debug_assert_eq!(out.len(), n);
+    if n >= threshold {
+        out.par_chunks_mut(PARALLEL_CHUNK)
+            .zip(src.par_chunks(PARALLEL_CHUNK))
+            .for_each(|(out_chunk, in_chunk)| {
+                for (o, &x) in out_chunk.iter_mut().zip(in_chunk.iter()) {
+                    *o = f(x);
+                }
+            });
+    } else {
+        for (o, &x) in out.iter_mut().zip(src.iter()) {
+            *o = f(x);
+        }
+    }
+}
+
+// Note: binary arithmetic ops (add / sub / mul / div) are memory-bandwidth-
+// bound on modern CPUs — a single core already saturates the DRAM channel,
+// and splitting the work across threads only hurts per `examples/bench_parallel.rs`.
+// So `binary_float_op` / `binary_map_op` / `binary_mixed_op` are intentionally
+// kept serial. Transcendentals that go through `unary_float_op_compute` or the
+// slice kernels (`unary_slice_op_f64/f32`, `try_simd_f64_unary`) *do* benefit
+// from parallelism and have parallel dispatch at the compute-bound threshold.
 
 /// Apply a unary function elementwise, preserving dimension.
 /// Works for any `T: Element + Float` (or any Copy type with the given fn).
 ///
 /// When the input is contiguous, operates directly on the underlying slice
-/// for better auto-vectorization and cache locality.
+/// for better auto-vectorization and cache locality. This is the default
+/// path for memory-bound ops (abs, neg, sign, sqrt fallback) — serial,
+/// because a single core saturates memory bandwidth. For compute-bound
+/// transcendentals (sin, cos, exp, log) use [`unary_float_op_compute`]
+/// instead, which parallelizes above the 100k-element threshold.
 #[inline]
-pub fn unary_float_op<T, D>(input: &Array<T, D>, f: impl Fn(T) -> T) -> FerrayResult<Array<T, D>>
+pub fn unary_float_op<T, D>(
+    input: &Array<T, D>,
+    f: impl Fn(T) -> T,
+) -> FerrayResult<Array<T, D>>
 where
     T: Element + Copy,
     D: Dimension,
 {
-    // Fast path: contiguous array — write directly into uninit buffer to skip zeroing.
     if let Some(slice) = input.as_slice() {
         let n = slice.len();
         let mut data = Vec::with_capacity(n);
-        // SAFETY: We write all n elements in the loop below before reading any.
+        // SAFETY: every element is written below before the Vec is read.
         #[allow(clippy::uninit_vec)]
         unsafe {
             data.set_len(n);
@@ -39,10 +94,44 @@ where
     }
 }
 
+/// Parallel variant of [`unary_float_op`] for compute-bound scalar kernels.
+///
+/// Intended for transcendentals (`sin`, `cos`, `exp`, `log`, `cr_*`) where
+/// each element takes ≥10 ns of scalar work — large enough to amortize
+/// rayon dispatch at the 100k-element mark. Memory-bound ops like `add`,
+/// `sqrt`, or `square` should keep using [`unary_float_op`] instead since
+/// their crossover is much higher and parallelism actively hurts below it.
+#[inline]
+pub fn unary_float_op_compute<T, D>(
+    input: &Array<T, D>,
+    f: impl Fn(T) -> T + Sync + Send,
+) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    if let Some(slice) = input.as_slice() {
+        let n = slice.len();
+        let mut data = Vec::with_capacity(n);
+        // SAFETY: every element is written below before the Vec is read.
+        #[allow(clippy::uninit_vec)]
+        unsafe {
+            data.set_len(n);
+        }
+        parallel_unary_fill_threshold(slice, &mut data, THRESHOLD_COMPUTE_BOUND, f);
+        Array::from_vec(input.dim().clone(), data)
+    } else {
+        let data: Vec<T> = input.iter().map(|&x| f(x)).collect();
+        Array::from_vec(input.dim().clone(), data)
+    }
+}
+
 /// Apply a unary operation using a pre-written slice-to-slice kernel.
 ///
 /// This is used for operations like sqrt, abs, neg where we have optimized
 /// SIMD implementations that operate on contiguous `f64` slices directly.
+/// Arrays above `THRESHOLD_COMPUTE_BOUND` are chunked across the ferray
+/// Rayon pool so the SIMD kernel runs in parallel on disjoint regions.
 #[inline]
 pub fn unary_slice_op_f64<D>(
     input: &Array<f64, D>,
@@ -61,7 +150,7 @@ where
         unsafe {
             data.set_len(n);
         }
-        kernel(slice, &mut data);
+        run_slice_kernel_f64(slice, &mut data, kernel);
         Array::from_vec(input.dim().clone(), data)
     } else {
         let data: Vec<f64> = input.iter().map(|&x| scalar_fallback(x)).collect();
@@ -86,11 +175,45 @@ where
         unsafe {
             data.set_len(n);
         }
-        kernel(slice, &mut data);
+        run_slice_kernel_f32(slice, &mut data, kernel);
         Array::from_vec(input.dim().clone(), data)
     } else {
         let data: Vec<f32> = input.iter().map(|&x| scalar_fallback(x)).collect();
         Array::from_vec(input.dim().clone(), data)
+    }
+}
+
+/// Run a SIMD f64 kernel on potentially-parallel chunks via rayon's global pool.
+///
+/// The kernel is a plain function pointer so it carries no captured state
+/// and is trivially `Sync`.
+#[inline]
+fn run_slice_kernel_f64(src: &[f64], out: &mut [f64], kernel: fn(&[f64], &mut [f64])) {
+    let n = src.len();
+    debug_assert_eq!(out.len(), n);
+    if n >= THRESHOLD_COMPUTE_BOUND {
+        out.par_chunks_mut(PARALLEL_CHUNK)
+            .zip(src.par_chunks(PARALLEL_CHUNK))
+            .for_each(|(out_chunk, in_chunk)| {
+                kernel(in_chunk, out_chunk);
+            });
+    } else {
+        kernel(src, out);
+    }
+}
+
+#[inline]
+fn run_slice_kernel_f32(src: &[f32], out: &mut [f32], kernel: fn(&[f32], &mut [f32])) {
+    let n = src.len();
+    debug_assert_eq!(out.len(), n);
+    if n >= THRESHOLD_COMPUTE_BOUND {
+        out.par_chunks_mut(PARALLEL_CHUNK)
+            .zip(src.par_chunks(PARALLEL_CHUNK))
+            .for_each(|(out_chunk, in_chunk)| {
+                kernel(in_chunk, out_chunk);
+            });
+    } else {
+        kernel(src, out);
     }
 }
 
@@ -122,7 +245,7 @@ where
     unsafe {
         output.set_len(n);
     }
-    kernel(f64_slice, &mut output);
+    run_slice_kernel_f64(f64_slice, &mut output, kernel);
     // SAFETY: T is f64. Reinterpret Vec<f64> as Vec<T> without copying.
     let t_vec: Vec<T> = unsafe {
         let mut md = std::mem::ManuallyDrop::new(output);
@@ -168,6 +291,16 @@ where
 {
     // Fast path: identical shapes — no broadcasting needed.
     if a.shape() == b.shape() {
+        // Contiguous subpath: iterate over raw slices so the compiler
+        // auto-vectorizes the inner loop. Memory-bound, no parallelism.
+        if let (Some(a_slice), Some(b_slice)) = (a.as_slice(), b.as_slice()) {
+            let data: Vec<T> = a_slice
+                .iter()
+                .zip(b_slice.iter())
+                .map(|(&x, &y)| f(x, y))
+                .collect();
+            return Array::from_vec(a.dim().clone(), data);
+        }
         let data: Vec<T> = a.iter().zip(b.iter()).map(|(&x, &y)| f(x, y)).collect();
         return Array::from_vec(a.dim().clone(), data);
     }
@@ -214,6 +347,14 @@ where
 {
     // Fast path: identical shapes — no broadcasting needed.
     if a.shape() == b.shape() {
+        if let (Some(a_slice), Some(b_slice)) = (a.as_slice(), b.as_slice()) {
+            let data: Vec<U> = a_slice
+                .iter()
+                .zip(b_slice.iter())
+                .map(|(&x, &y)| f(x, y))
+                .collect();
+            return Array::from_vec(a.dim().clone(), data);
+        }
         let data: Vec<U> = a.iter().zip(b.iter()).map(|(&x, &y)| f(x, y)).collect();
         return Array::from_vec(a.dim().clone(), data);
     }
@@ -259,6 +400,14 @@ where
 {
     // Fast path: identical shapes.
     if a.shape() == b.shape() {
+        if let (Some(a_slice), Some(b_slice)) = (a.as_slice(), b.as_slice()) {
+            let data: Vec<V> = a_slice
+                .iter()
+                .zip(b_slice.iter())
+                .map(|(&x, &y)| f(x, y))
+                .collect();
+            return Array::from_vec(a.dim().clone(), data);
+        }
         let data: Vec<V> = a.iter().zip(b.iter()).map(|(&x, &y)| f(x, y)).collect();
         return Array::from_vec(a.dim().clone(), data);
     }
