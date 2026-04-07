@@ -1,0 +1,10 @@
+{
+  "uuid": "0497c398-dff5-48c5-9d8d-4e1cfbcc6af1",
+  "issue_uuid": "5aba7ad0-ad02-474f-98bf-0f81b0113ea8",
+  "author": "phase-4-coordinator",
+  "content": "Resolved by adding f32 variants for the core distributions: random_f32, uniform_f32, standard_normal_f32, normal_f32, lognormal_f32, standard_exponential_f32, exponential_f32. Generator gains next_f32() to match next_f64(). Box-Muller generation for f32 normals is done in f64 and cast to f32 to preserve tail accuracy (matches NumPy's approach for dtype=np.float32). 18 new tests covering range, determinism, ND shapes, mean/variance, and error handling; all 145 lib tests + 12 property tests + 9 doctests pass. Ziggurat speedup for standard_normal is tracked separately as #442.",
+  "created_at": "2026-04-07T22:01:21.364888922Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAbyYc+CjflSl4hY3ESPnIrEVqwer0Gw5AiedtfydH/ZXBWLsgjBbl87ixLnhfLJJ3NhBFubs4xWBjlqHeitYjCA=="
+}
