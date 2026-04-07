@@ -1,0 +1,10 @@
+{
+  "uuid": "031099bd-95ca-40ef-8230-6f6f5eee57bb",
+  "issue_uuid": "54a3ee4a-30a7-4fb7-81da-0351b6d57e68",
+  "author": "phase-4-coordinator",
+  "content": "Operator overloading complete in ferray-core/src/ops.rs. Implements Add/Sub/Mul/Div/Rem/Neg for all ownership combinations (&Array op &Array, owned op owned, owned op &Array, &Array op owned), scalar variants (Array op T), and Neg. 19 tests passing. Note: this implementation requires same-shape arrays — broadcasting tracked separately as #346. Closing #43 as completed.",
+  "created_at": "2026-04-07T12:35:08.218948849Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAWbwLKni18sCriQbRRh6ubYBfD6EQpTDJ6cilkPW+aZEKMH2ZCFkb9PKBWNWaB4qdNI3apOSAx/QcSsKmIn/RAQ=="
+}
