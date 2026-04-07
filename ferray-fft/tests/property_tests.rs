@@ -278,4 +278,71 @@ proptest! {
             energy_time, energy_freq, diff
         );
     }
+
+    // --- rfft/irfft property tests ---
+
+    #[test]
+    fn prop_rfft_irfft_roundtrip(
+        data in proptest::collection::vec(-10.0f64..10.0, 4..=32),
+    ) {
+        let n = data.len();
+        let arr = ferray_core::Array::<f64, ferray_core::Ix1>::from_vec(
+            ferray_core::Ix1::new([n]),
+            data.clone(),
+        ).unwrap();
+
+        let spectrum = ferray_fft::rfft(&arr, None, None, FftNorm::Backward).unwrap();
+        let recovered = ferray_fft::irfft(&spectrum, Some(n), None, FftNorm::Backward).unwrap();
+
+        for (i, (&orig, &rec)) in data.iter().zip(recovered.iter()).enumerate() {
+            let diff = (orig - rec).abs();
+            prop_assert!(
+                diff < 1e-8,
+                "rfft/irfft roundtrip failed at index {}: {} vs {} (diff={})",
+                i, orig, rec, diff
+            );
+        }
+    }
+
+    #[test]
+    fn prop_rfft_output_length(
+        n in 2usize..=64,
+    ) {
+        let data: Vec<f64> = (0..n).map(|i| i as f64).collect();
+        let arr = ferray_core::Array::<f64, ferray_core::Ix1>::from_vec(
+            ferray_core::Ix1::new([n]),
+            data,
+        ).unwrap();
+
+        let spectrum = ferray_fft::rfft(&arr, None, None, FftNorm::Backward).unwrap();
+        // rfft output should have n/2+1 elements
+        let expected_len = n / 2 + 1;
+        prop_assert_eq!(spectrum.shape()[0], expected_len);
+    }
+
+    #[test]
+    fn prop_rfft_dc_component(
+        data in proptest::collection::vec(-10.0f64..10.0, 4..=32),
+    ) {
+        let n = data.len();
+        let arr = ferray_core::Array::<f64, ferray_core::Ix1>::from_vec(
+            ferray_core::Ix1::new([n]),
+            data.clone(),
+        ).unwrap();
+
+        let spectrum = ferray_fft::rfft(&arr, None, None, FftNorm::Backward).unwrap();
+        // DC component (index 0) should equal the sum of input
+        let expected_dc: f64 = data.iter().sum();
+        let dc = spectrum.iter().next().unwrap();
+        prop_assert!(
+            (dc.re - expected_dc).abs() < 1e-8,
+            "DC component: expected {}, got {}",
+            expected_dc, dc.re
+        );
+        prop_assert!(
+            dc.im.abs() < 1e-8,
+            "DC imaginary should be 0, got {}",
+            dc.im
+        );
+    }
 }

@@ -6,7 +6,6 @@ use ferray_core::{Array, FerrayError, Ix1};
 
 use crate::bitgen::BitGenerator;
 use crate::distributions::gamma::standard_gamma_single;
-use crate::distributions::normal::standard_normal_single;
 use crate::generator::{Generator, generate_vec_i64, vec_to_array1_i64};
 
 /// Generate a single Poisson variate using Knuth's algorithm for small lambda,
@@ -117,14 +116,80 @@ fn binomial_single<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> i64 {
         }
         x.min(n as i64)
     } else {
-        // For large n*p, use normal approximation with correction
-        // (BTPE is complex; this is a simpler but adequate approach)
+        // BTPE algorithm (Hormann 1993) for large n*p.
+        // Based on the transformed rejection method with decomposition
+        // into triangular, parallelogram, and exponential regions.
+        let q = 1.0 - pp;
+        let fm = np + pp;
+        let m = fm.floor() as i64;
+        let mf = m as f64;
+        let p1 = (2.195 * (np * q).sqrt() - 4.6 * q).floor() + 0.5;
+        let xm = mf + 0.5;
+        let xl = xm - p1;
+        let xr = xm + p1;
+        let c = 0.134 + 20.5 / (15.3 + mf);
+        let a = (fm - xl) / (fm - xl * pp);
+        let lambda_l = a * (1.0 + 0.5 * a);
+        let a2 = (xr - fm) / (xr * q);
+        let lambda_r = a2 * (1.0 + 0.5 * a2);
+        let p2 = p1 * (1.0 + 2.0 * c);
+        let p3 = p2 + c / lambda_l;
+        let p4 = p3 + c / lambda_r;
+
         loop {
-            let z = standard_normal_single(bg);
-            let sigma = (np * (1.0 - pp)).sqrt();
-            let x = (np + sigma * z + 0.5).floor() as i64;
-            if x >= 0 && x <= n as i64 {
-                break x;
+            let u = bg.next_f64() * p4;
+            let v = bg.next_f64();
+            let y: i64;
+
+            if u <= p1 {
+                // Triangular region
+                y = (xm - p1 * v + u).floor() as i64;
+            } else if u <= p2 {
+                // Parallelogram region
+                let x = xl + (u - p1) / c;
+                let w = v + (x - xm) * (x - xm) / (p1 * p1);
+                if w > 1.0 {
+                    continue;
+                }
+                y = x.floor() as i64;
+            } else if u <= p3 {
+                // Left exponential tail
+                y = (xl + v.ln() / lambda_l).floor() as i64;
+                if y < 0 {
+                    continue;
+                }
+            } else {
+                // Right exponential tail
+                y = (xr - v.ln() / lambda_r).floor() as i64;
+                if y > n as i64 {
+                    continue;
+                }
+            }
+
+            // Squeeze acceptance
+            let k = (y - m).abs();
+            if k <= 20 || k as f64 >= 0.5 * np * q - 1.0 {
+                // Full acceptance/rejection via log-factorial comparison
+                let kf = k as f64;
+                let yf = y as f64;
+                let rho = (kf / (np * q))
+                    * ((kf * (kf / 3.0 + 0.625) + 1.0 / 6.0) / (np * q) + 0.5);
+                let t = -kf * kf / (2.0 * np * q);
+                let log_a = t - rho;
+                if v.ln() <= log_a {
+                    break y;
+                }
+                // Full log-factorial test
+                let log_v = v.ln();
+                let log_accept = ln_factorial(m as u64) - ln_factorial(y as u64)
+                    - ln_factorial(n - y as u64)
+                    + ln_factorial(n - m as u64)
+                    + (yf - mf) * (pp / q).ln();
+                if log_v <= log_accept {
+                    break y;
+                }
+            } else {
+                break y;
             }
         }
     };

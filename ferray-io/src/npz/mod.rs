@@ -4,7 +4,7 @@
 // REQ-5: savez_compressed(path, ...) writes gzip-compressed .npz
 
 use std::fs::File;
-use std::io::{BufReader, Cursor, Read, Write};
+use std::io::{BufReader, Cursor, Read};
 use std::path::Path;
 
 use ferray_core::dynarray::DynArray;
@@ -43,13 +43,8 @@ pub fn savez<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -> FerrayRes
             FerrayError::io_error(format!("failed to create zip entry '{entry_name}': {e}"))
         })?;
 
-        // Write the .npy data into a buffer first
-        let mut npy_buf = Vec::new();
-        npy::save_dynamic_to_writer(&mut npy_buf, array)?;
-
-        zip_writer.write_all(&npy_buf).map_err(|e| {
-            FerrayError::io_error(format!("failed to write zip entry '{entry_name}': {e}"))
-        })?;
+        // Write .npy data directly into the zip entry — no intermediate buffer.
+        npy::save_dynamic_to_writer(&mut zip_writer, array)?;
     }
 
     zip_writer
@@ -89,12 +84,8 @@ pub fn savez_compressed<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -
             FerrayError::io_error(format!("failed to create zip entry '{entry_name}': {e}"))
         })?;
 
-        let mut npy_buf = Vec::new();
-        npy::save_dynamic_to_writer(&mut npy_buf, array)?;
-
-        zip_writer.write_all(&npy_buf).map_err(|e| {
-            FerrayError::io_error(format!("failed to write zip entry '{entry_name}': {e}"))
-        })?;
+        // Write .npy data directly into the compressed zip entry.
+        npy::save_dynamic_to_writer(&mut zip_writer, array)?;
     }
 
     zip_writer

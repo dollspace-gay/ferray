@@ -45,16 +45,16 @@ pub use ops::rounding::{around, ceil, fix, floor, rint, round, trunc};
 // Arithmetic
 pub use ops::arithmetic::{
     absolute, add, add_accumulate, add_broadcast, add_reduce, cbrt, cross, cumprod, cumsum, diff,
-    divide, divide_broadcast, divmod, ediff1d, fabs, floor_divide, fmod, gcd, gradient, heaviside,
-    lcm, mod_, multiply, multiply_broadcast, multiply_outer, nancumprod, nancumsum, negative,
-    positive, power, reciprocal, remainder, sign, sqrt, square, subtract, subtract_broadcast,
-    trapezoid, true_divide,
+    divide, divide_broadcast, divmod, ediff1d, fabs, floor_divide, fmod, gcd, gcd_int, gradient,
+    heaviside, lcm, lcm_int, mod_, multiply, multiply_broadcast, multiply_outer, nancumprod,
+    nancumsum, negative, positive, power, reciprocal, remainder, sign, sqrt, square, subtract,
+    subtract_broadcast, trapezoid, true_divide,
 };
 
 // Float intrinsics
 pub use ops::floatintrinsic::{
-    clip, copysign, float_power, fmax, fmin, frexp, isfinite, isinf, isnan, isneginf, isposinf,
-    ldexp, maximum, minimum, nan_to_num, nextafter, signbit, spacing,
+    clip, clip_ord, copysign, float_power, fmax, fmin, frexp, isfinite, isinf, isnan, isneginf,
+    isposinf, ldexp, maximum, minimum, nan_to_num, nextafter, signbit, spacing,
 };
 
 // Complex

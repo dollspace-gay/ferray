@@ -111,6 +111,48 @@ impl_binary_op!(Mul, mul, |a, b| a * b, "*");
 impl_binary_op!(Div, div, |a, b| a / b, "/");
 impl_binary_op!(Rem, rem, |a, b| a % b, "%");
 
+// ---------------------------------------------------------------------------
+// Scalar-array operations: Array op scalar and scalar op Array
+// ---------------------------------------------------------------------------
+
+/// Implement scalar-array binary operators (Array op T and &Array op T).
+macro_rules! impl_scalar_op {
+    ($trait:ident, $method:ident, $op_fn:expr) => {
+        // &Array op scalar
+        impl<T, D> std::ops::$trait<T> for &Array<T, D>
+        where
+            T: Element + Copy + std::ops::$trait<Output = T>,
+            D: Dimension,
+        {
+            type Output = FerrayResult<Array<T, D>>;
+
+            fn $method(self, rhs: T) -> Self::Output {
+                let data: Vec<T> = self.iter().map(|&x| $op_fn(x, rhs)).collect();
+                Array::from_vec(self.dim().clone(), data)
+            }
+        }
+
+        // Array op scalar
+        impl<T, D> std::ops::$trait<T> for Array<T, D>
+        where
+            T: Element + Copy + std::ops::$trait<Output = T>,
+            D: Dimension,
+        {
+            type Output = FerrayResult<Array<T, D>>;
+
+            fn $method(self, rhs: T) -> Self::Output {
+                (&self).$method(rhs)
+            }
+        }
+    };
+}
+
+impl_scalar_op!(Add, add, |a, b| a + b);
+impl_scalar_op!(Sub, sub, |a, b| a - b);
+impl_scalar_op!(Mul, mul, |a, b| a * b);
+impl_scalar_op!(Div, div, |a, b| a / b);
+impl_scalar_op!(Rem, rem, |a, b| a % b);
+
 // Unary negation: -&Array and -Array
 impl<T, D> std::ops::Neg for &Array<T, D>
 where
@@ -232,6 +274,50 @@ mod tests {
         let b = arr(vec![1.0, 2.0, 3.0]);
         let result = &a + &b;
         assert!(result.is_err());
+    }
+
+    // --- Scalar-array operations ---
+
+    #[test]
+    fn test_add_scalar() {
+        let a = arr(vec![1.0, 2.0, 3.0]);
+        let c = (&a + 10.0).unwrap();
+        assert_eq!(c.as_slice().unwrap(), &[11.0, 12.0, 13.0]);
+    }
+
+    #[test]
+    fn test_sub_scalar() {
+        let a = arr(vec![10.0, 20.0, 30.0]);
+        let c = (&a - 5.0).unwrap();
+        assert_eq!(c.as_slice().unwrap(), &[5.0, 15.0, 25.0]);
+    }
+
+    #[test]
+    fn test_mul_scalar() {
+        let a = arr(vec![1.0, 2.0, 3.0]);
+        let c = (&a * 3.0).unwrap();
+        assert_eq!(c.as_slice().unwrap(), &[3.0, 6.0, 9.0]);
+    }
+
+    #[test]
+    fn test_div_scalar() {
+        let a = arr(vec![10.0, 20.0, 30.0]);
+        let c = (&a / 10.0).unwrap();
+        assert_eq!(c.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn test_rem_scalar() {
+        let a = arr_i32(vec![7, 10, 15]);
+        let c = (&a % 4).unwrap();
+        assert_eq!(c.as_slice().unwrap(), &[3, 2, 3]);
+    }
+
+    #[test]
+    fn test_scalar_op_owned() {
+        let a = arr(vec![1.0, 2.0, 3.0]);
+        let c = (a + 10.0).unwrap();
+        assert_eq!(c.as_slice().unwrap(), &[11.0, 12.0, 13.0]);
     }
 
     #[test]

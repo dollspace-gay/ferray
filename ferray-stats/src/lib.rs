@@ -28,7 +28,9 @@ pub mod sorting;
 // ---------------------------------------------------------------------------
 
 // Reductions
-pub use reductions::{argmax, argmin, cumprod, cumsum, max, mean, min, prod, std_, sum, var};
+pub use reductions::{
+    argmax, argmin, cumprod, cumsum, max, mean, mean_as_f64, min, prod, std_, sum, sum_as_f64, var,
+};
 
 // Quantile-based
 pub use reductions::quantile::{median, nanmedian, nanpercentile, percentile, quantile};

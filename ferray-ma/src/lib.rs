@@ -130,6 +130,24 @@ mod tests {
         assert!((data_vals[3] - 44.0).abs() < 1e-10);
     }
 
+    #[test]
+    fn operator_add_matches_masked_add() {
+        let d1 = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let m1 = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
+        let ma1 = MaskedArray::new(d1, m1).unwrap();
+
+        let d2 = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![10.0, 20.0, 30.0]).unwrap();
+        let m2 = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, false, true]).unwrap();
+        let ma2 = MaskedArray::new(d2, m2).unwrap();
+
+        // Use operator syntax
+        let result = (&ma1 + &ma2).unwrap();
+        let mask_vals: Vec<bool> = result.mask().iter().copied().collect();
+        assert_eq!(mask_vals, vec![false, true, true]);
+        let data_vals: Vec<f64> = result.data().iter().copied().collect();
+        assert!((data_vals[0] - 11.0).abs() < 1e-10);
+    }
+
     // -----------------------------------------------------------------------
     // AC-7: sin(masked_array) returns same mask, correct values
     // -----------------------------------------------------------------------
@@ -571,5 +589,94 @@ mod tests {
         let ma = MaskedArray::new(data, mask).unwrap();
         let filled = ma.filled(-999.0).unwrap();
         assert_eq!(filled.as_slice().unwrap(), &[-999.0, 2.0, -999.0, 4.0]);
+    }
+
+    // --- 2D masked array tests ---
+
+    #[test]
+    fn masked_2d_construction() {
+        use ferray_core::dimension::Ix2;
+        let data =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![false, true, false, false, false, true],
+        )
+        .unwrap();
+        let ma = MaskedArray::new(data, mask).unwrap();
+        assert_eq!(ma.ndim(), 2);
+        assert_eq!(ma.shape(), &[2, 3]);
+        assert_eq!(ma.size(), 6);
+        assert_eq!(ma.count().unwrap(), 4);
+    }
+
+    #[test]
+    fn masked_2d_mean() {
+        use ferray_core::dimension::Ix2;
+        let data =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
+        // Mask out 2.0 and 6.0
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![false, true, false, false, false, true],
+        )
+        .unwrap();
+        let ma = MaskedArray::new(data, mask).unwrap();
+        // mean of [1, 3, 4, 5] = 13/4 = 3.25
+        let m = ma.mean().unwrap();
+        assert!((m - 3.25).abs() < 1e-10);
+    }
+
+    #[test]
+    fn masked_2d_sum() {
+        use ferray_core::dimension::Ix2;
+        let data =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![false, true, false, false, false, true],
+        )
+        .unwrap();
+        let ma = MaskedArray::new(data, mask).unwrap();
+        // sum of [1, 3, 4, 5] = 13
+        assert!((ma.sum().unwrap() - 13.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn masked_2d_add_operator() {
+        use ferray_core::dimension::Ix2;
+        let d1 =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let m1 = Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![false, true, false, false])
+            .unwrap();
+        let ma1 = MaskedArray::new(d1, m1).unwrap();
+
+        let d2 =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![10.0, 20.0, 30.0, 40.0]).unwrap();
+        let m2 = Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![false, false, true, false])
+            .unwrap();
+        let ma2 = MaskedArray::new(d2, m2).unwrap();
+
+        let result = (&ma1 + &ma2).unwrap();
+        let mask_vals: Vec<bool> = result.mask().iter().copied().collect();
+        assert_eq!(mask_vals, vec![false, true, true, false]);
+        let data_vals: Vec<f64> = result.data().iter().copied().collect();
+        assert!((data_vals[0] - 11.0).abs() < 1e-10);
+        assert!((data_vals[3] - 44.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn masked_2d_compressed() {
+        use ferray_core::dimension::Ix2;
+        let data =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![false, true, false, true])
+            .unwrap();
+        let ma = MaskedArray::new(data, mask).unwrap();
+        let compressed = ma.compressed().unwrap();
+        assert_eq!(compressed.as_slice().unwrap(), &[1.0, 3.0]);
     }
 }

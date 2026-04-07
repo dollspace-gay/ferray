@@ -45,16 +45,30 @@ pub fn center<D: Dimension>(
 /// # Errors
 /// Returns an error if the internal array construction fails.
 pub fn ljust<D: Dimension>(a: &StringArray<D>, width: usize) -> FerrayResult<StringArray<D>> {
+    ljust_with(a, width, ' ')
+}
+
+/// Left-justify each string in a field of the given width, padded with `fillchar`.
+///
+/// If the string is already longer than `width`, it is returned unchanged.
+///
+/// # Errors
+/// Returns an error if the internal array construction fails.
+pub fn ljust_with<D: Dimension>(
+    a: &StringArray<D>,
+    width: usize,
+    fillchar: char,
+) -> FerrayResult<StringArray<D>> {
     a.map(|s| {
         let char_count = s.chars().count();
         if char_count >= width {
             return s.to_string();
         }
         let pad = width - char_count;
-        let mut result = String::with_capacity(s.len() + pad);
+        let mut result = String::with_capacity(s.len() + pad * fillchar.len_utf8());
         result.push_str(s);
         for _ in 0..pad {
-            result.push(' ');
+            result.push(fillchar);
         }
         result
     })
@@ -67,15 +81,29 @@ pub fn ljust<D: Dimension>(a: &StringArray<D>, width: usize) -> FerrayResult<Str
 /// # Errors
 /// Returns an error if the internal array construction fails.
 pub fn rjust<D: Dimension>(a: &StringArray<D>, width: usize) -> FerrayResult<StringArray<D>> {
+    rjust_with(a, width, ' ')
+}
+
+/// Right-justify each string in a field of the given width, padded with `fillchar`.
+///
+/// If the string is already longer than `width`, it is returned unchanged.
+///
+/// # Errors
+/// Returns an error if the internal array construction fails.
+pub fn rjust_with<D: Dimension>(
+    a: &StringArray<D>,
+    width: usize,
+    fillchar: char,
+) -> FerrayResult<StringArray<D>> {
     a.map(|s| {
         let char_count = s.chars().count();
         if char_count >= width {
             return s.to_string();
         }
         let pad = width - char_count;
-        let mut result = String::with_capacity(s.len() + pad);
+        let mut result = String::with_capacity(s.len() + pad * fillchar.len_utf8());
         for _ in 0..pad {
-            result.push(' ');
+            result.push(fillchar);
         }
         result.push_str(s);
         result
@@ -150,6 +178,27 @@ mod tests {
         let a = array(&["hi", "hello"]).unwrap();
         let b = rjust(&a, 6).unwrap();
         assert_eq!(b.as_slice(), &["    hi", " hello"]);
+    }
+
+    #[test]
+    fn test_ljust_with_fillchar() {
+        let a = array(&["hi"]).unwrap();
+        let b = ljust_with(&a, 6, '-').unwrap();
+        assert_eq!(b.as_slice(), &["hi----"]);
+    }
+
+    #[test]
+    fn test_rjust_with_fillchar() {
+        let a = array(&["hi"]).unwrap();
+        let b = rjust_with(&a, 6, '.').unwrap();
+        assert_eq!(b.as_slice(), &["....hi"]);
+    }
+
+    #[test]
+    fn test_ljust_with_unicode_fillchar() {
+        let a = array(&["ab"]).unwrap();
+        let b = ljust_with(&a, 5, '★').unwrap();
+        assert_eq!(b.as_slice(), &["ab★★★"]);
     }
 
     #[test]

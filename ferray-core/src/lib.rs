@@ -38,6 +38,8 @@ pub mod indexing;
 #[cfg(not(feature = "no_std"))]
 pub mod manipulation;
 #[cfg(not(feature = "no_std"))]
+pub mod nditer;
+#[cfg(not(feature = "no_std"))]
 pub mod ops;
 #[cfg(not(feature = "no_std"))]
 pub mod prelude;
@@ -79,6 +81,9 @@ pub use buffer::AsRawBuffer;
 
 #[cfg(not(feature = "no_std"))]
 pub use dynarray::DynArray;
+
+#[cfg(not(feature = "no_std"))]
+pub use nditer::NdIter;
 
 pub use record::FieldDescriptor;
 

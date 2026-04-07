@@ -268,3 +268,59 @@ where
     let result_data = Array::from_vec(ma.dim().clone(), data)?;
     MaskedArray::new(result_data, ma.mask().clone())
 }
+
+// ---------------------------------------------------------------------------
+// std::ops trait implementations for MaskedArray + MaskedArray
+// ---------------------------------------------------------------------------
+
+/// `&MaskedArray + &MaskedArray` — elementwise add with mask union.
+impl<T, D> std::ops::Add<&MaskedArray<T, D>> for &MaskedArray<T, D>
+where
+    T: Element + Add<Output = T> + Copy,
+    D: Dimension,
+{
+    type Output = FerrayResult<MaskedArray<T, D>>;
+
+    fn add(self, rhs: &MaskedArray<T, D>) -> Self::Output {
+        masked_add(self, rhs)
+    }
+}
+
+/// `&MaskedArray - &MaskedArray` — elementwise subtract with mask union.
+impl<T, D> std::ops::Sub<&MaskedArray<T, D>> for &MaskedArray<T, D>
+where
+    T: Element + Sub<Output = T> + Copy,
+    D: Dimension,
+{
+    type Output = FerrayResult<MaskedArray<T, D>>;
+
+    fn sub(self, rhs: &MaskedArray<T, D>) -> Self::Output {
+        masked_sub(self, rhs)
+    }
+}
+
+/// `&MaskedArray * &MaskedArray` — elementwise multiply with mask union.
+impl<T, D> std::ops::Mul<&MaskedArray<T, D>> for &MaskedArray<T, D>
+where
+    T: Element + Mul<Output = T> + Copy,
+    D: Dimension,
+{
+    type Output = FerrayResult<MaskedArray<T, D>>;
+
+    fn mul(self, rhs: &MaskedArray<T, D>) -> Self::Output {
+        masked_mul(self, rhs)
+    }
+}
+
+/// `&MaskedArray / &MaskedArray` — elementwise divide with mask union.
+impl<T, D> std::ops::Div<&MaskedArray<T, D>> for &MaskedArray<T, D>
+where
+    T: Element + Div<Output = T> + Copy,
+    D: Dimension,
+{
+    type Output = FerrayResult<MaskedArray<T, D>>;
+
+    fn div(self, rhs: &MaskedArray<T, D>) -> Self::Output {
+        masked_div(self, rhs)
+    }
+}

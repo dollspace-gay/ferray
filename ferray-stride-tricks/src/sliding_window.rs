@@ -90,13 +90,12 @@ pub fn sliding_window_view<'a, T: Element, D: Dimension>(
     // the window).
     let mut out_strides = Vec::with_capacity(2 * ndim);
     for &s in src_strides {
-        if s < 0 {
-            return Err(FerrayError::invalid_value(format!(
-                "sliding_window_view does not support negative strides (got {}); \
-                 make the array contiguous first",
-                s
-            )));
-        }
+        // Owned arrays (Array<T, D>) are always C-contiguous with non-negative
+        // strides. If this ever fires, it indicates a bug in ferray-core.
+        debug_assert!(
+            s >= 0,
+            "sliding_window_view: unexpected negative stride {s}"
+        );
         out_strides.push(s as usize);
     }
     for &s in src_strides {

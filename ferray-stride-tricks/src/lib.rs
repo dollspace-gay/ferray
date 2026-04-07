@@ -141,4 +141,75 @@ mod integration_tests {
         let data: Vec<i32> = v.iter().copied().collect();
         assert_eq!(data, vec![0, 3, 6]);
     }
+
+    // --- Tests for various stride patterns ---
+
+    #[test]
+    fn as_strided_stride_zero_broadcast() {
+        // stride 0 broadcasts a single value — only valid with unchecked
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![42.0]).unwrap();
+        let v = unsafe { as_strided_unchecked(&a, &[5], &[0]).unwrap() };
+        assert_eq!(v.shape(), &[5]);
+        let data: Vec<f64> = v.iter().copied().collect();
+        assert_eq!(data, vec![42.0; 5]);
+    }
+
+    #[test]
+    fn as_strided_2d_column_broadcast() {
+        // (3,) -> (3, 4) via stride [1, 0] — each row repeats the element
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![10, 20, 30]).unwrap();
+        let v = unsafe { as_strided_unchecked(&a, &[3, 4], &[1, 0]).unwrap() };
+        assert_eq!(v.shape(), &[3, 4]);
+        let data: Vec<i32> = v.iter().copied().collect();
+        assert_eq!(data, vec![10, 10, 10, 10, 20, 20, 20, 20, 30, 30, 30, 30]);
+    }
+
+    #[test]
+    fn sliding_window_2d() {
+        let a = Array::<i32, Ix2>::from_vec(
+            Ix2::new([3, 4]),
+            (0..12).collect(),
+        )
+        .unwrap();
+        // 2x2 sliding window on 3x4 -> shape (2, 3, 2, 2)
+        let v = sliding_window_view(&a, &[2, 2]).unwrap();
+        assert_eq!(v.shape(), &[2, 3, 2, 2]);
+        // First window (top-left 2x2): [[0,1],[4,5]]
+        let data: Vec<i32> = v.iter().copied().collect();
+        assert_eq!(&data[0..4], &[0, 1, 4, 5]);
+    }
+
+    #[test]
+    fn sliding_window_single_element_window() {
+        // Window size 1 along each axis: output has double ndim but same data
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![10, 20, 30, 40]).unwrap();
+        let v = sliding_window_view(&a, &[1]).unwrap();
+        assert_eq!(v.shape(), &[4, 1]);
+        let data: Vec<i32> = v.iter().copied().collect();
+        assert_eq!(data, vec![10, 20, 30, 40]);
+    }
+
+    #[test]
+    fn sliding_window_full_window() {
+        // Window covers entire array: output has shape (1, n)
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let v = sliding_window_view(&a, &[5]).unwrap();
+        assert_eq!(v.shape(), &[1, 5]);
+        let data: Vec<i32> = v.iter().copied().collect();
+        assert_eq!(data, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn overlap_check_large_stride_no_overlap() {
+        // Large strides that skip elements: no overlap
+        let a = Array::<f64, Ix1>::from_vec(
+            Ix1::new([20]),
+            (0..20).map(|i| i as f64).collect(),
+        )
+        .unwrap();
+        let v = as_strided(&a, &[2, 3], &[10, 3]).unwrap();
+        assert_eq!(v.shape(), &[2, 3]);
+        let data: Vec<f64> = v.iter().copied().collect();
+        assert_eq!(data, vec![0.0, 3.0, 6.0, 10.0, 13.0, 16.0]);
+    }
 }

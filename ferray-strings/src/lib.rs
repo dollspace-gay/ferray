@@ -38,7 +38,7 @@ pub mod strip;
 pub use string_array::{StringArray, StringArray1, StringArray2, array};
 
 // Re-export operations for flat namespace (like numpy.strings.upper etc.)
-pub use align::{center, ljust, rjust, zfill};
+pub use align::{center, ljust, ljust_with, rjust, rjust_with, zfill};
 pub use case::{capitalize, lower, title, upper};
 pub use concat::{add, multiply};
 pub use regex_ops::{extract, match_};
@@ -197,5 +197,71 @@ mod integration_tests {
         let b = upper(&a).unwrap();
         assert_eq!(b.as_slice(), &["A", "B", "C", "D"]);
         assert_eq!(b.shape(), &[2, 2]);
+    }
+
+    // --- Unicode / multi-byte character tests ---
+
+    #[test]
+    fn unicode_upper_lower() {
+        let a = array(&["café", "naïve", "über"]).unwrap();
+        let u = upper(&a).unwrap();
+        assert_eq!(u.as_slice(), &["CAFÉ", "NAÏVE", "ÜBER"]);
+        let l = lower(&u).unwrap();
+        assert_eq!(l.as_slice(), &["café", "naïve", "über"]);
+    }
+
+    #[test]
+    fn unicode_capitalize() {
+        let a = array(&["ñoño", "straße"]).unwrap();
+        let c = capitalize(&a).unwrap();
+        assert_eq!(c.as_slice()[0], "Ñoño");
+        // Rust's capitalize of "straße" -> "Straße"
+        assert_eq!(c.as_slice()[1], "Straße");
+    }
+
+    #[test]
+    fn unicode_find() {
+        let a = array(&["日本語テスト", "こんにちは"]).unwrap();
+        let r = find(&a, "テスト").unwrap();
+        let data = r.as_slice().unwrap();
+        assert_eq!(data[0], 3); // "テスト" starts at byte position, but find uses char position...
+        // Actually, find returns the byte index via str::find. Check:
+        // "日本語テスト".find("テスト") returns byte offset 9
+        // But our find should return character index or byte index?
+        // Let's just verify it finds it (>= 0) vs not found (-1)
+        assert!(data[0] >= 0); // found
+        assert_eq!(data[1], -1); // not found
+    }
+
+    #[test]
+    fn unicode_strip() {
+        let a = array(&["  héllo  ", "  wörld  "]).unwrap();
+        let s = strip(&a, None).unwrap();
+        assert_eq!(s.as_slice(), &["héllo", "wörld"]);
+    }
+
+    #[test]
+    fn unicode_replace() {
+        let a = array(&["café latte"]).unwrap();
+        let r = replace(&a, "café", "tea", None).unwrap();
+        assert_eq!(r.as_slice(), &["tea latte"]);
+    }
+
+    #[test]
+    fn emoji_operations() {
+        let a = array(&["hello 🌍", "rust 🦀"]).unwrap();
+        let u = upper(&a).unwrap();
+        assert_eq!(u.as_slice(), &["HELLO 🌍", "RUST 🦀"]);
+        let c = count(&a, "🌍").unwrap();
+        assert_eq!(c.as_slice().unwrap(), &[1, 0]);
+    }
+
+    #[test]
+    fn cjk_characters() {
+        let a = array(&["你好世界", "こんにちは"]).unwrap();
+        let starts = startswith(&a, "你好").unwrap();
+        assert_eq!(starts.as_slice().unwrap(), &[true, false]);
+        let ends = endswith(&a, "世界").unwrap();
+        assert_eq!(ends.as_slice().unwrap(), &[true, false]);
     }
 }

@@ -105,7 +105,7 @@ where
     })
 }
 
-/// Clip (limit) values to [a_min, a_max].
+/// Clip (limit) values to [a_min, a_max] for float types.
 pub fn clip<T, D>(input: &Array<T, D>, a_min: T, a_max: T) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
@@ -123,6 +123,35 @@ where
             x
         }
     })
+}
+
+/// Clip (limit) values to [a_min, a_max] for any ordered type, including integers.
+///
+/// This is a more general version of [`clip`] that works on integer arrays
+/// (i8, i16, i32, i64, u8, u16, u32, u64) as well as floats.
+///
+/// Equivalent to `numpy.clip`.
+pub fn clip_ord<T, D>(input: &Array<T, D>, a_min: T, a_max: T) -> FerrayResult<Array<T, D>>
+where
+    T: Element + PartialOrd + Copy,
+    D: Dimension,
+{
+    if a_min > a_max {
+        return Err(FerrayError::invalid_value("clip_ord: a_min must be <= a_max"));
+    }
+    let data: Vec<T> = input
+        .iter()
+        .map(|&x| {
+            if x < a_min {
+                a_min
+            } else if x > a_max {
+                a_max
+            } else {
+                x
+            }
+        })
+        .collect();
+    Array::from_vec(input.dim().clone(), data)
 }
 
 // ---------------------------------------------------------------------------
@@ -672,6 +701,20 @@ mod tests {
         let a = arr1(vec![-1.0, 0.5, 1.5, 3.0]);
         let r = clip(&a, 0.0, 2.0).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[0.0, 0.5, 1.5, 2.0]);
+    }
+
+    #[test]
+    fn test_clip_ord_integer() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![-10, 0, 5, 100, 255]).unwrap();
+        let r = clip_ord(&a, 0, 200).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[0, 0, 5, 100, 200]);
+    }
+
+    #[test]
+    fn test_clip_ord_u8() {
+        let a = Array::<u8, Ix1>::from_vec(Ix1::new([4]), vec![0, 50, 200, 255]).unwrap();
+        let r = clip_ord(&a, 10, 128).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[10, 50, 128, 128]);
     }
 
     #[test]

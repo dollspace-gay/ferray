@@ -16,6 +16,31 @@ use crate::scalar::LinalgFloat;
 pub use einsum::einsum;
 pub use tensordot::{TensordotAxes, tensordot};
 
+/// Borrow contiguous data directly or copy if strided, avoiding allocation
+/// for the common case of C-contiguous arrays.
+enum DataRef<'a, T> {
+    Borrowed(&'a [T]),
+    Owned(Vec<T>),
+}
+
+impl<T> std::ops::Deref for DataRef<'_, T> {
+    type Target = [T];
+    fn deref(&self) -> &[T] {
+        match self {
+            DataRef::Borrowed(s) => s,
+            DataRef::Owned(v) => v,
+        }
+    }
+}
+
+fn borrow_data<T: LinalgFloat>(a: &Array<T, IxDyn>) -> DataRef<'_, T> {
+    if let Some(s) = a.as_slice() {
+        DataRef::Borrowed(s)
+    } else {
+        DataRef::Owned(a.iter().copied().collect())
+    }
+}
+
 /// Generalized dot product matching `np.dot` semantics.
 ///
 /// - 1D x 1D: inner product (scalar returned as 1-element array)
@@ -68,8 +93,8 @@ pub fn dot<T: LinalgFloat>(
             let out_shape: Vec<usize> = a_shape[..a_shape.len() - 1].to_vec();
             let out_size: usize = out_shape.iter().product::<usize>().max(1);
 
-            let a_data: Vec<T> = a.iter().copied().collect();
-            let b_data: Vec<T> = b.iter().copied().collect();
+            let a_data = borrow_data(a);
+            let b_data = borrow_data(b);
 
             let mut result = Vec::with_capacity(out_size);
             for i in 0..out_size {
@@ -101,19 +126,19 @@ pub fn dot<T: LinalgFloat>(
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if total element counts differ.
 pub fn vdot<T: LinalgFloat>(a: &Array<T, IxDyn>, b: &Array<T, IxDyn>) -> FerrayResult<T> {
-    let a_flat: Vec<T> = a.iter().copied().collect();
-    let b_flat: Vec<T> = b.iter().copied().collect();
-    if a_flat.len() != b_flat.len() {
+    if a.size() != b.size() {
         return Err(FerrayError::shape_mismatch(format!(
             "vdot: arrays have different sizes {} and {}",
-            a_flat.len(),
-            b_flat.len()
+            a.size(),
+            b.size()
         )));
     }
+    let a_data = borrow_data(a);
+    let b_data = borrow_data(b);
     let zero = T::from_f64_const(0.0);
-    Ok(a_flat
+    Ok(a_data
         .iter()
-        .zip(b_flat.iter())
+        .zip(b_data.iter())
         .map(|(&x, &y)| x * y)
         .fold(zero, |acc, v| acc + v))
 }
@@ -161,14 +186,14 @@ pub fn outer<T: LinalgFloat>(
     a: &Array<T, IxDyn>,
     b: &Array<T, IxDyn>,
 ) -> FerrayResult<Array<T, IxDyn>> {
-    let a_flat: Vec<T> = a.iter().copied().collect();
-    let b_flat: Vec<T> = b.iter().copied().collect();
-    let m = a_flat.len();
-    let n = b_flat.len();
+    let a_data = borrow_data(a);
+    let b_data = borrow_data(b);
+    let m = a_data.len();
+    let n = b_data.len();
 
     let mut result = Vec::with_capacity(m * n);
-    for &ai in &a_flat {
-        for &bj in &b_flat {
+    for &ai in &*a_data {
+        for &bj in &*b_data {
             result.push(ai * bj);
         }
     }
@@ -858,5 +883,36 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn matmul_batched_3d() {
+        // Batch of 2 matrices: (2, 2, 3) @ (2, 3, 2) -> (2, 2, 2)
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2, 3]),
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 3, 2]),
+            vec![1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        )
+        .unwrap();
+        let c = matmul(&a, &b).unwrap();
+        assert_eq!(c.shape(), &[2, 2, 2]);
+
+        let data: Vec<f64> = c.iter().copied().collect();
+        // batch 0: [[1,2,3],[4,5,6]] @ [[1,0],[0,1],[1,1]] = [[4,5],[10,11]]
+        assert!((data[0] - 4.0).abs() < 1e-10);
+        assert!((data[1] - 5.0).abs() < 1e-10);
+        assert!((data[2] - 10.0).abs() < 1e-10);
+        assert!((data[3] - 11.0).abs() < 1e-10);
+        // batch 1: [[7,8,9],[10,11,12]] @ [[1,0],[0,1],[0,0]] = [[7,8],[10,11]]
+        assert!((data[4] - 7.0).abs() < 1e-10);
+        assert!((data[5] - 8.0).abs() < 1e-10);
+        assert!((data[6] - 10.0).abs() < 1e-10);
+        assert!((data[7] - 11.0).abs() < 1e-10);
     }
 }

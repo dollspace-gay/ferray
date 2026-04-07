@@ -14,8 +14,28 @@ use crate::norm::FftNorm;
 // ---------------------------------------------------------------------------
 
 /// Convert an Array<Complex<f64>, D> to flat row-major data.
-fn to_complex_flat<D: Dimension>(a: &Array<Complex<f64>, D>) -> Vec<Complex<f64>> {
-    a.iter().copied().collect()
+/// Get contiguous data, borrowing if C-contiguous, copying otherwise.
+enum ComplexData<'a> {
+    Borrowed(&'a [Complex<f64>]),
+    Owned(Vec<Complex<f64>>),
+}
+
+impl std::ops::Deref for ComplexData<'_> {
+    type Target = [Complex<f64>];
+    fn deref(&self) -> &[Complex<f64>] {
+        match self {
+            ComplexData::Borrowed(s) => s,
+            ComplexData::Owned(v) => v,
+        }
+    }
+}
+
+fn borrow_complex_flat<D: Dimension>(a: &Array<Complex<f64>, D>) -> ComplexData<'_> {
+    if let Some(s) = a.as_slice() {
+        ComplexData::Borrowed(s)
+    } else {
+        ComplexData::Owned(a.iter().copied().collect())
+    }
 }
 
 /// Resolve an axis parameter: if None, use the last axis.
@@ -103,7 +123,7 @@ pub fn fft<D: Dimension>(
     let shape = a.shape().to_vec();
     let ndim = shape.len();
     let ax = resolve_axis(ndim, axis)?;
-    let data = to_complex_flat(a);
+    let data = borrow_complex_flat(a);
 
     let (new_shape, result) = fft_1d_along_axis(&data, &shape, ax, n, false, norm)?;
 
@@ -131,7 +151,7 @@ pub fn ifft<D: Dimension>(
     let shape = a.shape().to_vec();
     let ndim = shape.len();
     let ax = resolve_axis(ndim, axis)?;
-    let data = to_complex_flat(a);
+    let data = borrow_complex_flat(a);
 
     let (new_shape, result) = fft_1d_along_axis(&data, &shape, ax, n, true, norm)?;
 
@@ -278,7 +298,7 @@ fn fftn_impl<D: Dimension>(
 ) -> FerrayResult<Array<Complex<f64>, IxDyn>> {
     let shape = a.shape().to_vec();
     let sizes = resolve_shapes(&shape, axes, s)?;
-    let data = to_complex_flat(a);
+    let data = borrow_complex_flat(a);
 
     let axes_and_sizes: Vec<(usize, Option<usize>)> = axes.iter().copied().zip(sizes).collect();
 
@@ -428,5 +448,110 @@ mod tests {
     fn fft_axis_out_of_bounds() {
         let a = make_1d(vec![c(1.0, 0.0)]);
         assert!(fft(&a, None, Some(1), FftNorm::Backward).is_err());
+    }
+
+    // --- Shape/padding parameter tests ---
+
+    #[test]
+    fn fft2_with_shape_padding() {
+        use ferray_core::dimension::Ix2;
+        // 2x2 input, pad to 4x4 via s parameter
+        let data = vec![c(1.0, 0.0), c(2.0, 0.0), c(3.0, 0.0), c(4.0, 0.0)];
+        let a = Array::from_vec(Ix2::new([2, 2]), data).unwrap();
+        let result = fft2(&a, Some(&[4, 4]), None, FftNorm::Backward).unwrap();
+        assert_eq!(result.shape(), &[4, 4]);
+    }
+
+    #[test]
+    fn fft2_with_shape_truncation() {
+        use ferray_core::dimension::Ix2;
+        // 4x4 input, truncate to 2x2 via s parameter
+        let data: Vec<Complex<f64>> = (0..16).map(|i| c(i as f64, 0.0)).collect();
+        let a = Array::from_vec(Ix2::new([4, 4]), data).unwrap();
+        let result = fft2(&a, Some(&[2, 2]), None, FftNorm::Backward).unwrap();
+        assert_eq!(result.shape(), &[2, 2]);
+    }
+
+    #[test]
+    fn fftn_with_shape_roundtrip() {
+        use ferray_core::dimension::Ix2;
+        // 3x4 input, pad to 4x8, then ifft with same shape should recover padded version
+        let data: Vec<Complex<f64>> = (0..12).map(|i| c(i as f64, 0.0)).collect();
+        let a = Array::from_vec(Ix2::new([3, 4]), data).unwrap();
+        let spectrum = fftn(&a, Some(&[4, 8]), None, FftNorm::Backward).unwrap();
+        assert_eq!(spectrum.shape(), &[4, 8]);
+        let recovered = ifftn(&spectrum, Some(&[4, 8]), None, FftNorm::Backward).unwrap();
+        assert_eq!(recovered.shape(), &[4, 8]);
+        // First 3x4 block should match original (rest is zero-padded)
+        for i in 0..3 {
+            for j in 0..4 {
+                let idx = i * 8 + j;
+                let orig_val = (i * 4 + j) as f64;
+                assert!(
+                    (recovered.iter().nth(idx).unwrap().re - orig_val).abs() < 1e-9,
+                    "mismatch at ({i},{j})"
+                );
+            }
+        }
+    }
+
+    // --- Normalization mode tests ---
+
+    #[test]
+    fn fft_ifft_ortho_roundtrip() {
+        // Ortho normalization: both forward and inverse scale by 1/sqrt(n)
+        let data = vec![c(1.0, 0.0), c(2.0, 0.0), c(3.0, 0.0), c(4.0, 0.0)];
+        let a = make_1d(data.clone());
+        let spectrum = fft(&a, None, None, FftNorm::Ortho).unwrap();
+        let recovered = ifft(&spectrum, None, None, FftNorm::Ortho).unwrap();
+        for (orig, rec) in data.iter().zip(recovered.iter()) {
+            assert!((orig.re - rec.re).abs() < 1e-10);
+            assert!((orig.im - rec.im).abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn fft_ifft_forward_roundtrip() {
+        // Forward normalization: forward scales by 1/n, inverse no scaling
+        let data = vec![c(1.0, 2.0), c(-1.0, 0.5), c(3.0, -1.0), c(0.0, 0.0)];
+        let a = make_1d(data.clone());
+        let spectrum = fft(&a, None, None, FftNorm::Forward).unwrap();
+        let recovered = ifft(&spectrum, None, None, FftNorm::Forward).unwrap();
+        for (orig, rec) in data.iter().zip(recovered.iter()) {
+            assert!((orig.re - rec.re).abs() < 1e-10);
+            assert!((orig.im - rec.im).abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn fft_ortho_energy_preservation() {
+        // Parseval's theorem: ||x||^2 = ||X||^2 for ortho normalization
+        let data = vec![c(1.0, 0.0), c(2.0, 0.0), c(3.0, 0.0), c(4.0, 0.0)];
+        let a = make_1d(data.clone());
+        let spectrum = fft(&a, None, None, FftNorm::Ortho).unwrap();
+
+        let energy_time: f64 = data.iter().map(|x| x.re * x.re + x.im * x.im).sum();
+        let energy_freq: f64 = spectrum
+            .iter()
+            .map(|x| x.re * x.re + x.im * x.im)
+            .sum();
+        assert!(
+            (energy_time - energy_freq).abs() < 1e-10,
+            "Parseval: time={energy_time}, freq={energy_freq}"
+        );
+    }
+
+    #[test]
+    fn fft_forward_scaling() {
+        // Forward normalization: FFT of constant [1,1,1,1] should be [1, 0, 0, 0]
+        // (divided by n=4, so DC = 4/4 = 1)
+        let a = make_1d(vec![c(1.0, 0.0); 4]);
+        let result = fft(&a, None, None, FftNorm::Forward).unwrap();
+        let vals: Vec<_> = result.iter().copied().collect();
+        assert!((vals[0].re - 1.0).abs() < 1e-12);
+        for v in &vals[1..] {
+            assert!(v.re.abs() < 1e-12);
+            assert!(v.im.abs() < 1e-12);
+        }
     }
 }

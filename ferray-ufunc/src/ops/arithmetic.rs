@@ -155,12 +155,38 @@ where
 }
 
 /// Return (floor_divide, remainder) as a tuple of arrays.
+///
+/// Computes both results in a single pass over the data, avoiding the
+/// redundant division that would occur from calling `floor_divide` and
+/// `remainder` separately.
 pub fn divmod<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<(Array<T, D>, Array<T, D>)>
 where
     T: Element + Float,
     D: Dimension,
 {
-    Ok((floor_divide(a, b)?, remainder(a, b)?))
+    if a.shape() != b.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "divmod: shapes {:?} and {:?} do not match",
+            a.shape(),
+            b.shape()
+        )));
+    }
+    let z = <T as Element>::zero();
+    let mut quot_data = Vec::with_capacity(a.size());
+    let mut rem_data = Vec::with_capacity(a.size());
+    for (&x, &y) in a.iter().zip(b.iter()) {
+        let q = (x / y).floor();
+        let mut r = x - q * y;
+        // Python/NumPy mod: result has same sign as divisor
+        if (r < z && y > z) || (r > z && y < z) {
+            r = r + y;
+        }
+        quot_data.push(q);
+        rem_data.push(r);
+    }
+    let quot = Array::from_vec(a.dim().clone(), quot_data)?;
+    let rem = Array::from_vec(a.dim().clone(), rem_data)?;
+    Ok((quot, rem))
 }
 
 // ---------------------------------------------------------------------------
@@ -353,6 +379,86 @@ where
     })
 }
 
+/// Integer GCD using the Euclidean algorithm.
+///
+/// Works on actual integer element types (i8, i16, i32, i64, u8, u16, u32, u64, etc.).
+/// For float-typed arrays, use [`gcd`] instead.
+pub fn gcd_int<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element
+        + Copy
+        + PartialEq
+        + std::ops::Rem<Output = T>
+        + num_traits::Signed,
+    D: Dimension,
+{
+    if a.shape() != b.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "gcd_int: shapes {:?} and {:?} do not match",
+            a.shape(),
+            b.shape()
+        )));
+    }
+    let data: Vec<T> = a
+        .iter()
+        .zip(b.iter())
+        .map(|(&x, &y)| {
+            let mut ax = x.abs();
+            let mut ay = y.abs();
+            while ay != <T as Element>::zero() {
+                let t = ay;
+                ay = ax % ay;
+                ax = t;
+            }
+            ax
+        })
+        .collect();
+    Array::from_vec(a.dim().clone(), data)
+}
+
+/// Integer LCM using the Euclidean GCD algorithm.
+///
+/// Works on actual integer element types. For float-typed arrays, use [`lcm`] instead.
+pub fn lcm_int<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element
+        + Copy
+        + PartialEq
+        + std::ops::Rem<Output = T>
+        + std::ops::Div<Output = T>
+        + std::ops::Mul<Output = T>
+        + num_traits::Signed,
+    D: Dimension,
+{
+    if a.shape() != b.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "lcm_int: shapes {:?} and {:?} do not match",
+            a.shape(),
+            b.shape()
+        )));
+    }
+    let data: Vec<T> = a
+        .iter()
+        .zip(b.iter())
+        .map(|(&x, &y)| {
+            let ax = x.abs();
+            let ay = y.abs();
+            if ax == <T as Element>::zero() || ay == <T as Element>::zero() {
+                return <T as Element>::zero();
+            }
+            let mut gx = ax;
+            let mut gy = ay;
+            while gy != <T as Element>::zero() {
+                let t = gy;
+                gy = gx % gy;
+                gx = t;
+            }
+            ax / gx * ay
+        })
+        .collect();
+    Array::from_vec(a.dim().clone(), data)
+}
+
 // ---------------------------------------------------------------------------
 // Broadcasting binary arithmetic
 // ---------------------------------------------------------------------------
@@ -442,7 +548,14 @@ where
     let outer_size: usize = shape[..axis].iter().product();
     let inner_size = stride;
 
-    let data: Vec<T> = input.iter().copied().collect();
+    // Use contiguous slice directly if available, avoiding a full copy
+    let owned_data: Vec<T>;
+    let data: &[T] = if let Some(s) = input.as_slice() {
+        s
+    } else {
+        owned_data = input.iter().copied().collect();
+        &owned_data
+    };
     let mut result = vec![<T as Element>::zero(); out_size];
 
     for outer in 0..outer_size {
@@ -480,7 +593,6 @@ pub fn multiply_outer<T>(a: &Array<T, Ix1>, b: &Array<T, Ix1>) -> FerrayResult<A
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
 {
-    use ferray_core::dimension::Ix2;
     let m = a.size();
     let n = b.size();
     let a_data: Vec<T> = a.iter().copied().collect();
@@ -491,10 +603,7 @@ where
             data.push(ai * bj);
         }
     }
-    let arr = Array::from_vec(Ix2::new([m, n]), data)?;
-    // Convert to IxDyn
-    let dyn_data: Vec<T> = arr.iter().copied().collect();
-    Array::from_vec(IxDyn::from(&[m, n][..]), dyn_data)
+    Array::from_vec(IxDyn::from(&[m, n][..]), data)
 }
 
 // ---------------------------------------------------------------------------
@@ -1106,6 +1215,30 @@ mod tests {
         let b = arr1(vec![6.0, 8.0]);
         let r = lcm(&a, &b).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[12.0, 24.0]);
+    }
+
+    #[test]
+    fn test_gcd_int() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![12, 15, 0]).unwrap();
+        let b = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![8, 25, 7]).unwrap();
+        let r = gcd_int(&a, &b).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[4, 5, 7]);
+    }
+
+    #[test]
+    fn test_lcm_int() {
+        let a = Array::<i64, Ix1>::from_vec(Ix1::new([3]), vec![4, 6, 0]).unwrap();
+        let b = Array::<i64, Ix1>::from_vec(Ix1::new([3]), vec![6, 8, 5]).unwrap();
+        let r = lcm_int(&a, &b).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[12, 24, 0]);
+    }
+
+    #[test]
+    fn test_gcd_int_negative() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([2]), vec![-12, 15]).unwrap();
+        let b = Array::<i32, Ix1>::from_vec(Ix1::new([2]), vec![8, -25]).unwrap();
+        let r = gcd_int(&a, &b).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[4, 5]);
     }
 
     #[test]

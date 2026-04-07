@@ -531,4 +531,77 @@ mod tests {
     fn roots_empty_err() {
         assert!(find_roots_from_power_coeffs(&[]).is_err());
     }
+
+    #[test]
+    fn roots_degree_5_known() {
+        // (x-1)(x-2)(x-3)(x-4)(x-5) = x^5 - 15x^4 + 85x^3 - 225x^2 + 274x - 120
+        let coeffs = [-120.0, 274.0, -225.0, 85.0, -15.0, 1.0];
+        let roots = find_roots_from_power_coeffs(&coeffs).unwrap();
+        assert_eq!(roots.len(), 5);
+        let mut real_roots: Vec<f64> = roots.iter().map(|r| r.re).collect();
+        real_roots.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        for (i, &r) in real_roots.iter().enumerate() {
+            assert!(
+                (r - (i + 1) as f64).abs() < 1e-6,
+                "root {i}: expected {}, got {r}",
+                i + 1
+            );
+        }
+    }
+
+    #[test]
+    fn roots_degree_10() {
+        // (x-1)(x-2)...(x-10) — all roots are 1..10
+        // Build coefficients by expanding the product
+        let mut coeffs = vec![1.0_f64]; // start with constant polynomial "1"
+        for k in 1..=10 {
+            // Multiply by (x - k): new[i] = old[i-1] - k * old[i]
+            let mut new_coeffs = vec![0.0; coeffs.len() + 1];
+            for (i, &c) in coeffs.iter().enumerate() {
+                new_coeffs[i + 1] += c; // x term
+                new_coeffs[i] -= k as f64 * c; // -k term
+            }
+            coeffs = new_coeffs;
+        }
+
+        let roots = find_roots_from_power_coeffs(&coeffs).unwrap();
+        assert_eq!(roots.len(), 10);
+
+        // All roots should be real and close to 1..10
+        let mut real_roots: Vec<f64> = roots.iter().map(|r| r.re).collect();
+        real_roots.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        for (i, &r) in real_roots.iter().enumerate() {
+            let expected = (i + 1) as f64;
+            assert!(
+                (r - expected).abs() < 0.01,
+                "degree-10 root {i}: expected {expected}, got {r}"
+            );
+        }
+        // Imaginary parts should be near zero
+        for (i, root) in roots.iter().enumerate() {
+            assert!(
+                root.im.abs() < 0.01,
+                "degree-10 root {i} has imaginary part {}",
+                root.im
+            );
+        }
+    }
+
+    #[test]
+    fn roots_degree_6_with_real_roots() {
+        // (x-1)(x+1)(x-2)(x+2)(x-3)(x+3) = (x^2-1)(x^2-4)(x^2-9)
+        // = x^6 - 14x^4 + 49x^2 - 36
+        let coeffs = [-36.0, 0.0, 49.0, 0.0, -14.0, 0.0, 1.0];
+        let roots = find_roots_from_power_coeffs(&coeffs).unwrap();
+        assert_eq!(roots.len(), 6);
+        let mut real_roots: Vec<f64> = roots.iter().map(|r| r.re).collect();
+        real_roots.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let expected = [-3.0, -2.0, -1.0, 1.0, 2.0, 3.0];
+        for (i, (&r, &e)) in real_roots.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (r - e).abs() < 1e-4,
+                "root {i}: expected {e}, got {r}"
+            );
+        }
+    }
 }

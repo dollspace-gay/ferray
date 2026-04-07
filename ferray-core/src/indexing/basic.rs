@@ -261,17 +261,36 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
     /// Index into the array with a flat (linear) index.
     ///
-    /// Elements are ordered in row-major (C) order.
+    /// Elements are ordered in row-major (C) order. The flat index is
+    /// converted to a multi-dimensional index via unravel, then stride
+    /// arithmetic computes the physical offset in O(ndim) time.
     ///
     /// # Errors
     /// Returns `IndexOutOfBounds` if the index is out of range.
     pub fn flat_index(&self, index: isize) -> FerrayResult<&T> {
         let size = self.size();
         let idx = normalize_index(index, size, 0)?;
-        self.inner
-            .iter()
-            .nth(idx)
-            .ok_or_else(|| FerrayError::index_out_of_bounds(index, 0, size))
+
+        // Unravel flat index to multi-dim index in row-major order,
+        // then compute the physical offset via strides.
+        let shape = self.shape();
+        let strides = self.inner.strides();
+        let base_ptr = self.inner.as_ptr();
+        let ndim = shape.len();
+
+        let mut remaining = idx;
+        let mut offset: isize = 0;
+        for d in 0..ndim {
+            let dim_stride: usize = shape[d + 1..].iter().product::<usize>().max(1);
+            let coord = remaining / dim_stride;
+            remaining %= dim_stride;
+            offset += coord as isize * strides[d];
+        }
+
+        // SAFETY: idx is validated in-bounds via normalize_index, and the
+        // unravel produces coordinates within each axis, so the computed
+        // offset is within the array's data allocation.
+        Ok(unsafe { &*base_ptr.offset(offset) })
     }
 
     /// Get a reference to a single element by multi-dimensional index.

@@ -11,14 +11,22 @@ use crate::scalar::LinalgFloat;
 
 /// Convert a 2D ferray Array<T, Ix2> to a faer::Mat<T>.
 ///
-/// If the array is C-contiguous (row-major), we copy the data into faer's
-/// column-major layout. faer always stores data column-major.
+/// Convert a 2D ferray Array to faer's column-major Mat.
+///
+/// Uses `as_slice()` for C-contiguous arrays to avoid an intermediate
+/// allocation — the data is indexed directly from the contiguous buffer.
+/// Non-contiguous arrays fall back to iterator-based collection.
 pub fn array2_to_faer<T: LinalgFloat>(a: &Array<T, Ix2>) -> faer::Mat<T> {
     let shape = a.shape();
     let (m, n) = (shape[0], shape[1]);
-    // Collect data once upfront to avoid per-element allocation in the closure.
-    let data: Vec<T> = a.iter().copied().collect();
-    faer::Mat::from_fn(m, n, |i, j| data[i * n + j])
+    if let Some(slice) = a.as_slice() {
+        // C-contiguous: index directly into the slice (row-major -> col-major)
+        faer::Mat::from_fn(m, n, |i, j| slice[i * n + j])
+    } else {
+        // Non-contiguous: collect in logical order first
+        let data: Vec<T> = a.iter().copied().collect();
+        faer::Mat::from_fn(m, n, |i, j| data[i * n + j])
+    }
 }
 
 /// Convert a 2D ferray Array<T, D> to a faer::Mat<T> using iter-based
@@ -34,8 +42,12 @@ pub fn array2_to_faer_general<T: LinalgFloat, D: Dimension>(
         )));
     }
     let (m, n) = (shape[0], shape[1]);
-    let data: Vec<T> = a.iter().copied().collect();
-    Ok(faer::Mat::from_fn(m, n, |i, j| data[i * n + j]))
+    if let Some(slice) = a.as_slice() {
+        Ok(faer::Mat::from_fn(m, n, |i, j| slice[i * n + j]))
+    } else {
+        let data: Vec<T> = a.iter().copied().collect();
+        Ok(faer::Mat::from_fn(m, n, |i, j| data[i * n + j]))
+    }
 }
 
 /// Convert a faer::Mat<T> back to a ferray Array<T, Ix2>.

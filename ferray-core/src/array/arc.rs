@@ -30,23 +30,50 @@ pub struct ArcArray<T: Element, D: Dimension> {
 
 impl<T: Element, D: Dimension> ArcArray<T, D> {
     /// Create an `ArcArray` from an owned `Array`.
+    ///
+    /// Preserves the original memory layout (C or Fortran) when possible.
+    /// Non-contiguous arrays are converted to C-contiguous.
     pub fn from_owned(arr: Array<T, D>) -> Self {
         let dim = arr.dim.clone();
-        // Ensure we get contiguous data
-        let data = if arr.inner.is_standard_layout() {
-            arr.inner.into_raw_vec_and_offset().0
+        let original_strides: Vec<isize> = arr.inner.strides().to_vec();
+
+        if arr.inner.is_standard_layout() {
+            // C-contiguous: take data directly, preserve strides
+            let data = arr.inner.into_raw_vec_and_offset().0;
+            Self {
+                data: Arc::new(data),
+                dim,
+                strides: original_strides,
+                offset: 0,
+            }
         } else {
-            // Need to make it contiguous first
-            let contiguous = arr.inner.as_standard_layout().into_owned();
-            contiguous.into_raw_vec_and_offset().0
-        };
-        // Recompute strides for the potentially re-laid-out data
-        let strides = compute_c_strides(dim.as_slice());
-        Self {
-            data: Arc::new(data),
-            dim,
-            strides,
-            offset: 0,
+            // Non-standard layout: check if F-contiguous
+            let shape = dim.as_slice();
+            let is_f = crate::layout::detect_layout(shape, &original_strides)
+                == crate::layout::MemoryLayout::Fortran;
+
+            if is_f {
+                // Fortran-contiguous: data is contiguous, just different stride order.
+                // Extract the raw vec — for F-order the data is contiguous in memory.
+                let data = arr.inner.into_raw_vec_and_offset().0;
+                Self {
+                    data: Arc::new(data),
+                    dim,
+                    strides: original_strides,
+                    offset: 0,
+                }
+            } else {
+                // Truly non-contiguous (e.g., strided slice): make C-contiguous
+                let contiguous = arr.inner.as_standard_layout().into_owned();
+                let data = contiguous.into_raw_vec_and_offset().0;
+                let strides = compute_c_strides(shape);
+                Self {
+                    data: Arc::new(data),
+                    dim,
+                    strides,
+                    offset: 0,
+                }
+            }
         }
     }
 

@@ -39,8 +39,13 @@ pub enum Side {
 /// Sort an array along the given axis (or flattened if axis is None).
 ///
 /// When `axis` is `None`, the array is flattened before sorting and a 1-D
-/// array is returned (matching NumPy behaviour). When an axis is given, the
-/// returned array has the same shape as the input.
+/// array is returned. When an axis is given, the returned array has the
+/// same shape as the input.
+///
+/// **Note:** NumPy's `np.sort(a)` defaults to `axis=-1` (last axis).
+/// ferray's `sort(a, None, kind)` flattens instead. To match NumPy's
+/// default, pass the last axis explicitly:
+/// `sort(a, Some(a.ndim() - 1), kind)`.
 ///
 /// Equivalent to `numpy.sort`.
 pub fn sort<T, D>(
@@ -144,9 +149,13 @@ fn sort_slice<T: PartialOrd + Copy + Send + Sync>(data: &mut [T], kind: SortKind
 /// Return the indices that would sort an array along the given axis.
 ///
 /// When `axis` is `None`, the array is flattened before computing
-/// indices and a 1-D array is returned (matching NumPy behaviour).
+/// indices and a 1-D array is returned.
 ///
 /// Returns u64 indices.
+///
+/// **Note:** NumPy's `np.argsort(a)` defaults to `axis=-1` (last axis).
+/// ferray's `argsort(a, None)` flattens instead. To match NumPy's
+/// default, pass the last axis explicitly: `argsort(a, Some(a.ndim() - 1))`.
 ///
 /// Equivalent to `numpy.argsort`.
 pub fn argsort<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<u64, IxDyn>>

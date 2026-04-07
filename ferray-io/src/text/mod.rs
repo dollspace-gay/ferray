@@ -47,7 +47,87 @@ impl Default for SaveTxtOptions {
     }
 }
 
+/// Format a single value using a format string.
+///
+/// Supports:
+/// - NumPy printf-style: `"%.6e"`, `"%.18e"`, `"%10.5f"`, `"%.4f"`, `"%d"`
+/// - Rust-style with braces: `"{:.6}"`, `"{:.6e}"`, `"{:>10.5}"`
+/// - Plain `"{}"` — default Display
+///
+/// Unrecognized patterns fall back to default Display formatting.
+fn format_value<T: Display>(val: &T, fmt_str: &str) -> String {
+    // Rust-style: contains "{" — parse precision patterns.
+    if fmt_str.contains('{') {
+        if let Some(spec) = fmt_str.strip_prefix("{:").and_then(|s| s.strip_suffix('}')) {
+            if let Some(prec_str) = spec.strip_prefix('.') {
+                let is_sci = prec_str.ends_with('e') || prec_str.ends_with('E');
+                let digits_str = if is_sci {
+                    &prec_str[..prec_str.len() - 1]
+                } else {
+                    prec_str
+                };
+                if let Ok(prec) = digits_str.parse::<usize>() {
+                    // Parse value as f64 for numeric formatting
+                    if let Ok(v) = val.to_string().parse::<f64>() {
+                        return if is_sci {
+                            format!("{v:.prec$e}")
+                        } else {
+                            format!("{v:.prec$}")
+                        };
+                    }
+                }
+            }
+        }
+        // Fallback: simple substitution
+        return fmt_str.replace("{}", &val.to_string());
+    }
+
+    // NumPy printf-style: starts with "%"
+    if let Some(spec) = fmt_str.strip_prefix('%') {
+        let (body, mode) = if let Some(rest) = spec.strip_suffix('e') {
+            (rest, 'e')
+        } else if let Some(rest) = spec.strip_suffix('E') {
+            (rest, 'E')
+        } else if let Some(rest) = spec.strip_suffix('f') {
+            (rest, 'f')
+        } else if let Some(rest) = spec.strip_suffix('g') {
+            (rest, 'g')
+        } else {
+            // %d, %i, or unrecognized — use default Display
+            return format!("{val}");
+        };
+
+        // Parse value as f64 for numeric formatting
+        if let Ok(v) = val.to_string().parse::<f64>() {
+            if let Some(dot_pos) = body.find('.') {
+                let prec_str = &body[dot_pos + 1..];
+                if let Ok(prec) = prec_str.parse::<usize>() {
+                    return match mode {
+                        'e' => format!("{v:.prec$e}"),
+                        'E' => format!("{v:.prec$E}"),
+                        _ => format!("{v:.prec$}"),
+                    };
+                }
+            } else if body.is_empty() {
+                return match mode {
+                    'e' => format!("{v:e}"),
+                    'E' => format!("{v:E}"),
+                    _ => format!("{v}"),
+                };
+            }
+        }
+    }
+
+    // Unrecognized format — default Display
+    format!("{val}")
+}
+
 /// Save a 2D array as delimited text.
+///
+/// The `fmt` field in [`SaveTxtOptions`] supports:
+/// - NumPy printf-style: `"%.6e"`, `"%.18e"`, `"%10.5f"`, `"%d"`
+/// - Rust-style: `"{:.6}"`, `"{:.6e}"`
+/// - Default: `None` uses standard `Display` formatting.
 ///
 /// # Errors
 /// Returns `FerrayError::IoError` on file write failures.
@@ -96,9 +176,12 @@ pub fn savetxt_to_writer<T: Element + Display, W: Write>(
             }
             let val = &slice[row * ncols + col];
             if let Some(ref fmt_str) = opts.fmt {
-                // Use the format string with the value
-                // We support a simple subset: if fmt contains "{}", use it directly
-                let formatted = fmt_str.replace("{}", &val.to_string());
+                // Format string support:
+                // - NumPy printf-style: "%.6e", "%.18e", "%10.5f", "%d"
+                // - Rust-style: "{:.6}", "{:.6e}", "{:>10.5}"
+                // We convert common printf patterns to Rust format, then
+                // fall back to string substitution.
+                let formatted = format_value(val, fmt_str);
                 write!(writer, "{formatted}").map_err(|e| FerrayError::io_error(e.to_string()))?;
             } else {
                 write!(writer, "{val}").map_err(|e| FerrayError::io_error(e.to_string()))?;

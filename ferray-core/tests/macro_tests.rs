@@ -238,6 +238,86 @@ fn s_macro_all_rows_step_cols() {
     );
 }
 
+// --- s![] macro tests: negative indices ---
+
+#[test]
+fn s_macro_negative_index() {
+    let slices = ferray_core::s![-1];
+    assert_eq!(slices.len(), 1);
+    assert_eq!(slices[0], SliceInfoElem::Index(-1));
+}
+
+#[test]
+fn s_macro_negative_start() {
+    let slices = ferray_core::s![-3..];
+    assert_eq!(slices.len(), 1);
+    assert_eq!(
+        slices[0],
+        SliceInfoElem::Slice {
+            start: -3,
+            end: None,
+            step: 1,
+        }
+    );
+}
+
+#[test]
+fn s_macro_negative_end() {
+    let slices = ferray_core::s![..-1];
+    assert_eq!(slices.len(), 1);
+    assert_eq!(
+        slices[0],
+        SliceInfoElem::Slice {
+            start: 0,
+            end: Some(-1),
+            step: 1,
+        }
+    );
+}
+
+#[test]
+fn s_macro_negative_step() {
+    let slices = ferray_core::s![..;-1];
+    assert_eq!(slices.len(), 1);
+    assert_eq!(
+        slices[0],
+        SliceInfoElem::Slice {
+            start: 0,
+            end: None,
+            step: -1,
+        }
+    );
+}
+
+#[test]
+fn s_macro_negative_range_with_step() {
+    let slices = ferray_core::s![-5..-1;2];
+    assert_eq!(slices.len(), 1);
+    assert_eq!(
+        slices[0],
+        SliceInfoElem::Slice {
+            start: -5,
+            end: Some(-1),
+            step: 2,
+        }
+    );
+}
+
+#[test]
+fn s_macro_multi_axis_with_negatives() {
+    let slices = ferray_core::s![1..-1, -2];
+    assert_eq!(slices.len(), 2);
+    assert_eq!(
+        slices[0],
+        SliceInfoElem::Slice {
+            start: 1,
+            end: Some(-1),
+            step: 1,
+        }
+    );
+    assert_eq!(slices[1], SliceInfoElem::Index(-2));
+}
+
 // ---------------------------------------------------------------------------
 // promoted_type! macro tests
 // ---------------------------------------------------------------------------

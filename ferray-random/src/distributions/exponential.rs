@@ -118,4 +118,40 @@ mod tests {
         let b = rng2.exponential(2.0, 100).unwrap();
         assert_eq!(a.as_slice().unwrap(), b.as_slice().unwrap());
     }
+
+    #[test]
+    fn exponential_mean_and_variance() {
+        let mut rng = default_rng_seeded(42);
+        let n = 100_000;
+        let scale = 3.0;
+        let arr = rng.exponential(scale, n).unwrap();
+        let s = arr.as_slice().unwrap();
+        let mean: f64 = s.iter().sum::<f64>() / n as f64;
+        let var: f64 = s.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / n as f64;
+        // Exponential(scale): mean=scale, var=scale^2
+        assert!(
+            (mean - scale).abs() < 0.1,
+            "exponential mean {mean} too far from {scale}"
+        );
+        assert!(
+            (var - scale * scale).abs() < 1.0,
+            "exponential variance {var} too far from {}",
+            scale * scale
+        );
+    }
+
+    #[test]
+    fn standard_exponential_mean() {
+        let mut rng = default_rng_seeded(42);
+        let n = 100_000;
+        let arr = rng.standard_exponential(n).unwrap();
+        let s = arr.as_slice().unwrap();
+        let mean: f64 = s.iter().sum::<f64>() / n as f64;
+        assert!(
+            (mean - 1.0).abs() < 0.02,
+            "standard_exponential mean {mean} too far from 1.0"
+        );
+        // All values should be non-negative
+        assert!(s.iter().all(|&x| x >= 0.0), "negative exponential value");
+    }
 }

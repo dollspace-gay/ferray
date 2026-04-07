@@ -202,6 +202,10 @@ pub(crate) fn output_shape(shape: &[usize], axis: usize) -> Vec<usize> {
 ///
 /// Equivalent to `numpy.sum`.
 ///
+/// **Note:** Unlike NumPy, which auto-promotes `int32` sums to `int64`,
+/// ferray returns the same type as the input. For large integer arrays
+/// this may overflow. Use [`sum_as_f64`] for overflow-safe integer summation.
+///
 /// # Examples
 /// ```ignore
 /// let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
@@ -233,12 +237,43 @@ where
     }
 }
 
+/// Sum of array elements, returning `f64` regardless of input type.
+///
+/// This works on integer arrays (i32, u64, etc.) without overflow risk.
+/// The result is always `Array<f64, IxDyn>`, matching NumPy's behavior
+/// of promoting integer sums to a wider type.
+pub fn sum_as_f64<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<f64, IxDyn>>
+where
+    T: Element + Copy + Send + Sync + num_traits::ToPrimitive,
+    D: Dimension,
+{
+    match axis {
+        None => {
+            let total: f64 = a.iter().map(|x| x.to_f64().unwrap_or(0.0)).sum();
+            make_result(&[], vec![total])
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape = a.shape();
+            let out_s = output_shape(shape, ax);
+            let f64_data: Vec<f64> = a.iter().map(|x| x.to_f64().unwrap_or(0.0)).collect();
+            let result = reduce_axis_general(&f64_data, shape, ax, |lane| {
+                lane.iter().sum()
+            });
+            make_result(&out_s, result)
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // prod
 // ---------------------------------------------------------------------------
 
 /// Product of array elements over a given axis.
 ///
+/// **Note:** Unlike NumPy, which auto-promotes integer products,
+/// ferray returns the same type as the input. For large integer arrays
+/// this may overflow.
 /// Equivalent to `numpy.prod`.
 pub fn prod<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
@@ -536,6 +571,45 @@ where
     }
 }
 
+/// Mean of array elements, returning `f64` regardless of input type.
+///
+/// This works on integer arrays (i32, u64, etc.) where [`mean`] would
+/// fail because integers don't implement `Float`. The result is always
+/// `Array<f64, IxDyn>`, matching NumPy's behavior of promoting integer
+/// means to float64.
+///
+/// Equivalent to `numpy.mean` for integer inputs.
+pub fn mean_as_f64<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<f64, IxDyn>>
+where
+    T: Element + Copy + Send + Sync + num_traits::ToPrimitive,
+    D: Dimension,
+{
+    if a.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "cannot compute mean of empty array",
+        ));
+    }
+    match axis {
+        None => {
+            let n = a.size() as f64;
+            let total: f64 = a.iter().map(|x| x.to_f64().unwrap_or(0.0)).sum();
+            make_result(&[], vec![total / n])
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape = a.shape();
+            let out_s = output_shape(shape, ax);
+            let axis_len = shape[ax] as f64;
+            let f64_data: Vec<f64> = a.iter().map(|x| x.to_f64().unwrap_or(0.0)).collect();
+            let result = reduce_axis_general(&f64_data, shape, ax, |lane| {
+                let total: f64 = lane.iter().sum();
+                total / axis_len
+            });
+            make_result(&out_s, result)
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // var
 // ---------------------------------------------------------------------------
@@ -794,5 +868,49 @@ mod tests {
         let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
         let s = sum(&a, None).unwrap();
         assert_eq!(s.iter().next(), Some(&15));
+    }
+
+    #[test]
+    fn test_mean_as_f64_integer() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![1, 2, 3, 4]).unwrap();
+        let m = mean_as_f64(&a, None).unwrap();
+        assert!((m.iter().next().unwrap() - 2.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_mean_as_f64_integer_axis() {
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 5, 6]).unwrap();
+        let m = mean_as_f64(&a, Some(1)).unwrap();
+        assert_eq!(m.shape(), &[2]);
+        let data: Vec<f64> = m.iter().copied().collect();
+        assert!((data[0] - 2.0).abs() < 1e-12);
+        assert!((data[1] - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_mean_as_f64_u8() {
+        let a = Array::<u8, Ix1>::from_vec(Ix1::new([4]), vec![10, 20, 30, 40]).unwrap();
+        let m = mean_as_f64(&a, None).unwrap();
+        assert!((m.iter().next().unwrap() - 25.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_sum_as_f64_integer() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![1, 2, 3, 4]).unwrap();
+        let s = sum_as_f64(&a, None).unwrap();
+        assert!((s.iter().next().unwrap() - 10.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_sum_as_f64_large_values() {
+        // Values that would overflow i32 if summed as i32
+        let a = Array::<i32, Ix1>::from_vec(
+            Ix1::new([3]),
+            vec![i32::MAX, i32::MAX, i32::MAX],
+        )
+        .unwrap();
+        let s = sum_as_f64(&a, None).unwrap();
+        let expected = 3.0 * (i32::MAX as f64);
+        assert!((s.iter().next().unwrap() - expected).abs() < 1.0);
     }
 }

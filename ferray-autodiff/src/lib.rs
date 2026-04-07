@@ -239,12 +239,14 @@ impl<T: Float> Div<T> for DualNumber<T> {
 impl<T: Float> Rem<T> for DualNumber<T> {
     type Output = Self;
 
+    /// Remainder with a scalar constant: `x % c`.
+    /// Derivative: `d/dx (x % c) = 1` (almost everywhere, since `x % c = x - c * floor(x/c)`
+    /// and `floor` is locally constant).
     #[inline]
     fn rem(self, rhs: T) -> Self {
-        let q = (self.real / rhs).floor();
         Self {
             real: self.real % rhs,
-            dual: self.dual - T::zero() * q, // rhs is constant, so just self.dual contribution... actually rem with constant
+            dual: self.dual,
         }
     }
 }
@@ -417,14 +419,51 @@ impl<T: Float> DualNumber<T> {
 
     /// Floating-point power where the exponent is a DualNumber.
     /// `x^p` where both x and p may carry derivatives.
-    /// d/dx: p * x^(p-1) * dx
-    /// d/dp: x^p * ln(x) * dp
+    ///
+    /// Derivative components:
+    /// - d/dx: `p * x^(p-1) * dx`
+    /// - d/dp: `x^p * ln(x) * dp`
+    ///
+    /// At `x = 0`:
+    /// - For `p > 1`: derivative is 0 (both components).
+    /// - For `p == 1`: d/dx component is `dx`, d/dp component is 0.
+    /// - For `0 < p < 1`: d/dx is infinite (returns NaN/Inf).
+    /// - For `p <= 0`: undefined (returns NaN).
+    ///
+    /// For `x < 0` with non-integer `p`, the real part is NaN (as with `f64::powf`),
+    /// and the dual part is also NaN.
     #[inline]
     pub fn powf(self, p: Self) -> Self {
-        let val = self.real.powf(p.real);
+        let x = self.real;
+        let val = x.powf(p.real);
+
+        // Handle x == 0 to avoid ln(0) and 0/0
+        if x == T::zero() {
+            let one = T::one();
+            let zero = T::zero();
+            if p.real > one {
+                // x^p = 0, d/dx = p * 0^(p-1) = 0, d/dp = 0^p * ln(0) -> 0
+                return Self {
+                    real: val,
+                    dual: zero,
+                };
+            } else if p.real == one {
+                // x^1 = x, d/dx = 1 * dx, d/dp = 0^1 * ln(0) -> 0
+                return Self {
+                    real: val,
+                    dual: self.dual,
+                };
+            }
+            // p < 1 at x = 0: derivative is singular, let NaN/Inf propagate
+            return Self {
+                real: val,
+                dual: val * (p.dual * x.ln() + p.real * self.dual / x),
+            };
+        }
+
         Self {
             real: val,
-            dual: val * (p.dual * self.real.ln() + p.real * self.dual / self.real),
+            dual: val * (p.dual * x.ln() + p.real * self.dual / x),
         }
     }
 
@@ -1203,21 +1242,70 @@ pub fn derivative<T: Float>(f: impl Fn(DualNumber<T>) -> DualNumber<T>, x: T) ->
 pub fn gradient<T: Float>(f: impl Fn(&[DualNumber<T>]) -> DualNumber<T>, point: &[T]) -> Vec<T> {
     let n = point.len();
     let mut grad = Vec::with_capacity(n);
+
+    // Pre-allocate a single buffer of constants; toggle one variable at a time.
+    let mut args: Vec<DualNumber<T>> = point.iter().map(|&val| DualNumber::constant(val)).collect();
+
     for i in 0..n {
-        let args: Vec<DualNumber<T>> = point
-            .iter()
-            .enumerate()
-            .map(|(j, &val)| {
-                if j == i {
-                    DualNumber::variable(val)
-                } else {
-                    DualNumber::constant(val)
-                }
-            })
-            .collect();
+        // Seed the i-th component as the variable
+        args[i].dual = T::one();
         grad.push(f(&args).dual);
+        // Reset back to constant
+        args[i].dual = T::zero();
     }
     grad
+}
+
+/// Compute the Jacobian matrix of a vector-valued function at a point.
+///
+/// For `f: R^n -> R^m`, returns an `m x n` matrix (as a flat `Vec<T>` in
+/// row-major order) where `J[i*n + j] = df_i/dx_j`.
+///
+/// Uses forward-mode AD: each evaluation with the j-th input seeded
+/// produces column j of the Jacobian (all m partial derivatives with
+/// respect to x_j).
+///
+/// # Examples
+///
+/// ```
+/// use ferray_autodiff::{jacobian, DualNumber};
+///
+/// // f(x, y) = (x*y, x + y)
+/// // J = [[y, x], [1, 1]]
+/// let (jac, m) = jacobian(
+///     |v| vec![v[0] * v[1], v[0] + v[1]],
+///     &[3.0_f64, 4.0],
+/// );
+/// assert_eq!(m, 2); // 2 outputs
+/// assert!((jac[0] - 4.0).abs() < 1e-10); // df0/dx = y = 4
+/// assert!((jac[1] - 3.0).abs() < 1e-10); // df0/dy = x = 3
+/// assert!((jac[2] - 1.0).abs() < 1e-10); // df1/dx = 1
+/// assert!((jac[3] - 1.0).abs() < 1e-10); // df1/dy = 1
+/// ```
+pub fn jacobian<T: Float>(
+    f: impl Fn(&[DualNumber<T>]) -> Vec<DualNumber<T>>,
+    point: &[T],
+) -> (Vec<T>, usize) {
+    let n = point.len();
+    let mut args: Vec<DualNumber<T>> = point.iter().map(|&val| DualNumber::constant(val)).collect();
+
+    // First evaluation to determine output dimension m
+    let first_out = f(&args);
+    let m = first_out.len();
+
+    // Jacobian stored row-major: J[i*n + j] = df_i/dx_j
+    let mut jac = vec![T::zero(); m * n];
+
+    for j in 0..n {
+        args[j].dual = T::one();
+        let out = f(&args);
+        for i in 0..m {
+            jac[i * n + j] = out[i].dual;
+        }
+        args[j].dual = T::zero();
+    }
+
+    (jac, m)
 }
 
 // ---------------------------------------------------------------------------
@@ -1303,6 +1391,33 @@ mod tests {
         let b = -a;
         assert_eq!(b.real, -3.0);
         assert_eq!(b.dual, -4.0);
+    }
+
+    // --- Remainder ---
+
+    #[test]
+    fn test_rem_dual_dual() {
+        // d/dx (x % 3) = 1 (for non-integer x/3)
+        let d = derivative(|x| x % DualNumber::constant(3.0), 7.5_f64);
+        assert!(approx_eq(d, 1.0));
+    }
+
+    #[test]
+    fn test_rem_dual_scalar() {
+        // d/dx (x % 3.0) = 1
+        let x = DualNumber::variable(7.5_f64);
+        let r = x % 3.0;
+        assert!((r.real - 1.5).abs() < 1e-10);
+        assert!(approx_eq(r.dual, 1.0));
+    }
+
+    #[test]
+    fn test_rem_values() {
+        // 7.5 % 3.0 = 1.5
+        let a = DualNumber::new(7.5_f64, 1.0);
+        let b = DualNumber::constant(3.0);
+        let c = a % b;
+        assert!((c.real - 1.5).abs() < 1e-10);
     }
 
     // --- Scalar arithmetic ---
@@ -1417,6 +1532,79 @@ mod tests {
     }
 
     #[test]
+    fn test_powf_both_variable() {
+        // f(x) = x^x at x=2: value = 4, derivative = x^x * (ln(x) + 1) = 4 * (ln(2) + 1)
+        let x = 2.0_f64;
+        let d = derivative(|v| v.powf(v), x);
+        let expected = x.powf(x) * (x.ln() + 1.0);
+        assert!((d - expected).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_powf_variable_exponent() {
+        // f(p) = 2^p at p=3: value = 8, derivative = 2^p * ln(2) = 8 * ln(2)
+        let p = 3.0_f64;
+        let d = derivative(|v| DualNumber::constant(2.0).powf(v), p);
+        let expected = 2.0_f64.powf(p) * 2.0_f64.ln();
+        assert!((d - expected).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_powf_at_zero_p_gt_1() {
+        // d/dx x^2 at x=0 is 0
+        let d = derivative(|v| v.powf(DualNumber::constant(2.0)), 0.0_f64);
+        assert!(approx_eq(d, 0.0));
+    }
+
+    #[test]
+    fn test_powf_at_zero_p_eq_1() {
+        // d/dx x^1 at x=0 is 1
+        let d = derivative(|v| v.powf(DualNumber::constant(1.0)), 0.0_f64);
+        assert!(approx_eq(d, 1.0));
+    }
+
+    #[test]
+    fn test_powf_at_zero_p_lt_1() {
+        // d/dx x^0.5 at x=0 is infinite (singular)
+        let d = derivative(|v| v.powf(DualNumber::constant(0.5)), 0.0_f64);
+        assert!(d.is_infinite() || d.is_nan());
+    }
+
+    // --- ReLU pattern: max(x, 0) ---
+
+    #[test]
+    fn test_relu_positive() {
+        // d/dx max(x, 0) at x=3 is 1
+        let d = derivative(|v| v.max(DualNumber::constant(0.0)), 3.0_f64);
+        assert!(approx_eq(d, 1.0));
+    }
+
+    #[test]
+    fn test_relu_negative() {
+        // d/dx max(x, 0) at x=-3 is 0
+        let d = derivative(|v| v.max(DualNumber::constant(0.0)), -3.0_f64);
+        assert!(approx_eq(d, 0.0));
+    }
+
+    #[test]
+    fn test_relu_at_zero() {
+        // d/dx max(x, 0) at x=0: convention returns 1 (self.real >= other.real picks self)
+        let d = derivative(|v| v.max(DualNumber::constant(0.0)), 0.0_f64);
+        assert!(approx_eq(d, 1.0));
+    }
+
+    #[test]
+    fn test_min_derivative() {
+        // d/dx min(x, 1) at x=0.5 is 1 (x is smaller)
+        let d = derivative(|v| v.min(DualNumber::constant(1.0)), 0.5_f64);
+        assert!(approx_eq(d, 1.0));
+
+        // d/dx min(x, 1) at x=2.0 is 0 (constant is smaller)
+        let d = derivative(|v| v.min(DualNumber::constant(1.0)), 2.0_f64);
+        assert!(approx_eq(d, 0.0));
+    }
+
+    #[test]
     fn test_abs_derivative() {
         // d/dx |x| = signum(x)
         let d = derivative(|v| v.abs(), 3.0_f64);
@@ -1424,6 +1612,53 @@ mod tests {
 
         let d = derivative(|v| v.abs(), -3.0_f64);
         assert!(approx_eq(d, -1.0));
+    }
+
+    // --- Mathematical singularities ---
+    // These document the behavior at points where derivatives are
+    // infinite or undefined. The results are NaN or Inf, which is
+    // correct — the derivative genuinely doesn't exist or is unbounded.
+
+    #[test]
+    fn test_sqrt_at_zero_singular() {
+        // d/dx sqrt(x) = 1/(2*sqrt(x)), which is +inf at x=0
+        let d = derivative(|v| v.sqrt(), 0.0_f64);
+        assert!(d.is_infinite() && d.is_sign_positive());
+    }
+
+    #[test]
+    fn test_ln_at_zero_singular() {
+        // d/dx ln(x) = 1/x, which is +inf at x=0+
+        let d = derivative(|v| v.ln(), 0.0_f64);
+        assert!(d.is_infinite());
+    }
+
+    #[test]
+    fn test_recip_at_zero_singular() {
+        // d/dx 1/x = -1/x^2, which is -inf at x=0
+        let d = derivative(|v| v.recip(), 0.0_f64);
+        assert!(d.is_infinite() || d.is_nan());
+    }
+
+    #[test]
+    fn test_asin_at_boundary() {
+        // d/dx asin(x) = 1/sqrt(1-x^2), which is +inf at x=1
+        let d = derivative(|v| v.asin(), 1.0_f64);
+        assert!(d.is_infinite() || d.is_nan());
+    }
+
+    #[test]
+    fn test_acosh_at_boundary() {
+        // d/dx acosh(x) = 1/sqrt(x^2-1), which is +inf at x=1
+        let d = derivative(|v| v.acosh(), 1.0_f64);
+        assert!(d.is_infinite() || d.is_nan());
+    }
+
+    #[test]
+    fn test_atanh_at_boundary() {
+        // d/dx atanh(x) = 1/(1-x^2), which is +inf at x=1
+        let d = derivative(|v| v.atanh(), 1.0_f64);
+        assert!(d.is_infinite());
     }
 
     // --- Hyperbolic derivatives ---
@@ -1570,6 +1805,98 @@ mod tests {
         assert!(approx_eq(g[0], 5.0)); // y + z = 2 + 3
         assert!(approx_eq(g[1], 4.0)); // x + z = 1 + 3
         assert!(approx_eq(g[2], 3.0)); // y + x = 2 + 1
+    }
+
+    // --- Jacobian ---
+
+    #[test]
+    fn test_jacobian_2x2() {
+        // f(x, y) = (x*y, x + y)
+        // J = [[y, x], [1, 1]]
+        let (jac, m) = jacobian(
+            |v| vec![v[0] * v[1], v[0] + v[1]],
+            &[3.0_f64, 4.0],
+        );
+        assert_eq!(m, 2);
+        assert!(approx_eq(jac[0], 4.0)); // df0/dx = y
+        assert!(approx_eq(jac[1], 3.0)); // df0/dy = x
+        assert!(approx_eq(jac[2], 1.0)); // df1/dx = 1
+        assert!(approx_eq(jac[3], 1.0)); // df1/dy = 1
+    }
+
+    #[test]
+    fn test_jacobian_3x2() {
+        // f(x, y) = (x^2, x*y, y^2)
+        // J = [[2x, 0], [y, x], [0, 2y]]
+        let (jac, m) = jacobian(
+            |v| vec![v[0] * v[0], v[0] * v[1], v[1] * v[1]],
+            &[2.0_f64, 3.0],
+        );
+        assert_eq!(m, 3);
+        assert!(approx_eq(jac[0], 4.0)); // 2x
+        assert!(approx_eq(jac[1], 0.0)); // 0
+        assert!(approx_eq(jac[2], 3.0)); // y
+        assert!(approx_eq(jac[3], 2.0)); // x
+        assert!(approx_eq(jac[4], 0.0)); // 0
+        assert!(approx_eq(jac[5], 6.0)); // 2y
+    }
+
+    #[test]
+    fn test_jacobian_1x1_matches_derivative() {
+        // f(x) = sin(x) — Jacobian is just the derivative
+        let (jac, m) = jacobian(|v| vec![v[0].sin()], &[0.5_f64]);
+        assert_eq!(m, 1);
+        assert!(approx_eq(jac[0], 0.5_f64.cos()));
+    }
+
+    // --- Higher-order derivatives via nesting ---
+
+    #[test]
+    fn test_second_derivative_x_squared() {
+        // d²/dx² x² = 2
+        // Nest: derivative of (derivative of x²) at x
+        let x = 2.0_f64;
+        let d2 = derivative(
+            |outer| {
+                // Inner derivative: d/dx x² = 2x
+                // We seed the inner DualNumber as a variable of the outer DualNumber
+                let inner = DualNumber::variable(outer);
+                let result = inner * inner; // x²
+                result.dual // = 2x, which is itself a DualNumber<f64>
+            },
+            x,
+        );
+        // d/dx (2x) = 2
+        assert!(approx_eq(d2, 2.0));
+    }
+
+    #[test]
+    fn test_second_derivative_sin() {
+        // d²/dx² sin(x) = -sin(x)
+        let x = 1.0_f64;
+        let d2 = derivative(
+            |outer| {
+                let inner = DualNumber::variable(outer);
+                inner.sin().dual // d/dx sin(x) = cos(x)
+            },
+            x,
+        );
+        // d/dx cos(x) = -sin(x)
+        assert!((d2 - (-x.sin())).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_second_derivative_exp() {
+        // d²/dx² exp(x) = exp(x)
+        let x = 0.5_f64;
+        let d2 = derivative(
+            |outer| {
+                let inner = DualNumber::variable(outer);
+                inner.exp().dual // d/dx exp(x) = exp(x)
+            },
+            x,
+        );
+        assert!((d2 - x.exp()).abs() < 1e-10);
     }
 
     // --- num_traits implementations ---
@@ -1773,6 +2100,94 @@ mod tests {
         let y = DualNumber::variable(180.0_f64);
         let rad = y.to_radians();
         assert!(approx_eq(rad.real, std::f64::consts::PI));
+    }
+}
+
+#[cfg(test)]
+mod finite_difference_tests {
+    use super::*;
+
+    /// Central finite difference: f'(x) ≈ (f(x+h) - f(x-h)) / (2h)
+    fn numerical_derivative(f: impl Fn(f64) -> f64, x: f64) -> f64 {
+        let h = 1e-7;
+        (f(x + h) - f(x - h)) / (2.0 * h)
+    }
+
+    /// Verify AD derivative matches numerical finite difference within tolerance.
+    fn check_ad_vs_fd(
+        ad_fn: impl Fn(DualNumber<f64>) -> DualNumber<f64>,
+        scalar_fn: impl Fn(f64) -> f64,
+        x: f64,
+        tol: f64,
+    ) {
+        let ad_result = derivative(&ad_fn, x);
+        let fd_result = numerical_derivative(&scalar_fn, x);
+        assert!(
+            (ad_result - fd_result).abs() < tol,
+            "AD vs FD mismatch at x={x}: AD={ad_result}, FD={fd_result}, diff={}",
+            (ad_result - fd_result).abs()
+        );
+    }
+
+    #[test]
+    fn fd_sin() {
+        check_ad_vs_fd(|x| x.sin(), f64::sin, 1.0, 1e-8);
+    }
+
+    #[test]
+    fn fd_cos() {
+        check_ad_vs_fd(|x| x.cos(), f64::cos, 1.0, 1e-8);
+    }
+
+    #[test]
+    fn fd_exp() {
+        check_ad_vs_fd(|x| x.exp(), f64::exp, 1.0, 1e-8);
+    }
+
+    #[test]
+    fn fd_ln() {
+        check_ad_vs_fd(|x| x.ln(), f64::ln, 2.0, 1e-8);
+    }
+
+    #[test]
+    fn fd_sqrt() {
+        check_ad_vs_fd(|x| x.sqrt(), f64::sqrt, 4.0, 1e-8);
+    }
+
+    #[test]
+    fn fd_tanh() {
+        check_ad_vs_fd(|x| x.tanh(), f64::tanh, 0.5, 1e-8);
+    }
+
+    #[test]
+    fn fd_asin() {
+        check_ad_vs_fd(|x| x.asin(), f64::asin, 0.5, 1e-8);
+    }
+
+    #[test]
+    fn fd_complex_expression() {
+        // f(x) = x^2 * sin(x) + exp(-x)
+        let ad_fn = |x: DualNumber<f64>| x * x * x.sin() + (-x).exp();
+        let scalar_fn = |x: f64| x * x * x.sin() + (-x).exp();
+        check_ad_vs_fd(ad_fn, scalar_fn, 1.5, 1e-7);
+    }
+
+    #[test]
+    fn fd_gradient_multivariate() {
+        // f(x, y) = x^2 * y + sin(x * y)
+        let g = gradient(
+            |v| v[0] * v[0] * v[1] + (v[0] * v[1]).sin(),
+            &[1.0_f64, 2.0],
+        );
+
+        let h = 1e-7;
+        let f = |x: f64, y: f64| x * x * y + (x * y).sin();
+
+        let fd_dx = (f(1.0 + h, 2.0) - f(1.0 - h, 2.0)) / (2.0 * h);
+        let fd_dy = (f(1.0, 2.0 + h) - f(1.0, 2.0 - h)) / (2.0 * h);
+
+        assert!((g[0] - fd_dx).abs() < 1e-6, "df/dx: AD={}, FD={fd_dx}", g[0]);
+        assert!((g[1] - fd_dy).abs() < 1e-6, "df/dy: AD={}, FD={fd_dy}", g[1]);
     }
 }
 

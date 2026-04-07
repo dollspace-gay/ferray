@@ -8,7 +8,7 @@ use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::faer_bridge;
 use crate::scalar::LinalgFloat;
-use faer::linalg::solvers::{DenseSolveCore, Solve, SolveLstsq};
+use faer::linalg::solvers::{DenseSolveCore, Solve};
 
 /// Solve the linear equation `A @ x = b` for x.
 ///
@@ -74,11 +74,17 @@ pub fn solve<T: LinalgFloat>(
         _ => return Err(FerrayError::shape_mismatch("solve: b must be 1D or 2D")),
     };
 
-    // Check for NaN/Inf in result, which indicates a singular matrix
+    // Check for singularity: scan result for NaN/Inf which indicates
+    // the LU solve encountered a (near-)singular matrix. This catches
+    // both exact singularity (zero pivot) and severe ill-conditioning.
+    // A more precise check would inspect the LU diagonal for near-zero
+    // pivots, but faer's partial_piv_lu does not expose the factors
+    // directly through a stable public API.
     for &val in result.iter() {
         if val.is_nan() || val.is_infinite() {
             return Err(FerrayError::SingularMatrix {
-                message: "matrix is singular; solve produced non-finite values".to_string(),
+                message: "matrix is singular or nearly singular; solve produced non-finite values"
+                    .to_string(),
             });
         }
     }
@@ -105,11 +111,9 @@ pub fn lstsq<T: LinalgFloat>(
     let b_shape = b.shape();
     let (m, n) = (a_shape[0], a_shape[1]);
 
-    let a_mat = faer_bridge::array2_to_faer(a);
-    let qr_decomp = a_mat.as_ref().col_piv_qr();
-
-    // Get SVD for rank and singular values
-    let (_u, sv, _vt) = crate::decomp::svd(a, false)?;
+    // Single SVD decomposition for both the solve and rank/singular values.
+    // This replaces the previous approach that computed QR + SVD separately.
+    let (u_arr, sv, vt_arr) = crate::decomp::svd(a, false)?;
     let svals = sv.as_slice().unwrap();
     let tol = rcond.unwrap_or_else(|| {
         let max_dim = T::from_usize(m.max(n));
@@ -120,7 +124,15 @@ pub fn lstsq<T: LinalgFloat>(
     } else {
         svals[0]
     };
-    let rank = svals.iter().filter(|&&s| s > tol * max_sv).count();
+    let cutoff = tol * max_sv;
+    let rank = svals.iter().filter(|&&s| s > cutoff).count();
+
+    // SVD-based least squares: x = V * diag(1/s_i) * U^T * b
+    // (zeroing singular values below cutoff)
+    let k = svals.len(); // min(m, n)
+    let u_data: Vec<T> = u_arr.iter().copied().collect();
+    let vt_data: Vec<T> = vt_arr.iter().copied().collect();
+    let zero = T::from_f64_const(0.0);
 
     match b_shape.len() {
         1 => {
@@ -131,20 +143,41 @@ pub fn lstsq<T: LinalgFloat>(
                 )));
             }
             let b_data: Vec<T> = b.iter().copied().collect();
-            let b_mat = faer::Mat::from_fn(m, 1, |i, _| b_data[i]);
-            let x_mat = qr_decomp.solve_lstsq(&b_mat);
 
-            let mut x_vec = Vec::with_capacity(n);
+            // x = V * diag(1/s) * U^T * b
+            // Step 1: c = U^T * b (k-vector)
+            let mut c = vec![zero; k];
+            for p in 0..k {
+                let mut dot = zero;
+                for i in 0..m {
+                    dot = dot + u_data[i * k + p] * b_data[i];
+                }
+                c[p] = dot;
+            }
+            // Step 2: c[p] /= s[p] (zero out small singular values)
+            for p in 0..k {
+                if svals[p] > cutoff {
+                    c[p] = c[p] / svals[p];
+                } else {
+                    c[p] = zero;
+                }
+            }
+            // Step 3: x = V * c = Vt^T * c (n-vector)
+            let mut x_vec = vec![zero; n];
             for i in 0..n {
-                x_vec.push(x_mat[(i, 0)]);
+                let mut sum = zero;
+                for p in 0..k {
+                    sum = sum + vt_data[p * n + i] * c[p];
+                }
+                x_vec[i] = sum;
             }
 
             // Compute residuals
             let residuals = if m > n && rank == n {
                 let a_data: Vec<T> = a.iter().copied().collect();
-                let mut resid = T::from_f64_const(0.0);
+                let mut resid = zero;
                 for i in 0..m {
-                    let mut ax_i = T::from_f64_const(0.0);
+                    let mut ax_i = zero;
                     for j in 0..n {
                         ax_i = ax_i + a_data[i * n + j] * x_vec[j];
                     }
@@ -169,13 +202,30 @@ pub fn lstsq<T: LinalgFloat>(
             }
             let nrhs = b_shape[1];
             let b_data: Vec<T> = b.iter().copied().collect();
-            let b_mat = faer::Mat::from_fn(m, nrhs, |i, j| b_data[i * nrhs + j]);
-            let x_mat = qr_decomp.solve_lstsq(&b_mat);
 
-            let mut x_vec = Vec::with_capacity(n * nrhs);
-            for i in 0..n {
-                for j in 0..nrhs {
-                    x_vec.push(x_mat[(i, j)]);
+            // x = V * diag(1/s) * U^T * b for each column of b
+            let mut x_vec = vec![zero; n * nrhs];
+            for col in 0..nrhs {
+                // c = U^T * b[:, col]
+                let mut c = vec![zero; k];
+                for p in 0..k {
+                    let mut dot = zero;
+                    for i in 0..m {
+                        dot = dot + u_data[i * k + p] * b_data[i * nrhs + col];
+                    }
+                    c[p] = if svals[p] > cutoff {
+                        dot / svals[p]
+                    } else {
+                        zero
+                    };
+                }
+                // x[:, col] = Vt^T * c
+                for i in 0..n {
+                    let mut sum = zero;
+                    for p in 0..k {
+                        sum = sum + vt_data[p * n + i] * c[p];
+                    }
+                    x_vec[i * nrhs + col] = sum;
                 }
             }
 
@@ -246,17 +296,49 @@ pub fn inv<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix2>> {
 ///
 /// # Errors
 /// - `FerrayError::InvalidValue` if SVD computation fails.
-pub fn pinv<T: LinalgFloat>(a: &Array<T, Ix2>, _rcond: Option<T>) -> FerrayResult<Array<T, Ix2>> {
-    let mat = faer_bridge::array2_to_faer(a);
-    let decomp = mat
-        .as_ref()
-        .thin_svd()
-        .map_err(|e| FerrayError::InvalidValue {
-            message: format!("SVD failed in pinv: {e:?}"),
-        })?;
+pub fn pinv<T: LinalgFloat>(a: &Array<T, Ix2>, rcond: Option<T>) -> FerrayResult<Array<T, Ix2>> {
+    let (m, n) = (a.shape()[0], a.shape()[1]);
+    let (u, s, vt) = crate::decomp::svd(a, false)?;
 
-    let pinv_mat = decomp.pseudoinverse();
-    faer_bridge::faer_to_array2(&pinv_mat)
+    let svals = s.as_slice().unwrap();
+    let max_sv = if svals.is_empty() {
+        T::from_f64_const(0.0)
+    } else {
+        svals[0]
+    };
+
+    // Default rcond matches NumPy: max(M, N) * machine_epsilon
+    let tol = rcond.unwrap_or_else(|| {
+        let max_dim = T::from_usize(m.max(n));
+        max_dim * T::machine_epsilon()
+    });
+    let cutoff = tol * max_sv;
+
+    // Build pinv = V * diag(1/s_i) * U^T, zeroing small singular values
+    let k = svals.len(); // min(m, n)
+    let u_data: Vec<T> = u.iter().copied().collect();
+    let vt_data: Vec<T> = vt.iter().copied().collect();
+
+    // Result shape is (n, m) — the pseudoinverse of (m, n)
+    let zero = T::from_f64_const(0.0);
+    let one = T::from_f64_const(1.0);
+    let mut result = vec![zero; n * m];
+
+    for i in 0..n {
+        for j in 0..m {
+            let mut sum = zero;
+            for p in 0..k {
+                if svals[p] > cutoff {
+                    // vt[p][i] * (1/s[p]) * u[j][p]
+                    // vt is (k, n), u is (m, k)
+                    sum = sum + vt_data[p * n + i] * (one / svals[p]) * u_data[j * k + p];
+                }
+            }
+            result[i * m + j] = sum;
+        }
+    }
+
+    Array::from_vec(Ix2::new([n, m]), result)
 }
 
 /// Raise a square matrix to an integer power.
@@ -568,5 +650,145 @@ mod tests {
         // x should be approximately [0, 1] (y = x)
         assert!((xs[0]).abs() < 0.1);
         assert!((xs[1] - 1.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn lstsq_2d_b_multiple_rhs() {
+        // A = [[1,0],[0,1],[1,1]], b = [[1,2],[3,4],[5,6]]
+        // Overdetermined system with 2 right-hand sides
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 2]),
+            vec![1.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[3, 2]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let (x, _residuals, rank, _sv) = lstsq(&a, &b, None).unwrap();
+        assert_eq!(rank, 2);
+        assert_eq!(x.shape(), &[2, 2]);
+        // The solution should be a reasonable least-squares fit
+        let xs: Vec<f64> = x.iter().copied().collect();
+        // All values should be finite
+        for &v in &xs {
+            assert!(v.is_finite(), "lstsq 2D b produced non-finite: {v}");
+        }
+    }
+
+    #[test]
+    fn lstsq_exact_system() {
+        // A = [[1,0],[0,1]], b = [3, 5] — exact solution x = [3, 5]
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 0.0, 0.0, 1.0]).unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 5.0]).unwrap();
+        let (x, _residuals, rank, _sv) = lstsq(&a, &b, None).unwrap();
+        assert_eq!(rank, 2);
+        let xs: Vec<f64> = x.iter().copied().collect();
+        assert!((xs[0] - 3.0).abs() < 1e-10);
+        assert!((xs[1] - 5.0).abs() < 1e-10);
+    }
+
+    // --- Empty and 1x1 matrix edge cases ---
+
+    #[test]
+    fn inv_0x0() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([0, 0]), vec![]).unwrap();
+        let result = inv(&a).unwrap();
+        assert_eq!(result.shape(), &[0, 0]);
+    }
+
+    #[test]
+    fn inv_1x1() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([1, 1]), vec![4.0]).unwrap();
+        let result = inv(&a).unwrap();
+        assert!((result.as_slice().unwrap()[0] - 0.25).abs() < 1e-10);
+    }
+
+    #[test]
+    fn solve_1x1() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([1, 1]), vec![2.0]).unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1]), vec![6.0]).unwrap();
+        let x = solve(&a, &b).unwrap();
+        assert!((x.iter().next().unwrap() - 3.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn det_1x1() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([1, 1]), vec![5.0]).unwrap();
+        let d = crate::norms::det(&a).unwrap();
+        assert!((d - 5.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn matrix_power_1x1() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([1, 1]), vec![3.0]).unwrap();
+        let result = matrix_power(&a, 4).unwrap();
+        assert!((result.as_slice().unwrap()[0] - 81.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn solve_singular_matrix_error() {
+        // Singular matrix: second row is a multiple of the first
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 2.0, 4.0]).unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 6.0]).unwrap();
+        let result = solve(&a, &b);
+        // Should error (singular) or produce NaN/Inf which triggers the check
+        assert!(result.is_err(), "solve should fail on singular matrix");
+    }
+
+    #[test]
+    fn solve_multiple_rhs() {
+        // A = [[1, 0], [0, 2]], b = [[3, 5], [4, 6]]
+        // x = [[3, 5], [2, 3]]
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 0.0, 0.0, 2.0]).unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![3.0, 5.0, 4.0, 6.0],
+        )
+        .unwrap();
+        let x = solve(&a, &b).unwrap();
+        assert_eq!(x.shape(), &[2, 2]);
+        let data: Vec<f64> = x.iter().copied().collect();
+        assert!((data[0] - 3.0).abs() < 1e-10);
+        assert!((data[1] - 5.0).abs() < 1e-10);
+        assert!((data[2] - 2.0).abs() < 1e-10);
+        assert!((data[3] - 3.0).abs() < 1e-10);
+    }
+
+    // --- tensorsolve / tensorinv tests ---
+
+    #[test]
+    fn tensorsolve_2d_as_matrix() {
+        // tensorsolve with 2D tensors is equivalent to regular solve
+        // A(2,2) @ x(2) = b(2) -> tensorsolve(A, b) = solve(A, b)
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![1.0, 0.0, 0.0, 2.0],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
+        let x = tensorsolve(&a, &b, None).unwrap();
+        let data: Vec<f64> = x.iter().copied().collect();
+        // x = [3, 4]
+        assert!((data[0] - 3.0).abs() < 1e-10);
+        assert!((data[1] - 4.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn tensorinv_2d_as_matrix() {
+        // tensorinv of a 2D array with ind=1 is equivalent to matrix inverse
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![1.0, 0.0, 0.0, 2.0],
+        )
+        .unwrap();
+        let inv_a = tensorinv(&a, 1).unwrap();
+        let data: Vec<f64> = inv_a.iter().copied().collect();
+        // inv([[1,0],[0,2]]) = [[1,0],[0,0.5]]
+        assert!((data[0] - 1.0).abs() < 1e-10);
+        assert!((data[1] - 0.0).abs() < 1e-10);
+        assert!((data[2] - 0.0).abs() < 1e-10);
+        assert!((data[3] - 0.5).abs() < 1e-10);
     }
 }

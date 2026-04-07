@@ -8,7 +8,7 @@ use ferray_core::dimension::{Axis, Dimension, Ix1, IxDyn};
 use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 
-/// Wrap a scalar function to operate elementwise on arrays.
+/// Wrap a scalar function to operate elementwise on arrays of any dimension.
 ///
 /// Returns a closure that accepts `&Array<T, D>` and returns
 /// `FerrayResult<Array<U, D>>`, applying `f` to every element.
@@ -16,33 +16,14 @@ use ferray_core::error::{FerrayError, FerrayResult};
 /// This is NumPy's `np.vectorize` — in Rust it is essentially `.mapv()`
 /// wrapped as a reusable callable.
 ///
+/// Works with any dimension type: `Ix1`, `Ix2`, `IxDyn`, etc.
+///
 /// # Example
 /// ```ignore
 /// let square = vectorize(|x: f64| x * x);
 /// let result = square(&input_array)?;
 /// ```
-pub fn vectorize<T, U, F>(f: F) -> impl Fn(&Array<T, Ix1>) -> FerrayResult<Array<U, Ix1>>
-where
-    T: Element + Copy,
-    U: Element,
-    F: Fn(T) -> U,
-{
-    move |input: &Array<T, Ix1>| {
-        let data: Vec<U> = input.iter().map(|&x| f(x)).collect();
-        Array::from_vec(Ix1::new([data.len()]), data)
-    }
-}
-
-/// Wrap a scalar function to operate elementwise on arrays of any dimension.
-///
-/// Like [`vectorize`], but works with any dimension type `D`.
-///
-/// # Example
-/// ```ignore
-/// let square = vectorize_nd(|x: f64| x * x);
-/// let result = square(&input_2d_array)?;
-/// ```
-pub fn vectorize_nd<T, U, F, D>(f: F) -> impl Fn(&Array<T, D>) -> FerrayResult<Array<U, D>>
+pub fn vectorize<T, U, F, D>(f: F) -> impl Fn(&Array<T, D>) -> FerrayResult<Array<U, D>>
 where
     T: Element + Copy,
     U: Element,
@@ -53,6 +34,19 @@ where
         let data: Vec<U> = input.iter().map(|&x| f(x)).collect();
         Array::from_vec(input.dim().clone(), data)
     }
+}
+
+/// Alias for [`vectorize`] — kept for backward compatibility.
+///
+/// `vectorize` is now generic over dimension; this function is identical.
+pub fn vectorize_nd<T, U, F, D>(f: F) -> impl Fn(&Array<T, D>) -> FerrayResult<Array<U, D>>
+where
+    T: Element + Copy,
+    U: Element,
+    D: Dimension,
+    F: Fn(T) -> U,
+{
+    vectorize(f)
 }
 
 /// Evaluate a piecewise-defined function.

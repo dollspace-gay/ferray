@@ -589,4 +589,56 @@ mod tests {
             assert!((o - r).abs() < 1e-10, "{} vs {}", o, r);
         }
     }
+
+    #[test]
+    fn rfft_along_axis0_2d() {
+        use ferray_core::dimension::Ix2;
+        // 2x4 real array, rfft along axis 0 (columns)
+        // Each column is length 2, so rfft output has 2 bins (2/2+1=2)
+        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 4]), data).unwrap();
+        let result = rfft(&a, None, Some(0), FftNorm::Backward).unwrap();
+        // Output shape: (2, 4) -> rfft along axis 0 -> (2/2+1, 4) = (2, 4)
+        assert_eq!(result.shape(), &[2, 4]);
+    }
+
+    #[test]
+    fn rfft_irfft_roundtrip_axis0() {
+        use ferray_core::dimension::Ix2;
+        // 3x4 array, rfft/irfft along axis 0
+        let data: Vec<f64> = (0..12).map(|i| i as f64).collect();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 4]), data.clone()).unwrap();
+        let spectrum = rfft(&a, None, Some(0), FftNorm::Backward).unwrap();
+        let recovered = irfft(&spectrum, Some(3), Some(0), FftNorm::Backward).unwrap();
+        let rec_data: Vec<f64> = recovered.iter().copied().collect();
+        for (o, r) in data.iter().zip(rec_data.iter()) {
+            assert!(
+                (o - r).abs() < 1e-9,
+                "axis0 roundtrip: {} vs {}",
+                o,
+                r
+            );
+        }
+    }
+
+    #[test]
+    fn rfft_irfft_roundtrip_axis1() {
+        use ferray_core::dimension::Ix2;
+        // 3x4 array, rfft/irfft along axis 1 (default)
+        let data: Vec<f64> = (0..12).map(|i| i as f64).collect();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 4]), data.clone()).unwrap();
+        let spectrum = rfft(&a, None, Some(1), FftNorm::Backward).unwrap();
+        assert_eq!(spectrum.shape()[0], 3);
+        assert_eq!(spectrum.shape()[1], 3); // 4/2+1 = 3
+        let recovered = irfft(&spectrum, Some(4), Some(1), FftNorm::Backward).unwrap();
+        let rec_data: Vec<f64> = recovered.iter().copied().collect();
+        for (o, r) in data.iter().zip(rec_data.iter()) {
+            assert!(
+                (o - r).abs() < 1e-9,
+                "axis1 roundtrip: {} vs {}",
+                o,
+                r
+            );
+        }
+    }
 }

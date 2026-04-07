@@ -195,13 +195,13 @@ fn matrix_norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayRes
             }
             Ok(max_sum)
         }
-        NormOrder::P(_) => {
-            // General p-norm not standard for matrices; use Frobenius
-            let sum: T = data
-                .iter()
-                .map(|&x| x * x)
-                .fold(T::from_f64_const(0.0), |a, b| a + b);
-            Ok(sum.sqrt())
+        NormOrder::P(p) => {
+            // Only specific p-norms are defined for matrices.
+            // NumPy raises ValueError for unsupported orders.
+            Err(FerrayError::invalid_value(format!(
+                "invalid norm order P({p}) for matrices; \
+                 use Fro, Nuc, L1, L2, Inf, or NegInf"
+            )))
         }
     }
 }

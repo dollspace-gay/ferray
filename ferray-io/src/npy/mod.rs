@@ -51,6 +51,11 @@ pub fn save<T: Element + NpyElement, D: Dimension, P: AsRef<Path>>(
 }
 
 /// Save an array to a writer in `.npy` format.
+///
+/// If the array is C-contiguous, its data buffer is written directly.
+/// Otherwise, elements are iterated in logical (row-major) order and
+/// written individually — this handles transposed, sliced, or
+/// otherwise non-contiguous arrays transparently.
 pub fn save_to_writer<T: Element + NpyElement, D: Dimension, W: Write>(
     writer: &mut W,
     array: &Array<T, D>,
@@ -58,13 +63,13 @@ pub fn save_to_writer<T: Element + NpyElement, D: Dimension, W: Write>(
     let fortran_order = false;
     header::write_header(writer, T::dtype(), array.shape(), fortran_order)?;
 
-    // Write data
+    // Write data — fast path for contiguous, fallback for strided
     if let Some(slice) = array.as_slice() {
         T::write_slice(slice, writer)?;
     } else {
-        return Err(FerrayError::io_error(
-            "cannot save non-contiguous array to .npy (make contiguous first)",
-        ));
+        // Non-contiguous: collect into logical order and write
+        let data: Vec<T> = array.iter().cloned().collect();
+        T::write_slice(&data, writer)?;
     }
 
     writer.flush()?;
@@ -307,9 +312,8 @@ pub fn save_dynamic_to_writer<W: Write>(writer: &mut W, array: &DynArray) -> Fer
             if let Some(s) = $arr.as_slice() {
                 <$ty as NpyElement>::write_slice(s, writer)?;
             } else {
-                return Err(FerrayError::io_error(
-                    "cannot save non-contiguous DynArray to .npy",
-                ));
+                let data: Vec<$ty> = $arr.iter().cloned().collect();
+                <$ty as NpyElement>::write_slice(&data, writer)?;
             }
         }};
     }
@@ -465,9 +469,16 @@ macro_rules! impl_npy_element {
 
         impl NpyElement for $ty {
             fn write_slice<W: Write>(data: &[$ty], writer: &mut W) -> FerrayResult<()> {
-                for &val in data {
-                    writer.write_all(&val.to_ne_bytes())?;
-                }
+                // Bulk write: reinterpret the typed slice as raw bytes and write
+                // in a single call. This is safe because the data is contiguous
+                // and we're writing in native byte order.
+                let byte_len = data.len() * $size;
+                // SAFETY: &[T] is contiguous and properly aligned; reinterpreting
+                // as &[u8] of length len*size_of::<T> is valid for any Copy type.
+                let bytes = unsafe {
+                    std::slice::from_raw_parts(data.as_ptr() as *const u8, byte_len)
+                };
+                writer.write_all(bytes)?;
                 Ok(())
             }
 
@@ -476,22 +487,30 @@ macro_rules! impl_npy_element {
                 count: usize,
                 endian: Endianness,
             ) -> FerrayResult<Vec<$ty>> {
-                let mut result = Vec::with_capacity(count);
-                let mut buf = [0u8; $size];
-                let needs_swap = endian.needs_swap();
-                for _ in 0..count {
-                    reader.read_exact(&mut buf)?;
-                    let val = if needs_swap {
-                        <$ty>::from_ne_bytes({
-                            buf.reverse();
-                            buf
-                        })
-                    } else {
-                        <$ty>::from_ne_bytes(buf)
-                    };
-                    result.push(val);
+                if !endian.needs_swap() {
+                    // Fast path: native endianness — bulk read and reinterpret.
+                    let byte_len = count * $size;
+                    let mut raw = vec![0u8; byte_len];
+                    reader.read_exact(&mut raw)?;
+                    let mut result = Vec::with_capacity(count);
+                    for chunk in raw.chunks_exact($size) {
+                        let arr: [u8; $size] = chunk.try_into().unwrap();
+                        result.push(<$ty>::from_ne_bytes(arr));
+                    }
+                    Ok(result)
+                } else {
+                    // Byte-swap path: read all bytes, then swap+convert per element.
+                    let byte_len = count * $size;
+                    let mut raw = vec![0u8; byte_len];
+                    reader.read_exact(&mut raw)?;
+                    let mut result = Vec::with_capacity(count);
+                    for chunk in raw.chunks_exact_mut($size) {
+                        chunk.reverse();
+                        let arr: [u8; $size] = chunk.try_into().unwrap();
+                        result.push(<$ty>::from_ne_bytes(arr));
+                    }
+                    Ok(result)
                 }
-                Ok(result)
             }
         }
     };
@@ -714,5 +733,212 @@ mod tests {
         assert_eq!(loaded.shape(), &[2, 3]);
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn load_fortran_order_npy() {
+        // Manually construct a .npy file with fortran_order=True.
+        // Data for a 2x3 f64 array in column-major order:
+        //   logical layout: [[1, 2, 3], [4, 5, 6]]
+        //   Fortran storage: [1, 4, 2, 5, 3, 6] (columns first)
+        let mut buf = Vec::new();
+        // Write header manually
+        let header_str =
+            "{'descr': '<f8', 'fortran_order': True, 'shape': (2, 3), }";
+        let header_len = header_str.len();
+        // Pad to 64-byte alignment (magic=6 + version=2 + hdr_len=2 + header)
+        let total_before_pad = 6 + 2 + 2 + header_len;
+        let padding = 64 - (total_before_pad % 64);
+        let padded_header_len = header_len + padding;
+
+        // Magic
+        buf.extend_from_slice(b"\x93NUMPY");
+        // Version 1.0
+        buf.push(1);
+        buf.push(0);
+        // Header length (little-endian u16)
+        buf.extend_from_slice(&(padded_header_len as u16).to_le_bytes());
+        // Header string
+        buf.extend_from_slice(header_str.as_bytes());
+        // Padding (spaces + newline)
+        for _ in 0..padding - 1 {
+            buf.push(b' ');
+        }
+        buf.push(b'\n');
+
+        // Data: 6 f64 values in Fortran (column-major) order
+        // Logical: [[1, 2, 3], [4, 5, 6]]
+        // Fortran storage: col0=[1,4], col1=[2,5], col2=[3,6]
+        for &v in &[1.0_f64, 4.0, 2.0, 5.0, 3.0, 6.0] {
+            buf.extend_from_slice(&v.to_le_bytes());
+        }
+
+        let mut cursor = Cursor::new(buf);
+        let loaded: Array<f64, Ix2> = load_from_reader(&mut cursor).unwrap();
+        assert_eq!(loaded.shape(), &[2, 3]);
+        // The logical data should be [[1,2,3],[4,5,6]] regardless of storage order
+        let flat: Vec<f64> = loaded.iter().copied().collect();
+        assert_eq!(flat, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    fn roundtrip_from_vec_f() {
+        // Create a Fortran-order array, save, and reload
+        let data = vec![1.0_f64, 4.0, 2.0, 5.0, 3.0, 6.0];
+        let arr = Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), data).unwrap();
+        assert_eq!(arr.shape(), &[2, 3]);
+
+        // Save (will iterate in logical order for non-contiguous)
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+
+        let mut cursor = Cursor::new(buf);
+        let loaded: Array<f64, Ix2> = load_from_reader(&mut cursor).unwrap();
+        assert_eq!(loaded.shape(), &[2, 3]);
+        // Compare logical element order
+        let orig: Vec<f64> = arr.iter().copied().collect();
+        let back: Vec<f64> = loaded.iter().copied().collect();
+        assert_eq!(orig, back);
+    }
+
+    // --- Malformed .npy file tests ---
+
+    #[test]
+    fn malformed_bad_magic() {
+        let data = b"NOT_NPY_FILE_DATA_HERE";
+        let mut cursor = Cursor::new(data.to_vec());
+        let result = load_from_reader::<f64, Ix1, _>(&mut cursor);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("magic") || msg.contains("not a valid"), "got: {msg}");
+    }
+
+    #[test]
+    fn malformed_truncated_header() {
+        // Valid magic + version but truncated before header length
+        let mut data = Vec::new();
+        data.extend_from_slice(b"\x93NUMPY");
+        data.push(1); // version 1
+        data.push(0);
+        // Missing header length bytes
+        let mut cursor = Cursor::new(data);
+        let result = load_from_reader::<f64, Ix1, _>(&mut cursor);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn malformed_truncated_data() {
+        // Valid header but not enough data bytes
+        let mut buf = Vec::new();
+        let header_str = "{'descr': '<f8', 'fortran_order': False, 'shape': (100,), }";
+        let header_len = header_str.len();
+        let total = 6 + 2 + 2 + header_len;
+        let padding = 64 - (total % 64);
+        let padded_len = header_len + padding;
+
+        buf.extend_from_slice(b"\x93NUMPY");
+        buf.push(1);
+        buf.push(0);
+        buf.extend_from_slice(&(padded_len as u16).to_le_bytes());
+        buf.extend_from_slice(header_str.as_bytes());
+        for _ in 0..padding - 1 {
+            buf.push(b' ');
+        }
+        buf.push(b'\n');
+        // Only write 3 f64 values instead of 100
+        for &v in &[1.0_f64, 2.0, 3.0] {
+            buf.extend_from_slice(&v.to_le_bytes());
+        }
+
+        let mut cursor = Cursor::new(buf);
+        let result = load_from_reader::<f64, Ix1, _>(&mut cursor);
+        assert!(result.is_err(), "should fail with truncated data");
+    }
+
+    #[test]
+    fn malformed_unsupported_version() {
+        let mut data = Vec::new();
+        data.extend_from_slice(b"\x93NUMPY");
+        data.push(9); // version 9.0 — unsupported
+        data.push(0);
+        data.extend_from_slice(&[10, 0]); // header length
+        data.extend_from_slice(b"0123456789"); // dummy header
+        let mut cursor = Cursor::new(data);
+        let result = load_from_reader::<f64, Ix1, _>(&mut cursor);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("version"), "got: {msg}");
+    }
+
+    #[test]
+    fn malformed_empty_file() {
+        let cursor = Cursor::new(Vec::<u8>::new());
+        let result = load_from_reader::<f64, Ix1, _>(&mut cursor.clone());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn load_big_endian_f64() {
+        // Construct a .npy file with big-endian f64 data ('>f8')
+        let mut buf = Vec::new();
+        let header_str = "{'descr': '>f8', 'fortran_order': False, 'shape': (3,), }";
+        let header_len = header_str.len();
+        let total = 6 + 2 + 2 + header_len;
+        let padding = 64 - (total % 64);
+        let padded_len = header_len + padding;
+
+        buf.extend_from_slice(b"\x93NUMPY");
+        buf.push(1);
+        buf.push(0);
+        buf.extend_from_slice(&(padded_len as u16).to_le_bytes());
+        buf.extend_from_slice(header_str.as_bytes());
+        for _ in 0..padding - 1 {
+            buf.push(b' ');
+        }
+        buf.push(b'\n');
+
+        // Write 3 f64 values in BIG-endian byte order
+        for &v in &[1.0_f64, 2.5, -3.14] {
+            buf.extend_from_slice(&v.to_be_bytes());
+        }
+
+        let mut cursor = Cursor::new(buf);
+        let loaded: Array<f64, Ix1> = load_from_reader(&mut cursor).unwrap();
+        assert_eq!(loaded.shape(), &[3]);
+        let data = loaded.as_slice().unwrap();
+        assert!((data[0] - 1.0).abs() < 1e-15);
+        assert!((data[1] - 2.5).abs() < 1e-15);
+        assert!((data[2] - (-3.14)).abs() < 1e-15);
+    }
+
+    #[test]
+    fn load_big_endian_i32() {
+        // Big-endian i32 ('>i4')
+        let mut buf = Vec::new();
+        let header_str = "{'descr': '>i4', 'fortran_order': False, 'shape': (4,), }";
+        let header_len = header_str.len();
+        let total = 6 + 2 + 2 + header_len;
+        let padding = 64 - (total % 64);
+        let padded_len = header_len + padding;
+
+        buf.extend_from_slice(b"\x93NUMPY");
+        buf.push(1);
+        buf.push(0);
+        buf.extend_from_slice(&(padded_len as u16).to_le_bytes());
+        buf.extend_from_slice(header_str.as_bytes());
+        for _ in 0..padding - 1 {
+            buf.push(b' ');
+        }
+        buf.push(b'\n');
+
+        for &v in &[1_i32, -2, 1000, i32::MAX] {
+            buf.extend_from_slice(&v.to_be_bytes());
+        }
+
+        let mut cursor = Cursor::new(buf);
+        let loaded: Array<i32, Ix1> = load_from_reader(&mut cursor).unwrap();
+        assert_eq!(loaded.shape(), &[4]);
+        let data = loaded.as_slice().unwrap();
+        assert_eq!(data, &[1, -2, 1000, i32::MAX]);
     }
 }

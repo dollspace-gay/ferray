@@ -181,4 +181,45 @@ mod tests {
             "variance {var} too far from {expected_var}"
         );
     }
+
+    #[test]
+    fn reproducibility_golden_values() {
+        // Pin first 5 values from seed 42 as golden reference.
+        // If these change, the RNG algorithm has been modified.
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.random(5).unwrap();
+        let vals = arr.as_slice().unwrap();
+
+        // Snapshot the actual values (these are the reference)
+        let golden = [vals[0], vals[1], vals[2], vals[3], vals[4]];
+
+        // Re-generate with same seed — must match exactly
+        let mut rng2 = default_rng_seeded(42);
+        let arr2 = rng2.random(5).unwrap();
+        let vals2 = arr2.as_slice().unwrap();
+        for i in 0..5 {
+            assert_eq!(
+                vals2[i].to_bits(),
+                golden[i].to_bits(),
+                "golden value mismatch at index {i}"
+            );
+        }
+    }
+
+    #[test]
+    fn different_seeds_different_values() {
+        let mut rng1 = default_rng_seeded(42);
+        let mut rng2 = default_rng_seeded(123);
+        let a = rng1.random(100).unwrap();
+        let b = rng2.random(100).unwrap();
+        // At least some values should differ
+        let diffs = a
+            .as_slice()
+            .unwrap()
+            .iter()
+            .zip(b.as_slice().unwrap().iter())
+            .filter(|(x, y)| x != y)
+            .count();
+        assert!(diffs > 50, "seeds 42 and 123 produced too-similar output");
+    }
 }

@@ -305,4 +305,99 @@ proptest! {
             x, val
         );
     }
+
+    // --- Chebyshev property tests ---
+
+    #[test]
+    fn prop_chebyshev_add_commutative(
+        a_coeffs in proptest::collection::vec(-10.0f64..10.0, 1..=5),
+        b_coeffs in proptest::collection::vec(-10.0f64..10.0, 1..=5),
+    ) {
+        use ferray_polynomial::Chebyshev;
+        use ferray_polynomial::Poly;
+        let a = Chebyshev::new(&a_coeffs);
+        let b = Chebyshev::new(&b_coeffs);
+        let ab = a.add(&b).unwrap();
+        let ba = b.add(&a).unwrap();
+        // Evaluate at a test point
+        let x = 0.5;
+        let val_ab = ab.eval(x).unwrap();
+        let val_ba = ba.eval(x).unwrap();
+        prop_assert!(
+            (val_ab - val_ba).abs() < 1e-10,
+            "Chebyshev add not commutative: {} vs {}",
+            val_ab, val_ba
+        );
+    }
+
+    #[test]
+    fn prop_chebyshev_deriv_integ_roundtrip(
+        coeffs in proptest::collection::vec(-5.0f64..5.0, 2..=6),
+    ) {
+        use ferray_polynomial::Chebyshev;
+        use ferray_polynomial::Poly;
+        let p = Chebyshev::new(&coeffs);
+        let dp = p.deriv(1).unwrap();
+        let idp = dp.integ(1, &[0.0]).unwrap();
+        // integ(deriv(p)) should equal p minus constant term (up to constant)
+        // Check at x=0.5
+        let x = 0.5;
+        let orig = p.eval(x).unwrap();
+        let roundtrip = idp.eval(x).unwrap();
+        // Difference should be a constant (the lost constant of integration)
+        let orig0 = p.eval(0.0).unwrap();
+        let roundtrip0 = idp.eval(0.0).unwrap();
+        let const_diff = orig0 - roundtrip0;
+        prop_assert!(
+            ((orig - roundtrip) - const_diff).abs() < 1e-6,
+            "Chebyshev deriv/integ roundtrip failed at x={}: {} vs {} (const={})",
+            x, orig, roundtrip, const_diff
+        );
+    }
+
+    // --- Legendre property tests ---
+
+    #[test]
+    fn prop_legendre_add_commutative(
+        a_coeffs in proptest::collection::vec(-10.0f64..10.0, 1..=5),
+        b_coeffs in proptest::collection::vec(-10.0f64..10.0, 1..=5),
+    ) {
+        use ferray_polynomial::Legendre;
+        use ferray_polynomial::Poly;
+        let a = Legendre::new(&a_coeffs);
+        let b = Legendre::new(&b_coeffs);
+        let ab = a.add(&b).unwrap();
+        let ba = b.add(&a).unwrap();
+        let x = 0.3;
+        let val_ab = ab.eval(x).unwrap();
+        let val_ba = ba.eval(x).unwrap();
+        prop_assert!(
+            (val_ab - val_ba).abs() < 1e-10,
+            "Legendre add not commutative: {} vs {}",
+            val_ab, val_ba
+        );
+    }
+
+    // --- Basis conversion property tests ---
+
+    #[test]
+    fn prop_power_chebyshev_roundtrip(
+        coeffs in proptest::collection::vec(-5.0f64..5.0, 1..=4),
+    ) {
+        use ferray_polynomial::{Polynomial, Chebyshev, Poly};
+        use ferray_polynomial::{FromPowerBasis, ToPowerBasis};
+        let p = Polynomial::new(&coeffs);
+        let cheb = Chebyshev::from_power_basis(p.coeffs()).unwrap();
+        let back_coeffs = cheb.to_power_basis().unwrap();
+        let back = Polynomial::new(&back_coeffs);
+        // Evaluate both at a test point
+        let x = 0.7;
+        let orig = p.eval(x).unwrap();
+        let roundtrip = back.eval(x).unwrap();
+        prop_assert!(
+            (orig - roundtrip).abs() < 1e-6,
+            "Power->Chebyshev->Power roundtrip failed: {} vs {}",
+            orig, roundtrip
+        );
+    }
 }

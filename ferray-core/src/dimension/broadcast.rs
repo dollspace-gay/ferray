@@ -165,12 +165,18 @@ pub fn broadcast_to<'a, T: Element, D: Dimension>(
     // Validate all strides are non-negative before casting to usize.
     // Negative strides (from reversed/transposed views) cannot be represented
     // as usize and would wrap to huge values, causing out-of-bounds access.
+    //
+    // Note: owned Array<T, D> is always C-contiguous and never has negative
+    // strides, so this check only triggers for unusual ndarray internals.
+    // For ArrayViews with negative strides, use broadcast_view_to instead
+    // (which has the same limitation — call .to_owned() on the view first).
     for (i, &s) in new_strides.iter().enumerate() {
         if s < 0 {
             return Err(FerrayError::shape_mismatch(format!(
-                "cannot broadcast array with negative stride {} on axis {}; \
-                 make the array contiguous first",
-                s, i
+                "cannot broadcast with negative stride {s} on axis {i}; \
+                 call .to_owned() on the reversed/transposed array first",
+                s = s,
+                i = i
             )));
         }
     }
@@ -214,7 +220,7 @@ pub fn broadcast_view_to<'a, T: Element, D: Dimension>(
         if s < 0 {
             return Err(FerrayError::shape_mismatch(format!(
                 "cannot broadcast view with negative stride {} on axis {}; \
-                 make the array contiguous first",
+                 call .to_owned() on the reversed/transposed view first",
                 s, i
             )));
         }

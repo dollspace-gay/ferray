@@ -120,9 +120,14 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
             // Hard mask: cannot clear mask bits
             return Ok(());
         }
-        // Set via iter_mut at the flat index
-        if let Some(m) = self.mask.iter_mut().nth(flat_idx) {
-            *m = value;
+        // Fast path: contiguous mask — direct O(1) slice indexing
+        if let Some(slice) = self.mask.as_slice_mut() {
+            slice[flat_idx] = value;
+        } else {
+            // Non-contiguous: fall back to iterator (rare case)
+            if let Some(m) = self.mask.iter_mut().nth(flat_idx) {
+                *m = value;
+            }
         }
         Ok(())
     }

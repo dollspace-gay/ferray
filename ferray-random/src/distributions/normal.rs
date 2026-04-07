@@ -196,4 +196,40 @@ mod tests {
             "lognormal mean {mean} too far from {expected_mean}"
         );
     }
+
+    #[test]
+    fn standard_normal_variance() {
+        let mut rng = default_rng_seeded(42);
+        let n = 100_000;
+        let arr = rng.standard_normal(n).unwrap();
+        let s = arr.as_slice().unwrap();
+        let mean: f64 = s.iter().sum::<f64>() / n as f64;
+        let var: f64 = s.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / n as f64;
+        // Variance should be ~1.0
+        assert!(
+            (var - 1.0).abs() < 0.05,
+            "standard_normal variance {var} too far from 1.0"
+        );
+    }
+
+    #[test]
+    fn normal_mean_and_variance() {
+        let mut rng = default_rng_seeded(42);
+        let n = 100_000;
+        let loc = 5.0;
+        let scale = 2.0;
+        let arr = rng.normal(loc, scale, n).unwrap();
+        let s = arr.as_slice().unwrap();
+        let mean: f64 = s.iter().sum::<f64>() / n as f64;
+        let var: f64 = s.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / n as f64;
+        assert!(
+            (mean - loc).abs() < 0.05,
+            "normal mean {mean} too far from {loc}"
+        );
+        assert!(
+            (var - scale * scale).abs() < 0.2,
+            "normal variance {var} too far from {}",
+            scale * scale
+        );
+    }
 }

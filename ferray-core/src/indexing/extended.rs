@@ -714,6 +714,42 @@ pub fn ndenumerate<'a, T: Element, D: Dimension>(
     })
 }
 
+// ---------------------------------------------------------------------------
+// where_select — ternary selection (np.where equivalent)
+// ---------------------------------------------------------------------------
+
+/// Select elements from `x` or `y` depending on `condition`.
+///
+/// For each element position, returns `x[i]` where `condition[i]` is `true`,
+/// and `y[i]` where `condition[i]` is `false`.
+///
+/// All three arrays must have the same shape.
+///
+/// Equivalent to `numpy.where(condition, x, y)`.
+///
+/// # Errors
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
+pub fn where_select<T: Element + Copy, D: Dimension>(
+    condition: &Array<bool, D>,
+    x: &Array<T, D>,
+    y: &Array<T, D>,
+) -> FerrayResult<Array<T, D>> {
+    if condition.shape() != x.shape() || condition.shape() != y.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "where_select: condition shape {:?}, x shape {:?}, y shape {:?} must all match",
+            condition.shape(),
+            x.shape(),
+            y.shape()
+        )));
+    }
+    let data: Vec<T> = condition
+        .iter()
+        .zip(x.iter().zip(y.iter()))
+        .map(|(&c, (&xi, &yi))| if c { xi } else { yi })
+        .collect();
+    Array::from_vec(x.dim().clone(), data)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1107,5 +1143,59 @@ mod tests {
         arr.put_along_axis(&[0, 2], &values, Axis(0)).unwrap();
         let data: Vec<i32> = arr.iter().copied().collect();
         assert_eq!(data, vec![1, 2, 3, 4, 0, 0, 0, 0, 5, 6, 7, 8]);
+    }
+
+    // -----------------------------------------------------------------------
+    // where_
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn where_basic() {
+        let cond =
+            Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![true, false, true, false]).unwrap();
+        let x = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let y = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![10.0, 20.0, 30.0, 40.0]).unwrap();
+        let result = where_select(&cond, &x, &y).unwrap();
+        assert_eq!(result.as_slice().unwrap(), &[1.0, 20.0, 3.0, 40.0]);
+    }
+
+    #[test]
+    fn where_all_true() {
+        let cond = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, true, true]).unwrap();
+        let x = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        let y = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![10, 20, 30]).unwrap();
+        let result = where_select(&cond, &x, &y).unwrap();
+        assert_eq!(result.as_slice().unwrap(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn where_all_false() {
+        let cond = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, false, false]).unwrap();
+        let x = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        let y = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![10, 20, 30]).unwrap();
+        let result = where_select(&cond, &x, &y).unwrap();
+        assert_eq!(result.as_slice().unwrap(), &[10, 20, 30]);
+    }
+
+    #[test]
+    fn where_shape_mismatch() {
+        let cond = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true; 3]).unwrap();
+        let x = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0; 4]).unwrap();
+        let y = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![2.0; 3]).unwrap();
+        assert!(where_select(&cond, &x, &y).is_err());
+    }
+
+    #[test]
+    fn where_2d() {
+        let cond = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 2]),
+            vec![true, false, false, true],
+        )
+        .unwrap();
+        let x = Array::<i32, Ix2>::from_vec(Ix2::new([2, 2]), vec![1, 2, 3, 4]).unwrap();
+        let y = Array::<i32, Ix2>::from_vec(Ix2::new([2, 2]), vec![10, 20, 30, 40]).unwrap();
+        let result = where_select(&cond, &x, &y).unwrap();
+        let data: Vec<i32> = result.iter().copied().collect();
+        assert_eq!(data, vec![1, 20, 30, 4]);
     }
 }
