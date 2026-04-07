@@ -1,0 +1,10 @@
+{
+  "uuid": "483ae2b2-a9fd-4948-b9af-15fb6cdd6ab1",
+  "issue_uuid": "aa7283dd-e47e-4a90-a796-9dfd2e092b7d",
+  "author": "phase-4-coordinator",
+  "content": "exp_fast() implemented in ferray-ufunc. Files: ferray-ufunc/src/fast_exp.rs (Even/Odd Remez algorithm), ferray-ufunc/src/ops/explog.rs (exp_fast public API), ferray-ufunc/src/dispatch.rs (ExpFastF64Op/ExpFastF32Op pulp dispatch). Closing as completed.",
+  "created_at": "2026-04-07T12:34:17.392290046Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAf7pIVdzTWDKjOTAPS5XJErCn7UDEpVbkRuKBbUZWMqwC1AB2miKAojDHSt7G+zd6BsgJuublWKWsauAmU4WHAA=="
+}
