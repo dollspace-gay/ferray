@@ -86,6 +86,24 @@ impl<T: Element, D: Dimension> Array<T, D> {
         let inner = self.inner.mapv(&f);
         Array::from_ndarray(inner)
     }
+
+    /// Convert this array to a dynamic-rank `Array<T, IxDyn>`.
+    ///
+    /// This is a cheap conversion (re-wraps the same data) and is needed
+    /// to call functions like [`crate::manipulation::concatenate`] which
+    /// take dynamic-rank slices.
+    pub fn to_dyn(&self) -> Array<T, IxDyn> {
+        let dyn_inner = self.inner.clone().into_dyn();
+        Array::<T, IxDyn>::from_ndarray(dyn_inner)
+    }
+
+    /// Consume this array and return a dynamic-rank `Array<T, IxDyn>`.
+    ///
+    /// Like [`Array::to_dyn`] but takes ownership to avoid the clone.
+    pub fn into_dyn(self) -> Array<T, IxDyn> {
+        let dyn_inner = self.inner.into_dyn();
+        Array::<T, IxDyn>::from_ndarray(dyn_inner)
+    }
 }
 
 // ---------------------------------------------------------------------------

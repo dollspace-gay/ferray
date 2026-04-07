@@ -430,6 +430,57 @@ pub fn dstack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrayResult<Array<T, I
     concatenate(&expanded, 2)
 }
 
+/// Stack 1-D arrays as columns into a 2-D array.
+///
+/// Each input becomes one column of the output. For 2-D+ inputs, this is
+/// equivalent to [`hstack`].
+///
+/// Analogous to `numpy.column_stack()`.
+///
+/// # Errors
+/// Returns `FerrayError::InvalidValue` if the input is empty,
+/// or `FerrayError::ShapeMismatch` if 1-D inputs have different lengths.
+pub fn column_stack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrayResult<Array<T, IxDyn>> {
+    if arrays.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "column_stack: need at least one array",
+        ));
+    }
+    let first_ndim = arrays[0].ndim();
+    if first_ndim == 1 {
+        // Convert each 1-D array of length N into a (N, 1) column, then hstack.
+        let n = arrays[0].shape()[0];
+        let mut reshaped = Vec::with_capacity(arrays.len());
+        for arr in arrays {
+            if arr.ndim() != 1 {
+                return Err(FerrayError::shape_mismatch(
+                    "column_stack: all inputs must have the same ndim",
+                ));
+            }
+            if arr.shape()[0] != n {
+                return Err(FerrayError::shape_mismatch(format!(
+                    "column_stack: 1-D inputs must have the same length; got {} and {}",
+                    n,
+                    arr.shape()[0],
+                )));
+            }
+            reshaped.push(reshape(arr, &[n, 1])?);
+        }
+        concatenate(&reshaped, 1)
+    } else {
+        // 2-D+: same as hstack
+        hstack(arrays)
+    }
+}
+
+/// Stack arrays in sequence vertically (row-wise). Alias for [`vstack`].
+///
+/// Analogous to `numpy.row_stack()` (deprecated alias for `vstack` in NumPy 2.0
+/// but still widely used).
+pub fn row_stack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrayResult<Array<T, IxDyn>> {
+    vstack(arrays)
+}
+
 /// Assemble an array from nested blocks.
 ///
 /// Simplified version: takes a 2-D grid of arrays (as Vec<Vec<...>>)
@@ -565,6 +616,45 @@ pub fn array_split<T: Element>(
     }
 
     Ok(result)
+}
+
+/// Split an array into `n` sub-arrays along `axis`, allowing uneven sections.
+///
+/// Unlike [`split`], this never errors on uneven division: the first
+/// `axis_len % n` sections have one extra element. This matches NumPy's
+/// `numpy.array_split(ary, n, axis)` (integer-section variant).
+///
+/// # Errors
+/// Returns `FerrayError::AxisOutOfBounds` if `axis >= ndim`.
+/// Returns `FerrayError::InvalidValue` if `n == 0`.
+pub fn array_split_n<T: Element>(
+    a: &Array<T, IxDyn>,
+    n: usize,
+    axis: usize,
+) -> FerrayResult<Vec<Array<T, IxDyn>>> {
+    if n == 0 {
+        return Err(FerrayError::invalid_value(
+            "array_split_n: n must be > 0",
+        ));
+    }
+    let shape = a.shape();
+    if axis >= shape.len() {
+        return Err(FerrayError::axis_out_of_bounds(axis, shape.len()));
+    }
+    let axis_len = shape[axis];
+
+    // Build split indices following NumPy's array_split:
+    // First (axis_len % n) sections get (axis_len / n + 1) elements,
+    // remaining sections get (axis_len / n) elements.
+    let base = axis_len / n;
+    let extra = axis_len % n;
+    let mut indices = Vec::with_capacity(n.saturating_sub(1));
+    let mut cum = 0usize;
+    for i in 0..n - 1 {
+        cum += if i < extra { base + 1 } else { base };
+        indices.push(cum);
+    }
+    array_split(a, &indices, axis)
 }
 
 /// Split array along axis 0 (vertical split). Equivalent to `split(a, n, 0)`.
@@ -1314,5 +1404,131 @@ mod tests {
         let b = roll(&a, 1, Some(1)).unwrap();
         let data: Vec<f64> = b.iter().copied().collect();
         assert_eq!(data, vec![3.0, 1.0, 2.0, 6.0, 4.0, 5.0]);
+    }
+
+    // -----------------------------------------------------------------------
+    // column_stack / row_stack / array_split_n / to_dyn (issue #362)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_column_stack_1d() {
+        // 3 1-D arrays of length 4 -> (4, 3)
+        let a = dyn_arr(&[4], vec![1.0, 2.0, 3.0, 4.0]);
+        let b = dyn_arr(&[4], vec![10.0, 20.0, 30.0, 40.0]);
+        let c = dyn_arr(&[4], vec![100.0, 200.0, 300.0, 400.0]);
+        let result = column_stack(&[a, b, c]).unwrap();
+        assert_eq!(result.shape(), &[4, 3]);
+        assert_eq!(
+            result.iter().copied().collect::<Vec<_>>(),
+            vec![
+                1.0, 10.0, 100.0, // row 0
+                2.0, 20.0, 200.0, // row 1
+                3.0, 30.0, 300.0, // row 2
+                4.0, 40.0, 400.0, // row 3
+            ]
+        );
+    }
+
+    #[test]
+    fn test_column_stack_2d_same_as_hstack() {
+        let a = dyn_arr(&[2, 2], vec![1.0, 2.0, 3.0, 4.0]);
+        let b = dyn_arr(&[2, 2], vec![5.0, 6.0, 7.0, 8.0]);
+        let result = column_stack(&[a, b]).unwrap();
+        assert_eq!(result.shape(), &[2, 4]);
+        assert_eq!(
+            result.iter().copied().collect::<Vec<_>>(),
+            vec![1.0, 2.0, 5.0, 6.0, 3.0, 4.0, 7.0, 8.0]
+        );
+    }
+
+    #[test]
+    fn test_column_stack_length_mismatch() {
+        let a = dyn_arr(&[3], vec![1.0, 2.0, 3.0]);
+        let b = dyn_arr(&[4], vec![1.0, 2.0, 3.0, 4.0]);
+        assert!(column_stack(&[a, b]).is_err());
+    }
+
+    #[test]
+    fn test_row_stack_is_vstack() {
+        let a = dyn_arr(&[3], vec![1.0, 2.0, 3.0]);
+        let b = dyn_arr(&[3], vec![4.0, 5.0, 6.0]);
+        let row = row_stack(&[a.clone(), b.clone()]).unwrap();
+        let v = vstack(&[a, b]).unwrap();
+        assert_eq!(row.shape(), v.shape());
+        assert_eq!(
+            row.iter().copied().collect::<Vec<_>>(),
+            v.iter().copied().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_array_split_n_uneven() {
+        // 7 elements split into 3 sections -> [3, 2, 2]
+        let a = dyn_arr(&[7], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
+        let parts = array_split_n(&a, 3, 0).unwrap();
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts[0].iter().copied().collect::<Vec<_>>(), vec![1.0, 2.0, 3.0]);
+        assert_eq!(parts[1].iter().copied().collect::<Vec<_>>(), vec![4.0, 5.0]);
+        assert_eq!(parts[2].iter().copied().collect::<Vec<_>>(), vec![6.0, 7.0]);
+    }
+
+    #[test]
+    fn test_array_split_n_even() {
+        let a = dyn_arr(&[6], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let parts = array_split_n(&a, 3, 0).unwrap();
+        assert_eq!(parts.len(), 3);
+        for (i, expected) in [vec![1.0, 2.0], vec![3.0, 4.0], vec![5.0, 6.0]]
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(&parts[i].iter().copied().collect::<Vec<_>>(), expected);
+        }
+    }
+
+    #[test]
+    fn test_array_split_n_more_sections_than_elements() {
+        // NumPy's behavior: 3 elements split into 5 sections gives 5 parts,
+        // first 3 have 1 element each, last 2 are empty.
+        let a = dyn_arr(&[3], vec![1.0, 2.0, 3.0]);
+        let parts = array_split_n(&a, 5, 0).unwrap();
+        assert_eq!(parts.len(), 5);
+        assert_eq!(parts[0].iter().copied().collect::<Vec<_>>(), vec![1.0]);
+        assert_eq!(parts[1].iter().copied().collect::<Vec<_>>(), vec![2.0]);
+        assert_eq!(parts[2].iter().copied().collect::<Vec<_>>(), vec![3.0]);
+        assert_eq!(parts[3].iter().copied().collect::<Vec<_>>(), Vec::<f64>::new());
+        assert_eq!(parts[4].iter().copied().collect::<Vec<_>>(), Vec::<f64>::new());
+    }
+
+    #[test]
+    fn test_to_dyn_from_typed() {
+        use crate::Array;
+        use crate::dimension::Ix2;
+        let typed = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let dy = typed.to_dyn();
+        assert_eq!(dy.shape(), &[2, 3]);
+        assert_eq!(
+            dy.iter().copied().collect::<Vec<_>>(),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        );
+    }
+
+    #[test]
+    fn test_concatenate_typed_via_to_dyn() {
+        // Demonstrates the typical end-user flow: have Array<T, Ix2>, want to
+        // concatenate, route through to_dyn().
+        use crate::Array;
+        use crate::dimension::Ix2;
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![5.0, 6.0, 7.0, 8.0]).unwrap();
+        let result = concatenate(&[a.to_dyn(), b.to_dyn()], 0).unwrap();
+        assert_eq!(result.shape(), &[4, 2]);
+        assert_eq!(
+            result.iter().copied().collect::<Vec<_>>(),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+        );
     }
 }
