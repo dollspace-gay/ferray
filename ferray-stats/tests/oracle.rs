@@ -1,6 +1,13 @@
-/// Oracle tests: validate ferray-stats against NumPy fixture outputs.
+//! Oracle tests: validate ferray-stats against NumPy fixture outputs.
+//!
+//! The `reduction_oracle!` macro takes a bare function `path` and pins its
+//! concrete type via an internal `let` binding to a `fn` pointer, so callers
+//! can write `reduction_oracle!(oracle_sum, "sum.json", ferray_stats::sum)`
+//! without a closure or turbofish. Same pattern as ferray-ufunc/tests/oracle.rs.
+
 use ferray_core::Array;
 use ferray_core::dimension::IxDyn;
+use ferray_core::error::FerrayResult;
 use ferray_test_oracle::*;
 
 fn stats_path(name: &str) -> std::path::PathBuf {
@@ -12,28 +19,24 @@ fn stats_path(name: &str) -> std::path::PathBuf {
 // ---------------------------------------------------------------------------
 
 macro_rules! reduction_oracle {
-    ($test_name:ident, $file:expr, $func:expr) => {
+    ($test_name:ident, $file:expr, $func:path) => {
         #[test]
         fn $test_name() {
-            run_reduction_f64_oracle(&stats_path($file), $func);
+            let func: fn(
+                &Array<f64, IxDyn>,
+                Option<usize>,
+            ) -> FerrayResult<Array<f64, IxDyn>> = $func;
+            run_reduction_f64_oracle(&stats_path($file), func);
         }
     };
 }
 
-reduction_oracle!(oracle_sum, "sum.json", |a, axis| ferray_stats::sum(a, axis));
-reduction_oracle!(oracle_prod, "prod.json", |a, axis| ferray_stats::prod(
-    a, axis
-));
-reduction_oracle!(oracle_mean, "mean.json", |a, axis| ferray_stats::mean(
-    a, axis
-));
-reduction_oracle!(oracle_min, "min.json", |a, axis| ferray_stats::min(a, axis));
-reduction_oracle!(oracle_max, "max.json", |a, axis| ferray_stats::max(a, axis));
-reduction_oracle!(
-    oracle_median,
-    "median.json",
-    |a, axis| ferray_stats::median(a, axis)
-);
+reduction_oracle!(oracle_sum, "sum.json", ferray_stats::sum);
+reduction_oracle!(oracle_prod, "prod.json", ferray_stats::prod);
+reduction_oracle!(oracle_mean, "mean.json", ferray_stats::mean);
+reduction_oracle!(oracle_min, "min.json", ferray_stats::min);
+reduction_oracle!(oracle_max, "max.json", ferray_stats::max);
+reduction_oracle!(oracle_median, "median.json", ferray_stats::median);
 
 // ---------------------------------------------------------------------------
 // Variance / std (use ddof=0 to match NumPy default)

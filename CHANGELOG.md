@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-03-07
 
 ### Added
+- ferray-stats: no multi-axis reductions — axis only accepts single usize (#458)
+- ferray-stats: no keepdims= parameter on any reduction (#457)
 - ferray-core: no concatenate/stack/split in core (#362)
 - ferray-core: no safe casting functions (can_cast, astype equivalent) (#361)
 - ferray-core: no reduction methods (sum, prod, min, max, mean) on Array (#368)
