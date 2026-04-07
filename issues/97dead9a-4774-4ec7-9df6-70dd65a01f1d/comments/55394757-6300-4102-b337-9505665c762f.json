@@ -1,0 +1,10 @@
+{
+  "uuid": "55394757-6300-4102-b337-9505665c762f",
+  "issue_uuid": "97dead9a-4774-4ec7-9df6-70dd65a01f1d",
+  "author": "phase-4-coordinator",
+  "content": "Added batched variants for the most commonly-used linalg ops. All take an Array<T, IxDyn> with shape (..., M, N) (or (..., N, N) where applicable), dispatch over the leading batch axes, and parallelize via Rayon through the existing batch.rs infrastructure. New functions (10): solve_batched, inv_batched, pinv_batched, matrix_power_batched (in solve.rs); slogdet_batched, matrix_rank_batched (in norms.rs); qr_batched, svd_batched, eigh_batched, eigvalsh_batched (in decomp/). cholesky_batched and det_batched already existed. solve_batched handles both vector-stacked (..., M) and matrix-stacked (..., M, K) right-hand sides. All short-circuit to the 2-D entry point when given a plain 2-D input. Output shape preserves the input batch dims (slogdet/matrix_rank return Array<T/i64, Ix1> flattened over batch, matching det_batched's existing convention). 14 new tests cover A@A^-1=I, A@x=b, Q@R=A, U diag(S) Vt = A, sign/log|det| correctness, rank, matrix^0=I, singular error propagation, and 2-D shortcut forwarding. 109 lib tests (up from 95) + 17 integration + 12 property pass. Clippy clean. Full workspace builds. Complex eig/eigvals batched variants and lstsq_batched deferred to a follow-up since they have more structural variance (complex outputs, multi-returns).",
+  "created_at": "2026-04-07T23:10:16.332532217Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA0dYVPFXAEt8Ul0y94G39HoWEpTQ163u8WS+KB65/ikhk3xRiHK9UNLkxifcqSYkSCBsar77lZ5gpDohaxzvuAQ=="
+}
