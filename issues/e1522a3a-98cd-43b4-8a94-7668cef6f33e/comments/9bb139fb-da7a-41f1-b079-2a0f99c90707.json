@@ -1,0 +1,10 @@
+{
+  "uuid": "9bb139fb-da7a-41f1-b079-2a0f99c90707",
+  "issue_uuid": "e1522a3a-98cd-43b4-8a94-7668cef6f33e",
+  "author": "phase-4-coordinator",
+  "content": "Added fill_value field to MaskedArray (defaults to T::zero()). New API:\n- with_fill_value(value) builder\n- fill_value() getter\n- set_fill_value(value) mutator\n- filled_default() method that uses the stored fill_value (complements existing filled(fill_value) which takes an explicit override)\n\nAll operations now use the receiver's fill_value as the replacement for masked positions in result data, instead of hardcoded T::zero():\n- masked_add/sub/mul/div and their _array variants (in arithmetic.rs)\n- masked_unary_op/masked_binary_op helpers in ufunc_support.rs (which back all the trig/exp/log ufuncs)\n\nThe fill_value propagates through unary/binary ops via the result's set_fill_value call.\n\n3 new tests covering default value, with_fill_value builder, filled_default behavior, and arithmetic propagation.\n\nCloses #501.",
+  "created_at": "2026-04-07T18:25:15.889420242Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAH0Maqb16Bqccc4GwHjCATjYxFBzQKyQ5JhwrqVzu9DXaDfUzkPeOhpNkpkKpJsZWlA8ltxgvlTthnnkgcCKfCw=="
+}
