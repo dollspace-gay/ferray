@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-03-07
 
 ### Added
+- ferray-ufunc: no reduce/accumulate/outer/at/reduceat as generic ufunc methods (#381)
 - ferray-ufunc: every operation allocates a new Vec — no out= parameter (#378)
 - ferray-linalg: no batched solve/inv/det — only cholesky has batched variant (#412)
 - ferray-random: standard_normal uses Box-Muller instead of Ziggurat — slower (#442)

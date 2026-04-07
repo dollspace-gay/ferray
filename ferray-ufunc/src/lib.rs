@@ -25,6 +25,7 @@ pub mod kernels;
 pub mod operator_overloads;
 pub mod ops;
 pub mod parallel;
+pub mod ufunc_methods;
 
 // ---------------------------------------------------------------------------
 // Public re-exports — flat namespace for ergonomic use
@@ -86,6 +87,10 @@ pub use ops::convolution::{ConvolveMode, convolve};
 
 // Interpolation
 pub use ops::interpolation::{interp, interp_one};
+
+// Generic ufunc methods (reduce / accumulate / outer / at) — work with
+// any `Fn(T, T) -> T` op, equivalent to NumPy's `np.<ufunc>.reduce` etc.
+pub use ufunc_methods::{accumulate_axis, at, outer as ufunc_outer, reduce_axis};
 
 // f16 variants (feature-gated)
 #[cfg(feature = "f16")]

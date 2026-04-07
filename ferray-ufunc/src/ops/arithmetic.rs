@@ -594,61 +594,16 @@ where
 
 /// Reduce by addition along an axis (column sums, row sums, etc.).
 ///
+/// Equivalent to `np.add.reduce(arr, axis=...)`. Delegates to the generic
+/// [`crate::ufunc_methods::reduce_axis`] with the `+` kernel and `0` seed.
+///
 /// AC-2: `add_reduce` computes correct column sums.
 pub fn add_reduce<T, D>(input: &Array<T, D>, axis: usize) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
 {
-    let ndim = input.ndim();
-    if axis >= ndim {
-        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
-    }
-    let shape = input.shape().to_vec();
-    let axis_len = shape[axis];
-
-    // Compute output shape: remove the axis
-    let mut out_shape: Vec<usize> = Vec::with_capacity(ndim - 1);
-    for (i, &s) in shape.iter().enumerate() {
-        if i != axis {
-            out_shape.push(s);
-        }
-    }
-    let out_size: usize = out_shape.iter().product();
-
-    // Compute strides for input traversal
-    let mut stride = 1usize;
-    for d in shape.iter().skip(axis + 1) {
-        stride *= d;
-    }
-    let outer_size: usize = shape[..axis].iter().product();
-    let inner_size = stride;
-
-    // Use contiguous slice directly if available, avoiding a full copy
-    let owned_data: Vec<T>;
-    let data: &[T] = if let Some(s) = input.as_slice() {
-        s
-    } else {
-        owned_data = input.iter().copied().collect();
-        &owned_data
-    };
-    let mut result = vec![<T as Element>::zero(); out_size];
-
-    for outer in 0..outer_size {
-        for inner in 0..inner_size {
-            let mut acc = <T as Element>::zero();
-            for k in 0..axis_len {
-                let idx = outer * axis_len * inner_size + k * inner_size + inner;
-                acc = acc + data[idx];
-            }
-            result[outer * inner_size + inner] = acc;
-        }
-    }
-
-    if out_shape.is_empty() {
-        out_shape.push(1);
-    }
-    Array::from_vec(IxDyn::from(&out_shape[..]), result)
+    crate::ufunc_methods::reduce_axis(input, axis, <T as Element>::zero(), |acc, x| acc + x)
 }
 
 /// Running (cumulative) addition along an axis.
@@ -662,24 +617,17 @@ where
     cumsum(input, Some(axis))
 }
 
-/// Outer product: multiply_outer(a, b)[i, j] = a[i] * b[j].
+/// Outer product: `multiply_outer(a, b)[i, j] = a[i] * b[j]`.
+///
+/// Equivalent to `np.multiply.outer(a, b)`. Delegates to the generic
+/// [`crate::ufunc_methods::outer`] with the `*` kernel.
 ///
 /// AC-3: multiply_outer produces correct outer product.
 pub fn multiply_outer<T>(a: &Array<T, Ix1>, b: &Array<T, Ix1>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
 {
-    let m = a.size();
-    let n = b.size();
-    let a_data: Vec<T> = a.iter().copied().collect();
-    let b_data: Vec<T> = b.iter().copied().collect();
-    let mut data = Vec::with_capacity(m * n);
-    for &ai in &a_data {
-        for &bj in &b_data {
-            data.push(ai * bj);
-        }
-    }
-    Array::from_vec(IxDyn::from(&[m, n][..]), data)
+    crate::ufunc_methods::outer(a, b, |x, y| x * y)
 }
 
 // ---------------------------------------------------------------------------
