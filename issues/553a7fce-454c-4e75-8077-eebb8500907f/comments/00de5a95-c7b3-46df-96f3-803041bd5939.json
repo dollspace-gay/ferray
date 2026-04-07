@@ -1,0 +1,10 @@
+{
+  "uuid": "00de5a95-c7b3-46df-96f3-803041bd5939",
+  "issue_uuid": "553a7fce-454c-4e75-8077-eebb8500907f",
+  "author": "phase-4-coordinator",
+  "content": "Oracle test suite is implemented across 8 crates: ferray-core, ferray-stats, ferray-linalg, ferray-ufunc, ferray-fft, ferray-polynomial, ferray-strings, ferray-ma. Each has tests/oracle.rs that loads JSON fixtures from fixtures/<crate>/ and validates output against NumPy reference values within ULP tolerance. The shared infrastructure lives in ferray-test-oracle crate (run_unary_f64_oracle, run_binary_f64_oracle, run_unary_bool_oracle, run_reduction_f64_oracle helpers). Closing as completed.",
+  "created_at": "2026-04-07T17:34:52.207941870Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAyNFzJCAUyJct1WRkJ3U3CFtHbDHsg+Af5uUDltFdqtbTQyM7lsyK0z+TrVp4EorDvIuqIKAT2z7yO/KsoqNACA=="
+}
