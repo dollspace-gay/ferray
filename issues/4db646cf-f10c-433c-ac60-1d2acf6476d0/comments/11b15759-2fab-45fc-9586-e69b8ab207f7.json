@@ -1,0 +1,10 @@
+{
+  "uuid": "11b15759-2fab-45fc-9586-e69b8ab207f7",
+  "issue_uuid": "4db646cf-f10c-433c-ac60-1d2acf6476d0",
+  "author": "phase-4-coordinator",
+  "content": "Resolved in 383cbc5 — rfft now uses a dedicated real-to-complex transform via the realfft crate (rfft_along_axis in ferray-fft/src/nd.rs:264), no longer computing the full FFT and discarding half.",
+  "created_at": "2026-04-07T21:57:26.054468822Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA80y1Pbm4l5dJoMZAnSsLAaHVUDFmRaZj7KD3hAxg537Kf+I0p4JIfo2U2tpWo+t9bvigB7hsK+SJD29Dh17ADA=="
+}
