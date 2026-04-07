@@ -1,0 +1,10 @@
+{
+  "uuid": "695ac430-6ce0-4f25-8e6a-7ae3ba329a06",
+  "issue_uuid": "c47cd99d-372d-4d5c-9fb8-d14c1284cb9a",
+  "author": "phase-4-coordinator",
+  "content": "Resolved. Added NumPy-style out= support via _into suffix functions for the most-used ops:\\n\\nBinary: add_into, subtract_into, multiply_into, divide_into\\nUnary (memory-bound): sqrt_into, square_into, absolute_into, negative_into\\nUnary (compute-bound, parallel at 100k): exp_into, log_into, sin_into, cos_into\\n\\nAll are backed by three new helpers in ferray-ufunc/src/helpers.rs: unary_float_op_into, unary_float_op_into_compute, binary_float_op_into. These require contiguous inputs/output and identical shapes (broadcasting is not supported on the fast path — callers needing it should use the allocating variants, which is called out in the error message). The caller owns the output buffer so there's literally zero allocation per call.\\n\\n15 new unit tests cover each variant's correctness plus shape-mismatch error handling, matching the non-into variant results, and a chainable-no-alloc loop pattern that runs 100 iterations over the same buffer.\\n\\nBenchmark (release, cargo run --release --example bench_into):\\n  add n=100:     2.45x speedup (44ns -> 18ns)  — small-array alloc overhead\\n  add n=1M:      1.88x speedup (829us -> 441us) — large-Vec alloc cost\\n  add n=100k:    1.29x speedup\\n  exp n=100k:    1.23x speedup\\n\\n218 lib + 50/19/53 integration tests pass. Clippy clean. Full workspace builds. Also fixed a pre-existing 'extra unused type parameters' clippy lint in the new check_into_shapes helper while here.",
+  "created_at": "2026-04-07T23:40:02.181626448Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAdggzf6TeG0kCfiFy1EhK/yCigOK9Kc9mzJ4eLaBiMene0KYwsZycNRoO1lPAVgiFauPuHX/LMczrtz97TYPLBQ=="
+}
