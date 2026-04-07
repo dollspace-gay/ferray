@@ -1,0 +1,10 @@
+{
+  "uuid": "9e2b4a30-564c-4ecb-8b08-34e1edb1c98d",
+  "issue_uuid": "2748222c-605e-4e7b-946d-36b9377d2153",
+  "author": "phase-4-coordinator",
+  "content": "Resolved by implementing the Marsaglia-Tsang Ziggurat algorithm (256 layers) in ferray-random/src/distributions/ziggurat.rs. Both standard_normal_single (f64) and standard_normal_single_f32 (f32) now route through the Ziggurat path; Box-Muller is gone. Layer tables are built lazily via LazyLock with fixed-point iteration from R=3.654152885361009 and V=0.00492867323399, so unused programs pay nothing. 6 new tests cover table monotonicity, peak closure, mean/variance, skewness/kurtosis, tail reachability, and f32/f64 consistency. Microbenchmark on release profile shows ~4.83 ns/sample f64 (207 Msamples/s) and ~3.89 ns/sample f32 (257 Msamples/s), competitive with NumPy's own Ziggurat. normal/lognormal/standard_normal_parallel all inherit the speedup for free.",
+  "created_at": "2026-04-07T22:16:17.971989554Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAgPb8qGOmfboux9WodETMHs+K5q+igZv+ohTkSsVxgrInmBWILdfqktNbyxVfwn/7D+RbWWNyeATct9JxqkIWDw=="
+}
