@@ -548,6 +548,142 @@ where
     binary_map_op(a, b, |x, y| f(x.to_f32(), y.to_f32()))
 }
 
+// ---------------------------------------------------------------------------
+// In-place (`_into`) helpers — write results into a caller-owned buffer.
+//
+// These back the `_into` public ops that implement NumPy's `out=` parameter.
+// On the hot path (same-shape contiguous inputs, contiguous output) there is
+// zero allocation: the kernel runs straight from input slices into the output
+// slice. Broadcasting or non-contiguous layouts are rejected with a clear
+// error — users who need those should call the allocating variants instead.
+// ---------------------------------------------------------------------------
+
+/// Shared shape/layout validation for the in-place variants.
+#[inline]
+fn check_into_shapes<U: Element, D2: Dimension>(
+    out: &Array<U, D2>,
+    input_shape: &[usize],
+    op_name: &str,
+) -> FerrayResult<()> {
+    if out.shape() != input_shape {
+        return Err(FerrayError::shape_mismatch(format!(
+            "{op_name}_into: out shape {:?} does not match input shape {:?}",
+            out.shape(),
+            input_shape
+        )));
+    }
+    Ok(())
+}
+
+/// Apply a unary function elementwise, writing the result into `out` in
+/// place. Both `input` and `out` must be contiguous and have the same shape.
+///
+/// Returns an error if shapes mismatch or either array is non-contiguous.
+/// Memory-bound default: no parallel dispatch. Use [`unary_float_op_into_compute`]
+/// for transcendentals.
+#[inline]
+pub fn unary_float_op_into<T, D>(
+    input: &Array<T, D>,
+    out: &mut Array<T, D>,
+    op_name: &str,
+    f: impl Fn(T) -> T,
+) -> FerrayResult<()>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    check_into_shapes::<T, D>(out, input.shape(), op_name)?;
+    let in_slice = input.as_slice().ok_or_else(|| {
+        FerrayError::invalid_value(format!(
+            "{op_name}_into: input must be contiguous (C-order); call {op_name}() for strided arrays"
+        ))
+    })?;
+    let out_slice = out.as_slice_mut().ok_or_else(|| {
+        FerrayError::invalid_value(format!(
+            "{op_name}_into: out must be contiguous (C-order); call {op_name}() for strided output"
+        ))
+    })?;
+    for (o, &x) in out_slice.iter_mut().zip(in_slice.iter()) {
+        *o = f(x);
+    }
+    Ok(())
+}
+
+/// Compute-bound variant of [`unary_float_op_into`] — parallelizes the
+/// contiguous write above `THRESHOLD_COMPUTE_BOUND` for transcendentals
+/// (`exp_into`, `sin_into`, `log_into`, etc.).
+#[inline]
+pub fn unary_float_op_into_compute<T, D>(
+    input: &Array<T, D>,
+    out: &mut Array<T, D>,
+    op_name: &str,
+    f: impl Fn(T) -> T + Sync + Send,
+) -> FerrayResult<()>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    check_into_shapes::<T, D>(out, input.shape(), op_name)?;
+    let in_slice = input.as_slice().ok_or_else(|| {
+        FerrayError::invalid_value(format!(
+            "{op_name}_into: input must be contiguous (C-order); call {op_name}() for strided arrays"
+        ))
+    })?;
+    let out_slice = out.as_slice_mut().ok_or_else(|| {
+        FerrayError::invalid_value(format!(
+            "{op_name}_into: out must be contiguous (C-order); call {op_name}() for strided output"
+        ))
+    })?;
+    parallel_unary_fill_threshold(in_slice, out_slice, THRESHOLD_COMPUTE_BOUND, f);
+    Ok(())
+}
+
+/// Apply a binary function elementwise, writing the result into `out` in
+/// place. All three arrays must be contiguous and identically shaped.
+///
+/// Broadcasting is **not** supported here; use [`binary_float_op`] if you
+/// need it. The no-broadcast constraint is what makes this zero-allocation.
+#[inline]
+pub fn binary_float_op_into<T, D>(
+    a: &Array<T, D>,
+    b: &Array<T, D>,
+    out: &mut Array<T, D>,
+    op_name: &str,
+    f: impl Fn(T, T) -> T,
+) -> FerrayResult<()>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    if a.shape() != b.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "{op_name}_into: input shapes {:?} and {:?} differ (broadcasting not supported; use {op_name}() instead)",
+            a.shape(),
+            b.shape()
+        )));
+    }
+    check_into_shapes::<T, D>(out, a.shape(), op_name)?;
+    let a_slice = a.as_slice().ok_or_else(|| {
+        FerrayError::invalid_value(format!(
+            "{op_name}_into: a must be contiguous (C-order)"
+        ))
+    })?;
+    let b_slice = b.as_slice().ok_or_else(|| {
+        FerrayError::invalid_value(format!(
+            "{op_name}_into: b must be contiguous (C-order)"
+        ))
+    })?;
+    let out_slice = out.as_slice_mut().ok_or_else(|| {
+        FerrayError::invalid_value(format!(
+            "{op_name}_into: out must be contiguous (C-order)"
+        ))
+    })?;
+    for ((o, &x), &y) in out_slice.iter_mut().zip(a_slice.iter()).zip(b_slice.iter()) {
+        *o = f(x, y);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

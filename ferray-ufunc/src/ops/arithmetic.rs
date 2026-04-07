@@ -17,7 +17,10 @@ use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
-use crate::helpers::{binary_broadcast_op, binary_float_op, unary_float_op, unary_float_op_compute};
+use crate::helpers::{
+    binary_broadcast_op, binary_float_op, binary_float_op_into, unary_float_op,
+    unary_float_op_compute, unary_float_op_into,
+};
 
 // ---------------------------------------------------------------------------
 // Basic arithmetic (binary, same-shape)
@@ -32,6 +35,27 @@ where
     binary_float_op(a, b, |x, y| x + y)
 }
 
+/// In-place elementwise addition, equivalent to NumPy's
+/// `np.add(a, b, out=out)`. Writes `a + b` directly into `out` without
+/// allocating. All three arrays must be contiguous (C-order) and have the
+/// same shape; broadcasting is not supported on this fast path — use
+/// [`add`] if you need it.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if shapes differ.
+/// - `FerrayError::InvalidValue` if any array is non-contiguous.
+pub fn add_into<T, D>(
+    a: &Array<T, D>,
+    b: &Array<T, D>,
+    out: &mut Array<T, D>,
+) -> FerrayResult<()>
+where
+    T: Element + std::ops::Add<Output = T> + Copy,
+    D: Dimension,
+{
+    binary_float_op_into(a, b, out, "add", |x, y| x + y)
+}
+
 /// Elementwise subtraction with NumPy broadcasting.
 pub fn subtract<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
@@ -39,6 +63,19 @@ where
     D: Dimension,
 {
     binary_float_op(a, b, |x, y| x - y)
+}
+
+/// In-place subtraction — the `_into` counterpart of [`subtract`].
+pub fn subtract_into<T, D>(
+    a: &Array<T, D>,
+    b: &Array<T, D>,
+    out: &mut Array<T, D>,
+) -> FerrayResult<()>
+where
+    T: Element + std::ops::Sub<Output = T> + Copy,
+    D: Dimension,
+{
+    binary_float_op_into(a, b, out, "subtract", |x, y| x - y)
 }
 
 /// Elementwise multiplication with NumPy broadcasting.
@@ -50,6 +87,19 @@ where
     binary_float_op(a, b, |x, y| x * y)
 }
 
+/// In-place multiplication — the `_into` counterpart of [`multiply`].
+pub fn multiply_into<T, D>(
+    a: &Array<T, D>,
+    b: &Array<T, D>,
+    out: &mut Array<T, D>,
+) -> FerrayResult<()>
+where
+    T: Element + std::ops::Mul<Output = T> + Copy,
+    D: Dimension,
+{
+    binary_float_op_into(a, b, out, "multiply", |x, y| x * y)
+}
+
 /// Elementwise division with NumPy broadcasting.
 pub fn divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
@@ -57,6 +107,19 @@ where
     D: Dimension,
 {
     binary_float_op(a, b, |x, y| x / y)
+}
+
+/// In-place division — the `_into` counterpart of [`divide`].
+pub fn divide_into<T, D>(
+    a: &Array<T, D>,
+    b: &Array<T, D>,
+    out: &mut Array<T, D>,
+) -> FerrayResult<()>
+where
+    T: Element + std::ops::Div<Output = T> + Copy,
+    D: Dimension,
+{
+    binary_float_op_into(a, b, out, "divide", |x, y| x / y)
 }
 
 /// Alias for [`divide`] — true division (float).
@@ -208,6 +271,15 @@ where
     unary_float_op(input, T::abs)
 }
 
+/// In-place elementwise absolute value — `_into` counterpart of [`absolute`].
+pub fn absolute_into<T, D>(input: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    unary_float_op_into(input, out, "absolute", T::abs)
+}
+
 /// Alias for [`absolute`] — float abs.
 pub fn fabs<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
@@ -250,6 +322,15 @@ where
     unary_float_op(input, |x| -x)
 }
 
+/// In-place elementwise negation — `_into` counterpart of [`negative`].
+pub fn negative_into<T, D>(input: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    unary_float_op_into(input, out, "negative", |x| -x)
+}
+
 /// Elementwise positive (identity for numeric types).
 pub fn positive<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
@@ -288,6 +369,15 @@ where
     unary_float_op(input, T::sqrt)
 }
 
+/// In-place elementwise square root — the `_into` counterpart of [`sqrt`].
+pub fn sqrt_into<T, D>(input: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    unary_float_op_into(input, out, "sqrt", T::sqrt)
+}
+
 /// Elementwise cube root.
 pub fn cbrt<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
@@ -309,6 +399,15 @@ where
         return r;
     }
     unary_float_op(input, |x| x * x)
+}
+
+/// In-place elementwise square — the `_into` counterpart of [`square`].
+pub fn square_into<T, D>(input: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    unary_float_op_into(input, out, "square", |x| x * x)
 }
 
 /// Heaviside step function.
@@ -1598,6 +1697,167 @@ mod tests {
             let s = r.as_slice().unwrap();
             assert!((s[0].to_f32() - 5.0).abs() < 0.01);
             assert!((s[1].to_f32() - 5.0).abs() < 0.01);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // In-place (_into) variants (issue #378)
+    // -----------------------------------------------------------------------
+
+    mod into_tests {
+        use super::*;
+        use ferray_core::Array;
+        use ferray_core::dimension::Ix1;
+
+        fn arr(data: &[f64]) -> Array<f64, Ix1> {
+            Array::<f64, Ix1>::from_vec(Ix1::new([data.len()]), data.to_vec()).unwrap()
+        }
+
+        #[test]
+        fn add_into_writes_result() {
+            let a = arr(&[1.0, 2.0, 3.0]);
+            let b = arr(&[10.0, 20.0, 30.0]);
+            let mut out = arr(&[0.0, 0.0, 0.0]);
+            add_into(&a, &b, &mut out).unwrap();
+            assert_eq!(out.as_slice().unwrap(), &[11.0, 22.0, 33.0]);
+        }
+
+        #[test]
+        fn subtract_into_writes_result() {
+            let a = arr(&[10.0, 20.0, 30.0]);
+            let b = arr(&[1.0, 2.0, 3.0]);
+            let mut out = arr(&[0.0, 0.0, 0.0]);
+            subtract_into(&a, &b, &mut out).unwrap();
+            assert_eq!(out.as_slice().unwrap(), &[9.0, 18.0, 27.0]);
+        }
+
+        #[test]
+        fn multiply_into_writes_result() {
+            let a = arr(&[1.0, 2.0, 3.0]);
+            let b = arr(&[4.0, 5.0, 6.0]);
+            let mut out = arr(&[0.0; 3]);
+            multiply_into(&a, &b, &mut out).unwrap();
+            assert_eq!(out.as_slice().unwrap(), &[4.0, 10.0, 18.0]);
+        }
+
+        #[test]
+        fn divide_into_writes_result() {
+            let a = arr(&[10.0, 20.0, 30.0]);
+            let b = arr(&[2.0, 4.0, 6.0]);
+            let mut out = arr(&[0.0; 3]);
+            divide_into(&a, &b, &mut out).unwrap();
+            assert_eq!(out.as_slice().unwrap(), &[5.0, 5.0, 5.0]);
+        }
+
+        #[test]
+        fn add_into_shape_mismatch_errors() {
+            let a = arr(&[1.0, 2.0, 3.0]);
+            let b = arr(&[1.0, 2.0]);
+            let mut out = arr(&[0.0, 0.0, 0.0]);
+            assert!(add_into(&a, &b, &mut out).is_err());
+        }
+
+        #[test]
+        fn add_into_out_shape_mismatch_errors() {
+            let a = arr(&[1.0, 2.0, 3.0]);
+            let b = arr(&[4.0, 5.0, 6.0]);
+            let mut out = arr(&[0.0, 0.0]); // wrong size
+            assert!(add_into(&a, &b, &mut out).is_err());
+        }
+
+        #[test]
+        fn sqrt_into_writes_result() {
+            let a = arr(&[1.0, 4.0, 9.0, 16.0]);
+            let mut out = arr(&[0.0; 4]);
+            sqrt_into(&a, &mut out).unwrap();
+            assert_eq!(out.as_slice().unwrap(), &[1.0, 2.0, 3.0, 4.0]);
+        }
+
+        #[test]
+        fn square_into_writes_result() {
+            let a = arr(&[1.0, -2.0, 3.0, -4.0]);
+            let mut out = arr(&[0.0; 4]);
+            square_into(&a, &mut out).unwrap();
+            assert_eq!(out.as_slice().unwrap(), &[1.0, 4.0, 9.0, 16.0]);
+        }
+
+        #[test]
+        fn absolute_into_writes_result() {
+            let a = arr(&[-1.0, 2.0, -3.0]);
+            let mut out = arr(&[0.0; 3]);
+            absolute_into(&a, &mut out).unwrap();
+            assert_eq!(out.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+        }
+
+        #[test]
+        fn negative_into_writes_result() {
+            let a = arr(&[1.0, -2.0, 3.0]);
+            let mut out = arr(&[0.0; 3]);
+            negative_into(&a, &mut out).unwrap();
+            assert_eq!(out.as_slice().unwrap(), &[-1.0, 2.0, -3.0]);
+        }
+
+        #[test]
+        fn into_variants_are_chainable_no_alloc() {
+            // A realistic pattern: apply a pipeline in-place over and over
+            // without touching the allocator after initial setup.
+            let mut state = arr(&[1.0, 2.0, 3.0, 4.0]);
+            let ones = arr(&[1.0; 4]);
+            let mut scratch = arr(&[0.0; 4]);
+            for _ in 0..100 {
+                add_into(&state, &ones, &mut scratch).unwrap();
+                std::mem::swap(&mut state, &mut scratch);
+            }
+            // After 100 increments of 1: [101, 102, 103, 104]
+            assert_eq!(state.as_slice().unwrap(), &[101.0, 102.0, 103.0, 104.0]);
+        }
+
+        #[test]
+        fn exp_into_matches_exp() {
+            use crate::ops::explog::{exp, exp_into};
+            let a = arr(&[0.0, 1.0, 2.0]);
+            let expected = exp(&a).unwrap();
+            let mut out = arr(&[0.0; 3]);
+            exp_into(&a, &mut out).unwrap();
+            for (&x, &y) in expected.as_slice().unwrap().iter().zip(out.as_slice().unwrap().iter()) {
+                assert!((x - y).abs() < 1e-14);
+            }
+        }
+
+        #[test]
+        fn sin_into_matches_sin() {
+            use crate::ops::trig::{sin, sin_into};
+            let a = arr(&[0.0, std::f64::consts::FRAC_PI_2, std::f64::consts::PI]);
+            let expected = sin(&a).unwrap();
+            let mut out = arr(&[0.0; 3]);
+            sin_into(&a, &mut out).unwrap();
+            for (&x, &y) in expected.as_slice().unwrap().iter().zip(out.as_slice().unwrap().iter()) {
+                assert!((x - y).abs() < 1e-14);
+            }
+        }
+
+        #[test]
+        fn cos_into_matches_cos() {
+            use crate::ops::trig::{cos, cos_into};
+            let a = arr(&[0.0, std::f64::consts::FRAC_PI_2, std::f64::consts::PI]);
+            let expected = cos(&a).unwrap();
+            let mut out = arr(&[0.0; 3]);
+            cos_into(&a, &mut out).unwrap();
+            for (&x, &y) in expected.as_slice().unwrap().iter().zip(out.as_slice().unwrap().iter()) {
+                assert!((x - y).abs() < 1e-14);
+            }
+        }
+
+        #[test]
+        fn log_into_matches_log() {
+            use crate::ops::explog::{log, log_into};
+            let a = arr(&[1.0, std::f64::consts::E, 10.0]);
+            let expected = log(&a).unwrap();
+            let mut out = arr(&[0.0; 3]);
+            log_into(&a, &mut out).unwrap();
+            for (&x, &y) in expected.as_slice().unwrap().iter().zip(out.as_slice().unwrap().iter()) {
+                assert!((x - y).abs() < 1e-14);
+            }
         }
     }
 }

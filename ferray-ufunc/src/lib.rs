@@ -32,23 +32,26 @@ pub mod parallel;
 
 // Trigonometric
 pub use ops::trig::{
-    arccos, arccosh, arcsin, arcsinh, arctan, arctan2, arctanh, cos, cosh, deg2rad, degrees, hypot,
-    rad2deg, radians, sin, sinh, tan, tanh, unwrap,
+    arccos, arccosh, arcsin, arcsinh, arctan, arctan2, arctanh, cos, cos_into, cosh, deg2rad,
+    degrees, hypot, rad2deg, radians, sin, sin_into, sinh, tan, tanh, unwrap,
 };
 
 // Exponential and logarithmic
-pub use ops::explog::{exp, exp_fast, exp2, expm1, log, log1p, log2, log10, logaddexp, logaddexp2};
+pub use ops::explog::{
+    exp, exp_fast, exp_into, exp2, expm1, log, log_into, log1p, log2, log10, logaddexp, logaddexp2,
+};
 
 // Rounding
 pub use ops::rounding::{around, ceil, fix, floor, rint, round, trunc};
 
 // Arithmetic
 pub use ops::arithmetic::{
-    absolute, add, add_accumulate, add_broadcast, add_reduce, cbrt, cross, cumprod, cumsum, diff,
-    divide, divide_broadcast, divmod, ediff1d, fabs, floor_divide, fmod, gcd, gcd_int, gradient,
-    heaviside, lcm, lcm_int, mod_, multiply, multiply_broadcast, multiply_outer, nancumprod,
-    nancumsum, negative, positive, power, reciprocal, remainder, sign, sqrt, square, subtract,
-    subtract_broadcast, trapezoid, true_divide,
+    absolute, absolute_into, add, add_accumulate, add_broadcast, add_into, add_reduce, cbrt,
+    cross, cumprod, cumsum, diff, divide, divide_broadcast, divide_into, divmod, ediff1d, fabs,
+    floor_divide, fmod, gcd, gcd_int, gradient, heaviside, lcm, lcm_int, mod_, multiply,
+    multiply_broadcast, multiply_into, multiply_outer, nancumprod, nancumsum, negative,
+    negative_into, positive, power, reciprocal, remainder, sign, sqrt, sqrt_into, square,
+    square_into, subtract, subtract_broadcast, subtract_into, trapezoid, true_divide,
 };
 
 // Float intrinsics

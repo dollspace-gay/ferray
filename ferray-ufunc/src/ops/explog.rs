@@ -9,7 +9,9 @@ use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::cr_math::CrMath;
-use crate::helpers::{binary_float_op, unary_float_op, unary_float_op_compute};
+use crate::helpers::{
+    binary_float_op, unary_float_op, unary_float_op_compute, unary_float_op_into_compute,
+};
 
 /// Elementwise exponential (e^x).
 pub fn exp<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
@@ -18,6 +20,16 @@ where
     D: Dimension,
 {
     unary_float_op_compute(input, T::cr_exp)
+}
+
+/// In-place `e^x` — `_into` counterpart of [`exp`]. Parallelizes along
+/// the compute-bound threshold for transcendentals (100k elements).
+pub fn exp_into<T, D>(input: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
+where
+    T: Element + Float + CrMath,
+    D: Dimension,
+{
+    unary_float_op_into_compute(input, out, "exp", T::cr_exp)
 }
 
 /// Fast elementwise exponential (e^x) with ≤1 ULP accuracy.
@@ -109,6 +121,15 @@ where
     D: Dimension,
 {
     unary_float_op_compute(input, T::cr_ln)
+}
+
+/// In-place natural logarithm — `_into` counterpart of [`log`].
+pub fn log_into<T, D>(input: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
+where
+    T: Element + Float + CrMath,
+    D: Dimension,
+{
+    unary_float_op_into_compute(input, out, "log", T::cr_ln)
 }
 
 /// Elementwise base-2 logarithm.

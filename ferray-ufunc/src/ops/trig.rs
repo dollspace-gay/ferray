@@ -11,7 +11,9 @@ use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::cr_math::CrMath;
-use crate::helpers::{binary_float_op, unary_float_op, unary_float_op_compute};
+use crate::helpers::{
+    binary_float_op, unary_float_op, unary_float_op_compute, unary_float_op_into_compute,
+};
 
 // ---------------------------------------------------------------------------
 // Unary trig
@@ -26,6 +28,15 @@ where
     unary_float_op_compute(input, T::cr_sin)
 }
 
+/// In-place sine — `_into` counterpart of [`sin`].
+pub fn sin_into<T, D>(input: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
+where
+    T: Element + Float + CrMath,
+    D: Dimension,
+{
+    unary_float_op_into_compute(input, out, "sin", T::cr_sin)
+}
+
 /// Elementwise cosine.
 pub fn cos<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
@@ -33,6 +44,15 @@ where
     D: Dimension,
 {
     unary_float_op_compute(input, T::cr_cos)
+}
+
+/// In-place cosine — `_into` counterpart of [`cos`].
+pub fn cos_into<T, D>(input: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
+where
+    T: Element + Float + CrMath,
+    D: Dimension,
+{
+    unary_float_op_into_compute(input, out, "cos", T::cr_cos)
 }
 
 /// Elementwise tangent.
