@@ -1,0 +1,10 @@
+{
+  "uuid": "36db69f8-a122-40fe-b629-6a9bc40ee8f1",
+  "issue_uuid": "322f0daa-ce0a-470d-90bc-b041ebfec786",
+  "author": "phase-4-coordinator",
+  "content": "Resolved in bb1a4bf — dup of #426. All FFT entry points are now generic over a new FftFloat trait (ferray-fft/src/float.rs) implemented for both f32 and f64, with per-precision lazy plan caches in plan.rs. See #426 for full details.",
+  "created_at": "2026-04-07T21:57:35.198052341Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA6EXgFnhkIavfXxgMEFoTJwcmtnW2wbNe7PKoJ7q5G1Axn6d7NmcdU2EZu5ujmzta8bWTIJ1x7tADIv71YudSDw=="
+}
