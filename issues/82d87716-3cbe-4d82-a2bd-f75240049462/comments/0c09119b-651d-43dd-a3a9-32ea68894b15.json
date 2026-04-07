@@ -1,0 +1,10 @@
+{
+  "uuid": "0c09119b-651d-43dd-a3a9-32ea68894b15",
+  "issue_uuid": "82d87716-3cbe-4d82-a2bd-f75240049462",
+  "author": "phase-4-coordinator",
+  "content": "ExpFastF64Op/ExpFastF32Op WithSimd impls in ferray-ufunc/src/dispatch.rs. exp_fast in ops/explog.rs routes through dispatch_exp_fast_f64/f32. Verified files exist with correct contents. Closing as completed.",
+  "created_at": "2026-04-07T12:34:55.918744419Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAVYLJa0PC6SsHo7I1EYkNtKqOYnkxr+EwvRrb+6DhpXv6o4uBjh5WUQe7inzE9P/kHxFtIQCiZPwFbGgyRdSRAw=="
+}
