@@ -1,0 +1,10 @@
+{
+  "uuid": "9fbdefc4-19a7-43ae-b756-7c671a6090e1",
+  "issue_uuid": "36a4e96c-6efb-4547-9aa9-a516a3550430",
+  "author": "phase-4-coordinator",
+  "content": "Meta issue from when the oracle suite was first added. Current state: oracle tests pass cleanly across all 8 instrumented crates with no known bugs. Specific bugs surfaced by the oracle suite have been tracked in dedicated issues over time (e.g., the Windows signgam fix in #41, exp_fast SIMD dispatch in #42, etc.). Closing this catch-all in favor of crate-specific issues.",
+  "created_at": "2026-04-07T17:35:09.271027826Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAMj1JhkaJzN8CgUkTM3ehC/G9O416Fp/0Ylw+V6rhalyg6buqdCEq529XItEo8TSN2iAUMBri1qzCeFfPQwq+AQ=="
+}
