@@ -1,0 +1,10 @@
+{
+  "uuid": "3e094df3-175a-49ef-b806-5f5284339da0",
+  "issue_uuid": "afa5b8fa-a65d-48c8-8cba-44e64e927013",
+  "author": "phase-4-coordinator",
+  "content": "Updated the crate-level, module-level, and per-trait docstrings to accurately describe what the conversions actually do: every path (NumPy/Arrow/Polars in both directions) copies the data buffer. The new docs include a table enumerating the six paths and the specific reason each one copies, a short explanation of what true zero-copy would require, and a note that the copies are still single-memcpy-per-conversion. No runtime behavior change — this is a documentation fix to stop misleading users about allocation behavior. Trait docstrings on AsFerray and IntoNumPy are also updated so they no longer claim zero-copy semantics. Also fixed pre-existing -3.14 ~= PI clippy lints in three test fixtures while here.",
+  "created_at": "2026-04-07T23:59:48.471652244Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAxPQvWnoJJwXHom74nvXBZpbS8URsZuXeCc8qKZ9+EXx00jz13T++C3tQXq3Q+pki6C5ulTV9eDU3BwmiF4d7CA=="
+}
