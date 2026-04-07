@@ -1,0 +1,10 @@
+{
+  "uuid": "56413907-10ba-44e8-bc3e-baf8230c5edb",
+  "issue_uuid": "1435301b-2ec0-4358-8eb4-33f551bf7b4c",
+  "author": "phase-4-coordinator",
+  "content": "Implemented via new `*_axes` variants that take axes: Option<&[usize]> and keepdims: bool. The existing single-axis sum/prod/min/max/mean/var/std_ stay unchanged — this is non-breaking. See #458 for the companion multi-axis work; both issues shipped together.\n\nAdded functions in ferray-stats/src/reductions/mod.rs:\n- sum_axes, prod_axes, min_axes, max_axes, mean_axes, var_axes, std_axes — all accept axes: Option<&[usize]> (None or &[] = reduce all) plus keepdims\n- argmin_keepdims, argmax_keepdims — single-axis + keepdims (NumPy's argmin/argmax don't accept multi-axis)\n\nNew internal helpers:\n- normalize_axes: handles None / empty slice / validates in-bounds / rejects duplicates / sorts\n- output_shape_axes: computes the output shape with or without keepdims\n- reduce_axes_general: multi-axis reduction primitive that partitions axes into keep/reduce sets and iterates the full Cartesian product\n- reduce_axes_general_u64: same for u64 outputs (argmin/argmax)\n\nClosing as completed.",
+  "created_at": "2026-04-07T13:56:16.273028325Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA2YUXD48jnvm/YHrNvCIqmAdfo2sGmCE0nNL45gdd2rSY9kfPywLaDUU8c6OJv5VnVU0YEJ3GFWQaZRZjTlrTCA=="
+}
