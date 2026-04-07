@@ -1,0 +1,10 @@
+{
+  "uuid": "2985955c-794f-43b9-9a10-dc4bc3ea5d1b",
+  "issue_uuid": "1da66570-a1e4-4c2a-b17b-ab70121d79a5",
+  "author": "phase-4-coordinator",
+  "content": "Resolved. NpyElement is now implemented for half::f16 (behind feature \"f16\") and half::bf16 (behind new feature \"bf16\"); both reuse the existing bulk-read/bulk-write macro since half 2.x exposes to_ne_bytes/from_ne_bytes. dtype_parse accepts the standard NumPy \"f2\" descriptor for f16 (fully interoperable with np.float16) and a ferray-specific \"bf16\" descriptor for bfloat16 (NumPy has no native bf16 dtype). load/save/load_dynamic/save_dynamic all route F16 and BF16 through. The ferray umbrella crate now forwards ferray/f16 → ferray-io/f16 and ferray/bf16 → ferray-io/bf16 so end users get it transparently. 11 new tests cover dtype-string parsing, 1D/2D/DynArray round-trip for f16, 1D/DynArray round-trip for bf16, and header-descriptor verification. Also fixed 3 pre-existing clippy lints in tests (same-item-push and approx-constant PI) while here. 79 lib + 12 property tests pass on default, f16, bf16, and combined feature sets.",
+  "created_at": "2026-04-07T22:50:58.692731131Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAeQEsyVixtGUifYSe/O3rCyPrNDYUmkl3RxyaKkZH44cPKPBV0SFgRXjcn2EkCOXSqTTd2ajXCS1kwopxbyqhBA=="
+}
