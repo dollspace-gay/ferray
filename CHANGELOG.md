@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-03-07
 
 ### Added
+- ferray-core: no reduction methods (sum, prod, min, max, mean) on Array (#368)
+- ferray-core: ops.rs operators don't broadcast — diverges from NumPy behavior (#346)
+- Add operator overloading (+, -, *, /, %, unary -) for Array types (#43)
+- Yank all ferrum crates from crates.io for rename to ferray (#38)
+- Add exp_fast() with Even/Odd Remez v2 algorithm (#37)
 - ferray-core: no nditer equivalent — missing general-purpose strided iterator (#340)
 - ferray-linalg: faer_bridge always copies — no zero-copy path for C-contiguous arrays (#405)
 - ferray-core: no np.where equivalent (ternary selection) (#372)
@@ -79,6 +84,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Pinned memory transfers, 6 fused kernels, auto-dispatch
 
 ### Changed
+- Prepare all crates for crates.io publishing with GitHub URLs (#35)
 - ferray-core: NdIter — restore and complete BinaryBroadcastIter Iterator impl and binary_map_to (#560)
 
 #### Performance Optimizations
@@ -101,6 +107,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Slower: transcendentals at scale 1.4-2.1x (CORE-MATH accuracy tradeoff), matmul medium 4x (faer vs BLAS)
 
 ### Fixed
+- Fix exp_fast SIMD dispatch so it auto-vectorizes without target-cpu=native (#42)
+- Fix Windows compilation: add signgam compat header for core-math lgamma.c (#41)
 - ferray-linalg: tensorsolve and tensorinv have zero tests (#105)
 - ferray-linalg: matmul_batched (ND x ND) has zero tests (#106)
 - ferray-linalg: lstsq 2D b code path untested (#104)

@@ -12,6 +12,7 @@ pub mod iter;
 pub mod methods;
 mod index_impl;
 pub mod owned;
+pub mod reductions;
 #[cfg(feature = "serde")]
 mod serde_impl;
 pub mod view;

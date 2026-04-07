@@ -57,6 +57,14 @@ pub trait Dimension: Clone + PartialEq + Eq + fmt::Debug + Send + Sync + 'static
     #[doc(hidden)]
     #[cfg(not(feature = "no_std"))]
     fn from_ndarray_dim(dim: &Self::NdarrayDim) -> Self;
+
+    /// Construct a dimension from a slice of axis lengths.
+    ///
+    /// Returns `None` if the slice length does not match `Self::NDIM`
+    /// for fixed-rank dimensions. Always succeeds for [`IxDyn`].
+    ///
+    /// This is the inverse of [`Dimension::as_slice`].
+    fn from_dim_slice(shape: &[usize]) -> Option<Self>;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +131,15 @@ macro_rules! impl_fixed_dimension {
                 shape.copy_from_slice(s);
                 Self { shape }
             }
+
+            fn from_dim_slice(shape: &[usize]) -> Option<Self> {
+                if shape.len() != $n {
+                    return None;
+                }
+                let mut arr = [0usize; $n];
+                arr.copy_from_slice(shape);
+                Some(Self { shape: arr })
+            }
         }
     };
 }
@@ -172,6 +189,10 @@ impl Dimension for Ix0 {
     #[cfg(not(feature = "no_std"))]
     fn from_ndarray_dim(_dim: &Self::NdarrayDim) -> Self {
         Ix0
+    }
+
+    fn from_dim_slice(shape: &[usize]) -> Option<Self> {
+        if shape.is_empty() { Some(Ix0) } else { None }
     }
 }
 
@@ -238,6 +259,10 @@ impl Dimension for IxDyn {
         let view = dim.as_array_view();
         let s = view.as_slice().expect("ndarray IxDyn should be contiguous");
         Self { shape: s.to_vec() }
+    }
+
+    fn from_dim_slice(shape: &[usize]) -> Option<Self> {
+        Some(Self { shape: shape.to_vec() })
     }
 }
 

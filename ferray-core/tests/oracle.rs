@@ -1,7 +1,7 @@
 /// Oracle tests: validate ferray-core creation and manipulation against NumPy fixtures.
 use ferray_core::Array;
 use ferray_core::creation;
-use ferray_core::dimension::{Ix1, Ix2, IxDyn};
+use ferray_core::dimension::{Ix2, IxDyn};
 use ferray_test_oracle::*;
 
 fn core_path(name: &str) -> std::path::PathBuf {
@@ -56,7 +56,7 @@ fn oracle_arange() {
         let step = case
             .inputs
             .get("step")
-            .map(|v| parse_f64_value(v))
+            .map(parse_f64_value)
             .unwrap_or(1.0);
         let result = creation::arange(start, stop, step).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);

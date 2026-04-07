@@ -605,8 +605,8 @@ mod tests {
     fn promote_to_identity() {
         let a: i32 = PromoteTo::<i32>::promote(42i32);
         assert_eq!(a, 42i32);
-        let b: f64 = PromoteTo::<f64>::promote(3.14f64);
-        assert_eq!(b, 3.14f64);
+        let b: f64 = PromoteTo::<f64>::promote(2.5f64);
+        assert_eq!(b, 2.5f64);
     }
 
     #[test]
@@ -617,7 +617,7 @@ mod tests {
         let y: i16 = PromoteTo::<i16>::promote(255u8);
         assert_eq!(y, 255);
 
-        let z: Complex<f64> = PromoteTo::<Complex<f64>>::promote(3.14f32);
-        assert_eq!(z, Complex::new(3.14f32 as f64, 0.0));
+        let z: Complex<f64> = PromoteTo::<Complex<f64>>::promote(2.5f32);
+        assert_eq!(z, Complex::new(2.5f32 as f64, 0.0));
     }
 }

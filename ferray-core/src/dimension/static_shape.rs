@@ -94,6 +94,10 @@ impl<const N: usize> Dimension for Shape1<N> {
         let _ = dim; // The shape is known at compile time
         Self::new()
     }
+
+    fn from_dim_slice(shape: &[usize]) -> Option<Self> {
+        if shape == [N] { Some(Self::new()) } else { None }
+    }
 }
 
 // ===========================================================================
@@ -163,6 +167,10 @@ impl<const M: usize, const N: usize> Dimension for Shape2<M, N> {
     fn from_ndarray_dim(dim: &Self::NdarrayDim) -> Self {
         let _ = dim;
         Self::new()
+    }
+
+    fn from_dim_slice(shape: &[usize]) -> Option<Self> {
+        if shape == [M, N] { Some(Self::new()) } else { None }
     }
 }
 
@@ -234,6 +242,10 @@ impl<const A: usize, const B: usize, const C: usize> Dimension for Shape3<A, B, 
         let _ = dim;
         Self::new()
     }
+
+    fn from_dim_slice(shape: &[usize]) -> Option<Self> {
+        if shape == [A, B, C] { Some(Self::new()) } else { None }
+    }
 }
 
 // ===========================================================================
@@ -304,6 +316,10 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize> Dimension
     fn from_ndarray_dim(dim: &Self::NdarrayDim) -> Self {
         let _ = dim;
         Self::new()
+    }
+
+    fn from_dim_slice(shape: &[usize]) -> Option<Self> {
+        if shape == [A, B, C, D] { Some(Self::new()) } else { None }
     }
 }
 
@@ -377,6 +393,10 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
     fn from_ndarray_dim(dim: &Self::NdarrayDim) -> Self {
         let _ = dim;
         Self::new()
+    }
+
+    fn from_dim_slice(shape: &[usize]) -> Option<Self> {
+        if shape == [A, B, C, D, E] { Some(Self::new()) } else { None }
     }
 }
 
@@ -457,6 +477,10 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
     fn from_ndarray_dim(dim: &Self::NdarrayDim) -> Self {
         let _ = dim;
         Self::new()
+    }
+
+    fn from_dim_slice(shape: &[usize]) -> Option<Self> {
+        if shape == [A, B, C, D, E, F] { Some(Self::new()) } else { None }
     }
 }
 

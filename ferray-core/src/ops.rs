@@ -6,19 +6,33 @@
 // Users write `(a + b)?` to get the result, maintaining the zero-panic
 // guarantee while enabling natural math syntax.
 //
-// These operate elementwise on same-shape arrays. For broadcasting,
-// use the functions in ferray-ufunc (e.g. ferray::add(&a, &b)).
+// Broadcasting: when both operands share the same dimension type `D`,
+// the operators broadcast along compatible axes (NumPy rules). Cross-rank
+// broadcasting (e.g. Ix1 + Ix2) is exposed via `add_broadcast` etc., which
+// return `Array<T, IxDyn>` because the result rank cannot be expressed in
+// the type system without specialization.
 //
 // See: https://github.com/dollspace-gay/ferray/issues/7
+// Broadcasting: https://github.com/dollspace-gay/ferray/issues/346
 
 use crate::array::owned::Array;
 use crate::dimension::Dimension;
+use crate::dimension::IxDyn;
+use crate::dimension::broadcast::{broadcast_shapes, broadcast_to};
 use crate::dtype::Element;
 use crate::error::{FerrayError, FerrayResult};
 
-/// Elementwise binary operation on two same-shape arrays.
+/// Elementwise binary operation on two same-D arrays, with NumPy broadcasting.
 ///
-/// Returns an error if the shapes don't match.
+/// - If shapes match exactly, takes the fast path (zip iter, no broadcast).
+/// - Otherwise, broadcasts both inputs to the common shape and applies `op`.
+///
+/// Both inputs share dimension type `D`, so the broadcast result also has
+/// rank `D::NDIM` (or, for `IxDyn`, the maximum of the two ranks). The result
+/// is reconstructed via [`Dimension::from_dim_slice`].
+///
+/// # Errors
+/// Returns `FerrayError::ShapeMismatch` if the shapes are not broadcast-compatible.
 fn elementwise_binary<T, D, F>(
     a: &Array<T, D>,
     b: &Array<T, D>,
@@ -30,16 +44,78 @@ where
     D: Dimension,
     F: Fn(T, T) -> T,
 {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "operator {}: shapes {:?} and {:?} are not compatible",
+    // Fast path: identical shapes — no broadcasting needed.
+    if a.shape() == b.shape() {
+        let data: Vec<T> = a.iter().zip(b.iter()).map(|(&x, &y)| op(x, y)).collect();
+        return Array::from_vec(a.dim().clone(), data);
+    }
+
+    // Broadcasting path.
+    let target_shape = broadcast_shapes(a.shape(), b.shape()).map_err(|_| {
+        FerrayError::shape_mismatch(format!(
+            "operator {}: shapes {:?} and {:?} are not broadcast-compatible",
             op_name,
             a.shape(),
             b.shape()
-        )));
-    }
-    let data: Vec<T> = a.iter().zip(b.iter()).map(|(&x, &y)| op(x, y)).collect();
-    Array::from_vec(a.dim().clone(), data)
+        ))
+    })?;
+
+    let a_view = broadcast_to(a, &target_shape)?;
+    let b_view = broadcast_to(b, &target_shape)?;
+
+    let data: Vec<T> = a_view
+        .iter()
+        .zip(b_view.iter())
+        .map(|(&x, &y)| op(x, y))
+        .collect();
+
+    let result_dim = D::from_dim_slice(&target_shape).ok_or_else(|| {
+        FerrayError::shape_mismatch(format!(
+            "operator {}: cannot represent broadcast result shape {:?} as the input dimension type",
+            op_name, target_shape
+        ))
+    })?;
+
+    Array::from_vec(result_dim, data)
+}
+
+/// Cross-rank broadcasting helper: apply a binary op to two arrays with
+/// possibly different dimension types, returning a dynamic-rank result.
+///
+/// This is the primitive behind [`Array::add_broadcast`], [`Array::sub_broadcast`],
+/// etc. Always returns `Array<T, IxDyn>` because the result rank depends
+/// on input shapes at runtime.
+fn elementwise_binary_dyn<T, D1, D2, F>(
+    a: &Array<T, D1>,
+    b: &Array<T, D2>,
+    op: F,
+    op_name: &str,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Copy,
+    D1: Dimension,
+    D2: Dimension,
+    F: Fn(T, T) -> T,
+{
+    let target_shape = broadcast_shapes(a.shape(), b.shape()).map_err(|_| {
+        FerrayError::shape_mismatch(format!(
+            "{}: shapes {:?} and {:?} are not broadcast-compatible",
+            op_name,
+            a.shape(),
+            b.shape()
+        ))
+    })?;
+
+    let a_view = broadcast_to(a, &target_shape)?;
+    let b_view = broadcast_to(b, &target_shape)?;
+
+    let data: Vec<T> = a_view
+        .iter()
+        .zip(b_view.iter())
+        .map(|(&x, &y)| op(x, y))
+        .collect();
+
+    Array::from_vec(IxDyn::from(&target_shape[..]), data)
 }
 
 /// Implement a binary operator for all ownership combinations of Array.
@@ -176,6 +252,92 @@ where
 
     fn neg(self) -> Self::Output {
         -&self
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cross-rank broadcasting methods
+//
+// These methods accept an operand of any dimension type and return a
+// dynamic-rank result. They handle the case where the std::ops operators
+// can't apply because the type system requires both operands to share `D`.
+//
+// Example: a (Ix1, shape (3,)) + b (Ix2, shape (2,1)) -> Array<T, IxDyn> shape (2,3)
+// ---------------------------------------------------------------------------
+
+impl<T, D> Array<T, D>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    /// Elementwise add with NumPy broadcasting across arbitrary ranks.
+    ///
+    /// Returns a dynamic-rank `Array<T, IxDyn>` so that mixed-rank inputs
+    /// (e.g. 1D + 2D) can produce a result whose rank is determined at
+    /// runtime. For same-rank inputs prefer the `+` operator.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::ShapeMismatch` if shapes are not broadcast-compatible.
+    pub fn add_broadcast<D2: Dimension>(
+        &self,
+        other: &Array<T, D2>,
+    ) -> FerrayResult<Array<T, IxDyn>>
+    where
+        T: std::ops::Add<Output = T>,
+    {
+        elementwise_binary_dyn(self, other, |x, y| x + y, "add_broadcast")
+    }
+
+    /// Elementwise subtract with NumPy broadcasting across arbitrary ranks.
+    ///
+    /// See [`Array::add_broadcast`] for details.
+    pub fn sub_broadcast<D2: Dimension>(
+        &self,
+        other: &Array<T, D2>,
+    ) -> FerrayResult<Array<T, IxDyn>>
+    where
+        T: std::ops::Sub<Output = T>,
+    {
+        elementwise_binary_dyn(self, other, |x, y| x - y, "sub_broadcast")
+    }
+
+    /// Elementwise multiply with NumPy broadcasting across arbitrary ranks.
+    ///
+    /// See [`Array::add_broadcast`] for details.
+    pub fn mul_broadcast<D2: Dimension>(
+        &self,
+        other: &Array<T, D2>,
+    ) -> FerrayResult<Array<T, IxDyn>>
+    where
+        T: std::ops::Mul<Output = T>,
+    {
+        elementwise_binary_dyn(self, other, |x, y| x * y, "mul_broadcast")
+    }
+
+    /// Elementwise divide with NumPy broadcasting across arbitrary ranks.
+    ///
+    /// See [`Array::add_broadcast`] for details.
+    pub fn div_broadcast<D2: Dimension>(
+        &self,
+        other: &Array<T, D2>,
+    ) -> FerrayResult<Array<T, IxDyn>>
+    where
+        T: std::ops::Div<Output = T>,
+    {
+        elementwise_binary_dyn(self, other, |x, y| x / y, "div_broadcast")
+    }
+
+    /// Elementwise remainder with NumPy broadcasting across arbitrary ranks.
+    ///
+    /// See [`Array::add_broadcast`] for details.
+    pub fn rem_broadcast<D2: Dimension>(
+        &self,
+        other: &Array<T, D2>,
+    ) -> FerrayResult<Array<T, IxDyn>>
+    where
+        T: std::ops::Rem<Output = T>,
+    {
+        elementwise_binary_dyn(self, other, |x, y| x % y, "rem_broadcast")
     }
 }
 
@@ -328,5 +490,175 @@ mod tests {
         // (a + b)? * c)?
         let result = (&(&a + &b).unwrap() * &c).unwrap();
         assert_eq!(result.as_slice().unwrap(), &[50.0, 70.0, 90.0]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Broadcasting tests (issue #346)
+    // -----------------------------------------------------------------------
+
+    use crate::dimension::{Ix2, Ix3, IxDyn};
+
+    #[test]
+    fn test_broadcast_2d_row_plus_column() {
+        // (3, 1) + (1, 4) -> (3, 4) — both Ix2
+        let col =
+            Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![1.0, 2.0, 3.0]).unwrap();
+        let row =
+            Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![10.0, 20.0, 30.0, 40.0]).unwrap();
+        let result = (&col + &row).unwrap();
+        assert_eq!(result.shape(), &[3, 4]);
+        assert_eq!(
+            result.as_slice().unwrap(),
+            &[
+                11.0, 21.0, 31.0, 41.0, // row 1
+                12.0, 22.0, 32.0, 42.0, // row 2
+                13.0, 23.0, 33.0, 43.0, // row 3
+            ]
+        );
+    }
+
+    #[test]
+    fn test_broadcast_2d_stretch_one_axis() {
+        // (3, 4) + (1, 4) -> (3, 4)
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 4]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+        )
+        .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![100.0, 200.0, 300.0, 400.0])
+            .unwrap();
+        let result = (&a + &b).unwrap();
+        assert_eq!(result.shape(), &[3, 4]);
+        assert_eq!(
+            result.as_slice().unwrap(),
+            &[
+                101.0, 202.0, 303.0, 404.0, 105.0, 206.0, 307.0, 408.0, 109.0, 210.0, 311.0, 412.0,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_broadcast_3d_with_2d_axis() {
+        // (2, 3, 4) - (1, 3, 4) -> (2, 3, 4) — both Ix3
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), (1..=24).map(|i| i as f64).collect())
+            .unwrap();
+        let b = Array::<f64, Ix3>::from_vec(Ix3::new([1, 3, 4]), (1..=12).map(|i| i as f64).collect())
+            .unwrap();
+        let result = (&a - &b).unwrap();
+        assert_eq!(result.shape(), &[2, 3, 4]);
+        // First 12 elements: a[0..12] - b
+        let first_half: Vec<f64> = (1..=12).map(|_| 0.0).collect();
+        assert_eq!(&result.as_slice().unwrap()[..12], &first_half[..]);
+        // Second 12 elements: a[12..24] - b == 12 each
+        let second_half: Vec<f64> = (0..12).map(|_| 12.0).collect();
+        assert_eq!(&result.as_slice().unwrap()[12..], &second_half[..]);
+    }
+
+    #[test]
+    fn test_broadcast_incompatible_shapes_error() {
+        // (3,) + (4,) — incompatible
+        let a = arr(vec![1.0, 2.0, 3.0]);
+        let b = arr(vec![1.0, 2.0, 3.0, 4.0]);
+        let result = &a + &b;
+        assert!(result.is_err());
+
+        // (3, 4) + (3, 5) — incompatible
+        let c = Array::<f64, Ix2>::from_vec(Ix2::new([3, 4]), vec![0.0; 12]).unwrap();
+        let d = Array::<f64, Ix2>::from_vec(Ix2::new([3, 5]), vec![0.0; 15]).unwrap();
+        assert!((&c + &d).is_err());
+    }
+
+    #[test]
+    fn test_broadcast_mul_2d() {
+        // (3, 1) * (1, 3) -> (3, 3) outer-product style
+        let col = Array::<i32, Ix2>::from_vec(Ix2::new([3, 1]), vec![1, 2, 3]).unwrap();
+        let row = Array::<i32, Ix2>::from_vec(Ix2::new([1, 3]), vec![10, 20, 30]).unwrap();
+        let result = (&col * &row).unwrap();
+        assert_eq!(result.shape(), &[3, 3]);
+        assert_eq!(
+            result.as_slice().unwrap(),
+            &[10, 20, 30, 20, 40, 60, 30, 60, 90]
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-rank broadcasting via `add_broadcast` etc.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_add_broadcast_1d_plus_2d() {
+        // (3,) + (2, 3) -> (2, 3)
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let m = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+        )
+        .unwrap();
+        let result = v.add_broadcast(&m).unwrap();
+        assert_eq!(result.shape(), &[2, 3]);
+        assert_eq!(
+            result.as_slice().unwrap(),
+            &[11.0, 22.0, 33.0, 41.0, 52.0, 63.0]
+        );
+    }
+
+    #[test]
+    fn test_add_broadcast_1d_plus_column() {
+        // (3,) + (2, 1) -> (2, 3) — the canonical NumPy example from issue #346
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let col =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![10.0, 20.0]).unwrap();
+        let result = v.add_broadcast(&col).unwrap();
+        assert_eq!(result.shape(), &[2, 3]);
+        assert_eq!(
+            result.as_slice().unwrap(),
+            &[11.0, 12.0, 13.0, 21.0, 22.0, 23.0]
+        );
+    }
+
+    #[test]
+    fn test_sub_broadcast_2d_minus_1d() {
+        // (2, 3) - (3,) -> (2, 3)
+        let m = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+        )
+        .unwrap();
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let result = m.sub_broadcast(&v).unwrap();
+        assert_eq!(result.shape(), &[2, 3]);
+        assert_eq!(
+            result.as_slice().unwrap(),
+            &[9.0, 18.0, 27.0, 39.0, 48.0, 57.0]
+        );
+    }
+
+    #[test]
+    fn test_mul_broadcast_returns_dyn() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let b =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![10.0, 20.0]).unwrap();
+        let result: Array<f64, IxDyn> = a.mul_broadcast(&b).unwrap();
+        assert_eq!(result.shape(), &[2, 3]);
+        assert_eq!(
+            result.as_slice().unwrap(),
+            &[10.0, 20.0, 30.0, 20.0, 40.0, 60.0]
+        );
+    }
+
+    #[test]
+    fn test_div_broadcast_incompatible() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let b = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        assert!(a.div_broadcast(&b).is_err());
+    }
+
+    #[test]
+    fn test_rem_broadcast_2d() {
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![10, 20, 30, 40, 50, 60]).unwrap();
+        let b = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![3, 7, 11]).unwrap();
+        let result = a.rem_broadcast(&b).unwrap();
+        assert_eq!(result.shape(), &[2, 3]);
+        assert_eq!(result.as_slice().unwrap(), &[10 % 3, 20 % 7, 30 % 11, 40 % 3, 50 % 7, 60 % 11]);
     }
 }
