@@ -9,30 +9,30 @@ use ferray_core::error::{FerrayError, FerrayResult};
 
 use std::f64::consts::PI;
 
-/// Scalar modified Bessel function I_0(x) using polynomial approximation.
-///
-/// Uses the Abramowitz and Stegun approximation for |x| <= 3.75 and
-/// an asymptotic expansion for |x| > 3.75.
-fn bessel_i0_scalar(x: f64) -> f64 {
-    let ax = x.abs();
+// Re-use the Abramowitz & Stegun Bessel I_0 polynomial approximation
+// from ferray-ufunc instead of shipping a second copy (see #530).
+// The previous copy had already drifted in whitespace; funnelling
+// through the canonical crate keeps both the window code and the
+// ufunc in sync.
+use ferray_ufunc::ops::special::bessel_i0_scalar;
 
-    if ax <= 3.75 {
-        let t = (ax / 3.75).powi(2);
-        1.0 + t
-            * (3.5156229
-                + t * (3.0899424
-                    + t * (1.2067492 + t * (0.2659732 + t * (0.0360768 + t * 0.0045813)))))
-    } else {
-        let t = 3.75 / ax;
-        let poly = 0.39894228
-            + t * (0.01328592
-                + t * (0.00225319
-                    + t * (-0.00157565
-                        + t * (0.00916281
-                            + t * (-0.02057706
-                                + t * (0.02635537 + t * (-0.01647633 + t * 0.00392377)))))));
-        poly * ax.exp() / ax.sqrt()
+/// Build a window array of length `m` by evaluating `f` at every sample
+/// `0..m`. Handles the shared `m == 0` / `m == 1` edge cases that every
+/// NumPy-equivalent window has (see issue #292 for the original
+/// five-way copy of this pattern).
+#[inline]
+fn gen_window<F: FnMut(usize) -> f64>(m: usize, mut f: F) -> FerrayResult<Array<f64, Ix1>> {
+    if m == 0 {
+        return Array::from_vec(Ix1::new([0]), vec![]);
     }
+    if m == 1 {
+        return Array::from_vec(Ix1::new([1]), vec![1.0]);
+    }
+    let mut data = Vec::with_capacity(m);
+    for n in 0..m {
+        data.push(f(n));
+    }
+    Array::from_vec(Ix1::new([m]), data)
 }
 
 /// Return the Bartlett (triangular) window of length `m`.
@@ -42,27 +42,11 @@ fn bessel_i0_scalar(x: f64) -> f64 {
 ///
 /// This is equivalent to `numpy.bartlett(M)`.
 ///
-/// # Edge Cases
-/// - `m == 0`: returns an empty array.
-/// - `m == 1`: returns `[1.0]`.
-///
 /// # Errors
 /// Returns an error only if internal array construction fails.
 pub fn bartlett(m: usize) -> FerrayResult<Array<f64, Ix1>> {
-    if m == 0 {
-        return Array::from_vec(Ix1::new([0]), vec![]);
-    }
-    if m == 1 {
-        return Array::from_vec(Ix1::new([1]), vec![1.0]);
-    }
-
-    let half = (m - 1) as f64 / 2.0;
-    let mut data = Vec::with_capacity(m);
-    for n in 0..m {
-        let val = 1.0 - ((n as f64 - half) / half).abs();
-        data.push(val);
-    }
-    Array::from_vec(Ix1::new([m]), data)
+    let half = (m.saturating_sub(1)) as f64 / 2.0;
+    gen_window(m, |n| 1.0 - ((n as f64 - half) / half).abs())
 }
 
 /// Return the Blackman window of length `m`.
@@ -72,28 +56,14 @@ pub fn bartlett(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 ///
 /// This is equivalent to `numpy.blackman(M)`.
 ///
-/// # Edge Cases
-/// - `m == 0`: returns an empty array.
-/// - `m == 1`: returns `[1.0]`.
-///
 /// # Errors
 /// Returns an error only if internal array construction fails.
 pub fn blackman(m: usize) -> FerrayResult<Array<f64, Ix1>> {
-    if m == 0 {
-        return Array::from_vec(Ix1::new([0]), vec![]);
-    }
-    if m == 1 {
-        return Array::from_vec(Ix1::new([1]), vec![1.0]);
-    }
-
-    let denom = (m - 1) as f64;
-    let mut data = Vec::with_capacity(m);
-    for n in 0..m {
+    let denom = (m.saturating_sub(1)) as f64;
+    gen_window(m, |n| {
         let x = n as f64;
-        let val = 0.42 - 0.5 * (2.0 * PI * x / denom).cos() + 0.08 * (4.0 * PI * x / denom).cos();
-        data.push(val);
-    }
-    Array::from_vec(Ix1::new([m]), data)
+        0.42 - 0.5 * (2.0 * PI * x / denom).cos() + 0.08 * (4.0 * PI * x / denom).cos()
+    })
 }
 
 /// Return the Hamming window of length `m`.
@@ -103,27 +73,11 @@ pub fn blackman(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 ///
 /// This is equivalent to `numpy.hamming(M)`.
 ///
-/// # Edge Cases
-/// - `m == 0`: returns an empty array.
-/// - `m == 1`: returns `[1.0]`.
-///
 /// # Errors
 /// Returns an error only if internal array construction fails.
 pub fn hamming(m: usize) -> FerrayResult<Array<f64, Ix1>> {
-    if m == 0 {
-        return Array::from_vec(Ix1::new([0]), vec![]);
-    }
-    if m == 1 {
-        return Array::from_vec(Ix1::new([1]), vec![1.0]);
-    }
-
-    let denom = (m - 1) as f64;
-    let mut data = Vec::with_capacity(m);
-    for n in 0..m {
-        let val = 0.54 - 0.46 * (2.0 * PI * n as f64 / denom).cos();
-        data.push(val);
-    }
-    Array::from_vec(Ix1::new([m]), data)
+    let denom = (m.saturating_sub(1)) as f64;
+    gen_window(m, |n| 0.54 - 0.46 * (2.0 * PI * n as f64 / denom).cos())
 }
 
 /// Return the Hann (Hanning) window of length `m`.
@@ -133,27 +87,11 @@ pub fn hamming(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 ///
 /// NumPy calls this function `hanning`. This is equivalent to `numpy.hanning(M)`.
 ///
-/// # Edge Cases
-/// - `m == 0`: returns an empty array.
-/// - `m == 1`: returns `[1.0]`.
-///
 /// # Errors
 /// Returns an error only if internal array construction fails.
 pub fn hanning(m: usize) -> FerrayResult<Array<f64, Ix1>> {
-    if m == 0 {
-        return Array::from_vec(Ix1::new([0]), vec![]);
-    }
-    if m == 1 {
-        return Array::from_vec(Ix1::new([1]), vec![1.0]);
-    }
-
-    let denom = (m - 1) as f64;
-    let mut data = Vec::with_capacity(m);
-    for n in 0..m {
-        let val = 0.5 * (1.0 - (2.0 * PI * n as f64 / denom).cos());
-        data.push(val);
-    }
-    Array::from_vec(Ix1::new([m]), data)
+    let denom = (m.saturating_sub(1)) as f64;
+    gen_window(m, |n| 0.5 * (1.0 - (2.0 * PI * n as f64 / denom).cos()))
 }
 
 /// Return the Kaiser window of length `m` with shape parameter `beta`.
@@ -180,23 +118,13 @@ pub fn kaiser(m: usize, beta: f64) -> FerrayResult<Array<f64, Ix1>> {
     // I_0 is an even function, so kaiser(m, -beta) == kaiser(m, beta).
     // Accept negative beta for NumPy compatibility.
     let beta = beta.abs();
-
-    if m == 0 {
-        return Array::from_vec(Ix1::new([0]), vec![]);
-    }
-    if m == 1 {
-        return Array::from_vec(Ix1::new([1]), vec![1.0]);
-    }
-
-    let i0_beta = bessel_i0_scalar(beta);
-    let alpha = (m as f64 - 1.0) / 2.0;
-    let mut data = Vec::with_capacity(m);
-    for n in 0..m {
+    let i0_beta = bessel_i0_scalar::<f64>(beta);
+    let alpha = (m.saturating_sub(1)) as f64 / 2.0;
+    gen_window(m, |n| {
         let t = (n as f64 - alpha) / alpha;
         let arg = beta * (1.0 - t * t).max(0.0).sqrt();
-        data.push(bessel_i0_scalar(arg) / i0_beta);
-    }
-    Array::from_vec(Ix1::new([m]), data)
+        bessel_i0_scalar::<f64>(arg) / i0_beta
+    })
 }
 
 #[cfg(test)]
@@ -447,14 +375,14 @@ mod tests {
 
     #[test]
     fn bessel_i0_scalar_zero() {
-        assert!((bessel_i0_scalar(0.0) - 1.0).abs() < 1e-6);
+        assert!((bessel_i0_scalar::<f64>(0.0) - 1.0).abs() < 1e-6);
     }
 
     #[test]
     fn bessel_i0_scalar_known() {
         // I0(1) ~ 1.2660658
-        assert!((bessel_i0_scalar(1.0) - 1.2660658).abs() < 1e-4);
+        assert!((bessel_i0_scalar::<f64>(1.0) - 1.2660658).abs() < 1e-4);
         // I0(5) ~ 27.2398718 (tests the asymptotic branch)
-        assert!((bessel_i0_scalar(5.0) - 27.2398718).abs() < 1e-2);
+        assert!((bessel_i0_scalar::<f64>(5.0) - 27.2398718).abs() < 1e-2);
     }
 }

@@ -39,14 +39,17 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op(input, bessel_i0)
+    unary_float_op(input, bessel_i0_scalar)
 }
 
 /// Scalar modified Bessel function I_0(x) using polynomial approximation.
 ///
 /// Uses the Abramowitz and Stegun approximation for |x| <= 3.75 and
-/// an asymptotic expansion for |x| > 3.75.
-fn bessel_i0<T: Float + CrMath>(x: T) -> T {
+/// an asymptotic expansion for |x| > 3.75. Exposed so downstream
+/// crates (notably ferray-window's Kaiser implementation) can depend
+/// on the canonical definition instead of maintaining their own copy
+/// (see #530).
+pub fn bessel_i0_scalar<T: Float + CrMath>(x: T) -> T {
     let ax = x.abs();
     let three_point_seven_five = T::from(3.75).unwrap();
 

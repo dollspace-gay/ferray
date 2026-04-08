@@ -51,39 +51,13 @@ pub fn as_strided<'a, T: Element, D: Dimension>(
     shape: &[usize],
     strides: &[usize],
 ) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
-    // Validate shape and strides have the same length.
-    if shape.len() != strides.len() {
-        return Err(FerrayError::invalid_value(format!(
-            "shape length ({}) must equal strides length ({})",
-            shape.len(),
-            strides.len(),
-        )));
-    }
-
-    // Convert usize strides to isize for the overlap check.
-    let istrides: Vec<isize> = strides.iter().map(|&s| s as isize).collect();
-
-    // Empty views are trivially valid.
-    let n_elements: usize = shape.iter().product();
-    if n_elements == 0 {
-        // SAFETY: zero elements means no memory access.
-        let ptr = array.as_ptr();
-        let view = unsafe { ArrayView::from_shape_ptr(ptr, shape, strides) };
-        return Ok(view);
-    }
-
-    // Bounds check: all offsets must be within the source buffer.
-    let buf_len = array.size();
-    if !all_offsets_in_bounds(shape, &istrides, buf_len) {
-        return Err(FerrayError::invalid_value(format!(
-            "as_strided: strides {:?} with shape {:?} would access elements \
-             outside the source buffer of length {}",
-            strides, shape, buf_len,
-        )));
-    }
+    let istrides = validate_and_bounds_check(array, shape, strides, "as_strided")?;
 
     // Overlap check: no two indices may map to the same element.
-    if has_overlapping_strides(shape, &istrides) {
+    // Empty views fall through here with an empty istrides vec — that's
+    // fine, has_overlapping_strides returns false for zero elements.
+    let n_elements: usize = shape.iter().product();
+    if n_elements > 0 && has_overlapping_strides(shape, &istrides) {
         return Err(FerrayError::invalid_value(format!(
             "as_strided: strides {:?} with shape {:?} produce overlapping \
              memory accesses; use as_strided_unchecked for overlapping views",
@@ -96,6 +70,44 @@ pub fn as_strided<'a, T: Element, D: Dimension>(
     let ptr = array.as_ptr();
     let view = unsafe { ArrayView::from_shape_ptr(ptr, shape, strides) };
     Ok(view)
+}
+
+/// Shared validation + bounds-check between [`as_strided`] and
+/// [`as_strided_unchecked`]. Returns the signed stride vector on
+/// success so the caller can feed it back into
+/// [`has_overlapping_strides`] without re-collecting (#287).
+fn validate_and_bounds_check<T: Element, D: Dimension>(
+    array: &Array<T, D>,
+    shape: &[usize],
+    strides: &[usize],
+    fn_name: &str,
+) -> FerrayResult<Vec<isize>> {
+    if shape.len() != strides.len() {
+        return Err(FerrayError::invalid_value(format!(
+            "shape length ({}) must equal strides length ({})",
+            shape.len(),
+            strides.len(),
+        )));
+    }
+
+    let istrides: Vec<isize> = strides.iter().map(|&s| s as isize).collect();
+
+    // Empty views are trivially valid — skip the bounds check.
+    let n_elements: usize = shape.iter().product();
+    if n_elements == 0 {
+        return Ok(istrides);
+    }
+
+    let buf_len = array.size();
+    if !all_offsets_in_bounds(shape, &istrides, buf_len) {
+        return Err(FerrayError::invalid_value(format!(
+            "{}: strides {:?} with shape {:?} would access elements \
+             outside the source buffer of length {}",
+            fn_name, strides, shape, buf_len,
+        )));
+    }
+
+    Ok(istrides)
 }
 
 /// Create a view of an array with arbitrary shape and strides, without
@@ -156,34 +168,10 @@ pub unsafe fn as_strided_unchecked<'a, T: Element, D: Dimension>(
     shape: &[usize],
     strides: &[usize],
 ) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
-    // Validate shape and strides have the same length.
-    if shape.len() != strides.len() {
-        return Err(FerrayError::invalid_value(format!(
-            "shape length ({}) must equal strides length ({})",
-            shape.len(),
-            strides.len(),
-        )));
-    }
-
-    let istrides: Vec<isize> = strides.iter().map(|&s| s as isize).collect();
-
-    // Empty views are trivially valid.
-    let n_elements: usize = shape.iter().product();
-    if n_elements == 0 {
-        let ptr = array.as_ptr();
-        let view = unsafe { ArrayView::from_shape_ptr(ptr, shape, strides) };
-        return Ok(view);
-    }
-
-    // Bounds check: all offsets must be within the source buffer.
-    let buf_len = array.size();
-    if !all_offsets_in_bounds(shape, &istrides, buf_len) {
-        return Err(FerrayError::invalid_value(format!(
-            "as_strided_unchecked: strides {:?} with shape {:?} would access \
-             elements outside the source buffer of length {}",
-            strides, shape, buf_len,
-        )));
-    }
+    // Shared validation / bounds check with `as_strided` — we just
+    // skip the overlap check (that's what `_unchecked` means, and the
+    // caller has accepted the safety contract documented above).
+    let _istrides = validate_and_bounds_check(array, shape, strides, "as_strided_unchecked")?;
 
     // SAFETY: bounds check passed. Overlap check is the caller's
     // responsibility per the Safety contract above.
