@@ -35,44 +35,48 @@ pub fn reset_force_scalar() {
     FORCE_SCALAR_CACHED.store(0, Ordering::SeqCst);
 }
 
-/// Apply a unary SIMD kernel over contiguous `f32` slices, falling back to
-/// scalar when SIMD is disabled.
+// ---------------------------------------------------------------------------
+// Generic unary / binary dispatch on contiguous float slices
+//
+// These four entry points used to route through `pulp::Arch::dispatch` and
+// a `WithSimd` wrapper, giving the impression that the kernel was
+// vectorized. That was misleading — the wrappers ignored the `simd`
+// parameter and ran the same scalar loop on every ISA. See #377 for the
+// audit. Until a real vectorized transcendental library (sleef-rs,
+// libmvec, or hand-rolled pulp intrinsics) lands, these are honestly
+// labeled as scalar loops. The signatures are stable so a future fix
+// can swap in a real SIMD kernel without breaking callers.
+//
+// The real SIMD kernels below (`SqrtF64Op`, `AbsF64Op`, `NegF64Op`,
+// `SquareF64Op`, `ReciprocalF64Op`, `ExpFastF64Op`, `ExpFastF32Op`) DO
+// use pulp intrinsics and are unaffected by this change.
+// ---------------------------------------------------------------------------
+
+/// Apply a unary scalar kernel elementwise to a contiguous `f32` slice.
+///
+/// Historically claimed to dispatch through SIMD; actually ran a scalar
+/// loop on every code path. Now honestly labeled as scalar — callers
+/// that want real vectorization should use one of the hardware-SIMD
+/// entry points below (`simd_sqrt_f32`, `simd_exp_fast_f32`, …).
 #[inline]
 pub fn dispatch_unary_f32(input: &[f32], output: &mut [f32], scalar_fn: fn(f32) -> f32) {
     debug_assert_eq!(input.len(), output.len());
-    if force_scalar() {
-        for (o, &i) in output.iter_mut().zip(input.iter()) {
-            *o = scalar_fn(i);
-        }
-    } else {
-        let arch = Arch::new();
-        arch.dispatch(UnaryF32Op {
-            input,
-            output,
-            scalar_fn,
-        });
+    for (o, &i) in output.iter_mut().zip(input.iter()) {
+        *o = scalar_fn(i);
     }
 }
 
-/// Apply a unary SIMD kernel over contiguous `f64` slices.
+/// Apply a unary scalar kernel elementwise to a contiguous `f64` slice.
+/// See [`dispatch_unary_f32`] for background.
 #[inline]
 pub fn dispatch_unary_f64(input: &[f64], output: &mut [f64], scalar_fn: fn(f64) -> f64) {
     debug_assert_eq!(input.len(), output.len());
-    if force_scalar() {
-        for (o, &i) in output.iter_mut().zip(input.iter()) {
-            *o = scalar_fn(i);
-        }
-    } else {
-        let arch = Arch::new();
-        arch.dispatch(UnaryF64Op {
-            input,
-            output,
-            scalar_fn,
-        });
+    for (o, &i) in output.iter_mut().zip(input.iter()) {
+        *o = scalar_fn(i);
     }
 }
 
-/// Apply a binary SIMD kernel over contiguous `f32` slices.
+/// Apply a binary scalar kernel elementwise to two contiguous `f32` slices.
 #[inline]
 pub fn dispatch_binary_f32(
     a: &[f32],
@@ -82,22 +86,12 @@ pub fn dispatch_binary_f32(
 ) {
     debug_assert_eq!(a.len(), b.len());
     debug_assert_eq!(a.len(), output.len());
-    if force_scalar() {
-        for ((o, &ai), &bi) in output.iter_mut().zip(a.iter()).zip(b.iter()) {
-            *o = scalar_fn(ai, bi);
-        }
-    } else {
-        let arch = Arch::new();
-        arch.dispatch(BinaryF32Op {
-            a,
-            b,
-            output,
-            scalar_fn,
-        });
+    for ((o, &ai), &bi) in output.iter_mut().zip(a.iter()).zip(b.iter()) {
+        *o = scalar_fn(ai, bi);
     }
 }
 
-/// Apply a binary SIMD kernel over contiguous `f64` slices.
+/// Apply a binary scalar kernel elementwise to two contiguous `f64` slices.
 #[inline]
 pub fn dispatch_binary_f64(
     a: &[f64],
@@ -107,18 +101,8 @@ pub fn dispatch_binary_f64(
 ) {
     debug_assert_eq!(a.len(), b.len());
     debug_assert_eq!(a.len(), output.len());
-    if force_scalar() {
-        for ((o, &ai), &bi) in output.iter_mut().zip(a.iter()).zip(b.iter()) {
-            *o = scalar_fn(ai, bi);
-        }
-    } else {
-        let arch = Arch::new();
-        arch.dispatch(BinaryF64Op {
-            a,
-            b,
-            output,
-            scalar_fn,
-        });
+    for ((o, &ai), &bi) in output.iter_mut().zip(a.iter()).zip(b.iter()) {
+        *o = scalar_fn(ai, bi);
     }
 }
 
@@ -247,86 +231,17 @@ pub fn simd_reciprocal_f64(input: &[f64], output: &mut [f64]) {
 }
 
 // ---------------------------------------------------------------------------
-// WithSimd implementations for pulp dispatch
-// ---------------------------------------------------------------------------
-
-struct UnaryF32Op<'a> {
-    input: &'a [f32],
-    output: &'a mut [f32],
-    scalar_fn: fn(f32) -> f32,
-}
-
-impl pulp::WithSimd for UnaryF32Op<'_> {
-    type Output = ();
-
-    #[inline(always)]
-    fn with_simd<S: pulp::Simd>(self, _simd: S) -> Self::Output {
-        let f = self.scalar_fn;
-        for (o, &i) in self.output.iter_mut().zip(self.input.iter()) {
-            *o = f(i);
-        }
-    }
-}
-
-struct UnaryF64Op<'a> {
-    input: &'a [f64],
-    output: &'a mut [f64],
-    scalar_fn: fn(f64) -> f64,
-}
-
-impl pulp::WithSimd for UnaryF64Op<'_> {
-    type Output = ();
-
-    #[inline(always)]
-    fn with_simd<S: pulp::Simd>(self, _simd: S) -> Self::Output {
-        let f = self.scalar_fn;
-        for (o, &i) in self.output.iter_mut().zip(self.input.iter()) {
-            *o = f(i);
-        }
-    }
-}
-
-struct BinaryF32Op<'a> {
-    a: &'a [f32],
-    b: &'a [f32],
-    output: &'a mut [f32],
-    scalar_fn: fn(f32, f32) -> f32,
-}
-
-impl pulp::WithSimd for BinaryF32Op<'_> {
-    type Output = ();
-
-    #[inline(always)]
-    fn with_simd<S: pulp::Simd>(self, _simd: S) -> Self::Output {
-        let f = self.scalar_fn;
-        for ((o, &ai), &bi) in self.output.iter_mut().zip(self.a.iter()).zip(self.b.iter()) {
-            *o = f(ai, bi);
-        }
-    }
-}
-
-struct BinaryF64Op<'a> {
-    a: &'a [f64],
-    b: &'a [f64],
-    output: &'a mut [f64],
-    scalar_fn: fn(f64, f64) -> f64,
-}
-
-impl pulp::WithSimd for BinaryF64Op<'_> {
-    type Output = ();
-
-    #[inline(always)]
-    fn with_simd<S: pulp::Simd>(self, _simd: S) -> Self::Output {
-        let f = self.scalar_fn;
-        for ((o, &ai), &bi) in self.output.iter_mut().zip(self.a.iter()).zip(self.b.iter()) {
-            *o = f(ai, bi);
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // SIMD intrinsic implementations (actual hardware SIMD, not scalar fallback)
 // ---------------------------------------------------------------------------
+//
+// Everything below this point genuinely uses pulp SIMD intrinsics and
+// will vectorize to SSE2/AVX2/AVX-512 on x86_64 or NEON on aarch64.
+// The four generic dispatch functions at the top of this file were
+// previously also routed through pulp via Unary{F32,F64}Op /
+// Binary{F32,F64}Op wrappers, but those impls ignored the SIMD
+// parameter and ran scalar loops — see #377 for the audit. They have
+// been collapsed into direct scalar loops above until a real
+// vectorized transcendental library is integrated.
 
 struct SqrtF64Op<'a> {
     input: &'a [f64],

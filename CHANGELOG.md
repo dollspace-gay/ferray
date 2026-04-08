@@ -135,6 +135,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Slower: transcendentals at scale 1.4-2.1x (CORE-MATH accuracy tradeoff), matmul medium 4x (faer vs BLAS)
 
 ### Fixed
+- ferray-ufunc: SIMD dispatch via pulp doesn't actually use SIMD for transcendentals (#377)
 - ferray-strings: operations return flat StringArray — don't preserve higher-D shape correctly (#520)
 - ferray-core-macros: no compile-fail tests for macro error paths (#210)
 - ferray-numpy-interop: IntoNumPy creates flat PyArray1 then reshapes — extra allocation (#550)
