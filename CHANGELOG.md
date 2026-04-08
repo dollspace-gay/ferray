@@ -130,6 +130,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Slower: transcendentals at scale 1.4-2.1x (CORE-MATH accuracy tradeoff), matmul medium 4x (faer vs BLAS)
 
 ### Fixed
+- ferray-numpy-interop: IntoNumPy creates flat PyArray1 then reshapes — extra allocation (#550)
+- ferray-numpy-interop: AsFerray always copies — doc claims zero-copy borrow but implementation copies (#548)
+- ferray-numpy-interop: to_arrow always copies — claims zero-copy but never achieves it (#547)
 - ferray-test-oracle: fixtures exist without corresponding oracle tests (#205)
 - ferray-test-oracle: no self-tests for the oracle framework (#204)
 - ferray-test-oracle: cross-sign ULP distance calculation incorrect (#199)

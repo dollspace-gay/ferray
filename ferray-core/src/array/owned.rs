@@ -35,7 +35,14 @@ impl<T: Element, D: Dimension> Array<T, D> {
     }
 
     /// Unwrap to the internal ndarray::Array. Crate-internal.
-    pub(crate) fn into_ndarray(self) -> ndarray::Array<T, D::NdarrayDim> {
+    /// Consume this ferray array and return the underlying
+    /// [`ndarray::Array`], preserving shape and layout.
+    ///
+    /// This is the escape hatch for interop with crates that already
+    /// work with ndarray (notably `numpy`/PyO3's
+    /// [`PyArray::from_owned_array`], which avoids a reshape round-trip).
+    /// Calls through to a move — no allocation or copy.
+    pub fn into_ndarray(self) -> ndarray::Array<T, D::NdarrayDim> {
         self.inner
     }
 

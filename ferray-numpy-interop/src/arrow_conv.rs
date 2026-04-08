@@ -3,7 +3,17 @@
 //! Provides [`ToArrow`] and [`FromArrow`] traits for converting between
 //! ferray 1-D arrays and Arrow [`PrimitiveArray`] / [`BooleanArray`].
 //!
-//! Zero-copy is used when the ferray array is C-contiguous.
+//! # Memory semantics
+//!
+//! Both directions copy the data buffer. The previous documentation
+//! claimed "zero-copy when the source is C-contiguous", but the
+//! implementation unconditionally calls `slice.to_vec()` on the ferray
+//! side (which allocates and copies) and `PrimitiveArray::values()`
+//! cloned into a Vec on the Arrow side. True zero-copy would require
+//! Arrow's [`Buffer::from_custom_allocation`] with a ferray-specific
+//! Drop hook on the outbound path, and unsafe pointer sharing on the
+//! inbound path — a non-trivial design change tracked as a follow-up.
+//! See the crate-level docstring for the full zero-copy discussion.
 
 use arrow::array::{Array as ArrowArray, BooleanArray, PrimitiveArray};
 use arrow::buffer::Buffer;
@@ -57,9 +67,8 @@ pub trait ToArrow {
     /// The Arrow array type produced by the conversion.
     type ArrowArray;
 
-    /// Convert this ferray array to an Arrow array.
-    ///
-    /// Zero-copy when the source is C-contiguous; copies otherwise.
+    /// Convert this ferray array to an Arrow array. This copies the
+    /// underlying buffer — see the module docstring for the rationale.
     ///
     /// # Errors
     ///
@@ -76,17 +85,19 @@ where
     type ArrowArray = PrimitiveArray<T::ArrowType>;
 
     fn to_arrow(&self) -> Result<Self::ArrowArray, FerrayError> {
-        // Validate that the ferray dtype has an Arrow equivalent
+        // Validate that the ferray dtype has an Arrow equivalent.
         let _ = dtype_map::dtype_to_arrow(self.dtype())?;
 
-        // Get contiguous data — as_slice() returns Some only for C-contiguous
+        // Copy the data into a Vec<T>. `as_slice()` succeeds for
+        // C-contiguous arrays (fast single-copy path); otherwise
+        // fall back to a logical-order iteration via `to_vec_flat`.
         let data: Vec<T> = match self.as_slice() {
             Some(slice) => slice.to_vec(),
             None => self.to_vec_flat(),
         };
 
+        // Hand the Vec to Arrow, which takes ownership of the allocation.
         let buffer = Buffer::from_vec(data);
-        // SAFETY: buffer length is exactly self.size() * size_of::<T>()
         let array = PrimitiveArray::<T::ArrowType>::new(buffer.into(), None);
         Ok(array)
     }

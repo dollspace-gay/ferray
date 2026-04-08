@@ -130,6 +130,8 @@ impl<T: NpElement> IntoNumPy<T, Ix1> for Array1<T> {
     type PyArrayType = PyArray1<T>;
 
     fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArray1<T>>, FerrayError> {
+        // 1-D has no reshape overhead to worry about; hand the flat Vec
+        // straight to PyArray1::from_vec.
         let data = self.to_vec_flat();
         Ok(PyArray1::from_vec(py, data))
     }
@@ -139,13 +141,34 @@ impl<T: NpElement> IntoNumPy<T, Ix2> for Array2<T> {
     type PyArrayType = PyArray2<T>;
 
     fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArray2<T>>, FerrayError> {
+        // #550: the cleanest fix would be to feed the underlying
+        // ndarray straight into `numpy::PyArray2::from_owned_array`,
+        // avoiding the reshape detour. That path is blocked today
+        // because `numpy` 0.24 pins `ndarray` 0.16 while ferray-core
+        // is on `ndarray` 0.17; the two ArrayBase types are nominally
+        // distinct. Once the numpy crate catches up this block should
+        // become a one-liner `PyArray2::from_owned_array(py, self.into_ndarray())`.
+        //
+        // In the meantime we still allocate one PyArray1 and reshape
+        // it to 2-D. NumPy's reshape on a freshly-constructed
+        // contiguous array is a metadata-only operation (no buffer
+        // copy), so the "extra allocation" in the issue title is
+        // really just a metadata wrapper — the underlying buffer is
+        // the same PyArray1 allocation we'd have to make anyway. The
+        // remaining concern was the fallible Result; that's resolved
+        // below because the shape comes from `self.shape()` and the
+        // length of `data` is `self.size()` by construction, so the
+        // reshape can never fail in practice. We still surface it as
+        // a FerrayError::shape_mismatch for defence in depth.
         let shape = [self.shape()[0], self.shape()[1]];
         let data = self.to_vec_flat();
         let arr = PyArray1::from_vec(py, data);
-        let reshaped = arr
-            .reshape(shape)
-            .map_err(|e| FerrayError::shape_mismatch(format!("failed to reshape PyArray: {e}")))?;
-        Ok(reshaped)
+        arr.reshape(shape).map_err(|e| {
+            FerrayError::shape_mismatch(format!(
+                "into_pyarray: reshape to {:?} failed (should be unreachable): {e}",
+                shape
+            ))
+        })
     }
 }
 
@@ -153,13 +176,18 @@ impl<T: NpElement> IntoNumPy<T, IxDyn> for ArrayD<T> {
     type PyArrayType = PyArrayDyn<T>;
 
     fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArrayDyn<T>>, FerrayError> {
+        // See the Ix2 impl above for why we still go through the
+        // PyArray1 + reshape path rather than
+        // `PyArrayDyn::from_owned_array`.
         let shape: Vec<usize> = self.shape().to_vec();
         let data = self.to_vec_flat();
         let flat = PyArray1::from_vec(py, data);
-        let reshaped = flat
-            .reshape(&shape[..])
-            .map_err(|e| FerrayError::shape_mismatch(format!("failed to reshape PyArray: {e}")))?;
-        Ok(reshaped)
+        flat.reshape(&shape[..]).map_err(|e| {
+            FerrayError::shape_mismatch(format!(
+                "into_pyarray: reshape to {:?} failed (should be unreachable): {e}",
+                shape
+            ))
+        })
     }
 }
 
