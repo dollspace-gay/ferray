@@ -3,11 +3,12 @@
   "display_id": 142,
   "title": "ferray-ufunc: ~50 f16 functions are repetitive boilerplate",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nEach is 5-7 lines calling unary_f16_op. A macro could eliminate ~300 lines.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:34:55.772522543Z",
-  "updated_at": "2026-03-25T15:35:10.472200449Z",
+  "updated_at": "2026-04-08T04:52:16.495066561Z",
+  "closed_at": "2026-04-08T04:52:16.495066561Z",
   "labels": [
     "refactor",
     "qa-audit"
