@@ -20,6 +20,7 @@
 pub mod cr_math;
 pub mod dispatch;
 pub mod fast_exp;
+pub mod fast_trig;
 pub mod helpers;
 pub mod kernels;
 pub mod operator_overloads;
