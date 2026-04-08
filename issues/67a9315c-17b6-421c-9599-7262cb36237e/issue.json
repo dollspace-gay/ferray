@@ -3,11 +3,12 @@
   "display_id": 331,
   "title": "ferray umbrella: no examples directory",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nNo example programs for docs.rs or users.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:08:55.651100500Z",
-  "updated_at": "2026-03-25T16:09:00.084011931Z",
+  "updated_at": "2026-04-08T15:42:02.404628677Z",
+  "closed_at": "2026-04-08T15:42:02.404628677Z",
   "labels": [
     "refactor",
     "qa-audit"
