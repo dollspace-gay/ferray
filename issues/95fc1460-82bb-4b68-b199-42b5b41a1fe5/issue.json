@@ -3,11 +3,12 @@
   "display_id": 293,
   "title": "ferray-window: vectorize restricted to Ix1 while vectorize_nd exists",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nfunctional.rs L24,45: confusing naming. NumPy vectorize works on any dim.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:01:15.110412202Z",
-  "updated_at": "2026-03-25T16:01:19.920677968Z",
+  "updated_at": "2026-04-08T16:41:47.513937191Z",
+  "closed_at": "2026-04-08T16:41:47.513937191Z",
   "labels": [
     "refactor",
     "qa-audit"
