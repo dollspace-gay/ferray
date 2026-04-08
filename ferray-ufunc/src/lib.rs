@@ -25,6 +25,7 @@ pub mod kernels;
 pub mod operator_overloads;
 pub mod ops;
 pub mod parallel;
+pub mod promoted;
 pub mod ufunc_methods;
 
 // ---------------------------------------------------------------------------
@@ -91,6 +92,11 @@ pub use ops::interpolation::{interp, interp_one};
 // Generic ufunc methods (reduce / accumulate / outer / at) — work with
 // any `Fn(T, T) -> T` op, equivalent to NumPy's `np.<ufunc>.reduce` etc.
 pub use ufunc_methods::{accumulate_axis, at, outer as ufunc_outer, reduce_axis};
+
+// Mixed-type (promoted) arithmetic — `np.add(i32_arr, f64_arr)` style.
+// Uses ferray-core's `Promoted` trait to resolve the output type at
+// compile time and `PromoteTo` to cast both operands.
+pub use promoted::{add_promoted, divide_promoted, multiply_promoted, subtract_promoted};
 
 // f16 variants (feature-gated)
 #[cfg(feature = "f16")]
