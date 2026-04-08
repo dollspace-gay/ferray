@@ -6,6 +6,7 @@
 use std::mem::MaybeUninit;
 
 use crate::array::owned::Array;
+use crate::array::view::ArrayView;
 use crate::dimension::{Dimension, Ix1, Ix2, IxDyn};
 use crate::dtype::Element;
 use crate::error::{FerrayError, FerrayResult};
@@ -95,6 +96,87 @@ pub fn frombuffer<T: Element, D: Dimension>(dim: D, buf: &[u8]) -> FerrayResult<
         data.push(val);
     }
     Array::from_vec(dim, data)
+}
+
+/// Create a zero-copy [`ArrayView`] over an existing byte buffer (#364).
+///
+/// Unlike [`frombuffer`], which copies bytes into a freshly allocated
+/// `Array`, this function returns a view whose lifetime is tied to the
+/// input slice. This is the equivalent of NumPy's `np.frombuffer()` with
+/// a memoryview source — the primary building block for zero-copy
+/// interop with mmap, shared memory, network buffers, and FFI.
+///
+/// # Errors
+/// - `InvalidValue` if `T` is a ZST.
+/// - `InvalidValue` if `buf.len()` is not a multiple of `size_of::<T>()`.
+/// - `ShapeMismatch` if the element count doesn't match `dim.size()`.
+/// - `InvalidValue` if `buf.as_ptr()` is not aligned to `align_of::<T>()`
+///   (views require proper alignment — use the copying [`frombuffer`]
+///   instead if alignment cannot be guaranteed).
+/// - `InvalidValue` if `T` is `bool` and any byte is outside `{0x00, 0x01}`.
+pub fn frombuffer_view<'a, T: Element, D: Dimension>(
+    dim: D,
+    buf: &'a [u8],
+) -> FerrayResult<ArrayView<'a, T, D>> {
+    let elem_size = std::mem::size_of::<T>();
+    if elem_size == 0 {
+        return Err(FerrayError::invalid_value("zero-sized type"));
+    }
+    if buf.len() % elem_size != 0 {
+        return Err(FerrayError::invalid_value(format!(
+            "buffer length {} is not a multiple of element size {}",
+            buf.len(),
+            elem_size,
+        )));
+    }
+    let n_elems = buf.len() / elem_size;
+    let expected = dim.size();
+    if n_elems != expected {
+        return Err(FerrayError::shape_mismatch(format!(
+            "buffer contains {} elements but shape {:?} requires {}",
+            n_elems,
+            dim.as_slice(),
+            expected,
+        )));
+    }
+
+    // Alignment: a view interprets the bytes in place, so the buffer must
+    // already be aligned for T. A misaligned read of f32/f64/etc. is UB.
+    let align = std::mem::align_of::<T>();
+    let addr = buf.as_ptr() as usize;
+    if addr % align != 0 {
+        return Err(FerrayError::invalid_value(format!(
+            "buffer address 0x{addr:x} is not aligned to {align} bytes required by the element type; \
+             use `frombuffer` for misaligned input"
+        )));
+    }
+
+    // bool has the same size/alignment as u8 but restricts the valid bit
+    // patterns; validate exhaustively, matching the copy-based frombuffer.
+    if std::any::TypeId::of::<T>() == std::any::TypeId::of::<bool>() {
+        for &byte in buf {
+            if byte > 1 {
+                return Err(FerrayError::invalid_value(format!(
+                    "invalid byte {byte:#04x} for bool (must be 0x00 or 0x01)"
+                )));
+            }
+        }
+    }
+
+    // SAFETY:
+    // - The pointer comes from a valid `&[u8]` slice with length
+    //   `n_elems * elem_size`, so the region is valid for reads of
+    //   `n_elems` `T` values.
+    // - Alignment was checked above.
+    // - For bool, bit patterns were validated above. For all other
+    //   `Element` types, every bit pattern is a valid value.
+    // - The returned view's lifetime is bound to `'a = &'a [u8]`, which
+    //   tracks the borrow back to `buf`, so the memory cannot be freed
+    //   or mutated while the view lives.
+    let ptr = buf.as_ptr() as *const T;
+    let nd_dim = dim.to_ndarray_dim();
+    let nd_view = unsafe { ndarray::ArrayView::from_shape_ptr(nd_dim, ptr) };
+    Ok(ArrayView::from_ndarray(nd_view))
 }
 
 /// Create a 1-D array from an iterator.
@@ -790,6 +872,86 @@ mod tests {
         // requested element count.
         let bytes: Vec<u8> = vec![0, 1];
         assert!(frombuffer::<bool, Ix1>(Ix1::new([3]), &bytes).is_err());
+    }
+
+    // #364: frombuffer_view — zero-copy view over an existing byte buffer.
+
+    /// Build an aligned byte buffer of `nbytes` from a typed slice so we
+    /// can exercise the zero-copy path without fighting the allocator.
+    fn aligned_bytes<T: Copy>(src: &[T]) -> Vec<u8> {
+        let n = std::mem::size_of_val(src);
+        let mut out = vec![0u8; n];
+        // SAFETY: src is &[T], out is a byte buffer of exactly n bytes.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                src.as_ptr() as *const u8,
+                out.as_mut_ptr(),
+                n,
+            );
+        }
+        out
+    }
+
+    #[test]
+    fn test_frombuffer_view_i32_is_zero_copy() {
+        // Build an aligned byte buffer that represents three i32s.
+        let source: Vec<i32> = vec![10, 20, 30];
+        let bytes = aligned_bytes(&source);
+        let view = frombuffer_view::<i32, Ix1>(Ix1::new([3]), &bytes).unwrap();
+        assert_eq!(view.shape(), &[3]);
+        let values: Vec<i32> = view.iter().copied().collect();
+        assert_eq!(values, vec![10, 20, 30]);
+        // Pointer must alias the source buffer — that's the zero-copy
+        // contract distinguishing this from the copying frombuffer.
+        assert_eq!(view.as_ptr() as *const u8, bytes.as_ptr());
+    }
+
+    #[test]
+    fn test_frombuffer_view_f64_2d() {
+        let source: Vec<f64> = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let bytes = aligned_bytes(&source);
+        let view = frombuffer_view::<f64, Ix2>(Ix2::new([2, 3]), &bytes).unwrap();
+        assert_eq!(view.shape(), &[2, 3]);
+        let values: Vec<f64> = view.iter().copied().collect();
+        assert_eq!(values, source);
+    }
+
+    #[test]
+    fn test_frombuffer_view_bool_valid() {
+        let bytes: Vec<u8> = vec![0, 1, 0, 1];
+        let view = frombuffer_view::<bool, Ix1>(Ix1::new([4]), &bytes).unwrap();
+        let values: Vec<bool> = view.iter().copied().collect();
+        assert_eq!(values, vec![false, true, false, true]);
+    }
+
+    #[test]
+    fn test_frombuffer_view_bool_rejects_invalid_byte() {
+        let bytes: Vec<u8> = vec![0, 1, 42]; // 42 is not a valid bool.
+        assert!(frombuffer_view::<bool, Ix1>(Ix1::new([3]), &bytes).is_err());
+    }
+
+    #[test]
+    fn test_frombuffer_view_rejects_wrong_length() {
+        // 13 bytes is not a multiple of size_of::<i32>() = 4.
+        let bytes = vec![0u8; 13];
+        assert!(frombuffer_view::<i32, Ix1>(Ix1::new([3]), &bytes).is_err());
+        // 8 bytes is 2 i32s, but the caller asked for shape [3].
+        let bytes = vec![0u8; 8];
+        assert!(frombuffer_view::<i32, Ix1>(Ix1::new([3]), &bytes).is_err());
+    }
+
+    #[test]
+    fn test_frombuffer_view_rejects_misalignment() {
+        // Force a misaligned slice by advancing the byte pointer by 1.
+        let mut backing: Vec<u8> = vec![0u8; 1 + 4 * 3];
+        for (i, chunk) in backing[1..].chunks_exact_mut(4).enumerate() {
+            chunk.copy_from_slice(&(i as i32).to_ne_bytes());
+        }
+        let misaligned = &backing[1..];
+        // The slice address is off by one from a 4-byte boundary, so
+        // alignment for i32 cannot be satisfied.
+        assert!((misaligned.as_ptr() as usize) % 4 != 0);
+        assert!(frombuffer_view::<i32, Ix1>(Ix1::new([3]), misaligned).is_err());
     }
 
     #[test]

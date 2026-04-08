@@ -103,9 +103,9 @@ pub use ferray_core::constants::{E, EULER_GAMMA, INF, NAN, NEG_INF, NEWAXIS, NZE
 // ---------------------------------------------------------------------------
 
 pub use ferray_core::creation::{
-    arange, array, asarray, diag, diagflat, empty, empty_like, eye, frombuffer, fromiter, full,
-    full_like, geomspace, identity, linspace, logspace, meshgrid, mgrid, ogrid, ones, ones_like,
-    tri, tril, triu, zeros, zeros_like,
+    arange, array, asarray, diag, diagflat, empty, empty_like, eye, frombuffer, frombuffer_view,
+    fromiter, full, full_like, geomspace, identity, linspace, logspace, meshgrid, mgrid, ogrid,
+    ones, ones_like, tri, tril, triu, zeros, zeros_like,
 };
 
 // ---------------------------------------------------------------------------
