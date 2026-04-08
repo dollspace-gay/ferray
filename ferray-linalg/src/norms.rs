@@ -729,20 +729,65 @@ pub fn matrix_rank_batched<T: LinalgFloat>(
     Array::from_vec(Ix1::new([num_batches]), ranks)
 }
 
-/// Compute the trace of a matrix (sum of diagonal elements).
+/// Compute the trace of a matrix (sum of main-diagonal elements).
 ///
-/// For non-square matrices, sums the diagonal up to min(m, n).
+/// For non-square matrices, sums the diagonal up to min(m, n). For the
+/// generalized offset trace (k-th diagonal), see [`trace_offset`].
 ///
 /// # Errors
 /// Returns an error only if the array is malformed (never for valid input).
 pub fn trace<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<T> {
+    trace_offset(a, 0)
+}
+
+/// Compute the trace of a matrix along the `offset`-th diagonal.
+///
+/// Equivalent to `numpy.linalg.trace(x, offset=offset)`. `offset = 0` is
+/// the main diagonal (same as [`trace`]); positive offsets walk
+/// super-diagonals (right of the main), negative offsets walk
+/// sub-diagonals. An offset that falls entirely outside the matrix
+/// produces `0` (the sum of an empty set), matching NumPy.
+///
+/// The NumPy `dtype=` parameter (for accumulating into a higher-precision
+/// type to avoid overflow on integer inputs) is not modeled — trace only
+/// accepts `T: LinalgFloat`, so the accumulation already happens in the
+/// native float type. An issue tracking dtype-widening trace will be
+/// filed separately if it becomes a real need.
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if `offset` cannot be normalized
+///   (effectively only when `offset == isize::MIN`).
+pub fn trace_offset<T: LinalgFloat>(a: &Array<T, Ix2>, offset: isize) -> FerrayResult<T> {
     let shape = a.shape();
     let (m, n) = (shape[0], shape[1]);
+
+    // Match the diagonal() bounds logic so the two functions never disagree
+    // on which elements belong to a given diagonal.
+    let (start_i, start_j, length) = if offset >= 0 {
+        let off = offset as usize;
+        if off >= n {
+            (0usize, 0usize, 0usize)
+        } else {
+            (0, off, m.min(n - off))
+        }
+    } else {
+        let off_neg = offset.checked_neg().ok_or_else(|| {
+            FerrayError::invalid_value("trace_offset: offset magnitude overflows isize")
+        })?;
+        let off = off_neg as usize;
+        if off >= m {
+            (0, 0, 0)
+        } else {
+            (off, 0, (m - off).min(n))
+        }
+    };
+
     let data: Vec<T> = a.iter().copied().collect();
-    let min_dim = m.min(n);
     let mut sum = T::from_f64_const(0.0);
-    for i in 0..min_dim {
-        sum += data[i * n + i];
+    for k in 0..length {
+        let i = start_i + k;
+        let j = start_j + k;
+        sum += data[i * n + j];
     }
     Ok(sum)
 }
@@ -1221,6 +1266,85 @@ mod tests {
         // P(_) is a vector-only norm order.
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
         assert!(matrix_norm(&a, NormOrder::P(3.0)).is_err());
+    }
+
+    // ---- trace_offset (#424) ----
+
+    #[test]
+    fn trace_offset_zero_matches_trace() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        )
+        .unwrap();
+        let t0 = trace(&a).unwrap();
+        let tz = trace_offset(&a, 0).unwrap();
+        assert!((t0 - tz).abs() < 1e-10);
+        assert!((tz - (1.0 + 5.0 + 9.0)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn trace_offset_super_diagonal() {
+        // 3x3 super-diagonal (offset=1) elements: (0,1), (1,2) = 2, 6 → sum 8.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        )
+        .unwrap();
+        let t = trace_offset(&a, 1).unwrap();
+        assert!((t - 8.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn trace_offset_sub_diagonal() {
+        // 3x3 sub-diagonal (offset=-1) elements: (1,0), (2,1) = 4, 8 → sum 12.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        )
+        .unwrap();
+        let t = trace_offset(&a, -1).unwrap();
+        assert!((t - 12.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn trace_offset_matches_diagonal_sum() {
+        // trace_offset(a, k) == diagonal(a, k).sum() for any valid k.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([4, 5]),
+            (1..=20).map(|x| x as f64).collect(),
+        )
+        .unwrap();
+        for k in -3..=4 {
+            let via_trace = trace_offset(&a, k).unwrap();
+            let via_diag: f64 = diagonal(&a, k).unwrap().iter().copied().sum();
+            assert!(
+                (via_trace - via_diag).abs() < 1e-10,
+                "offset {}: trace_offset={}, diagonal.sum()={}",
+                k,
+                via_trace,
+                via_diag
+            );
+        }
+    }
+
+    #[test]
+    fn trace_offset_out_of_range_is_zero() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        assert!((trace_offset(&a, 99).unwrap() - 0.0).abs() < 1e-10);
+        assert!((trace_offset(&a, -99).unwrap() - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn trace_offset_non_square_matrix() {
+        // 2x4: main diagonal is (0,0)(1,1)=1+6, super=1→(0,1)(1,2)=2+7
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 4]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        )
+        .unwrap();
+        assert!((trace_offset(&a, 0).unwrap() - 7.0).abs() < 1e-10); // 1+6
+        assert!((trace_offset(&a, 1).unwrap() - 9.0).abs() < 1e-10); // 2+7
     }
 
     #[test]
