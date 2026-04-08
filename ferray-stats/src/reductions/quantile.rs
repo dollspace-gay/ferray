@@ -11,49 +11,69 @@ use super::{collect_data, make_result, output_shape, reduce_axis_general, valida
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Compute a single quantile value from a sorted slice using linear interpolation.
-/// `q` must be in [0, 1].
-fn quantile_sorted<T: Float>(sorted: &[T], q: T) -> T {
-    let n = sorted.len();
+/// Compute a single quantile value from an unsorted slice using
+/// `select_nth_unstable_by` rather than a full `sort_by`.
+///
+/// The selection algorithm gives an O(n) average-time path (quickselect)
+/// instead of the O(n log n) full sort the previous implementation used
+/// (#175). Linear interpolation between the two surrounding elements is
+/// preserved exactly, matching NumPy's default `'linear'` method.
+///
+/// `data` is consumed: it is partitioned in place so the caller should
+/// pass an owned buffer (or a clone they no longer need).
+fn quantile_select<T: Float>(mut data: Vec<T>, q: T) -> T {
+    let n = data.len();
     if n == 0 {
         return T::nan();
     }
     if n == 1 {
-        return sorted[0];
+        return data[0];
     }
+
+    let cmp = |a: &T, b: &T| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal);
+
     let idx_f = q * T::from(n - 1).unwrap();
     let lo = idx_f.floor();
-    let hi = idx_f.ceil();
     let lo_i = lo.to_usize().unwrap().min(n - 1);
-    let hi_i = hi.to_usize().unwrap().min(n - 1);
-    if lo_i == hi_i {
-        sorted[lo_i]
-    } else {
-        let frac = idx_f - lo;
-        sorted[lo_i] * (T::one() - frac) + sorted[hi_i] * frac
+    let frac = idx_f - lo;
+
+    // First selection: place the lo_i-th smallest at position lo_i.
+    data.select_nth_unstable_by(lo_i, cmp);
+    let lo_val = data[lo_i];
+
+    // Fast exit: exact hit on an integral index.
+    if lo_i == n - 1 || frac == T::zero() {
+        return lo_val;
     }
+
+    // After the partial select, every element in `data[lo_i + 1..]` is
+    // ordered-after `lo_val`; the smallest of them is the
+    // `(lo_i + 1)`-th smallest element overall, which is the `hi_val`
+    // we need for the linear interpolation.
+    let hi_val = data[lo_i + 1..]
+        .iter()
+        .copied()
+        .reduce(|a, b| match cmp(&a, &b) {
+            std::cmp::Ordering::Less | std::cmp::Ordering::Equal => a,
+            std::cmp::Ordering::Greater => b,
+        })
+        .unwrap_or(lo_val);
+
+    lo_val * (T::one() - frac) + hi_val * frac
 }
 
-/// Sort a mutable slice by partial_cmp, placing NaN at the end.
-fn partial_sort<T: Float>(data: &mut [T]) {
-    data.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-}
-
-/// Sort and compute quantile from a lane.
+/// Compute quantile on a lane via the select-based fast path.
 fn lane_quantile<T: Float>(lane: &[T], q: T) -> T {
-    let mut sorted: Vec<T> = lane.to_vec();
-    partial_sort(&mut sorted);
-    quantile_sorted(&sorted, q)
+    quantile_select(lane.to_vec(), q)
 }
 
-/// Sort (excluding NaN) and compute quantile from a lane.
+/// Compute quantile on a lane, excluding NaNs.
 fn lane_nanquantile<T: Float>(lane: &[T], q: T) -> T {
-    let mut sorted: Vec<T> = lane.iter().copied().filter(|x| !x.is_nan()).collect();
-    if sorted.is_empty() {
+    let filtered: Vec<T> = lane.iter().copied().filter(|x| !x.is_nan()).collect();
+    if filtered.is_empty() {
         return T::nan();
     }
-    partial_sort(&mut sorted);
-    quantile_sorted(&sorted, q)
+    quantile_select(filtered, q)
 }
 
 // ---------------------------------------------------------------------------
