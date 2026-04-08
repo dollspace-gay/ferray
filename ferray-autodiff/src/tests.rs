@@ -80,6 +80,72 @@ mod unit_tests {
         assert_eq!(b.dual, -4.0);
     }
 
+    // --- Compound assignment (issue #542) ---
+
+    #[test]
+    fn test_add_assign_dual() {
+        let mut a = DualNumber::new(2.0_f64, 3.0);
+        let b = DualNumber::new(4.0, 5.0);
+        a += b;
+        assert_eq!(a.real, 6.0);
+        assert_eq!(a.dual, 8.0);
+    }
+
+    #[test]
+    fn test_sub_assign_dual() {
+        let mut a = DualNumber::new(5.0_f64, 3.0);
+        let b = DualNumber::new(2.0, 1.0);
+        a -= b;
+        assert_eq!(a.real, 3.0);
+        assert_eq!(a.dual, 2.0);
+    }
+
+    #[test]
+    fn test_mul_assign_dual() {
+        // d/dx (x^2) at x=2.5: variable starts with dual=1
+        let mut a = DualNumber::variable(2.5_f64);
+        a *= DualNumber::variable(2.5_f64);
+        // (2.5 + eps) * (2.5 + eps) = 6.25 + 5*eps
+        assert!(approx_eq(a.real, 6.25));
+        assert!(approx_eq(a.dual, 5.0));
+    }
+
+    #[test]
+    fn test_div_assign_dual() {
+        let mut a = DualNumber::new(10.0_f64, 1.0);
+        let b = DualNumber::new(2.0, 0.0);
+        a /= b;
+        assert!(approx_eq(a.real, 5.0));
+        assert!(approx_eq(a.dual, 0.5));
+    }
+
+    #[test]
+    fn test_add_assign_scalar() {
+        let mut a = DualNumber::new(2.0_f64, 3.0);
+        a += 4.0;
+        assert_eq!(a.real, 6.0);
+        assert_eq!(a.dual, 3.0);
+    }
+
+    #[test]
+    fn test_mul_assign_scalar() {
+        let mut a = DualNumber::new(2.0_f64, 3.0);
+        a *= 4.0;
+        assert_eq!(a.real, 8.0);
+        assert_eq!(a.dual, 12.0);
+    }
+
+    #[test]
+    fn test_accumulation_loop_compiles() {
+        // The motivating use case for compound assign: sum loops.
+        let mut sum = DualNumber::constant(0.0_f64);
+        for i in 1..=5 {
+            sum += DualNumber::variable(i as f64);
+        }
+        assert_eq!(sum.real, 15.0);
+        assert_eq!(sum.dual, 5.0); // each variable contributes dual=1
+    }
+
     // --- Remainder ---
 
     #[test]

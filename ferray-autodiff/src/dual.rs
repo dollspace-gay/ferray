@@ -5,7 +5,9 @@
 
 use num_traits::Float;
 use std::fmt;
-use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
+use std::ops::{
+    Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, Sub, SubAssign,
+};
 
 /// A dual number for forward-mode automatic differentiation.
 ///
@@ -237,6 +239,71 @@ impl<T: Float> Rem<T> for DualNumber<T> {
             real: self.real % rhs,
             dual: self.dual,
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Compound assignment: DualNumber op= DualNumber / scalar T
+//
+// Mirrors the existing `Add`/`Sub`/`Mul`/`Div` impls so accumulation
+// loops like `sum += f(x_i)` compile without requiring `sum = sum + ...`
+// (see issue #542). Each `_assign` method forwards to the pre-existing
+// by-value operator to keep the differentiation rules in one place.
+// ---------------------------------------------------------------------------
+
+impl<T: Float> AddAssign for DualNumber<T> {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
+impl<T: Float> SubAssign for DualNumber<T> {
+    #[inline]
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
+}
+
+impl<T: Float> MulAssign for DualNumber<T> {
+    #[inline]
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
+}
+
+impl<T: Float> DivAssign for DualNumber<T> {
+    #[inline]
+    fn div_assign(&mut self, rhs: Self) {
+        *self = *self / rhs;
+    }
+}
+
+impl<T: Float> AddAssign<T> for DualNumber<T> {
+    #[inline]
+    fn add_assign(&mut self, rhs: T) {
+        *self = *self + rhs;
+    }
+}
+
+impl<T: Float> SubAssign<T> for DualNumber<T> {
+    #[inline]
+    fn sub_assign(&mut self, rhs: T) {
+        *self = *self - rhs;
+    }
+}
+
+impl<T: Float> MulAssign<T> for DualNumber<T> {
+    #[inline]
+    fn mul_assign(&mut self, rhs: T) {
+        *self = *self * rhs;
+    }
+}
+
+impl<T: Float> DivAssign<T> for DualNumber<T> {
+    #[inline]
+    fn div_assign(&mut self, rhs: T) {
+        *self = *self / rhs;
     }
 }
 
