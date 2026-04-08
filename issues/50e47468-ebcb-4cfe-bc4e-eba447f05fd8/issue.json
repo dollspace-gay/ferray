@@ -3,11 +3,12 @@
   "display_id": 166,
   "title": "ferray-stats: where_ only supports 3-argument form",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nsearching.rs L163-189: NumPy np.where(condition) 1-arg form missing.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:38:43.972165238Z",
-  "updated_at": "2026-03-25T15:38:57.752540386Z",
+  "updated_at": "2026-04-08T21:12:30.065927390Z",
+  "closed_at": "2026-04-08T21:12:30.065927390Z",
   "labels": [
     "refactor",
     "qa-audit"
