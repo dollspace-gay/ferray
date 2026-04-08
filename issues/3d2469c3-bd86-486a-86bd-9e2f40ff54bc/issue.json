@@ -3,11 +3,12 @@
   "display_id": 168,
   "title": "ferray-stats: bincount hardcodes f64 return type",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nhistogram.rs L367-401: NumPy returns int counts when no weights. Fix: return int when unweighted.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:39:00.771564335Z",
-  "updated_at": "2026-03-25T15:39:29.976341545Z",
+  "updated_at": "2026-04-08T14:15:51.993893679Z",
+  "closed_at": "2026-04-08T14:15:51.993893679Z",
   "labels": [
     "refactor",
     "qa-audit"
