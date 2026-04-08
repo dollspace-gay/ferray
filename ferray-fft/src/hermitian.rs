@@ -44,7 +44,7 @@ use crate::norm::FftNorm;
 pub fn hfft<T: FftFloat, D: Dimension>(
     a: &Array<Complex<T>, D>,
     n: Option<usize>,
-    axis: Option<usize>,
+    axis: Option<isize>,
     norm: FftNorm,
 ) -> FerrayResult<Array<T, IxDyn>>
 where
@@ -78,7 +78,9 @@ where
         FftNorm::Ortho => FftNorm::Ortho,
     };
 
-    crate::real::irfft::<T, IxDyn>(&conj_arr, Some(output_len), Some(ax), hfft_norm)
+    // `ax` is already validated against `ndim` here, so casting to
+    // `isize` is lossless within usize::MAX/2.
+    crate::real::irfft::<T, IxDyn>(&conj_arr, Some(output_len), Some(ax as isize), hfft_norm)
 }
 
 /// Compute the inverse FFT of a real-valued signal, returning
@@ -100,7 +102,7 @@ where
 pub fn ihfft<T: FftFloat, D: Dimension>(
     a: &Array<T, D>,
     n: Option<usize>,
-    axis: Option<usize>,
+    axis: Option<isize>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -120,7 +122,7 @@ where
         FftNorm::Ortho => FftNorm::Ortho,
     };
 
-    let result = crate::real::rfft::<T, D>(a, n, Some(ax), ihfft_norm)?;
+    let result = crate::real::rfft::<T, D>(a, n, Some(ax as isize), ihfft_norm)?;
 
     // Conjugate the output
     let conj_data: Vec<Complex<T>> = result.iter().map(|c| c.conj()).collect();

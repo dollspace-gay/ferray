@@ -9,19 +9,31 @@
 
 use ferray_core::error::{FerrayError, FerrayResult};
 
-/// Resolve an axis parameter: if `None`, use the last axis.
+/// Normalize a (possibly negative) axis into the range `[0, ndim)`.
+///
+/// Mirrors NumPy's behaviour where `axis=-1` selects the last axis,
+/// `axis=-2` the one before it, and so on. Returns
+/// `FerrayError::AxisOutOfBounds` if the value is out of range
+/// (after normalization). See issue #434.
+#[inline]
+pub(crate) fn normalize_axis(ndim: usize, axis: isize) -> FerrayResult<usize> {
+    let n = ndim as isize;
+    let normalized = if axis < 0 { axis + n } else { axis };
+    if normalized < 0 || normalized >= n {
+        Err(FerrayError::axis_out_of_bounds(axis as usize, ndim))
+    } else {
+        Ok(normalized as usize)
+    }
+}
+
+/// Resolve an axis parameter: if `None`, use the last axis. Negative
+/// values are accepted and normalized via [`normalize_axis`].
 ///
 /// Returns an error if `ndim == 0` or the given axis is out of bounds.
 #[inline]
-pub(crate) fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrayResult<usize> {
+pub(crate) fn resolve_axis(ndim: usize, axis: Option<isize>) -> FerrayResult<usize> {
     match axis {
-        Some(ax) => {
-            if ax >= ndim {
-                Err(FerrayError::axis_out_of_bounds(ax, ndim))
-            } else {
-                Ok(ax)
-            }
-        }
+        Some(ax) => normalize_axis(ndim, ax),
         None => {
             if ndim == 0 {
                 Err(FerrayError::invalid_value(
@@ -35,22 +47,17 @@ pub(crate) fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrayResult<usi
 }
 
 /// Resolve axes for a multi-dimensional FFT. If `None`, use all axes.
+/// Each axis may be negative; values are normalized via
+/// [`normalize_axis`] (#434).
 ///
 /// Returns an error if any axis is out of bounds.
 #[inline]
 pub(crate) fn resolve_axes(
     ndim: usize,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
 ) -> FerrayResult<Vec<usize>> {
     match axes {
-        Some(ax) => {
-            for &a in ax {
-                if a >= ndim {
-                    return Err(FerrayError::axis_out_of_bounds(a, ndim));
-                }
-            }
-            Ok(ax.to_vec())
-        }
+        Some(ax) => ax.iter().map(|&a| normalize_axis(ndim, a)).collect(),
         None => Ok((0..ndim).collect()),
     }
 }
@@ -92,6 +99,17 @@ mod tests {
     #[test]
     fn resolve_axis_out_of_bounds() {
         assert!(resolve_axis(2, Some(3)).is_err());
+        assert!(resolve_axis(2, Some(-3)).is_err());
+    }
+
+    #[test]
+    fn resolve_axis_negative() {
+        // axis = -1 is the last axis
+        assert_eq!(resolve_axis(3, Some(-1)).unwrap(), 2);
+        // axis = -2 is the second-to-last
+        assert_eq!(resolve_axis(3, Some(-2)).unwrap(), 1);
+        // axis = -3 wraps to the first
+        assert_eq!(resolve_axis(3, Some(-3)).unwrap(), 0);
     }
 
     #[test]
@@ -103,6 +121,24 @@ mod tests {
     fn resolve_axes_validates_each() {
         assert!(resolve_axes(3, Some(&[0, 5])).is_err());
         assert_eq!(resolve_axes(3, Some(&[0, 2])).unwrap(), vec![0, 2]);
+    }
+
+    #[test]
+    fn resolve_axes_negative_mix() {
+        // mix of positive and negative axes
+        assert_eq!(resolve_axes(4, Some(&[-2, -1])).unwrap(), vec![2, 3]);
+        assert_eq!(resolve_axes(4, Some(&[0, -1])).unwrap(), vec![0, 3]);
+    }
+
+    #[test]
+    fn normalize_axis_round_trip() {
+        for ndim in 1..=4usize {
+            for ax in 0..ndim {
+                assert_eq!(normalize_axis(ndim, ax as isize).unwrap(), ax);
+                let neg = (ax as isize) - (ndim as isize);
+                assert_eq!(normalize_axis(ndim, neg).unwrap(), ax);
+            }
+        }
     }
 
     #[test]

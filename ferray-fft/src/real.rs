@@ -45,7 +45,7 @@ use crate::norm::FftNorm;
 pub fn rfft<T: FftFloat, D: Dimension>(
     a: &Array<T, D>,
     n: Option<usize>,
-    axis: Option<usize>,
+    axis: Option<isize>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -88,7 +88,7 @@ where
 pub fn irfft<T: FftFloat, D: Dimension>(
     a: &Array<Complex<T>, D>,
     n: Option<usize>,
-    axis: Option<usize>,
+    axis: Option<isize>,
     norm: FftNorm,
 ) -> FerrayResult<Array<T, IxDyn>>
 where
@@ -134,7 +134,7 @@ where
 pub fn rfft2<T: FftFloat, D: Dimension>(
     a: &Array<T, D>,
     s: Option<&[usize]>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -142,7 +142,7 @@ where
 {
     let ndim = a.shape().len();
     let axes = match axes {
-        Some(ax) => ax.to_vec(),
+        Some(ax) => resolve_axes(ndim, Some(ax))?,
         None => {
             if ndim < 2 {
                 return Err(FerrayError::invalid_value(
@@ -170,7 +170,7 @@ where
 pub fn irfft2<T: FftFloat, D: Dimension>(
     a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
     norm: FftNorm,
 ) -> FerrayResult<Array<T, IxDyn>>
 where
@@ -178,7 +178,7 @@ where
 {
     let ndim = a.shape().len();
     let axes = match axes {
-        Some(ax) => ax.to_vec(),
+        Some(ax) => resolve_axes(ndim, Some(ax))?,
         None => {
             if ndim < 2 {
                 return Err(FerrayError::invalid_value(
@@ -211,7 +211,7 @@ where
 pub fn rfftn<T: FftFloat, D: Dimension>(
     a: &Array<T, D>,
     s: Option<&[usize]>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -236,7 +236,7 @@ where
 pub fn irfftn<T: FftFloat, D: Dimension>(
     a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
     norm: FftNorm,
 ) -> FerrayResult<Array<T, IxDyn>>
 where

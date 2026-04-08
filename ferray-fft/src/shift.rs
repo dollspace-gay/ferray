@@ -27,7 +27,7 @@ use crate::axes::{compute_strides, resolve_axes};
 /// Returns an error if any axis is out of bounds.
 pub fn fftshift<T: Element, D: Dimension>(
     a: &Array<T, D>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
 ) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     let ndim = shape.len();
@@ -55,7 +55,7 @@ pub fn fftshift<T: Element, D: Dimension>(
 /// Returns an error if any axis is out of bounds.
 pub fn ifftshift<T: Element, D: Dimension>(
     a: &Array<T, D>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
 ) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     let ndim = shape.len();

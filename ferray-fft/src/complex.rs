@@ -96,7 +96,7 @@ fn resolve_shapes(
 pub fn fft<T: FftFloat, D: Dimension>(
     a: &Array<Complex<T>, D>,
     n: Option<usize>,
-    axis: Option<usize>,
+    axis: Option<isize>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -127,7 +127,7 @@ where
 pub fn ifft<T: FftFloat, D: Dimension>(
     a: &Array<Complex<T>, D>,
     n: Option<usize>,
-    axis: Option<usize>,
+    axis: Option<isize>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -165,7 +165,7 @@ where
 pub fn fft2<T: FftFloat, D: Dimension>(
     a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -173,7 +173,7 @@ where
 {
     let ndim = a.shape().len();
     let axes = match axes {
-        Some(ax) => ax.to_vec(),
+        Some(ax) => resolve_axes(ndim, Some(ax))?,
         None => {
             if ndim < 2 {
                 return Err(FerrayError::invalid_value(
@@ -202,7 +202,7 @@ where
 pub fn ifft2<T: FftFloat, D: Dimension>(
     a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -210,7 +210,7 @@ where
 {
     let ndim = a.shape().len();
     let axes = match axes {
-        Some(ax) => ax.to_vec(),
+        Some(ax) => resolve_axes(ndim, Some(ax))?,
         None => {
             if ndim < 2 {
                 return Err(FerrayError::invalid_value(
@@ -245,7 +245,7 @@ where
 pub fn fftn<T: FftFloat, D: Dimension>(
     a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -272,7 +272,7 @@ where
 pub fn ifftn<T: FftFloat, D: Dimension>(
     a: &Array<Complex<T>, D>,
     s: Option<&[usize]>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -317,7 +317,7 @@ where
 pub fn fft_real<T: FftFloat, D: Dimension>(
     a: &Array<T, D>,
     n: Option<usize>,
-    axis: Option<usize>,
+    axis: Option<isize>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -341,7 +341,7 @@ where
 pub fn ifft_real<T: FftFloat, D: Dimension>(
     a: &Array<Complex<T>, D>,
     n: Option<usize>,
-    axis: Option<usize>,
+    axis: Option<isize>,
     norm: FftNorm,
 ) -> FerrayResult<Array<T, IxDyn>>
 where
@@ -360,7 +360,7 @@ where
 pub fn fft_real2<T: FftFloat, D: Dimension>(
     a: &Array<T, D>,
     s: Option<&[usize]>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -379,7 +379,7 @@ where
 pub fn fft_realn<T: FftFloat, D: Dimension>(
     a: &Array<T, D>,
     s: Option<&[usize]>,
-    axes: Option<&[usize]>,
+    axes: Option<&[isize]>,
     norm: FftNorm,
 ) -> FerrayResult<Array<Complex<T>, IxDyn>>
 where
@@ -440,6 +440,40 @@ mod tests {
         for val in result.iter() {
             assert!((val.re - 1.0).abs() < 1e-12);
             assert!(val.im.abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn fft_negative_axis_matches_explicit() {
+        // axis=-1 on a 2-D array should match axis=1 (#434).
+        use ferray_core::dimension::Ix2;
+        let data = vec![
+            c(1.0, 0.0),
+            c(2.0, 0.0),
+            c(3.0, 0.0),
+            c(4.0, 0.0),
+        ];
+        let a = Array::<Complex<f64>, Ix2>::from_vec(Ix2::new([2, 2]), data).unwrap();
+        let neg = fft(&a, None, Some(-1), FftNorm::Backward).unwrap();
+        let pos = fft(&a, None, Some(1), FftNorm::Backward).unwrap();
+        assert_eq!(neg.shape(), pos.shape());
+        for (n, p) in neg.iter().zip(pos.iter()) {
+            assert!((n.re - p.re).abs() < 1e-12);
+            assert!((n.im - p.im).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn fftn_negative_axes_matches_explicit() {
+        // axes=[-2, -1] on a 2-D array should match axes=[0, 1] (#434).
+        use ferray_core::dimension::Ix2;
+        let data: Vec<Complex<f64>> = (0..6).map(|i| c(i as f64, 0.0)).collect();
+        let a = Array::<Complex<f64>, Ix2>::from_vec(Ix2::new([2, 3]), data).unwrap();
+        let neg = fftn(&a, None, Some(&[-2, -1][..]), FftNorm::Backward).unwrap();
+        let pos = fftn(&a, None, Some(&[0, 1][..]), FftNorm::Backward).unwrap();
+        for (n, p) in neg.iter().zip(pos.iter()) {
+            assert!((n.re - p.re).abs() < 1e-12);
+            assert!((n.im - p.im).abs() < 1e-12);
         }
     }
 

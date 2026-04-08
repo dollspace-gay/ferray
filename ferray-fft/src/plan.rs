@@ -1,7 +1,7 @@
 // ferray-fft: FftPlan type and global plan cache (REQ-12, REQ-13)
 
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, RwLock};
 
 use num_complex::Complex;
 use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
@@ -22,71 +22,32 @@ struct CacheKey {
 // ---------------------------------------------------------------------------
 // Complex FFT plan caches (f32 and f64)
 //
-// Each precision gets its own LazyLock-wrapped Mutex<PlanCache<T>>. The
-// caches are lazy — the f32 cache is only constructed if f32 FFTs are
-// actually used, so pure f64 users pay nothing.
+// The cache splits into two locks (#431):
+//
+//   * `RwLock<HashMap<key, Arc<plan>>>` — held in *read* mode for the
+//     overwhelmingly common cache-hit lookup. Many concurrent FFTs of
+//     already-cached sizes can read in parallel without serializing.
+//   * `Mutex<FftPlanner<T>>` — held only on the (rare) cache miss path,
+//     because `FftPlanner::plan_fft_forward` requires `&mut self`.
+//
+// The previous design wrapped both fields in a single `Mutex`, so even
+// the lookup path serialized every concurrent caller; under heavy
+// multi-threaded load that produced false sharing on what should be a
+// read-mostly path.
 // ---------------------------------------------------------------------------
 
-static F64_CACHE: LazyLock<Mutex<PlanCacheF64>> =
-    LazyLock::new(|| Mutex::new(PlanCacheF64::new()));
-static F32_CACHE: LazyLock<Mutex<PlanCacheF32>> =
-    LazyLock::new(|| Mutex::new(PlanCacheF32::new()));
+// Aliases keep clippy's `type_complexity` lint quiet on the `LazyLock`
+// statics below.
+type ComplexPlanMap<T> = RwLock<HashMap<CacheKey, Arc<dyn Fft<T>>>>;
 
-struct PlanCacheF64 {
-    planner: FftPlanner<f64>,
-    plans: HashMap<CacheKey, Arc<dyn Fft<f64>>>,
-}
-
-impl PlanCacheF64 {
-    fn new() -> Self {
-        Self {
-            planner: FftPlanner::new(),
-            plans: HashMap::new(),
-        }
-    }
-
-    fn get_plan(&mut self, size: usize, inverse: bool) -> Arc<dyn Fft<f64>> {
-        let key = CacheKey { size, inverse };
-        self.plans
-            .entry(key)
-            .or_insert_with(|| {
-                if inverse {
-                    self.planner.plan_fft_inverse(size)
-                } else {
-                    self.planner.plan_fft_forward(size)
-                }
-            })
-            .clone()
-    }
-}
-
-struct PlanCacheF32 {
-    planner: FftPlanner<f32>,
-    plans: HashMap<CacheKey, Arc<dyn Fft<f32>>>,
-}
-
-impl PlanCacheF32 {
-    fn new() -> Self {
-        Self {
-            planner: FftPlanner::new(),
-            plans: HashMap::new(),
-        }
-    }
-
-    fn get_plan(&mut self, size: usize, inverse: bool) -> Arc<dyn Fft<f32>> {
-        let key = CacheKey { size, inverse };
-        self.plans
-            .entry(key)
-            .or_insert_with(|| {
-                if inverse {
-                    self.planner.plan_fft_inverse(size)
-                } else {
-                    self.planner.plan_fft_forward(size)
-                }
-            })
-            .clone()
-    }
-}
+static F64_PLANS: LazyLock<ComplexPlanMap<f64>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static F64_PLANNER: LazyLock<Mutex<FftPlanner<f64>>> =
+    LazyLock::new(|| Mutex::new(FftPlanner::new()));
+static F32_PLANS: LazyLock<ComplexPlanMap<f32>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static F32_PLANNER: LazyLock<Mutex<FftPlanner<f32>>> =
+    LazyLock::new(|| Mutex::new(FftPlanner::new()));
 
 /// Obtain a cached f64 FFT plan for the given size and direction.
 ///
@@ -94,14 +55,48 @@ impl PlanCacheF32 {
 /// Plans are cached globally so repeated transforms of the same size
 /// reuse the same plan.
 pub(crate) fn get_cached_plan_f64(size: usize, inverse: bool) -> Arc<dyn Fft<f64>> {
-    let mut cache = F64_CACHE.lock().expect("f64 FFT plan cache lock poisoned");
-    cache.get_plan(size, inverse)
+    let key = CacheKey { size, inverse };
+    // Fast path: read lock the plan map and return an existing plan.
+    {
+        let plans = F64_PLANS.read().expect("f64 FFT plan cache poisoned");
+        if let Some(plan) = plans.get(&key) {
+            return plan.clone();
+        }
+    }
+    // Cache miss: build a new plan with the planner Mutex, then insert
+    // it under the write lock. Two concurrent misses for the same key
+    // are handled by the second one finding the entry already populated.
+    let plan: Arc<dyn Fft<f64>> = {
+        let mut planner = F64_PLANNER.lock().expect("f64 FFT planner poisoned");
+        if inverse {
+            planner.plan_fft_inverse(size)
+        } else {
+            planner.plan_fft_forward(size)
+        }
+    };
+    let mut plans = F64_PLANS.write().expect("f64 FFT plan cache poisoned");
+    plans.entry(key).or_insert(plan).clone()
 }
 
 /// Obtain a cached f32 FFT plan for the given size and direction.
 pub(crate) fn get_cached_plan_f32(size: usize, inverse: bool) -> Arc<dyn Fft<f32>> {
-    let mut cache = F32_CACHE.lock().expect("f32 FFT plan cache lock poisoned");
-    cache.get_plan(size, inverse)
+    let key = CacheKey { size, inverse };
+    {
+        let plans = F32_PLANS.read().expect("f32 FFT plan cache poisoned");
+        if let Some(plan) = plans.get(&key) {
+            return plan.clone();
+        }
+    }
+    let plan: Arc<dyn Fft<f32>> = {
+        let mut planner = F32_PLANNER.lock().expect("f32 FFT planner poisoned");
+        if inverse {
+            planner.plan_fft_inverse(size)
+        } else {
+            planner.plan_fft_forward(size)
+        }
+    };
+    let mut plans = F32_PLANS.write().expect("f32 FFT plan cache poisoned");
+    plans.entry(key).or_insert(plan).clone()
 }
 
 /// Legacy alias for f64 plan lookup — preserved for tests and any call
@@ -112,93 +107,53 @@ pub(crate) fn get_cached_plan(size: usize, inverse: bool) -> Arc<dyn Fft<f64>> {
 }
 
 // ---------------------------------------------------------------------------
-// Real-FFT plan caches (issues #432, #426)
+// Real-FFT plan caches (issues #432, #426, #431)
 //
-// realfft uses a separate planner type from rustfft because real-to-complex
-// (RealToComplex<T>) and complex-to-real (ComplexToReal<T>) are distinct
-// trait objects. We give each precision its own LazyLock so the complex
-// caches are untouched, and the real planners are only constructed if
-// rfft/irfft is used.
+// Same RwLock-plus-Mutex split as the complex caches above. realfft
+// uses a separate planner type from rustfft because real-to-complex
+// (RealToComplex<T>) and complex-to-real (ComplexToReal<T>) are
+// distinct trait objects, so each direction gets its own plan map.
 // ---------------------------------------------------------------------------
 
-static REAL_CACHE_F64: LazyLock<Mutex<RealPlanCacheF64>> =
-    LazyLock::new(|| Mutex::new(RealPlanCacheF64::new()));
-static REAL_CACHE_F32: LazyLock<Mutex<RealPlanCacheF32>> =
-    LazyLock::new(|| Mutex::new(RealPlanCacheF32::new()));
+type RealForwardMap<T> = RwLock<HashMap<usize, Arc<dyn RealToComplex<T>>>>;
+type RealInverseMap<T> = RwLock<HashMap<usize, Arc<dyn ComplexToReal<T>>>>;
 
-struct RealPlanCacheF64 {
-    planner: RealFftPlanner<f64>,
-    forward_plans: HashMap<usize, Arc<dyn RealToComplex<f64>>>,
-    inverse_plans: HashMap<usize, Arc<dyn ComplexToReal<f64>>>,
-}
-
-impl RealPlanCacheF64 {
-    fn new() -> Self {
-        Self {
-            planner: RealFftPlanner::new(),
-            forward_plans: HashMap::new(),
-            inverse_plans: HashMap::new(),
-        }
-    }
-
-    fn forward(&mut self, size: usize) -> Arc<dyn RealToComplex<f64>> {
-        let planner = &mut self.planner;
-        self.forward_plans
-            .entry(size)
-            .or_insert_with(|| planner.plan_fft_forward(size))
-            .clone()
-    }
-
-    fn inverse(&mut self, size: usize) -> Arc<dyn ComplexToReal<f64>> {
-        let planner = &mut self.planner;
-        self.inverse_plans
-            .entry(size)
-            .or_insert_with(|| planner.plan_fft_inverse(size))
-            .clone()
-    }
-}
-
-struct RealPlanCacheF32 {
-    planner: RealFftPlanner<f32>,
-    forward_plans: HashMap<usize, Arc<dyn RealToComplex<f32>>>,
-    inverse_plans: HashMap<usize, Arc<dyn ComplexToReal<f32>>>,
-}
-
-impl RealPlanCacheF32 {
-    fn new() -> Self {
-        Self {
-            planner: RealFftPlanner::new(),
-            forward_plans: HashMap::new(),
-            inverse_plans: HashMap::new(),
-        }
-    }
-
-    fn forward(&mut self, size: usize) -> Arc<dyn RealToComplex<f32>> {
-        let planner = &mut self.planner;
-        self.forward_plans
-            .entry(size)
-            .or_insert_with(|| planner.plan_fft_forward(size))
-            .clone()
-    }
-
-    fn inverse(&mut self, size: usize) -> Arc<dyn ComplexToReal<f32>> {
-        let planner = &mut self.planner;
-        self.inverse_plans
-            .entry(size)
-            .or_insert_with(|| planner.plan_fft_inverse(size))
-            .clone()
-    }
-}
+static REAL_F64_FORWARD: LazyLock<RealForwardMap<f64>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static REAL_F64_INVERSE: LazyLock<RealInverseMap<f64>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static REAL_F64_PLANNER: LazyLock<Mutex<RealFftPlanner<f64>>> =
+    LazyLock::new(|| Mutex::new(RealFftPlanner::new()));
+static REAL_F32_FORWARD: LazyLock<RealForwardMap<f32>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static REAL_F32_INVERSE: LazyLock<RealInverseMap<f32>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static REAL_F32_PLANNER: LazyLock<Mutex<RealFftPlanner<f32>>> =
+    LazyLock::new(|| Mutex::new(RealFftPlanner::new()));
 
 /// Obtain a cached f64 real-to-complex FFT plan for the given size.
 ///
 /// Returns a plan that consumes a real input of length `size` and
 /// produces `size/2 + 1` complex values.
 pub(crate) fn get_cached_real_forward_f64(size: usize) -> Arc<dyn RealToComplex<f64>> {
-    let mut cache = REAL_CACHE_F64
-        .lock()
-        .expect("f64 real FFT plan cache lock poisoned");
-    cache.forward(size)
+    {
+        let plans = REAL_F64_FORWARD
+            .read()
+            .expect("f64 real-forward plan cache poisoned");
+        if let Some(plan) = plans.get(&size) {
+            return plan.clone();
+        }
+    }
+    let plan: Arc<dyn RealToComplex<f64>> = {
+        let mut planner = REAL_F64_PLANNER
+            .lock()
+            .expect("f64 real FFT planner poisoned");
+        planner.plan_fft_forward(size)
+    };
+    let mut plans = REAL_F64_FORWARD
+        .write()
+        .expect("f64 real-forward plan cache poisoned");
+    plans.entry(size).or_insert(plan).clone()
 }
 
 /// Obtain a cached f64 complex-to-real FFT plan for the given output size.
@@ -206,26 +161,68 @@ pub(crate) fn get_cached_real_forward_f64(size: usize) -> Arc<dyn RealToComplex<
 /// The argument `size` is the **real-output** length (not the complex
 /// input length, which is `size/2 + 1`).
 pub(crate) fn get_cached_real_inverse_f64(size: usize) -> Arc<dyn ComplexToReal<f64>> {
-    let mut cache = REAL_CACHE_F64
-        .lock()
-        .expect("f64 real FFT plan cache lock poisoned");
-    cache.inverse(size)
+    {
+        let plans = REAL_F64_INVERSE
+            .read()
+            .expect("f64 real-inverse plan cache poisoned");
+        if let Some(plan) = plans.get(&size) {
+            return plan.clone();
+        }
+    }
+    let plan: Arc<dyn ComplexToReal<f64>> = {
+        let mut planner = REAL_F64_PLANNER
+            .lock()
+            .expect("f64 real FFT planner poisoned");
+        planner.plan_fft_inverse(size)
+    };
+    let mut plans = REAL_F64_INVERSE
+        .write()
+        .expect("f64 real-inverse plan cache poisoned");
+    plans.entry(size).or_insert(plan).clone()
 }
 
 /// Obtain a cached f32 real-to-complex FFT plan for the given size.
 pub(crate) fn get_cached_real_forward_f32(size: usize) -> Arc<dyn RealToComplex<f32>> {
-    let mut cache = REAL_CACHE_F32
-        .lock()
-        .expect("f32 real FFT plan cache lock poisoned");
-    cache.forward(size)
+    {
+        let plans = REAL_F32_FORWARD
+            .read()
+            .expect("f32 real-forward plan cache poisoned");
+        if let Some(plan) = plans.get(&size) {
+            return plan.clone();
+        }
+    }
+    let plan: Arc<dyn RealToComplex<f32>> = {
+        let mut planner = REAL_F32_PLANNER
+            .lock()
+            .expect("f32 real FFT planner poisoned");
+        planner.plan_fft_forward(size)
+    };
+    let mut plans = REAL_F32_FORWARD
+        .write()
+        .expect("f32 real-forward plan cache poisoned");
+    plans.entry(size).or_insert(plan).clone()
 }
 
 /// Obtain a cached f32 complex-to-real FFT plan for the given output size.
 pub(crate) fn get_cached_real_inverse_f32(size: usize) -> Arc<dyn ComplexToReal<f32>> {
-    let mut cache = REAL_CACHE_F32
-        .lock()
-        .expect("f32 real FFT plan cache lock poisoned");
-    cache.inverse(size)
+    {
+        let plans = REAL_F32_INVERSE
+            .read()
+            .expect("f32 real-inverse plan cache poisoned");
+        if let Some(plan) = plans.get(&size) {
+            return plan.clone();
+        }
+    }
+    let plan: Arc<dyn ComplexToReal<f32>> = {
+        let mut planner = REAL_F32_PLANNER
+            .lock()
+            .expect("f32 real FFT planner poisoned");
+        planner.plan_fft_inverse(size)
+    };
+    let mut plans = REAL_F32_INVERSE
+        .write()
+        .expect("f32 real-inverse plan cache poisoned");
+    plans.entry(size).or_insert(plan).clone()
 }
 
 /// Legacy f64 alias for the real-forward cache.
