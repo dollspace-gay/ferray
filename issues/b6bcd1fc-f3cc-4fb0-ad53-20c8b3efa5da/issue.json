@@ -3,11 +3,12 @@
   "display_id": 189,
   "title": "ferray-linalg: duplicated matmul implementations in 3 places",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nproducts/mod.rs, solve.rs, einsum/mod.rs: three separate naive matmul impls.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:42:51.498039623Z",
-  "updated_at": "2026-03-25T15:43:06.941884387Z",
+  "updated_at": "2026-04-08T05:03:03.326514210Z",
+  "closed_at": "2026-04-08T05:03:03.326514210Z",
   "labels": [
     "refactor",
     "qa-audit"
