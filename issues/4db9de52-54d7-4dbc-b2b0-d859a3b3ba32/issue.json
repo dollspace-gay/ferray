@@ -3,11 +3,12 @@
   "display_id": 201,
   "title": "ferray-linalg: norm returns scalar, no axis/keepdims support",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nnorms.rs L40: NumPy accepts axis/keepdims, returns arrays.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:44:58.940022778Z",
-  "updated_at": "2026-03-25T15:45:26.063382857Z",
+  "updated_at": "2026-04-08T05:03:11.563234412Z",
+  "closed_at": "2026-04-08T05:03:11.563234412Z",
   "labels": [
     "refactor",
     "qa-audit"
