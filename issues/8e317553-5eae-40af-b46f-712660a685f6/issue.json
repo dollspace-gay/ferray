@@ -3,11 +3,12 @@
   "display_id": 224,
   "title": "ferray-fft: resolve_axes duplicated 3 times",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\ncomplex.rs L44, real.rs L46, shift.rs L72: identical function.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:48:47.848941133Z",
-  "updated_at": "2026-03-25T15:48:52.270361328Z",
+  "updated_at": "2026-04-08T04:21:56.036835900Z",
+  "closed_at": "2026-04-08T04:21:56.036835900Z",
   "labels": [
     "refactor",
     "qa-audit"
