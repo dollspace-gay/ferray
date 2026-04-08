@@ -101,6 +101,13 @@ fn impl_ferray_record(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
     let expanded = quote! {
         unsafe impl #impl_generics ferray_core::record::FerrayRecord for #name #ty_generics #where_clause {
             fn field_descriptors() -> &'static [ferray_core::record::FieldDescriptor] {
+                // Issue #323 asked whether this could be a `const` static
+                // array. `offset_of!` and `size_of::<T>()` are both const,
+                // but `<T as Element>::dtype()` is a trait method call and
+                // trait methods are not `const` on stable Rust yet — so
+                // the LazyLock is unavoidable without breaking
+                // `Element::dtype()` for every user. Re-evaluate once
+                // `const_trait_impl` stabilises.
                 static FIELDS: std::sync::LazyLock<Vec<ferray_core::record::FieldDescriptor>> =
                     std::sync::LazyLock::new(|| {
                         vec![

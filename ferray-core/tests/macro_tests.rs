@@ -363,3 +363,83 @@ use num_complex::Complex;
 fn promoted_type_complex_f32() {
     let _: ferray_core::promoted_type!(f32, Complex<f32>) = Complex::new(1.0f32, 0.0f32);
 }
+
+#[test]
+fn promoted_type_complex_f32_complex_f64() {
+    // Issue #325: Complex<f32> + Complex<f64> should widen to Complex<f64>.
+    let _: ferray_core::promoted_type!(Complex<f32>, Complex<f64>) =
+        Complex::new(1.0f64, 0.0f64);
+}
+
+#[test]
+fn promoted_type_complex_f64_complex_f32() {
+    // Symmetry check.
+    let _: ferray_core::promoted_type!(Complex<f64>, Complex<f32>) =
+        Complex::new(1.0f64, 0.0f64);
+}
+
+// ---------------------------------------------------------------------------
+// Cross-validation: proc macro vs Promoted trait (#214)
+//
+// The three promotion pathways (compile-time `promoted_type!`, runtime
+// `ferray_core::dtype::promotion::Promoted`, and the
+// `ferray_core::dtype::promotion::promoted_dtype` lookup) used to be
+// maintained independently. These tests assert that they agree on a
+// representative set of dtype pairs so a silent divergence fails CI.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn promoted_type_matches_promoted_trait_f32_f64() {
+    use ferray_core::dtype::promotion::Promoted;
+    type Macro = ferray_core::promoted_type!(f32, f64);
+    type Trait = <f32 as Promoted<f64>>::Output;
+    // If this compiles with the same type alias, the two branches agree.
+    let _: Macro = 1.0f64;
+    let _: Trait = 1.0f64;
+}
+
+#[test]
+fn promoted_type_matches_promoted_trait_u8_i8() {
+    use ferray_core::dtype::promotion::Promoted;
+    type Macro = ferray_core::promoted_type!(u8, i8);
+    type Trait = <u8 as Promoted<i8>>::Output;
+    let _: Macro = 1i16;
+    let _: Trait = 1i16;
+}
+
+#[test]
+fn promoted_type_matches_promoted_trait_i32_f32() {
+    use ferray_core::dtype::promotion::Promoted;
+    type Macro = ferray_core::promoted_type!(i32, f32);
+    type Trait = <i32 as Promoted<f32>>::Output;
+    let _: Macro = 1.0f64;
+    let _: Trait = 1.0f64;
+}
+
+#[test]
+fn promoted_type_matches_promoted_trait_complex() {
+    use ferray_core::dtype::promotion::Promoted;
+    type Macro = ferray_core::promoted_type!(Complex<f32>, Complex<f64>);
+    type Trait = <Complex<f32> as Promoted<Complex<f64>>>::Output;
+    let _: Macro = Complex::new(1.0f64, 0.0f64);
+    let _: Trait = Complex::new(1.0f64, 0.0f64);
+}
+
+// ---------------------------------------------------------------------------
+// FerrayRecord generic / edge cases (#326, #327)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn s_macro_with_three_axes() {
+    // Issue #327: exercise the s![a, b, c] multi-axis path that the
+    // existing tests only covered up to two axes.
+    let slices = ferray_core::s![0..2, 1..4, ..];
+    assert_eq!(slices.len(), 3);
+}
+
+#[test]
+fn s_macro_with_step_and_full_slice() {
+    // Mixed step-and-slice cases.
+    let slices = ferray_core::s![0..10;2, ..];
+    assert_eq!(slices.len(), 2);
+}

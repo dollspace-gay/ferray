@@ -27,6 +27,22 @@ pub use serde_json;
 /// the fixture records NumPy's slightly imprecise result as "expected").
 pub const MIN_ULP_TOLERANCE: u64 = 128;
 
+/// Unified near-zero absolute tolerance for f64 ULP comparisons.
+///
+/// Values with magnitude below this are considered indistinguishable
+/// from rounding error and treated as a match regardless of ULP
+/// distance (which is meaningless near zero: adjacent subnormals
+/// differ by millions of ULPs). Derived from the min ULP tolerance
+/// and `f64::EPSILON` so changes to `MIN_ULP_TOLERANCE` propagate in
+/// one place (#315).
+pub const F64_NOISE_FLOOR: f64 = MIN_ULP_TOLERANCE as f64 * f64::EPSILON;
+
+/// f32 counterpart. Uses the same ULP knob so the f32 and f64
+/// comparisons behave consistently (#316 — previously f32 used a
+/// hard-coded `4.0 * f32::EPSILON` and f64 used a different constant
+/// at the assert level).
+pub const F32_NOISE_FLOOR: f32 = MIN_ULP_TOLERANCE as f32 * f32::EPSILON;
+
 // ---------------------------------------------------------------------------
 // JSON schema types
 // ---------------------------------------------------------------------------
@@ -254,18 +270,13 @@ pub fn should_skip_f64(input: &serde_json::Value) -> bool {
     false
 }
 
-/// Check if the expected output is a scalar (shape=[]).
-pub fn is_scalar_expected(expected: &serde_json::Value) -> bool {
-    if let Some(shape) = expected.get("shape") {
-        return parse_shape(shape).is_empty();
-    }
-    // If expected is a bare number, it's scalar
-    expected.is_number()
-}
-
 // ---------------------------------------------------------------------------
 // ULP comparison
 // ---------------------------------------------------------------------------
+//
+// `is_scalar_expected` used to live here but was never called; the
+// scalar-detection path goes through `parse_shape(..).is_empty()`
+// directly (#318).
 
 /// Sign bit masks for clearing the top bit of an IEEE 754 float when
 /// converting to a magnitude-in-ULPs-from-zero.
@@ -295,9 +306,15 @@ pub fn ulp_distance_f64(a: f64, b: f64) -> Option<u64> {
         return Some(0);
     }
     // Near-zero noise floor: values below this are indistinguishable
-    // from rounding error, so we report an exact match.
-    let abs_tol = MIN_ULP_TOLERANCE as f64 * f64::EPSILON;
-    if a.abs() < abs_tol && b.abs() < abs_tol {
+    // from rounding error, so we report an exact match *and* require
+    // the absolute difference to also be within the floor. The extra
+    // `(a - b).abs() < floor` check avoids the opposite-sign pair
+    // `(+floor/2, -floor/2)` being reported as identical even though
+    // their cross-sign ULP distance is huge (#321).
+    if a.abs() < F64_NOISE_FLOOR
+        && b.abs() < F64_NOISE_FLOOR
+        && (a - b).abs() < F64_NOISE_FLOOR
+    {
         return Some(0);
     }
     if a.is_sign_negative() != b.is_sign_negative() {
@@ -323,8 +340,10 @@ pub fn ulp_distance_f32(a: f32, b: f32) -> Option<u64> {
     if a == b {
         return Some(0);
     }
-    let abs_tol = 4.0 * f32::EPSILON;
-    if a.abs() < abs_tol && b.abs() < abs_tol && (a - b).abs() < abs_tol {
+    if a.abs() < F32_NOISE_FLOOR
+        && b.abs() < F32_NOISE_FLOOR
+        && (a - b).abs() < F32_NOISE_FLOOR
+    {
         return Some(0);
     }
     if a.is_sign_negative() != b.is_sign_negative() {
@@ -339,8 +358,9 @@ pub fn ulp_distance_f32(a: f32, b: f32) -> Option<u64> {
 
 /// Assert that two f64 values match within the given ULP tolerance.
 /// NaN == NaN is considered a match. Inf signs must agree.
-/// Values that are both near zero (within the noise floor of f64 arithmetic)
-/// are considered matching regardless of ULP distance.
+/// Near-zero values (below [`F64_NOISE_FLOOR`]) are handled inside
+/// [`ulp_distance_f64`]; this function previously had its own
+/// duplicate noise-floor branch (#315).
 pub fn assert_f64_ulp(actual: f64, expected: f64, tolerance: u64, context: &str) {
     // NaN matches NaN
     if actual.is_nan() && expected.is_nan() {
@@ -358,27 +378,23 @@ pub fn assert_f64_ulp(actual: f64, expected: f64, tolerance: u64, context: &str)
         );
         return;
     }
-    // Both near zero: treat as matching. ULP distance is meaningless for
-    // values in the noise floor (e.g. FFT DC component of a sine wave).
-    let noise_floor = 1e-13;
-    if actual.abs() < noise_floor && expected.abs() < noise_floor {
-        return;
-    }
-    match ulp_distance_f64(actual, expected) {
-        Some(dist) if dist <= tolerance => {}
-        Some(dist) => {
-            panic!(
-                "{context}: ULP distance {dist} exceeds tolerance {tolerance} \
-                 (actual={actual}, expected={expected})"
-            );
-        }
-        None => {
-            panic!("{context}: comparison failed (actual={actual}, expected={expected})");
-        }
+    // `ulp_distance_f64` only returns `None` when one of the inputs is
+    // NaN — handled above — so at this point we always get `Some`.
+    // The unreachable arm was the subject of #317.
+    let dist = ulp_distance_f64(actual, expected)
+        .expect("ulp_distance_f64 returned None despite NaN guard above");
+    if dist > tolerance {
+        panic!(
+            "{context}: ULP distance {dist} exceeds tolerance {tolerance} \
+             (actual={actual}, expected={expected})"
+        );
     }
 }
 
 /// Assert that two f32 values match within the given ULP tolerance.
+///
+/// f32 now uses the same noise-floor shape as f64 via
+/// [`ulp_distance_f32`] (#316).
 pub fn assert_f32_ulp(actual: f32, expected: f32, tolerance: u64, context: &str) {
     if actual.is_nan() && expected.is_nan() {
         return;
@@ -394,17 +410,13 @@ pub fn assert_f32_ulp(actual: f32, expected: f32, tolerance: u64, context: &str)
         );
         return;
     }
-    match ulp_distance_f32(actual, expected) {
-        Some(dist) if dist <= tolerance => {}
-        Some(dist) => {
-            panic!(
-                "{context}: ULP distance {dist} exceeds tolerance {tolerance} \
-                 (actual={actual}, expected={expected})"
-            );
-        }
-        None => {
-            panic!("{context}: comparison failed (actual={actual}, expected={expected})");
-        }
+    let dist = ulp_distance_f32(actual, expected)
+        .expect("ulp_distance_f32 returned None despite NaN guard above");
+    if dist > tolerance {
+        panic!(
+            "{context}: ULP distance {dist} exceeds tolerance {tolerance} \
+             (actual={actual}, expected={expected})"
+        );
     }
 }
 
@@ -496,6 +508,64 @@ where
         tested += 1;
     }
     assert!(tested > 0, "no f64 test cases found in {}", path.display());
+}
+
+/// Run a unary f32 oracle test: `fn(Array<f32>) -> Array<f32>`.
+///
+/// Mirror of [`run_unary_f64_oracle`] that picks up f32 fixture cases
+/// (`dtype == "float32"`). Added to close the "only f64 runners"
+/// coverage gap in #319. The f32 path casts the expected data down
+/// from the fixture's native f64 representation if the fixture
+/// doesn't have a native f32 column.
+pub fn run_unary_f32_oracle<F>(path: &Path, func: F)
+where
+    F: Fn(&Array<f32, IxDyn>) -> FerrayResult<Array<f32, IxDyn>>,
+{
+    let suite = load_fixture(path);
+    let mut tested = 0;
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        let dtype = get_dtype(input);
+        // Accept either a native f32 fixture or an f64 fixture cast
+        // down — the ULP tolerance at f32 precision will still
+        // accommodate the rounding error.
+        if dtype != "float32" && dtype != "float64" {
+            continue;
+        }
+        let shape = parse_shape(&input["shape"]);
+        if shape.is_empty() {
+            continue;
+        }
+        let arr = if dtype == "float32" {
+            make_f32_array(input)
+        } else {
+            let data: Vec<f32> = parse_f64_data(&input["data"])
+                .into_iter()
+                .map(|x| x as f32)
+                .collect();
+            Array::<f32, IxDyn>::from_vec(IxDyn::new(&shape), data).unwrap()
+        };
+        let result = func(&arr)
+            .unwrap_or_else(|e| panic!("case '{}': function returned error: {e}", case.name));
+        let expected: Vec<f32> = parse_f64_data(&case.expected["data"])
+            .into_iter()
+            .map(|x| x as f32)
+            .collect();
+        let result_slice = result.as_slice().unwrap();
+        // f32 ULP tolerance is the f64 tolerance scaled by the
+        // relative epsilon ratio, rounded up.
+        let f32_tol = case.tolerance_ulps.max(MIN_ULP_TOLERANCE);
+        for (i, (&a, &e)) in result_slice.iter().zip(expected.iter()).enumerate() {
+            assert_f32_ulp(
+                a,
+                e,
+                f32_tol,
+                &format!("case '{}' [element {i}]", case.name),
+            );
+        }
+        tested += 1;
+    }
+    assert!(tested > 0, "no f32 test cases found in {}", path.display());
 }
 
 /// Run a binary f64 oracle test: `fn(Array<f64>, Array<f64>) -> Array<f64>`.
@@ -684,8 +754,15 @@ where
         );
         tested += 1;
     }
-    // Some fixtures may have only complex inputs, so don't assert tested > 0
-    let _ = tested;
+    // Previously this ran silently with zero test cases if a fixture
+    // happened to have only complex inputs — so a missing dtype
+    // handler or a broken fixture would produce a passing test
+    // (#320). Match every other runner and require at least one case.
+    assert!(
+        tested > 0,
+        "run_real_to_complex_oracle: no f64 cases were tested in {}",
+        path.display()
+    );
 }
 
 /// Run oracle for a complex->complex FFT.
