@@ -104,6 +104,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Pinned memory transfers, 6 fused kernels, auto-dispatch
 
 ### Changed
+- ferray-autodiff: god file — 1866 lines in single lib.rs (#535)
 - ferray-fft: plan cache is f64-only; no f32 FFT support (#109)
 - ferray-fft: rfft computes full FFT then discards half (#108)
 - ferray-ufunc oracle.rs: replace closure-suppression with macro type pinning (#561)
