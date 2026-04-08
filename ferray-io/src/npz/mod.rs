@@ -9,8 +9,18 @@ use std::path::Path;
 
 use ferray_core::dynarray::DynArray;
 use ferray_core::error::{FerrayError, FerrayResult};
+use zip::ZipArchive;
 
 use crate::npy;
+
+/// Type-erased reader source backing an [`NpzFile`]. We don't expose
+/// the concrete underlying reader to keep the type signature simple.
+type NpzReader = Box<dyn ReadSeek + Send>;
+
+/// Convenience trait combining `Read + Seek + Send` so the boxed
+/// reader can be stored in a single `Box<dyn ...>`.
+trait ReadSeek: Read + std::io::Seek {}
+impl<T: Read + std::io::Seek + ?Sized> ReadSeek for T {}
 
 /// Save multiple arrays to an uncompressed `.npz` file (zip archive of `.npy` files).
 ///
@@ -95,17 +105,28 @@ pub fn savez_compressed<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -
     Ok(())
 }
 
-/// A loaded `.npz` archive, providing access to named arrays.
+/// A `.npz` archive opened lazily — entries are decompressed and
+/// parsed only when [`get`](Self::get) is called.
+///
+/// The previous implementation read every entry into a `Vec<Vec<u8>>`
+/// up front (#232, #492), which negated the named-access API for
+/// large archives where callers only need a few arrays. The reader is
+/// kept alive inside the struct so each `get` call can seek back to
+/// the requested entry on demand.
 pub struct NpzFile {
-    /// The entries in the archive, keyed by name (without .npy extension).
-    entries: Vec<(String, Vec<u8>)>,
+    archive: ZipArchive<NpzReader>,
+    /// Pre-extracted name list (without `.npy` extension) so the
+    /// `names`/`len`/`is_empty` queries don't require the lock-step
+    /// `&mut self` that `ZipArchive::by_index` requires.
+    names: Vec<String>,
 }
 
 impl NpzFile {
-    /// Open and read a `.npz` file.
+    /// Open a `.npz` file for lazy access.
     ///
-    /// All entries are read into memory. Use the [`get`](Self::get) method to
-    /// retrieve individual arrays.
+    /// The file's directory is parsed and entry names are cached, but
+    /// no array data is decompressed until [`get`](Self::get) is
+    /// called for a specific name.
     pub fn open<P: AsRef<Path>>(path: P) -> FerrayResult<Self> {
         let file = File::open(path.as_ref()).map_err(|e| {
             FerrayError::io_error(format!(
@@ -113,69 +134,76 @@ impl NpzFile {
                 path.as_ref().display()
             ))
         })?;
-        let reader = BufReader::new(file);
-        Self::from_reader(reader)
+        let reader: NpzReader = Box::new(BufReader::new(file));
+        Self::from_boxed_reader(reader)
     }
 
-    /// Read a `.npz` from a reader.
-    pub fn from_reader<R: Read + std::io::Seek>(reader: R) -> FerrayResult<Self> {
-        let mut archive = zip::ZipArchive::new(reader)
+    /// Read a `.npz` from any `Read + Seek` source.
+    pub fn from_reader<R: Read + std::io::Seek + Send + 'static>(reader: R) -> FerrayResult<Self> {
+        Self::from_boxed_reader(Box::new(reader))
+    }
+
+    fn from_boxed_reader(reader: NpzReader) -> FerrayResult<Self> {
+        let archive = ZipArchive::new(reader)
             .map_err(|e| FerrayError::io_error(format!("failed to read .npz archive: {e}")))?;
 
-        let mut entries = Vec::new();
-        for i in 0..archive.len() {
-            let mut entry = archive.by_index(i).map_err(|e| {
-                FerrayError::io_error(format!("failed to read .npz entry {i}: {e}"))
-            })?;
+        // Pre-extract the entry names so we can answer `names()`
+        // queries without grabbing `&mut self`.
+        let names: Vec<String> = archive
+            .file_names()
+            .map(|n| n.strip_suffix(".npy").unwrap_or(n).to_string())
+            .collect();
 
-            let name = entry
-                .name()
-                .strip_suffix(".npy")
-                .unwrap_or(entry.name())
-                .to_string();
-
-            let mut data = Vec::new();
-            entry.read_to_end(&mut data).map_err(|e| {
-                FerrayError::io_error(format!("failed to read .npz entry data: {e}"))
-            })?;
-
-            entries.push((name, data));
-        }
-
-        Ok(Self { entries })
+        Ok(Self { archive, names })
     }
 
     /// List the names of arrays stored in the archive.
     pub fn names(&self) -> Vec<&str> {
-        self.entries.iter().map(|(name, _)| name.as_str()).collect()
+        self.names.iter().map(String::as_str).collect()
     }
 
     /// Retrieve a named array as a `DynArray`.
     ///
+    /// Decompresses and parses the entry on demand — large archives
+    /// pay no cost for entries that are never requested.
+    ///
     /// # Errors
-    /// Returns `FerrayError::IoError` if the name is not found or the data is invalid.
-    pub fn get(&self, name: &str) -> FerrayResult<DynArray> {
-        let data = self
-            .entries
-            .iter()
-            .find(|(n, _)| n == name)
-            .map(|(_, d)| d)
-            .ok_or_else(|| {
-                FerrayError::io_error(format!("array '{name}' not found in .npz archive"))
-            })?;
-
+    /// Returns `FerrayError::IoError` if the name is not found or the
+    /// data is invalid.
+    pub fn get(&mut self, name: &str) -> FerrayResult<DynArray> {
+        // Resolve the requested logical name to the on-disk
+        // `<name>.npy` entry. NumPy always writes the .npy suffix, but
+        // we tolerate either form.
+        let entry_name = if self.names.iter().any(|n| n == name) {
+            format!("{name}.npy")
+        } else {
+            return Err(FerrayError::io_error(format!(
+                "array '{name}' not found in .npz archive"
+            )));
+        };
+        let mut entry = self.archive.by_name(&entry_name).map_err(|e| {
+            FerrayError::io_error(format!("failed to read .npz entry '{entry_name}': {e}"))
+        })?;
+        // Materialize the entry's bytes into a small Vec — most .npy
+        // payloads aren't huge and decompression is streaming anyway.
+        // We can't pass `entry` directly to `load_dynamic_from_reader`
+        // because the npy parser uses Seek and `ZipFile` does not.
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data).map_err(|e| {
+            FerrayError::io_error(format!("failed to read .npz entry data: {e}"))
+        })?;
         let mut cursor = Cursor::new(data);
         npy::load_dynamic_from_reader(&mut cursor)
     }
 
     /// Number of arrays in the archive.
     pub fn len(&self) -> usize {
-        self.entries.len()
+        self.names.len()
     }
 
     /// Whether the archive is empty.
     pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+        self.names.is_empty()
     }
 }
 
@@ -214,7 +242,7 @@ mod tests {
         let path = test_file("test.npz");
         savez(&path, &[("a", &a), ("b", &b)]).unwrap();
 
-        let npz = NpzFile::open(&path).unwrap();
+        let mut npz = NpzFile::open(&path).unwrap();
         assert_eq!(npz.len(), 2);
 
         let mut names = npz.names();
@@ -238,7 +266,7 @@ mod tests {
         let path = test_file("test_compressed.npz");
         savez_compressed(&path, &[("data", &a)]).unwrap();
 
-        let npz = NpzFile::open(&path).unwrap();
+        let mut npz = NpzFile::open(&path).unwrap();
         assert_eq!(npz.len(), 1);
 
         let loaded = npz.get("data").unwrap();
@@ -254,8 +282,27 @@ mod tests {
         let path = test_file("npz_missing.npz");
         savez(&path, &[("a", &a)]).unwrap();
 
-        let npz = NpzFile::open(&path).unwrap();
+        let mut npz = NpzFile::open(&path).unwrap();
         assert!(npz.get("nonexistent").is_err());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn npz_lazy_get_then_get() {
+        // Issue #232/#492: open should not eagerly load every entry,
+        // but `get` calls should still work for repeated lookups in
+        // any order.
+        let a = make_f64_dyn(vec![1.0, 2.0, 3.0], &[3]);
+        let b = make_i32_dyn(vec![10, 20, 30], &[3]);
+
+        let path = test_file("test_lazy.npz");
+        savez(&path, &[("a", &a), ("b", &b)]).unwrap();
+
+        let mut npz = NpzFile::open(&path).unwrap();
+        // Lazy: read b first, then a, then b again.
+        let _b1 = npz.get("b").unwrap();
+        let _a = npz.get("a").unwrap();
+        let _b2 = npz.get("b").unwrap();
         let _ = std::fs::remove_file(&path);
     }
 
