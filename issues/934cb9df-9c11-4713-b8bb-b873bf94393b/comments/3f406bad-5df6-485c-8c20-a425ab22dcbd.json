@@ -1,0 +1,10 @@
+{
+  "uuid": "3f406bad-5df6-485c-8c20-a425ab22dcbd",
+  "issue_uuid": "934cb9df-9c11-4713-b8bb-b873bf94393b",
+  "author": "phase-4-coordinator",
+  "content": "Added the 7 missing oracle tests flagged in the issue:\\n\\nstats (3 new): histogram, unique, argsort — histogram handles both Bins::Count and Bins::Edges inputs and checks both the counts and bin_edges outputs. unique handles both the value-only and the with_counts return_counts=true variant. argsort ties are compared via apply-the-permutation-and-check-sorted-values rather than direct index equality, since LAPACK/Rust's tie-breaking may differ from NumPy.\\n\\nlinalg (4 new): eig, eigvals, lstsq, tensordot — eig/eigvals compare only the eigenvalue spectrum (eigenvector signs are implementation-defined) and handle the Complex<f64> return type, checking that the imaginary parts are zero and matching real parts order-independently (since LAPACK's output order isn't guaranteed). tensordot handles both the integer-axes and the [[axes_a], [axes_b]] pair-of-lists forms of the fixture input. lstsq compares the solution vector (rank and residuals depend on the SVD cutoff rule).\\n\\n18 stats oracle tests (up from 15) + 21 linalg oracle tests (up from 17) all pass. Clippy clean.",
+  "created_at": "2026-04-08T00:18:10.708112298Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABABOVVAzFlO0f+lmJRIwHGHYyYCRPxGIcBOViw/QNQEwxtQfylbrMKxRemuZWvTA1gEjZov30ZKFU1jtgc6W0CCg=="
+}
