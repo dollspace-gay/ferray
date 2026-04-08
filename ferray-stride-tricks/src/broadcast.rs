@@ -1,8 +1,12 @@
 // ferray-stride-tricks: Broadcasting helpers (REQ-2, REQ-3, REQ-4)
 //
-// These functions delegate to the existing implementations in
-// `ferray_core::dimension::broadcast`, providing a convenient
-// stride-tricks–flavoured entry point.
+// These functions are thin forwarding wrappers over
+// `ferray_core::dimension::broadcast`. No separate implementation
+// lives here — they exist purely so users who pull in
+// `ferray-stride-tricks` for `as_strided`/`sliding_window_view` get a
+// NumPy-style broadcasting surface at the same import path without
+// needing to reach into `ferray-core::dimension::broadcast`. #528
+// verified this is not a second copy of the code.
 
 use ferray_core::dimension::broadcast as core_broadcast;
 use ferray_core::dimension::{Dimension, IxDyn};
