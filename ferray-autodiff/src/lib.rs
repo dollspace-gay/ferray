@@ -18,6 +18,17 @@ use std::fmt;
 use std::num::FpCategory;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
+/// Array-aware forward-mode AD primitives (derivative_elementwise,
+/// gradient_vector, jacobian) that accept `ferray_core::Array` inputs.
+/// See the module docstring for the rationale (Element sealing
+/// prevents storing DualNumber in a ferray Array directly).
+pub mod array_ops;
+
+pub use array_ops::{
+    derivative_elementwise, gradient_vector, jacobian_array, value_and_derivative_elementwise,
+    value_and_gradient,
+};
+
 /// A dual number for forward-mode automatic differentiation.
 ///
 /// `DualNumber { real: a, dual: b }` represents `a + b*eps` where `eps^2 = 0`.

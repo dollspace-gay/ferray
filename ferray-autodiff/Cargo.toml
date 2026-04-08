@@ -13,6 +13,7 @@ description = "Forward-mode automatic differentiation for ferray"
 
 [dependencies]
 num-traits = { workspace = true }
+ferray-core = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

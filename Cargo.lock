@@ -1007,6 +1007,7 @@ dependencies = [
 name = "ferray-autodiff"
 version = "0.2.9"
 dependencies = [
+ "ferray-core",
  "num-traits",
  "proptest",
 ]
