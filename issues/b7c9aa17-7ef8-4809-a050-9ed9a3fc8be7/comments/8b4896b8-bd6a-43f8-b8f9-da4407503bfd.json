@@ -1,0 +1,10 @@
+{
+  "uuid": "8b4896b8-bd6a-43f8-b8f9-da4407503bfd",
+  "issue_uuid": "b7c9aa17-7ef8-4809-a050-9ed9a3fc8be7",
+  "author": "phase-4-coordinator",
+  "content": "AsFerray trait docstrings updated in 5458299 (the #195 batch) to accurately say 'Copy the NumPy array's contents into a fresh ferray Array' instead of claiming a zero-copy borrow. Verified in this pass that all three impls (Ix1, Ix2, IxDyn) have matching docs and implementation. Cross-references the crate-level copy discussion added in #195.",
+  "created_at": "2026-04-08T00:24:06.708006796Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAME++0xnYPM1UeiMWILotw17c0nC03FS2+yMbqVf4we2tM6iQJigkIcdx8fRZcg+lBAsdFy7lGsGcSUIK5mENBw=="
+}
