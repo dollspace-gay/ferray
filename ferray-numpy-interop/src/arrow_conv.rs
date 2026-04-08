@@ -195,6 +195,180 @@ impl FromArrowBool for BooleanArray {
 }
 
 // ---------------------------------------------------------------------------
+// 2-D and dynamic-rank interop (#549)
+// ---------------------------------------------------------------------------
+//
+// Arrow's primitive data model is inherently 1-D: a `PrimitiveArray` is
+// a flat buffer. Higher-rank ferray arrays can be represented in two
+// natural ways:
+//
+//   1. "flattened": one Arrow array containing the row-major bytes.
+//      Round-trip requires the caller to remember the shape.
+//   2. "columnar": a `Vec<PrimitiveArray>`, one per column of the 2-D
+//      ferray array. This is the natural fit for a downstream Arrow
+//      consumer that treats each column as a field.
+//
+// We provide both. Callers pick whichever matches their pipeline.
+
+use ferray_core::array::aliases::{Array2, ArrayD};
+use ferray_core::dimension::{Ix2, IxDyn};
+
+/// Convert an `Array2<T>` into a `Vec` of 1-D Arrow arrays, one per
+/// column of the input. This is the natural shape for a downstream
+/// consumer that turns each column into an Arrow field.
+///
+/// # Errors
+/// - `FerrayError::InvalidDtype` if the element type has no Arrow equivalent.
+pub fn array2_to_arrow_columns<T>(
+    a: &Array2<T>,
+) -> Result<Vec<PrimitiveArray<T::ArrowType>>, FerrayError>
+where
+    T: ArrowElement,
+    T::ArrowType: ArrowPrimitiveType<Native = T>,
+{
+    let _ = dtype_map::dtype_to_arrow(a.dtype())?;
+    let shape = a.shape();
+    let (nrows, ncols) = (shape[0], shape[1]);
+    let mut out: Vec<PrimitiveArray<T::ArrowType>> = Vec::with_capacity(ncols);
+    for c in 0..ncols {
+        let mut col: Vec<T> = Vec::with_capacity(nrows);
+        for r in 0..nrows {
+            // Use iter+nth (slow path) because we need strided access.
+            // For C-contiguous arrays this still walks via as_slice below.
+            if let Some(slice) = a.as_slice() {
+                col.push(slice[r * ncols + c]);
+            } else {
+                // Non-contiguous fallback — one-off; build from scratch
+                // via iter indexing. Rare in practice.
+                col.push(*a.iter().nth(r * ncols + c).unwrap());
+            }
+        }
+        let buffer = Buffer::from_vec(col);
+        out.push(PrimitiveArray::<T::ArrowType>::new(buffer.into(), None));
+    }
+    Ok(out)
+}
+
+/// Stack a `Vec` of 1-D Arrow arrays into a single `Array2<T>`, one
+/// column per input array. All input arrays must have the same length;
+/// the result has shape `(len, ncols)`.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if the columns have different lengths.
+/// - `FerrayError::InvalidDtype` / `InvalidValue` as per `FromArrow`.
+pub fn array2_from_arrow_columns<T>(
+    cols: &[PrimitiveArray<T::ArrowType>],
+) -> Result<Array2<T>, FerrayError>
+where
+    T: ArrowElement,
+    T::ArrowType: ArrowPrimitiveType<Native = T>,
+{
+    if cols.is_empty() {
+        return Array2::<T>::from_vec(Ix2::new([0, 0]), Vec::new());
+    }
+    let nrows = cols[0].len();
+    let ncols = cols.len();
+
+    // Validate shapes and dtypes up front so we fail fast.
+    for (i, c) in cols.iter().enumerate() {
+        if c.len() != nrows {
+            return Err(FerrayError::shape_mismatch(format!(
+                "array2_from_arrow_columns: column {i} has length {} but column 0 has length {nrows}",
+                c.len()
+            )));
+        }
+        if c.null_count() > 0 {
+            return Err(FerrayError::invalid_value(format!(
+                "Arrow array column {i} contains {} nulls; ferray arrays do not support nulls",
+                c.null_count()
+            )));
+        }
+        let arrow_dt = c.data_type();
+        let ferray_dt = dtype_map::arrow_to_dtype(arrow_dt)?;
+        if ferray_dt != T::dtype() {
+            return Err(FerrayError::invalid_dtype(format!(
+                "Arrow dtype {arrow_dt:?} on column {i} maps to ferray {ferray_dt}, but requested {}",
+                T::dtype()
+            )));
+        }
+    }
+
+    // Interleave into row-major order.
+    let mut data: Vec<T> = Vec::with_capacity(nrows * ncols);
+    for r in 0..nrows {
+        for c in cols.iter() {
+            data.push(c.values()[r]);
+        }
+    }
+    Array2::<T>::from_vec(Ix2::new([nrows, ncols]), data)
+}
+
+/// Flatten a dynamic-rank ferray array into a single 1-D Arrow
+/// primitive array. The shape is NOT preserved in the returned Arrow
+/// array — pass the shape alongside it (or use
+/// [`arrayd_from_arrow_flat`] with an explicit target shape to
+/// reshape on the round-trip).
+///
+/// # Errors
+/// - `FerrayError::InvalidDtype` if the element type has no Arrow equivalent.
+pub fn arrayd_to_arrow_flat<T>(
+    a: &ArrayD<T>,
+) -> Result<PrimitiveArray<T::ArrowType>, FerrayError>
+where
+    T: ArrowElement,
+    T::ArrowType: ArrowPrimitiveType<Native = T>,
+{
+    let _ = dtype_map::dtype_to_arrow(a.dtype())?;
+    let data: Vec<T> = match a.as_slice() {
+        Some(slice) => slice.to_vec(),
+        None => a.to_vec_flat(),
+    };
+    let buffer = Buffer::from_vec(data);
+    Ok(PrimitiveArray::<T::ArrowType>::new(buffer.into(), None))
+}
+
+/// Reshape a flat Arrow primitive array into a dynamic-rank ferray
+/// array with the given shape.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if `shape.iter().product()` does not
+///   match the Arrow array's length.
+pub fn arrayd_from_arrow_flat<T>(
+    arr: &PrimitiveArray<T::ArrowType>,
+    shape: &[usize],
+) -> Result<ArrayD<T>, FerrayError>
+where
+    T: ArrowElement,
+    T::ArrowType: ArrowPrimitiveType<Native = T>,
+{
+    if arr.null_count() > 0 {
+        return Err(FerrayError::invalid_value(format!(
+            "Arrow array contains {} null values; ferray arrays do not support nulls",
+            arr.null_count()
+        )));
+    }
+    let arrow_dt = arr.data_type();
+    let ferray_dt = dtype_map::arrow_to_dtype(arrow_dt)?;
+    if ferray_dt != T::dtype() {
+        return Err(FerrayError::invalid_dtype(format!(
+            "Arrow dtype {arrow_dt:?} maps to ferray {ferray_dt}, but requested {}",
+            T::dtype()
+        )));
+    }
+    let expected: usize = shape.iter().product();
+    if arr.len() != expected {
+        return Err(FerrayError::shape_mismatch(format!(
+            "arrayd_from_arrow_flat: arrow length {} does not match shape {:?} (product {})",
+            arr.len(),
+            shape,
+            expected
+        )));
+    }
+    let data: Vec<T> = arr.values().iter().copied().collect();
+    ArrayD::<T>::from_vec(IxDyn::new(shape), data)
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -311,5 +485,92 @@ mod tests {
                 "bit mismatch at index {i}: {a} vs {b}"
             );
         }
+    }
+
+    // ----- 2-D and dynamic-rank interop (#549) -----
+
+    #[test]
+    fn array2_arrow_columns_roundtrip_f64() {
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let a = Array2::<f64>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
+
+        let cols = array2_to_arrow_columns(&a).unwrap();
+        // 3 columns of 2 rows each
+        assert_eq!(cols.len(), 3);
+        for c in &cols {
+            assert_eq!(c.len(), 2);
+        }
+        // Column 0: rows are elements [0] and [3]
+        assert_eq!(cols[0].values()[0], 1.0);
+        assert_eq!(cols[0].values()[1], 4.0);
+        // Column 2: elements [2] and [5]
+        assert_eq!(cols[2].values()[0], 3.0);
+        assert_eq!(cols[2].values()[1], 6.0);
+
+        let back = array2_from_arrow_columns::<f64>(&cols).unwrap();
+        assert_eq!(back.shape(), &[2, 3]);
+        assert_eq!(back.as_slice().unwrap(), &data[..]);
+    }
+
+    #[test]
+    fn array2_arrow_columns_roundtrip_i32() {
+        let data = vec![1i32, 2, 3, 4, 5, 6, 7, 8];
+        let a = Array2::<i32>::from_vec(Ix2::new([4, 2]), data.clone()).unwrap();
+        let cols = array2_to_arrow_columns(&a).unwrap();
+        assert_eq!(cols.len(), 2);
+        let back = array2_from_arrow_columns::<i32>(&cols).unwrap();
+        assert_eq!(back.shape(), &[4, 2]);
+        assert_eq!(back.as_slice().unwrap(), &data[..]);
+    }
+
+    #[test]
+    fn array2_from_arrow_columns_inconsistent_length_errors() {
+        let c0 = PrimitiveArray::<arrow::datatypes::Float64Type>::new(
+            Buffer::from_vec(vec![1.0_f64, 2.0, 3.0]).into(),
+            None,
+        );
+        let c1 = PrimitiveArray::<arrow::datatypes::Float64Type>::new(
+            Buffer::from_vec(vec![4.0_f64, 5.0]).into(),
+            None,
+        );
+        assert!(array2_from_arrow_columns::<f64>(&[c0, c1]).is_err());
+    }
+
+    #[test]
+    fn array2_from_arrow_columns_empty_is_empty() {
+        let cols: Vec<PrimitiveArray<arrow::datatypes::Float64Type>> = Vec::new();
+        let a = array2_from_arrow_columns::<f64>(&cols).unwrap();
+        assert_eq!(a.shape(), &[0, 0]);
+    }
+
+    #[test]
+    fn arrayd_flat_roundtrip() {
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let a = ArrayD::<f64>::from_vec(IxDyn::new(&[2, 2, 2]), data.clone()).unwrap();
+        let flat = arrayd_to_arrow_flat(&a).unwrap();
+        assert_eq!(flat.len(), 8);
+        let back = arrayd_from_arrow_flat::<f64>(&flat, &[2, 2, 2]).unwrap();
+        assert_eq!(back.shape(), &[2, 2, 2]);
+        assert_eq!(back.to_vec_flat(), data);
+    }
+
+    #[test]
+    fn arrayd_flat_reshape_to_different_rank() {
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let a = ArrayD::<f64>::from_vec(IxDyn::new(&[6]), data.clone()).unwrap();
+        let flat = arrayd_to_arrow_flat(&a).unwrap();
+        // Re-interpret the same 6 values as (2, 3).
+        let reshaped = arrayd_from_arrow_flat::<f64>(&flat, &[2, 3]).unwrap();
+        assert_eq!(reshaped.shape(), &[2, 3]);
+        assert_eq!(reshaped.to_vec_flat(), data);
+    }
+
+    #[test]
+    fn arrayd_from_arrow_flat_wrong_shape_errors() {
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let a = ArrayD::<f64>::from_vec(IxDyn::new(&[6]), data).unwrap();
+        let flat = arrayd_to_arrow_flat(&a).unwrap();
+        // 6 elements cannot reshape to (2, 4).
+        assert!(arrayd_from_arrow_flat::<f64>(&flat, &[2, 4]).is_err());
     }
 }

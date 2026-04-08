@@ -66,10 +66,17 @@ pub mod polars_conv;
 // Re-export the main conversion traits at crate root for ergonomics.
 
 #[cfg(feature = "arrow")]
-pub use arrow_conv::{FromArrow, FromArrowBool, ToArrow, ToArrowBool};
+pub use arrow_conv::{
+    FromArrow, FromArrowBool, ToArrow, ToArrowBool,
+    array2_from_arrow_columns, array2_to_arrow_columns, arrayd_from_arrow_flat,
+    arrayd_to_arrow_flat,
+};
 
 #[cfg(feature = "polars")]
-pub use polars_conv::{FromPolars, FromPolarsBool, ToPolars, ToPolarsBool};
+pub use polars_conv::{
+    FromPolars, FromPolarsBool, ToPolars, ToPolarsBool, array2_from_polars_dataframe,
+    array2_to_polars_dataframe,
+};
 
 #[cfg(feature = "python")]
 pub use numpy_conv::{AsFerray, IntoNumPy};

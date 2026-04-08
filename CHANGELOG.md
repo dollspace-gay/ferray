@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-03-07
 
 ### Added
+- ferray-numpy-interop: only supports 1D arrays for Arrow and Polars (#549)
 - ferray-ufunc: no mixed-type operations (type promotion at ufunc level) (#380)
 - ferray-autodiff: no integration with ferray-core — DualNumber can't be stored in Array (#534)
 - ferray-ufunc: no reduce/accumulate/outer/at/reduceat as generic ufunc methods (#381)

@@ -184,6 +184,119 @@ impl FromPolarsBool for Series {
 }
 
 // ---------------------------------------------------------------------------
+// 2-D interop via Polars DataFrame (#549)
+// ---------------------------------------------------------------------------
+//
+// A Polars `DataFrame` is a heterogeneous collection of named 1-D
+// `Series`. The natural 2-D ferray mapping is "one column of the array
+// per Series", which lets callers hand an `Array2<f64>` to a data
+// pipeline that expects a DataFrame without any intermediate pandas-
+// like shuffling.
+//
+// Only f32/f64/integer columns are supported here; mixed-dtype
+// DataFrames need a per-column cast on the caller side.
+
+use ferray_core::array::aliases::Array2;
+use ferray_core::dimension::Ix2;
+
+/// Convert an `Array2<T>` into a Polars [`DataFrame`] with one `Series`
+/// per column of the input array. The `column_names` slice must have
+/// exactly `a.shape()[1]` entries.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if `column_names.len() != ncols`.
+/// - `FerrayError::InvalidDtype` on dtype-map failure.
+pub fn array2_to_polars_dataframe<T>(
+    a: &Array2<T>,
+    column_names: &[&str],
+) -> Result<DataFrame, FerrayError>
+where
+    T: PolarsElement + Copy,
+    ChunkedArray<T::PolarsType>: IntoSeries,
+{
+    let shape = a.shape();
+    let (nrows, ncols) = (shape[0], shape[1]);
+    if column_names.len() != ncols {
+        return Err(FerrayError::shape_mismatch(format!(
+            "array2_to_polars_dataframe: got {} column names but array has {ncols} columns",
+            column_names.len()
+        )));
+    }
+    let _ = dtype_map::dtype_to_polars(a.dtype())?;
+
+    let mut columns: Vec<Column> = Vec::with_capacity(ncols);
+    for c in 0..ncols {
+        // Extract column c into a fresh Vec<T> in row order.
+        let mut col: Vec<T> = Vec::with_capacity(nrows);
+        for r in 0..nrows {
+            if let Some(slice) = a.as_slice() {
+                col.push(slice[r * ncols + c]);
+            } else {
+                col.push(*a.iter().nth(r * ncols + c).unwrap());
+            }
+        }
+        // Build the Column via Array1 → Series → Column.
+        let col_arr = Array1::<T>::from_vec(Ix1::new([nrows]), col)?;
+        let series = col_arr.to_polars_series(column_names[c])?;
+        columns.push(series.into_column());
+    }
+
+    DataFrame::new(columns)
+        .map_err(|e| FerrayError::invalid_value(format!("DataFrame::new failed: {e}")))
+}
+
+/// Convert a Polars [`DataFrame`] back into an `Array2<T>` by stacking
+/// its columns. Every column must have the same Polars dtype (which
+/// must match `T`), the same length, and contain no nulls.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if columns have different lengths.
+/// - `FerrayError::InvalidDtype` if any column's dtype doesn't match `T`.
+/// - `FerrayError::InvalidValue` if any column contains nulls.
+pub fn array2_from_polars_dataframe<T>(df: &DataFrame) -> Result<Array2<T>, FerrayError>
+where
+    T: PolarsElement + Copy,
+{
+    let ncols = df.width();
+    if ncols == 0 {
+        return Array2::<T>::from_vec(Ix2::new([0, 0]), Vec::new());
+    }
+    let nrows = df.height();
+
+    // Extract each column as a typed ChunkedArray, collecting into row-major order.
+    let mut per_col: Vec<Vec<T>> = Vec::with_capacity(ncols);
+    for col_series in df.get_columns() {
+        let series = col_series.as_materialized_series();
+        if series.null_count() > 0 {
+            return Err(FerrayError::invalid_value(format!(
+                "column '{}' contains {} null values; ferray arrays do not support nulls",
+                col_series.name(),
+                series.null_count()
+            )));
+        }
+        let ca = T::extract_ca(series)?;
+        let values: Vec<T> = ca.into_no_null_iter().collect();
+        if values.len() != nrows {
+            return Err(FerrayError::shape_mismatch(format!(
+                "column '{}' has length {} but DataFrame height is {nrows}",
+                col_series.name(),
+                values.len()
+            )));
+        }
+        per_col.push(values);
+    }
+
+    // Interleave into row-major order.
+    let mut data: Vec<T> = Vec::with_capacity(nrows * ncols);
+    for r in 0..nrows {
+        for c in &per_col {
+            data.push(c[r]);
+        }
+    }
+    Array2::<T>::from_vec(Ix2::new([nrows, ncols]), data)
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -331,5 +444,79 @@ mod tests {
         assert!(back_slice[0].is_nan(), "index 0 should still be NaN");
         assert_eq!(back_slice[1], 1.0);
         assert!(back_slice[2].is_nan(), "index 2 should still be NaN");
+    }
+
+    // ----- 2-D DataFrame interop (#549) -----
+
+    #[test]
+    fn array2_to_polars_dataframe_f64() {
+        // shape (3, 2) — 3 rows, 2 columns
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let a = Array2::<f64>::from_vec(Ix2::new([3, 2]), data).unwrap();
+        let df = array2_to_polars_dataframe(&a, &["x", "y"]).unwrap();
+        assert_eq!(df.width(), 2);
+        assert_eq!(df.height(), 3);
+        // Column "x" = rows[0] across all 3 rows = [1, 3, 5]
+        let col_x: Vec<f64> = df
+            .column("x")
+            .unwrap()
+            .as_materialized_series()
+            .f64()
+            .unwrap()
+            .into_no_null_iter()
+            .collect();
+        assert_eq!(col_x, vec![1.0, 3.0, 5.0]);
+        let col_y: Vec<f64> = df
+            .column("y")
+            .unwrap()
+            .as_materialized_series()
+            .f64()
+            .unwrap()
+            .into_no_null_iter()
+            .collect();
+        assert_eq!(col_y, vec![2.0, 4.0, 6.0]);
+    }
+
+    #[test]
+    fn array2_polars_dataframe_roundtrip_f64() {
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let a = Array2::<f64>::from_vec(Ix2::new([4, 2]), data.clone()).unwrap();
+        let df = array2_to_polars_dataframe(&a, &["c0", "c1"]).unwrap();
+        let back = array2_from_polars_dataframe::<f64>(&df).unwrap();
+        assert_eq!(back.shape(), &[4, 2]);
+        assert_eq!(back.as_slice().unwrap(), &data[..]);
+    }
+
+    #[test]
+    fn array2_polars_dataframe_roundtrip_i32() {
+        let data = vec![1i32, 2, 3, 4, 5, 6];
+        let a = Array2::<i32>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
+        let df = array2_to_polars_dataframe(&a, &["a", "b", "c"]).unwrap();
+        let back = array2_from_polars_dataframe::<i32>(&df).unwrap();
+        assert_eq!(back.shape(), &[2, 3]);
+        assert_eq!(back.as_slice().unwrap(), &data[..]);
+    }
+
+    #[test]
+    fn array2_to_polars_dataframe_wrong_column_count_errors() {
+        let a = Array2::<f64>::from_vec(Ix2::new([2, 3]), vec![0.0; 6]).unwrap();
+        // 3 columns but only 2 names provided.
+        assert!(array2_to_polars_dataframe(&a, &["x", "y"]).is_err());
+    }
+
+    #[test]
+    fn array2_from_polars_dataframe_empty_is_empty() {
+        let df = DataFrame::empty();
+        let a = array2_from_polars_dataframe::<f64>(&df).unwrap();
+        assert_eq!(a.shape(), &[0, 0]);
+    }
+
+    #[test]
+    fn array2_from_polars_dataframe_wrong_dtype_errors() {
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0];
+        let a = Array2::<f64>::from_vec(Ix2::new([2, 2]), data).unwrap();
+        let df = array2_to_polars_dataframe(&a, &["c0", "c1"]).unwrap();
+        // Request the wrong type on the way back.
+        assert!(array2_from_polars_dataframe::<i32>(&df).is_err());
     }
 }
