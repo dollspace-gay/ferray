@@ -3,11 +3,12 @@
   "display_id": 232,
   "title": "ferray-io: NpzFile eagerly loads all entries into memory",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nnpz/mod.rs L130-155: NumPy's NpzFile is lazy. Eager loading defeats named-access purpose.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:50:06.463892982Z",
-  "updated_at": "2026-03-25T15:50:10.419015457Z",
+  "updated_at": "2026-04-08T14:46:48.651639807Z",
+  "closed_at": "2026-04-08T14:46:48.651639807Z",
   "labels": [
     "refactor",
     "qa-audit"
