@@ -108,6 +108,55 @@ where
     binary_mixed_op(a, b, |x, s| x >> s)
 }
 
+/// Trait for integer types that expose `count_ones` (population count).
+///
+/// Implemented for every signed and unsigned integer width that
+/// `BitwiseOps` already covers, with `bool` mapping `true` -> 1 and
+/// `false` -> 0 to match NumPy's `np.bitwise_count(np.bool_(...))`
+/// behaviour. The output type is always `u32` since the largest
+/// possible popcount over a 128-bit input is 128.
+pub trait BitwiseCount {
+    /// Number of set bits in the value.
+    fn bitwise_count(self) -> u32;
+}
+
+macro_rules! impl_bitwise_count {
+    ($($ty:ty),*) => {
+        $(
+            impl BitwiseCount for $ty {
+                #[inline]
+                fn bitwise_count(self) -> u32 {
+                    self.count_ones()
+                }
+            }
+        )*
+    };
+}
+
+impl_bitwise_count!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128);
+
+impl BitwiseCount for bool {
+    #[inline]
+    fn bitwise_count(self) -> u32 {
+        u32::from(self)
+    }
+}
+
+/// Elementwise population count: number of set bits in each element.
+///
+/// Mirrors NumPy 2.0's `numpy.bitwise_count` (issue #396). Routes to
+/// the underlying integer's `count_ones` intrinsic, which compiles to
+/// `POPCNT` on x86 and the equivalent instruction on ARM/RISC-V where
+/// available.
+pub fn bitwise_count<T, D>(input: &Array<T, D>) -> FerrayResult<Array<u32, D>>
+where
+    T: Element + BitwiseCount + Copy,
+    D: Dimension,
+{
+    let data: Vec<u32> = input.iter().map(|&x| x.bitwise_count()).collect();
+    Array::from_vec(input.dim().clone(), data)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,6 +213,38 @@ mod tests {
         let a = arr1_u8(vec![0b0000_1111]);
         let r = invert(&a).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[0b1111_0000]);
+    }
+
+    // ----- bitwise_count (#396) -----
+
+    #[test]
+    fn test_bitwise_count_u8() {
+        let a = arr1_u8(vec![0u8, 1, 0b0000_1111, 0b1111_1111, 0b1010_0101]);
+        let r = bitwise_count(&a).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[0u32, 1, 4, 8, 4]);
+    }
+
+    #[test]
+    fn test_bitwise_count_i32_negative() {
+        // -1 as i32 is all-bits-set: 32 ones.
+        let a = arr1_i32(vec![-1, 0, 1, 7]);
+        let r = bitwise_count(&a).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[32u32, 0, 1, 3]);
+    }
+
+    #[test]
+    fn test_bitwise_count_u32() {
+        let a = arr1_u32(vec![0u32, 1, 0xFFFF_FFFF, 0xFF_00FF_00]);
+        let r = bitwise_count(&a).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[0u32, 1, 32, 16]);
+    }
+
+    #[test]
+    fn test_bitwise_count_bool() {
+        let n = 4;
+        let a = Array::from_vec(Ix1::new([n]), vec![true, false, true, true]).unwrap();
+        let r = bitwise_count(&a).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[1u32, 0, 1, 1]);
     }
 
     #[test]

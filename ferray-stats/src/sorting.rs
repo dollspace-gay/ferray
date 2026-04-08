@@ -267,7 +267,8 @@ where
 /// `a` must be a sorted 1-D array. For each value in `v`, find the index
 /// in `a` where it should be inserted. Returns u64 indices.
 ///
-/// Equivalent to `numpy.searchsorted`.
+/// Equivalent to `numpy.searchsorted` (without `sorter`). For an
+/// already-permuted view of an unsorted array, see [`searchsorted_with_sorter`].
 pub fn searchsorted<T>(
     a: &Array<T, Ix1>,
     v: &Array<T, Ix1>,
@@ -277,10 +278,67 @@ where
     T: Element + PartialOrd + Copy,
 {
     let sorted: Vec<T> = a.iter().copied().collect();
-    let values: Vec<T> = v.iter().copied().collect();
+    searchsorted_inner(&sorted, v, side)
+}
 
-    let mut result = Vec::with_capacity(values.len());
-    for &val in &values {
+/// Find indices where elements should be inserted to maintain order,
+/// using `sorter` as a permutation that would sort `a`.
+///
+/// Mirrors `numpy.searchsorted(a, v, side, sorter)`. `a` may be in any
+/// order; `sorter[i]` gives the index in `a` of the i-th smallest
+/// element (i.e. `sorter` is the output of an `argsort` over `a`). The
+/// returned indices are positions into the **sorted** view, matching
+/// NumPy's behaviour. See issue #473.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if `sorter.len() != a.len()`.
+/// - `FerrayError::InvalidValue` if `sorter` contains an out-of-range index.
+pub fn searchsorted_with_sorter<T>(
+    a: &Array<T, Ix1>,
+    v: &Array<T, Ix1>,
+    side: Side,
+    sorter: &Array<u64, Ix1>,
+) -> FerrayResult<Array<u64, Ix1>>
+where
+    T: Element + PartialOrd + Copy,
+{
+    let n = a.size();
+    if sorter.size() != n {
+        return Err(FerrayError::shape_mismatch(format!(
+            "searchsorted: sorter length {} does not match array length {}",
+            sorter.size(),
+            n
+        )));
+    }
+
+    // Materialize `a` once and gather it in sorter order.
+    let a_data: Vec<T> = a.iter().copied().collect();
+    let mut sorted: Vec<T> = Vec::with_capacity(n);
+    for &idx in sorter.iter() {
+        let i = idx as usize;
+        if i >= n {
+            return Err(FerrayError::invalid_value(format!(
+                "searchsorted: sorter index {i} out of range for array of length {n}"
+            )));
+        }
+        sorted.push(a_data[i]);
+    }
+
+    searchsorted_inner(&sorted, v, side)
+}
+
+/// Shared binary-search core used by both [`searchsorted`] and
+/// [`searchsorted_with_sorter`].
+fn searchsorted_inner<T>(
+    sorted: &[T],
+    v: &Array<T, Ix1>,
+    side: Side,
+) -> FerrayResult<Array<u64, Ix1>>
+where
+    T: Element + PartialOrd + Copy,
+{
+    let mut result = Vec::with_capacity(v.size());
+    for &val in v.iter() {
         let idx = match side {
             Side::Left => sorted.partition_point(|x| {
                 x.partial_cmp(&val).unwrap_or(std::cmp::Ordering::Less) == std::cmp::Ordering::Less
@@ -292,7 +350,6 @@ where
         };
         result.push(idx as u64);
     }
-
     let n = result.len();
     Array::from_vec(Ix1::new([n]), result)
 }
@@ -387,6 +444,39 @@ mod tests {
         let idx = searchsorted(&a, &v, Side::Right).unwrap();
         let data: Vec<u64> = idx.iter().copied().collect();
         assert_eq!(data, vec![2, 4]);
+    }
+
+    // ----- searchsorted_with_sorter (#473) -----
+
+    #[test]
+    fn test_searchsorted_with_sorter_matches_pre_sorted() {
+        // Unsorted `a` plus its argsort gives the same indices as
+        // calling searchsorted on the pre-sorted array.
+        let unsorted =
+            Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![3.0, 1.0, 5.0, 2.0, 4.0]).unwrap();
+        // sorter so that unsorted[sorter] = [1.0, 2.0, 3.0, 4.0, 5.0]
+        let sorter = Array::<u64, Ix1>::from_vec(Ix1::new([5]), vec![1, 3, 0, 4, 2]).unwrap();
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![2.5, 1.0, 5.5]).unwrap();
+
+        let idx = searchsorted_with_sorter(&unsorted, &v, Side::Left, &sorter).unwrap();
+        assert_eq!(idx.iter().copied().collect::<Vec<_>>(), vec![2, 0, 5]);
+    }
+
+    #[test]
+    fn test_searchsorted_with_sorter_length_mismatch_errors() {
+        let a =
+            Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![3.0, 1.0, 5.0, 2.0]).unwrap();
+        let bad_sorter = Array::<u64, Ix1>::from_vec(Ix1::new([3]), vec![1, 3, 0]).unwrap();
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![2.5]).unwrap();
+        assert!(searchsorted_with_sorter(&a, &v, Side::Left, &bad_sorter).is_err());
+    }
+
+    #[test]
+    fn test_searchsorted_with_sorter_out_of_range_errors() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![3.0, 1.0, 5.0]).unwrap();
+        let bad_sorter = Array::<u64, Ix1>::from_vec(Ix1::new([3]), vec![1, 99, 0]).unwrap();
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![2.5]).unwrap();
+        assert!(searchsorted_with_sorter(&a, &v, Side::Left, &bad_sorter).is_err());
     }
 
     #[test]

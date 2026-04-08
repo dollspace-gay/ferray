@@ -50,7 +50,7 @@ pub use histogram::{
 };
 
 // Sorting
-pub use sorting::{Side, SortKind, argsort, searchsorted, sort};
+pub use sorting::{Side, SortKind, argsort, searchsorted, searchsorted_with_sorter, sort};
 
 // Searching
 pub use searching::{UniqueResult, count_nonzero, nonzero, unique, where_};

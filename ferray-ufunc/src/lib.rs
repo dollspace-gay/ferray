@@ -71,8 +71,8 @@ pub use ops::complex::{abs, angle, conj, conjugate, imag, real};
 
 // Bitwise
 pub use ops::bitwise::{
-    BitwiseOps, ShiftOps, bitwise_and, bitwise_not, bitwise_or, bitwise_xor, invert, left_shift,
-    right_shift,
+    BitwiseCount, BitwiseOps, ShiftOps, bitwise_and, bitwise_count, bitwise_not, bitwise_or,
+    bitwise_xor, invert, left_shift, right_shift,
 };
 
 // Comparison
