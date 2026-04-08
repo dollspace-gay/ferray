@@ -27,6 +27,7 @@ pub mod ops;
 pub mod parallel;
 pub mod promoted;
 pub mod ufunc_methods;
+pub mod ufunc_object;
 
 // ---------------------------------------------------------------------------
 // Public re-exports — flat namespace for ergonomic use
@@ -97,6 +98,11 @@ pub use ufunc_methods::{accumulate_axis, at, outer as ufunc_outer, reduce_axis};
 // Uses ferray-core's `Promoted` trait to resolve the output type at
 // compile time and `PromoteTo` to cast both operands.
 pub use promoted::{add_promoted, divide_promoted, multiply_promoted, subtract_promoted};
+
+// First-class ufunc objects: `add_ufunc().reduce(arr, 0)` etc. The
+// [`Ufunc`] struct wraps any binary op + identity and exposes the
+// NumPy ufunc methods (.call / .reduce / .accumulate / .outer / .at).
+pub use ufunc_object::{Ufunc, add_ufunc, divide_ufunc, multiply_ufunc, subtract_ufunc};
 
 // f16 variants (feature-gated)
 #[cfg(feature = "f16")]
