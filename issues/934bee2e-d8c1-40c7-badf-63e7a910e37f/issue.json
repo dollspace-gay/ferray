@@ -3,11 +3,12 @@
   "display_id": 210,
   "title": "ferray-core-macros: no compile-fail tests for macro error paths",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNo trybuild tests. Error paths (non-repr(C), enum derive, invalid syntax) all untested.",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:46:41.351952640Z",
-  "updated_at": "2026-03-25T15:46:54.232130149Z",
+  "updated_at": "2026-04-08T00:50:29.581573204Z",
+  "closed_at": "2026-04-08T00:50:29.581573204Z",
   "labels": [
     "bug",
     "qa-audit"
