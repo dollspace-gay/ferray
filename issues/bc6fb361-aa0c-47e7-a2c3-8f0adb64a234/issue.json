@@ -3,11 +3,12 @@
   "display_id": 148,
   "title": "ferray-ufunc: arr1 helper duplicated in every test module",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\n~10 test modules have identical arr1 function. Extract to shared test helper.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:35:48.041232025Z",
-  "updated_at": "2026-03-25T15:36:17.184797317Z",
+  "updated_at": "2026-04-08T04:52:21.122429192Z",
+  "closed_at": "2026-04-08T04:52:21.122429192Z",
   "labels": [
     "refactor",
     "qa-audit"
