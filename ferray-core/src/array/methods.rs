@@ -1,10 +1,12 @@
 // ferray-core: Closure-based operations (REQ-38)
 //   mapv, mapv_inplace, zip_mut_with, fold_axis
+//   as_standard_layout, as_fortran_layout (#351)
 
 use crate::dimension::{Axis, Dimension, IxDyn};
 use crate::dtype::Element;
 use crate::error::{FerrayError, FerrayResult};
 
+use super::cow::CowArray;
 use super::owned::Array;
 use super::view::ArrayView;
 
@@ -104,6 +106,55 @@ impl<T: Element, D: Dimension> Array<T, D> {
         let dyn_inner = self.inner.into_dyn();
         Array::<T, IxDyn>::from_ndarray(dyn_inner)
     }
+
+    /// Return a C-contiguous (row-major) version of this array, copying
+    /// only if the current layout is not already C-contiguous (#351).
+    ///
+    /// Equivalent to NumPy's `np.ascontiguousarray`. The returned
+    /// [`CowArray`] borrows from `self` when no copy is needed, so this
+    /// is a zero-cost guard before BLAS calls, SIMD loops, or FFI that
+    /// require row-major storage.
+    pub fn as_standard_layout(&self) -> CowArray<'_, T, D> {
+        // Delegate to the inner ndarray check: is_standard_layout returns
+        // true for C-contiguous arrays, including the 1-D / size-0 / size-1
+        // edge cases where the crate's tri-state `MemoryLayout` enum can't
+        // represent "both C and F at once".
+        if self.inner.is_standard_layout() {
+            CowArray::Borrowed(self.view())
+        } else {
+            // `iter()` walks in logical (row-major) order regardless of
+            // the underlying stride pattern, so collecting produces a
+            // C-contiguous flat buffer.
+            let data: Vec<T> = self.iter().cloned().collect();
+            let owned = Array::from_vec(self.dim().clone(), data)
+                .expect("from_vec: data length was just built from self.iter()");
+            CowArray::Owned(owned)
+        }
+    }
+
+    /// Return a Fortran-contiguous (column-major) version of this array,
+    /// copying only if the current layout is not already F-contiguous (#351).
+    ///
+    /// Equivalent to NumPy's `np.asfortranarray`. The returned
+    /// [`CowArray`] borrows from `self` when no copy is needed. 1-D arrays
+    /// are borrowed because they are trivially both C- and F-contiguous.
+    pub fn as_fortran_layout(&self) -> CowArray<'_, T, D> {
+        // The transpose of an F-contiguous array is C-contiguous, so
+        // `t().is_standard_layout()` is the canonical F-contig check and
+        // correctly handles 1-D / size-0 / size-1 edge cases.
+        if self.inner.t().is_standard_layout() {
+            CowArray::Borrowed(self.view())
+        } else {
+            // `t()` reverses all axes; iterating the reversed view in
+            // logical (row-major) order yields the original elements in
+            // column-major order, which is exactly what `from_vec_f`
+            // expects for Fortran-layout storage.
+            let data: Vec<T> = self.inner.t().iter().cloned().collect();
+            let owned = Array::from_vec_f(self.dim().clone(), data)
+                .expect("from_vec_f: data length was just built from self.inner.t().iter()");
+            CowArray::Owned(owned)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +194,7 @@ impl<T: Element, D: Dimension> ArrayView<'_, T, D> {
 mod tests {
     use super::*;
     use crate::dimension::{Ix1, Ix2};
+    use crate::layout::MemoryLayout;
 
     #[test]
     fn mapv_double() {
@@ -173,6 +225,85 @@ mod tests {
         let mut a = Array::<f64, Ix1>::zeros(Ix1::new([3])).unwrap();
         let b = Array::<f64, Ix1>::zeros(Ix1::new([5])).unwrap();
         assert!(a.zip_mut_with(&b, |_, _| {}).is_err());
+    }
+
+    // ---- #351: as_standard_layout / as_fortran_layout ----
+
+    #[test]
+    fn as_standard_layout_borrows_when_already_c_contig() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
+        assert_eq!(a.layout(), MemoryLayout::C);
+        let cow = a.as_standard_layout();
+        assert!(cow.is_borrowed(), "C-contig input must borrow, not copy");
+        assert_eq!(cow.shape(), &[2, 3]);
+        assert_eq!(cow.layout(), MemoryLayout::C);
+    }
+
+    #[test]
+    fn as_standard_layout_copies_f_contig_input_to_c() {
+        let a =
+            Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+                .unwrap();
+        // Logical shape is (2, 3), but storage is F-order.
+        assert_eq!(a.layout(), MemoryLayout::Fortran);
+        let cow = a.as_standard_layout();
+        assert!(cow.is_owned(), "F-contig input must be copied to C-contig");
+        assert_eq!(cow.shape(), &[2, 3]);
+        assert_eq!(cow.layout(), MemoryLayout::C);
+        // Logical element order must be preserved.
+        let owned = cow.into_owned();
+        assert_eq!(owned.as_slice().unwrap(), &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    fn as_fortran_layout_borrows_when_already_f_contig() {
+        let a =
+            Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+                .unwrap();
+        assert_eq!(a.layout(), MemoryLayout::Fortran);
+        let cow = a.as_fortran_layout();
+        assert!(cow.is_borrowed(), "F-contig input must borrow, not copy");
+        assert_eq!(cow.shape(), &[2, 3]);
+        assert_eq!(cow.layout(), MemoryLayout::Fortran);
+    }
+
+    #[test]
+    fn as_fortran_layout_copies_c_contig_input_to_f() {
+        // [[1,2,3],[4,5,6]] — C-contig logical layout.
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
+        assert_eq!(a.layout(), MemoryLayout::C);
+        let cow = a.as_fortran_layout();
+        assert!(cow.is_owned(), "C-contig input must be copied to F-contig");
+        assert_eq!(cow.shape(), &[2, 3]);
+        assert_eq!(cow.layout(), MemoryLayout::Fortran);
+        // Logical element values by row-major walk must match the original.
+        let owned = cow.into_owned();
+        let logical: Vec<f64> = owned.iter().copied().collect();
+        assert_eq!(logical, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    fn layout_roundtrip_preserves_values() {
+        // C -> F -> C returns the same logical contents.
+        let original =
+            Array::<i32, Ix2>::from_vec(Ix2::new([3, 4]), (0..12i32).collect()).unwrap();
+        let f_cow = original.as_fortran_layout();
+        let f_owned = f_cow.into_owned();
+        assert_eq!(f_owned.layout(), MemoryLayout::Fortran);
+        let c_cow = f_owned.as_standard_layout();
+        let c_owned = c_cow.into_owned();
+        assert_eq!(c_owned.layout(), MemoryLayout::C);
+        assert_eq!(c_owned.as_slice().unwrap(), original.as_slice().unwrap());
+    }
+
+    #[test]
+    fn as_standard_layout_1d_always_borrows() {
+        // Any 1-D array is both C and F contiguous; must borrow.
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
+        assert!(a.as_standard_layout().is_borrowed());
+        assert!(a.as_fortran_layout().is_borrowed());
     }
 
     #[test]
