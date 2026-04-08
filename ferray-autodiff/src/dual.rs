@@ -243,6 +243,121 @@ impl<T: Float> Rem<T> for DualNumber<T> {
 }
 
 // ---------------------------------------------------------------------------
+// Arithmetic: scalar T op DualNumber (#184)
+//
+// Without these impls, `2.0 * x` doesn't compile when `x: DualNumber`
+// because only `DualNumber * T` (not `T * DualNumber`) is defined.
+// Rust's orphan rules allow us to implement `Add<DualNumber<T>> for T`
+// etc. only for concrete T; we can't do a blanket impl. But Float
+// covers f32 and f64 which are the types users actually write. For
+// the non-commutative Sub and Div, the derivative flips sign / uses
+// the quotient rule respectively.
+// ---------------------------------------------------------------------------
+
+/// Newtype macro for T op DualNumber<T> where op is commutative.
+macro_rules! impl_scalar_lhs {
+    (Add, add) => {
+        impl<T: Float> Add<DualNumber<T>> for f64 {
+            type Output = DualNumber<T>;
+            #[inline]
+            fn add(self, rhs: DualNumber<T>) -> DualNumber<T> {
+                DualNumber {
+                    real: T::from(self).unwrap() + rhs.real,
+                    dual: rhs.dual,
+                }
+            }
+        }
+        impl<T: Float> Add<DualNumber<T>> for f32 {
+            type Output = DualNumber<T>;
+            #[inline]
+            fn add(self, rhs: DualNumber<T>) -> DualNumber<T> {
+                DualNumber {
+                    real: T::from(self).unwrap() + rhs.real,
+                    dual: rhs.dual,
+                }
+            }
+        }
+    };
+    (Mul, mul) => {
+        impl<T: Float> Mul<DualNumber<T>> for f64 {
+            type Output = DualNumber<T>;
+            #[inline]
+            fn mul(self, rhs: DualNumber<T>) -> DualNumber<T> {
+                let s = T::from(self).unwrap();
+                DualNumber {
+                    real: s * rhs.real,
+                    dual: s * rhs.dual,
+                }
+            }
+        }
+        impl<T: Float> Mul<DualNumber<T>> for f32 {
+            type Output = DualNumber<T>;
+            #[inline]
+            fn mul(self, rhs: DualNumber<T>) -> DualNumber<T> {
+                let s = T::from(self).unwrap();
+                DualNumber {
+                    real: s * rhs.real,
+                    dual: s * rhs.dual,
+                }
+            }
+        }
+    };
+    (Sub, sub) => {
+        impl<T: Float> Sub<DualNumber<T>> for f64 {
+            type Output = DualNumber<T>;
+            #[inline]
+            fn sub(self, rhs: DualNumber<T>) -> DualNumber<T> {
+                DualNumber {
+                    real: T::from(self).unwrap() - rhs.real,
+                    dual: -rhs.dual,
+                }
+            }
+        }
+        impl<T: Float> Sub<DualNumber<T>> for f32 {
+            type Output = DualNumber<T>;
+            #[inline]
+            fn sub(self, rhs: DualNumber<T>) -> DualNumber<T> {
+                DualNumber {
+                    real: T::from(self).unwrap() - rhs.real,
+                    dual: -rhs.dual,
+                }
+            }
+        }
+    };
+    (Div, div) => {
+        impl<T: Float> Div<DualNumber<T>> for f64 {
+            type Output = DualNumber<T>;
+            #[inline]
+            fn div(self, rhs: DualNumber<T>) -> DualNumber<T> {
+                let s = T::from(self).unwrap();
+                let r2 = rhs.real * rhs.real;
+                DualNumber {
+                    real: s / rhs.real,
+                    dual: -s * rhs.dual / r2,
+                }
+            }
+        }
+        impl<T: Float> Div<DualNumber<T>> for f32 {
+            type Output = DualNumber<T>;
+            #[inline]
+            fn div(self, rhs: DualNumber<T>) -> DualNumber<T> {
+                let s = T::from(self).unwrap();
+                let r2 = rhs.real * rhs.real;
+                DualNumber {
+                    real: s / rhs.real,
+                    dual: -s * rhs.dual / r2,
+                }
+            }
+        }
+    };
+}
+
+impl_scalar_lhs!(Add, add);
+impl_scalar_lhs!(Mul, mul);
+impl_scalar_lhs!(Sub, sub);
+impl_scalar_lhs!(Div, div);
+
+// ---------------------------------------------------------------------------
 // Compound assignment: DualNumber op= DualNumber / scalar T
 //
 // Mirrors the existing `Add`/`Sub`/`Mul`/`Div` impls so accumulation
@@ -315,5 +430,21 @@ impl<T: Float> PartialOrd for DualNumber<T> {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.real.partial_cmp(&other.real)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Iterator traits: Sum / Product (#302)
+// ---------------------------------------------------------------------------
+
+impl<T: Float> std::iter::Sum for DualNumber<T> {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::constant(T::zero()), |acc, x| acc + x)
+    }
+}
+
+impl<T: Float> std::iter::Product for DualNumber<T> {
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::constant(T::one()), |acc, x| acc * x)
     }
 }

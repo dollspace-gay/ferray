@@ -223,4 +223,47 @@ proptest! {
             x, d
         );
     }
+
+    // --- Unique tests moved from src/tests.rs internal proptests (#299) ---
+
+    // 16. Derivative of a constant is zero
+    #[test]
+    fn prop_derivative_of_constant_is_zero(c in -100.0..100.0_f64) {
+        let d = derivative(|_x| DualNumber::constant(c), 1.0_f64);
+        prop_assert!(approx_eq(d, 0.0));
+    }
+
+    // 17. d/dx x = 1
+    #[test]
+    fn prop_derivative_of_identity_is_one(x in -100.0..100.0_f64) {
+        let d = derivative(|v| v, x);
+        prop_assert!(approx_eq(d, 1.0));
+    }
+
+    // 18. d/dx (a*x + b) = a
+    #[test]
+    fn prop_derivative_linear(a in -10.0..10.0_f64, b in -10.0..10.0_f64, x in -10.0..10.0_f64) {
+        let d = derivative(|v| v * DualNumber::constant(a) + DualNumber::constant(b), x);
+        prop_assert!(approx_eq(d, a), "d/dx ({a}*x + {b}) at x={x}: got {d}, expected {a}");
+    }
+
+    // 19. T op DualNumber (#184) — verify 2.0 * x == x * 2.0
+    #[test]
+    fn prop_scalar_mul_commutative(x in -10.0..10.0_f64) {
+        let d1 = derivative(|v| 2.0 * v, x);
+        let d2 = derivative(|v| v * DualNumber::constant(2.0), x);
+        prop_assert!(approx_eq(d1, d2));
+    }
+
+    // 20. Sum trait works (#302)
+    #[test]
+    fn prop_sum_matches_fold(n in 1usize..10) {
+        let vals: Vec<DualNumber<f64>> = (0..n)
+            .map(|i| DualNumber::new(i as f64, 1.0))
+            .collect();
+        let sum: DualNumber<f64> = vals.iter().copied().sum();
+        let expected_real = (0..n).map(|i| i as f64).sum::<f64>();
+        prop_assert!(approx_eq(sum.real, expected_real));
+        prop_assert!(approx_eq(sum.dual, n as f64));
+    }
 }

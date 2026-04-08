@@ -59,6 +59,11 @@ impl<T: Float> DualNumber<T> {
     }
 
     /// `exp2(x) = 2^x`. Derivative: `2^x * ln(2)`.
+    ///
+    /// Note: `ln(2)` is computed at runtime via `T::from(2.0).unwrap().ln()`.
+    /// For `T = f64/f32` the compiler constant-folds this; for nested
+    /// `DualNumber<DualNumber<T>>` or future custom float types it may
+    /// not, adding a small per-call overhead (#546).
     #[inline]
     pub fn exp2(self) -> Self {
         let e = self.real.exp2();
@@ -144,6 +149,15 @@ impl<T: Float> DualNumber<T> {
     }
 
     /// Absolute value. Derivative: `signum(x)`.
+    ///
+    /// # Subgradient at zero
+    ///
+    /// `|x|` is not differentiable at `x = 0`. This implementation
+    /// uses `signum(0) = 0` as the subgradient convention, matching
+    /// PyTorch's `torch.abs` and JAX's `jnp.abs` behaviour (both
+    /// produce a zero gradient at 0). TensorFlow uses the same
+    /// convention. The alternative — returning NaN at 0 — would
+    /// silently poison downstream computations (#545).
     #[inline]
     pub fn abs(self) -> Self {
         Self {
