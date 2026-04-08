@@ -34,6 +34,7 @@ fn oracle_ifft() {
 #[test]
 fn oracle_rfft() {
     let suite = load_fixture(&fft_path("rfft.json"));
+    let mut tested = 0usize;
     for case in &suite.test_cases {
         let input = &case.inputs["x"];
         let dtype = get_dtype(input);
@@ -55,12 +56,21 @@ fn oracle_rfft() {
                 .max(ferray_test_oracle::MIN_ULP_TOLERANCE),
             &case.name,
         );
+        tested += 1;
     }
+    // Guard against silently passing because every fixture case got
+    // skipped — see issue #231 (oracle tests skipped non-f64 dtypes
+    // without telling anyone). At least one f64 case must run.
+    assert!(
+        tested > 0,
+        "oracle_rfft: no f64 fixture cases were tested — is rfft.json empty or all complex/f32?"
+    );
 }
 
 #[test]
 fn oracle_irfft() {
     let suite = load_fixture(&fft_path("irfft.json"));
+    let mut tested = 0usize;
     for case in &suite.test_cases {
         let input = &case.inputs["x"];
         let dtype = get_dtype(input);
@@ -86,7 +96,12 @@ fn oracle_irfft() {
                 .max(ferray_test_oracle::MIN_ULP_TOLERANCE),
             &case.name,
         );
+        tested += 1;
     }
+    assert!(
+        tested > 0,
+        "oracle_irfft: no complex128 fixture cases were tested (#231)"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +151,7 @@ fn oracle_rfftfreq() {
 #[test]
 fn oracle_fftshift() {
     let suite = load_fixture(&fft_path("fftshift.json"));
+    let mut tested = 0usize;
     for case in &suite.test_cases {
         let input = &case.inputs["x"];
         if should_skip_f64(input) {
@@ -151,12 +167,15 @@ fn oracle_fftshift() {
                 .max(ferray_test_oracle::MIN_ULP_TOLERANCE),
             &case.name,
         );
+        tested += 1;
     }
+    assert!(tested > 0, "oracle_fftshift: no f64 cases tested (#231)");
 }
 
 #[test]
 fn oracle_ifftshift() {
     let suite = load_fixture(&fft_path("ifftshift.json"));
+    let mut tested = 0usize;
     for case in &suite.test_cases {
         let input = &case.inputs["x"];
         if should_skip_f64(input) {
@@ -172,7 +191,9 @@ fn oracle_ifftshift() {
                 .max(ferray_test_oracle::MIN_ULP_TOLERANCE),
             &case.name,
         );
+        tested += 1;
     }
+    assert!(tested > 0, "oracle_ifftshift: no f64 cases tested (#231)");
 }
 
 // ---------------------------------------------------------------------------

@@ -444,6 +444,23 @@ mod tests {
     }
 
     #[test]
+    fn fft_length_one() {
+        // FFT of a length-1 array is the identity (#229).
+        let a = make_1d(vec![c(7.0, -2.0)]);
+        let result = fft(&a, None, None, FftNorm::Backward).unwrap();
+        assert_eq!(result.shape(), &[1]);
+        let v = result.iter().next().unwrap();
+        assert!((v.re - 7.0).abs() < 1e-12);
+        assert!((v.im + 2.0).abs() < 1e-12);
+
+        // Roundtrip should also be exact for length 1.
+        let recovered = ifft(&result, None, None, FftNorm::Backward).unwrap();
+        let r = recovered.iter().next().unwrap();
+        assert!((r.re - 7.0).abs() < 1e-12);
+        assert!((r.im + 2.0).abs() < 1e-12);
+    }
+
+    #[test]
     fn fft_negative_axis_matches_explicit() {
         // axis=-1 on a 2-D array should match axis=1 (#434).
         use ferray_core::dimension::Ix2;
