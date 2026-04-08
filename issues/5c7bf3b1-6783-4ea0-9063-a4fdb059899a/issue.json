@@ -3,11 +3,12 @@
   "display_id": 264,
   "title": "ferray-random: size=0 returns error instead of empty array",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNumPy allows size=0. Deviation undocumented.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:56:06.797265040Z",
-  "updated_at": "2026-03-25T15:56:12.720070182Z",
+  "updated_at": "2026-04-08T14:44:12.582433056Z",
+  "closed_at": "2026-04-08T14:44:12.582433056Z",
   "labels": [
     "bug",
     "qa-audit"
