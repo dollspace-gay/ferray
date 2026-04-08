@@ -15,6 +15,7 @@ pub mod owned;
 pub mod reductions;
 #[cfg(feature = "serde")]
 mod serde_impl;
+pub mod sort;
 pub mod view;
 pub mod view_mut;
 
