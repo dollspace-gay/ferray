@@ -26,7 +26,7 @@ use ferray_core::dtype::promotion::{Promoted, PromoteTo};
 use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
-use crate::helpers::binary_float_op;
+use crate::helpers::binary_elementwise_op;
 
 /// Cast every element of `a` from `A` to the target type `Out`, producing
 /// a fresh array. This is the tiny bridge that lets a mixed-type op
@@ -80,7 +80,7 @@ where
     }
     let a_cast = cast_array::<A, <A as Promoted<B>>::Output, D>(a)?;
     let b_cast = cast_array::<B, <A as Promoted<B>>::Output, D>(b)?;
-    binary_float_op(&a_cast, &b_cast, |x, y| x + y)
+    binary_elementwise_op(&a_cast, &b_cast, |x, y| x + y)
 }
 
 /// Elementwise subtraction with NumPy-style type promotion.
@@ -103,7 +103,7 @@ where
     }
     let a_cast = cast_array::<A, <A as Promoted<B>>::Output, D>(a)?;
     let b_cast = cast_array::<B, <A as Promoted<B>>::Output, D>(b)?;
-    binary_float_op(&a_cast, &b_cast, |x, y| x - y)
+    binary_elementwise_op(&a_cast, &b_cast, |x, y| x - y)
 }
 
 /// Elementwise multiplication with NumPy-style type promotion.
@@ -126,7 +126,7 @@ where
     }
     let a_cast = cast_array::<A, <A as Promoted<B>>::Output, D>(a)?;
     let b_cast = cast_array::<B, <A as Promoted<B>>::Output, D>(b)?;
-    binary_float_op(&a_cast, &b_cast, |x, y| x * y)
+    binary_elementwise_op(&a_cast, &b_cast, |x, y| x * y)
 }
 
 /// Elementwise division with NumPy-style type promotion.
@@ -149,7 +149,7 @@ where
     }
     let a_cast = cast_array::<A, <A as Promoted<B>>::Output, D>(a)?;
     let b_cast = cast_array::<B, <A as Promoted<B>>::Output, D>(b)?;
-    binary_float_op(&a_cast, &b_cast, |x, y| x / y)
+    binary_elementwise_op(&a_cast, &b_cast, |x, y| x / y)
 }
 
 #[cfg(test)]

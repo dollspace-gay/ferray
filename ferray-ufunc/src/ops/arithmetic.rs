@@ -18,7 +18,7 @@ use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
 use crate::helpers::{
-    binary_broadcast_op, binary_float_op, binary_float_op_into, unary_float_op,
+    binary_broadcast_op, binary_elementwise_op, binary_elementwise_op_into, unary_float_op,
     unary_float_op_compute, unary_float_op_into,
 };
 
@@ -32,7 +32,7 @@ where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| x + y)
+    binary_elementwise_op(a, b, |x, y| x + y)
 }
 
 /// In-place elementwise addition, equivalent to NumPy's
@@ -53,7 +53,7 @@ where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
 {
-    binary_float_op_into(a, b, out, "add", |x, y| x + y)
+    binary_elementwise_op_into(a, b, out, "add", |x, y| x + y)
 }
 
 /// Elementwise subtraction with NumPy broadcasting.
@@ -62,7 +62,7 @@ where
     T: Element + std::ops::Sub<Output = T> + Copy,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| x - y)
+    binary_elementwise_op(a, b, |x, y| x - y)
 }
 
 /// In-place subtraction — the `_into` counterpart of [`subtract`].
@@ -75,7 +75,7 @@ where
     T: Element + std::ops::Sub<Output = T> + Copy,
     D: Dimension,
 {
-    binary_float_op_into(a, b, out, "subtract", |x, y| x - y)
+    binary_elementwise_op_into(a, b, out, "subtract", |x, y| x - y)
 }
 
 /// Elementwise multiplication with NumPy broadcasting.
@@ -84,7 +84,7 @@ where
     T: Element + std::ops::Mul<Output = T> + Copy,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| x * y)
+    binary_elementwise_op(a, b, |x, y| x * y)
 }
 
 /// In-place multiplication — the `_into` counterpart of [`multiply`].
@@ -97,7 +97,7 @@ where
     T: Element + std::ops::Mul<Output = T> + Copy,
     D: Dimension,
 {
-    binary_float_op_into(a, b, out, "multiply", |x, y| x * y)
+    binary_elementwise_op_into(a, b, out, "multiply", |x, y| x * y)
 }
 
 /// Elementwise division with NumPy broadcasting.
@@ -106,7 +106,7 @@ where
     T: Element + std::ops::Div<Output = T> + Copy,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| x / y)
+    binary_elementwise_op(a, b, |x, y| x / y)
 }
 
 /// In-place division — the `_into` counterpart of [`divide`].
@@ -119,7 +119,7 @@ where
     T: Element + std::ops::Div<Output = T> + Copy,
     D: Dimension,
 {
-    binary_float_op_into(a, b, out, "divide", |x, y| x / y)
+    binary_elementwise_op_into(a, b, out, "divide", |x, y| x / y)
 }
 
 /// Alias for [`divide`] — true division (float).
@@ -128,7 +128,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| x / y)
+    binary_elementwise_op(a, b, |x, y| x / y)
 }
 
 /// Floor division: floor(a / b).
@@ -137,7 +137,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| (x / y).floor())
+    binary_elementwise_op(a, b, |x, y| (x / y).floor())
 }
 
 /// Elementwise power: a^b.
@@ -146,7 +146,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| x.powf(y))
+    binary_elementwise_op(a, b, |x, y| x.powf(y))
 }
 
 /// Elementwise remainder (Python-style modulo).
@@ -156,7 +156,7 @@ where
     D: Dimension,
 {
     let z = <T as Element>::zero();
-    binary_float_op(a, b, |x, y| {
+    binary_elementwise_op(a, b, |x, y| {
         let r = x % y;
         // Python/NumPy mod: result has same sign as divisor
         if (r < z && y > z) || (r > z && y < z) {
@@ -182,7 +182,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| x % y)
+    binary_elementwise_op(a, b, |x, y| x % y)
 }
 
 /// Return `(floor_divide, remainder)` as a tuple of arrays, with broadcasting.
@@ -418,7 +418,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(x, h0, |xi, h0i| {
+    binary_elementwise_op(x, h0, |xi, h0i| {
         if xi.is_nan() {
             xi
         } else if xi < <T as Element>::zero() {
@@ -437,7 +437,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(a, b, |mut x, mut y| {
+    binary_elementwise_op(a, b, |mut x, mut y| {
         if x.is_nan() || y.is_nan() {
             return T::nan();
         }
@@ -458,7 +458,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| {
+    binary_elementwise_op(a, b, |x, y| {
         if x.is_nan() || y.is_nan() {
             return T::nan();
         }
@@ -492,7 +492,7 @@ where
         + num_traits::Signed,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| {
+    binary_elementwise_op(a, b, |x, y| {
         let mut ax = x.abs();
         let mut ay = y.abs();
         while ay != <T as Element>::zero() {
@@ -518,7 +518,7 @@ where
         + num_traits::Signed,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| {
+    binary_elementwise_op(a, b, |x, y| {
         let ax = x.abs();
         let ay = y.abs();
         if ax == <T as Element>::zero() || ay == <T as Element>::zero() {
@@ -634,6 +634,59 @@ where
 // Cumulative operations
 // ---------------------------------------------------------------------------
 
+/// Shared cumulative kernel: build the result buffer by applying
+/// `preprocess` to every input element, then walk it in place with
+/// `accumulate` along `axis` (or flat if `None`). Factored out so
+/// `cumsum`, `cumprod`, `nancumsum` and `nancumprod` all share a single
+/// pass — previously `nancumsum`/`nancumprod` materialized a cleaned
+/// copy and then called `cumsum`/`cumprod`, which materialized a
+/// second buffer (#156).
+fn cumulative_with_preprocess<T, D, Pre, Acc>(
+    input: &Array<T, D>,
+    axis: Option<usize>,
+    preprocess: Pre,
+    accumulate: Acc,
+) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+    Pre: Fn(T) -> T,
+    Acc: Fn(T, T) -> T,
+{
+    if let Some(ax) = axis {
+        if ax >= input.ndim() {
+            return Err(FerrayError::axis_out_of_bounds(ax, input.ndim()));
+        }
+        let shape = input.shape().to_vec();
+        let mut result: Vec<T> = input.iter().map(|&x| preprocess(x)).collect();
+        let mut stride = 1usize;
+        for d in shape.iter().skip(ax + 1) {
+            stride *= d;
+        }
+        let axis_len = shape[ax];
+        let outer_size: usize = shape[..ax].iter().product();
+        let inner_size = stride;
+
+        for outer in 0..outer_size {
+            for inner in 0..inner_size {
+                let base = outer * axis_len * inner_size + inner;
+                for k in 1..axis_len {
+                    let prev = base + (k - 1) * inner_size;
+                    let curr = base + k * inner_size;
+                    result[curr] = accumulate(result[prev], result[curr]);
+                }
+            }
+        }
+        Array::from_vec(input.dim().clone(), result)
+    } else {
+        let mut data: Vec<T> = input.iter().map(|&x| preprocess(x)).collect();
+        for i in 1..data.len() {
+            data[i] = accumulate(data[i - 1], data[i]);
+        }
+        Array::from_vec(input.dim().clone(), data)
+    }
+}
+
 /// Cumulative sum along an axis (or flattened if axis is None).
 ///
 /// When `axis=None`, data is flattened and accumulated, but the result retains
@@ -646,42 +699,7 @@ where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
 {
-    if let Some(ax) = axis {
-        if ax >= input.ndim() {
-            return Err(FerrayError::axis_out_of_bounds(ax, input.ndim()));
-        }
-        // Work along the given axis
-        let shape = input.shape().to_vec();
-        let data: Vec<T> = input.iter().copied().collect();
-        let mut result = data.clone();
-        // Compute strides manually
-        let mut stride = 1usize;
-        for d in shape.iter().skip(ax + 1) {
-            stride *= d;
-        }
-        let axis_len = shape[ax];
-        let outer_size: usize = shape[..ax].iter().product();
-        let inner_size = stride;
-
-        for outer in 0..outer_size {
-            for inner in 0..inner_size {
-                let base = outer * axis_len * inner_size + inner;
-                for k in 1..axis_len {
-                    let prev = base + (k - 1) * inner_size;
-                    let curr = base + k * inner_size;
-                    result[curr] = result[prev] + result[curr];
-                }
-            }
-        }
-        Array::from_vec(input.dim().clone(), result)
-    } else {
-        // Flatten and cumsum
-        let mut data: Vec<T> = input.iter().copied().collect();
-        for i in 1..data.len() {
-            data[i] = data[i - 1] + data[i];
-        }
-        Array::from_vec(input.dim().clone(), data)
-    }
+    cumulative_with_preprocess(input, axis, |x| x, |a, b| a + b)
 }
 
 /// Cumulative product along an axis (or flattened if axis is None).
@@ -694,39 +712,7 @@ where
     T: Element + std::ops::Mul<Output = T> + Copy,
     D: Dimension,
 {
-    if let Some(ax) = axis {
-        if ax >= input.ndim() {
-            return Err(FerrayError::axis_out_of_bounds(ax, input.ndim()));
-        }
-        let shape = input.shape().to_vec();
-        let data: Vec<T> = input.iter().copied().collect();
-        let mut result = data.clone();
-        let mut stride = 1usize;
-        for d in shape.iter().skip(ax + 1) {
-            stride *= d;
-        }
-        let axis_len = shape[ax];
-        let outer_size: usize = shape[..ax].iter().product();
-        let inner_size = stride;
-
-        for outer in 0..outer_size {
-            for inner in 0..inner_size {
-                let base = outer * axis_len * inner_size + inner;
-                for k in 1..axis_len {
-                    let prev = base + (k - 1) * inner_size;
-                    let curr = base + k * inner_size;
-                    result[curr] = result[prev] * result[curr];
-                }
-            }
-        }
-        Array::from_vec(input.dim().clone(), result)
-    } else {
-        let mut data: Vec<T> = input.iter().copied().collect();
-        for i in 1..data.len() {
-            data[i] = data[i - 1] * data[i];
-        }
-        Array::from_vec(input.dim().clone(), data)
-    }
+    cumulative_with_preprocess(input, axis, |x| x, |a, b| a * b)
 }
 
 /// Cumulative sum ignoring NaNs.
@@ -735,19 +721,18 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    // Replace NaN with zero, then cumsum
-    let cleaned: Vec<T> = input
-        .iter()
-        .map(|&x| {
+    cumulative_with_preprocess(
+        input,
+        axis,
+        |x| {
             if x.is_nan() {
                 <T as Element>::zero()
             } else {
                 x
             }
-        })
-        .collect();
-    let arr = Array::from_vec(input.dim().clone(), cleaned)?;
-    cumsum(&arr, axis)
+        },
+        |a, b| a + b,
+    )
 }
 
 /// Cumulative product ignoring NaNs.
@@ -756,12 +741,18 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    let cleaned: Vec<T> = input
-        .iter()
-        .map(|&x| if x.is_nan() { <T as Element>::one() } else { x })
-        .collect();
-    let arr = Array::from_vec(input.dim().clone(), cleaned)?;
-    cumprod(&arr, axis)
+    cumulative_with_preprocess(
+        input,
+        axis,
+        |x| {
+            if x.is_nan() {
+                <T as Element>::one()
+            } else {
+                x
+            }
+        },
+        |a, b| a * b,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -916,70 +907,52 @@ where
 }
 
 // ---------------------------------------------------------------------------
-// f16 variants (f32-promoted)
+// f16 variants (f32-promoted) — generated via the shared macros (#142).
 // ---------------------------------------------------------------------------
 
-/// Elementwise absolute value for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn absolute_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::abs)
-}
+use crate::helpers::{binary_f16_fn, unary_f16_fn};
 
-/// Elementwise negation for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn negative_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, |x| -x)
-}
-
-/// Elementwise square root for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn sqrt_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::sqrt)
-}
-
-/// Elementwise cube root for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn cbrt_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::cbrt)
-}
-
-/// Elementwise square for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn square_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, |x| x * x)
-}
-
-/// Elementwise reciprocal for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn reciprocal_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::recip)
-}
-
-/// Elementwise sign for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn sign_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, |x| {
+unary_f16_fn!(
+    /// Elementwise absolute value for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    absolute_f16,
+    f32::abs
+);
+unary_f16_fn!(
+    /// Elementwise negation for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    negative_f16,
+    |x: f32| -x
+);
+unary_f16_fn!(
+    /// Elementwise square root for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    sqrt_f16,
+    f32::sqrt
+);
+unary_f16_fn!(
+    /// Elementwise cube root for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    cbrt_f16,
+    f32::cbrt
+);
+unary_f16_fn!(
+    /// Elementwise square for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    square_f16,
+    |x: f32| x * x
+);
+unary_f16_fn!(
+    /// Elementwise reciprocal for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    reciprocal_f16,
+    f32::recip
+);
+unary_f16_fn!(
+    /// Elementwise sign for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    sign_f16,
+    |x: f32| {
         if x.is_nan() {
             f32::NAN
         } else if x > 0.0 {
@@ -989,109 +962,64 @@ where
         } else {
             0.0
         }
-    })
-}
-
-/// Elementwise addition for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn add_f16<D>(
-    a: &Array<half::f16, D>,
-    b: &Array<half::f16, D>,
-) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::binary_f16_op(a, b, |x, y| x + y)
-}
-
-/// Elementwise subtraction for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn subtract_f16<D>(
-    a: &Array<half::f16, D>,
-    b: &Array<half::f16, D>,
-) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::binary_f16_op(a, b, |x, y| x - y)
-}
-
-/// Elementwise multiplication for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn multiply_f16<D>(
-    a: &Array<half::f16, D>,
-    b: &Array<half::f16, D>,
-) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::binary_f16_op(a, b, |x, y| x * y)
-}
-
-/// Elementwise division for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn divide_f16<D>(
-    a: &Array<half::f16, D>,
-    b: &Array<half::f16, D>,
-) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::binary_f16_op(a, b, |x, y| x / y)
-}
-
-/// Elementwise power for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn power_f16<D>(
-    a: &Array<half::f16, D>,
-    b: &Array<half::f16, D>,
-) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::binary_f16_op(a, b, f32::powf)
-}
-
-/// Floor division for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn floor_divide_f16<D>(
-    a: &Array<half::f16, D>,
-    b: &Array<half::f16, D>,
-) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::binary_f16_op(a, b, |x, y| (x / y).floor())
-}
-
-/// Elementwise remainder for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn remainder_f16<D>(
-    a: &Array<half::f16, D>,
-    b: &Array<half::f16, D>,
-) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::binary_f16_op(a, b, |x, y| {
+    }
+);
+binary_f16_fn!(
+    /// Elementwise addition for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    add_f16,
+    |x: f32, y: f32| x + y
+);
+binary_f16_fn!(
+    /// Elementwise subtraction for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    subtract_f16,
+    |x: f32, y: f32| x - y
+);
+binary_f16_fn!(
+    /// Elementwise multiplication for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    multiply_f16,
+    |x: f32, y: f32| x * y
+);
+binary_f16_fn!(
+    /// Elementwise division for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    divide_f16,
+    |x: f32, y: f32| x / y
+);
+binary_f16_fn!(
+    /// Elementwise power for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    power_f16,
+    f32::powf
+);
+binary_f16_fn!(
+    /// Floor division for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    floor_divide_f16,
+    |x: f32, y: f32| (x / y).floor()
+);
+binary_f16_fn!(
+    /// Elementwise remainder for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    remainder_f16,
+    |x: f32, y: f32| {
         let r = x % y;
         if (r < 0.0 && y > 0.0) || (r > 0.0 && y < 0.0) {
             r + y
         } else {
             r
         }
-    })
-}
+    }
+);
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use ferray_core::dimension::Ix2;
 
-    fn arr1(data: Vec<f64>) -> Array<f64, Ix1> {
-        let n = data.len();
-        Array::from_vec(Ix1::new([n]), data).unwrap()
-    }
+    use crate::test_util::arr1;
 
     fn arr1_i32(data: Vec<i32>) -> Array<i32, Ix1> {
         let n = data.len();

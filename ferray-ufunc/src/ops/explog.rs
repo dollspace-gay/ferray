@@ -10,7 +10,7 @@ use num_traits::Float;
 
 use crate::cr_math::CrMath;
 use crate::helpers::{
-    binary_float_op, unary_float_op, unary_float_op_compute, unary_float_op_into_compute,
+    binary_elementwise_op, unary_float_op, unary_float_op_compute, unary_float_op_into_compute,
 };
 
 /// Elementwise exponential (e^x).
@@ -69,8 +69,8 @@ where
                 .collect();
             Array::from_vec(f64_input.dim().clone(), data)?
         };
-        // SAFETY: T is f64, reinterpret back
-        Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
+        // SAFETY: T was verified to be f64 at the top of this branch.
+        Ok(unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) })
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
         let f32_input = unsafe { &*(input as *const Array<T, D> as *const Array<f32, D>) };
         let n = f32_input.size();
@@ -89,7 +89,8 @@ where
                 .collect();
             Array::from_vec(f32_input.dim().clone(), data)?
         };
-        Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
+        // SAFETY: T was verified to be f32 at the top of this branch.
+        Ok(unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) })
     } else {
         // Fallback for other float types: use libm exp
         unary_float_op(input, |x| x.exp())
@@ -165,7 +166,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| {
+    binary_elementwise_op(a, b, |x, y| {
         if x.is_nan() || y.is_nan() {
             return T::nan();
         }
@@ -182,7 +183,7 @@ where
     D: Dimension,
 {
     let ln2 = T::from(std::f64::consts::LN_2).unwrap_or_else(|| <T as Element>::one());
-    binary_float_op(a, b, |x, y| {
+    binary_elementwise_op(a, b, |x, y| {
         if x.is_nan() || y.is_nan() {
             return T::nan();
         }
@@ -193,81 +194,60 @@ where
 }
 
 // ---------------------------------------------------------------------------
-// f16 variants (f32-promoted)
+// f16 variants (f32-promoted) — generated via the shared unary_f16_fn!
+// macro (#142).
 // ---------------------------------------------------------------------------
 
-/// Elementwise exponential for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn exp_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::exp)
-}
+use crate::helpers::unary_f16_fn;
 
-/// Elementwise 2^x for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn exp2_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::exp2)
-}
-
-/// Elementwise exp(x)-1 for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn expm1_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, |x| x.exp_m1())
-}
-
-/// Elementwise natural logarithm for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn log_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::ln)
-}
-
-/// Elementwise base-2 logarithm for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn log2_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::log2)
-}
-
-/// Elementwise base-10 logarithm for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn log10_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::log10)
-}
-
-/// Elementwise ln(1+x) for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn log1p_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, |x| x.ln_1p())
-}
+unary_f16_fn!(
+    /// Elementwise exponential for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    exp_f16,
+    f32::exp
+);
+unary_f16_fn!(
+    /// Elementwise 2^x for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    exp2_f16,
+    f32::exp2
+);
+unary_f16_fn!(
+    /// Elementwise exp(x)-1 for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    expm1_f16,
+    f32::exp_m1
+);
+unary_f16_fn!(
+    /// Elementwise natural logarithm for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    log_f16,
+    f32::ln
+);
+unary_f16_fn!(
+    /// Elementwise base-2 logarithm for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    log2_f16,
+    f32::log2
+);
+unary_f16_fn!(
+    /// Elementwise base-10 logarithm for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    log10_f16,
+    f32::log10
+);
+unary_f16_fn!(
+    /// Elementwise ln(1+x) for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    log1p_f16,
+    f32::ln_1p
+);
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferray_core::dimension::Ix1;
 
-    fn arr1(data: Vec<f64>) -> Array<f64, Ix1> {
-        let n = data.len();
-        Array::from_vec(Ix1::new([n]), data).unwrap()
-    }
+    use crate::test_util::arr1;
 
     #[test]
     fn test_exp() {

@@ -80,34 +80,32 @@ fn bessel_i0<T: Float + CrMath>(x: T) -> T {
 }
 
 // ---------------------------------------------------------------------------
-// f16 variants (f32-promoted)
+// f16 variants (f32-promoted) — generated via the shared unary_f16_fn!
+// macro (#142).
 // ---------------------------------------------------------------------------
 
-/// Normalized sinc function for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn sinc_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, |x| {
+use crate::helpers::unary_f16_fn;
+
+unary_f16_fn!(
+    /// Normalized sinc function for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    sinc_f16,
+    |x: f32| {
         if x == 0.0 {
             1.0
         } else {
             let px = std::f32::consts::PI * x;
             core_math::sinf(px) / px
         }
-    })
-}
+    }
+);
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use ferray_core::dimension::Ix1;
 
-    fn arr1(data: Vec<f64>) -> Array<f64, Ix1> {
-        let n = data.len();
-        Array::from_vec(Ix1::new([n]), data).unwrap()
-    }
+    use crate::test_util::arr1;
 
     #[test]
     fn test_sinc_zero_ac13() {

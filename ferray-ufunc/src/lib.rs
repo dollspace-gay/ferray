@@ -27,6 +27,8 @@ pub mod operator_overloads;
 pub mod ops;
 pub mod parallel;
 pub mod promoted;
+#[cfg(test)]
+mod test_util;
 pub mod ufunc_methods;
 pub mod ufunc_object;
 

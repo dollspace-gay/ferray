@@ -12,7 +12,7 @@
 //! element (the seed for `.reduce()`). All five methods delegate to
 //! the generic machinery already built for [`crate::ufunc_methods`]
 //! (reduce_axis, accumulate_axis, outer, at) and to
-//! [`crate::helpers::binary_float_op`] for the elementwise call.
+//! [`crate::helpers::binary_elementwise_op`] for the elementwise call.
 //!
 //! # Example
 //!
@@ -38,7 +38,7 @@ use ferray_core::dimension::{Dimension, Ix1, IxDyn};
 use ferray_core::dtype::Element;
 use ferray_core::error::FerrayResult;
 
-use crate::helpers::binary_float_op;
+use crate::helpers::binary_elementwise_op;
 use crate::ufunc_methods::{accumulate_axis, at, outer, reduce_axis};
 
 /// A first-class binary ufunc: a name, an identity element, and the
@@ -94,7 +94,7 @@ where
         a: &Array<T, D>,
         b: &Array<T, D>,
     ) -> FerrayResult<Array<T, D>> {
-        binary_float_op(a, b, &self.op)
+        binary_elementwise_op(a, b, &self.op)
     }
 
     /// `ufunc.reduce(arr, axis)` — collapse `axis` by folding with
@@ -194,11 +194,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferray_core::dimension::{Ix1, Ix2};
+    use ferray_core::dimension::Ix2;
 
-    fn arr1(data: &[f64]) -> Array<f64, Ix1> {
-        Array::<f64, Ix1>::from_vec(Ix1::new([data.len()]), data.to_vec()).unwrap()
-    }
+    use crate::test_util::arr1;
 
     #[test]
     fn add_ufunc_roundtrip() {

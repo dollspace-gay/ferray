@@ -147,7 +147,10 @@ where
 /// Generic outer product: `outer(a, b)[i, j] = op(a[i], b[j])`.
 ///
 /// Takes two 1-D arrays and produces a 2-D `(a.size(), b.size())` result.
-/// Equivalent to `np.<ufunc>.outer(a, b)` for 1-D inputs.
+/// Equivalent to `np.<ufunc>.outer(a, b)` for 1-D inputs. Prefers
+/// borrowing `a`/`b` directly when they are contiguous so contiguous
+/// inputs avoid the two full-length `iter().copied().collect()` buffer
+/// materializations the previous implementation performed (see #153).
 pub fn outer<T, F>(
     a: &Array<T, ferray_core::dimension::Ix1>,
     b: &Array<T, ferray_core::dimension::Ix1>,
@@ -159,12 +162,22 @@ where
 {
     let m = a.size();
     let n = b.size();
-    let a_data: Vec<T> = a.iter().copied().collect();
-    let b_data: Vec<T> = b.iter().copied().collect();
     let mut data = Vec::with_capacity(m * n);
-    for &ai in &a_data {
-        for &bj in &b_data {
-            data.push(op(ai, bj));
+
+    // Fast path: both inputs contiguous — iterate raw slices in place.
+    if let (Some(a_slice), Some(b_slice)) = (a.as_slice(), b.as_slice()) {
+        for &ai in a_slice {
+            for &bj in b_slice {
+                data.push(op(ai, bj));
+            }
+        }
+    } else {
+        // Fallback for non-contiguous views: iterate once via the
+        // generic iterator. Still produces a single output buffer.
+        for ai in a.iter().copied() {
+            for bj in b.iter().copied() {
+                data.push(op(ai, bj));
+            }
         }
     }
     Array::from_vec(IxDyn::from(&[m, n][..]), data)
@@ -219,11 +232,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferray_core::dimension::{Ix1, Ix2};
+    use ferray_core::dimension::Ix2;
 
-    fn arr1(data: &[f64]) -> Array<f64, Ix1> {
-        Array::<f64, Ix1>::from_vec(Ix1::new([data.len()]), data.to_vec()).unwrap()
-    }
+    use crate::test_util::arr1;
 
     fn arr2(rows: usize, cols: usize, data: &[f64]) -> Array<f64, Ix2> {
         Array::<f64, Ix2>::from_vec(Ix2::new([rows, cols]), data.to_vec()).unwrap()

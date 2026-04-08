@@ -12,6 +12,35 @@ use rayon::prelude::*;
 
 use crate::parallel::THRESHOLD_COMPUTE_BOUND;
 
+/// Reinterpret a concrete `Array<SRC, D>` back to `Array<DST, D>` when
+/// the caller has already proven (via [`std::any::TypeId`] equality or
+/// equivalent) that `SRC` and `DST` are the same type. Exists so that
+/// the TypeId-dispatched f32/f64 fast paths scattered across
+/// [`crate::ops::explog`], [`crate::ops::floatintrinsic`] etc. share
+/// one well-documented safety boundary instead of inlining bare
+/// `transmute_copy` calls in every function (see issues #159, #160).
+///
+/// # Safety
+/// `SRC` and `DST` must be the same runtime type. The caller must verify
+/// this with `TypeId::of::<SRC>() == TypeId::of::<DST>()` before
+/// invoking; violating the precondition is instant UB. The extra
+/// `size_of`/`align_of` assertions are a cheap runtime sanity check.
+#[inline]
+pub(crate) unsafe fn reinterpret_array<SRC, DST, D>(arr: Array<SRC, D>) -> Array<DST, D>
+where
+    SRC: Element,
+    DST: Element,
+    D: Dimension,
+{
+    // If we ever land here with types that don't match in size/align,
+    // that is a bug in the caller's TypeId dispatch — not something
+    // users of the library can trigger.
+    debug_assert_eq!(std::mem::size_of::<SRC>(), std::mem::size_of::<DST>());
+    debug_assert_eq!(std::mem::align_of::<SRC>(), std::mem::align_of::<DST>());
+    // SAFETY: guaranteed by caller; see function docs.
+    unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(arr)) }
+}
+
 /// Target chunk size for parallel splits. Large enough that per-chunk
 /// overhead (thread handoff, cache warmup) stays below a few percent of
 /// the useful compute, small enough that work distributes evenly across
@@ -53,7 +82,7 @@ where
 // Note: binary arithmetic ops (add / sub / mul / div) are memory-bandwidth-
 // bound on modern CPUs — a single core already saturates the DRAM channel,
 // and splitting the work across threads only hurts per `examples/bench_parallel.rs`.
-// So `binary_float_op` / `binary_map_op` / `binary_mixed_op` are intentionally
+// So `binary_elementwise_op` / `binary_map_op` / `binary_mixed_op` are intentionally
 // kept serial. Transcendentals that go through `unary_float_op_compute` or the
 // slice kernels (`unary_slice_op_f64/f32`, `try_simd_f64_unary`) *do* benefit
 // from parallelism and have parallel dispatch at the compute-bound threshold.
@@ -280,7 +309,7 @@ where
 /// # Errors
 /// Returns `FerrayError::ShapeMismatch` if the shapes are not broadcast-compatible.
 #[inline]
-pub fn binary_float_op<T, D>(
+pub fn binary_elementwise_op<T, D>(
     a: &Array<T, D>,
     b: &Array<T, D>,
     f: impl Fn(T, T) -> T,
@@ -331,7 +360,7 @@ where
 
 /// Apply a binary function that maps `(T, T) -> U` with NumPy broadcasting.
 ///
-/// Same shape semantics as [`binary_float_op`] but allows the output element
+/// Same shape semantics as [`binary_elementwise_op`] but allows the output element
 /// type to differ from the inputs. Used by comparison ops (`(T, T) -> bool`),
 /// logical ops, and `isclose`/`isfinite`-style functions.
 #[inline]
@@ -531,8 +560,62 @@ pub fn binary_f16_op<D>(
 where
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| half::f16::from_f32(f(x.to_f32(), y.to_f32())))
+    binary_elementwise_op(a, b, |x, y| half::f16::from_f32(f(x.to_f32(), y.to_f32())))
 }
+
+/// Define a unary `*_f16` entry point that promotes elements to `f32`,
+/// applies `$f32_fn`, and converts the result back to `f16`. Eliminates
+/// the six-line `pub fn ..._f16<D>(input) { helpers::unary_f16_op(input, ...) }`
+/// pattern previously duplicated across every `ops::*` module
+/// (see issue #142).
+///
+/// The macro itself is always defined; feature-gate the generated
+/// function by including `#[cfg(feature = "f16")]` in the attribute list
+/// passed to the macro call.
+macro_rules! unary_f16_fn {
+    (
+        $(#[$attr:meta])*
+        $name:ident,
+        $f32_fn:expr
+    ) => {
+        $(#[$attr])*
+        pub fn $name<D>(
+            input: &::ferray_core::Array<half::f16, D>,
+        ) -> ::ferray_core::error::FerrayResult<
+            ::ferray_core::Array<half::f16, D>,
+        >
+        where
+            D: ::ferray_core::dimension::Dimension,
+        {
+            $crate::helpers::unary_f16_op(input, $f32_fn)
+        }
+    };
+}
+
+/// Define a binary `*_f16` entry point analogous to [`unary_f16_fn!`].
+macro_rules! binary_f16_fn {
+    (
+        $(#[$attr:meta])*
+        $name:ident,
+        $f32_fn:expr
+    ) => {
+        $(#[$attr])*
+        pub fn $name<D>(
+            a: &::ferray_core::Array<half::f16, D>,
+            b: &::ferray_core::Array<half::f16, D>,
+        ) -> ::ferray_core::error::FerrayResult<
+            ::ferray_core::Array<half::f16, D>,
+        >
+        where
+            D: ::ferray_core::dimension::Dimension,
+        {
+            $crate::helpers::binary_f16_op(a, b, $f32_fn)
+        }
+    };
+}
+
+pub(crate) use binary_f16_fn;
+pub(crate) use unary_f16_fn;
 
 /// Apply a binary f32 function to two f16 arrays, returning a bool array, with broadcasting.
 #[cfg(feature = "f16")]
@@ -641,10 +724,10 @@ where
 /// Apply a binary function elementwise, writing the result into `out` in
 /// place. All three arrays must be contiguous and identically shaped.
 ///
-/// Broadcasting is **not** supported here; use [`binary_float_op`] if you
+/// Broadcasting is **not** supported here; use [`binary_elementwise_op`] if you
 /// need it. The no-broadcast constraint is what makes this zero-allocation.
 #[inline]
-pub fn binary_float_op_into<T, D>(
+pub fn binary_elementwise_op_into<T, D>(
     a: &Array<T, D>,
     b: &Array<T, D>,
     out: &mut Array<T, D>,
@@ -700,7 +783,7 @@ mod tests {
     fn binary_op_same_shape() {
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let b = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![4.0, 5.0, 6.0]).unwrap();
-        let r = binary_float_op(&a, &b, |x, y| x + y).unwrap();
+        let r = binary_elementwise_op(&a, &b, |x, y| x + y).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[5.0, 7.0, 9.0]);
     }
 
@@ -708,7 +791,7 @@ mod tests {
     fn binary_op_shape_mismatch() {
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let b = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![4.0, 5.0]).unwrap();
-        assert!(binary_float_op(&a, &b, |x, y| x + y).is_err());
+        assert!(binary_elementwise_op(&a, &b, |x, y| x + y).is_err());
     }
 
     #[test]
@@ -722,11 +805,11 @@ mod tests {
     }
 
     #[test]
-    fn binary_float_op_broadcasts_within_same_rank() {
+    fn binary_elementwise_op_broadcasts_within_same_rank() {
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![1.0, 2.0, 3.0]).unwrap();
         let b =
             Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![10.0, 20.0, 30.0, 40.0]).unwrap();
-        let r = binary_float_op(&a, &b, |x, y| x + y).unwrap();
+        let r = binary_elementwise_op(&a, &b, |x, y| x + y).unwrap();
         assert_eq!(r.shape(), &[3, 4]);
         assert_eq!(
             r.iter().copied().collect::<Vec<_>>(),
@@ -764,7 +847,7 @@ mod tests {
     fn binary_op_incompatible_shapes_error() {
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let b = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
-        assert!(binary_float_op(&a, &b, |x, y| x + y).is_err());
+        assert!(binary_elementwise_op(&a, &b, |x, y| x + y).is_err());
         assert!(binary_map_op(&a, &b, |x, y| x == y).is_err());
     }
 }

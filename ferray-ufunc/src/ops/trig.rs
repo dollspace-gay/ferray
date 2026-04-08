@@ -12,7 +12,7 @@ use num_traits::Float;
 
 use crate::cr_math::CrMath;
 use crate::helpers::{
-    binary_float_op, unary_float_op, unary_float_op_compute, unary_float_op_into_compute,
+    binary_elementwise_op, unary_float_op, unary_float_op_compute, unary_float_op_into_compute,
 };
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    binary_float_op(y, x, T::cr_atan2)
+    binary_elementwise_op(y, x, T::cr_atan2)
 }
 
 /// Elementwise hypotenuse: sqrt(a^2 + b^2).
@@ -106,7 +106,7 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    binary_float_op(a, b, T::cr_hypot)
+    binary_elementwise_op(a, b, T::cr_hypot)
 }
 
 // ---------------------------------------------------------------------------
@@ -241,168 +241,116 @@ where
 }
 
 // ---------------------------------------------------------------------------
-// f16 variants (f32-promoted)
+// f16 variants (f32-promoted) — declared via the shared `unary_f16_fn!`
+// and `binary_f16_fn!` macros so each entry point is a single line. The
+// prior hand-written pattern (6 lines × 15 functions ≈ 90 lines of
+// boilerplate) is gone (#142).
 // ---------------------------------------------------------------------------
 
-/// Elementwise sine for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn sin_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::sin)
-}
+use crate::helpers::{binary_f16_fn, unary_f16_fn};
 
-/// Elementwise cosine for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn cos_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::cos)
-}
-
-/// Elementwise tangent for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn tan_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::tan)
-}
-
-/// Elementwise arc sine for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn arcsin_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::asin)
-}
-
-/// Elementwise arc cosine for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn arccos_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::acos)
-}
-
-/// Elementwise arc tangent for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn arctan_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::atan)
-}
-
-/// Elementwise two-argument arc tangent for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn arctan2_f16<D>(
-    y: &Array<half::f16, D>,
-    x: &Array<half::f16, D>,
-) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::binary_f16_op(y, x, f32::atan2)
-}
-
-/// Elementwise hypotenuse for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn hypot_f16<D>(
-    a: &Array<half::f16, D>,
-    b: &Array<half::f16, D>,
-) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::binary_f16_op(a, b, f32::hypot)
-}
-
-/// Elementwise hyperbolic sine for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn sinh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::sinh)
-}
-
-/// Elementwise hyperbolic cosine for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn cosh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::cosh)
-}
-
-/// Elementwise hyperbolic tangent for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn tanh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::tanh)
-}
-
-/// Elementwise inverse hyperbolic sine for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn arcsinh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::asinh)
-}
-
-/// Elementwise inverse hyperbolic cosine for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn arccosh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::acosh)
-}
-
-/// Elementwise inverse hyperbolic tangent for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn arctanh_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::atanh)
-}
-
-/// Convert radians to degrees for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn degrees_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::to_degrees)
-}
-
-/// Convert degrees to radians for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn radians_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::to_radians)
-}
+unary_f16_fn!(
+    /// Elementwise sine for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    sin_f16,
+    f32::sin
+);
+unary_f16_fn!(
+    /// Elementwise cosine for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    cos_f16,
+    f32::cos
+);
+unary_f16_fn!(
+    /// Elementwise tangent for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    tan_f16,
+    f32::tan
+);
+unary_f16_fn!(
+    /// Elementwise arc sine for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    arcsin_f16,
+    f32::asin
+);
+unary_f16_fn!(
+    /// Elementwise arc cosine for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    arccos_f16,
+    f32::acos
+);
+unary_f16_fn!(
+    /// Elementwise arc tangent for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    arctan_f16,
+    f32::atan
+);
+binary_f16_fn!(
+    /// Elementwise two-argument arc tangent for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    arctan2_f16,
+    f32::atan2
+);
+binary_f16_fn!(
+    /// Elementwise hypotenuse for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    hypot_f16,
+    f32::hypot
+);
+unary_f16_fn!(
+    /// Elementwise hyperbolic sine for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    sinh_f16,
+    f32::sinh
+);
+unary_f16_fn!(
+    /// Elementwise hyperbolic cosine for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    cosh_f16,
+    f32::cosh
+);
+unary_f16_fn!(
+    /// Elementwise hyperbolic tangent for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    tanh_f16,
+    f32::tanh
+);
+unary_f16_fn!(
+    /// Elementwise inverse hyperbolic sine for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    arcsinh_f16,
+    f32::asinh
+);
+unary_f16_fn!(
+    /// Elementwise inverse hyperbolic cosine for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    arccosh_f16,
+    f32::acosh
+);
+unary_f16_fn!(
+    /// Elementwise inverse hyperbolic tangent for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    arctanh_f16,
+    f32::atanh
+);
+unary_f16_fn!(
+    /// Convert radians to degrees for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    degrees_f16,
+    f32::to_degrees
+);
+unary_f16_fn!(
+    /// Convert degrees to radians for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    radians_f16,
+    f32::to_radians
+);
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferray_core::dimension::Ix1;
 
-    fn arr1(data: Vec<f64>) -> Array<f64, Ix1> {
-        let n = data.len();
-        Array::from_vec(Ix1::new([n]), data).unwrap()
-    }
+    use crate::test_util::arr1;
 
     #[test]
     fn test_sin() {

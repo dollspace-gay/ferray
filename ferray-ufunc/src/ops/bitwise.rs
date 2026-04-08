@@ -8,7 +8,7 @@ use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
 use ferray_core::error::FerrayResult;
 
-use crate::helpers::{binary_float_op, binary_mixed_op, unary_float_op};
+use crate::helpers::{binary_elementwise_op, binary_mixed_op, unary_float_op};
 
 /// Trait for types that support bitwise operations.
 pub trait BitwiseOps:
@@ -47,7 +47,7 @@ where
     T: Element + BitwiseOps,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| x & y)
+    binary_elementwise_op(a, b, |x, y| x & y)
 }
 
 /// Elementwise bitwise OR.
@@ -56,7 +56,7 @@ where
     T: Element + BitwiseOps,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| x | y)
+    binary_elementwise_op(a, b, |x, y| x | y)
 }
 
 /// Elementwise bitwise XOR.
@@ -65,7 +65,7 @@ where
     T: Element + BitwiseOps,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| x ^ y)
+    binary_elementwise_op(a, b, |x, y| x ^ y)
 }
 
 /// Elementwise bitwise NOT.

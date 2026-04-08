@@ -4,7 +4,7 @@
 //!
 //! 1. **High-level ufunc functions** (`ferray_ufunc::sin`, `ferray_ufunc::exp`, etc.)
 //!    which are generic over `T: Element + Float` and `D: Dimension`.
-//!    These currently use `unary_float_op` / `binary_float_op` helpers that
+//!    These currently use `unary_float_op` / `binary_elementwise_op` helpers that
 //!    iterate directly — the `FERRAY_FORCE_SCALAR` env var has no effect on them
 //!    today, but this test locks in the contract that results are identical
 //!    regardless of the env var, future-proofing against SIMD kernels being

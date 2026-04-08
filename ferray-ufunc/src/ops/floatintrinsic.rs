@@ -10,7 +10,7 @@ use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
-use crate::helpers::{binary_float_op, binary_mixed_op, unary_float_op, unary_map_op};
+use crate::helpers::{binary_elementwise_op, binary_mixed_op, unary_float_op, unary_map_op};
 
 // ---------------------------------------------------------------------------
 // Classification
@@ -223,17 +223,17 @@ where
         // SAFETY: T is f64, verified by TypeId check above.
         let a_f64 = unsafe { &*(x1 as *const Array<T, D> as *const Array<f64, D>) };
         let b_f64 = unsafe { &*(x2 as *const Array<T, D> as *const Array<f64, D>) };
-        let result = binary_float_op(a_f64, b_f64, nextafter_f64)?;
-        Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
+        let result = binary_elementwise_op(a_f64, b_f64, nextafter_f64)?;
+        Ok(unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) })
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
         // SAFETY: T is f32, verified by TypeId check above.
         let a_f32 = unsafe { &*(x1 as *const Array<T, D> as *const Array<f32, D>) };
         let b_f32 = unsafe { &*(x2 as *const Array<T, D> as *const Array<f32, D>) };
-        let result = binary_float_op(a_f32, b_f32, nextafter_f32)?;
-        Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
+        let result = binary_elementwise_op(a_f32, b_f32, nextafter_f32)?;
+        Ok(unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) })
     } else {
         // Fallback for other float types: use f64 round-trip
-        binary_float_op(x1, x2, |a, b| {
+        binary_elementwise_op(x1, x2, |a, b| {
             let a64 = a.to_f64().unwrap();
             let b64 = b.to_f64().unwrap();
             T::from(nextafter_f64(a64, b64)).unwrap()
@@ -279,11 +279,11 @@ where
     if TypeId::of::<T>() == TypeId::of::<f64>() {
         let f64_input = unsafe { &*(input as *const Array<T, D> as *const Array<f64, D>) };
         let result = unary_float_op(f64_input, spacing_f64)?;
-        Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
+        Ok(unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) })
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
         let f32_input = unsafe { &*(input as *const Array<T, D> as *const Array<f32, D>) };
         let result = unary_float_op(f32_input, spacing_f32)?;
-        Ok(unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(result)) })
+        Ok(unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) })
     } else {
         // Fallback for other float types: use f64 round-trip
         unary_float_op(input, |x| {
@@ -379,7 +379,7 @@ where
         }
         let m_arr: Array<f64, D> = Array::from_vec(f64_input.dim().clone(), mantissas)?;
         let e_arr = Array::from_vec(f64_input.dim().clone(), exponents)?;
-        let m_result = unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(m_arr)) };
+        let m_result = unsafe { crate::helpers::reinterpret_array::<f64, T, D>(m_arr) };
         Ok((m_result, e_arr))
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
         // SAFETY: T is f32, verified by TypeId check above.
@@ -393,7 +393,7 @@ where
         }
         let m_arr: Array<f32, D> = Array::from_vec(f32_input.dim().clone(), mantissas)?;
         let e_arr = Array::from_vec(f32_input.dim().clone(), exponents)?;
-        let m_result = unsafe { std::mem::transmute_copy(&std::mem::ManuallyDrop::new(m_arr)) };
+        let m_result = unsafe { crate::helpers::reinterpret_array::<f32, T, D>(m_arr) };
         Ok((m_result, e_arr))
     } else {
         // Fallback for other float types: use f64 round-trip
@@ -418,7 +418,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(x1, x2, |a, b| {
+    binary_elementwise_op(x1, x2, |a, b| {
         let mag = a.abs();
         if b.is_sign_negative() { -mag } else { mag }
     })
@@ -430,7 +430,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(x1, x2, T::powf)
+    binary_elementwise_op(x1, x2, T::powf)
 }
 
 /// Elementwise maximum, propagating NaN.
@@ -439,7 +439,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| {
+    binary_elementwise_op(a, b, |x, y| {
         if x.is_nan() || y.is_nan() {
             <T as Float>::nan()
         } else if x >= y {
@@ -456,7 +456,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| {
+    binary_elementwise_op(a, b, |x, y| {
         if x.is_nan() || y.is_nan() {
             <T as Float>::nan()
         } else if x <= y {
@@ -473,7 +473,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| {
+    binary_elementwise_op(a, b, |x, y| {
         if x.is_nan() {
             y
         } else if y.is_nan() || x >= y {
@@ -490,7 +490,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_float_op(a, b, |x, y| {
+    binary_elementwise_op(a, b, |x, y| {
         if x.is_nan() {
             y
         } else if y.is_nan() || x <= y {
@@ -628,10 +628,7 @@ mod tests {
     use super::*;
     use ferray_core::dimension::Ix1;
 
-    fn arr1(data: Vec<f64>) -> Array<f64, Ix1> {
-        let n = data.len();
-        Array::from_vec(Ix1::new([n]), data).unwrap()
-    }
+    use crate::test_util::arr1;
 
     fn arr1_i32(data: Vec<i32>) -> Array<i32, Ix1> {
         let n = data.len();

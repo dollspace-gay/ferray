@@ -111,73 +111,45 @@ where
 }
 
 // ---------------------------------------------------------------------------
-// f16 variants (f32-promoted)
+// f16 variants (f32-promoted) — generated via the shared unary_f16_fn!
+// macro (#142).
 // ---------------------------------------------------------------------------
 
-/// Elementwise floor for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn floor_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::floor)
-}
+use crate::helpers::unary_f16_fn;
 
-/// Elementwise ceiling for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn ceil_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::ceil)
-}
-
-/// Elementwise truncation for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn trunc_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, f32::trunc)
-}
-
-/// Elementwise banker's rounding for f16 arrays via f32 promotion.
-#[cfg(feature = "f16")]
-pub fn round_f16<D>(input: &Array<half::f16, D>) -> FerrayResult<Array<half::f16, D>>
-where
-    D: Dimension,
-{
-    crate::helpers::unary_f16_op(input, bankers_round_f32)
-}
-
-/// f32 version of banker's round for f16 promotion.
-#[cfg(feature = "f16")]
-fn bankers_round_f32(x: f32) -> f32 {
-    let floored = x.floor();
-    let frac = x - floored;
-    if frac == 0.5 {
-        let ceiled = x.ceil();
-        if (floored / 2.0).floor() * 2.0 == floored {
-            floored
-        } else {
-            ceiled
-        }
-    } else if frac == -0.5 {
-        x.ceil()
-    } else {
-        x.round()
-    }
-}
+unary_f16_fn!(
+    /// Elementwise floor for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    floor_f16,
+    f32::floor
+);
+unary_f16_fn!(
+    /// Elementwise ceiling for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    ceil_f16,
+    f32::ceil
+);
+unary_f16_fn!(
+    /// Elementwise truncation for f16 arrays via f32 promotion.
+    #[cfg(feature = "f16")]
+    trunc_f16,
+    f32::trunc
+);
+unary_f16_fn!(
+    /// Elementwise banker's rounding for f16 arrays via f32 promotion.
+    ///
+    /// Reuses the generic [`bankers_round`] via monomorphization on
+    /// `f32`; the hand-rolled f32 copy was deleted in #144.
+    #[cfg(feature = "f16")]
+    round_f16,
+    bankers_round::<f32>
+);
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferray_core::dimension::Ix1;
 
-    fn arr1(data: Vec<f64>) -> Array<f64, Ix1> {
-        let n = data.len();
-        Array::from_vec(Ix1::new([n]), data).unwrap()
-    }
+    use crate::test_util::arr1;
 
     #[test]
     fn test_bankers_round_half_to_even_ac9() {

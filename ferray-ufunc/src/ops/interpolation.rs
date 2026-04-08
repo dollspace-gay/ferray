@@ -102,10 +102,7 @@ where
 mod tests {
     use super::*;
 
-    fn arr1(data: Vec<f64>) -> Array<f64, Ix1> {
-        let n = data.len();
-        Array::from_vec(Ix1::new([n]), data).unwrap()
-    }
+    use crate::test_util::arr1;
 
     #[test]
     fn test_interp_ac12() {

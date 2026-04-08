@@ -134,10 +134,7 @@ mod tests {
     use super::*;
     use ferray_core::dimension::Ix1;
 
-    fn arr1(data: Vec<f64>) -> Array<f64, Ix1> {
-        let n = data.len();
-        Array::from_vec(Ix1::new([n]), data).unwrap()
-    }
+    use crate::test_util::arr1;
 
     fn arr1_i32(data: Vec<i32>) -> Array<i32, Ix1> {
         let n = data.len();
