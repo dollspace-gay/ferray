@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] - 2026-03-07
 
 ### Added
+- ferray-linalg: no complex matrix support — LinalgFloat is sealed to f32/f64 (#404)
 - ferray-ufunc: no vectorized math library for transcendentals (sleef/svml equivalent) (#393)
 - ferray-ufunc: no ufunc object — functions are standalone, not composable abstractions (#376)
 - ferray-numpy-interop: only supports 1D arrays for Arrow and Polars (#549)

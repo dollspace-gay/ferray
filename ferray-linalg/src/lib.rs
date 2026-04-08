@@ -16,6 +16,8 @@
 
 /// Batched dispatch for stacked (3D+) arrays with Rayon parallelism.
 pub mod batch;
+/// Complex matrix operations (matmul/inv/solve/det for `Array<Complex<T>, Ix2>`).
+pub mod complex;
 /// Matrix decompositions: Cholesky, QR, SVD, LU, eigendecomposition.
 pub mod decomp;
 /// Conversion bridge between ferray arrays and faer matrices.
@@ -57,4 +59,10 @@ pub use solve::{
 pub use norms::{
     NormOrder, cond, det, det_batched, matrix_rank, matrix_rank_batched, norm, slogdet,
     slogdet_batched, trace,
+};
+
+// Complex matrix operations (#404) — take `Array<Complex<T>, Ix2>` directly
+// since `LinalgFloat` is sealed to real floats.
+pub use complex::{
+    det_complex, inv_complex, matmul_complex, solve_complex, solve_complex_vec,
 };
