@@ -33,7 +33,9 @@ pub use reductions::{
 };
 
 // Quantile-based
-pub use reductions::quantile::{median, nanmedian, nanpercentile, percentile, quantile};
+pub use reductions::quantile::{
+    median, nanmedian, nanpercentile, nanquantile, percentile, quantile,
+};
 
 // NaN-aware reductions
 pub use reductions::nan_aware::{
@@ -51,11 +53,12 @@ pub use histogram::{
 
 // Sorting
 pub use sorting::{
-    Side, SortKind, argsort, lexsort, searchsorted, searchsorted_with_sorter, sort,
+    Side, SortKind, argpartition, argsort, lexsort, partition, searchsorted,
+    searchsorted_with_sorter, sort,
 };
 
 // Searching
-pub use searching::{UniqueResult, count_nonzero, nonzero, unique, where_};
+pub use searching::{UniqueResult, count_nonzero, nonzero, unique, where_, where_condition};
 
 // Set operations
 pub use set_ops::{in1d, intersect1d, isin, setdiff1d, setxor1d, union1d};

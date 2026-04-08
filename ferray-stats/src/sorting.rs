@@ -259,6 +259,63 @@ where
 }
 
 // ---------------------------------------------------------------------------
+// partition / argpartition
+// ---------------------------------------------------------------------------
+
+/// Partial sort: rearrange elements so that `a[kth]` is the value that
+/// would be there in a sorted array, all elements before it are `<=`,
+/// and all elements after are `>=`. The relative order within the two
+/// halves is undefined.
+///
+/// Equivalent to `numpy.partition(a, kth)`. Uses `select_nth_unstable`
+/// for O(n) average-case performance (#466).
+///
+/// # Errors
+/// - `FerrayError::AxisOutOfBounds` if `kth >= a.size()`.
+pub fn partition<T>(a: &Array<T, Ix1>, kth: usize) -> FerrayResult<Array<T, Ix1>>
+where
+    T: Element + PartialOrd + Copy,
+{
+    let n = a.size();
+    if kth >= n {
+        return Err(FerrayError::invalid_value(format!(
+            "partition: kth={kth} out of range for array of size {n}"
+        )));
+    }
+    let mut data: Vec<T> = a.iter().copied().collect();
+    data.select_nth_unstable_by(kth, |x, y| {
+        x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Array::from_vec(Ix1::new([n]), data)
+}
+
+/// Return indices that would partition the array. The k-th element of
+/// the result is the index of the k-th smallest element; elements
+/// before index kth are indices of smaller-or-equal elements, and
+/// elements after are indices of greater-or-equal.
+///
+/// Equivalent to `numpy.argpartition(a, kth)` (#466).
+pub fn argpartition<T>(a: &Array<T, Ix1>, kth: usize) -> FerrayResult<Array<u64, Ix1>>
+where
+    T: Element + PartialOrd + Copy,
+{
+    let n = a.size();
+    if kth >= n {
+        return Err(FerrayError::invalid_value(format!(
+            "argpartition: kth={kth} out of range for array of size {n}"
+        )));
+    }
+    let data: Vec<T> = a.iter().copied().collect();
+    let mut idx: Vec<u64> = (0..n as u64).collect();
+    idx.select_nth_unstable_by(kth, |&a_i, &b_i| {
+        let va = data[a_i as usize];
+        let vb = data[b_i as usize];
+        va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Array::from_vec(Ix1::new([n]), idx)
+}
+
+// ---------------------------------------------------------------------------
 // lexsort
 // ---------------------------------------------------------------------------
 

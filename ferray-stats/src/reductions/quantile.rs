@@ -188,8 +188,10 @@ where
     nanquantile(a, q / hundred, axis)
 }
 
-/// Quantile, skipping NaN values.
-fn nanquantile<T, D>(a: &Array<T, D>, q: T, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
+/// Quantile, skipping NaN values. Equivalent to `numpy.nanquantile`
+/// (#93 — was previously private, only accessible indirectly through
+/// `nanmedian`/`nanpercentile`).
+pub fn nanquantile<T, D>(a: &Array<T, D>, q: T, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,

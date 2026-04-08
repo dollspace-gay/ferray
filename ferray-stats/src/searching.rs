@@ -188,6 +188,43 @@ where
     Array::from_vec(condition.dim().clone(), result)
 }
 
+/// One-argument form of `where`: return the indices where `condition`
+/// is true, as a vector of 1-D index arrays (one per dimension).
+///
+/// Equivalent to `numpy.where(condition)` (single-argument form) or
+/// `numpy.nonzero(condition.astype(int))`. Added for NumPy parity
+/// (#166) — the three-argument form above is [`where_`].
+pub fn where_condition<D: Dimension>(
+    condition: &Array<bool, D>,
+) -> FerrayResult<Vec<Array<u64, Ix1>>> {
+    let shape = condition.shape();
+    let ndim = shape.len();
+    let mut indices_per_dim: Vec<Vec<u64>> = vec![Vec::new(); ndim];
+
+    let mut strides = vec![1usize; ndim];
+    for i in (0..ndim.saturating_sub(1)).rev() {
+        strides[i] = strides[i + 1] * shape[i + 1];
+    }
+
+    for (flat_idx, &val) in condition.iter().enumerate() {
+        if val {
+            let mut rem = flat_idx;
+            for d in 0..ndim {
+                indices_per_dim[d].push((rem / strides[d]) as u64);
+                rem %= strides[d];
+            }
+        }
+    }
+
+    indices_per_dim
+        .into_iter()
+        .map(|v| {
+            let n = v.len();
+            Array::from_vec(Ix1::new([n]), v)
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------------
 // count_nonzero
 // ---------------------------------------------------------------------------
