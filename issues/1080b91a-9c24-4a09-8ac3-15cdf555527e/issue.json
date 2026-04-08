@@ -3,11 +3,12 @@
   "display_id": 144,
   "title": "ferray-ufunc: duplicated bankers_round for f32 and generic Float",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nrounding.rs L16-45,155-170: identical logic. Generic version could monomorphize.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:35:13.114152324Z",
-  "updated_at": "2026-03-25T15:35:31.494617374Z",
+  "updated_at": "2026-04-08T04:52:18.107933890Z",
+  "closed_at": "2026-04-08T04:52:18.107933890Z",
   "labels": [
     "refactor",
     "qa-audit"
