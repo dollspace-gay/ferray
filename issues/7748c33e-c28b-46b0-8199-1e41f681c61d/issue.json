@@ -3,11 +3,12 @@
   "display_id": 167,
   "title": "ferray-strings: many missing NumPy string operations",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nMissing: isalpha, isdigit, isspace, isupper, islower, swapcase, rfind, str_len, partition, slice, etc.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:38:55.776158607Z",
-  "updated_at": "2026-03-25T15:39:09.645344077Z",
+  "updated_at": "2026-04-08T21:08:22.985837038Z",
+  "closed_at": "2026-04-08T21:08:22.985837038Z",
   "labels": [
     "refactor",
     "qa-audit"
