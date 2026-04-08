@@ -3,11 +3,12 @@
   "display_id": 337,
   "title": "ferray umbrella: ferray-autodiff not available through umbrella",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nNo optional dep or feature flag.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:09:56.727062377Z",
-  "updated_at": "2026-03-25T16:10:01.292681276Z",
+  "updated_at": "2026-04-08T15:42:13.440114141Z",
+  "closed_at": "2026-04-08T15:42:13.440114141Z",
   "labels": [
     "refactor",
     "qa-audit"
