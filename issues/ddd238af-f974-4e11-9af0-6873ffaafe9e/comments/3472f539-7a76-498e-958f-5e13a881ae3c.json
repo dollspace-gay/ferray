@@ -1,0 +1,10 @@
+{
+  "uuid": "3472f539-7a76-498e-958f-5e13a881ae3c",
+  "issue_uuid": "ddd238af-f974-4e11-9af0-6873ffaafe9e",
+  "author": "phase-4-coordinator",
+  "content": "Added an initial self-test suite for the oracle framework. Previously zero tests existed for the oracle utilities themselves. Now covers (21 tests total): ULP distance for f64/f32 (equal values, signed zeros, 1-ULP step, NaN, cross-sign for ±1, cross-sign symmetry, cross-sign monotonicity, near-zero noise floor), parse_f64_value (numeric, NaN string, Inf/-Inf/Infinity strings), and parse_complex_data (finite numbers, NaN in re, NaN in im, +/-Inf in re, mixed fields, single Object form). Closes the foundational gap flagged in this issue. Fixture loading / full comparison logic testing can be layered on later as the framework evolves.",
+  "created_at": "2026-04-08T00:11:34.006407439Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA9z1yPN4kAPzgttnvagOYx8fx2d/W8Ssxk4T9UTNAVKXLmjALJfmedWRHIIe8rGHyra9c1ay/z7WG7DdZ/2LsCQ=="
+}
