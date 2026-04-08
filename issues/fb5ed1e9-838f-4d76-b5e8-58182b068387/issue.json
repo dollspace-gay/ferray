@@ -3,11 +3,12 @@
   "display_id": 222,
   "title": "ferray umbrella: const_shapes feature not forwarded from core",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nferray-core has const_shapes feature. Umbrella doesn't expose it.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:48:35.736991574Z",
-  "updated_at": "2026-03-25T15:48:41.787759262Z",
+  "updated_at": "2026-04-08T15:41:52.638053064Z",
+  "closed_at": "2026-04-08T15:41:52.638053064Z",
   "labels": [
     "refactor",
     "qa-audit"
