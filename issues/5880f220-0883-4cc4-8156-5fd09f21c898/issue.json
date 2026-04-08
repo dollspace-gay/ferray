@@ -3,11 +3,12 @@
   "display_id": 298,
   "title": "ferray-autodiff: dead q computation in Rem<T>",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nlib.rs L244-247: q computed then multiplied by zero. Remove.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:01:55.548758107Z",
-  "updated_at": "2026-03-25T16:02:00.984225550Z",
+  "updated_at": "2026-04-08T16:43:56.613097585Z",
+  "closed_at": "2026-04-08T16:43:56.613097585Z",
   "labels": [
     "refactor",
     "qa-audit"
