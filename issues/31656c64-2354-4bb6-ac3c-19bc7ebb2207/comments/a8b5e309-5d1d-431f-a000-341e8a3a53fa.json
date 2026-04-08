@@ -1,0 +1,10 @@
+{
+  "uuid": "a8b5e309-5d1d-431f-a000-341e8a3a53fa",
+  "issue_uuid": "31656c64-2354-4bb6-ac3c-19bc7ebb2207",
+  "author": "phase-4-coordinator",
+  "content": "Updated arrow_conv.rs docs to accurately describe what to_arrow actually does: it copies. Removed the misleading 'Zero-copy when the source is C-contiguous' claim from the module doc and the method doc, and removed the bogus 'SAFETY: buffer length is exactly ...' comment that preceded a line of entirely safe code (there was no unsafe). The to_arrow body is unchanged — it still makes one copy via as_slice().to_vec() or to_vec_flat() and then hands the Vec to Arrow's Buffer::from_vec. Cross-references the crate-level zero-copy discussion added in #195. Companion fixes in #548 and #550.",
+  "created_at": "2026-04-08T00:23:51.591596327Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA3lyrrskXGP6epKUjq3vZLn38paPlmhPBzhsTGye/jVFpiMcf2/YrIMYajMhHTMzQ33RV6witkpv/AbO/vv9gBg=="
+}
