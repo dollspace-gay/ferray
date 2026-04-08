@@ -3,11 +3,12 @@
   "display_id": 292,
   "title": "ferray-window: duplicated boilerplate across all 5 window functions",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nwindows/mod.rs L51-197: identical pattern repeated. Extract gen_window helper.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:01:07.360430044Z",
-  "updated_at": "2026-03-25T16:01:12.408289841Z",
+  "updated_at": "2026-04-08T05:08:16.202676076Z",
+  "closed_at": "2026-04-08T05:08:16.202676076Z",
   "labels": [
     "refactor",
     "qa-audit"
