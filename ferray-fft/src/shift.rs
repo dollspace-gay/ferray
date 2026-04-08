@@ -103,10 +103,29 @@ fn roll_along_axes<T: Element, D: Dimension>(
         }
     }
 
-    // Allocate output and fill
-    let input: Vec<T> = a.iter().cloned().collect();
-    let mut output = Vec::with_capacity(total);
+    // Borrow the contiguous buffer directly when available, avoiding
+    // the full `iter().cloned().collect()` copy the previous version
+    // always performed (#430). Non-contiguous arrays still fall back
+    // to a materialized copy.
+    enum InputRef<'a, T> {
+        Borrowed(&'a [T]),
+        Owned(Vec<T>),
+    }
+    impl<T> std::ops::Deref for InputRef<'_, T> {
+        type Target = [T];
+        fn deref(&self) -> &[T] {
+            match self {
+                InputRef::Borrowed(s) => s,
+                InputRef::Owned(v) => v,
+            }
+        }
+    }
+    let input: InputRef<'_, T> = match a.as_slice() {
+        Some(s) => InputRef::Borrowed(s),
+        None => InputRef::Owned(a.iter().cloned().collect()),
+    };
 
+    let mut output = Vec::with_capacity(total);
     for out_flat in 0..total {
         // Convert flat index to multi-index
         let mut src_flat = 0usize;
