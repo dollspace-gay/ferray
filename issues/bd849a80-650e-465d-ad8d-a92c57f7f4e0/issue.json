@@ -3,11 +3,12 @@
   "display_id": 275,
   "title": "ferray-ma: no test for masked_div with division by zero",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNumPy auto-masks div-by-zero results. Current behavior untested.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:58:53.798675122Z",
-  "updated_at": "2026-03-25T15:58:57.735251670Z",
+  "updated_at": "2026-04-08T22:05:50.945002989Z",
+  "closed_at": "2026-04-08T22:05:50.945002989Z",
   "labels": [
     "bug",
     "qa-audit"
