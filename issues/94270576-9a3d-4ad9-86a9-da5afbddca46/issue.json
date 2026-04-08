@@ -3,11 +3,12 @@
   "display_id": 278,
   "title": "ferray-strings: no Display or IntoIterator for StringArray",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nstring_array.rs: missing standard Rust trait impls.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:59:13.861764205Z",
-  "updated_at": "2026-03-25T15:59:17.877782987Z",
+  "updated_at": "2026-04-08T21:08:24.879489253Z",
+  "closed_at": "2026-04-08T21:08:24.879489253Z",
   "labels": [
     "refactor",
     "qa-audit"
