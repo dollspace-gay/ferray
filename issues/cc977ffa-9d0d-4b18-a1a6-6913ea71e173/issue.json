@@ -3,11 +3,12 @@
   "display_id": 161,
   "title": "ferray-stats: reduce_axis_general and _u64 are near-identical duplications",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nreductions/mod.rs L78-135,433-486: ~100 lines duplicated. Parameterize on output type.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:38:00.234461584Z",
-  "updated_at": "2026-03-25T15:38:12.323391288Z",
+  "updated_at": "2026-04-08T05:20:11.219254473Z",
+  "closed_at": "2026-04-08T05:20:11.219254473Z",
   "labels": [
     "refactor",
     "qa-audit"
