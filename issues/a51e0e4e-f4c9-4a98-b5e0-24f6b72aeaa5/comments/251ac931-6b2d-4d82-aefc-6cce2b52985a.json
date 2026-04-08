@@ -1,0 +1,10 @@
+{
+  "uuid": "251ac931-6b2d-4d82-aefc-6cce2b52985a",
+  "issue_uuid": "a51e0e4e-f4c9-4a98-b5e0-24f6b72aeaa5",
+  "author": "phase-4-coordinator",
+  "content": "Added 2-D and dynamic-rank interop for Arrow and Polars. Two complementary mappings per backend.\\n\\nArrow (arrow_conv.rs):\\n- array2_to_arrow_columns(a) -> Vec<PrimitiveArray> — one Arrow column per column of the ferray array. This is the natural shape for a downstream Arrow consumer that treats each column as a field.\\n- array2_from_arrow_columns(cols) -> Array2 — stacks columns back, validating shape/dtype/null-count per column.\\n- arrayd_to_arrow_flat(a) -> PrimitiveArray — flattens any ND ferray array to a single 1-D Arrow buffer. Round-trip requires the caller to remember the shape.\\n- arrayd_from_arrow_flat(arr, shape) -> ArrayD — reshape a flat Arrow buffer into a target shape with bounds checking.\\n\\nPolars (polars_conv.rs):\\n- array2_to_polars_dataframe(a, column_names) -> DataFrame — one Series per column of the 2-D array. The natural fit for pipelines that hand a DataFrame to further processing.\\n- array2_from_polars_dataframe(df) -> Array2 — stack the columns, requiring consistent length/dtype and no nulls.\\n\\n10 new tests across both backends: Array2 roundtrip for f64 and i32, arrayd flat roundtrip incl. reshape-to-different-rank, empty DataFrame/columns, inconsistent column length, wrong dtype, wrong column-name count — plus bound checks on the flat reshape path. All 54 lib tests pass with the arrow and polars features enabled (up from 44). Clippy clean. Arrow/Polars mixed-dtype or null-aware DataFrames are still out of scope; callers with those need to cast/drop-null on the pandas side before handing to ferray.",
+  "created_at": "2026-04-08T02:06:59.516781354Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAex0SxiSsHgan65+Pnqhf09Y289U38W/A6pAVXm5kWnKooNtmFdxGyP9yAtIxXW6XeYAPxgZmM/aDH0eP6YpBCw=="
+}
