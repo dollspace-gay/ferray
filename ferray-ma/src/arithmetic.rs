@@ -408,3 +408,87 @@ where
         masked_div(self, rhs)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferray_core::dimension::Ix1;
+
+    fn ma1d(data: Vec<f64>, mask: Vec<bool>) -> MaskedArray<f64, Ix1> {
+        let n = data.len();
+        let d = Array::<f64, Ix1>::from_vec(Ix1::new([n]), data).unwrap();
+        let m = Array::<bool, Ix1>::from_vec(Ix1::new([n]), mask).unwrap();
+        MaskedArray::new(d, m).unwrap()
+    }
+
+    // ---- #275: masked_div with division by zero ----
+    //
+    // NumPy's np.ma auto-masks division-by-zero results. ferray-ma does NOT
+    // auto-mask: division is a plain IEEE 754 f64 divide, so the result
+    // carries ±inf / NaN at the offending positions and the output mask
+    // equals the union of the input masks. These tests pin that current
+    // behavior so any future NumPy-alignment work is an intentional change.
+
+    #[test]
+    fn masked_div_positive_by_zero_yields_positive_infinity_unmasked() {
+        let a = ma1d(vec![1.0, 2.0, 3.0], vec![false; 3]);
+        let b = ma1d(vec![1.0, 0.0, 3.0], vec![false; 3]);
+        let r = masked_div(&a, &b).unwrap();
+        let rd: Vec<f64> = r.data().iter().copied().collect();
+        let rm: Vec<bool> = r.mask().iter().copied().collect();
+        assert_eq!(rd[0], 1.0);
+        assert!(rd[1].is_infinite() && rd[1].is_sign_positive());
+        assert_eq!(rd[2], 1.0);
+        // Current behavior: div-by-zero is NOT auto-masked.
+        assert_eq!(rm, vec![false, false, false]);
+    }
+
+    #[test]
+    fn masked_div_negative_by_zero_yields_negative_infinity_unmasked() {
+        let a = ma1d(vec![-4.0], vec![false]);
+        let b = ma1d(vec![0.0], vec![false]);
+        let r = masked_div(&a, &b).unwrap();
+        let v = r.data().iter().next().copied().unwrap();
+        assert!(v.is_infinite() && v.is_sign_negative());
+        assert!(!r.mask().iter().next().copied().unwrap());
+    }
+
+    #[test]
+    fn masked_div_zero_by_zero_yields_nan_unmasked() {
+        let a = ma1d(vec![0.0], vec![false]);
+        let b = ma1d(vec![0.0], vec![false]);
+        let r = masked_div(&a, &b).unwrap();
+        let v = r.data().iter().next().copied().unwrap();
+        assert!(v.is_nan());
+        assert!(!r.mask().iter().next().copied().unwrap());
+    }
+
+    #[test]
+    fn masked_div_skips_op_at_masked_divisor_positions() {
+        // If the divisor is masked, the op is never evaluated — the masked
+        // slot is filled with the receiver's fill_value, not inf/NaN.
+        let a = ma1d(vec![1.0, 2.0, 3.0], vec![false; 3]).with_fill_value(-42.0);
+        let b = ma1d(vec![2.0, 0.0, 4.0], vec![false, true, false]);
+        let r = masked_div(&a, &b).unwrap();
+        let rd: Vec<f64> = r.data().iter().copied().collect();
+        let rm: Vec<bool> = r.mask().iter().copied().collect();
+        assert_eq!(rd, vec![0.5, -42.0, 0.75]);
+        assert_eq!(rm, vec![false, true, false]);
+        // The masked position must not carry the div-by-zero IEEE value.
+        assert!(!rd[1].is_infinite() && !rd[1].is_nan());
+    }
+
+    #[test]
+    fn masked_div_array_by_zero_yields_infinity_unmasked() {
+        // Same behavior holds for the masked-by-regular-array variant.
+        let a = ma1d(vec![5.0, 6.0], vec![false; 2]);
+        let divisor =
+            Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.0, 2.0]).unwrap();
+        let r = masked_div_array(&a, &divisor).unwrap();
+        let rd: Vec<f64> = r.data().iter().copied().collect();
+        assert!(rd[0].is_infinite() && rd[0].is_sign_positive());
+        assert_eq!(rd[1], 3.0);
+        let rm: Vec<bool> = r.mask().iter().copied().collect();
+        assert_eq!(rm, vec![false, false]);
+    }
+}

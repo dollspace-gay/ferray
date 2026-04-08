@@ -741,6 +741,66 @@ mod tests {
         );
     }
 
+    // ---- #276: all-masked whole-array reductions ----
+    //
+    // Pin the current semantics when every element is masked:
+    //   sum   -> 0 (neutral element of the fold)
+    //   mean  -> NaN
+    //   var   -> NaN
+    //   std   -> NaN
+    //   min   -> error (FerrayError::InvalidValue)
+    //   max   -> error (FerrayError::InvalidValue)
+
+    fn all_masked_ma1d(n: usize) -> MaskedArray<f64, Ix1> {
+        let d = Array::<f64, Ix1>::from_vec(Ix1::new([n]), vec![1.0; n]).unwrap();
+        let m = Array::<bool, Ix1>::from_vec(Ix1::new([n]), vec![true; n]).unwrap();
+        MaskedArray::new(d, m).unwrap()
+    }
+
+    #[test]
+    fn sum_all_masked_returns_zero() {
+        let ma = all_masked_ma1d(4);
+        assert_eq!(ma.sum().unwrap(), 0.0);
+    }
+
+    #[test]
+    fn mean_all_masked_returns_nan() {
+        let ma = all_masked_ma1d(4);
+        assert!(ma.mean().unwrap().is_nan());
+    }
+
+    #[test]
+    fn var_all_masked_returns_nan() {
+        let ma = all_masked_ma1d(4);
+        assert!(ma.var().unwrap().is_nan());
+    }
+
+    #[test]
+    fn std_all_masked_returns_nan() {
+        let ma = all_masked_ma1d(4);
+        assert!(ma.std().unwrap().is_nan());
+    }
+
+    #[test]
+    fn min_max_all_masked_error() {
+        // Documenting the asymmetry: sum/mean/var/std fall through with
+        // 0/NaN sentinels, but min/max have no neutral element and error.
+        let ma = all_masked_ma1d(4);
+        assert!(ma.min().is_err());
+        assert!(ma.max().is_err());
+    }
+
+    #[test]
+    fn sum_var_std_all_masked_2d_matches_1d() {
+        // Same semantics hold for multi-dimensional whole-array reductions.
+        let d = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![9.0; 6]).unwrap();
+        let m = Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![true; 6]).unwrap();
+        let ma = MaskedArray::new(d, m).unwrap();
+        assert_eq!(ma.sum().unwrap(), 0.0);
+        assert!(ma.var().unwrap().is_nan());
+        assert!(ma.std().unwrap().is_nan());
+    }
+
     #[test]
     fn masked_add_broadcast_incompatible_errors() {
         use crate::masked_add;
