@@ -1,6 +1,9 @@
 // ferray-stats: Core reductions — sum, prod, min, max, argmin, argmax, mean, var, std (REQ-1, REQ-2)
+//
+// `cumulative` used to exist as an empty placeholder whose only content
+// was a note that cumulative functions live in nan_aware / mod.rs; it's
+// been deleted to stop pretending there's a dedicated module there (#162).
 
-pub mod cumulative;
 pub mod nan_aware;
 pub mod quantile;
 
@@ -74,14 +77,26 @@ pub(crate) fn increment_multi_index(multi: &mut [usize], shape: &[usize]) -> boo
     false
 }
 
-/// General axis reduction: given input data in row-major order with `shape`,
-/// reduce along `axis` using the function `f` which maps a lane to a scalar.
-pub(crate) fn reduce_axis_general<T: Copy, F: Fn(&[T]) -> T>(
+/// General axis reduction parameterized on the output element type.
+///
+/// Walks `data` (in row-major order with `shape`), gathers each lane
+/// along `axis` into a temporary `Vec<T>`, and calls `f` to collapse it
+/// to an output of type `U`. Returns the concatenated outputs in
+/// row-major order for the shape with `axis` removed.
+///
+/// Used as the shared backbone for `reduce_axis_general` (T=T path) and
+/// `reduce_axis_general_u64` (T=T, U=u64 path). The two used to have
+/// copy-pasted bodies differing only in return type (#161).
+pub(crate) fn reduce_axis_typed<T, U, F>(
     data: &[T],
     shape: &[usize],
     axis: usize,
     f: F,
-) -> Vec<T> {
+) -> Vec<U>
+where
+    T: Copy,
+    F: Fn(&[T]) -> U,
+{
     let ndim = shape.len();
     let axis_len = shape[axis];
     let strides = compute_strides(shape);
@@ -102,7 +117,7 @@ pub(crate) fn reduce_axis_general<T: Copy, F: Fn(&[T]) -> T>(
     let mut result = Vec::with_capacity(out_size);
     let mut out_multi = vec![0usize; out_shape.len()];
     let mut in_multi = vec![0usize; ndim];
-    let mut lane_vec = Vec::with_capacity(axis_len);
+    let mut lane_vec: Vec<T> = Vec::with_capacity(axis_len);
 
     for _ in 0..out_size {
         // Build input multi-index by inserting axis position
@@ -133,6 +148,22 @@ pub(crate) fn reduce_axis_general<T: Copy, F: Fn(&[T]) -> T>(
     }
 
     result
+}
+
+/// Thin wrapper: `T -> T` reduction. Preserved for the many call sites
+/// that pass `Fn(&[T]) -> T` kernels.
+#[inline]
+pub(crate) fn reduce_axis_general<T, F>(
+    data: &[T],
+    shape: &[usize],
+    axis: usize,
+    f: F,
+) -> Vec<T>
+where
+    T: Copy,
+    F: Fn(&[T]) -> T,
+{
+    reduce_axis_typed(data, shape, axis, f)
 }
 
 /// Validate axis parameter and return an error if out of bounds.
@@ -602,60 +633,21 @@ where
     }
 }
 
-/// Like reduce_axis_general but returns u64 values from a lane -> u64 function.
-pub(crate) fn reduce_axis_general_u64<T: Copy, F: Fn(&[T]) -> u64>(
+/// Thin wrapper: `T -> u64` reduction (for `argmin`/`argmax` /
+/// `bincount` paths). Shares its body with `reduce_axis_general`
+/// via `reduce_axis_typed`.
+#[inline]
+pub(crate) fn reduce_axis_general_u64<T, F>(
     data: &[T],
     shape: &[usize],
     axis: usize,
     f: F,
-) -> Vec<u64> {
-    let ndim = shape.len();
-    let axis_len = shape[axis];
-    let strides = compute_strides(shape);
-
-    let out_shape: Vec<usize> = shape
-        .iter()
-        .enumerate()
-        .filter(|&(i, _)| i != axis)
-        .map(|(_, &s)| s)
-        .collect();
-    let out_size: usize = if out_shape.is_empty() {
-        1
-    } else {
-        out_shape.iter().product()
-    };
-
-    let mut result = Vec::with_capacity(out_size);
-    let mut out_multi = vec![0usize; out_shape.len()];
-    let mut in_multi = vec![0usize; ndim];
-    let mut lane_vec = Vec::with_capacity(axis_len);
-
-    for _ in 0..out_size {
-        let mut out_dim = 0;
-        for (d, idx) in in_multi.iter_mut().enumerate() {
-            if d == axis {
-                *idx = 0;
-            } else {
-                *idx = out_multi[out_dim];
-                out_dim += 1;
-            }
-        }
-
-        lane_vec.clear();
-        for k in 0..axis_len {
-            in_multi[axis] = k;
-            let flat = flat_index(&in_multi, &strides);
-            lane_vec.push(data[flat]);
-        }
-
-        result.push(f(&lane_vec));
-
-        if !out_shape.is_empty() {
-            increment_multi_index(&mut out_multi, &out_shape);
-        }
-    }
-
-    result
+) -> Vec<u64>
+where
+    T: Copy,
+    F: Fn(&[T]) -> u64,
+{
+    reduce_axis_typed(data, shape, axis, f)
 }
 
 // ---------------------------------------------------------------------------

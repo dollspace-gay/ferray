@@ -11,34 +11,41 @@ use super::{borrow_data, make_result, output_shape, reduce_axis_general, validat
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Iterate over the non-NaN elements of a lane without allocating a
+/// filtered buffer. Every lane_nan* helper used to open-code this
+/// filter; consolidating it keeps the "skip NaN" policy in one place
+/// (#164).
+#[inline]
+fn non_nan<T: Float>(lane: &[T]) -> impl Iterator<Item = T> + '_ {
+    lane.iter().copied().filter(|x| !x.is_nan())
+}
+
+/// Single-pass sum-and-count of non-NaN elements. Shared between
+/// `lane_nanmean` and `lane_nanvar`.
+#[inline]
+fn nan_sum_count<T: Float>(lane: &[T]) -> (T, usize) {
+    let mut sum = T::zero();
+    let mut count = 0usize;
+    for x in non_nan(lane) {
+        sum = sum + x;
+        count += 1;
+    }
+    (sum, count)
+}
+
 /// Sum a lane, skipping NaN values. Returns zero for all-NaN.
-/// Accumulates directly without allocating a filtered Vec.
 fn lane_nansum<T: Float>(lane: &[T]) -> T {
-    lane.iter()
-        .copied()
-        .filter(|x| !x.is_nan())
-        .fold(T::zero(), |a, b| a + b)
+    non_nan(lane).fold(T::zero(), |a, b| a + b)
 }
 
 /// Product of a lane, skipping NaN values. Returns one for all-NaN.
 fn lane_nanprod<T: Float>(lane: &[T]) -> T {
-    lane.iter()
-        .copied()
-        .filter(|x| !x.is_nan())
-        .fold(T::one(), |a, b| a * b)
+    non_nan(lane).fold(T::one(), |a, b| a * b)
 }
 
 /// Mean of a lane, skipping NaN values. Returns NaN for all-NaN.
-/// Accumulates sum and count in a single pass without allocation.
 fn lane_nanmean<T: Float>(lane: &[T]) -> T {
-    let mut sum = T::zero();
-    let mut count = 0usize;
-    for &x in lane {
-        if !x.is_nan() {
-            sum = sum + x;
-            count += 1;
-        }
-    }
+    let (sum, count) = nan_sum_count(lane);
     if count == 0 {
         T::nan()
     } else {
@@ -46,49 +53,34 @@ fn lane_nanmean<T: Float>(lane: &[T]) -> T {
     }
 }
 
-/// Variance of a lane, skipping NaN values.
-/// Two-pass algorithm without allocation: first pass computes mean,
-/// second pass computes sum of squared deviations.
+/// Variance of a lane, skipping NaN values. Two-pass algorithm.
 fn lane_nanvar<T: Float>(lane: &[T], ddof: usize) -> T {
-    // Pass 1: compute mean
-    let mut sum = T::zero();
-    let mut count = 0usize;
-    for &x in lane {
-        if !x.is_nan() {
-            sum = sum + x;
-            count += 1;
-        }
-    }
+    let (sum, count) = nan_sum_count(lane);
     if count <= ddof {
         return T::nan();
     }
     let mean = sum / T::from(count).unwrap();
 
     // Pass 2: sum of squared deviations
-    let mut sq_sum = T::zero();
-    for &x in lane {
-        if !x.is_nan() {
+    let sq_sum: T = non_nan(lane)
+        .map(|x| {
             let d = x - mean;
-            sq_sum = sq_sum + d * d;
-        }
-    }
+            d * d
+        })
+        .fold(T::zero(), |a, b| a + b);
     sq_sum / T::from(count - ddof).unwrap()
 }
 
 /// Min of a lane, skipping NaN values. Returns NaN for all-NaN.
 fn lane_nanmin<T: Float>(lane: &[T]) -> T {
-    lane.iter()
-        .copied()
-        .filter(|x| !x.is_nan())
+    non_nan(lane)
         .reduce(|a, b| if a <= b { a } else { b })
         .unwrap_or_else(T::nan)
 }
 
 /// Max of a lane, skipping NaN values. Returns NaN for all-NaN.
 fn lane_nanmax<T: Float>(lane: &[T]) -> T {
-    lane.iter()
-        .copied()
-        .filter(|x| !x.is_nan())
+    non_nan(lane)
         .reduce(|a, b| if a >= b { a } else { b })
         .unwrap_or_else(T::nan)
 }
