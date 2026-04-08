@@ -1,0 +1,10 @@
+{
+  "uuid": "a6b65ddb-d6ce-4f5d-ad96-6d5325b9d7a6",
+  "issue_uuid": "b01ddcae-5f1d-40b3-83ae-2b6f212bffc3",
+  "author": "phase-4-coordinator",
+  "content": "Partially addressed — the full fix is blocked by a dependency-graph version mismatch.\\n\\nThe cleanest fix would be PyArray2::from_owned_array(py, self.into_ndarray()), skipping the PyArray1+reshape detour entirely. I made into_ndarray() pub in ferray-core (it was pub(crate)) to enable this, but it turns out numpy 0.24 pins ndarray 0.16 while ferray-core is on ndarray 0.17 — the two ArrayBase types are nominally distinct so from_owned_array rejects it at compile time. Once numpy releases a version that tracks ndarray 0.17 this becomes a one-line change.\\n\\nIn the meantime: (1) documented why the indirection is still there so the next person doesn't re-investigate, (2) clarified that NumPy's reshape on a freshly-constructed contiguous PyArray1 is metadata-only (no buffer copy), so the 'extra allocation' in the title is actually just a metadata wrapper over the same allocation, (3) changed the reshape error message to clearly mark it as unreachable — the shape comes from self.shape() and the buffer length is self.size() by construction, so the reshape can only fail via a numpy crate bug.\\n\\nAlso made ferray_core::Array::into_ndarray() public as a bonus (useful for other interop consumers even if numpy can't use it yet).",
+  "created_at": "2026-04-08T00:24:28.127075014Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABADwbADhdurwNsjyWKHBURI0M3ya7JhYOtMbXD8hDRwIN9UTrT3uoTvjDljBN3GzV+Yy36d37oFzWQ9VWGbSAYAw=="
+}
