@@ -1,0 +1,10 @@
+{
+  "uuid": "7d7b73a8-ff1d-4b3a-aec5-39b200afdf73",
+  "issue_uuid": "88528c9a-811a-417b-86a3-1d9208cf4b39",
+  "author": "phase-4-coordinator",
+  "content": "Added mixed-type (promoted) arithmetic ufuncs in new ferray-ufunc/src/promoted.rs module. The compile-time promotion machinery already existed in ferray-core (Promoted trait for result-type resolution, PromoteTo for element casting); this is the glue that wires it into the ufunc layer. New functions: add_promoted, subtract_promoted, multiply_promoted, divide_promoted. Canonical example from the issue works: add_promoted of an i32 array and an f64 array promotes to f64. 8 new unit tests covering (i32,f64), (f32,f64), (i16,f32), (u8,f64) pairings plus same-type identity, 2-D shape preservation, and shape mismatch error. Output type bound is Float which covers every mixed int+float and f32+f64 case; pure int+int promotion is unusual for ufuncs and callers can cast explicitly. 244 lib tests (up from 236) + 50/19/53 integration tests pass. Clippy clean. Broadcasting on the promoted path is deferred until a concrete caller needs it.",
+  "created_at": "2026-04-08T01:59:59.150197474Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA3970Mf6gJlpQ5H0f+JBug0vXZcIyMwsO5VLbcx5ZXVbiqQUIpIIJSZj5umqdNebxtWAsa8NQP4c6QuhrMD4EBQ=="
+}
