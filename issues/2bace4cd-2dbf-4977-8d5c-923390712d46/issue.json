@@ -3,11 +3,12 @@
   "display_id": 300,
   "title": "ferray-autodiff: free functions duplicate method API without adding value",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nL638-736: 16 one-line delegations. Inconsistent coverage.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:02:11.529447504Z",
-  "updated_at": "2026-03-25T16:02:16.994418473Z",
+  "updated_at": "2026-04-08T16:43:01.903939897Z",
+  "closed_at": "2026-04-08T16:43:01.903939897Z",
   "labels": [
     "refactor",
     "qa-audit"
