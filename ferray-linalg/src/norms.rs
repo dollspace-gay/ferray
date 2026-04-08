@@ -3,7 +3,9 @@
 // norm, cond, det, slogdet, matrix_rank, trace
 
 use ferray_core::array::owned::Array;
+use ferray_core::array::view::ArrayView;
 use ferray_core::dimension::{Ix1, Ix2, IxDyn};
+use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::batch;
@@ -684,6 +686,77 @@ pub fn trace<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<T> {
     Ok(sum)
 }
 
+/// Extract the diagonal of a matrix as a 1-D array.
+///
+/// `offset` selects which diagonal is returned:
+/// - `offset = 0` → main diagonal (default)
+/// - `offset > 0` → super-diagonal (above the main, shifted right by `offset`)
+/// - `offset < 0` → sub-diagonal (below the main, shifted down by `|offset|`)
+///
+/// Equivalent to `numpy.linalg.diagonal(x, offset=offset)` / `np.diag` on a
+/// 2-D input. Unlike [`trace`], `diagonal` is a pure structural op so it
+/// works for any [`Element`] type, not just `LinalgFloat`.
+///
+/// An `offset` that falls entirely outside the matrix produces an empty
+/// result rather than an error — this matches NumPy (`np.diagonal(a, 999)`
+/// yields an empty array).
+///
+/// # Errors
+/// Returns `FerrayError::InvalidValue` if `offset` would overflow `isize`
+/// during normalization (effectively never for real-world matrices).
+pub fn diagonal<T>(a: &Array<T, Ix2>, offset: isize) -> FerrayResult<Array<T, Ix1>>
+where
+    T: Element,
+{
+    let shape = a.shape();
+    let (m, n) = (shape[0], shape[1]);
+
+    // Work out the (row, col) starting position and the diagonal length.
+    // offset >= 0 → start at (0, offset)        length = min(m, n - offset)
+    // offset <  0 → start at (|offset|, 0)      length = min(m - |offset|, n)
+    let (start_i, start_j, length) = if offset >= 0 {
+        let off = offset as usize;
+        if off >= n {
+            (0usize, 0usize, 0usize)
+        } else {
+            (0, off, m.min(n - off))
+        }
+    } else {
+        // offset < 0 — guard against isize::MIN overflow before negating.
+        let off_neg = offset.checked_neg().ok_or_else(|| {
+            FerrayError::invalid_value("diagonal: offset magnitude overflows isize")
+        })?;
+        let off = off_neg as usize;
+        if off >= m {
+            (0, 0, 0)
+        } else {
+            (off, 0, (m - off).min(n))
+        }
+    };
+
+    // Materialize once — matches the pattern used by `trace` above.
+    let data: Vec<T> = a.iter().cloned().collect();
+    let mut result = Vec::with_capacity(length);
+    for k in 0..length {
+        let i = start_i + k;
+        let j = start_j + k;
+        result.push(data[i * n + j].clone());
+    }
+    Array::from_vec(Ix1::new([length]), result)
+}
+
+/// Transpose a 2-D matrix by swapping its axes, returning a zero-copy view.
+///
+/// This is the `numpy.linalg.matrix_transpose(x)` entry point from the
+/// Array API standard. For a 2-D matrix it is equivalent to `a.t()` /
+/// `x.T` — no data is copied, only the stride/shape metadata. Batched
+/// matrix transpose (swap the last two axes of an N-D array) is covered
+/// by the general batched matmul / batched ops tracked in #412 and will
+/// land alongside that work.
+pub fn matrix_transpose<T: Element>(a: &Array<T, Ix2>) -> ArrayView<'_, T, Ix2> {
+    a.t()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -842,5 +915,154 @@ mod tests {
         let r = ranks.as_slice().unwrap();
         assert_eq!(r[0], 2);
         assert_eq!(r[1], 1);
+    }
+
+    // ---- diagonal / matrix_transpose (#416) ----
+
+    #[test]
+    fn diagonal_main_square() {
+        // [[1,2,3],[4,5,6],[7,8,9]] → main diagonal [1,5,9]
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        )
+        .unwrap();
+        let d = diagonal(&a, 0).unwrap();
+        assert_eq!(d.shape(), &[3]);
+        assert_eq!(d.as_slice().unwrap(), &[1.0, 5.0, 9.0]);
+    }
+
+    #[test]
+    fn diagonal_super_diagonal() {
+        // offset=1 on 3x3 → elements (0,1), (1,2) → [2, 6]
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        )
+        .unwrap();
+        let d = diagonal(&a, 1).unwrap();
+        assert_eq!(d.shape(), &[2]);
+        assert_eq!(d.as_slice().unwrap(), &[2.0, 6.0]);
+    }
+
+    #[test]
+    fn diagonal_sub_diagonal() {
+        // offset=-1 on 3x3 → elements (1,0), (2,1) → [4, 8]
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        )
+        .unwrap();
+        let d = diagonal(&a, -1).unwrap();
+        assert_eq!(d.shape(), &[2]);
+        assert_eq!(d.as_slice().unwrap(), &[4.0, 8.0]);
+    }
+
+    #[test]
+    fn diagonal_wide_matrix() {
+        // 2x3 main diagonal is (0,0),(1,1) → length 2
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let d = diagonal(&a, 0).unwrap();
+        assert_eq!(d.shape(), &[2]);
+        assert_eq!(d.as_slice().unwrap(), &[1.0, 5.0]);
+    }
+
+    #[test]
+    fn diagonal_tall_matrix() {
+        // 3x2 main diagonal is (0,0),(1,1) → length 2
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 2]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let d = diagonal(&a, 0).unwrap();
+        assert_eq!(d.shape(), &[2]);
+        assert_eq!(d.as_slice().unwrap(), &[1.0, 4.0]);
+    }
+
+    #[test]
+    fn diagonal_offset_out_of_range_is_empty() {
+        // Matches NumPy: offsets past the matrix yield an empty result, not
+        // an error.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 2]),
+            vec![1.0, 2.0, 3.0, 4.0],
+        )
+        .unwrap();
+        let d = diagonal(&a, 5).unwrap();
+        assert_eq!(d.shape(), &[0]);
+        let d2 = diagonal(&a, -5).unwrap();
+        assert_eq!(d2.shape(), &[0]);
+    }
+
+    #[test]
+    fn diagonal_on_non_float_element_type() {
+        // Non-LinalgFloat element type: i64 works because diagonal only
+        // requires Element, not LinalgFloat.
+        let a = Array::<i64, Ix2>::from_vec(Ix2::new([3, 3]), vec![1, 2, 3, 4, 5, 6, 7, 8, 9])
+            .unwrap();
+        let d = diagonal(&a, 0).unwrap();
+        assert_eq!(d.shape(), &[3]);
+        assert_eq!(d.as_slice().unwrap(), &[1, 5, 9]);
+    }
+
+    #[test]
+    fn diagonal_agrees_with_trace_via_sum() {
+        // sum(diagonal(a)) == trace(a) for square inputs.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([4, 4]),
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+                16.0,
+            ],
+        )
+        .unwrap();
+        let diag_sum: f64 = diagonal(&a, 0).unwrap().iter().copied().sum();
+        let tr = trace(&a).unwrap();
+        assert!((diag_sum - tr).abs() < 1e-10);
+    }
+
+    #[test]
+    fn matrix_transpose_swaps_axes() {
+        // [[1,2,3],[4,5,6]] transposes to a view with shape [3,2]:
+        // [[1,4],[2,5],[3,6]]
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let t = matrix_transpose(&a);
+        assert_eq!(t.shape(), &[3, 2]);
+        // Walk the transposed view in logical order.
+        let seen: Vec<f64> = t.iter().copied().collect();
+        assert_eq!(seen, vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);
+    }
+
+    #[test]
+    fn matrix_transpose_identity_roundtrip() {
+        // Transposing twice yields a view over the original.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let t = matrix_transpose(&a);
+        // Collect logical values by iterating the double-transposed view via
+        // ndarray's reversed_axes twice: done through the owned array.
+        let tt: Vec<f64> = t.t().iter().copied().collect();
+        assert_eq!(tt, a.iter().copied().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn matrix_transpose_non_copy_element_type() {
+        // Works for any Element — no LinalgFloat bound.
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 2]), vec![1, 2, 3, 4]).unwrap();
+        let t = matrix_transpose(&a);
+        let seen: Vec<i32> = t.iter().copied().collect();
+        assert_eq!(seen, vec![1, 3, 2, 4]);
     }
 }
