@@ -1,0 +1,10 @@
+{
+  "uuid": "b5d1e132-2c9a-4a48-adbb-682e9adf30ae",
+  "issue_uuid": "f10b7221-5802-4da9-9782-1cecab3fd01c",
+  "author": "phase-4-coordinator",
+  "content": "Added first-class ufunc objects in new ferray-ufunc/src/ufunc_object.rs module. The Ufunc struct wraps a binary op plus an identity element and exposes the NumPy ufunc methods (.call, .reduce, .accumulate, .outer, .at). All five delegate to the generic machinery already built for issue #381, so no duplicated traversal code.\\n\\nPre-registered constructors for the common NumPy names: add_ufunc, subtract_ufunc, multiply_ufunc, divide_ufunc — each returns a fresh Ufunc with the correct identity (0 for add/subtract, 1 for multiply/divide).\\n\\nUser-defined ufuncs work in one line: Ufunc::new(\"max\", f64::NEG_INFINITY, f64::max). The struct is Copy so callers can pass it around freely.\\n\\nExisting free functions (add, add_reduce, multiply_outer, etc.) are unchanged — ufunc_object is purely additive and composes with everything already in place.\\n\\n11 new unit tests cover: elementwise call, reduce (1D and 2D row sums), accumulate (including running differences), outer product, unbuffered scatter-reduce with duplicate indices, the user-defined max example from the issue, divide, and the Copy contract. Plus 1 new doctest showing the basic API. 255 lib tests (up from 244) + 50/19/53 integration tests pass. Clippy clean on the full workspace.",
+  "created_at": "2026-04-08T02:10:08.986929012Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAKfmEnKsWMAK/FWIXSKn3fZ2wRsPMYowsmEnKJlDJ7ER8OWySei1Rwd+J1f64I3ZanWHO0RA+ldDKhSmvkt0GAQ=="
+}
