@@ -3,11 +3,12 @@
   "display_id": 230,
   "title": "ferray-fft: no negative axis support (accepts usize, not isize)",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nresolve_axis functions: NumPy accepts axis=-1 etc.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:49:48.791442561Z",
-  "updated_at": "2026-03-25T15:49:54.410651179Z",
+  "updated_at": "2026-04-08T14:16:23.127353062Z",
+  "closed_at": "2026-04-08T14:16:23.127353062Z",
   "labels": [
     "refactor",
     "qa-audit"
