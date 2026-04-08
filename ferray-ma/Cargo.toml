@@ -13,8 +13,8 @@ description = "Masked arrays with mask propagation for ferray"
 
 [dependencies]
 ferray-core = { workspace = true }
-ferray-ufunc = { workspace = true }
-ferray-stats = { workspace = true }
+# ferray-ufunc and ferray-stats were listed but never imported (#272);
+# the interop module references them only in doc comments.
 num-traits = { workspace = true }
 
 [dev-dependencies]
