@@ -130,7 +130,7 @@ pub fn tensordot<T: LinalgFloat>(
         for j in 0..free_b_size {
             let mut sum = zero;
             for k in 0..contract_size {
-                sum = sum + a_perm_data[i * contract_size + k] * b_perm_data[k * free_b_size + j];
+                sum += a_perm_data[i * contract_size + k] * b_perm_data[k * free_b_size + j];
             }
             result[i * free_b_size + j] = sum;
         }

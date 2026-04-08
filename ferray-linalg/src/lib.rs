@@ -6,13 +6,16 @@
 //! (norm, cond, det, trace, matrix\_rank). All functions support batched
 //! (stacked 3D+) arrays with automatic parallelization along batch dimensions.
 
-#![allow(missing_docs)]
+// Kept intentionally narrow. `type_complexity` is accepted for
+// decomposition return types (e.g. SVD returning `(U, S, V)` of nested
+// generic arrays). `needless_range_loop` stays because many of the
+// explicit-index loops here are index-arithmetic-heavy and the
+// "idiomatic" zip-based rewrites are less readable for that style of
+// code. Prior #193 removed broader `missing_docs`, `needless_return`,
+// `if_same_then_else`, `unused_enumerate_index`, and `assign_op_pattern`
+// allow-lists that masked real issues.
 #![allow(clippy::type_complexity)]
-#![allow(clippy::needless_return)]
 #![allow(clippy::needless_range_loop)]
-#![allow(clippy::if_same_then_else)]
-#![allow(clippy::unused_enumerate_index)]
-#![allow(clippy::assign_op_pattern)]
 
 /// Batched dispatch for stacked (3D+) arrays with Rayon parallelism.
 pub mod batch;
@@ -57,8 +60,8 @@ pub use solve::{
 
 // Norms and measures (Section 8.4)
 pub use norms::{
-    NormOrder, cond, det, det_batched, matrix_rank, matrix_rank_batched, norm, slogdet,
-    slogdet_batched, trace,
+    NormOrder, cond, det, det_batched, matrix_rank, matrix_rank_batched, norm, norm_axis,
+    slogdet, slogdet_batched, trace,
 };
 
 // Complex matrix operations (#404) — take `Array<Complex<T>, Ix2>` directly

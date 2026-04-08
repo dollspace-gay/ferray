@@ -151,14 +151,14 @@ pub fn lstsq<T: LinalgFloat>(
             for p in 0..k {
                 let mut dot = zero;
                 for i in 0..m {
-                    dot = dot + u_data[i * k + p] * b_data[i];
+                    dot += u_data[i * k + p] * b_data[i];
                 }
                 c[p] = dot;
             }
             // Step 2: c[p] /= s[p] (zero out small singular values)
             for p in 0..k {
                 if svals[p] > cutoff {
-                    c[p] = c[p] / svals[p];
+                    c[p] /= svals[p];
                 } else {
                     c[p] = zero;
                 }
@@ -168,7 +168,7 @@ pub fn lstsq<T: LinalgFloat>(
             for i in 0..n {
                 let mut sum = zero;
                 for p in 0..k {
-                    sum = sum + vt_data[p * n + i] * c[p];
+                    sum += vt_data[p * n + i] * c[p];
                 }
                 x_vec[i] = sum;
             }
@@ -180,10 +180,10 @@ pub fn lstsq<T: LinalgFloat>(
                 for i in 0..m {
                     let mut ax_i = zero;
                     for j in 0..n {
-                        ax_i = ax_i + a_data[i * n + j] * x_vec[j];
+                        ax_i += a_data[i * n + j] * x_vec[j];
                     }
                     let diff = ax_i - b_data[i];
-                    resid = resid + diff * diff;
+                    resid += diff * diff;
                 }
                 vec![resid]
             } else {
@@ -212,7 +212,7 @@ pub fn lstsq<T: LinalgFloat>(
                 for p in 0..k {
                     let mut dot = zero;
                     for i in 0..m {
-                        dot = dot + u_data[i * k + p] * b_data[i * nrhs + col];
+                        dot += u_data[i * k + p] * b_data[i * nrhs + col];
                     }
                     c[p] = if svals[p] > cutoff {
                         dot / svals[p]
@@ -224,7 +224,7 @@ pub fn lstsq<T: LinalgFloat>(
                 for i in 0..n {
                     let mut sum = zero;
                     for p in 0..k {
-                        sum = sum + vt_data[p * n + i] * c[p];
+                        sum += vt_data[p * n + i] * c[p];
                     }
                     x_vec[i * nrhs + col] = sum;
                 }
@@ -238,10 +238,10 @@ pub fn lstsq<T: LinalgFloat>(
                     for i in 0..m {
                         let mut ax_i = T::from_f64_const(0.0);
                         for j in 0..n {
-                            ax_i = ax_i + a_data[i * n + j] * x_vec[j * nrhs + col];
+                            ax_i += a_data[i * n + j] * x_vec[j * nrhs + col];
                         }
                         let diff = ax_i - b_data[i * nrhs + col];
-                        resids[col] = resids[col] + diff * diff;
+                        resids[col] += diff * diff;
                     }
                 }
                 resids
@@ -332,7 +332,7 @@ pub fn pinv<T: LinalgFloat>(a: &Array<T, Ix2>, rcond: Option<T>) -> FerrayResult
                 if svals[p] > cutoff {
                     // vt[p][i] * (1/s[p]) * u[j][p]
                     // vt is (k, n), u is (m, k)
-                    sum = sum + vt_data[p * n + i] * (one / svals[p]) * u_data[j * k + p];
+                    sum += vt_data[p * n + i] * (one / svals[p]) * u_data[j * k + p];
                 }
             }
             result[i * m + j] = sum;

@@ -117,8 +117,8 @@ pub fn generic_contraction<T: LinalgFloat>(
     let op_label_dims: Vec<Vec<(usize, usize)>> = expr
         .inputs
         .iter()
-        .enumerate()
-        .map(|(_op_idx, labels)| {
+        
+        .map(|labels| {
             labels
                 .iter()
                 .enumerate()
@@ -152,11 +152,11 @@ pub fn generic_contraction<T: LinalgFloat>(
             for &(dim_idx, all_idx) in label_dims {
                 op_flat += multi_idx[all_idx] * operand_strides[op_idx][dim_idx];
             }
-            product = product * operand_data[op_idx][op_flat];
+            product *= operand_data[op_idx][op_flat];
         }
 
         if out_size > 0 {
-            result[out_flat] = result[out_flat] + product;
+            result[out_flat] += product;
         }
 
         // Increment multi_idx (like an odometer)

@@ -100,7 +100,7 @@ pub fn dot<T: LinalgFloat>(
             for i in 0..out_size {
                 let mut sum = zero;
                 for j in 0..k {
-                    sum = sum + a_data[i * k + j] * b_data[j];
+                    sum += a_data[i * k + j] * b_data[j];
                 }
                 result.push(sum);
             }
@@ -178,10 +178,11 @@ pub fn inner<T: LinalgFloat>(
 
 /// Outer product of two arrays.
 ///
-/// Computes the outer product of two 1D arrays, producing a 2D array.
-///
-/// # Errors
-/// - `FerrayError::ShapeMismatch` if inputs are not 1D.
+/// Analogous to `numpy.outer`. Both inputs are flattened to 1-D and the
+/// result has shape `(a.size(), b.size())`. Mirrors NumPy's documented
+/// "if a and b are any larger than 1D, they are flattened" behaviour;
+/// #203 made this contract explicit so callers no longer see a silent
+/// reshape as a bug.
 pub fn outer<T: LinalgFloat>(
     a: &Array<T, IxDyn>,
     b: &Array<T, IxDyn>,
@@ -221,9 +222,9 @@ pub fn matmul<T: LinalgFloat>(
 
     match (a_shape.len(), b_shape.len()) {
         (1, 1) => {
-            return Err(FerrayError::shape_mismatch(
+            Err(FerrayError::shape_mismatch(
                 "matmul: cannot multiply two 1D arrays (use dot instead)",
-            ));
+            ))
         }
         (1, 2) => {
             // Vector-matrix: treat a as (1, k)
@@ -240,7 +241,7 @@ pub fn matmul<T: LinalgFloat>(
             let mut result = vec![zero; n];
             for j in 0..n {
                 for p in 0..k {
-                    result[j] = result[j] + a_data[p] * b_data[p * n + j];
+                    result[j] += a_data[p] * b_data[p * n + j];
                 }
             }
             Array::from_vec(IxDyn::new(&[n]), result)
@@ -259,7 +260,7 @@ pub fn matmul<T: LinalgFloat>(
             let mut result = vec![zero; m];
             for i in 0..m {
                 for p in 0..k {
-                    result[i] = result[i] + a_data[i * k + p] * b_data[p];
+                    result[i] += a_data[i * k + p] * b_data[p];
                 }
             }
             Array::from_vec(IxDyn::new(&[m]), result)
@@ -318,7 +319,7 @@ pub(crate) fn matmul_raw<T: LinalgFloat>(
             for p in 0..k {
                 let a_ip = a[i * k + p];
                 for j in 0..n {
-                    result[i * n + j] = result[i * n + j] + a_ip * b[p * n + j];
+                    result[i * n + j] += a_ip * b[p * n + j];
                 }
             }
         }
@@ -330,10 +331,12 @@ pub(crate) fn matmul_raw<T: LinalgFloat>(
     let b_faer = faer::Mat::<T>::from_fn(k, n, |i, j| b[i * n + j]);
     let mut c_faer = faer::Mat::<T>::zeros(m, n);
 
+    // Use faer's built-in `Par::rayon(0)` to auto-detect the global
+    // rayon thread count. The previous `NonZeroUsize::new(0).unwrap_or(…)`
+    // always collapsed to a single thread, effectively running the
+    // "parallel" branch sequentially (#191).
     let par = if max_dim >= FAER_PARALLEL_THRESHOLD {
-        faer::Par::Rayon(
-            std::num::NonZeroUsize::new(0).unwrap_or(std::num::NonZeroUsize::new(1).unwrap()),
-        )
+        faer::Par::rayon(0)
     } else {
         faer::Par::Seq
     };
@@ -469,44 +472,83 @@ fn broadcast_shapes(a: &[usize], b: &[usize]) -> FerrayResult<Vec<usize>> {
     Ok(result)
 }
 
-/// Kronecker product of two 2D arrays.
+/// Kronecker product of two arrays.
 ///
-/// The Kronecker product of A (m x n) and B (p x q) is an (m*p x n*q) matrix.
-///
-/// # Errors
-/// - `FerrayError::ShapeMismatch` if inputs are not 2D.
+/// Matches `numpy.kron`: the output shape is the element-wise product
+/// of the two input shapes, after prepending 1s to whichever input has
+/// fewer dimensions. For 1-D inputs `a.kron(b).shape == (len_a * len_b,)`,
+/// for 2-D inputs the classic `(m*p, n*q)` matrix, and the pattern
+/// generalizes to arbitrary rank (issue #206 — the previous
+/// implementation rejected anything but 2-D).
 pub fn kron<T: LinalgFloat>(
     a: &Array<T, IxDyn>,
     b: &Array<T, IxDyn>,
 ) -> FerrayResult<Array<T, IxDyn>> {
-    let a_shape = a.shape();
-    let b_shape = b.shape();
-    if a_shape.len() != 2 || b_shape.len() != 2 {
-        return Err(FerrayError::shape_mismatch("kron: both arrays must be 2D"));
+    let a_shape = a.shape().to_vec();
+    let b_shape = b.shape().to_vec();
+
+    // Pad the shorter shape with leading 1s so both shapes have the
+    // same rank — matches NumPy's broadcasting-lite behaviour.
+    let ndim = a_shape.len().max(b_shape.len());
+    let mut a_pad = vec![1usize; ndim];
+    let mut b_pad = vec![1usize; ndim];
+    let a_offset = ndim - a_shape.len();
+    let b_offset = ndim - b_shape.len();
+    for (i, &s) in a_shape.iter().enumerate() {
+        a_pad[a_offset + i] = s;
+    }
+    for (i, &s) in b_shape.iter().enumerate() {
+        b_pad[b_offset + i] = s;
     }
 
-    let (m, n) = (a_shape[0], a_shape[1]);
-    let (p, q) = (b_shape[0], b_shape[1]);
+    let out_shape: Vec<usize> = a_pad
+        .iter()
+        .zip(b_pad.iter())
+        .map(|(&ai, &bi)| ai * bi)
+        .collect();
+    let out_total: usize = out_shape.iter().product();
+
+    // Materialize the inputs in logical (row-major) order so the
+    // strided-index formulas below can use plain `usize` math without
+    // consulting the array's own strides.
     let a_data: Vec<T> = a.iter().copied().collect();
     let b_data: Vec<T> = b.iter().copied().collect();
 
-    let out_rows = m * p;
-    let out_cols = n * q;
-    let zero = T::from_f64_const(0.0);
-    let mut result = vec![zero; out_rows * out_cols];
-
-    for i in 0..m {
-        for j in 0..n {
-            let a_ij = a_data[i * n + j];
-            for k in 0..p {
-                for l in 0..q {
-                    result[(i * p + k) * out_cols + (j * q + l)] = a_ij * b_data[k * q + l];
-                }
-            }
+    // Row-major strides for a_pad, b_pad, out_shape — needed to walk
+    // multi-indices in sync.
+    let row_major_strides = |dims: &[usize]| -> Vec<usize> {
+        let n = dims.len();
+        let mut s = vec![1usize; n];
+        for i in (0..n.saturating_sub(1)).rev() {
+            s[i] = s[i + 1] * dims[i + 1];
         }
+        s
+    };
+    let a_strides = row_major_strides(&a_pad);
+    let b_strides = row_major_strides(&b_pad);
+    let out_strides = row_major_strides(&out_shape);
+
+    let zero = T::from_f64_const(0.0);
+    let mut result = vec![zero; out_total];
+
+    for out_flat in 0..out_total {
+        // Decompose out_flat into per-axis indices, then split each
+        // into the `a` / `b` contributions: `out_idx[axis] = a_idx * b_pad[axis] + b_idx`.
+        let mut rem = out_flat;
+        let mut a_flat = 0usize;
+        let mut b_flat = 0usize;
+        for axis in 0..ndim {
+            let o = rem / out_strides[axis];
+            rem %= out_strides[axis];
+            let a_i = o / b_pad[axis];
+            let b_i = o % b_pad[axis];
+            a_flat += a_i * a_strides[axis];
+            b_flat += b_i * b_strides[axis];
+        }
+        result[out_flat] = a_data[a_flat] * b_data[b_flat];
     }
 
-    Array::from_vec(IxDyn::new(&[out_rows, out_cols]), result)
+    Array::from_vec(IxDyn::new(&out_shape), result)
 }
 
 /// Optimized chain matrix multiplication using dynamic programming.
@@ -564,11 +606,10 @@ pub fn multi_dot<T: LinalgFloat>(arrays: &[&Array<T, IxDyn>]) -> FerrayResult<Ar
         let prev_shape = arrays[i - 1].shape();
         let curr_shape = arrays[i].shape();
         let prev_cols = prev_shape.last().copied().unwrap_or(0);
-        let curr_rows = if curr_shape.len() == 1 {
-            curr_shape[0]
-        } else {
-            curr_shape[0]
-        };
+        // Both 1-D and 2-D arrays use `shape[0]` for "rows" in the
+        // multi_dot validation — they mean "the length along the
+        // contraction axis".
+        let curr_rows = curr_shape[0];
         if prev_cols != curr_rows {
             return Err(FerrayError::shape_mismatch(format!(
                 "multi_dot: shapes of matrices {} and {} not aligned ({} != {})",
@@ -600,23 +641,51 @@ pub fn multi_dot<T: LinalgFloat>(arrays: &[&Array<T, IxDyn>]) -> FerrayResult<Ar
         }
     }
 
+    // `ChainLeaf` lets the recursion return borrowed references at
+    // the leaves (`i == j`) and only allocate owned arrays when
+    // `matmul` actually runs. The previous implementation unconditionally
+    // cloned `arrays[i]` at every leaf, which is an O(matrix_size) copy
+    // per leaf visit of the chain (#209).
+    enum ChainLeaf<'a, T: LinalgFloat> {
+        Borrowed(&'a Array<T, IxDyn>),
+        Owned(Array<T, IxDyn>),
+    }
+    impl<'a, T: LinalgFloat> ChainLeaf<'a, T> {
+        fn as_ref(&self) -> &Array<T, IxDyn> {
+            match self {
+                ChainLeaf::Borrowed(a) => a,
+                ChainLeaf::Owned(a) => a,
+            }
+        }
+        fn into_owned(self) -> Array<T, IxDyn> {
+            match self {
+                ChainLeaf::Borrowed(a) => a.clone(),
+                ChainLeaf::Owned(a) => a,
+            }
+        }
+    }
+
     // Recursively multiply according to optimal split
-    fn multiply_chain<T: LinalgFloat>(
-        arrays: &[&Array<T, IxDyn>],
+    fn multiply_chain<'a, T: LinalgFloat>(
+        arrays: &'a [&Array<T, IxDyn>],
         split: &[Vec<usize>],
         i: usize,
         j: usize,
-    ) -> FerrayResult<Array<T, IxDyn>> {
+    ) -> FerrayResult<ChainLeaf<'a, T>> {
         if i == j {
-            return Ok(arrays[i].clone());
+            return Ok(ChainLeaf::Borrowed(arrays[i]));
         }
         let k = split[i][j];
         let left = multiply_chain(arrays, split, i, k)?;
         let right = multiply_chain(arrays, split, k + 1, j)?;
-        matmul(&left, &right)
+        matmul(left.as_ref(), right.as_ref()).map(ChainLeaf::Owned)
     }
 
-    multiply_chain(arrays, &split, 0, n - 1)
+    // Only the top-level `into_owned` path can still clone, and only
+    // when the user called `multi_dot` with a single matrix — in which
+    // case there is no matmul and we legitimately need to materialize
+    // an owned copy to honour the function signature.
+    Ok(multiply_chain(arrays, &split, 0, n - 1)?.into_owned())
 }
 
 /// Vector dot product along a specified axis.
@@ -713,7 +782,7 @@ pub fn vecdot<T: LinalgFloat>(
                 };
                 full_flat += idx * a_strides[d];
             }
-            sum = sum + a_data[full_flat] * b_data[full_flat];
+            sum += a_data[full_flat] * b_data[full_flat];
         }
         result[flat] = sum;
     }

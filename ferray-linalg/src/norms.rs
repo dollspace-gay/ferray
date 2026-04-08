@@ -35,6 +35,10 @@ pub enum NormOrder {
 /// For vectors (1D), this computes the vector norm.
 /// For matrices (2D), this computes the matrix norm.
 ///
+/// Reduces the full array to a single scalar. For axis-wise reduction
+/// (the `axis` / `keepdims` parameters in `numpy.linalg.norm`), use
+/// [`norm_axis`].
+///
 /// # Errors
 /// - `FerrayError::InvalidValue` for invalid norm specifications.
 pub fn norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult<T> {
@@ -45,6 +49,159 @@ pub fn norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult
         _ => {
             // For ND arrays, flatten and compute vector norm
             vector_norm(a, ord)
+        }
+    }
+}
+
+/// Compute the vector norm along a single axis.
+///
+/// Analogous to `numpy.linalg.norm(a, ord, axis=k, keepdims=...)` for the
+/// 1-D axis case. For each 1-D lane along `axis`, applies the vector
+/// norm `ord` and returns an array with shape matching the input except
+/// that `axis` is removed (or set to 1 when `keepdims=true`).
+///
+/// Matrix-style norm axes (a `(int, int)` tuple in NumPy) are not yet
+/// supported; pass the matrix to [`matrix_norm`] via `norm` instead.
+///
+/// # Errors
+/// - `FerrayError::AxisOutOfBounds` if `axis >= ndim`.
+/// - `FerrayError::InvalidValue` for norm orders that are not defined
+///   for vectors (currently `NormOrder::Nuc`).
+pub fn norm_axis<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    ord: NormOrder,
+    axis: usize,
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>> {
+    let shape = a.shape().to_vec();
+    let ndim = shape.len();
+    if axis >= ndim {
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
+    }
+
+    // Output shape: drop the reduced axis (or keep it as size 1).
+    let mut out_shape = shape.clone();
+    if keepdims {
+        out_shape[axis] = 1;
+    } else {
+        out_shape.remove(axis);
+    }
+    let axis_len = shape[axis];
+
+    // Row-major strides for the input so we can walk each lane
+    // independently.
+    let mut strides = vec![1usize; ndim];
+    for i in (0..ndim.saturating_sub(1)).rev() {
+        strides[i] = strides[i + 1] * shape[i + 1];
+    }
+
+    // Enumerate all "outer" positions (the multi-index excluding
+    // `axis`) and pull the corresponding lane of length `axis_len`.
+    let outer_total: usize = out_shape.iter().product::<usize>().max(1);
+    let data: Vec<T> = a.iter().copied().collect();
+    let mut out: Vec<T> = Vec::with_capacity(outer_total);
+
+    // Each outer index corresponds to a flat base offset in `data`;
+    // we iterate through `outer_total` output positions and for each
+    // one reconstruct the flat base offset into `data`.
+    let mut outer_shape = shape.clone();
+    outer_shape.remove(axis);
+    let mut outer_strides = vec![1usize; outer_shape.len()];
+    for i in (0..outer_shape.len().saturating_sub(1)).rev() {
+        outer_strides[i] = outer_strides[i + 1] * outer_shape[i + 1];
+    }
+
+    for outer_flat in 0..outer_total {
+        // Decompose outer_flat into per-axis multi-index (outer shape).
+        let mut base = 0usize;
+        let mut rem = outer_flat;
+        let mut dim = 0usize;
+        for d in 0..ndim {
+            if d == axis {
+                continue;
+            }
+            let idx = if outer_strides.is_empty() {
+                0
+            } else {
+                rem / outer_strides[dim]
+            };
+            if !outer_strides.is_empty() {
+                rem %= outer_strides[dim];
+            }
+            base += idx * strides[d];
+            dim += 1;
+        }
+        // Extract the lane along `axis`.
+        let mut lane = Vec::with_capacity(axis_len);
+        let step = strides[axis];
+        for k in 0..axis_len {
+            lane.push(data[base + k * step]);
+        }
+        out.push(vector_norm_from_slice(&lane, ord)?);
+    }
+
+    Array::from_vec(IxDyn::new(&out_shape), out)
+}
+
+/// Helper that runs the same vector-norm math as `vector_norm` but on a
+/// plain slice, avoiding the `&Array<T, IxDyn>` allocation that would
+/// otherwise be required per-lane in [`norm_axis`].
+fn vector_norm_from_slice<T: LinalgFloat>(
+    data: &[T],
+    ord: NormOrder,
+) -> FerrayResult<T> {
+    use num_traits::Float;
+    let zero = T::from_f64_const(0.0);
+    match ord {
+        NormOrder::L2 | NormOrder::Fro => {
+            let sum: T = data.iter().map(|&x| x * x).fold(zero, |a, b| a + b);
+            Ok(sum.sqrt())
+        }
+        NormOrder::L1 => {
+            let sum: T = data.iter().map(|x| x.abs()).fold(zero, |a, b| a + b);
+            Ok(sum)
+        }
+        NormOrder::Inf => {
+            let max = data
+                .iter()
+                .map(|x| x.abs())
+                .fold(zero, |a, b| if a > b { a } else { b });
+            Ok(max)
+        }
+        NormOrder::NegInf => {
+            let min = data
+                .iter()
+                .map(|x| x.abs())
+                .fold(<T as Float>::infinity(), |a, b| if a < b { a } else { b });
+            Ok(min)
+        }
+        NormOrder::Nuc => Err(FerrayError::invalid_value(
+            "nuclear norm is not defined for 1-D axis reductions",
+        )),
+        NormOrder::P(p) => {
+            if p == 0.0 {
+                let count = data.iter().filter(|&&x| x != zero).count();
+                Ok(T::from_usize(count))
+            } else if p == f64::INFINITY {
+                let max = data
+                    .iter()
+                    .map(|x| x.abs())
+                    .fold(zero, |a, b| if a > b { a } else { b });
+                Ok(max)
+            } else if p == f64::NEG_INFINITY {
+                let min = data
+                    .iter()
+                    .map(|x| x.abs())
+                    .fold(<T as Float>::infinity(), |a, b| if a < b { a } else { b });
+                Ok(min)
+            } else {
+                let p_t = T::from_f64_const(p);
+                let sum: T = data
+                    .iter()
+                    .map(|x| x.abs().powf(p_t))
+                    .fold(zero, |a, b| a + b);
+                Ok(sum.powf(T::from_f64_const(1.0) / p_t))
+            }
         }
     }
 }
@@ -83,12 +240,12 @@ fn vector_norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayRes
             Ok(min)
         }
         NormOrder::Nuc => {
-            // Nuclear norm is not typically defined for vectors; use L1
-            let sum: T = data
-                .iter()
-                .map(|x| x.abs())
-                .fold(T::from_f64_const(0.0), |a, b| a + b);
-            Ok(sum)
+            // NumPy raises ValueError when the nuclear norm is requested
+            // for a vector; match that behaviour rather than silently
+            // returning the L1 norm (issue #197).
+            Err(FerrayError::invalid_value(
+                "nuclear norm is not defined for 1-D arrays; use L1/L2/Inf/P for vectors",
+            ))
         }
         NormOrder::P(p) => {
             if p == 0.0 {
@@ -159,7 +316,7 @@ fn matrix_norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayRes
             for i in 0..m {
                 let mut row_sum = T::from_f64_const(0.0);
                 for j in 0..n {
-                    row_sum = row_sum + data[i * n + j].abs();
+                    row_sum += data[i * n + j].abs();
                 }
                 if row_sum > max_sum {
                     max_sum = row_sum;
@@ -173,7 +330,7 @@ fn matrix_norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayRes
             for i in 0..m {
                 let mut row_sum = T::from_f64_const(0.0);
                 for j in 0..n {
-                    row_sum = row_sum + data[i * n + j].abs();
+                    row_sum += data[i * n + j].abs();
                 }
                 if row_sum < min_sum {
                     min_sum = row_sum;
@@ -187,7 +344,7 @@ fn matrix_norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayRes
             for j in 0..n {
                 let mut col_sum = T::from_f64_const(0.0);
                 for i in 0..m {
-                    col_sum = col_sum + data[i * n + j].abs();
+                    col_sum += data[i * n + j].abs();
                 }
                 if col_sum > max_sum {
                     max_sum = col_sum;
@@ -354,9 +511,9 @@ pub fn slogdet<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<(T, T)> {
         if diag == zero {
             return Ok((zero, <T as num_traits::Float>::neg_infinity()));
         }
-        log_abs_det = log_abs_det + diag.abs().ln();
+        log_abs_det += diag.abs().ln();
         if diag < zero {
-            sign = sign * neg_one;
+            sign *= neg_one;
         }
     }
 
@@ -377,7 +534,7 @@ pub fn slogdet<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<(T, T)> {
         }
     }
     if num_swaps % 2 == 1 {
-        sign = sign * neg_one;
+        sign *= neg_one;
     }
 
     Ok((sign, log_abs_det))
@@ -522,7 +679,7 @@ pub fn trace<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<T> {
     let min_dim = m.min(n);
     let mut sum = T::from_f64_const(0.0);
     for i in 0..min_dim {
-        sum = sum + data[i * n + i];
+        sum += data[i * n + i];
     }
     Ok(sum)
 }

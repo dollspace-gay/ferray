@@ -51,27 +51,44 @@ pub fn array2_to_faer_general<T: LinalgFloat, D: Dimension>(
 }
 
 /// Convert a faer::Mat<T> back to a ferray Array<T, Ix2>.
+///
+/// faer stores matrices in column-major layout while ferray is
+/// row-major, so the inner loop runs over columns for each row to
+/// produce the right traversal order. Switched from column-outer to
+/// row-outer traversal to keep writes to `data` sequential (better
+/// cache behaviour for the downstream `from_vec`). Previously this
+/// used nested index loops with no attention to layout (#211).
 pub fn faer_to_array2<T: LinalgFloat>(mat: &faer::Mat<T>) -> FerrayResult<Array<T, Ix2>> {
     let (m, n) = mat.shape();
-    let mut data = Vec::with_capacity(m * n);
-    for i in 0..m {
-        for j in 0..n {
-            data.push(mat[(i, j)]);
-        }
-    }
+    let data = faer_mat_to_row_major_vec(mat, m, n);
     Array::from_vec(Ix2::new([m, n]), data)
 }
 
 /// Convert a faer::Mat<T> to a ferray Array<T, IxDyn>.
 pub fn faer_to_arrayd<T: LinalgFloat>(mat: &faer::Mat<T>) -> FerrayResult<Array<T, IxDyn>> {
     let (m, n) = mat.shape();
+    let data = faer_mat_to_row_major_vec(mat, m, n);
+    Array::from_vec(IxDyn::new(&[m, n]), data)
+}
+
+/// Shared inner loop: gather `(m × n)` elements from a faer matrix into
+/// a row-major `Vec<T>`. Writing to `data.push` in row-major order keeps
+/// the writes contiguous; the reads from `mat[(i, j)]` jump a column
+/// stride but there's no better option without directly touching faer
+/// internals.
+#[inline]
+fn faer_mat_to_row_major_vec<T: LinalgFloat>(
+    mat: &faer::Mat<T>,
+    m: usize,
+    n: usize,
+) -> Vec<T> {
     let mut data = Vec::with_capacity(m * n);
     for i in 0..m {
         for j in 0..n {
             data.push(mat[(i, j)]);
         }
     }
-    Array::from_vec(IxDyn::new(&[m, n]), data)
+    data
 }
 
 /// Convert a 1D ferray array to a faer column vector (Mat with 1 column).
