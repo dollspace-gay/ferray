@@ -4,8 +4,8 @@ use num_complex::Complex;
 
 use crate::array::owned::Array;
 use crate::dimension::IxDyn;
-use crate::dtype::DType;
 use crate::dtype::casting::CastKind;
+use crate::dtype::{DType, I256};
 use crate::error::{FerrayError, FerrayResult};
 
 /// A runtime-typed array whose element type is determined at runtime.
@@ -41,6 +41,10 @@ pub enum DynArray {
     I64(Array<i64, IxDyn>),
     /// `i128` elements
     I128(Array<i128, IxDyn>),
+    /// `I256` elements — 256-bit two's-complement signed integer,
+    /// used as the promoted type for mixed `u128` + signed-int
+    /// arithmetic (#375, #562).
+    I256(Array<I256, IxDyn>),
     /// `f32` elements
     F32(Array<f32, IxDyn>),
     /// `f64` elements
@@ -75,6 +79,7 @@ macro_rules! dispatch {
             Self::I32($binding) => $expr,
             Self::I64($binding) => $expr,
             Self::I128($binding) => $expr,
+            Self::I256($binding) => $expr,
             Self::F32($binding) => $expr,
             Self::F64($binding) => $expr,
             Self::Complex32($binding) => $expr,
@@ -102,6 +107,7 @@ impl DynArray {
             Self::I32(_) => DType::I32,
             Self::I64(_) => DType::I64,
             Self::I128(_) => DType::I128,
+            Self::I256(_) => DType::I256,
             Self::F32(_) => DType::F32,
             Self::F64(_) => DType::F64,
             Self::Complex32(_) => DType::Complex32,
@@ -229,6 +235,16 @@ impl DynArray {
                 "DynArray::astype does not yet support bf16",
             ));
         }
+        // I256 is accepted as a storage type (from promotion) but
+        // generic cast-through-`CastTo` is not yet wired for it.
+        // Reject both source and target explicitly — users who want
+        // I256 arrays should construct them directly rather than via
+        // astype (#562).
+        if matches!(self, Self::I256(_)) || target == DType::I256 {
+            return Err(FerrayError::invalid_dtype(
+                "DynArray::astype does not yet support I256 — construct I256 arrays directly",
+            ));
+        }
 
         // Inner macro: dispatch on the *source* variant. The target type `$U`
         // is fixed by the outer match below.
@@ -250,6 +266,7 @@ impl DynArray {
                     Self::F64(a) => a.cast::<$U>(casting),
                     Self::Complex32(a) => a.cast::<$U>(casting),
                     Self::Complex64(a) => a.cast::<$U>(casting),
+                    Self::I256(_) => unreachable!("I256 source rejected above"),
                     #[cfg(feature = "f16")]
                     Self::F16(_) => unreachable!("f16 source rejected above"),
                     #[cfg(feature = "bf16")]
@@ -274,6 +291,7 @@ impl DynArray {
             DType::F64 => Self::F64(cast_into!(f64)?),
             DType::Complex32 => Self::Complex32(cast_into!(Complex<f32>)?),
             DType::Complex64 => Self::Complex64(cast_into!(Complex<f64>)?),
+            DType::I256 => unreachable!("I256 target rejected above"),
             #[cfg(feature = "f16")]
             DType::F16 => unreachable!("f16 target rejected above"),
             #[cfg(feature = "bf16")]
@@ -296,6 +314,7 @@ impl DynArray {
             DType::I32 => Self::I32(Array::zeros(dim)?),
             DType::I64 => Self::I64(Array::zeros(dim)?),
             DType::I128 => Self::I128(Array::zeros(dim)?),
+            DType::I256 => Self::I256(Array::zeros(dim)?),
             DType::F32 => Self::F32(Array::zeros(dim)?),
             DType::F64 => Self::F64(Array::zeros(dim)?),
             DType::Complex32 => Self::Complex32(Array::zeros(dim)?),
@@ -336,6 +355,7 @@ impl_from_array_dyn!(i16, I16);
 impl_from_array_dyn!(i32, I32);
 impl_from_array_dyn!(i64, I64);
 impl_from_array_dyn!(i128, I128);
+impl_from_array_dyn!(I256, I256);
 impl_from_array_dyn!(f32, F32);
 impl_from_array_dyn!(f64, F64);
 impl_from_array_dyn!(Complex<f32>, Complex32);

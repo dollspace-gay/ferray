@@ -433,7 +433,13 @@ fn promote_types_static(a: &str, b: &str) -> Option<&'static str> {
     let ra = type_rank(a)?;
     let rb = type_rank(b)?;
 
-    Some(promote_ranks(ra, rb))
+    // `promote_ranks` uses an empty string to signal "no lossless
+    // common type exists" (currently the u128 + signed-int case); map
+    // that to `None` so the outer proc-macro emits a compile error.
+    match promote_ranks(ra, rb) {
+        "" => None,
+        other => Some(other),
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -586,8 +592,13 @@ fn promote_ranks(a: TypeRank, b: TypeRank) -> &'static str {
                 if needed <= 128 {
                     int_type(needed)
                 } else {
-                    // Fall back to f64 when we exceed i128
-                    "f64"
+                    // u128 + any signed int: no lossless common type
+                    // on stable Rust (see ferray-core/src/dtype/promotion.rs
+                    // and issue #375). Return the empty string as a
+                    // sentinel; `promote_types_static` maps that to
+                    // `None`, which the outer proc-macro converts
+                    // into a compile error with a clear message.
+                    ""
                 }
             }
         }

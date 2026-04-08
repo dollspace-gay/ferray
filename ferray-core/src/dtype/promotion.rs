@@ -414,6 +414,20 @@ impl_promoted!(Complex<f32>, Complex<f64> => Complex<f64>);
 /// Follows NumPy's type promotion rules: returns the smallest type that can
 /// represent both inputs without precision loss.
 ///
+/// # 128-bit promotion behaviour
+///
+/// ferray supports `u128`/`i128` as a NumPy-incompatible extension.
+/// No native Rust integer wider than 128 bits exists on stable, so
+/// ferray provides [`crate::dtype::I256`] — a 256-bit
+/// two's-complement type — and uses it as the promoted dtype for
+/// mixed `u128` + any signed int. This closes the former lossy
+/// `F64` fallback (issue #375, #562). The result of arithmetic on
+/// `(u128, i128)` arrays is therefore fully lossless.
+///
+/// `U128` or `I128` mixed with a float type still promotes to `F64`
+/// because the caller already asked for a float result — the
+/// precision-above-`2^53` loss is the standard IEEE-754 contract.
+///
 /// # Errors
 /// Returns `FerrayError::InvalidDtype` if promotion is not possible (should
 /// not happen for valid DType values).
@@ -494,11 +508,16 @@ fn promote_dtypes(a: DType, b: DType) -> Option<DType> {
         (U64, I32) => I128,
         (U64, I64) => I128,
         (U64, I128) => I128,
-        (U128, I8) => F64,
-        (U128, I16) => F64,
-        (U128, I32) => F64,
-        (U128, I64) => F64,
-        (U128, I128) => F64,
+        // `U128 + <any signed int>` promotes to the custom
+        // `I256` type which can losslessly hold the full union
+        // (129 signed bits would suffice; we round up to 256 for
+        // alignment and arithmetic simplicity). This closes the
+        // former lossy-`F64` fallback (#375, #562).
+        (U128, I8) => I256,
+        (U128, I16) => I256,
+        (U128, I32) => I256,
+        (U128, I64) => I256,
+        (U128, I128) => I256,
 
         // Integer + Float
         (U8, F32) | (U16, F32) | (I8, F32) | (I16, F32) => F32,
@@ -550,6 +569,31 @@ mod tests {
         assert_eq!(result_type(DType::I32, DType::F32).unwrap(), DType::F64);
         assert_eq!(result_type(DType::I16, DType::F32).unwrap(), DType::F32);
         assert_eq!(result_type(DType::U8, DType::F64).unwrap(), DType::F64);
+    }
+
+    #[test]
+    fn result_type_u128_signed_promotes_to_i256() {
+        // Issue #375 / #562: `u128 + any signed int` has no lossless
+        // native common type, so ferray promotes to its custom I256
+        // (256-bit two's-complement) which can hold the full union.
+        assert_eq!(result_type(DType::U128, DType::I8).unwrap(), DType::I256);
+        assert_eq!(result_type(DType::U128, DType::I16).unwrap(), DType::I256);
+        assert_eq!(result_type(DType::U128, DType::I32).unwrap(), DType::I256);
+        assert_eq!(result_type(DType::U128, DType::I64).unwrap(), DType::I256);
+        assert_eq!(result_type(DType::U128, DType::I128).unwrap(), DType::I256);
+        // Symmetric check.
+        assert_eq!(result_type(DType::I64, DType::U128).unwrap(), DType::I256);
+    }
+
+    #[test]
+    fn result_type_u128_float_still_f64() {
+        // `U128 + F*` still promotes to F64 because the caller asked
+        // for a float result — precision loss above 2^53 is the
+        // standard IEEE-754 contract.
+        assert_eq!(result_type(DType::U128, DType::F32).unwrap(), DType::F64);
+        assert_eq!(result_type(DType::U128, DType::F64).unwrap(), DType::F64);
+        assert_eq!(result_type(DType::I128, DType::F32).unwrap(), DType::F64);
+        assert_eq!(result_type(DType::I128, DType::F64).unwrap(), DType::F64);
     }
 
     #[test]

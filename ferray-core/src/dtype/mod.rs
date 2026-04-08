@@ -6,8 +6,11 @@ use num_complex::Complex;
 
 pub mod casting;
 pub mod finfo;
+pub mod i256;
 pub mod promotion;
 pub mod unsafe_cast;
+
+pub use i256::I256;
 
 // ---------------------------------------------------------------------------
 // SliceInfoElem — used by the s![] macro
@@ -61,6 +64,10 @@ pub enum DType {
     I64,
     /// `i128`
     I128,
+    /// `I256` — 256-bit two's-complement signed integer. Used as
+    /// the promoted type for mixed `u128` + `i128` arithmetic
+    /// (no native Rust type can hold that union losslessly).
+    I256,
     /// `f32`
     F32,
     /// `f64`
@@ -93,6 +100,7 @@ impl DType {
             Self::I32 => 4,
             Self::I64 => 8,
             Self::I128 => 16,
+            Self::I256 => 32,
             Self::F32 => 4,
             Self::F64 => 8,
             Self::Complex32 => 8,
@@ -119,6 +127,8 @@ impl DType {
             Self::I32 => 4,
             Self::I64 => 8,
             Self::I128 => 16,
+            // I256 uses `[u64; 4]` so its natural alignment matches u64.
+            Self::I256 => core::mem::align_of::<I256>(),
             Self::F32 => 4,
             Self::F64 => 8,
             Self::Complex32 => core::mem::align_of::<Complex<f32>>(),
@@ -160,6 +170,7 @@ impl DType {
                 | Self::I32
                 | Self::I64
                 | Self::I128
+                | Self::I256
         )
     }
 
@@ -179,6 +190,7 @@ impl DType {
                 | Self::I32
                 | Self::I64
                 | Self::I128
+                | Self::I256
                 | Self::F32
                 | Self::F64
                 | Self::Complex32
@@ -211,6 +223,7 @@ impl fmt::Display for DType {
             Self::I32 => "int32",
             Self::I64 => "int64",
             Self::I128 => "int128",
+            Self::I256 => "int256",
             Self::F32 => "float32",
             Self::F64 => "float64",
             Self::Complex32 => "complex64",
@@ -333,6 +346,26 @@ impl_element_int!(i16, I16);
 impl_element_int!(i32, I32);
 impl_element_int!(i64, I64);
 impl_element_int!(i128, I128);
+
+// I256 — hand-written because the macro wants `0 as Self` / `1 as Self`.
+impl private::Sealed for I256 {}
+
+impl Element for I256 {
+    #[inline]
+    fn dtype() -> DType {
+        DType::I256
+    }
+
+    #[inline]
+    fn zero() -> Self {
+        I256::ZERO
+    }
+
+    #[inline]
+    fn one() -> Self {
+        I256::ONE
+    }
+}
 
 // Floats
 impl_element_float!(f32, F32);

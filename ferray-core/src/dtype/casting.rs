@@ -140,7 +140,7 @@ pub fn min_scalar_type(dt: DType) -> DType {
     match dt {
         Bool => Bool,
         U8 | U16 | U32 | U64 | U128 => U8,
-        I8 | I16 | I32 | I64 | I128 => I8,
+        I8 | I16 | I32 | I64 | I128 | I256 => I8,
         F32 | F64 => F32,
         Complex32 | Complex64 => Complex32,
         #[cfg(feature = "f16")]
