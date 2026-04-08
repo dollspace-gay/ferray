@@ -3,11 +3,12 @@
   "display_id": 290,
   "title": "ferray-stride-tricks: 2D window test checks shape only, not element values",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsliding_window.rs L144: stride interleaving correctness unverified.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:00:51.997341871Z",
-  "updated_at": "2026-03-25T16:00:57.978248354Z",
+  "updated_at": "2026-04-08T16:41:42.214718543Z",
+  "closed_at": "2026-04-08T16:41:42.214718543Z",
   "labels": [
     "bug",
     "qa-audit"
