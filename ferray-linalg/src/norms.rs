@@ -46,11 +46,11 @@ pub enum NormOrder {
 pub fn norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult<T> {
     let shape = a.shape();
     match shape.len() {
-        1 => vector_norm(a, ord),
-        2 => matrix_norm(a, ord),
+        1 => vector_norm_scalar(a, ord),
+        2 => matrix_norm_scalar(a, ord),
         _ => {
             // For ND arrays, flatten and compute vector norm
-            vector_norm(a, ord)
+            vector_norm_scalar(a, ord)
         }
     }
 }
@@ -63,7 +63,8 @@ pub fn norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult
 /// that `axis` is removed (or set to 1 when `keepdims=true`).
 ///
 /// Matrix-style norm axes (a `(int, int)` tuple in NumPy) are not yet
-/// supported; pass the matrix to [`matrix_norm`] via `norm` instead.
+/// supported; pass the matrix to [`matrix_norm`] directly, or call `norm`
+/// for the scalar form.
 ///
 /// # Errors
 /// - `FerrayError::AxisOutOfBounds` if `axis >= ndim`.
@@ -145,8 +146,68 @@ pub fn norm_axis<T: LinalgFloat>(
     Array::from_vec(IxDyn::new(&out_shape), out)
 }
 
-/// Helper that runs the same vector-norm math as `vector_norm` but on a
-/// plain slice, avoiding the `&Array<T, IxDyn>` allocation that would
+/// Compute a vector norm, optionally reducing along a single axis.
+///
+/// NumPy 2.0 Array API standard entry point (`numpy.linalg.vector_norm`).
+/// When `axis = Some(k)`, delegates to [`norm_axis`] to collapse one axis
+/// at a time. When `axis = None`, reduces the entire flattened array to
+/// a single scalar wrapped in a shape-`[]` (or shape-`[1,1,…]` with
+/// `keepdims = true`) array.
+///
+/// This is a thin wrapper over the scalar-returning internal helpers —
+/// use [`norm`] when you want a plain scalar out without going through an
+/// `Array`.
+///
+/// # Errors
+/// - `FerrayError::AxisOutOfBounds` if `axis` is out of range.
+/// - `FerrayError::InvalidValue` for norm orders not defined on vectors
+///   (currently `NormOrder::Nuc`).
+pub fn vector_norm<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    ord: NormOrder,
+    axis: Option<usize>,
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>> {
+    if let Some(ax) = axis {
+        return norm_axis(a, ord, ax, keepdims);
+    }
+
+    // Whole-array vector norm: reduce to a scalar, then wrap.
+    let scalar = vector_norm_scalar(a, ord)?;
+
+    let out_shape: Vec<usize> = if keepdims {
+        // NumPy's keepdims=True with axis=None fills a size-1 dim for every
+        // original axis (shape (1, 1, 1, ...)).
+        vec![1; a.ndim()]
+    } else {
+        vec![]
+    };
+    Array::from_vec(IxDyn::new(&out_shape), vec![scalar])
+}
+
+/// Compute the matrix norm of a 2-D matrix.
+///
+/// NumPy 2.0 Array API standard entry point (`numpy.linalg.matrix_norm`).
+/// Supports `Fro`, `Nuc`, `L1`, `L2`, `Inf`, and `NegInf` orders. The
+/// `P(_)` vector-only orders return [`FerrayError::InvalidValue`] because
+/// they are not defined on matrices.
+///
+/// For the batched (N-D input with matrix axes) version, see #412; this
+/// entry point currently operates on rank-2 inputs only.
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if `ord` is not valid for matrix norms.
+pub fn matrix_norm<T: LinalgFloat>(a: &Array<T, Ix2>, ord: NormOrder) -> FerrayResult<T> {
+    // Forward to the scalar helper after a dynamic-rank re-wrap so the
+    // existing matrix_norm_scalar code path is reused unchanged.
+    let shape = a.shape();
+    let data: Vec<T> = a.iter().copied().collect();
+    let dyn_a = Array::<T, IxDyn>::from_vec(IxDyn::new(shape), data)?;
+    matrix_norm_scalar(&dyn_a, ord)
+}
+
+/// Helper that runs the same vector-norm math as `vector_norm_scalar` but
+/// on a plain slice, avoiding the `&Array<T, IxDyn>` allocation that would
 /// otherwise be required per-lane in [`norm_axis`].
 fn vector_norm_from_slice<T: LinalgFloat>(
     data: &[T],
@@ -208,7 +269,7 @@ fn vector_norm_from_slice<T: LinalgFloat>(
     }
 }
 
-fn vector_norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult<T> {
+fn vector_norm_scalar<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult<T> {
     let data: Vec<T> = a.iter().copied().collect();
     match ord {
         NormOrder::L2 | NormOrder::Fro => {
@@ -281,7 +342,7 @@ fn vector_norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayRes
     }
 }
 
-fn matrix_norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult<T> {
+fn matrix_norm_scalar<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult<T> {
     let shape = a.shape();
     let (m, n) = (shape[0], shape[1]);
     let data: Vec<T> = a.iter().copied().collect();
@@ -1064,5 +1125,128 @@ mod tests {
         let t = matrix_transpose(&a);
         let seen: Vec<i32> = t.iter().copied().collect();
         assert_eq!(seen, vec![1, 3, 2, 4]);
+    }
+
+    // ---- vector_norm / matrix_norm Array API entry points (#408) ----
+
+    #[test]
+    fn vector_norm_with_axis_matches_norm_axis() {
+        // (2, 3) L2 along axis=1 → shape (2,)
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 3]),
+            vec![3.0, 4.0, 0.0, 1.0, 2.0, 2.0],
+        )
+        .unwrap();
+        let v = vector_norm(&a, NormOrder::L2, Some(1), false).unwrap();
+        assert_eq!(v.shape(), &[2]);
+        let s = v.as_slice().unwrap();
+        assert!((s[0] - 5.0).abs() < 1e-10); // sqrt(9+16+0) = 5
+        assert!((s[1] - 3.0).abs() < 1e-10); // sqrt(1+4+4) = 3
+    }
+
+    #[test]
+    fn vector_norm_with_keepdims_preserves_axis() {
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 3]),
+            vec![3.0, 4.0, 0.0, 1.0, 2.0, 2.0],
+        )
+        .unwrap();
+        let v = vector_norm(&a, NormOrder::L2, Some(1), true).unwrap();
+        assert_eq!(v.shape(), &[2, 1]);
+    }
+
+    #[test]
+    fn vector_norm_no_axis_returns_full_array_norm() {
+        // L2 of [3, 4] = 5; result is wrapped in a shape-[] scalar array.
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 4.0]).unwrap();
+        let v = vector_norm(&a, NormOrder::L2, None, false).unwrap();
+        assert_eq!(v.shape(), &[] as &[usize]);
+        assert!((v.iter().next().copied().unwrap() - 5.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn vector_norm_no_axis_keepdims_gives_size_1_shape() {
+        // keepdims=true + axis=None → shape (1, 1, ..., 1) matching ndim.
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 3]),
+            vec![3.0, 4.0, 0.0, 1.0, 2.0, 2.0],
+        )
+        .unwrap();
+        let v = vector_norm(&a, NormOrder::L2, None, true).unwrap();
+        assert_eq!(v.shape(), &[1, 1]);
+    }
+
+    #[test]
+    fn vector_norm_nuclear_on_vector_errors() {
+        // Nuclear norm undefined on vectors; must propagate the error.
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1.0, 2.0, 3.0]).unwrap();
+        assert!(vector_norm(&a, NormOrder::Nuc, None, false).is_err());
+    }
+
+    #[test]
+    fn vector_norm_axis_out_of_bounds_errors() {
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        assert!(vector_norm(&a, NormOrder::L2, Some(5), false).is_err());
+    }
+
+    #[test]
+    fn matrix_norm_frobenius_matches_manual() {
+        // fro_norm([[1,2],[3,4]]) = sqrt(1+4+9+16) = sqrt(30)
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let got = matrix_norm(&a, NormOrder::Fro).unwrap();
+        let expected = 30.0_f64.sqrt();
+        assert!((got - expected).abs() < 1e-10);
+    }
+
+    #[test]
+    fn matrix_norm_l1_is_max_col_sum() {
+        // L1 matrix norm = max absolute column sum.
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, -2.0, 3.0, 4.0]).unwrap();
+        // Columns: |1|+|3|=4 ; |-2|+|4|=6 → L1 = 6
+        let got = matrix_norm(&a, NormOrder::L1).unwrap();
+        assert!((got - 6.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn matrix_norm_inf_is_max_row_sum() {
+        // Inf matrix norm = max absolute row sum.
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, -2.0, 3.0, 4.0]).unwrap();
+        // Rows: |1|+|-2|=3 ; |3|+|4|=7 → Inf = 7
+        let got = matrix_norm(&a, NormOrder::Inf).unwrap();
+        assert!((got - 7.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn matrix_norm_rejects_p_order() {
+        // P(_) is a vector-only norm order.
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        assert!(matrix_norm(&a, NormOrder::P(3.0)).is_err());
+    }
+
+    #[test]
+    fn matrix_norm_matches_existing_norm_entry_point() {
+        // New matrix_norm must agree with the existing norm() scalar path
+        // for all supported orders.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0],
+        )
+        .unwrap();
+        let dyn_a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[3, 3]),
+            a.iter().copied().collect(),
+        )
+        .unwrap();
+        for ord in [NormOrder::Fro, NormOrder::L1, NormOrder::Inf, NormOrder::NegInf] {
+            let via_matrix = matrix_norm(&a, ord).unwrap();
+            let via_norm = norm(&dyn_a, ord).unwrap();
+            assert!(
+                (via_matrix - via_norm).abs() < 1e-10,
+                "ord {:?}: matrix_norm={}, norm={}",
+                ord,
+                via_matrix,
+                via_norm
+            );
+        }
     }
 }

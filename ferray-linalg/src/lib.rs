@@ -61,8 +61,8 @@ pub use solve::{
 
 // Norms and measures (Section 8.4)
 pub use norms::{
-    NormOrder, cond, det, det_batched, diagonal, matrix_rank, matrix_rank_batched,
-    matrix_transpose, norm, norm_axis, slogdet, slogdet_batched, trace,
+    NormOrder, cond, det, det_batched, diagonal, matrix_norm, matrix_rank, matrix_rank_batched,
+    matrix_transpose, norm, norm_axis, slogdet, slogdet_batched, trace, vector_norm,
 };
 
 // Complex matrix operations (#404) — take `Array<Complex<T>, Ix2>` directly
