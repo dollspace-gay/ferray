@@ -1092,6 +1092,22 @@ mod tests {
         assert!(broadcast_to(&a, &[3]).is_err());
     }
 
+    #[test]
+    fn test_broadcast_to_from_non_contiguous_source() {
+        // Issue #133: broadcast_to's source may itself be non-contiguous
+        // (e.g., transposed). Since broadcast_to now delegates to
+        // ndarray's `broadcast` which handles any stride pattern, the
+        // result should materialize correctly.
+        let a = dyn_arr(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        // Transpose gives us a 3x2 logical view — then broadcast to (2, 3, 2).
+        let t = transpose(&a, None).unwrap();
+        let b = broadcast_to(&t, &[2, 3, 2]).unwrap();
+        assert_eq!(b.shape(), &[2, 3, 2]);
+        // Both outer slices should be identical.
+        let data: Vec<f64> = b.iter().copied().collect();
+        assert_eq!(&data[..6], &data[6..12]);
+    }
+
     // -- REQ-21 --
 
     #[test]

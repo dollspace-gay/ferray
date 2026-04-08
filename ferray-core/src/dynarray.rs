@@ -467,4 +467,52 @@ mod tests {
         let da = DynArray::zeros(DType::F32, &[0]).unwrap();
         assert!(da.is_empty());
     }
+
+    // ----- f16 / bf16 DynArray coverage (#139) -----
+
+    #[cfg(feature = "f16")]
+    #[test]
+    fn dynarray_f16_zeros_shape_and_dtype() {
+        let da = DynArray::zeros(DType::F16, &[2, 3]).unwrap();
+        assert_eq!(da.dtype(), DType::F16);
+        assert_eq!(da.shape(), &[2, 3]);
+        assert_eq!(da.size(), 6);
+        assert_eq!(da.itemsize(), 2);
+        assert_eq!(da.nbytes(), 12);
+    }
+
+    #[cfg(feature = "f16")]
+    #[test]
+    fn dynarray_f16_from_typed_roundtrips() {
+        use half::f16;
+        let raw = [f16::from_f32(1.0), f16::from_f32(2.5), f16::from_f32(-3.0)];
+        let arr =
+            Array::<f16, IxDyn>::from_vec(IxDyn::new(&[3]), raw.to_vec()).unwrap();
+        let da: DynArray = arr.into();
+        assert_eq!(da.dtype(), DType::F16);
+        assert_eq!(da.shape(), &[3]);
+    }
+
+    #[cfg(feature = "bf16")]
+    #[test]
+    fn dynarray_bf16_zeros_shape_and_dtype() {
+        let da = DynArray::zeros(DType::BF16, &[4]).unwrap();
+        assert_eq!(da.dtype(), DType::BF16);
+        assert_eq!(da.shape(), &[4]);
+        assert_eq!(da.itemsize(), 2);
+    }
+
+    #[cfg(feature = "bf16")]
+    #[test]
+    fn dynarray_bf16_from_typed_roundtrips() {
+        use half::bf16;
+        let raw = [
+            bf16::from_f32(1.0),
+            bf16::from_f32(2.0),
+        ];
+        let arr =
+            Array::<bf16, IxDyn>::from_vec(IxDyn::new(&[2]), raw.to_vec()).unwrap();
+        let da: DynArray = arr.into();
+        assert_eq!(da.dtype(), DType::BF16);
+    }
 }

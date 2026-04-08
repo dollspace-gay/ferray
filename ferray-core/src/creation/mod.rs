@@ -759,6 +759,28 @@ mod tests {
     }
 
     #[test]
+    fn test_frombuffer_bool() {
+        // Issue #135: bool round-trips through frombuffer must
+        // preserve the discriminating byte (0 -> false, nonzero
+        // -> true, although our raw-buffer contract is that each
+        // byte is a valid bool per `Element`).
+        let bytes: Vec<u8> = vec![0, 1, 0, 1, 1];
+        let a = frombuffer::<bool, Ix1>(Ix1::new([5]), &bytes).unwrap();
+        assert_eq!(
+            a.as_slice().unwrap(),
+            &[false, true, false, true, true]
+        );
+    }
+
+    #[test]
+    fn test_frombuffer_bool_wrong_length() {
+        // For bool (1 byte each), the buffer length must equal the
+        // requested element count.
+        let bytes: Vec<u8> = vec![0, 1];
+        assert!(frombuffer::<bool, Ix1>(Ix1::new([3]), &bytes).is_err());
+    }
+
+    #[test]
     fn test_fromiter() {
         let a = fromiter((0..5).map(|x| x as f64)).unwrap();
         assert_eq!(a.shape(), &[5]);

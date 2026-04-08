@@ -354,4 +354,39 @@ mod tests {
         assert_eq!(arc.ref_count(), 1); // original not shared with copy
         assert_eq!(copy.ref_count(), 1);
     }
+
+    // ----- non-contiguous source coverage (#129) -----
+
+    #[test]
+    fn arc_from_owned_after_transpose_is_standard_layout() {
+        // Transpose produces an F-contiguous view; going through
+        // `as_standard_layout` in manipulation::transpose materializes
+        // a standard-layout copy, and wrapping that in ArcArray must
+        // yield a usable shared array whose `as_slice` succeeds.
+        use crate::dimension::Ix2;
+        let arr =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
+        let transposed = crate::manipulation::transpose(&arr, None).unwrap();
+        assert_eq!(transposed.shape(), &[3, 2]);
+        let arc = ArcArray::<f64, crate::dimension::IxDyn>::from_owned(transposed);
+        // ArcArray::as_slice returns the underlying contiguous buffer
+        // in row-major order; the transposed data should be
+        // [1, 4, 2, 5, 3, 6] after as_standard_layout.
+        assert_eq!(arc.as_slice(), &[1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);
+    }
+
+    #[test]
+    fn arc_from_owned_with_broadcast_to_materializes_data() {
+        // broadcast_to produces a stride-0 view that, after
+        // `as_standard_layout`, becomes a proper contiguous array
+        // with duplicated rows. ArcArray should accept it.
+        use crate::dimension::Ix1;
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let b = crate::manipulation::broadcast_to(&a, &[2, 3]).unwrap();
+        assert_eq!(b.shape(), &[2, 3]);
+        let arc = ArcArray::<f64, crate::dimension::IxDyn>::from_owned(b);
+        // Both rows should be `[1, 2, 3]`.
+        assert_eq!(arc.as_slice(), &[1.0, 2.0, 3.0, 1.0, 2.0, 3.0]);
+    }
 }
