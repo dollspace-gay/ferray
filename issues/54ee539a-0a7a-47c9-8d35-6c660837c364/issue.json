@@ -3,11 +3,12 @@
   "display_id": 306,
   "title": "ferray-autodiff: gradient allocates new Vec per dimension",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nL1206-1218: reuse single allocation by mutating seed in-place.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:02:55.869799316Z",
-  "updated_at": "2026-03-25T16:03:00.787796643Z",
+  "updated_at": "2026-04-08T16:45:55.704087004Z",
+  "closed_at": "2026-04-08T16:45:55.704087004Z",
   "labels": [
     "refactor",
     "qa-audit"
