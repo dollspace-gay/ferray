@@ -94,12 +94,40 @@ where
     Ok((pair, result_dim))
 }
 
+/// Apply `f` only to unmasked elements of `ma`. Masked positions carry
+/// the masked array's `fill_value` into the result. Crate-internal so
+/// `ufunc_support::masked_unary_op`-style call sites can reuse it and
+/// `ferray-ma` ships one definition instead of two (#150).
+pub(crate) fn masked_unary_op<T, D, F>(
+    ma: &MaskedArray<T, D>,
+    f: F,
+) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+    F: Fn(T) -> T,
+{
+    let fill = ma.fill_value;
+    let data: Vec<T> = ma
+        .data()
+        .iter()
+        .zip(ma.mask().iter())
+        .map(|(v, m)| if *m { fill } else { f(*v) })
+        .collect();
+    let result_data = Array::from_vec(ma.dim().clone(), data)?;
+    let mut out = MaskedArray::new(result_data, ma.mask().clone())?;
+    out.fill_value = fill;
+    Ok(out)
+}
+
 /// Generic masked binary op: applies `op` to each (a, b) pair, propagates
 /// the mask union, fills masked positions with the receiver's `fill_value`.
 ///
 /// Fast path on identical shapes; broadcasts otherwise. Used by
-/// [`masked_add`], [`masked_sub`], etc.
-fn masked_binary_op<T, D, F>(
+/// [`masked_add`], [`masked_sub`], etc. Crate-internal so
+/// `ufunc_support` can replace its own two-variant copy of the body
+/// with this single source of truth (#150).
+pub(crate) fn masked_binary_op<T, D, F>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,
     op: F,

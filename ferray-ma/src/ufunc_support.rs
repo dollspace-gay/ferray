@@ -4,80 +4,13 @@
 // operations on the data, then propagate masks. Masked elements are skipped;
 // their output positions retain the masked array's `fill_value`.
 
-use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrayError, FerrayResult};
+use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
 use crate::MaskedArray;
-
-// ---------------------------------------------------------------------------
-// Internal helper: apply a unary ufunc only on unmasked elements
-// ---------------------------------------------------------------------------
-
-/// Apply a unary function only on unmasked elements, keeping masked positions
-/// at the masked array's `fill_value`.
-fn masked_unary_op<T, D>(
-    ma: &MaskedArray<T, D>,
-    f: impl Fn(T) -> T,
-) -> FerrayResult<MaskedArray<T, D>>
-where
-    T: Element + Copy,
-    D: Dimension,
-{
-    let fill = ma.fill_value();
-    let data: Vec<T> = ma
-        .data()
-        .iter()
-        .zip(ma.mask().iter())
-        .map(|(v, m)| if *m { fill } else { f(*v) })
-        .collect();
-    let result_data = Array::from_vec(ma.dim().clone(), data)?;
-    let mut out = MaskedArray::new(result_data, ma.mask().clone())?;
-    out.set_fill_value(fill);
-    Ok(out)
-}
-
-/// Apply a binary ufunc on two masked arrays, producing the mask union.
-/// Masked positions get the receiver's `fill_value`.
-fn masked_binary_op<T, D>(
-    a: &MaskedArray<T, D>,
-    b: &MaskedArray<T, D>,
-    f: impl Fn(T, T) -> T,
-) -> FerrayResult<MaskedArray<T, D>>
-where
-    T: Element + Copy,
-    D: Dimension,
-{
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "operand shapes {:?} and {:?} do not match",
-            a.shape(),
-            b.shape(),
-        )));
-    }
-
-    let fill = a.fill_value();
-    let mask_data: Vec<bool> = a
-        .mask()
-        .iter()
-        .zip(b.mask().iter())
-        .map(|(ma, mb)| *ma || *mb)
-        .collect();
-    let result_mask = Array::from_vec(a.dim().clone(), mask_data)?;
-    let data: Vec<T> = a
-        .data()
-        .iter()
-        .zip(b.data().iter())
-        .zip(result_mask.iter())
-        .map(|((x, y), m)| if *m { fill } else { f(*x, *y) })
-        .collect();
-    let result_data = Array::from_vec(a.dim().clone(), data)?;
-    let mut out = MaskedArray::new(result_data, result_mask)?;
-    out.set_fill_value(fill);
-    Ok(out)
-}
+use crate::arithmetic::{masked_binary_op, masked_unary_op};
 
 // ---------------------------------------------------------------------------
 // Trigonometric ufuncs
@@ -324,7 +257,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_binary_op(a, b, |x, y| x + y)
+    masked_binary_op(a, b, |x, y| x + y, "add")
 }
 
 /// Elementwise subtraction of two masked arrays with mask propagation.
@@ -339,7 +272,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_binary_op(a, b, |x, y| x - y)
+    masked_binary_op(a, b, |x, y| x - y, "subtract")
 }
 
 /// Elementwise multiplication of two masked arrays with mask propagation.
@@ -354,7 +287,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_binary_op(a, b, |x, y| x * y)
+    masked_binary_op(a, b, |x, y| x * y, "multiply")
 }
 
 /// Elementwise division of two masked arrays with mask propagation.
@@ -366,7 +299,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_binary_op(a, b, |x, y| x / y)
+    masked_binary_op(a, b, |x, y| x / y, "divide")
 }
 
 /// Elementwise power of two masked arrays with mask propagation.
@@ -378,5 +311,5 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_binary_op(a, b, T::powf)
+    masked_binary_op(a, b, T::powf, "power")
 }
