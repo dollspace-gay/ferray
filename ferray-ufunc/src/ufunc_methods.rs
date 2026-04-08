@@ -99,6 +99,53 @@ where
     Array::from_vec(IxDyn::from(&out_shape[..]), result)
 }
 
+/// Generic reduction along an axis with an optional `keepdims` flag.
+///
+/// Equivalent to calling [`reduce_axis`] followed by inserting a size-1 axis
+/// at the reduced position when `keepdims` is `true`. Matches NumPy's
+/// `np.<ufunc>.reduce(input, axis=axis, keepdims=keepdims)`.
+///
+/// `keepdims=false` is identical to [`reduce_axis`] — the reduced axis is
+/// removed entirely. `keepdims=true` preserves the axis as a size-1
+/// dimension so the result is broadcastable back against the original input
+/// shape (the core use case — `arr - arr.sum(axis=1, keepdims=True)`).
+///
+/// # Errors
+/// - `FerrayError::AxisOutOfBounds` if `axis >= input.ndim()`.
+pub fn reduce_axis_keepdims<T, D, F>(
+    input: &Array<T, D>,
+    axis: usize,
+    identity: T,
+    keepdims: bool,
+    op: F,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Copy,
+    D: Dimension,
+    F: Fn(T, T) -> T,
+{
+    // Delegate the core work to reduce_axis; we re-validate the axis here
+    // too so we can produce the keepdims shape without materializing an
+    // invalid intermediate.
+    let ndim = input.ndim();
+    if axis >= ndim {
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
+    }
+
+    let reduced = reduce_axis(input, axis, identity, op)?;
+    if !keepdims {
+        return Ok(reduced);
+    }
+
+    // Rebuild the shape with a size-1 axis re-inserted at `axis`. The core
+    // `reduce_axis` also collapses 0-D results to length-1, which we
+    // preserve here by inserting rather than replacing.
+    let mut kept_shape: Vec<usize> = input.shape().to_vec();
+    kept_shape[axis] = 1;
+    let data: Vec<T> = reduced.iter().copied().collect();
+    Array::from_vec(IxDyn::new(&kept_shape), data)
+}
+
 /// Generic cumulative reduction along an axis.
 ///
 /// For each position in the output, the running accumulator starts at the
@@ -284,6 +331,66 @@ mod tests {
     fn reduce_axis_out_of_bounds() {
         let a = arr1(&[1.0, 2.0, 3.0]);
         assert!(reduce_axis(&a, 1, 0.0, |x, y| x + y).is_err());
+    }
+
+    // ---- reduce_axis_keepdims (#394) ----
+
+    #[test]
+    fn reduce_axis_keepdims_2d_rows_preserves_axis() {
+        // Shape (2, 3); reducing axis 1 with keepdims=true -> shape (2, 1).
+        let a = arr2(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let r = reduce_axis_keepdims(&a, 1, 0.0, true, |acc, x| acc + x).unwrap();
+        assert_eq!(r.shape(), &[2, 1]);
+        assert_eq!(r.as_slice().unwrap(), &[6.0, 15.0]);
+    }
+
+    #[test]
+    fn reduce_axis_keepdims_2d_cols_preserves_axis() {
+        // Shape (2, 3); reducing axis 0 with keepdims=true -> shape (1, 3).
+        let a = arr2(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let r = reduce_axis_keepdims(&a, 0, 0.0, true, |acc, x| acc + x).unwrap();
+        assert_eq!(r.shape(), &[1, 3]);
+        assert_eq!(r.as_slice().unwrap(), &[5.0, 7.0, 9.0]);
+    }
+
+    #[test]
+    fn reduce_axis_keepdims_false_matches_reduce_axis() {
+        // keepdims=false must behave identically to the plain reduce_axis.
+        let a = arr2(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let with_flag = reduce_axis_keepdims(&a, 1, 0.0, false, |acc, x| acc + x).unwrap();
+        let without = reduce_axis(&a, 1, 0.0, |acc, x| acc + x).unwrap();
+        assert_eq!(with_flag.shape(), without.shape());
+        assert_eq!(with_flag.as_slice().unwrap(), without.as_slice().unwrap());
+    }
+
+    #[test]
+    fn reduce_axis_keepdims_3d_middle_axis() {
+        // Shape (2, 3, 4); reducing axis 1 with keepdims=true -> (2, 1, 4).
+        use ferray_core::dimension::Ix3;
+        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
+        let r = reduce_axis_keepdims(&a, 1, 0.0, true, |acc, x| acc + x).unwrap();
+        assert_eq!(r.shape(), &[2, 1, 4]);
+    }
+
+    #[test]
+    fn reduce_axis_keepdims_out_of_bounds_errors() {
+        let a = arr1(&[1.0, 2.0, 3.0]);
+        assert!(reduce_axis_keepdims(&a, 5, 0.0, true, |x, y| x + y).is_err());
+        assert!(reduce_axis_keepdims(&a, 5, 0.0, false, |x, y| x + y).is_err());
+    }
+
+    #[test]
+    fn reduce_axis_keepdims_result_is_broadcastable() {
+        // The whole point of keepdims: the result shape broadcasts back
+        // against the input for row centering / normalization patterns.
+        let a = arr2(2, 3, &[1.0, 2.0, 3.0, 10.0, 20.0, 30.0]);
+        let row_sums =
+            reduce_axis_keepdims(&a, 1, 0.0, true, |acc, x| acc + x).unwrap();
+        // row_sums shape is (2, 1) which broadcasts against (2, 3).
+        assert_eq!(row_sums.shape(), &[2, 1]);
+        let row_sums_slice = row_sums.as_slice().unwrap();
+        assert_eq!(row_sums_slice, &[6.0, 60.0]);
     }
 
     #[test]

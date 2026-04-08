@@ -606,6 +606,34 @@ where
     crate::ufunc_methods::reduce_axis(input, axis, <T as Element>::zero(), |acc, x| acc + x)
 }
 
+/// Reduce by addition along an axis with an optional `keepdims` flag.
+///
+/// Equivalent to `np.add.reduce(arr, axis=..., keepdims=...)` /
+/// `np.sum(arr, axis=..., keepdims=...)`. When `keepdims = true` the
+/// reduced axis is preserved as a size-1 dimension so the result is
+/// broadcastable back against the original input — the classic pattern
+/// for row/column centering (`arr - arr.sum(axis=1, keepdims=True)`).
+///
+/// With `keepdims = false` this behaves exactly like [`add_reduce`].
+/// Added for #394.
+pub fn add_reduce_keepdims<T, D>(
+    input: &Array<T, D>,
+    axis: usize,
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + std::ops::Add<Output = T> + Copy,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_axis_keepdims(
+        input,
+        axis,
+        <T as Element>::zero(),
+        keepdims,
+        |acc, x| acc + x,
+    )
+}
+
 /// Running (cumulative) addition along an axis.
 ///
 /// AC-2: `add_accumulate` produces running sums.
@@ -1291,6 +1319,45 @@ mod tests {
         let a = arr1(vec![1.0, 2.0, 3.0, 4.0]);
         let r = add_accumulate(&a, 0).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[1.0, 3.0, 6.0, 10.0]);
+    }
+
+    #[test]
+    fn add_reduce_keepdims_true_preserves_row_axis() {
+        // (2,3) + axis=1 + keepdims=true → (2,1) with row sums.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let r = add_reduce_keepdims(&a, 1, true).unwrap();
+        assert_eq!(r.shape(), &[2, 1]);
+        assert_eq!(r.as_slice().unwrap(), &[6.0, 15.0]);
+    }
+
+    #[test]
+    fn add_reduce_keepdims_true_preserves_col_axis() {
+        // (2,3) + axis=0 + keepdims=true → (1,3) with column sums.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let r = add_reduce_keepdims(&a, 0, true).unwrap();
+        assert_eq!(r.shape(), &[1, 3]);
+        assert_eq!(r.as_slice().unwrap(), &[5.0, 7.0, 9.0]);
+    }
+
+    #[test]
+    fn add_reduce_keepdims_false_matches_legacy_add_reduce() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let legacy = add_reduce(&a, 1).unwrap();
+        let new_false = add_reduce_keepdims(&a, 1, false).unwrap();
+        assert_eq!(legacy.shape(), new_false.shape());
+        assert_eq!(legacy.as_slice().unwrap(), new_false.as_slice().unwrap());
     }
 
     #[test]

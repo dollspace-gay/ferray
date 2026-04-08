@@ -52,12 +52,13 @@ pub use ops::rounding::{around, ceil, fix, floor, rint, round, trunc};
 
 // Arithmetic
 pub use ops::arithmetic::{
-    absolute, absolute_into, add, add_accumulate, add_broadcast, add_into, add_reduce, cbrt,
-    cross, cumprod, cumsum, diff, divide, divide_broadcast, divide_into, divmod, ediff1d, fabs,
-    floor_divide, fmod, gcd, gcd_int, gradient, heaviside, lcm, lcm_int, mod_, multiply,
-    multiply_broadcast, multiply_into, multiply_outer, nancumprod, nancumsum, negative,
-    negative_into, positive, power, reciprocal, remainder, sign, sqrt, sqrt_into, square,
-    square_into, subtract, subtract_broadcast, subtract_into, trapezoid, true_divide,
+    absolute, absolute_into, add, add_accumulate, add_broadcast, add_into, add_reduce,
+    add_reduce_keepdims, cbrt, cross, cumprod, cumsum, diff, divide, divide_broadcast,
+    divide_into, divmod, ediff1d, fabs, floor_divide, fmod, gcd, gcd_int, gradient, heaviside,
+    lcm, lcm_int, mod_, multiply, multiply_broadcast, multiply_into, multiply_outer, nancumprod,
+    nancumsum, negative, negative_into, positive, power, reciprocal, remainder, sign, sqrt,
+    sqrt_into, square, square_into, subtract, subtract_broadcast, subtract_into, trapezoid,
+    true_divide,
 };
 
 // Float intrinsics
@@ -97,7 +98,9 @@ pub use ops::interpolation::{interp, interp_one};
 
 // Generic ufunc methods (reduce / accumulate / outer / at) — work with
 // any `Fn(T, T) -> T` op, equivalent to NumPy's `np.<ufunc>.reduce` etc.
-pub use ufunc_methods::{accumulate_axis, at, outer as ufunc_outer, reduce_axis};
+pub use ufunc_methods::{
+    accumulate_axis, at, outer as ufunc_outer, reduce_axis, reduce_axis_keepdims,
+};
 
 // Mixed-type (promoted) arithmetic — `np.add(i32_arr, f64_arr)` style.
 // Uses ferray-core's `Promoted` trait to resolve the output type at
