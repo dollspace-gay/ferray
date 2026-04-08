@@ -1,0 +1,10 @@
+{
+  "uuid": "105de894-577a-418d-8759-0e85bb64aa07",
+  "issue_uuid": "4db91650-93f4-40e4-933c-9133207af40c",
+  "author": "phase-4-coordinator",
+  "content": "Resolved via option 3 from the issue (remove the misleading SIMD dispatch). The four fake-SIMD wrappers (UnaryF32Op, UnaryF64Op, BinaryF32Op, BinaryF64Op) were deleted entirely — their `impl pulp::WithSimd for ... { fn with_simd<S>(_simd: S) { scalar loop } }` bodies ignored the SIMD parameter and ran plain scalar loops on every ISA. The dispatch_unary_f32/f64 and dispatch_binary_f32/f64 entry points are collapsed into direct scalar loops with a comment pointing at this issue so the next reader knows why the SIMD trappings are gone.\\n\\nAll the GENUINE SIMD kernels (SqrtF64Op, AbsF64Op, NegF64Op, SquareF64Op, ReciprocalF64Op, SqrtF32Op, ExpFastF64Op, ExpFastF32Op) are untouched — those use real pulp intrinsics via simd.sqrt_f64s and friends. The section header for the real-SIMD block is updated to note that the fake-SIMD wrappers used to sit above it.\\n\\nPublic API is unchanged: dispatch_unary_f32/f64 and dispatch_binary_f32/f64 keep the same signature, so a future vectorized transcendental library (sleef-rs / libmvec / hand-rolled pulp) can swap back in without breaking callers. This is tracked as the bigger #393 issue.\\n\\n255 lib tests + 50/19/53 integration tests still pass — no regression since the SIMD path was already scalar. Clippy clean. Net effect: ~80 lines of dead code deleted, and the misleading comment claiming pulp-based SIMD dispatch is replaced with honest scalar-loop documentation.",
+  "created_at": "2026-04-08T02:13:33.036735057Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAy8JmMHcFsmIRuYZ/CMF7hN5Z5gLyNHdtR+3FwoMqJCBCmlGQPzTe1e4F1JnyUjr8zKVhSkoO5iGzA3pIqYjaCA=="
+}
