@@ -2,11 +2,12 @@
   "uuid": "7168c01e-6e73-470e-9311-be29a1770c7a",
   "display_id": 562,
   "title": "ferray-core: implement DType::I256 / I256 element type for lossless u128+i128 promotion",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-04-08T16:05:12.904718588Z",
-  "updated_at": "2026-04-08T16:05:14.734597664Z",
+  "updated_at": "2026-04-08T16:13:44.175618563Z",
+  "closed_at": "2026-04-08T16:13:44.175618563Z",
   "labels": [
     "feature"
   ]
