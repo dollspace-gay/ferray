@@ -1,0 +1,10 @@
+{
+  "uuid": "290494e8-11d9-4a72-bc55-44a12dec95c1",
+  "issue_uuid": "a85a9265-77a5-4dd8-ad5b-9da9eb29f881",
+  "author": "phase-4-coordinator",
+  "content": "Fixed. Cross-sign ULP distance now masks off the IEEE 754 sign bit explicitly (a.to_bits() & !F64_SIGN_MASK) + (b.to_bits() & !F64_SIGN_MASK) instead of casting to i64 and taking unsigned_abs. The old code mixed sign-magnitude floats with two's-complement arithmetic and overstated cross-sign distances by up to 2^53. Same-sign branch also switched to u64 subtraction with max/min to avoid the as-i64-then-subtract pattern. Added compile-time constants F64_SIGN_MASK and F32_SIGN_MASK. 12 new self-tests cover: equal values, signed zeros, 1-ULP step, NaN returns None, cross-sign for ±1, cross-sign symmetry across a range of pairs, cross-sign monotonicity, near-zero noise floor, and the same set for f32. All 17 ferray-linalg oracle tests and 50 ferray-ufunc oracle tests still pass — the fix strictly tightens the cross-sign distance, so existing tolerances remain valid.",
+  "created_at": "2026-04-08T00:11:16.803339798Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAYyMyAM7Mk9hb4mawpIXv6fUmoRp7py18d4UOBxfceFh3hQG4dzQ6TE/32UNSBkWGOzAIESMcZxOKS8p8XqWkCw=="
+}
