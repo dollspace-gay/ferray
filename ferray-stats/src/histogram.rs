@@ -371,12 +371,59 @@ where
 // bincount
 // ---------------------------------------------------------------------------
 
+/// Count occurrences of each value in a non-negative integer array,
+/// returning **integer** counts.
+///
+/// Matches NumPy's `numpy.bincount(x)` (no-weights form): the result
+/// dtype is `uint64`, not `float64`. Callers that need weighted sums
+/// (float output) should call [`bincount_weighted`] explicitly
+/// (see issue #168 — the original `bincount` hard-coded `f64` counts
+/// even in the unweighted case).
+pub fn bincount_u64(x: &Array<u64, Ix1>, minlength: usize) -> FerrayResult<Array<u64, Ix1>> {
+    let data: Vec<u64> = x.iter().copied().collect();
+    let max_val = data.iter().copied().max().unwrap_or(0) as usize;
+    let out_len = (max_val + 1).max(minlength);
+    let mut result = vec![0u64; out_len];
+    for &v in &data {
+        result[v as usize] += 1;
+    }
+    Array::from_vec(Ix1::new([out_len]), result)
+}
+
+/// Weighted bincount: accumulates `weights[i]` into bucket `x[i]`,
+/// returning `Array<f64, Ix1>`.
+///
+/// This is NumPy's `numpy.bincount(x, weights=w)` form; the output
+/// dtype is `float64` because weights are floating point.
+pub fn bincount_weighted(
+    x: &Array<u64, Ix1>,
+    weights: &Array<f64, Ix1>,
+    minlength: usize,
+) -> FerrayResult<Array<f64, Ix1>> {
+    if weights.size() != x.size() {
+        return Err(FerrayError::shape_mismatch(
+            "x and weights must have the same length",
+        ));
+    }
+    let data: Vec<u64> = x.iter().copied().collect();
+    let wdata: Vec<f64> = weights.iter().copied().collect();
+    let max_val = data.iter().copied().max().unwrap_or(0) as usize;
+    let out_len = (max_val + 1).max(minlength);
+    let mut result = vec![0.0_f64; out_len];
+    for (i, &v) in data.iter().enumerate() {
+        result[v as usize] += wdata[i];
+    }
+    Array::from_vec(Ix1::new([out_len]), result)
+}
+
 /// Count occurrences of each value in a non-negative integer array.
 ///
-/// If `weights` is provided, the output is weighted sums instead of counts.
-/// `minlength` specifies a minimum length for the output array.
-///
-/// The input array must contain non-negative u64 values.
+/// Umbrella entry point that dispatches between [`bincount_u64`] and
+/// [`bincount_weighted`] based on whether weights are provided.
+/// Always returns `Array<f64, Ix1>` for the umbrella case because we
+/// can't express a union return type; new code should prefer
+/// [`bincount_u64`] or [`bincount_weighted`] directly to avoid the
+/// u64→f64 cast in the unweighted path.
 ///
 /// Equivalent to `numpy.bincount`.
 pub fn bincount(
@@ -384,35 +431,14 @@ pub fn bincount(
     weights: Option<&Array<f64, Ix1>>,
     minlength: usize,
 ) -> FerrayResult<Array<f64, Ix1>> {
-    let data: Vec<u64> = x.iter().copied().collect();
-
-    if let Some(w) = weights {
-        if w.size() != x.size() {
-            return Err(FerrayError::shape_mismatch(
-                "x and weights must have the same length",
-            ));
-        }
-    }
-
-    let max_val = data.iter().copied().max().unwrap_or(0) as usize;
-    let out_len = (max_val + 1).max(minlength);
-    let mut result = vec![0.0_f64; out_len];
-
     match weights {
-        Some(w) => {
-            let wdata: Vec<f64> = w.iter().copied().collect();
-            for (i, &v) in data.iter().enumerate() {
-                result[v as usize] += wdata[i];
-            }
-        }
+        Some(w) => bincount_weighted(x, w, minlength),
         None => {
-            for &v in &data {
-                result[v as usize] += 1.0;
-            }
+            let counts = bincount_u64(x, minlength)?;
+            let data: Vec<f64> = counts.iter().map(|&c| c as f64).collect();
+            Array::from_vec(Ix1::new([counts.size()]), data)
         }
     }
-
-    Array::from_vec(Ix1::new([out_len]), result)
 }
 
 // ---------------------------------------------------------------------------

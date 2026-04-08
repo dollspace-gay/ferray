@@ -44,7 +44,10 @@ pub use reductions::nan_aware::{
 pub use correlation::{CorrelateMode, corrcoef, correlate, cov};
 
 // Histogram
-pub use histogram::{Bins, bincount, digitize, histogram, histogram2d, histogramdd};
+pub use histogram::{
+    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram2d,
+    histogramdd,
+};
 
 // Sorting
 pub use sorting::{Side, SortKind, argsort, searchsorted, sort};

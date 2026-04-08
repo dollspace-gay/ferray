@@ -70,11 +70,26 @@ where
                 return Err(FerrayError::axis_out_of_bounds(ax, a.ndim()));
             }
             let shape = a.shape().to_vec();
-            let data: Vec<T> = a.iter().copied().collect();
-            let mut result = data.clone();
-            let strides = compute_strides(&shape);
-
+            let ndim = shape.len();
+            // Materialize once into a single buffer that we sort in
+            // place — the previous code allocated `data` plus a full
+            // `result = data.clone()` second copy (#171).
+            let mut buf: Vec<T> = a.iter().copied().collect();
             let axis_len = shape[ax];
+
+            // Last-axis fast path: lanes are already contiguous in
+            // row-major order, so we can hand each `axis_len` window to
+            // `sort_slice` directly with no gather/scatter.
+            if ax == ndim - 1 {
+                for chunk in buf.chunks_exact_mut(axis_len) {
+                    sort_slice(chunk, kind);
+                }
+                return Array::from_vec(IxDyn::new(&shape), buf);
+            }
+
+            // General axis: gather a temporary lane, sort it, scatter
+            // values back into the same buffer.
+            let strides = compute_strides(&shape);
             let out_shape: Vec<usize> = shape
                 .iter()
                 .enumerate()
@@ -88,36 +103,38 @@ where
             };
 
             let mut out_multi = vec![0usize; out_shape.len()];
-            let ndim = shape.len();
+            // Re-used per-lane scratch buffers to avoid `axis_len`
+            // re-allocations on every output position.
+            let mut in_multi = vec![0usize; ndim];
+            let mut lane: Vec<T> = Vec::with_capacity(axis_len);
+            let mut lane_indices: Vec<usize> = Vec::with_capacity(axis_len);
 
             for _ in 0..out_size {
                 // Build input multi-index template
-                let mut in_multi = Vec::with_capacity(ndim);
                 let mut out_dim = 0;
-                for d in 0..ndim {
+                for (d, slot) in in_multi.iter_mut().enumerate() {
                     if d == ax {
-                        in_multi.push(0);
+                        *slot = 0;
                     } else {
-                        in_multi.push(out_multi[out_dim]);
+                        *slot = out_multi[out_dim];
                         out_dim += 1;
                     }
                 }
 
-                // Gather lane
-                let mut lane: Vec<T> = Vec::with_capacity(axis_len);
-                let mut lane_indices: Vec<usize> = Vec::with_capacity(axis_len);
+                lane.clear();
+                lane_indices.clear();
                 for k in 0..axis_len {
                     in_multi[ax] = k;
                     let idx = flat_index(&in_multi, &strides);
-                    lane.push(data[idx]);
+                    lane.push(buf[idx]);
                     lane_indices.push(idx);
                 }
 
                 sort_slice(&mut lane, kind);
 
-                // Scatter sorted values back
+                // Scatter sorted values back into the in-place buffer.
                 for (k, &idx) in lane_indices.iter().enumerate() {
-                    result[idx] = lane[k];
+                    buf[idx] = lane[k];
                 }
 
                 if !out_shape.is_empty() {
@@ -125,7 +142,7 @@ where
                 }
             }
 
-            Array::from_vec(IxDyn::new(&shape), result)
+            Array::from_vec(IxDyn::new(&shape), buf)
         }
     }
 }
