@@ -33,6 +33,35 @@ pub fn add<Da: Dimension, Db: Dimension>(
     StringArray::from_vec(IxDyn::new(&out_shape), data)
 }
 
+/// Same-dimension elementwise string concatenation.
+///
+/// Like [`add`] but both inputs must have the same shape — no
+/// broadcasting is performed, and the result preserves the static
+/// dimension type. Use this when you know the shapes match and want
+/// to keep `StringArray<Ix1>` instead of getting `StringArray<IxDyn>`
+/// (#163).
+///
+/// # Errors
+/// Returns `FerrayError::ShapeMismatch` if shapes differ.
+pub fn add_same<D: Dimension>(
+    a: &StringArray<D>,
+    b: &StringArray<D>,
+) -> FerrayResult<StringArray<D>> {
+    if a.shape() != b.shape() {
+        return Err(ferray_core::error::FerrayError::shape_mismatch(format!(
+            "add_same: shapes {:?} and {:?} must be identical",
+            a.shape(),
+            b.shape()
+        )));
+    }
+    let data: Vec<String> = a
+        .iter()
+        .zip(b.iter())
+        .map(|(x, y)| format!("{x}{y}"))
+        .collect();
+    StringArray::from_vec(a.dim().clone(), data)
+}
+
 /// Repeat each string element `n` times.
 ///
 /// # Errors

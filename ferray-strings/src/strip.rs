@@ -7,6 +7,13 @@ use ferray_core::error::FerrayResult;
 
 use crate::string_array::StringArray;
 
+/// Build a char-set predicate from `chars`. Shared by strip/lstrip/rstrip
+/// so the `char_set: Vec<char>` construction lives in one place (#280).
+fn char_set_predicate(chars: &str) -> impl Fn(char) -> bool + '_ {
+    let char_set: Vec<char> = chars.chars().collect();
+    move |c: char| char_set.contains(&c)
+}
+
 /// Strip leading and trailing characters from each string element.
 ///
 /// If `chars` is `None`, strips whitespace. Otherwise strips any character
@@ -21,8 +28,8 @@ pub fn strip<D: Dimension>(
     match chars {
         None => a.map(|s| s.trim().to_string()),
         Some(ch) => {
-            let char_set: Vec<char> = ch.chars().collect();
-            a.map(|s| s.trim_matches(|c: char| char_set.contains(&c)).to_string())
+            let pred = char_set_predicate(ch);
+            a.map(|s| s.trim_matches(&pred).to_string())
         }
     }
 }
@@ -41,11 +48,8 @@ pub fn lstrip<D: Dimension>(
     match chars {
         None => a.map(|s| s.trim_start().to_string()),
         Some(ch) => {
-            let char_set: Vec<char> = ch.chars().collect();
-            a.map(|s| {
-                s.trim_start_matches(|c: char| char_set.contains(&c))
-                    .to_string()
-            })
+            let pred = char_set_predicate(ch);
+            a.map(|s| s.trim_start_matches(&pred).to_string())
         }
     }
 }
@@ -64,11 +68,8 @@ pub fn rstrip<D: Dimension>(
     match chars {
         None => a.map(|s| s.trim_end().to_string()),
         Some(ch) => {
-            let char_set: Vec<char> = ch.chars().collect();
-            a.map(|s| {
-                s.trim_end_matches(|c: char| char_set.contains(&c))
-                    .to_string()
-            })
+            let pred = char_set_predicate(ch);
+            a.map(|s| s.trim_end_matches(&pred).to_string())
         }
     }
 }

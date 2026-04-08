@@ -209,6 +209,40 @@ impl<D: Dimension> PartialEq for StringArray<D> {
 
 impl<D: Dimension> Eq for StringArray<D> {}
 
+// Display: print like NumPy's `array(["a", "b", "c"])` (#278).
+impl<D: Dimension> std::fmt::Display for StringArray<D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "array([")?;
+        for (i, s) in self.data.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{s:?}")?;
+        }
+        write!(f, "])")
+    }
+}
+
+// IntoIterator for &StringArray yields &String (#278).
+impl<'a, D: Dimension> IntoIterator for &'a StringArray<D> {
+    type Item = &'a String;
+    type IntoIter = std::slice::Iter<'a, String>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.iter()
+    }
+}
+
+// IntoIterator for StringArray yields owned Strings.
+impl<D: Dimension> IntoIterator for StringArray<D> {
+    type Item = String;
+    type IntoIter = std::vec::IntoIter<String>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.into_iter()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Construction from string slices (REQ-2)
 // ---------------------------------------------------------------------------

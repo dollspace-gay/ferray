@@ -27,10 +27,12 @@
 
 pub mod align;
 pub mod case;
+pub mod classify;
 pub mod concat;
 pub mod regex_ops;
 pub mod search;
 pub mod split_join;
+pub mod str_ops;
 pub mod string_array;
 pub mod strip;
 
@@ -40,13 +42,15 @@ pub use string_array::{StringArray, StringArray1, StringArray2, array};
 // Re-export operations for flat namespace (like numpy.strings.upper etc.)
 pub use align::{center, ljust, ljust_with, rjust, rjust_with, zfill};
 pub use case::{capitalize, lower, title, upper};
-pub use concat::{add, multiply};
+pub use classify::{isalnum, isalpha, isdigit, islower, isnumeric, isspace, istitle, isupper};
+pub use concat::{add, add_same, multiply};
 pub use regex_ops::{extract, extract_compiled, match_, match_compiled};
 // Re-export `regex::Regex` so callers of `match_compiled`/`extract_compiled`
 // don't have to add a direct `regex` dependency to construct one.
 pub use regex::Regex;
 pub use search::{count, endswith, find, replace, startswith};
 pub use split_join::{join, join_array, split};
+pub use str_ops::{equal, greater, greater_equal, less, less_equal, not_equal, str_len, swapcase};
 pub use strip::{lstrip, rstrip, strip};
 
 #[cfg(test)]
