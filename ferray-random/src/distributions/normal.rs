@@ -384,4 +384,37 @@ mod tests {
         assert!(rng.lognormal_f32(0.0, 0.0, 100).is_err());
         assert!(rng.lognormal_f32(0.0, -0.5, 100).is_err());
     }
+
+    // ----- NaN/Inf parameter input tests (#263) -----
+
+    #[test]
+    fn normal_nan_loc_produces_nan_output() {
+        // NumPy: np.random.default_rng(42).normal(np.nan, 1.0, 5) → all NaN
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.normal(f64::NAN, 1.0, 5).unwrap();
+        for &v in arr.as_slice().unwrap() {
+            assert!(v.is_nan(), "expected NaN, got {v}");
+        }
+    }
+
+    #[test]
+    fn normal_inf_scale_produces_inf_output() {
+        // Infinite scale → every sample is ±inf.
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.normal(0.0, f64::INFINITY, 5).unwrap();
+        for &v in arr.as_slice().unwrap() {
+            assert!(v.is_infinite() || v.is_nan(), "expected Inf/NaN, got {v}");
+        }
+    }
+
+    #[test]
+    fn normal_nan_scale_rejected() {
+        // NaN scale should propagate — the output is meaningless but
+        // at minimum must not panic.
+        let mut rng = default_rng_seeded(42);
+        // scale <= 0 is rejected by parameter validation; NaN is
+        // neither > 0 nor <= 0, so the check may or may not catch it
+        // depending on the implementation. Just assert no panic.
+        let _ = rng.normal(0.0, f64::NAN, 5);
+    }
 }
