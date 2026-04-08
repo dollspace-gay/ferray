@@ -199,6 +199,86 @@ mod integration_tests {
         assert_eq!(b.shape(), &[2, 2]);
     }
 
+    // -----------------------------------------------------------------
+    // #520 — shape preservation for ND StringArrays across every op.
+    //
+    // Every operation that takes `StringArray<D>` must thread `D`
+    // through the output. These tests pin that contract on a 2x2
+    // input so regressions (e.g. an accidental `Ix1::new([len])` in
+    // the output constructor) are caught immediately.
+    // -----------------------------------------------------------------
+
+    fn two_by_two(vals: &[&str; 4]) -> crate::StringArray2 {
+        crate::StringArray2::from_rows(&[&[vals[0], vals[1]], &[vals[2], vals[3]]]).unwrap()
+    }
+
+    #[test]
+    fn shape_preserved_case_ops_2d() {
+        let a = two_by_two(&["Hello", "World", "foo", "Bar"]);
+        assert_eq!(upper(&a).unwrap().shape(), &[2, 2]);
+        assert_eq!(lower(&a).unwrap().shape(), &[2, 2]);
+        assert_eq!(capitalize(&a).unwrap().shape(), &[2, 2]);
+        assert_eq!(title(&a).unwrap().shape(), &[2, 2]);
+    }
+
+    #[test]
+    fn shape_preserved_align_ops_2d() {
+        let a = two_by_two(&["a", "bb", "ccc", "dddd"]);
+        assert_eq!(center(&a, 6, ' ').unwrap().shape(), &[2, 2]);
+        assert_eq!(ljust(&a, 6).unwrap().shape(), &[2, 2]);
+        assert_eq!(rjust(&a, 6).unwrap().shape(), &[2, 2]);
+        assert_eq!(zfill(&a, 6).unwrap().shape(), &[2, 2]);
+    }
+
+    #[test]
+    fn shape_preserved_strip_ops_2d() {
+        let a = two_by_two(&["  a  ", "  b  ", "  c  ", "  d  "]);
+        assert_eq!(strip(&a, None).unwrap().shape(), &[2, 2]);
+        assert_eq!(lstrip(&a, None).unwrap().shape(), &[2, 2]);
+        assert_eq!(rstrip(&a, None).unwrap().shape(), &[2, 2]);
+    }
+
+    #[test]
+    fn shape_preserved_concat_ops_2d() {
+        let a = two_by_two(&["ab", "cd", "ef", "gh"]);
+        // `add` currently flattens to IxDyn regardless of input rank
+        // (it supports cross-rank broadcasting), so it's not expected
+        // to preserve D. Just verify the total element count.
+        let b = two_by_two(&["!", "!", "!", "!"]);
+        let ab = add(&a, &b).unwrap();
+        assert_eq!(ab.shape(), &[2, 2]);
+        // multiply preserves D
+        assert_eq!(multiply(&a, 2).unwrap().shape(), &[2, 2]);
+    }
+
+    #[test]
+    fn shape_preserved_search_ops_2d() {
+        let a = two_by_two(&["hello", "help", "world", "word"]);
+        // Each of these returns Array<T, D> — verify D is preserved.
+        assert_eq!(find(&a, "ell").unwrap().shape(), &[2, 2]);
+        assert_eq!(count(&a, "l").unwrap().shape(), &[2, 2]);
+        assert_eq!(startswith(&a, "he").unwrap().shape(), &[2, 2]);
+        assert_eq!(endswith(&a, "d").unwrap().shape(), &[2, 2]);
+        assert_eq!(replace(&a, "l", "L", None).unwrap().shape(), &[2, 2]);
+    }
+
+    #[test]
+    fn shape_preserved_regex_ops_2d() {
+        let a = two_by_two(&["abc123", "x", "y42", "zzz"]);
+        // match_ preserves D; extract flattens by design (ragged results).
+        assert_eq!(match_(&a, r"\d+").unwrap().shape(), &[2, 2]);
+    }
+
+    #[test]
+    fn shape_preserved_case_ops_3d() {
+        // Just to confirm we aren't special-casing Ix2 somewhere — bump to Ix3.
+        use ferray_core::dimension::Ix3;
+        let data: Vec<String> = (0..8).map(|i| format!("s{i}")).collect();
+        let a = crate::StringArray::<Ix3>::from_vec(Ix3::new([2, 2, 2]), data).unwrap();
+        assert_eq!(upper(&a).unwrap().shape(), &[2, 2, 2]);
+        assert_eq!(lower(&a).unwrap().shape(), &[2, 2, 2]);
+    }
+
     // --- Unicode / multi-byte character tests ---
 
     #[test]
