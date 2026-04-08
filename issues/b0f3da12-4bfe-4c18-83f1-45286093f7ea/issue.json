@@ -3,11 +3,12 @@
   "display_id": 294,
   "title": "ferray-window: kaiser produces NaN for large beta (~710+) without warning",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nL188-195: bessel_i0_scalar returns Inf, center element NaN. Document practical range.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:01:23.213168450Z",
-  "updated_at": "2026-03-25T16:01:30.044588042Z",
+  "updated_at": "2026-04-08T16:41:49.263544098Z",
+  "closed_at": "2026-04-08T16:41:49.263544098Z",
   "labels": [
     "bug",
     "qa-audit"
