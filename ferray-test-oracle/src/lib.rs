@@ -267,34 +267,55 @@ pub fn is_scalar_expected(expected: &serde_json::Value) -> bool {
 // ULP comparison
 // ---------------------------------------------------------------------------
 
+/// Sign bit masks for clearing the top bit of an IEEE 754 float when
+/// converting to a magnitude-in-ULPs-from-zero.
+const F64_SIGN_MASK: u64 = 0x8000_0000_0000_0000;
+const F32_SIGN_MASK: u32 = 0x8000_0000;
+
 /// Compute ULP distance between two f64 values.
-/// Returns `None` if either value is NaN (NaN comparison is handled separately).
+///
+/// Same sign: bit-subtract, since IEEE 754 lays out floats so that the
+/// integer representation of same-sign floats increases monotonically.
+///
+/// Different signs: route through zero — the distance from `a` to zero
+/// (which is just `|a|`'s bit pattern with the sign bit masked off, since
+/// IEEE 754 negatives are sign-magnitude, *not* two's complement) plus
+/// the same for `b`. The previous implementation cast `to_bits()` as
+/// `i64` and called `unsigned_abs()`, which produced a two's-complement
+/// magnitude and overstated the cross-sign distance by up to 2^53.
+///
+/// Returns `None` if either value is NaN (NaN comparison is handled
+/// separately by [`assert_f64_ulp`]).
 pub fn ulp_distance_f64(a: f64, b: f64) -> Option<u64> {
     if a.is_nan() || b.is_nan() {
         return None;
     }
     if a == b {
+        // Also covers +0.0 == -0.0.
         return Some(0);
     }
-    // Near zero: when both values are tiny (< MIN_ULP_TOLERANCE * epsilon),
-    // ULP distance becomes meaningless because the values are in the noise
-    // floor of the floating-point format. Use absolute tolerance instead.
+    // Near-zero noise floor: values below this are indistinguishable
+    // from rounding error, so we report an exact match.
     let abs_tol = MIN_ULP_TOLERANCE as f64 * f64::EPSILON;
     if a.abs() < abs_tol && b.abs() < abs_tol {
         return Some(0);
     }
-    if a.signum() != b.signum() {
-        // Different signs far from zero — very large ULP distance
-        let a_to_zero = a.to_bits() as i64;
-        let b_to_zero = b.to_bits() as i64;
-        return Some(a_to_zero.unsigned_abs() + b_to_zero.unsigned_abs());
+    if a.is_sign_negative() != b.is_sign_negative() {
+        // Cross-sign: distance-through-zero in sign-magnitude ULPs.
+        let a_mag = a.to_bits() & !F64_SIGN_MASK;
+        let b_mag = b.to_bits() & !F64_SIGN_MASK;
+        return Some(a_mag + b_mag);
     }
-    let a_bits = a.to_bits() as i64;
-    let b_bits = b.to_bits() as i64;
-    Some((a_bits - b_bits).unsigned_abs())
+    // Same sign: bit-level subtraction. For same-sign floats the
+    // integer reinterpretation is monotonic in magnitude, so the
+    // difference is a valid ULP distance.
+    let a_bits = a.to_bits();
+    let b_bits = b.to_bits();
+    Some(a_bits.max(b_bits) - a_bits.min(b_bits))
 }
 
-/// Compute ULP distance between two f32 values.
+/// Compute ULP distance between two f32 values. See [`ulp_distance_f64`]
+/// for the algorithm — this is the same thing with 32-bit masks.
 pub fn ulp_distance_f32(a: f32, b: f32) -> Option<u64> {
     if a.is_nan() || b.is_nan() {
         return None;
@@ -306,14 +327,14 @@ pub fn ulp_distance_f32(a: f32, b: f32) -> Option<u64> {
     if a.abs() < abs_tol && b.abs() < abs_tol && (a - b).abs() < abs_tol {
         return Some(0);
     }
-    if a.signum() != b.signum() {
-        let a_to_zero = a.to_bits() as i32;
-        let b_to_zero = b.to_bits() as i32;
-        return Some(a_to_zero.unsigned_abs() as u64 + b_to_zero.unsigned_abs() as u64);
+    if a.is_sign_negative() != b.is_sign_negative() {
+        let a_mag = a.to_bits() & !F32_SIGN_MASK;
+        let b_mag = b.to_bits() & !F32_SIGN_MASK;
+        return Some(a_mag as u64 + b_mag as u64);
     }
-    let a_bits = a.to_bits() as i32;
-    let b_bits = b.to_bits() as i32;
-    Some((a_bits - b_bits).unsigned_abs() as u64)
+    let a_bits = a.to_bits();
+    let b_bits = b.to_bits();
+    Some((a_bits.max(b_bits) - a_bits.min(b_bits)) as u64)
 }
 
 /// Assert that two f64 values match within the given ULP tolerance.
@@ -748,6 +769,121 @@ where
 mod tests {
     use super::*;
     use serde_json::json;
+
+    // -----------------------------------------------------------------
+    // ULP distance (#199, #204)
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn ulp_distance_f64_equal_values() {
+        assert_eq!(ulp_distance_f64(1.0, 1.0), Some(0));
+        assert_eq!(ulp_distance_f64(0.0, 0.0), Some(0));
+        assert_eq!(ulp_distance_f64(-1.5, -1.5), Some(0));
+        assert_eq!(ulp_distance_f64(f64::INFINITY, f64::INFINITY), Some(0));
+        assert_eq!(ulp_distance_f64(f64::NEG_INFINITY, f64::NEG_INFINITY), Some(0));
+    }
+
+    #[test]
+    fn ulp_distance_f64_signed_zeros_equal() {
+        // IEEE 754 says +0.0 == -0.0, and the oracle agrees.
+        assert_eq!(ulp_distance_f64(0.0, -0.0), Some(0));
+        assert_eq!(ulp_distance_f64(-0.0, 0.0), Some(0));
+    }
+
+    #[test]
+    fn ulp_distance_f64_one_ulp_step() {
+        // next_up gives the next-representable f64 — that's exactly 1 ULP away.
+        let a = 1.0f64;
+        let b = f64::from_bits(a.to_bits() + 1);
+        assert_eq!(ulp_distance_f64(a, b), Some(1));
+        assert_eq!(ulp_distance_f64(b, a), Some(1));
+    }
+
+    #[test]
+    fn ulp_distance_f64_nan_returns_none() {
+        assert_eq!(ulp_distance_f64(f64::NAN, 1.0), None);
+        assert_eq!(ulp_distance_f64(1.0, f64::NAN), None);
+        assert_eq!(ulp_distance_f64(f64::NAN, f64::NAN), None);
+    }
+
+    #[test]
+    fn ulp_distance_f64_cross_sign_one_vs_minus_one() {
+        // #199: this is the case the old code got wrong. The correct
+        // cross-sign distance is (|a|.to_bits()) + (|b|.to_bits()),
+        // using the sign-magnitude representation of IEEE 754 floats.
+        let expected = (1.0f64.to_bits() & !F64_SIGN_MASK)
+            + ((-1.0f64).to_bits() & !F64_SIGN_MASK);
+        assert_eq!(ulp_distance_f64(1.0, -1.0), Some(expected));
+        assert_eq!(ulp_distance_f64(-1.0, 1.0), Some(expected));
+    }
+
+    #[test]
+    fn ulp_distance_f64_cross_sign_is_symmetric() {
+        // Symmetry sanity check across a range of cross-sign pairs.
+        for (a, b) in [
+            (1.0f64, -1.0),
+            (1e-300, -1e-300),
+            (1e100, -1e100),
+            (4.25, -6.5),
+        ] {
+            assert_eq!(
+                ulp_distance_f64(a, b),
+                ulp_distance_f64(b, a),
+                "cross-sign ULP distance should be symmetric for ({a}, {b})"
+            );
+        }
+    }
+
+    #[test]
+    fn ulp_distance_f64_cross_sign_is_monotone() {
+        // Moving `a` further from zero (same sign) must not decrease the
+        // cross-sign distance to a fixed `b` on the other side.
+        let b = -1.0f64;
+        let d1 = ulp_distance_f64(1.0, b).unwrap();
+        let d2 = ulp_distance_f64(2.0, b).unwrap();
+        let d3 = ulp_distance_f64(1000.0, b).unwrap();
+        assert!(d1 < d2, "d1={d1} d2={d2}");
+        assert!(d2 < d3, "d2={d2} d3={d3}");
+    }
+
+    #[test]
+    fn ulp_distance_f64_near_zero_noise_floor() {
+        // Both below the noise floor → considered equal regardless of
+        // actual bit distance. 4 * f64::EPSILON ≈ 8.88e-16.
+        let tiny = f64::EPSILON;
+        let smaller = f64::EPSILON / 2.0;
+        assert_eq!(ulp_distance_f64(tiny, smaller), Some(0));
+        assert_eq!(ulp_distance_f64(-tiny, tiny), Some(0));
+    }
+
+    #[test]
+    fn ulp_distance_f32_equal_values() {
+        assert_eq!(ulp_distance_f32(1.0, 1.0), Some(0));
+        assert_eq!(ulp_distance_f32(0.0, -0.0), Some(0));
+    }
+
+    #[test]
+    fn ulp_distance_f32_one_ulp_step() {
+        let a = 1.0f32;
+        let b = f32::from_bits(a.to_bits() + 1);
+        assert_eq!(ulp_distance_f32(a, b), Some(1));
+    }
+
+    #[test]
+    fn ulp_distance_f32_cross_sign_symmetric() {
+        let d1 = ulp_distance_f32(1.0, -1.0).unwrap();
+        let d2 = ulp_distance_f32(-1.0, 1.0).unwrap();
+        assert_eq!(d1, d2);
+        let expected = (1.0f32.to_bits() & !F32_SIGN_MASK) as u64
+            + ((-1.0f32).to_bits() & !F32_SIGN_MASK) as u64;
+        assert_eq!(d1, expected);
+    }
+
+    #[test]
+    fn ulp_distance_f32_nan_returns_none() {
+        assert_eq!(ulp_distance_f32(f32::NAN, 0.0), None);
+        assert_eq!(ulp_distance_f32(0.0, f32::NAN), None);
+    }
 
     // ---- parse_f64_value / parse_f64_special ----
 

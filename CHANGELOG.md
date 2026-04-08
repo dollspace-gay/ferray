@@ -130,6 +130,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Slower: transcendentals at scale 1.4-2.1x (CORE-MATH accuracy tradeoff), matmul medium 4x (faer vs BLAS)
 
 ### Fixed
+- ferray-test-oracle: no self-tests for the oracle framework (#204)
+- ferray-test-oracle: cross-sign ULP distance calculation incorrect (#199)
 - ferray-numpy-interop: zero-copy claims are false — every conversion copies (#195)
 - ferray-numpy-interop: NpElement not implemented for bool (#196)
 - ferray-numpy-interop: no NaN roundtrip test for Polars (#198)
