@@ -460,3 +460,177 @@ fn oracle_qr() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Eigenvalues (general, complex-returning) (#205)
+//
+// `eig` / `eigvals` return `Complex<T>` even for real matrices with real
+// spectra. The fixtures store only the real parts (NumPy's serializer
+// writes real arrays when all imaginary parts are zero). We compare the
+// real part of each eigenvalue against the fixture, check that the
+// imaginary parts are zero within tolerance, and match eigenvalues
+// order-independently since LAPACK's output order is not guaranteed.
+// ---------------------------------------------------------------------------
+
+/// Match two 1-D slices of f64 eigenvalues up to reordering. LAPACK may
+/// return eigenvalues in any order, so we sort both before comparing.
+fn assert_eigenvalues_match(
+    actual: &[f64],
+    expected: &[f64],
+    tol_ulps: u64,
+    context: &str,
+) {
+    assert_eq!(
+        actual.len(),
+        expected.len(),
+        "{context}: eigenvalue count mismatch"
+    );
+    let mut a_sorted = actual.to_vec();
+    let mut e_sorted = expected.to_vec();
+    a_sorted.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+    e_sorted.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+    assert_f64_slice_ulp(
+        &a_sorted,
+        &e_sorted,
+        tol_ulps.max(ferray_test_oracle::MIN_ULP_TOLERANCE),
+        context,
+    );
+}
+
+#[test]
+fn oracle_eigvals() {
+    let suite = load_fixture(&linalg_path("eigvals.json"));
+    for case in &suite.test_cases {
+        let input = &case.inputs["a"];
+        if should_skip_f64(input) {
+            continue;
+        }
+        let arr = to_ix2(&make_f64_array(input));
+        let vals = ferray_linalg::eigvals(&arr).unwrap();
+
+        // eigvals returns Complex<f64>; fixture stores real parts only.
+        let actual_re: Vec<f64> = vals.iter().map(|c| c.re).collect();
+        let actual_im_max = vals.iter().map(|c| c.im.abs()).fold(0.0f64, f64::max);
+        assert!(
+            actual_im_max < 1e-10,
+            "case '{}': expected real-spectrum matrix but got max |im| = {}",
+            case.name,
+            actual_im_max
+        );
+        let expected = parse_f64_data(&case.expected["data"]);
+        assert_eigenvalues_match(&actual_re, &expected, case.tolerance_ulps, &case.name);
+    }
+}
+
+#[test]
+fn oracle_eig() {
+    let suite = load_fixture(&linalg_path("eig.json"));
+    for case in &suite.test_cases {
+        let input = &case.inputs["a"];
+        if should_skip_f64(input) {
+            continue;
+        }
+        let arr = to_ix2(&make_f64_array(input));
+        let (vals, _vecs) = ferray_linalg::eig(&arr).unwrap();
+
+        // Compare eigenvalues only — eigenvector signs/columns are
+        // implementation-defined and differ between LAPACK backends.
+        let actual_re: Vec<f64> = vals.iter().map(|c| c.re).collect();
+        let actual_im_max = vals.iter().map(|c| c.im.abs()).fold(0.0f64, f64::max);
+        assert!(
+            actual_im_max < 1e-10,
+            "case '{}': expected real-spectrum matrix but got max |im| = {}",
+            case.name,
+            actual_im_max
+        );
+        let expected = parse_f64_data(&case.expected["eigenvalues"]["data"]);
+        assert_eigenvalues_match(&actual_re, &expected, case.tolerance_ulps, &case.name);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Least squares (#205) — compare the solution vector; rank and residuals
+// are implementation details that depend on the SVD cutoff rule.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn oracle_lstsq() {
+    let suite = load_fixture(&linalg_path("lstsq.json"));
+    for case in &suite.test_cases {
+        let a_input = &case.inputs["a"];
+        let b_input = &case.inputs["b"];
+        if should_skip_f64(a_input) || should_skip_f64(b_input) {
+            continue;
+        }
+        let a = to_ix2(&make_f64_array(a_input));
+        let b_shape = parse_shape(&b_input["shape"]);
+        let b_data = parse_f64_data(&b_input["data"]);
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&b_shape), b_data).unwrap();
+
+        let (x, _residuals, _rank, _svals) = ferray_linalg::lstsq(&a, &b, None).unwrap();
+
+        let expected_x = parse_f64_data(&case.expected["x"]["data"]);
+        assert_f64_slice_ulp(
+            x.as_slice().unwrap(),
+            &expected_x,
+            case.tolerance_ulps
+                .max(ferray_test_oracle::MIN_ULP_TOLERANCE),
+            &case.name,
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tensor dot (#205) — handles both integer and pair-of-axis-lists forms.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn oracle_tensordot() {
+    use ferray_linalg::TensordotAxes;
+
+    let suite = load_fixture(&linalg_path("tensordot.json"));
+    for case in &suite.test_cases {
+        let a_input = &case.inputs["a"];
+        let b_input = &case.inputs["b"];
+        if should_skip_f64(a_input) || should_skip_f64(b_input) {
+            continue;
+        }
+        let a = make_f64_array(a_input);
+        let b = make_f64_array(b_input);
+
+        // The "axes" field is either a single integer or a pair of
+        // lists `[[axes_a], [axes_b]]`.
+        let axes_val = &case.inputs["axes"];
+        let axes = if let Some(n) = axes_val.as_u64() {
+            TensordotAxes::Scalar(n as usize)
+        } else {
+            let pair = axes_val.as_array().expect("axes pair must be an array");
+            let aa: Vec<usize> = pair[0]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_u64().unwrap() as usize)
+                .collect();
+            let bb: Vec<usize> = pair[1]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_u64().unwrap() as usize)
+                .collect();
+            TensordotAxes::Pairs(aa, bb)
+        };
+
+        let result = ferray_linalg::tensordot(&a, &b, axes).unwrap();
+
+        let expected = parse_f64_data(&case.expected["data"]);
+        let result_slice: Vec<f64> = result.iter().copied().collect();
+        assert_f64_slice_ulp(
+            &result_slice,
+            &expected,
+            case.tolerance_ulps
+                .max(ferray_test_oracle::MIN_ULP_TOLERANCE),
+            &case.name,
+        );
+    }
+}
+

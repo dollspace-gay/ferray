@@ -365,3 +365,168 @@ fn oracle_argmax() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Argsort — integer (index) output (#205)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn oracle_argsort() {
+    let suite = load_fixture(&stats_path("argsort.json"));
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        if should_skip_f64(input) {
+            continue;
+        }
+        let shape = parse_shape(&input["shape"]);
+        if shape.is_empty() {
+            continue;
+        }
+        let arr = make_f64_array(input);
+        let axis = case
+            .inputs
+            .get("axis")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+        let result = ferray_stats::argsort(&arr, axis).unwrap();
+        let expected: Vec<u64> = parse_usize_data(&case.expected["data"])
+            .into_iter()
+            .map(|v| v as u64)
+            .collect();
+        let result_slice = result.as_slice().unwrap();
+        assert_eq!(
+            result_slice.len(),
+            expected.len(),
+            "case '{}': length mismatch",
+            case.name
+        );
+        // Argsort ties may permute differently than NumPy's stable sort.
+        // Rather than comparing indices directly, apply both permutations
+        // and check that the resulting sorted values agree.
+        let flat_input: Vec<f64> = arr.iter().copied().collect();
+        let actual_sorted: Vec<f64> = result_slice
+            .iter()
+            .map(|&i| flat_input[i as usize])
+            .collect();
+        let expected_sorted: Vec<f64> = expected
+            .iter()
+            .map(|&i| flat_input[i as usize])
+            .collect();
+        for (i, (a, e)) in actual_sorted.iter().zip(expected_sorted.iter()).enumerate() {
+            assert_eq!(
+                a.to_bits(),
+                e.to_bits(),
+                "case '{}' [position {i}]: sorted value mismatch",
+                case.name
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Unique — value-only and with-counts variants (#205)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn oracle_unique() {
+    let suite = load_fixture(&stats_path("unique.json"));
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        if should_skip_f64(input) {
+            continue;
+        }
+        let arr = make_f64_array(input);
+        let return_counts = case
+            .inputs
+            .get("return_counts")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let result = ferray_stats::unique(&arr, false, return_counts).unwrap();
+
+        if return_counts {
+            // with_counts layout: expected = { "values": {...}, "counts": {...} }
+            let expected_values = parse_f64_data(&case.expected["values"]["data"]);
+            let expected_counts: Vec<u64> = parse_usize_data(&case.expected["counts"]["data"])
+                .into_iter()
+                .map(|v| v as u64)
+                .collect();
+            let got_values: Vec<f64> = result.values.iter().copied().collect();
+            assert_f64_slice_ulp(
+                &got_values,
+                &expected_values,
+                case.tolerance_ulps.max(MIN_ULP_TOLERANCE),
+                &case.name,
+            );
+            let got_counts: Vec<u64> = result
+                .counts
+                .as_ref()
+                .expect("return_counts=true should populate counts")
+                .iter()
+                .copied()
+                .collect();
+            assert_eq!(
+                got_counts, expected_counts,
+                "case '{}': counts mismatch",
+                case.name
+            );
+        } else {
+            // value-only layout: expected = { "data": [...], ... }
+            let expected_values = parse_f64_data(&case.expected["data"]);
+            let got_values: Vec<f64> = result.values.iter().copied().collect();
+            assert_f64_slice_ulp(
+                &got_values,
+                &expected_values,
+                case.tolerance_ulps.max(MIN_ULP_TOLERANCE),
+                &case.name,
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Histogram — produces (counts, bin_edges) pair (#205)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn oracle_histogram() {
+    use ferray_core::dimension::Ix1;
+    use ferray_stats::histogram::{Bins, histogram};
+
+    let suite = load_fixture(&stats_path("histogram.json"));
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        if should_skip_f64(input) {
+            continue;
+        }
+        // histogram is 1-D only; build an Ix1 array from the fixture data.
+        let data = parse_f64_data(&input["data"]);
+        let arr = Array::<f64, Ix1>::from_vec(Ix1::new([data.len()]), data).unwrap();
+
+        // bins: either an integer count or an explicit edges object.
+        let bins_val = &case.inputs["bins"];
+        let bins = if let Some(n) = bins_val.as_u64() {
+            Bins::Count(n as usize)
+        } else {
+            Bins::Edges(parse_f64_data(&bins_val["data"]))
+        };
+
+        let (counts, edges) = histogram(&arr, bins, None, false).unwrap();
+
+        // counts are stored as int64; compare numerically as f64.
+        let expected_counts = parse_f64_data(&case.expected["counts"]["data"]);
+        assert_f64_slice_ulp(
+            counts.as_slice().unwrap(),
+            &expected_counts,
+            case.tolerance_ulps.max(MIN_ULP_TOLERANCE),
+            &format!("{} counts", case.name),
+        );
+
+        let expected_edges = parse_f64_data(&case.expected["bin_edges"]["data"]);
+        assert_f64_slice_ulp(
+            edges.as_slice().unwrap(),
+            &expected_edges,
+            case.tolerance_ulps.max(MIN_ULP_TOLERANCE),
+            &format!("{} edges", case.name),
+        );
+    }
+}
