@@ -559,6 +559,49 @@ fn hfft_ihfft_roundtrip() {
 }
 
 #[test]
+fn hfft_ihfft_roundtrip_forward_norm() {
+    // Issue #228: hermitian.rs only tested Backward; the
+    // normalization-swap path (Backward<->Forward) was uncovered.
+    // ihfft(.., Forward) followed by hfft(.., Forward) is also a
+    // roundtrip because both functions invert each other for any
+    // self-consistent norm choice.
+    let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let n = data.len();
+    let a = make_real_1d(data.clone());
+    let spectrum = ihfft(&a, None, None, FftNorm::Forward).unwrap();
+    let recovered = hfft(&spectrum, Some(n), None, FftNorm::Forward).unwrap();
+    let rec: Vec<f64> = recovered.iter().copied().collect();
+    for (o, r) in data.iter().zip(rec.iter()) {
+        assert!(
+            (o - r).abs() < 1e-9,
+            "Forward norm roundtrip mismatch: {} vs {}",
+            o,
+            r
+        );
+    }
+}
+
+#[test]
+fn hfft_ihfft_roundtrip_ortho_norm() {
+    // Ortho preserves energy and is its own inverse, so
+    // hfft(ihfft(a, Ortho), Ortho) should also roundtrip (#228).
+    let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let n = data.len();
+    let a = make_real_1d(data.clone());
+    let spectrum = ihfft(&a, None, None, FftNorm::Ortho).unwrap();
+    let recovered = hfft(&spectrum, Some(n), None, FftNorm::Ortho).unwrap();
+    let rec: Vec<f64> = recovered.iter().copied().collect();
+    for (o, r) in data.iter().zip(rec.iter()) {
+        assert!(
+            (o - r).abs() < 1e-9,
+            "Ortho norm roundtrip mismatch: {} vs {}",
+            o,
+            r
+        );
+    }
+}
+
+#[test]
 fn plan_inverse_roundtrip() {
     let plan = FftPlan::new(8).unwrap();
     let data = vec![
