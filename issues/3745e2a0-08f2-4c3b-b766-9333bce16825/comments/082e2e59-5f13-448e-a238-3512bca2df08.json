@@ -1,0 +1,10 @@
+{
+  "uuid": "082e2e59-5f13-448e-a238-3512bca2df08",
+  "issue_uuid": "3745e2a0-08f2-4c3b-b766-9333bce16825",
+  "author": "phase-4-coordinator",
+  "content": "Resolved via option 2 from the issue discussion: added Array-aware forward-mode AD primitives that accept ferray Arrays directly. Implementing Element for DualNumber<T> was the other option but would require breaking the sealed trait in ferray-core (the two crates are in a downstream relationship that can't become a cycle).\\n\\nNew module ferray-autodiff/src/array_ops.rs exposes five functions:\\n\\n  derivative_elementwise(f, &Array<T, D>) -> Array<T, D>\\n    Elementwise f'(x) for scalar→scalar f, preserving input shape.\\n\\n  value_and_derivative_elementwise(f, &Array<T, D>) -> (values, derivs)\\n    Both in one pass.\\n\\n  gradient_vector(f, &Array<T, Ix1>) -> Array<T, Ix1>\\n    Full gradient of a scalar-valued f: R^n → R via n forward passes.\\n\\n  value_and_gradient(f, &Array<T, Ix1>) -> (T, Array<T, Ix1>)\\n\\n  jacobian_array(f, &Array<T, Ix1>) -> Array<T, Ix2>\\n    m×n Jacobian of a vector-valued f: R^n → R^m. Renamed to avoid\\n    colliding with the existing slice-based jacobian() already in the\\n    crate.\\n\\nGeneric over T: Element + Float so f32 and f64 both work. Added\\nferray-core as a direct dep. 12 new unit tests cover: elementwise x^2,\\nsin, x^3 on a 2-D array, value_and_derivative, quadratic-form\\ngradient, value_and_gradient, linear-map Jacobian, polar-to-cartesian\\nJacobian, inconsistent-output-dim rejection, and f32 coverage. Plus\\n3 new doctests on the public API.\\n\\n112 lib tests (up from 100) + 15 property + 9 doctests pass. Clippy\\nclean. Full workspace builds.",
+  "created_at": "2026-04-08T01:29:51.531509130Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAaY4469wPHvfjVt/KWR7tOCOXyFaxiMtHkz0FgEltxlmUu+7MBAZnzIwZkiuqVX/ZuXOkGFAuIu7V2psQAq7wAA=="
+}
