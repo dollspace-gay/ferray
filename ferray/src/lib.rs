@@ -122,8 +122,8 @@ pub use ferray_core::manipulation::extended::{
     append, delete, insert, pad, repeat, resize, tile, trim_zeros,
 };
 
-// Broadcasted elementwise assignment (np.copyto equivalent) (#352)
-pub use ferray_core::ops::copyto;
+// Broadcasted elementwise assignment (np.copyto equivalent) (#352, #353)
+pub use ferray_core::ops::{copyto, copyto_where};
 
 // Indexing
 pub use ferray_core::indexing::extended::{

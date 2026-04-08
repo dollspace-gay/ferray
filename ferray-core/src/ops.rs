@@ -536,6 +536,58 @@ where
     Ok(())
 }
 
+/// Copy values from `src` into `dst` where `mask` is `true`, broadcasting
+/// both `src` and `mask` to `dst.shape()`.
+///
+/// Equivalent to `np.copyto(dst, src, where=mask)`. This is the generalized
+/// form of NumPy's `where=` ufunc parameter (#353): positions where the mask
+/// is `false` are left untouched in `dst`. All three shapes must be
+/// broadcast-compatible with `dst.shape()`; the destination shape is fixed,
+/// so neither `src` nor `mask` can grow `dst`.
+///
+/// # Errors
+/// Returns `FerrayError::ShapeMismatch` if either `src.shape()` or
+/// `mask.shape()` cannot be broadcast into `dst.shape()`. On error `dst` is
+/// left untouched (broadcast validation happens before any writes).
+pub fn copyto_where<T, D1, D2, D3>(
+    dst: &mut Array<T, D1>,
+    src: &Array<T, D2>,
+    mask: &Array<bool, D3>,
+) -> FerrayResult<()>
+where
+    T: Element,
+    D1: Dimension,
+    D2: Dimension,
+    D3: Dimension,
+{
+    // Validate + materialize broadcast views BEFORE writing, so that a shape
+    // mismatch can't leave dst in a partially-updated state.
+    let target_shape: Vec<usize> = dst.shape().to_vec();
+
+    let src_view = broadcast_to(src, &target_shape).map_err(|_| {
+        FerrayError::shape_mismatch(format!(
+            "copyto_where: source shape {:?} cannot be broadcast into destination shape {:?}",
+            src.shape(),
+            target_shape
+        ))
+    })?;
+
+    let mask_view = broadcast_to(mask, &target_shape).map_err(|_| {
+        FerrayError::shape_mismatch(format!(
+            "copyto_where: mask shape {:?} cannot be broadcast into destination shape {:?}",
+            mask.shape(),
+            target_shape
+        ))
+    })?;
+
+    for ((d, s), &m) in dst.iter_mut().zip(src_view.iter()).zip(mask_view.iter()) {
+        if m {
+            *d = s.clone();
+        }
+    }
+    Ok(())
+}
+
 impl<T, D> Array<T, D>
 where
     T: Element,
@@ -550,6 +602,22 @@ where
     /// `self.shape()`. On error `self` is left untouched.
     pub fn copy_from<D2: Dimension>(&mut self, src: &Array<T, D2>) -> FerrayResult<()> {
         copyto(self, src)
+    }
+
+    /// Copy values from `src` into `self` at positions where `mask` is `true`,
+    /// broadcasting both inputs to `self.shape()`.
+    ///
+    /// See [`copyto_where`] for the free-function form and full semantics.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::ShapeMismatch` if `src` or `mask` cannot be
+    /// broadcast into `self.shape()`. On error `self` is left untouched.
+    pub fn copy_from_where<D2: Dimension, D3: Dimension>(
+        &mut self,
+        src: &Array<T, D2>,
+        mask: &Array<bool, D3>,
+    ) -> FerrayResult<()> {
+        copyto_where(self, src, mask)
     }
 }
 
@@ -1055,6 +1123,102 @@ mod tests {
         let src = Array::<i64, Ix1>::from_vec(Ix1::new([4]), vec![1, 2, 3, 4]).unwrap();
         copyto(&mut dst, &src).unwrap();
         assert_eq!(dst.as_slice().unwrap(), &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn copyto_where_same_shape_only_writes_masked_positions() {
+        let mut dst = arr(vec![1.0, 2.0, 3.0, 4.0]);
+        let src = arr(vec![10.0, 20.0, 30.0, 40.0]);
+        let mask =
+            Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![true, false, true, false]).unwrap();
+        copyto_where(&mut dst, &src, &mask).unwrap();
+        assert_eq!(dst.as_slice().unwrap(), &[10.0, 2.0, 30.0, 4.0]);
+    }
+
+    #[test]
+    fn copyto_where_broadcasts_mask_across_dst() {
+        // (2, 3) <= (2, 3), mask = (1, 3) broadcasts across rows.
+        let mut dst =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
+        let src = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+        )
+        .unwrap();
+        let mask =
+            Array::<bool, Ix2>::from_vec(Ix2::new([1, 3]), vec![true, false, true]).unwrap();
+        copyto_where(&mut dst, &src, &mask).unwrap();
+        assert_eq!(
+            dst.as_slice().unwrap(),
+            &[10.0, 2.0, 30.0, 40.0, 5.0, 60.0]
+        );
+    }
+
+    #[test]
+    fn copyto_where_broadcasts_scalar_src_with_mask() {
+        // Conditional scalar fill: set dst[i,j] = 99.0 wherever mask is true.
+        let mut dst =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
+        let src = arr(vec![99.0]);
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![true, false, true, false, true, false],
+        )
+        .unwrap();
+        copyto_where(&mut dst, &src, &mask).unwrap();
+        assert_eq!(
+            dst.as_slice().unwrap(),
+            &[99.0, 2.0, 99.0, 4.0, 99.0, 6.0]
+        );
+    }
+
+    #[test]
+    fn copyto_where_all_false_mask_is_noop() {
+        let mut dst = arr(vec![1.0, 2.0, 3.0]);
+        let original = dst.as_slice().unwrap().to_vec();
+        let src = arr(vec![99.0, 99.0, 99.0]);
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, false, false]).unwrap();
+        copyto_where(&mut dst, &src, &mask).unwrap();
+        assert_eq!(dst.as_slice().unwrap(), &original[..]);
+    }
+
+    #[test]
+    fn copyto_where_all_true_mask_matches_copyto() {
+        let mut dst = arr(vec![0.0, 0.0, 0.0]);
+        let src = arr(vec![1.0, 2.0, 3.0]);
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, true, true]).unwrap();
+        copyto_where(&mut dst, &src, &mask).unwrap();
+        assert_eq!(dst.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn copyto_where_rejects_incompatible_src_shape() {
+        let mut dst = arr(vec![1.0, 2.0, 3.0]);
+        let src = arr(vec![1.0, 2.0]);
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, true, true]).unwrap();
+        assert!(copyto_where(&mut dst, &src, &mask).is_err());
+        assert_eq!(dst.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn copyto_where_rejects_incompatible_mask_shape() {
+        let mut dst = arr(vec![1.0, 2.0, 3.0]);
+        let src = arr(vec![10.0, 20.0, 30.0]);
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![true; 4]).unwrap();
+        assert!(copyto_where(&mut dst, &src, &mask).is_err());
+        // Validation happens before writes — dst untouched.
+        assert_eq!(dst.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn copy_from_where_method_form_equivalent() {
+        let mut dst = arr(vec![1.0, 2.0, 3.0]);
+        let src = arr(vec![10.0, 20.0, 30.0]);
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
+        dst.copy_from_where(&src, &mask).unwrap();
+        assert_eq!(dst.as_slice().unwrap(), &[1.0, 20.0, 3.0]);
     }
 
     #[test]
