@@ -162,8 +162,12 @@ mod tests {
     }
 
     #[test]
-    fn parallel_zero_size_error() {
+    fn parallel_zero_size_returns_empty() {
+        // Issue #264, #455: NumPy treats size=0 as a valid request that
+        // produces an empty array. ferray-random now matches.
         let mut rng = default_rng_seeded(42);
-        assert!(rng.standard_normal_parallel(0).is_err());
+        let arr = rng.standard_normal_parallel(0).unwrap();
+        assert_eq!(arr.shape(), &[0]);
+        assert_eq!(arr.size(), 0);
     }
 }

@@ -15,21 +15,23 @@ use ferray_core::FerrayError;
 /// Convert a size argument into a concrete shape vector.
 ///
 /// Implemented for:
-/// - `usize` — 1-D shape `[n]`
+/// - `usize` — 1-D shape `[n]` (including `n == 0` for an empty array)
 /// - `&[usize]` — arbitrary-rank shape
 /// - `[usize; N]` (any N, via const generics)
 /// - `&[usize; N]`
 /// - `Vec<usize>`
 ///
-/// A zero-element shape (e.g. `&[]`) is rejected: distributions need at
-/// least one axis. A shape containing a zero axis (e.g. `[0, 4]`) is also
-/// rejected, matching the original 1-D `size == 0` check.
+/// Zero-axis shapes (e.g. `0usize`, `[3, 0, 4]`) are now permitted and
+/// produce an empty array, matching NumPy's `np.random.uniform(size=0)`
+/// behaviour (#264, #455). The only rejected shape is a totally
+/// rank-empty `&[]`, which would correspond to a 0-d scalar — that is
+/// not yet wired through the distribution machinery.
 pub trait IntoShape {
     /// Consume `self` and return the shape as a `Vec<usize>`.
     ///
     /// # Errors
-    /// Returns `FerrayError::InvalidValue` if the resulting shape is empty
-    /// or contains a zero-sized axis.
+    /// Returns `FerrayError::InvalidValue` if the resulting shape has
+    /// zero rank (i.e. an empty shape slice).
     fn into_shape(self) -> Result<Vec<usize>, FerrayError>;
 }
 
@@ -38,11 +40,6 @@ fn validate_shape(shape: Vec<usize>) -> Result<Vec<usize>, FerrayError> {
         return Err(FerrayError::invalid_value(
             "shape must have at least one axis",
         ));
-    }
-    if shape.contains(&0) {
-        return Err(FerrayError::invalid_value(format!(
-            "shape must not contain zero-sized axes, got {shape:?}"
-        )));
     }
     Ok(shape)
 }
@@ -121,8 +118,10 @@ mod tests {
     }
 
     #[test]
-    fn zero_axis_rejected() {
-        assert!(0usize.into_shape().is_err());
-        assert!([3, 0, 4].into_shape().is_err());
+    fn zero_axis_allowed() {
+        // NumPy allows size=0 / size=(3, 0, 4) and returns an empty
+        // array. ferray now matches that (#264, #455).
+        assert_eq!(0usize.into_shape().unwrap(), vec![0]);
+        assert_eq!([3, 0, 4].into_shape().unwrap(), vec![3, 0, 4]);
     }
 }

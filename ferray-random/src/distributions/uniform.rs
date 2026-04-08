@@ -294,10 +294,16 @@ mod tests {
     }
 
     #[test]
-    fn random_nd_rejects_zero_axis() {
+    fn random_nd_zero_axis_returns_empty() {
+        // Issue #264, #455: NumPy returns an empty array for zero-axis
+        // shapes; ferray-random now matches that behaviour.
         let mut rng = default_rng_seeded(42);
-        assert!(rng.random([3, 0]).is_err());
-        assert!(rng.random(0usize).is_err());
+        let a = rng.random([3, 0]).unwrap();
+        assert_eq!(a.shape(), &[3, 0]);
+        assert_eq!(a.size(), 0);
+        let b = rng.random(0usize).unwrap();
+        assert_eq!(b.shape(), &[0]);
+        assert_eq!(b.size(), 0);
     }
 
     #[test]
@@ -401,8 +407,10 @@ mod tests {
     }
 
     #[test]
-    fn random_f32_rejects_zero_axis() {
+    fn random_f32_zero_axis_returns_empty() {
         let mut rng = default_rng_seeded(42);
-        assert!(rng.random_f32([3, 0]).is_err());
+        let a = rng.random_f32([3, 0]).unwrap();
+        assert_eq!(a.shape(), &[3, 0]);
+        assert_eq!(a.size(), 0);
     }
 }

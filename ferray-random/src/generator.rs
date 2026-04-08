@@ -68,6 +68,26 @@ impl<B: BitGenerator> Generator<B> {
     pub fn next_u64_bounded(&mut self, bound: u64) -> u64 {
         self.bg.next_u64_bounded(bound)
     }
+
+    /// Generate `n` random bytes as a `Vec<u8>`.
+    ///
+    /// Equivalent to `numpy.random.Generator.bytes(n)`. Each byte is
+    /// drawn from the underlying bit generator's `u64` stream and
+    /// little-endian-decomposed; calling `bytes(n)` advances the bit
+    /// generator by `ceil(n / 8)` `u64` draws (#446).
+    pub fn bytes(&mut self, n: usize) -> Vec<u8> {
+        let mut out = Vec::with_capacity(n);
+        let full_words = n / 8;
+        for _ in 0..full_words {
+            out.extend_from_slice(&self.bg.next_u64().to_le_bytes());
+        }
+        let remainder = n % 8;
+        if remainder > 0 {
+            let bytes = self.bg.next_u64().to_le_bytes();
+            out.extend_from_slice(&bytes[..remainder]);
+        }
+        out
+    }
 }
 
 /// Create a `Generator` with the default BitGenerator (Xoshiro256**)
@@ -277,5 +297,34 @@ mod tests {
     fn spawn_zero_is_error() {
         let mut parent = default_rng_seeded(42);
         assert!(spawn_generators(&mut parent, 0).is_err());
+    }
+
+    // ----- bytes() coverage (#446) -----
+
+    #[test]
+    fn bytes_length_zero() {
+        let mut rng = default_rng_seeded(42);
+        assert!(rng.bytes(0).is_empty());
+    }
+
+    #[test]
+    fn bytes_length_full_word() {
+        let mut rng = default_rng_seeded(42);
+        let b = rng.bytes(8);
+        assert_eq!(b.len(), 8);
+    }
+
+    #[test]
+    fn bytes_length_partial_word() {
+        let mut rng = default_rng_seeded(42);
+        let b = rng.bytes(13);
+        assert_eq!(b.len(), 13);
+    }
+
+    #[test]
+    fn bytes_deterministic_for_same_seed() {
+        let mut rng1 = default_rng_seeded(42);
+        let mut rng2 = default_rng_seeded(42);
+        assert_eq!(rng1.bytes(64), rng2.bytes(64));
     }
 }

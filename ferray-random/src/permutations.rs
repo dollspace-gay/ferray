@@ -102,8 +102,11 @@ impl<B: BitGenerator> Generator<B> {
         T: ferray_core::Element,
     {
         let n = arr.shape()[0];
+        // size == 0 is valid: NumPy returns an empty array. Only the
+        // source-array-empty case (and only when we actually need a
+        // sample) is still an error (#264, #455).
         if size == 0 {
-            return Err(FerrayError::invalid_value("size must be > 0"));
+            return Array::from_vec(Ix1::new([0]), Vec::new());
         }
         if n == 0 {
             return Err(FerrayError::invalid_value("source array must be non-empty"));
