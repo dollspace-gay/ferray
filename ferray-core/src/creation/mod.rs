@@ -251,6 +251,18 @@ pub fn empty<T: Element, D: Dimension>(dim: D) -> UninitArray<T, D> {
     UninitArray { data, dim }
 }
 
+/// Create an uninitialized array with the same shape (and element type)
+/// as `other`.
+///
+/// Analogous to `numpy.empty_like()`. Returns a [`UninitArray`] that the
+/// caller must fully initialize before calling
+/// [`UninitArray::assume_init`]. Avoids the memset that `zeros_like` /
+/// `full_like` incur when the caller is about to overwrite every element
+/// anyway.
+pub fn empty_like<T: Element, D: Dimension>(other: &Array<T, D>) -> UninitArray<T, D> {
+    empty(other.dim().clone())
+}
+
 // ============================================================================
 // REQ-18: Range functions
 // ============================================================================
@@ -846,6 +858,43 @@ mod tests {
     fn test_empty_write_oob() {
         let mut u = empty::<f64, Ix1>(Ix1::new([2]));
         assert!(u.write_at(5, 1.0).is_err());
+    }
+
+    // #363: empty_like matches source shape, contents independent.
+    #[test]
+    fn test_empty_like_matches_shape_2d() {
+        use crate::dimension::Ix2;
+        let src = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mut u = empty_like(&src);
+        assert_eq!(u.shape(), &[2, 3]);
+        assert_eq!(u.size(), 6);
+        assert_eq!(u.ndim(), 2);
+
+        // Fill and init — the resulting array is independent of `src`.
+        for i in 0..6 {
+            u.write_at(i, -(i as f64)).unwrap();
+        }
+        // SAFETY: every slot just written.
+        let out = unsafe { u.assume_init() };
+        assert_eq!(out.shape(), &[2, 3]);
+        assert_eq!(out.as_slice().unwrap(), &[0.0, -1.0, -2.0, -3.0, -4.0, -5.0]);
+        // Source is unchanged.
+        assert_eq!(src.as_slice().unwrap(), &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    fn test_empty_like_zero_sized() {
+        let src = Array::<f64, Ix1>::from_vec(Ix1::new([0]), vec![]).unwrap();
+        let u = empty_like(&src);
+        assert_eq!(u.shape(), &[0]);
+        assert_eq!(u.size(), 0);
+        // SAFETY: size is zero — nothing to initialize.
+        let out = unsafe { u.assume_init() };
+        assert_eq!(out.size(), 0);
     }
 
     // -- REQ-18 tests --
