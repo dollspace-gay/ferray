@@ -129,6 +129,76 @@ impl<D: Dimension> StringArray<D> {
     pub fn iter(&self) -> std::slice::Iter<'_, String> {
         self.data.iter()
     }
+
+    // -----------------------------------------------------------------
+    // Shape operations (#514) — parallel to `ferray_core::Array`
+    //
+    // StringArray can't reuse `Array<String, D>` because `String`
+    // isn't an `Element` (the trait is sealed inside ferray-core and
+    // `String` isn't `Copy`). Instead we mirror the shape API that
+    // `Array` exposes so callers can write shape-manipulation code
+    // that looks the same for string and numeric arrays.
+    // -----------------------------------------------------------------
+
+    /// Reshape this array to a new dimension type / shape. The total
+    /// element count must be unchanged.
+    ///
+    /// Since strings are cheap to move (they're owned), reshape just
+    /// rebuilds the array around the existing buffer. No data copy.
+    ///
+    /// # Errors
+    /// Returns [`FerrayError::ShapeMismatch`] if the new shape's
+    /// element count does not match `self.len()`.
+    pub fn reshape<D2: Dimension>(self, new_dim: D2) -> FerrayResult<StringArray<D2>> {
+        StringArray::<D2>::from_vec(new_dim, self.data)
+    }
+
+    /// Flatten to a 1-D `StringArray1` of length `self.len()`. The
+    /// row-major traversal order is preserved.
+    ///
+    /// This is the string analogue of `ndarray::Array::flatten` /
+    /// NumPy's `arr.flatten()`.
+    pub fn flatten(self) -> StringArray1 {
+        let n = self.data.len();
+        StringArray::<Ix1>::from_vec(Ix1::new([n]), self.data)
+            .expect("flatten: length check is trivially satisfied")
+    }
+
+    /// Convert to a dynamic-rank `StringArray<IxDyn>`. Useful when
+    /// the rank isn't known until runtime, or when interoperating
+    /// with code that only accepts `IxDyn`.
+    pub fn into_dyn(self) -> StringArray<IxDyn> {
+        let shape = self.dim.as_slice().to_vec();
+        StringArray::<IxDyn>::from_vec(IxDyn::new(&shape), self.data)
+            .expect("into_dyn: shape length check is trivially satisfied")
+    }
+
+    /// Look up an element by multi-dimensional index. Returns `None`
+    /// if the index is out of bounds.
+    ///
+    /// Indexing is row-major (C-order): for a `(rows, cols)` array,
+    /// index `[r, c]` maps to `data[r * cols + c]`.
+    pub fn get(&self, idx: &[usize]) -> Option<&String> {
+        let shape = self.dim.as_slice();
+        if idx.len() != shape.len() {
+            return None;
+        }
+        let mut flat = 0usize;
+        let mut stride = 1usize;
+        // Walk dimensions right-to-left (row-major).
+        for (i, (&dim, &k)) in shape.iter().zip(idx.iter()).enumerate().rev() {
+            if k >= dim {
+                return None;
+            }
+            if i == shape.len() - 1 {
+                flat += k;
+            } else {
+                flat += k * stride;
+            }
+            stride *= dim;
+        }
+        self.data.get(flat)
+    }
 }
 
 impl<D: Dimension> PartialEq for StringArray<D> {
@@ -158,6 +228,23 @@ impl StringArray<Ix1> {
 }
 
 impl StringArray<Ix2> {
+    /// Transpose a 2-D `StringArray`: swap rows and columns.
+    ///
+    /// Walks the elements into a new buffer — a `(r, c)` cell of the
+    /// input becomes `(c, r)` of the output. Strings are cloned to
+    /// avoid disturbing the original array.
+    pub fn transpose(&self) -> FerrayResult<StringArray<Ix2>> {
+        let shape = self.shape();
+        let (nrows, ncols) = (shape[0], shape[1]);
+        let mut data = Vec::with_capacity(nrows * ncols);
+        for c in 0..ncols {
+            for r in 0..nrows {
+                data.push(self.data[r * ncols + c].clone());
+            }
+        }
+        Self::from_vec(Ix2::new([ncols, nrows]), data)
+    }
+
     /// Create a 2-D `StringArray` from nested slices.
     ///
     /// # Errors
@@ -368,5 +455,74 @@ mod tests {
         let a = array(&["a", "b"]).unwrap();
         let v = a.into_vec();
         assert_eq!(v, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    // ---- shape operations (#514) ----
+
+    #[test]
+    fn reshape_1d_to_2d() {
+        let a = array(&["a", "b", "c", "d", "e", "f"]).unwrap();
+        let b = a.reshape(Ix2::new([2, 3])).unwrap();
+        assert_eq!(b.shape(), &[2, 3]);
+        assert_eq!(b.as_slice(), &["a", "b", "c", "d", "e", "f"]);
+    }
+
+    #[test]
+    fn reshape_wrong_size_errors() {
+        let a = array(&["a", "b", "c"]).unwrap();
+        assert!(a.reshape(Ix2::new([2, 2])).is_err());
+    }
+
+    #[test]
+    fn flatten_2d_to_1d() {
+        let a = StringArray2::from_rows(&[&["a", "b"], &["c", "d"]]).unwrap();
+        let f = a.flatten();
+        assert_eq!(f.shape(), &[4]);
+        assert_eq!(f.as_slice(), &["a", "b", "c", "d"]);
+    }
+
+    #[test]
+    fn into_dyn_preserves_shape() {
+        let a = StringArray2::from_rows(&[&["x", "y"], &["z", "w"]]).unwrap();
+        let d = a.into_dyn();
+        assert_eq!(d.shape(), &[2, 2]);
+        assert_eq!(d.as_slice(), &["x", "y", "z", "w"]);
+    }
+
+    #[test]
+    fn transpose_2x3() {
+        // [["a","b","c"], ["d","e","f"]] -> [["a","d"], ["b","e"], ["c","f"]]
+        let a = StringArray2::from_rows(&[&["a", "b", "c"], &["d", "e", "f"]]).unwrap();
+        let t = a.transpose().unwrap();
+        assert_eq!(t.shape(), &[3, 2]);
+        assert_eq!(t.as_slice(), &["a", "d", "b", "e", "c", "f"]);
+    }
+
+    #[test]
+    fn transpose_square_is_involution() {
+        let a = StringArray2::from_rows(&[&["1", "2"], &["3", "4"]]).unwrap();
+        let t = a.transpose().unwrap();
+        let tt = t.transpose().unwrap();
+        assert_eq!(tt.as_slice(), a.as_slice());
+    }
+
+    #[test]
+    fn get_1d() {
+        let a = array(&["zero", "one", "two"]).unwrap();
+        assert_eq!(a.get(&[0]).unwrap(), "zero");
+        assert_eq!(a.get(&[1]).unwrap(), "one");
+        assert_eq!(a.get(&[2]).unwrap(), "two");
+        assert_eq!(a.get(&[3]), None); // out of bounds
+        assert_eq!(a.get(&[0, 0]), None); // wrong rank
+    }
+
+    #[test]
+    fn get_2d() {
+        let a = StringArray2::from_rows(&[&["a", "b", "c"], &["d", "e", "f"]]).unwrap();
+        assert_eq!(a.get(&[0, 0]).unwrap(), "a");
+        assert_eq!(a.get(&[0, 2]).unwrap(), "c");
+        assert_eq!(a.get(&[1, 1]).unwrap(), "e");
+        assert_eq!(a.get(&[2, 0]), None); // row out of bounds
+        assert_eq!(a.get(&[0, 3]), None); // col out of bounds
     }
 }
