@@ -15,6 +15,7 @@ description = "A NumPy-equivalent library for Rust — N-dimensional arrays with
 ferray-core = { workspace = true }
 ferray-ufunc = { workspace = true }
 ferray-stats = { workspace = true }
+num-complex = { workspace = true }
 rayon = { workspace = true }
 
 [dependencies.ferray-io]
@@ -57,12 +58,31 @@ optional = true
 workspace = true
 optional = true
 
+[dependencies.ferray-autodiff]
+workspace = true
+optional = true
+
 [features]
-default = ["rayon", "simd", "complex", "strings", "ma", "io", "window"]
-full = ["default", "linalg", "fft", "random", "polynomial", "stride-tricks"]
-rayon = []
-simd = []
-complex = []
+# Default feature set: the common subset most users want out of the
+# box. The historical `rayon`, `simd`, `complex` flags were no-ops
+# (rayon/ndarray/num-complex are unconditional deps), so they were
+# removed — see issue #216.
+default = ["strings", "ma", "io", "window"]
+
+# `full` pulls in every sub-crate plus f16 and serde, matching the
+# "give me everything" expectation (#334).
+full = [
+    "default",
+    "linalg",
+    "fft",
+    "random",
+    "polynomial",
+    "stride-tricks",
+    "autodiff",
+    "f16",
+    "serde",
+]
+
 f16 = ["ferray-core/f16", "ferray-ufunc/f16", "ferray-io?/f16"]
 bf16 = ["ferray-core/bf16", "ferray-io?/bf16"]
 strings = ["dep:ferray-strings"]
@@ -74,8 +94,12 @@ random = ["dep:ferray-random"]
 polynomial = ["dep:ferray-polynomial", "linalg"]
 window = ["dep:ferray-window"]
 stride-tricks = ["dep:ferray-stride-tricks"]
+autodiff = ["dep:ferray-autodiff"]
 numpy = ["dep:ferray-numpy-interop"]
 serde = ["ferray-core/serde"]
+# Forward ferray-core's compile-time const_shapes knob so users of the
+# umbrella can opt in without dropping down to ferray-core (#222).
+const_shapes = ["ferray-core/const_shapes"]
 # no_std is not supported by the umbrella crate because ferray-ufunc and
 # ferray-stats require std. Use ferray-core directly with its no_std feature
 # for no_std environments.

@@ -47,6 +47,7 @@ ferray-strings = { path = "ferray-strings", version = "0.2.8" }
 ferray-ma = { path = "ferray-ma", version = "0.2.8" }
 ferray-stride-tricks = { path = "ferray-stride-tricks", version = "0.2.8" }
 ferray-numpy-interop = { path = "ferray-numpy-interop", version = "0.2.8" }
+ferray-autodiff = { path = "ferray-autodiff", version = "0.2.8" }
 
 # External dependencies (pinned versions per design spec)
 ndarray = "0.17"

@@ -1,7 +1,49 @@
-// ferray: Main re-export crate providing `use ferray::prelude::*`
-//
-// This is the top-level crate that users depend on. It re-exports all
-// subcrates into a unified namespace, matching NumPy's `import numpy as np`.
+//! # ferray — a NumPy-equivalent library for Rust
+//!
+//! `ferray` is the top-level umbrella crate that re-exports every
+//! ferray sub-crate under a unified namespace, analogous to `import
+//! numpy as np` in Python. Most users should start here rather than
+//! depending on the individual `ferray-core`, `ferray-ufunc`,
+//! `ferray-stats`, etc. crates directly.
+//!
+//! ```ignore
+//! use ferray::prelude::*;
+//!
+//! let a = zeros::<f64, Ix2>(Ix2::new([2, 3])).unwrap();
+//! let b = sin(&a).unwrap();
+//! ```
+//!
+//! ## Sub-modules
+//!
+//! Optional sub-crates are feature-gated and exposed as named
+//! modules (`ferray::fft`, `ferray::linalg`, `ferray::random`,
+//! `ferray::io`, `ferray::polynomial`, `ferray::window`,
+//! `ferray::strings`, `ferray::ma`, `ferray::stride_tricks`,
+//! `ferray::autodiff`, `ferray::numpy_interop`).
+//!
+//! ## Features
+//!
+//! | flag              | pulls in                                   |
+//! |-------------------|--------------------------------------------|
+//! | `full`            | every sub-crate below + f16 + serde        |
+//! | `io`              | `ferray-io` (.npy/.npz/text/memmap)        |
+//! | `linalg`          | `ferray-linalg` (decomps, solvers, norms)  |
+//! | `fft`             | `ferray-fft` (rustfft + realfft)           |
+//! | `random`          | `ferray-random` (PCG64 / Xoshiro256)       |
+//! | `polynomial`      | `ferray-polynomial` (power + 5 bases)      |
+//! | `window`          | `ferray-window` (Kaiser, Bartlett, …)      |
+//! | `strings`         | `ferray-strings` (vectorized string ops)   |
+//! | `ma`              | `ferray-ma` (masked arrays)                |
+//! | `stride-tricks`   | `ferray-stride-tricks` (as_strided, …)     |
+//! | `autodiff`        | `ferray-autodiff` (forward-mode dual)      |
+//! | `numpy`           | `ferray-numpy-interop` (PyO3 bridge)       |
+//! | `f16` / `bf16`    | half-precision element types               |
+//! | `serde`           | Array serde impls via `ferray-core/serde`  |
+//!
+//! The umbrella crate itself contains only re-exports and a thin
+//! thread-pool config layer, so it forbids unsafe code.
+
+#![forbid(unsafe_code)]
 
 pub mod config;
 pub mod prelude;
@@ -38,7 +80,11 @@ pub use ferray_core::{FerrayError, FerrayResult};
 pub use ferray_core::MemoryLayout;
 
 // Macros
-pub use ferray_core::{FerrayRecord as DeriveFerrayRecord, promoted_type, s};
+pub use ferray_core::{promoted_type, s};
+
+// num_complex re-export so downstream users don't need a direct
+// num-complex dependency just to name Complex<T> (#333).
+pub use num_complex::Complex;
 
 // Type aliases
 pub use ferray_core::aliases;
@@ -121,8 +167,13 @@ pub use ferray_ufunc::{abs, angle, conj, conjugate, imag, real};
 
 // Bitwise
 pub use ferray_ufunc::{
-    bitwise_and, bitwise_not, bitwise_or, bitwise_xor, invert, left_shift, right_shift,
+    BitwiseCount, BitwiseOps, ShiftOps, bitwise_and, bitwise_count, bitwise_not, bitwise_or,
+    bitwise_xor, invert, left_shift, right_shift,
 };
+
+// Logical / comparison / i0 / sinc / convolve / interp traits used
+// by downstream generics (#220).
+pub use ferray_ufunc::Logical;
 
 // Comparison
 pub use ferray_ufunc::{
@@ -149,29 +200,34 @@ pub use ferray_ufunc::{
 // REQ-1: Stats functions at top level
 // ---------------------------------------------------------------------------
 
-// Reductions
-pub use ferray_stats::{
-    argmax, argmin, cumprod as stats_cumprod, cumsum as stats_cumsum, max, mean, min, prod, std_,
-    sum, var,
-};
+// Reductions — `cumsum`/`cumprod` already come from `ferray_ufunc`
+// above, so the stats versions are aliased in under different names
+// via full paths at use sites rather than re-exported here (#335).
+pub use ferray_stats::{argmax, argmin, max, mean, min, prod, std_, sum, var};
 
 // Quantile-based
 pub use ferray_stats::{median, percentile, quantile};
 
-// NaN-aware reductions
+// NaN-aware reductions — same rationale as above, `nancumsum` /
+// `nancumprod` come from ferray-ufunc so we only re-export the
+// stats-specific reducers (#335).
 pub use ferray_stats::{
-    nancumprod as stats_nancumprod, nancumsum as stats_nancumsum, nanmax, nanmean, nanmedian,
-    nanmin, nanpercentile, nanprod, nanstd, nansum, nanvar,
+    nanmax, nanmean, nanmedian, nanmin, nanpercentile, nanprod, nanstd, nansum, nanvar,
 };
 
 // Correlation and covariance
 pub use ferray_stats::{CorrelateMode, corrcoef, correlate, cov};
 
 // Histogram
-pub use ferray_stats::{Bins, bincount, digitize, histogram, histogram2d, histogramdd};
+pub use ferray_stats::{
+    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram2d,
+    histogramdd,
+};
 
 // Sorting and searching
-pub use ferray_stats::{Side, SortKind, argsort, searchsorted, sort};
+pub use ferray_stats::{
+    Side, SortKind, argsort, lexsort, searchsorted, searchsorted_with_sorter, sort,
+};
 pub use ferray_stats::{UniqueResult, count_nonzero, nonzero, unique, where_};
 
 // Set operations
@@ -216,6 +272,10 @@ pub use ferray_ma as ma;
 /// Stride manipulation utilities.
 #[cfg(feature = "stride-tricks")]
 pub use ferray_stride_tricks as stride_tricks;
+
+/// Forward-mode automatic differentiation via `DualNumber<T>`.
+#[cfg(feature = "autodiff")]
+pub use ferray_autodiff as autodiff;
 
 /// Python/NumPy interop via PyO3.
 #[cfg(feature = "numpy")]

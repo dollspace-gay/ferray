@@ -2,6 +2,7 @@
 
 use std::sync::OnceLock;
 
+use ferray_core::error::{FerrayError, FerrayResult};
 use rayon::ThreadPool;
 
 /// Global ferray thread pool, initialized once.
@@ -19,15 +20,20 @@ static POOL_CACHE: std::sync::LazyLock<
 /// If never called, Rayon's default thread count (usually number of CPUs) is used.
 ///
 /// # Errors
-/// Returns an error if the pool has already been initialized.
-pub fn set_num_threads(n: usize) -> Result<(), String> {
+/// Returns `FerrayError::InvalidValue` wrapped with the rayon build
+/// error if thread-pool creation fails, or
+/// `"ferray thread pool already initialized"` if `set_num_threads`
+/// has already been called (#218 — this used to return
+/// `Result<_, String>` which forced callers to juggle two error
+/// types alongside the rest of the ferray API).
+pub fn set_num_threads(n: usize) -> FerrayResult<()> {
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(n)
         .build()
-        .map_err(|e| format!("failed to create thread pool: {e}"))?;
-    GLOBAL_POOL
-        .set(pool)
-        .map_err(|_| "ferray thread pool already initialized".to_string())
+        .map_err(|e| FerrayError::invalid_value(format!("failed to create thread pool: {e}")))?;
+    GLOBAL_POOL.set(pool).map_err(|_| {
+        FerrayError::invalid_value("ferray thread pool already initialized")
+    })
 }
 
 /// Execute a closure on a thread pool with `n` threads.
@@ -36,22 +42,27 @@ pub fn set_num_threads(n: usize) -> Result<(), String> {
 /// the same pool, avoiding the cost of repeated thread creation (AC-8).
 ///
 /// # Errors
-/// Returns an error if the thread pool cannot be created.
-pub fn with_num_threads<F, R>(n: usize, f: F) -> Result<R, String>
+/// Returns a `FerrayError::InvalidValue` wrapping any rayon build
+/// failure or lock-poisoning event (#218).
+pub fn with_num_threads<F, R>(n: usize, f: F) -> FerrayResult<R>
 where
     F: FnOnce() -> R + Send,
     R: Send,
 {
-    let mut cache = POOL_CACHE
-        .lock()
-        .map_err(|e| format!("pool cache lock poisoned: {e}"))?;
+    let mut cache = POOL_CACHE.lock().map_err(|e| {
+        FerrayError::invalid_value(format!("pool cache lock poisoned: {e}"))
+    })?;
     let pool = if let Some(existing) = cache.get(&n) {
         existing.clone()
     } else {
         let new_pool = rayon::ThreadPoolBuilder::new()
             .num_threads(n)
             .build()
-            .map_err(|e| format!("failed to create cached thread pool: {e}"))?;
+            .map_err(|e| {
+                FerrayError::invalid_value(format!(
+                    "failed to create cached thread pool: {e}"
+                ))
+            })?;
         let arc = std::sync::Arc::new(new_pool);
         cache.insert(n, arc.clone());
         arc

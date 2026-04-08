@@ -127,3 +127,22 @@ pub use ferray_ufunc::{
 pub use ferray_stats::{
     argmax, argmin, max, mean, median, min, nanmax, nanmean, nanmin, nansum, prod, std_, sum, var,
 };
+
+// Traits used by downstream generics — users importing the prelude
+// expected these to be in scope so trait methods like
+// `.array_add()` / `.all()` / `.bitand()` resolve without extra
+// imports (#220, #336).
+pub use ferray_ufunc::{BitwiseCount, BitwiseOps, Logical, ShiftOps};
+
+// Bitwise ops — added alongside the trait re-export because the
+// integration tests expect `bitwise_count` to be directly callable
+// from the prelude (#396).
+pub use ferray_ufunc::{
+    bitwise_and, bitwise_count, bitwise_not, bitwise_or, bitwise_xor, invert, left_shift,
+    right_shift,
+};
+
+// `Complex<T>` is frequently used alongside ferray arrays; re-export
+// here so `use ferray::prelude::*` gives it without pulling in a
+// direct `num-complex` dependency (#333).
+pub use num_complex::Complex;
