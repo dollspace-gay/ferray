@@ -3,11 +3,12 @@
   "display_id": 239,
   "title": "ferray-io: open_memmap copies data, defeating memory mapping purpose",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nmemmap.rs L237-251: immediately calls to_array() which copies all data.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:51:20.936571853Z",
-  "updated_at": "2026-03-25T15:51:35.155607249Z",
+  "updated_at": "2026-04-08T21:26:40.157186045Z",
+  "closed_at": "2026-04-08T21:26:40.157186045Z",
   "labels": [
     "refactor",
     "qa-audit"
