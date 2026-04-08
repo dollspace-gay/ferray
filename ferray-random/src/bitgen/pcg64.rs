@@ -53,18 +53,18 @@ impl BitGenerator for Pcg64 {
     }
 
     fn seed_from_u64(seed: u64) -> Self {
-        // Use SplitMix64-like expansion for seeding
+        // Use SplitMix64 expansion for seeding (#259 — shared helper).
         let seed128 = {
             let mut s = seed;
-            let a = splitmix64_step(&mut s);
-            let b = splitmix64_step(&mut s);
+            let a = super::splitmix64(&mut s);
+            let b = super::splitmix64(&mut s);
             ((a as u128) << 64) | (b as u128)
         };
         // inc must be odd
         let inc = {
             let mut s = seed.wrapping_add(0xda3e39cb94b95bdb);
-            let a = splitmix64_step(&mut s);
-            let b = splitmix64_step(&mut s);
+            let a = super::splitmix64(&mut s);
+            let b = super::splitmix64(&mut s);
             (((a as u128) << 64) | (b as u128)) | 1
         };
 
@@ -84,15 +84,6 @@ impl BitGenerator for Pcg64 {
         // PCG64 does not support stream IDs in this implementation
         None
     }
-}
-
-/// SplitMix64 step for seed expansion.
-fn splitmix64_step(state: &mut u64) -> u64 {
-    *state = state.wrapping_add(0x9e3779b97f4a7c15);
-    let mut z = *state;
-    z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
-    z ^ (z >> 31)
 }
 
 impl Clone for Pcg64 {

@@ -143,6 +143,36 @@ pub fn vdot<T: LinalgFloat>(a: &Array<T, IxDyn>, b: &Array<T, IxDyn>) -> FerrayR
         .fold(zero, |acc, v| acc + v))
 }
 
+/// Cross product of two 3-element 1-D arrays.
+///
+/// Computes the vector cross product `a × b = [a1*b2 - a2*b1, a2*b0 - a0*b2, a0*b1 - a1*b0]`.
+/// Both inputs must be 1-D with exactly 3 elements. Equivalent to
+/// `numpy.cross(a, b)` for 3-D vectors (#417).
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if either input is not a 3-element 1-D array.
+pub fn cross<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
+    let a_shape = a.shape();
+    let b_shape = b.shape();
+    if a_shape != [3] || b_shape != [3] {
+        return Err(FerrayError::shape_mismatch(format!(
+            "cross: both arrays must be 1-D with 3 elements, got shapes {:?} and {:?}",
+            a_shape, b_shape
+        )));
+    }
+    let ad = borrow_data(a);
+    let bd = borrow_data(b);
+    let result = vec![
+        ad[1] * bd[2] - ad[2] * bd[1],
+        ad[2] * bd[0] - ad[0] * bd[2],
+        ad[0] * bd[1] - ad[1] * bd[0],
+    ];
+    Array::from_vec(IxDyn::new(&[3]), result)
+}
+
 /// Inner product of two arrays.
 ///
 /// For 1D arrays, this is the same as `dot`.

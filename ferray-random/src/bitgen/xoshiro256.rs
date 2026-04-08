@@ -35,16 +35,6 @@ impl Xoshiro256StarStar {
     }
 }
 
-/// SplitMix64 used for seed expansion — converts a single u64 seed into
-/// multiple high-quality u64 values for initializing the Xoshiro state.
-fn splitmix64(state: &mut u64) -> u64 {
-    *state = state.wrapping_add(0x9e3779b97f4a7c15);
-    let mut z = *state;
-    z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
-    z ^ (z >> 31)
-}
-
 impl BitGenerator for Xoshiro256StarStar {
     fn next_u64(&mut self) -> u64 {
         let result = (self.s[1].wrapping_mul(5)).rotate_left(7).wrapping_mul(9);
@@ -62,11 +52,12 @@ impl BitGenerator for Xoshiro256StarStar {
     }
 
     fn seed_from_u64(seed: u64) -> Self {
+        // Use the shared splitmix64 helper (#259).
         let mut sm = seed;
-        let s0 = splitmix64(&mut sm);
-        let s1 = splitmix64(&mut sm);
-        let s2 = splitmix64(&mut sm);
-        let s3 = splitmix64(&mut sm);
+        let s0 = super::splitmix64(&mut sm);
+        let s1 = super::splitmix64(&mut sm);
+        let s2 = super::splitmix64(&mut sm);
+        let s3 = super::splitmix64(&mut sm);
         // Ensure state is not all zeros
         if s0 | s1 | s2 | s3 == 0 {
             Self::from_state([1, 0, 0, 0])

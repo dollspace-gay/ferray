@@ -64,6 +64,31 @@ pub fn svd<T: LinalgFloat>(
     Ok((u_arr, s_arr, vt_arr))
 }
 
+/// Return only the singular values of a matrix.
+///
+/// Equivalent to `numpy.linalg.svdvals(a)`. Faster than full `svd`
+/// because U and Vt are never materialized — only the diagonal S is
+/// extracted from the faer decomposition (#406).
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if SVD computation fails to converge.
+pub fn svdvals<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix1>> {
+    let mat = faer_bridge::array2_to_faer(a);
+    let decomp = mat
+        .as_ref()
+        .thin_svd()
+        .map_err(|e| FerrayError::InvalidValue {
+            message: format!("svdvals failed to converge: {e:?}"),
+        })?;
+    let s_diag = decomp.S();
+    let min_dim = a.shape()[0].min(a.shape()[1]);
+    let mut s_vals = Vec::with_capacity(min_dim);
+    for i in 0..min_dim {
+        s_vals.push(s_diag.column_vector()[i]);
+    }
+    Array::from_vec(Ix1::new([s_vals.len()]), s_vals)
+}
+
 /// Batched SVD for arrays of shape `(..., M, N)`.
 ///
 /// Returns `(U, S, Vt)` with batch dimensions preserved. In thin mode

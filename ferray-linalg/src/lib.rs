@@ -43,13 +43,14 @@ pub use scalar::LinalgFloat;
 
 // Matrix products (Section 8.1)
 pub use products::{
-    TensordotAxes, dot, einsum, inner, kron, matmul, multi_dot, outer, tensordot, vdot, vecdot,
+    TensordotAxes, cross, dot, einsum, inner, kron, matmul, multi_dot, outer, tensordot, vdot,
+    vecdot,
 };
 
 // Decompositions (Section 8.2)
 pub use decomp::{
     QrMode, cholesky, cholesky_batched, eig, eigh, eigh_batched, eigvals, eigvalsh,
-    eigvalsh_batched, lu, qr, qr_batched, svd, svd_batched,
+    eigvalsh_batched, lu, qr, qr_batched, svd, svd_batched, svdvals,
 };
 
 // Solving and inversion (Section 8.3)

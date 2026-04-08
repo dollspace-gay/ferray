@@ -17,4 +17,4 @@ pub use cholesky::{cholesky, cholesky_batched};
 pub use eigen::{eig, eigh, eigh_batched, eigvals, eigvalsh, eigvalsh_batched};
 pub use lu::lu;
 pub use qr::{QrMode, qr, qr_batched};
-pub use svd::{svd, svd_batched};
+pub use svd::{svd, svd_batched, svdvals};
