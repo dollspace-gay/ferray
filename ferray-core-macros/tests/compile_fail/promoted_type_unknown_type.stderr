@@ -1,0 +1,7 @@
+error: cannot promote types: MyCustomType and f64
+  --> tests/compile_fail/promoted_type_unknown_type.rs:11:13
+   |
+11 |     let _x: promoted_type!(MyCustomType, f64);
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the macro `promoted_type` (in Nightly builds, run with -Z macro-backtrace for more info)

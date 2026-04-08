@@ -18,3 +18,7 @@ proc-macro = true
 syn = { version = "2", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
+
+[dev-dependencies]
+trybuild = "1.0"
+ferray-core = { path = "../ferray-core", version = "0.2.8" }

@@ -1,0 +1,5 @@
+error: FerrayRecord can only be derived for structs
+ --> tests/compile_fail/ferray_record_on_enum.rs:9:6
+  |
+9 | enum NotAStruct {
+  |      ^^^^^^^^^^

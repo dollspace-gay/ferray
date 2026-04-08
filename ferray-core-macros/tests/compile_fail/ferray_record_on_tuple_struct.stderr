@@ -1,0 +1,5 @@
+error: FerrayRecord only supports structs with named fields
+ --> tests/compile_fail/ferray_record_on_tuple_struct.rs:9:8
+  |
+9 | struct TupleStruct(f64, i32);
+  |        ^^^^^^^^^^^

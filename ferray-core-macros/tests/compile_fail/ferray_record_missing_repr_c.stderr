@@ -1,0 +1,5 @@
+error: FerrayRecord requires #[repr(C)] on the struct
+  --> tests/compile_fail/ferray_record_missing_repr_c.rs:10:8
+   |
+10 | struct NoReprC {
+   |        ^^^^^^^

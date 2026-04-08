@@ -1,0 +1,15 @@
+error: promoted_type! expects exactly two type arguments: promoted_type!(T1, T2)
+ --> tests/compile_fail/promoted_type_wrong_arg_count.rs:8:13
+  |
+8 |     let _x: promoted_type!(f64) = 0.0;
+  |             ^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `promoted_type` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0308]: mismatched types
+ --> tests/compile_fail/promoted_type_wrong_arg_count.rs:8:35
+  |
+8 |     let _x: promoted_type!(f64) = 0.0;
+  |             -------------------   ^^^ expected `()`, found floating-point number
+  |             |
+  |             expected due to this

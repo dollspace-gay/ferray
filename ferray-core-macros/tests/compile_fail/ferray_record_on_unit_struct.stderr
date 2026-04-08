@@ -1,0 +1,5 @@
+error: FerrayRecord only supports structs with named fields
+  --> tests/compile_fail/ferray_record_on_unit_struct.rs:10:8
+   |
+10 | struct UnitStruct;
+   |        ^^^^^^^^^^
