@@ -3,11 +3,12 @@
   "display_id": 200,
   "title": "ferray-linalg: tensorsolve ignores axes parameter",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nsolve.rs L329: _axes unused. NumPy uses it to rearrange a before solving.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:44:40.233866045Z",
-  "updated_at": "2026-03-25T15:44:56.141117407Z",
+  "updated_at": "2026-04-08T20:58:11.790801784Z",
+  "closed_at": "2026-04-08T20:58:11.790801784Z",
   "labels": [
     "bug",
     "qa-audit"
