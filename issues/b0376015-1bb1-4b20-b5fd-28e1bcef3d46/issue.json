@@ -3,11 +3,12 @@
   "display_id": 237,
   "title": "ferray-io: write_padding writes one byte at a time",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nheader.rs L161-166: single write_all call would suffice.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:50:50.449517623Z",
-  "updated_at": "2026-03-25T15:51:02.919415278Z",
+  "updated_at": "2026-04-08T21:26:38.379000479Z",
+  "closed_at": "2026-04-08T21:26:38.379000479Z",
   "labels": [
     "refactor",
     "qa-audit"
