@@ -122,6 +122,9 @@ pub use ferray_core::manipulation::extended::{
     append, delete, insert, pad, repeat, resize, tile, trim_zeros,
 };
 
+// Broadcasted elementwise assignment (np.copyto equivalent) (#352)
+pub use ferray_core::ops::copyto;
+
 // Indexing
 pub use ferray_core::indexing::extended::{
     argwhere, choose, compress, diag_indices, diag_indices_from, flatnonzero, indices, ix_,
@@ -228,7 +231,9 @@ pub use ferray_stats::{
 pub use ferray_stats::{
     Side, SortKind, argsort, lexsort, searchsorted, searchsorted_with_sorter, sort,
 };
-pub use ferray_stats::{UniqueResult, count_nonzero, nonzero, unique, where_};
+// `nonzero` now lives in ferray-core (#373) and is re-exported above via
+// `ferray_core::indexing::extended`; don't re-export the stats version too.
+pub use ferray_stats::{UniqueResult, count_nonzero, unique, where_};
 
 // Set operations
 pub use ferray_stats::{in1d, intersect1d, isin, setdiff1d, setxor1d, union1d};

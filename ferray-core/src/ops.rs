@@ -480,6 +480,79 @@ where
     }
 }
 
+// ---------------------------------------------------------------------------
+// copyto: broadcasted elementwise assignment (#352)
+//
+// NumPy parity for `np.copyto(dst, src)`: copies values from `src` into `dst`,
+// broadcasting `src` into `dst.shape()`. The destination shape is fixed — a
+// copyto never reallocates `dst`. `casting=` is not modeled because ferray's
+// type system already enforces matching element types; use `astype()` before
+// copyto if conversion is desired.
+//
+// Kept separate from the in-place arithmetic ops because copyto is the
+// "fundamental building block" called out in the issue: it has to handle
+// cross-rank src/dst pairs (e.g. `Ix1` into `Ix2` via broadcasting), whereas
+// `*_inplace` stay within one dimension type `D` to match std::ops::*Assign.
+// ---------------------------------------------------------------------------
+
+/// Copy values from `src` into `dst`, broadcasting `src` to `dst.shape()`.
+///
+/// Equivalent to `np.copyto(dst, src)` without the `casting=` or `where=`
+/// parameters. `src` may have any dimension type — it only needs to be
+/// broadcast-compatible with `dst.shape()`. The destination shape is fixed,
+/// so `src` can never grow the destination.
+///
+/// # Errors
+/// Returns `FerrayError::ShapeMismatch` if `src.shape()` cannot be broadcast
+/// into `dst.shape()`. On error `dst` is left untouched.
+pub fn copyto<T, D1, D2>(dst: &mut Array<T, D1>, src: &Array<T, D2>) -> FerrayResult<()>
+where
+    T: Element,
+    D1: Dimension,
+    D2: Dimension,
+{
+    // Fast path: identical shapes — straight iter-zip, no broadcast machinery.
+    if dst.shape() == src.shape() {
+        for (d, s) in dst.iter_mut().zip(src.iter()) {
+            *d = s.clone();
+        }
+        return Ok(());
+    }
+
+    // Broadcasting path: src must broadcast into dst.shape(). We validate up
+    // front so that a shape error leaves dst completely untouched.
+    let target_shape: Vec<usize> = dst.shape().to_vec();
+    let src_view = broadcast_to(src, &target_shape).map_err(|_| {
+        FerrayError::shape_mismatch(format!(
+            "copyto: source shape {:?} cannot be broadcast into destination shape {:?}",
+            src.shape(),
+            target_shape
+        ))
+    })?;
+
+    for (d, s) in dst.iter_mut().zip(src_view.iter()) {
+        *d = s.clone();
+    }
+    Ok(())
+}
+
+impl<T, D> Array<T, D>
+where
+    T: Element,
+    D: Dimension,
+{
+    /// Copy values from `src` into `self`, broadcasting `src` to `self.shape()`.
+    ///
+    /// See [`copyto`] for the free-function form and full semantics.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::ShapeMismatch` if `src` cannot be broadcast into
+    /// `self.shape()`. On error `self` is left untouched.
+    pub fn copy_from<D2: Dimension>(&mut self, src: &Array<T, D2>) -> FerrayResult<()> {
+        copyto(self, src)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -904,6 +977,84 @@ mod tests {
             Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![10.0; 6]).unwrap();
         assert!(a.add_inplace(&b).is_err());
         assert_eq!(a.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn copyto_same_shape_fast_path() {
+        let mut dst = arr(vec![0.0, 0.0, 0.0]);
+        let src = arr(vec![1.0, 2.0, 3.0]);
+        copyto(&mut dst, &src).unwrap();
+        assert_eq!(dst.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn copyto_broadcasts_row_into_matrix() {
+        // (2, 3) <= (1, 3)
+        let mut dst =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0; 6]).unwrap();
+        let src =
+            Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![10.0, 20.0, 30.0]).unwrap();
+        copyto(&mut dst, &src).unwrap();
+        assert_eq!(
+            dst.as_slice().unwrap(),
+            &[10.0, 20.0, 30.0, 10.0, 20.0, 30.0]
+        );
+    }
+
+    #[test]
+    fn copyto_broadcasts_cross_rank_src() {
+        // (2, 3) <= (3,)  — a lower-rank src broadcasts against a higher-rank dst.
+        let mut dst =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0; 6]).unwrap();
+        let src = arr(vec![7.0, 8.0, 9.0]);
+        copyto(&mut dst, &src).unwrap();
+        assert_eq!(dst.as_slice().unwrap(), &[7.0, 8.0, 9.0, 7.0, 8.0, 9.0]);
+    }
+
+    #[test]
+    fn copyto_scalar_src_broadcasts_to_full_dst() {
+        // (2, 3) <= () via a length-1 1D stand-in.
+        let mut dst =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0; 6]).unwrap();
+        let src = arr(vec![42.0]);
+        copyto(&mut dst, &src).unwrap();
+        assert_eq!(dst.as_slice().unwrap(), &[42.0; 6]);
+    }
+
+    #[test]
+    fn copyto_rejects_growing_dst() {
+        // (1, 3) <= (2, 3) — src wants to grow dst; must error, dst untouched.
+        let mut dst =
+            Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let src = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![99.0; 6]).unwrap();
+        assert!(copyto(&mut dst, &src).is_err());
+        assert_eq!(dst.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn copyto_rejects_incompatible_shapes() {
+        let mut dst = arr(vec![1.0, 2.0, 3.0]);
+        let src = arr(vec![1.0, 2.0, 3.0, 4.0]);
+        assert!(copyto(&mut dst, &src).is_err());
+        assert_eq!(dst.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn copyto_method_form_equivalent_to_function() {
+        let mut dst = arr(vec![0.0, 0.0, 0.0]);
+        let src = arr(vec![1.0, 2.0, 3.0]);
+        dst.copy_from(&src).unwrap();
+        assert_eq!(dst.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn copyto_works_for_non_copy_element_type_i64() {
+        // Exercises the Clone-not-Copy path on the Element trait — copyto
+        // must not require T: Copy.
+        let mut dst = Array::<i64, Ix1>::from_vec(Ix1::new([4]), vec![0, 0, 0, 0]).unwrap();
+        let src = Array::<i64, Ix1>::from_vec(Ix1::new([4]), vec![1, 2, 3, 4]).unwrap();
+        copyto(&mut dst, &src).unwrap();
+        assert_eq!(dst.as_slice().unwrap(), &[1, 2, 3, 4]);
     }
 
     #[test]
