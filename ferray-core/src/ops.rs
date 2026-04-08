@@ -341,6 +341,145 @@ where
     }
 }
 
+// ---------------------------------------------------------------------------
+// In-place operators (#348)
+//
+// NumPy supports `arr += 5`, `arr *= other` — mutation without allocation.
+// We split these into two groups:
+//
+// 1. Scalar in-place: `std::ops::*Assign<T> for Array<T, D>`. Always safe
+//    (scalar ops never fail), implemented via `mapv_inplace`.
+//
+// 2. Array-array in-place: inherent fallible methods `add_inplace`,
+//    `sub_inplace`, `mul_inplace`, `div_inplace`, `rem_inplace` returning
+//    `FerrayResult<()>`. We cannot implement `std::ops::AddAssign<&Array>`
+//    because the trait signature returns `()`, leaving no channel for
+//    shape-mismatch errors — incompatible with ferray's zero-panic rule.
+//    Use the `*_inplace` methods instead of `arr += other`.
+//
+//    The RHS is broadcast to `self.shape()` (NumPy semantics for in-place
+//    arithmetic: the destination shape is fixed and the source must be
+//    broadcastable to it).
+// ---------------------------------------------------------------------------
+
+/// Implement a scalar `*Assign` operator trait using `mapv_inplace`.
+macro_rules! impl_scalar_op_assign {
+    ($trait:ident, $method:ident, $op:tt) => {
+        impl<T, D> std::ops::$trait<T> for Array<T, D>
+        where
+            T: Element + Copy + std::ops::$trait,
+            D: Dimension,
+        {
+            fn $method(&mut self, rhs: T) {
+                self.mapv_inplace(|mut x| {
+                    x $op rhs;
+                    x
+                });
+            }
+        }
+    };
+}
+
+impl_scalar_op_assign!(AddAssign, add_assign, +=);
+impl_scalar_op_assign!(SubAssign, sub_assign, -=);
+impl_scalar_op_assign!(MulAssign, mul_assign, *=);
+impl_scalar_op_assign!(DivAssign, div_assign, /=);
+impl_scalar_op_assign!(RemAssign, rem_assign, %=);
+
+/// Shared implementation for in-place array-array ops with broadcasting.
+///
+/// Fast path on identical shapes uses `zip_mut_with`. Otherwise the RHS is
+/// broadcast into `self.shape()` via [`broadcast_to`] and then zipped with
+/// `self.iter_mut()` in logical order.
+fn inplace_binary<T, D, F>(
+    lhs: &mut Array<T, D>,
+    rhs: &Array<T, D>,
+    op: F,
+    op_name: &str,
+) -> FerrayResult<()>
+where
+    T: Element + Copy,
+    D: Dimension,
+    F: Fn(T, T) -> T,
+{
+    // Fast path: identical shapes — delegate to zip_mut_with.
+    if lhs.shape() == rhs.shape() {
+        return lhs.zip_mut_with(rhs, |a, b| *a = op(*a, *b));
+    }
+
+    // Broadcasting path: rhs must broadcast into lhs.shape() (the destination
+    // shape is fixed for in-place operations). Any shape change on the LHS
+    // would require a reallocation, defeating the purpose of `*_inplace`.
+    let target_shape: Vec<usize> = lhs.shape().to_vec();
+    let rhs_view = broadcast_to(rhs, &target_shape).map_err(|_| {
+        FerrayError::shape_mismatch(format!(
+            "{}: shape {:?} cannot be broadcast into destination shape {:?}",
+            op_name,
+            rhs.shape(),
+            target_shape
+        ))
+    })?;
+
+    for (a, b) in lhs.iter_mut().zip(rhs_view.iter()) {
+        *a = op(*a, *b);
+    }
+    Ok(())
+}
+
+impl<T, D> Array<T, D>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    /// In-place elementwise add: `self[i] += other[i]`. `other` is broadcast
+    /// into `self.shape()`; the destination shape never changes.
+    ///
+    /// Prefer this over `self = (&self + &other)?` for large arrays — it
+    /// avoids allocating a new result buffer.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::ShapeMismatch` if `other.shape()` cannot be
+    /// broadcast into `self.shape()`.
+    pub fn add_inplace(&mut self, other: &Array<T, D>) -> FerrayResult<()>
+    where
+        T: std::ops::Add<Output = T>,
+    {
+        inplace_binary(self, other, |a, b| a + b, "add_inplace")
+    }
+
+    /// In-place elementwise subtract. See [`Array::add_inplace`].
+    pub fn sub_inplace(&mut self, other: &Array<T, D>) -> FerrayResult<()>
+    where
+        T: std::ops::Sub<Output = T>,
+    {
+        inplace_binary(self, other, |a, b| a - b, "sub_inplace")
+    }
+
+    /// In-place elementwise multiply. See [`Array::add_inplace`].
+    pub fn mul_inplace(&mut self, other: &Array<T, D>) -> FerrayResult<()>
+    where
+        T: std::ops::Mul<Output = T>,
+    {
+        inplace_binary(self, other, |a, b| a * b, "mul_inplace")
+    }
+
+    /// In-place elementwise divide. See [`Array::add_inplace`].
+    pub fn div_inplace(&mut self, other: &Array<T, D>) -> FerrayResult<()>
+    where
+        T: std::ops::Div<Output = T>,
+    {
+        inplace_binary(self, other, |a, b| a / b, "div_inplace")
+    }
+
+    /// In-place elementwise remainder. See [`Array::add_inplace`].
+    pub fn rem_inplace(&mut self, other: &Array<T, D>) -> FerrayResult<()>
+    where
+        T: std::ops::Rem<Output = T>,
+    {
+        inplace_binary(self, other, |a, b| a % b, "rem_inplace")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -660,5 +799,123 @@ mod tests {
         let result = a.rem_broadcast(&b).unwrap();
         assert_eq!(result.shape(), &[2, 3]);
         assert_eq!(result.as_slice().unwrap(), &[10 % 3, 20 % 7, 30 % 11, 40 % 3, 50 % 7, 60 % 11]);
+    }
+
+    // ------------------------------------------------------------------
+    // #348: in-place operators
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn scalar_add_assign_mutates_in_place() {
+        let mut a = arr(vec![1.0, 2.0, 3.0]);
+        a += 10.0;
+        assert_eq!(a.as_slice().unwrap(), &[11.0, 12.0, 13.0]);
+    }
+
+    #[test]
+    fn scalar_sub_mul_div_rem_assign() {
+        let mut a = arr(vec![10.0, 20.0, 30.0]);
+        a -= 1.0;
+        assert_eq!(a.as_slice().unwrap(), &[9.0, 19.0, 29.0]);
+        a *= 2.0;
+        assert_eq!(a.as_slice().unwrap(), &[18.0, 38.0, 58.0]);
+        a /= 2.0;
+        assert_eq!(a.as_slice().unwrap(), &[9.0, 19.0, 29.0]);
+        let mut b = arr_i32(vec![10, 11, 12]);
+        b %= 3;
+        assert_eq!(b.as_slice().unwrap(), &[1, 2, 0]);
+    }
+
+    #[test]
+    fn scalar_assign_preserves_shape_ix2() {
+        let mut a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
+        a += 1.0;
+        assert_eq!(a.shape(), &[2, 3]);
+        assert_eq!(a.as_slice().unwrap(), &[2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
+    }
+
+    #[test]
+    fn add_inplace_same_shape_fast_path() {
+        let mut a = arr(vec![1.0, 2.0, 3.0]);
+        let b = arr(vec![10.0, 20.0, 30.0]);
+        a.add_inplace(&b).unwrap();
+        assert_eq!(a.as_slice().unwrap(), &[11.0, 22.0, 33.0]);
+    }
+
+    #[test]
+    fn sub_mul_div_rem_inplace_same_shape() {
+        let mut a = arr(vec![10.0, 20.0, 30.0]);
+        let b = arr(vec![1.0, 2.0, 3.0]);
+        a.sub_inplace(&b).unwrap();
+        assert_eq!(a.as_slice().unwrap(), &[9.0, 18.0, 27.0]);
+        a.mul_inplace(&b).unwrap();
+        assert_eq!(a.as_slice().unwrap(), &[9.0, 36.0, 81.0]);
+        a.div_inplace(&b).unwrap();
+        assert_eq!(a.as_slice().unwrap(), &[9.0, 18.0, 27.0]);
+        let mut c = arr_i32(vec![10, 20, 30]);
+        let d = arr_i32(vec![3, 7, 11]);
+        c.rem_inplace(&d).unwrap();
+        assert_eq!(c.as_slice().unwrap(), &[1, 6, 8]);
+    }
+
+    #[test]
+    fn add_inplace_broadcasts_rhs_into_lhs_shape() {
+        // (2, 3) += (1, 3) — RHS row broadcast across LHS rows.
+        let mut a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
+        let b =
+            Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![10.0, 20.0, 30.0]).unwrap();
+        a.add_inplace(&b).unwrap();
+        assert_eq!(a.shape(), &[2, 3]);
+        assert_eq!(a.as_slice().unwrap(), &[11.0, 22.0, 33.0, 14.0, 25.0, 36.0]);
+    }
+
+    #[test]
+    fn add_inplace_broadcasts_column_into_rows() {
+        // (2, 3) += (2, 1) — RHS column broadcast across LHS columns.
+        let mut a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![100.0, 200.0]).unwrap();
+        a.add_inplace(&b).unwrap();
+        assert_eq!(a.as_slice().unwrap(), &[101.0, 102.0, 103.0, 204.0, 205.0, 206.0]);
+    }
+
+    #[test]
+    fn add_inplace_rejects_incompatible_rhs() {
+        // (3,) += (4,) — not broadcast-compatible; error must be Err, not panic.
+        let mut a = arr(vec![1.0, 2.0, 3.0]);
+        let b = arr(vec![1.0, 2.0, 3.0, 4.0]);
+        assert!(a.add_inplace(&b).is_err());
+        // LHS must be untouched on error.
+        assert_eq!(a.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn add_inplace_rejects_growing_shape() {
+        // (1, 3) += (2, 3) — RHS bigger than LHS; the destination shape is
+        // fixed for in-place operations, so this must error.
+        let mut a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let b =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![10.0; 6]).unwrap();
+        assert!(a.add_inplace(&b).is_err());
+        assert_eq!(a.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn div_inplace_by_zero_yields_ieee_sentinels() {
+        // Pin current semantics: division-by-zero in-place produces IEEE
+        // inf/NaN at the offending positions and does NOT error.
+        let mut a = arr(vec![1.0, 2.0, 0.0]);
+        let b = arr(vec![2.0, 0.0, 0.0]);
+        a.div_inplace(&b).unwrap();
+        let s = a.as_slice().unwrap();
+        assert_eq!(s[0], 0.5);
+        assert!(s[1].is_infinite() && s[1].is_sign_positive());
+        assert!(s[2].is_nan());
     }
 }
