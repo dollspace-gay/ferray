@@ -3,11 +3,12 @@
   "display_id": 193,
   "title": "ferray-linalg: broad clippy allows in lib.rs",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nL9-15: crate-wide allow(missing_docs) and allow(if_same_then_else). Narrow to specific items.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:43:38.393825903Z",
-  "updated_at": "2026-03-25T15:43:43.995992980Z",
+  "updated_at": "2026-04-08T05:03:06.654502008Z",
+  "closed_at": "2026-04-08T05:03:06.654502008Z",
   "labels": [
     "refactor",
     "qa-audit"
