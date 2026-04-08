@@ -6,7 +6,9 @@
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::dtype::Element;
-use ferray_core::error::{FerrayError, FerrayResult};
+use ferray_core::error::FerrayResult;
+
+use crate::axes::{compute_strides, resolve_axes};
 
 /// Shift the zero-frequency component to the center of the spectrum.
 ///
@@ -69,20 +71,6 @@ pub fn ifftshift<T: Element, D: Dimension>(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-fn resolve_axes(ndim: usize, axes: Option<&[usize]>) -> FerrayResult<Vec<usize>> {
-    match axes {
-        Some(ax) => {
-            for &a in ax {
-                if a >= ndim {
-                    return Err(FerrayError::axis_out_of_bounds(a, ndim));
-                }
-            }
-            Ok(ax.to_vec())
-        }
-        None => Ok((0..ndim).collect()),
-    }
-}
-
 /// Roll an array along the specified axes by the given shift amounts.
 ///
 /// This implements circular shifting (like `numpy.roll`) along multiple
@@ -101,7 +89,10 @@ fn roll_along_axes<T: Element, D: Dimension>(
         return Array::from_vec(IxDyn::new(shape), data);
     }
 
-    let strides = compute_strides(shape);
+    // `compute_strides` returns signed strides (matching the lane machinery
+    // in nd.rs); the roll loop below only uses them as non-negative
+    // row-major strides, so cast once up front.
+    let strides: Vec<usize> = compute_strides(shape).iter().map(|&s| s as usize).collect();
 
     // Build a shift lookup: for each dimension, the shift amount (mod axis_len)
     let mut axis_shifts = vec![0isize; ndim];
@@ -133,19 +124,6 @@ fn roll_along_axes<T: Element, D: Dimension>(
     }
 
     Array::from_vec(IxDyn::new(shape), output)
-}
-
-fn compute_strides(shape: &[usize]) -> Vec<usize> {
-    let ndim = shape.len();
-    let mut strides = vec![0usize; ndim];
-    if ndim == 0 {
-        return strides;
-    }
-    strides[ndim - 1] = 1;
-    for i in (0..ndim - 1).rev() {
-        strides[i] = strides[i + 1] * shape[i + 1];
-    }
-    strides
 }
 
 #[cfg(test)]

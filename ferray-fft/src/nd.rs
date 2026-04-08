@@ -11,6 +11,7 @@ use rayon::prelude::*;
 
 use ferray_core::error::{FerrayError, FerrayResult};
 
+use crate::axes::compute_strides;
 use crate::float::FftFloat;
 use crate::norm::FftNorm;
 
@@ -143,9 +144,8 @@ where
             &new_shape,
             &new_strides,
             axis,
-            &lane_starts[lane_idx],
+            lane_starts[lane_idx],
             &strides,
-            shape,
         );
 
         for (i, &val) in lane_chunk.iter().enumerate() {
@@ -222,22 +222,6 @@ where
     }
 
     Ok((current_shape, current_data))
-}
-
-/// Simpler entry point: FFT along a single axis using raw execute_fft_1d.
-/// Used by the 1-D fft/ifft functions that don't need multi-axis iteration.
-pub(crate) fn fft_1d_along_axis<T: FftFloat>(
-    data: &[Complex<T>],
-    shape: &[usize],
-    axis: usize,
-    n: Option<usize>,
-    inverse: bool,
-    norm: FftNorm,
-) -> FerrayResult<(Vec<usize>, Vec<Complex<T>>)>
-where
-    Complex<T>: ferray_core::Element,
-{
-    fft_along_axis(data, shape, axis, n, inverse, norm)
 }
 
 // ---------------------------------------------------------------------------
@@ -369,9 +353,8 @@ where
             &new_shape,
             &new_strides,
             axis,
-            &lane_starts[lane_idx],
+            lane_starts[lane_idx],
             &strides,
-            shape,
         );
         for (i, &val) in lane_chunk.iter().enumerate() {
             output[out_start + i * out_stride] = val;
@@ -498,9 +481,8 @@ where
             &new_shape,
             &new_strides,
             axis,
-            &lane_starts[lane_idx],
+            lane_starts[lane_idx],
             &strides,
-            shape,
         );
         for (i, &val) in lane_chunk.iter().enumerate() {
             output[out_start + i * out_stride] = val;
@@ -513,20 +495,6 @@ where
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/// Compute row-major strides for a given shape.
-fn compute_strides(shape: &[usize]) -> Vec<isize> {
-    let ndim = shape.len();
-    let mut strides = vec![0isize; ndim];
-    if ndim == 0 {
-        return strides;
-    }
-    strides[ndim - 1] = 1;
-    for i in (0..ndim - 1).rev() {
-        strides[i] = strides[i + 1] * shape[i + 1] as isize;
-    }
-    strides
-}
 
 /// Compute the flat offset for each lane's starting position.
 ///
@@ -573,18 +541,19 @@ fn compute_lane_starts(
 ///
 /// When the axis size changes (due to zero-padding/truncation), the strides
 /// change, so we need to recompute the flat offset in the output array.
+/// The input shape is not needed because it's already encoded in
+/// `input_strides`.
 fn compute_lane_output_start(
     new_shape: &[usize],
     new_strides: &[isize],
     axis: usize,
-    input_start: &usize,
+    input_start: usize,
     input_strides: &[isize],
-    input_shape: &[usize],
 ) -> usize {
     let ndim = new_shape.len();
 
     // Recover the multi-index from the input start offset
-    let mut remaining = *input_start as isize;
+    let mut remaining = input_start as isize;
     let mut multi_idx = vec![0usize; ndim];
     for d in 0..ndim {
         if d == axis {
@@ -604,29 +573,12 @@ fn compute_lane_output_start(
         }
         offset += multi_idx[d] * new_strides[d] as usize;
     }
-
-    let _ = input_shape; // used implicitly via strides
     offset
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn strides_1d() {
-        assert_eq!(compute_strides(&[8]), vec![1]);
-    }
-
-    #[test]
-    fn strides_2d() {
-        assert_eq!(compute_strides(&[3, 4]), vec![4, 1]);
-    }
-
-    #[test]
-    fn strides_3d() {
-        assert_eq!(compute_strides(&[2, 3, 4]), vec![12, 4, 1]);
-    }
 
     #[test]
     fn fft_1d_simple() {

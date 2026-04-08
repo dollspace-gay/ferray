@@ -15,6 +15,7 @@ use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 
+use crate::axes::resolve_axis;
 use crate::float::FftFloat;
 use crate::norm::FftNorm;
 
@@ -127,26 +128,6 @@ where
     Array::from_vec(IxDyn::new(&out_shape), conj_data)
 }
 
-fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrayResult<usize> {
-    match axis {
-        Some(ax) => {
-            if ax >= ndim {
-                Err(FerrayError::axis_out_of_bounds(ax, ndim))
-            } else {
-                Ok(ax)
-            }
-        }
-        None => {
-            if ndim == 0 {
-                Err(FerrayError::invalid_value(
-                    "cannot compute FFT on a 0-dimensional array",
-                ))
-            } else {
-                Ok(ndim - 1)
-            }
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {

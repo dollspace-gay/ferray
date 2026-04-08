@@ -16,48 +16,10 @@ use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 
+use crate::axes::{resolve_axes, resolve_axis};
 use crate::float::FftFloat;
 use crate::nd::{fft_along_axis, irfft_along_axis, rfft_along_axis};
 use crate::norm::FftNorm;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrayResult<usize> {
-    match axis {
-        Some(ax) => {
-            if ax >= ndim {
-                Err(FerrayError::axis_out_of_bounds(ax, ndim))
-            } else {
-                Ok(ax)
-            }
-        }
-        None => {
-            if ndim == 0 {
-                Err(FerrayError::invalid_value(
-                    "cannot compute FFT on a 0-dimensional array",
-                ))
-            } else {
-                Ok(ndim - 1)
-            }
-        }
-    }
-}
-
-fn resolve_axes(ndim: usize, axes: Option<&[usize]>) -> FerrayResult<Vec<usize>> {
-    match axes {
-        Some(ax) => {
-            for &a in ax {
-                if a >= ndim {
-                    return Err(FerrayError::axis_out_of_bounds(a, ndim));
-                }
-            }
-            Ok(ax.to_vec())
-        }
-        None => Ok((0..ndim).collect()),
-    }
-}
 
 // ---------------------------------------------------------------------------
 // 1-D real FFT (REQ-5)

@@ -9,8 +9,9 @@ use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::error::{FerrayError, FerrayResult};
 
+use crate::axes::{resolve_axes, resolve_axis};
 use crate::float::FftFloat;
-use crate::nd::{fft_1d_along_axis, fft_along_axes};
+use crate::nd::{fft_along_axis, fft_along_axes};
 use crate::norm::FftNorm;
 
 // ---------------------------------------------------------------------------
@@ -50,43 +51,6 @@ where
         ComplexData::Borrowed(s)
     } else {
         ComplexData::Owned(a.iter().copied().collect())
-    }
-}
-
-/// Resolve an axis parameter: if None, use the last axis.
-fn resolve_axis(ndim: usize, axis: Option<usize>) -> FerrayResult<usize> {
-    match axis {
-        Some(ax) => {
-            if ax >= ndim {
-                Err(FerrayError::axis_out_of_bounds(ax, ndim))
-            } else {
-                Ok(ax)
-            }
-        }
-        None => {
-            if ndim == 0 {
-                Err(FerrayError::invalid_value(
-                    "cannot compute FFT on a 0-dimensional array",
-                ))
-            } else {
-                Ok(ndim - 1)
-            }
-        }
-    }
-}
-
-/// Resolve axes for multi-dimensional FFT. If None, use all axes.
-fn resolve_axes(ndim: usize, axes: Option<&[usize]>) -> FerrayResult<Vec<usize>> {
-    match axes {
-        Some(ax) => {
-            for &a in ax {
-                if a >= ndim {
-                    return Err(FerrayError::axis_out_of_bounds(a, ndim));
-                }
-            }
-            Ok(ax.to_vec())
-        }
-        None => Ok((0..ndim).collect()),
     }
 }
 
@@ -143,7 +107,7 @@ where
     let ax = resolve_axis(ndim, axis)?;
     let data = borrow_complex_flat(a);
 
-    let (new_shape, result) = fft_1d_along_axis::<T>(&data, &shape, ax, n, false, norm)?;
+    let (new_shape, result) = fft_along_axis::<T>(&data, &shape, ax, n, false, norm)?;
 
     Array::from_vec(IxDyn::new(&new_shape), result)
 }
@@ -174,7 +138,7 @@ where
     let ax = resolve_axis(ndim, axis)?;
     let data = borrow_complex_flat(a);
 
-    let (new_shape, result) = fft_1d_along_axis::<T>(&data, &shape, ax, n, true, norm)?;
+    let (new_shape, result) = fft_along_axis::<T>(&data, &shape, ax, n, true, norm)?;
 
     Array::from_vec(IxDyn::new(&new_shape), result)
 }

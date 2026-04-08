@@ -37,6 +37,7 @@
 //! and [`realfft`](https://crates.io/crates/realfft) with automatic plan
 //! caching for repeated transforms of the same size.
 
+mod axes;
 pub mod complex;
 pub mod float;
 pub mod freq;
