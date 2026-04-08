@@ -11,6 +11,7 @@ use std::path::Path;
 use memmap2::{Mmap, MmapMut, MmapOptions};
 
 use ferray_core::Array;
+use ferray_core::array::view::ArrayView;
 use ferray_core::dimension::IxDyn;
 use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
@@ -60,6 +61,24 @@ impl<T: Element> MemmapArray<T> {
         let data = self.as_slice().to_vec();
         Array::from_vec(IxDyn::new(&self.shape), data)
     }
+
+    /// Borrow the memory-mapped data as an `ArrayView<T, IxDyn>` so it
+    /// can be passed directly to ferray functions that expect an
+    /// `&Array<_>` or `ArrayView<_>` (#496). The view is C-contiguous
+    /// row-major and lives as long as the underlying mmap.
+    pub fn view(&self) -> ArrayView<'_, T, IxDyn> {
+        // Row-major strides for the shape: stride[i] = product(shape[i+1..]).
+        let ndim = self.shape.len();
+        let mut strides = vec![1usize; ndim];
+        for i in (0..ndim.saturating_sub(1)).rev() {
+            strides[i] = strides[i + 1] * self.shape[i + 1];
+        }
+        // SAFETY: `data_ptr` is valid for reads of `len * size_of::<T>()`
+        // bytes for the lifetime of `self._mmap`, which transitively
+        // outlives the borrow `&self`. Strides describe the same
+        // C-contiguous layout the data was written in.
+        unsafe { ArrayView::from_shape_ptr(self.data_ptr, &self.shape, &strides) }
+    }
 }
 
 /// A read-write memory-mapped array backed by a `.npy` file.
@@ -104,6 +123,22 @@ impl<T: Element> MemmapArrayMut<T> {
     pub fn to_array(&self) -> FerrayResult<Array<T, IxDyn>> {
         let data = self.as_slice().to_vec();
         Array::from_vec(IxDyn::new(&self.shape), data)
+    }
+
+    /// Borrow the memory-mapped data as an immutable
+    /// `ArrayView<T, IxDyn>`. See [`MemmapArray::view`] for the
+    /// rationale (#496).
+    pub fn view(&self) -> ArrayView<'_, T, IxDyn> {
+        let ndim = self.shape.len();
+        let mut strides = vec![1usize; ndim];
+        for i in (0..ndim.saturating_sub(1)).rev() {
+            strides[i] = strides[i + 1] * self.shape[i + 1];
+        }
+        // SAFETY: same invariants as MemmapArray::view; the *mut T is
+        // immediately demoted to *const T.
+        unsafe {
+            ArrayView::from_shape_ptr(self.data_ptr as *const T, &self.shape, &strides)
+        }
     }
 
     /// Flush changes to disk (only meaningful for ReadWrite mode).
@@ -403,6 +438,30 @@ mod tests {
         let loaded = open_memmap::<f64, _>(&path, MemmapMode::ReadOnly).unwrap();
         assert_eq!(loaded.shape(), &[3]);
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn memmap_view_borrows_underlying_data() {
+        // Issue #496: memmap arrays should expose an ArrayView so they
+        // can be passed to ferray functions that take `&Array` /
+        // `ArrayView` without an intermediate copy.
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let arr =
+            Array::<f64, ferray_core::dimension::Ix2>::from_vec(
+                ferray_core::dimension::Ix2::new([2, 3]),
+                data.clone(),
+            )
+            .unwrap();
+
+        let path = test_file("mm_view.npy");
+        npy::save(&path, &arr).unwrap();
+
+        let mapped = memmap_readonly::<f64, _>(&path).unwrap();
+        let view = mapped.view();
+        assert_eq!(view.shape(), &[2, 3]);
+        let collected: Vec<f64> = view.iter().copied().collect();
+        assert_eq!(collected, data);
         let _ = std::fs::remove_file(&path);
     }
 }
