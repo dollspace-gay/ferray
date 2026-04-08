@@ -213,7 +213,7 @@ mod tests {
         };
     }
 
-    test_roundtrip!(roundtrip_f64, f64, vec![1.0, 2.5, -3.14, 0.0, f64::MAX]);
+    test_roundtrip!(roundtrip_f64, f64, vec![1.0, 2.5, -4.75, 0.0, f64::MAX]);
     test_roundtrip!(roundtrip_f32, f32, vec![1.0f32, -2.5, 0.0, f32::MIN]);
     test_roundtrip!(roundtrip_i32, i32, vec![0, 1, -1, i32::MAX, i32::MIN]);
     test_roundtrip!(roundtrip_i64, i64, vec![0i64, 42, -99]);

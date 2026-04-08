@@ -209,7 +209,7 @@ mod tests {
         };
     }
 
-    test_roundtrip!(roundtrip_f64, f64, vec![1.0, 2.5, -3.14, 0.0]);
+    test_roundtrip!(roundtrip_f64, f64, vec![1.0, 2.5, -4.75, 0.0]);
     test_roundtrip!(roundtrip_f32, f32, vec![1.0f32, -2.5, 0.0]);
     test_roundtrip!(roundtrip_i32, i32, vec![0, 1, -1, i32::MAX, i32::MIN]);
     test_roundtrip!(roundtrip_i64, i64, vec![0i64, 42, -99]);
@@ -289,11 +289,17 @@ mod tests {
 
     #[test]
     fn bit_identical_f64_roundtrip() {
+        // AC (#198): Polars roundtrip must be bit-identical for every
+        // f64 corner case that the Arrow roundtrip already covers, incl.
+        // NaN. Previously `f64::NAN` was omitted here, hiding the fact
+        // that bit-preservation through Polars was never verified for
+        // non-finite values. Matches arrow_conv::tests::bit_identical_roundtrip.
         let original: Vec<f64> = vec![
             1.0,
             -0.0,
             f64::INFINITY,
             f64::NEG_INFINITY,
+            f64::NAN,
             1.23456789012345e-300,
             9.87654321098765e+300,
         ];
@@ -310,5 +316,20 @@ mod tests {
                 "bit mismatch at index {i}: {a} vs {b}"
             );
         }
+    }
+
+    #[test]
+    fn nan_f64_roundtrip_preserves_nan_ness() {
+        // Weaker but more portable check: Polars may canonicalize the
+        // exact NaN payload on roundtrip, which is allowed by IEEE 754.
+        // At minimum the result must still test is_nan().
+        let original: Vec<f64> = vec![f64::NAN, 1.0, f64::NAN];
+        let arr = Array1::<f64>::from_vec(Ix1::new([3]), original).unwrap();
+        let series = arr.to_polars_series("nans").unwrap();
+        let back: Array1<f64> = series.into_ferray().unwrap();
+        let back_slice = back.as_slice().unwrap();
+        assert!(back_slice[0].is_nan(), "index 0 should still be NaN");
+        assert_eq!(back_slice[1], 1.0);
+        assert!(back_slice[2].is_nan(), "index 2 should still be NaN");
     }
 }

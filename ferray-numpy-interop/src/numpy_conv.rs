@@ -1,17 +1,23 @@
 //! PyO3 NumPy <-> ferray array conversions (feature-gated behind `"python"`).
 //!
-//! Provides [`AsFerray`] and [`IntoNumPy`] traits for zero-copy conversion
-//! between PyO3 NumPy arrays and ferray arrays.
+//! Provides [`AsFerray`] and [`IntoNumPy`] traits for converting between
+//! PyO3 NumPy arrays and ferray arrays.
 //!
-//! # Zero-copy semantics
+//! # Memory semantics
 //!
-//! - **NumPy -> ferray**: [`AsFerray::as_ferray`] borrows from the NumPy array
-//!   (returning an [`ArrayView`]) when the array is C-contiguous. If the array
-//!   is not C-contiguous, a copy is made and an owned [`Array`] is returned
-//!   inside a view.
+//! Both directions **copy** the data buffer. The previous docstring
+//! claimed zero-copy borrows, but the implementation iterates and
+//! clones (`py_arr.iter().cloned().collect()` on the way in,
+//! `to_vec_flat()` + `PyArray1::from_vec` on the way out). True
+//! zero-copy would require sharing the raw buffer with the Python GC
+//! via a pinned refcount handshake — a larger design change that is
+//! tracked as a follow-up.
 //!
-//! - **ferray -> NumPy**: [`IntoNumPy::into_pyarray`] transfers ownership of
-//!   the data buffer to Python, producing a [`PyArray`] that Python's GC owns.
+//! - **NumPy -> ferray**: [`AsFerray::as_ferray`] allocates a fresh
+//!   ferray [`Array`] and copies each element from the NumPy array.
+//! - **ferray -> NumPy**: [`IntoNumPy::into_pyarray`] allocates a new
+//!   Python-owned [`PyArray`] and copies the flattened ferray buffer
+//!   into it.
 
 use numpy::Element as NumpyElement;
 use numpy::PyArrayMethods;
@@ -32,10 +38,10 @@ use ferray_core::{Array, Element, FerrayError};
 /// NumPy element type.
 ///
 /// Implemented for all numeric types that both ferray and NumPy support:
-/// `f32`, `f64`, `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`.
+/// `bool`, `f32`, `f64`, `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`.
 ///
-/// `bool` and complex types require special handling and are not covered
-/// by this trait.
+/// Complex types require special handling and are not covered by this
+/// trait — use [`crate::arrow_conv`] for those.
 pub trait NpElement: Element + NumpyElement {}
 
 macro_rules! impl_np_element {
@@ -44,17 +50,16 @@ macro_rules! impl_np_element {
     };
 }
 
-impl_np_element!(f32, f64, i8, i16, i32, i64, u8, u16, u32, u64);
+impl_np_element!(bool, f32, f64, i8, i16, i32, i64, u8, u16, u32, u64);
 
 // ---------------------------------------------------------------------------
 // NumPy -> ferray  (REQ-1)
 // ---------------------------------------------------------------------------
 
-/// Extension trait for zero-copy conversion from a NumPy readonly array
-/// to a ferray array view.
+/// Extension trait for converting a NumPy readonly array into a ferray
+/// array. The data is copied (see the module docstring for why).
 pub trait AsFerray<T: Element, D: ferray_core::Dimension> {
-    /// Zero-copy borrow as a ferray [`ArrayView`] if C-contiguous,
-    /// otherwise copy into an owned ferray [`Array`].
+    /// Copy the NumPy array's contents into a fresh ferray [`Array`].
     ///
     /// # Errors
     ///
@@ -100,18 +105,21 @@ impl<T: NpElement> AsFerray<T, IxDyn> for PyReadonlyArrayDyn<'_, T> {
 
 /// Extension trait for converting an owned ferray array to a NumPy array.
 ///
-/// Data ownership is transferred to Python (zero-copy).
+/// The data is copied into a fresh Python-owned `PyArray` (see the module
+/// docstring for why this is not yet zero-copy).
 pub trait IntoNumPy<T: Element, D: ferray_core::Dimension> {
     /// The PyO3 NumPy array type produced.
     type PyArrayType;
 
-    /// Transfer ownership of this ferray array to Python, producing a
-    /// NumPy array.
+    /// Copy this ferray array's contents into a new Python-owned NumPy
+    /// array. The input array's buffer is flattened, the resulting Vec
+    /// is handed to `PyArray::from_vec`, and the result is reshaped.
     ///
     /// # Errors
     ///
     /// Returns [`FerrayError::InvalidDtype`] if the element type has no
-    /// NumPy equivalent.
+    /// NumPy equivalent, or [`FerrayError::ShapeMismatch`] if the
+    /// reshape step fails.
     fn into_pyarray<'py>(
         self,
         py: Python<'py>,
@@ -193,12 +201,31 @@ mod tests {
         };
     }
 
-    test_roundtrip_1d!(roundtrip_f64, f64, vec![1.0, 2.5, -3.14, 0.0]);
+    test_roundtrip_1d!(roundtrip_f64, f64, vec![1.0, 2.5, -4.75, 0.0]);
     test_roundtrip_1d!(roundtrip_f32, f32, vec![1.0f32, -2.5, 0.0]);
     test_roundtrip_1d!(roundtrip_i32, i32, vec![0, 1, -1, i32::MAX, i32::MIN]);
     test_roundtrip_1d!(roundtrip_i64, i64, vec![0i64, 42, -99]);
     test_roundtrip_1d!(roundtrip_u8, u8, vec![0u8, 128, 255]);
     test_roundtrip_1d!(roundtrip_u32, u32, vec![0u32, 1, u32::MAX]);
+    // #196: bool round-trip — previously NpElement excluded bool even
+    // though numpy::Element implements it, so any Array<bool> → NumPy
+    // path was a type error.
+    test_roundtrip_1d!(roundtrip_bool, bool, vec![true, false, true, true, false]);
+
+    #[test]
+    fn roundtrip_2d_bool() {
+        with_python(|py| {
+            let data = vec![true, false, true, false, true, false];
+            let arr = Array2::<bool>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
+            let py_arr = arr.into_pyarray(py).unwrap();
+            assert_eq!(py_arr.shape(), [2, 3]);
+
+            let readonly = py_arr.readonly();
+            let back: Array2<bool> = readonly.as_ferray().unwrap();
+            assert_eq!(back.shape(), &[2, 3]);
+            assert_eq!(back.to_vec_flat(), data);
+        });
+    }
 
     #[test]
     fn roundtrip_2d_f64() {
