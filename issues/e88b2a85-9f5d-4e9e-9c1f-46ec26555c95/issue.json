@@ -3,11 +3,12 @@
   "display_id": 336,
   "title": "ferray umbrella: prelude missing AsType/CastKind from core",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nType casting is common. Should be in prelude.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:09:44.617426888Z",
-  "updated_at": "2026-03-25T16:09:52.567539252Z",
+  "updated_at": "2026-04-08T15:42:11.613290302Z",
+  "closed_at": "2026-04-08T15:42:11.613290302Z",
   "labels": [
     "refactor",
     "qa-audit"
