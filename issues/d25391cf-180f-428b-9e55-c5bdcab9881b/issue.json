@@ -3,11 +3,12 @@
   "display_id": 121,
   "title": "ferray-core: duplicated normalize_index in 3 indexing submodules",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nbasic.rs L21, advanced.rs L220, extended.rs L18: identical function 3 times.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:31:17.266419480Z",
-  "updated_at": "2026-03-25T15:31:42.551627698Z",
+  "updated_at": "2026-04-08T04:36:20.530384154Z",
+  "closed_at": "2026-04-08T04:36:20.530384154Z",
   "labels": [
     "refactor",
     "qa-audit"
