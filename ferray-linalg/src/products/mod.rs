@@ -454,20 +454,40 @@ fn matmul_batched<T: LinalgFloat>(
     let a_batch_size: usize = a_batch.iter().product::<usize>().max(1);
     let b_batch_size: usize = b_batch.iter().product::<usize>().max(1);
 
-    let mut result = vec![zero; batch_size * out_mat_size];
+    // Parallelize the batch loop with Rayon when the batch is large
+    // enough to amortize thread-spawn overhead. The previous version
+    // used a sequential for-loop regardless of batch size (#101).
+    use rayon::prelude::*;
 
-    for batch_idx in 0..batch_size {
-        let a_idx = batch_idx % a_batch_size;
-        let b_idx = batch_idx % b_batch_size;
-        let a_offset = a_idx * a_mat_size;
-        let b_offset = b_idx * b_mat_size;
-        let out_offset = batch_idx * out_mat_size;
-
-        let a_slice = &a_data[a_offset..a_offset + a_mat_size];
-        let b_slice = &b_data[b_offset..b_offset + b_mat_size];
-        let c = matmul_raw::<T>(a_slice, b_slice, a_m, a_k, b_n);
-        result[out_offset..out_offset + out_mat_size].copy_from_slice(&c);
-    }
+    let result: Vec<T> = if batch_size >= 4 {
+        let chunks: Vec<Vec<T>> = (0..batch_size)
+            .into_par_iter()
+            .map(|batch_idx| {
+                let a_idx = batch_idx % a_batch_size;
+                let b_idx = batch_idx % b_batch_size;
+                let a_offset = a_idx * a_mat_size;
+                let b_offset = b_idx * b_mat_size;
+                let a_slice = &a_data[a_offset..a_offset + a_mat_size];
+                let b_slice = &b_data[b_offset..b_offset + b_mat_size];
+                matmul_raw::<T>(a_slice, b_slice, a_m, a_k, b_n)
+            })
+            .collect();
+        chunks.into_iter().flatten().collect()
+    } else {
+        let mut buf = vec![zero; batch_size * out_mat_size];
+        for batch_idx in 0..batch_size {
+            let a_idx = batch_idx % a_batch_size;
+            let b_idx = batch_idx % b_batch_size;
+            let a_offset = a_idx * a_mat_size;
+            let b_offset = b_idx * b_mat_size;
+            let out_offset = batch_idx * out_mat_size;
+            let a_slice = &a_data[a_offset..a_offset + a_mat_size];
+            let b_slice = &b_data[b_offset..b_offset + b_mat_size];
+            let c = matmul_raw::<T>(a_slice, b_slice, a_m, a_k, b_n);
+            buf[out_offset..out_offset + out_mat_size].copy_from_slice(&c);
+        }
+        buf
+    };
 
     let mut out_shape: Vec<usize> = batch_shape;
     out_shape.push(a_m);
