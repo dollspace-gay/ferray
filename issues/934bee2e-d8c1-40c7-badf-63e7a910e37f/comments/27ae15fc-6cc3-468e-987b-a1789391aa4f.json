@@ -1,0 +1,10 @@
+{
+  "uuid": "27ae15fc-6cc3-468e-987b-a1789391aa4f",
+  "issue_uuid": "934bee2e-d8c1-40c7-badf-63e7a910e37f",
+  "author": "phase-4-coordinator",
+  "content": "Added trybuild-based compile-fail tests for all error paths in ferray-core-macros. New dev-dependency trybuild = 1.0. Tests live in ferray-core-macros/tests/compile_fail/ with a harness in tests/trybuild.rs.\\n\\n6 compile-fail fixtures cover:\\n- FerrayRecord without #[repr(C)] → 'FerrayRecord requires #[repr(C)] on the struct'\\n- FerrayRecord on an enum → 'FerrayRecord can only be derived for structs'\\n- FerrayRecord on a tuple struct → 'only supports structs with named fields'\\n- FerrayRecord on a unit struct → same diagnostic as tuple struct path\\n- promoted_type!(T) (wrong arg count) → 'expects exactly two type arguments'\\n- promoted_type!(Unknown, f64) → 'cannot promote types'\\n\\nEach fixture has a companion .stderr file that pins the exact compiler diagnostic, so message drift is surfaced in review. Regenerate via TRYBUILD=overwrite cargo test -p ferray-core-macros --test trybuild. Both trybuild test functions pass. Clippy clean.",
+  "created_at": "2026-04-08T00:50:27.861074333Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAtJtLzNr9bqdm2uHNzvbXqfgxX0fUZYbNRudUZ0IEN7FSNwqmSaJ2uPJph0mIoCN5I4j3H3MRzKRqqQd0ZCaIAg=="
+}
