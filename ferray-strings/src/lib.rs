@@ -41,7 +41,10 @@ pub use string_array::{StringArray, StringArray1, StringArray2, array};
 pub use align::{center, ljust, ljust_with, rjust, rjust_with, zfill};
 pub use case::{capitalize, lower, title, upper};
 pub use concat::{add, multiply};
-pub use regex_ops::{extract, match_};
+pub use regex_ops::{extract, extract_compiled, match_, match_compiled};
+// Re-export `regex::Regex` so callers of `match_compiled`/`extract_compiled`
+// don't have to add a direct `regex` dependency to construct one.
+pub use regex::Regex;
 pub use search::{count, endswith, find, replace, startswith};
 pub use split_join::{join, join_array, split};
 pub use strip::{lstrip, rstrip, strip};

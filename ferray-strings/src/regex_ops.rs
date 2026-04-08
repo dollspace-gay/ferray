@@ -14,13 +14,28 @@ use crate::string_array::{StringArray, StringArray1};
 /// Returns an `Array<bool, D>` preserving the input shape, where each element
 /// indicates whether the corresponding string contains a match for the pattern.
 ///
+/// Compiles the pattern once per call. Call sites that reuse the same
+/// pattern across many arrays should compile a `Regex` themselves and
+/// pass it to [`match_compiled`] to avoid repeated compilation
+/// (see issue #521).
+///
 /// # Errors
 /// Returns `FerrayError::InvalidValue` if the regex pattern is invalid.
 /// Returns an error if the internal array construction fails.
 pub fn match_<D: Dimension>(a: &StringArray<D>, pattern: &str) -> FerrayResult<Array<bool, D>> {
     let re = Regex::new(pattern)
         .map_err(|e| FerrayError::invalid_value(format!("invalid regex pattern: {e}")))?;
+    match_compiled(a, &re)
+}
 
+/// Like [`match_`] but takes a pre-compiled `Regex`. Callers that run
+/// the same pattern against many arrays can compile the pattern once
+/// and reuse it across all calls, avoiding the regex engine's
+/// per-call compilation overhead (#521).
+pub fn match_compiled<D: Dimension>(
+    a: &StringArray<D>,
+    re: &Regex,
+) -> FerrayResult<Array<bool, D>> {
     let data: Vec<bool> = a.map_to_vec(|s| re.is_match(s));
     Array::from_vec(a.dim().clone(), data)
 }
@@ -33,13 +48,23 @@ pub fn match_<D: Dimension>(a: &StringArray<D>, pattern: &str) -> FerrayResult<A
 ///
 /// The pattern must contain at least one capture group `(...)`.
 ///
+/// Compiles the pattern once per call. Use [`extract_compiled`] for a
+/// pre-compiled-regex entry point (#521).
+///
 /// # Errors
 /// Returns `FerrayError::InvalidValue` if the regex pattern is invalid.
 /// Returns an error if the internal array construction fails.
 pub fn extract<D: Dimension>(a: &StringArray<D>, pattern: &str) -> FerrayResult<StringArray1> {
     let re = Regex::new(pattern)
         .map_err(|e| FerrayError::invalid_value(format!("invalid regex pattern: {e}")))?;
+    extract_compiled(a, &re)
+}
 
+/// Like [`extract`] but takes a pre-compiled `Regex` (#521).
+pub fn extract_compiled<D: Dimension>(
+    a: &StringArray<D>,
+    re: &Regex,
+) -> FerrayResult<StringArray1> {
     let data: Vec<String> = a
         .iter()
         .map(|s| {
