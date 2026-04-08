@@ -1,0 +1,10 @@
+{
+  "uuid": "0f9e3764-9ca6-4ac0-8951-f944655a7cff",
+  "issue_uuid": "0255ff96-ad16-47ef-a40d-b449403100e9",
+  "author": "phase-4-coordinator",
+  "content": "Resolved. Split ferray-autodiff/src/lib.rs (was 2291 lines) into five focused modules plus a dedicated tests file, matching the layout proposed in the issue:\\n\\n  lib.rs          53 lines — module declarations, crate-level docs, public re-exports\\n  dual.rs        252 lines — DualNumber struct, constructors, Display, arithmetic ops (dual-dual and dual-scalar), PartialOrd\\n  functions.rs   529 lines — 30+ differentiable methods on DualNumber + 16 flat free-function mirrors (sin/cos/exp/...)\\n  num_impls.rs   420 lines — all num_traits impls: Zero, One, ToPrimitive, FromPrimitive, NumCast, Num, and the big Float trait (just glue)\\n  api.rs         122 lines — derivative, gradient, slice-based jacobian convenience API\\n  array_ops.rs   430 lines — Array-aware forward-mode AD (landed earlier for #534)\\n  tests.rs       967 lines — all three pre-existing test modules (unit/finite_difference/proptests), renamed to avoid module_inception\\n\\nNo file over 1000 lines. Public API is unchanged — lib.rs does pub use to re-export everything that used to live at the crate root, so existing callers (including the tests, ferray-core, and downstream crates) don't need any changes. Tests were moved verbatim with s/use super::*/use crate::*/ and needed num_traits imports added back for the unit test module.\\n\\n112 lib tests + 15 integration tests + 9 doctests all pass — same counts as before the split. Clippy clean. Full workspace builds.",
+  "created_at": "2026-04-08T01:55:44.841822101Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA6MMp1F35vW/TTwPwyq5jee3WGYWZiWaR7kZtCGoH+Mj3av5hgL90OxDz+EEM6Up46BkJmrKGtQBVoatOQ0q8Dg=="
+}
