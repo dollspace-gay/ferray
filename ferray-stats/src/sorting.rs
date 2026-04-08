@@ -259,6 +259,67 @@ where
 }
 
 // ---------------------------------------------------------------------------
+// lexsort
+// ---------------------------------------------------------------------------
+
+/// Indirect stable sort using a sequence of keys.
+///
+/// `keys` is a list of 1-D arrays of the same length. The **last** key
+/// in the list is the primary sort key (matching NumPy's
+/// `numpy.lexsort` convention); ties are broken by the second-to-last
+/// key, then the third-to-last, and so on. Returns a permutation
+/// `idx` such that `keys[-1][idx]` is non-decreasing.
+///
+/// Implementation notes: the underlying sort is `sort_by` (stable),
+/// applied once with a comparator that walks the keys from primary
+/// (last) to secondary (earlier). This avoids the multi-pass stable
+/// sort that NumPy historically used.
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if `keys` is empty or the keys have
+///   different lengths.
+pub fn lexsort<T>(keys: &[&Array<T, Ix1>]) -> FerrayResult<Array<u64, Ix1>>
+where
+    T: Element + PartialOrd + Copy,
+{
+    if keys.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "lexsort: keys must contain at least one array",
+        ));
+    }
+    let n = keys[0].size();
+    for (i, k) in keys.iter().enumerate().skip(1) {
+        if k.size() != n {
+            return Err(FerrayError::invalid_value(format!(
+                "lexsort: key {i} has length {}, expected {n}",
+                k.size()
+            )));
+        }
+    }
+
+    // Materialize each key into a contiguous Vec so the comparator
+    // can index into them directly without re-borrowing the array
+    // iterator on every comparison.
+    let key_data: Vec<Vec<T>> = keys.iter().map(|k| k.iter().copied().collect()).collect();
+
+    let mut idx: Vec<u64> = (0..n as u64).collect();
+    idx.sort_by(|&a, &b| {
+        let ai = a as usize;
+        let bi = b as usize;
+        // Iterate keys from primary (last) to secondary (earlier).
+        for k in key_data.iter().rev() {
+            match k[ai].partial_cmp(&k[bi]).unwrap_or(std::cmp::Ordering::Equal) {
+                std::cmp::Ordering::Equal => continue,
+                ord => return ord,
+            }
+        }
+        std::cmp::Ordering::Equal
+    });
+
+    Array::from_vec(Ix1::new([n]), idx)
+}
+
+// ---------------------------------------------------------------------------
 // searchsorted
 // ---------------------------------------------------------------------------
 
@@ -477,6 +538,43 @@ mod tests {
         let bad_sorter = Array::<u64, Ix1>::from_vec(Ix1::new([3]), vec![1, 99, 0]).unwrap();
         let v = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![2.5]).unwrap();
         assert!(searchsorted_with_sorter(&a, &v, Side::Left, &bad_sorter).is_err());
+    }
+
+    // ----- lexsort (#469) -----
+
+    #[test]
+    fn test_lexsort_single_key_matches_argsort() {
+        let k = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![3, 1, 4, 1, 5]).unwrap();
+        let idx = lexsort(&[&k]).unwrap();
+        // Sorted order: 1@idx1, 1@idx3, 3@idx0, 4@idx2, 5@idx4
+        assert_eq!(idx.iter().copied().collect::<Vec<_>>(), vec![1, 3, 0, 2, 4]);
+    }
+
+    #[test]
+    fn test_lexsort_secondary_key_breaks_ties() {
+        // Primary key (last in slice) sorts by ascending; ties resolved
+        // by the earlier key. Match NumPy's lexsort([secondary, primary]).
+        let secondary = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![20, 10, 40, 30]).unwrap();
+        let primary = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![1, 2, 1, 2]).unwrap();
+        let idx = lexsort(&[&secondary, &primary]).unwrap();
+        // primary buckets:
+        //   1 -> indices 0, 2 with secondary 20, 40 -> ordered as 0, 2
+        //   2 -> indices 1, 3 with secondary 10, 30 -> ordered as 1, 3
+        // result: [0, 2, 1, 3]
+        assert_eq!(idx.iter().copied().collect::<Vec<_>>(), vec![0, 2, 1, 3]);
+    }
+
+    #[test]
+    fn test_lexsort_length_mismatch_errors() {
+        let k1 = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        let k2 = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![1, 2, 3, 4]).unwrap();
+        assert!(lexsort(&[&k1, &k2]).is_err());
+    }
+
+    #[test]
+    fn test_lexsort_empty_keys_errors() {
+        let keys: &[&Array<i32, Ix1>] = &[];
+        assert!(lexsort(keys).is_err());
     }
 
     #[test]
