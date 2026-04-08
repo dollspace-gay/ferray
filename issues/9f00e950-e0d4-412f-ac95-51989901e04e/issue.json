@@ -3,11 +3,12 @@
   "display_id": 225,
   "title": "ferray-fft: compute_strides duplicated 3 times with inconsistent return types",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nnd.rs L217, real.rs L144, shift.rs L138: two return isize, one usize.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:48:54.385338496Z",
-  "updated_at": "2026-03-25T15:49:00.635945710Z",
+  "updated_at": "2026-04-08T04:22:04.776166109Z",
+  "closed_at": "2026-04-08T04:22:04.776166109Z",
   "labels": [
     "refactor",
     "qa-audit"
