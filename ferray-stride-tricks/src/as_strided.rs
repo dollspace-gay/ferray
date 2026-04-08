@@ -10,6 +10,40 @@ use ferray_core::{Array, ArrayView, Element};
 
 use crate::overlap_check::{all_offsets_in_bounds, has_overlapping_strides};
 
+/// A read-only source for [`as_strided`] / [`as_strided_unchecked`].
+///
+/// Implemented for both `&Array<T, D>` and `&ArrayView<'_, T, D>` so
+/// callers can hand either type to the as_strided entry points
+/// without `.to_owned()` materialization (#174, #525).
+pub trait StridedSource<T: Element> {
+    /// Raw pointer to the first element.
+    fn strided_as_ptr(&self) -> *const T;
+    /// Number of elements reachable from `strided_as_ptr`.
+    fn strided_size(&self) -> usize;
+}
+
+impl<T: Element, D: Dimension> StridedSource<T> for Array<T, D> {
+    #[inline]
+    fn strided_as_ptr(&self) -> *const T {
+        self.as_ptr()
+    }
+    #[inline]
+    fn strided_size(&self) -> usize {
+        self.size()
+    }
+}
+
+impl<T: Element, D: Dimension> StridedSource<T> for ArrayView<'_, T, D> {
+    #[inline]
+    fn strided_as_ptr(&self) -> *const T {
+        self.as_ptr()
+    }
+    #[inline]
+    fn strided_size(&self) -> usize {
+        self.size()
+    }
+}
+
 /// Create a view of an array with the given shape and strides, after
 /// validating that the strides do not produce overlapping memory accesses.
 ///
@@ -24,7 +58,16 @@ use crate::overlap_check::{all_offsets_in_bounds, has_overlapping_strides};
 /// If either check fails, an error is returned.
 ///
 /// Strides are given in units of elements (not bytes), and must be
-/// non-negative.
+/// non-negative. See [`as_strided_unchecked`] for views that need
+/// negative strides or overlapping access patterns.
+///
+/// # View size vs. source buffer capacity
+///
+/// The returned `ArrayView::size()` reports the **logical** element
+/// count `shape.iter().product()`, not the number of unique elements
+/// touched or the capacity of the source buffer. If you need the
+/// underlying buffer length you must keep a handle to the source
+/// `Array` (#285). This mirrors ndarray's own convention.
 ///
 /// # Errors
 ///
@@ -46,12 +89,16 @@ use crate::overlap_check::{all_offsets_in_bounds, has_overlapping_strides};
 /// let data: Vec<f64> = v.iter().copied().collect();
 /// assert_eq!(data, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
 /// ```
-pub fn as_strided<'a, T: Element, D: Dimension>(
-    array: &'a Array<T, D>,
+pub fn as_strided<'a, T, S>(
+    source: &'a S,
     shape: &[usize],
     strides: &[usize],
-) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
-    let istrides = validate_and_bounds_check(array, shape, strides, "as_strided")?;
+) -> FerrayResult<ArrayView<'a, T, IxDyn>>
+where
+    T: Element,
+    S: StridedSource<T>,
+{
+    let istrides = validate_and_bounds_check(source, shape, strides, "as_strided")?;
 
     // Overlap check: no two indices may map to the same element.
     // Empty views fall through here with an empty istrides vec — that's
@@ -67,7 +114,7 @@ pub fn as_strided<'a, T: Element, D: Dimension>(
 
     // SAFETY: bounds and overlap checks passed. All offsets are in-bounds
     // and distinct, so this is a valid immutable view.
-    let ptr = array.as_ptr();
+    let ptr = source.strided_as_ptr();
     let view = unsafe { ArrayView::from_shape_ptr(ptr, shape, strides) };
     Ok(view)
 }
@@ -76,12 +123,16 @@ pub fn as_strided<'a, T: Element, D: Dimension>(
 /// [`as_strided_unchecked`]. Returns the signed stride vector on
 /// success so the caller can feed it back into
 /// [`has_overlapping_strides`] without re-collecting (#287).
-fn validate_and_bounds_check<T: Element, D: Dimension>(
-    array: &Array<T, D>,
+fn validate_and_bounds_check<T, S>(
+    source: &S,
     shape: &[usize],
     strides: &[usize],
     fn_name: &str,
-) -> FerrayResult<Vec<isize>> {
+) -> FerrayResult<Vec<isize>>
+where
+    T: Element,
+    S: StridedSource<T>,
+{
     if shape.len() != strides.len() {
         return Err(FerrayError::invalid_value(format!(
             "shape length ({}) must equal strides length ({})",
@@ -98,7 +149,7 @@ fn validate_and_bounds_check<T: Element, D: Dimension>(
         return Ok(istrides);
     }
 
-    let buf_len = array.size();
+    let buf_len = source.strided_size();
     if !all_offsets_in_bounds(shape, &istrides, buf_len) {
         return Err(FerrayError::invalid_value(format!(
             "{}: strides {:?} with shape {:?} would access elements \
@@ -163,19 +214,23 @@ fn validate_and_bounds_check<T: Element, D: Dimension>(
 /// Returns `FerrayError::InvalidValue` if:
 /// - `shape` and `strides` have different lengths.
 /// - Any computed offset falls outside the source buffer.
-pub unsafe fn as_strided_unchecked<'a, T: Element, D: Dimension>(
-    array: &'a Array<T, D>,
+pub unsafe fn as_strided_unchecked<'a, T, S>(
+    source: &'a S,
     shape: &[usize],
     strides: &[usize],
-) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
+) -> FerrayResult<ArrayView<'a, T, IxDyn>>
+where
+    T: Element,
+    S: StridedSource<T>,
+{
     // Shared validation / bounds check with `as_strided` — we just
     // skip the overlap check (that's what `_unchecked` means, and the
     // caller has accepted the safety contract documented above).
-    let _istrides = validate_and_bounds_check(array, shape, strides, "as_strided_unchecked")?;
+    let _istrides = validate_and_bounds_check(source, shape, strides, "as_strided_unchecked")?;
 
     // SAFETY: bounds check passed. Overlap check is the caller's
     // responsibility per the Safety contract above.
-    let ptr = array.as_ptr();
+    let ptr = source.strided_as_ptr();
     let view = unsafe { ArrayView::from_shape_ptr(ptr, shape, strides) };
     Ok(view)
 }
@@ -288,5 +343,96 @@ mod tests {
         let v = unsafe { as_strided_unchecked(&a, &[0], &[1]).unwrap() };
         assert_eq!(v.shape(), &[0]);
         assert_eq!(v.size(), 0);
+    }
+
+    // ----- StridedSource on ArrayView (#174, #525) -----
+
+    #[test]
+    fn as_strided_accepts_array_view() {
+        // The caller has a view (e.g. from a slice) and wants to
+        // re-stride it without `.to_owned()`.
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([6]), vec![1, 2, 3, 4, 5, 6]).unwrap();
+        let view = a.view();
+        let v = as_strided(&view, &[2, 3], &[3, 1]).unwrap();
+        assert_eq!(v.shape(), &[2, 3]);
+        let data: Vec<i32> = v.iter().copied().collect();
+        assert_eq!(data, vec![1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn as_strided_view_zero_copy() {
+        // The returned view should share the original buffer.
+        let a = Array::<f64, Ix1>::from_vec(
+            Ix1::new([6]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let view = a.view();
+        let v = as_strided(&view, &[2, 3], &[3, 1]).unwrap();
+        assert_eq!(v.as_ptr(), a.as_ptr());
+    }
+
+    #[test]
+    fn as_strided_unchecked_accepts_array_view() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let view = a.view();
+        let v = unsafe { as_strided_unchecked(&view, &[3, 3], &[1, 1]).unwrap() };
+        let data: Vec<i32> = v.iter().copied().collect();
+        assert_eq!(data, vec![1, 2, 3, 2, 3, 4, 3, 4, 5]);
+    }
+
+    // ----- Property tests (#289) -----
+
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Any contiguous row-major (shape, strides) pair on a buffer
+        /// whose total size matches `product(shape)` must produce the
+        /// same element values as the source array, in the same order.
+        #[test]
+        fn prop_as_strided_row_major_round_trip(
+            rows in 1usize..8,
+            cols in 1usize..8,
+        ) {
+            let n = rows * cols;
+            let data: Vec<i32> = (0..n as i32).collect();
+            let a = Array::<i32, Ix1>::from_vec(Ix1::new([n]), data.clone()).unwrap();
+            // Row-major strides on a (rows, cols) reshape.
+            let v = as_strided(&a, &[rows, cols], &[cols, 1]).unwrap();
+            let collected: Vec<i32> = v.iter().copied().collect();
+            prop_assert_eq!(collected, data);
+        }
+
+        /// Any "take every k-th element" 1-D strided view must produce
+        /// the expected subset and never report overlap (the strides
+        /// are always strictly larger than 1).
+        #[test]
+        fn prop_as_strided_stride_k_subset(
+            buf in 1usize..32,
+            k in 1usize..4,
+        ) {
+            let data: Vec<i32> = (0..buf as i32).collect();
+            let a = Array::<i32, Ix1>::from_vec(Ix1::new([buf]), data.clone()).unwrap();
+            // How many elements fit with stride k?
+            let out_len = if buf == 0 { 0 } else { (buf - 1) / k + 1 };
+            let v = as_strided(&a, &[out_len], &[k]).unwrap();
+            let collected: Vec<i32> = v.iter().copied().collect();
+            let expected: Vec<i32> = (0..out_len).map(|i| (i * k) as i32).collect();
+            prop_assert_eq!(collected, expected);
+        }
+
+        /// A sliding window with stride (1, 1) and shape (n, n) on a
+        /// 1-D buffer always overlaps and must be rejected by
+        /// `as_strided`.
+        #[test]
+        fn prop_as_strided_rejects_sliding_overlap(
+            window in 2usize..6,
+        ) {
+            let buf_len = window + 2;
+            let data: Vec<i32> = (0..buf_len as i32).collect();
+            let a = Array::<i32, Ix1>::from_vec(Ix1::new([buf_len]), data).unwrap();
+            let result = as_strided(&a, &[window, window], &[1, 1]);
+            prop_assert!(result.is_err());
+        }
     }
 }

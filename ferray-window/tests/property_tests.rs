@@ -117,7 +117,7 @@ proptest! {
             for (i, &v) in vals.iter().enumerate() {
                 // Blackman can produce tiny negative values near zero (~-1e-17)
                 prop_assert!(
-                    v >= -1e-15 && v <= 1.0 + 1e-15,
+                    (-1e-15..=1.0 + 1e-15).contains(&v),
                     "{}({}) out of [0,1] at index {}: {}",
                     name, m, i, v
                 );

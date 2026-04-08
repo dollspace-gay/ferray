@@ -10,17 +10,17 @@
 /// Returns `true` if the strides produce overlapping accesses (i.e., two
 /// distinct multi-dimensional indices map to the same memory offset).
 ///
-/// The algorithm works by computing the set of all physical offsets
-/// reachable from the origin and checking for duplicates. For very large
-/// views this could be expensive, but it is the only correct approach for
-/// arbitrary stride patterns.
+/// Algorithm: try a cheap analytical check first (non-overlap is
+/// decidable in O(ndim²) for views whose absolute strides are
+/// "properly ordered" per the axis extents). Fall back to an exact
+/// offset enumeration via HashSet for cases the analytical pass
+/// can't prove. The previous version always enumerated and had a
+/// dead "if ≤ 1M then enumerate else enumerate" branch (#286, #288).
 ///
 /// # Arguments
 /// * `shape` — the shape of the desired view.
 /// * `strides` — strides in units of elements (may be negative).
-/// * `total_elements` — total number of elements in the source buffer,
-///   used only as a hint; the overlap check itself is purely offset-based.
-pub fn has_overlapping_strides(shape: &[usize], strides: &[isize]) -> bool {
+pub(crate) fn has_overlapping_strides(shape: &[usize], strides: &[isize]) -> bool {
     debug_assert_eq!(shape.len(), strides.len());
 
     let ndim = shape.len();
@@ -47,16 +47,58 @@ pub fn has_overlapping_strides(shape: &[usize], strides: &[isize]) -> bool {
         }
     }
 
-    // For moderate sizes, enumerate all offsets and check uniqueness.
-    // We use a HashSet for O(1) amortised lookup.
-    if n_elements <= 1_000_000 {
-        return has_overlapping_enumerate(shape, strides, n_elements);
+    // Analytical fast path: when we can sort the non-trivial axes by
+    // ascending `|stride|` and each subsequent stride is strictly
+    // larger than the maximum offset reachable by the lower axes
+    // (`(extent_so_far)`), overlap is impossible. This decides
+    // contiguous, transposed, and strided-take patterns without
+    // touching any per-element iteration (#288).
+    if is_non_overlapping_by_stride_order(shape, strides) {
+        return false;
     }
 
-    // For very large views, fall back to the same enumeration but accept
-    // the cost. In practice, as_strided is seldom called with > 1M elements
-    // in the safe variant.
+    // Fall back to exact offset enumeration for the stride patterns
+    // the analytical pass can't dispatch (e.g., strides with a common
+    // factor that produces aliasing). The enumeration is still O(n)
+    // time + memory, but in practice only exotic views hit this path.
     has_overlapping_enumerate(shape, strides, n_elements)
+}
+
+/// Try to prove non-overlap analytically by sorting the axes by
+/// ascending absolute stride and checking the "each axis strictly
+/// larger than the span of all lower axes" invariant that C/F
+/// contiguous-like layouts satisfy.
+///
+/// Returns `true` only when non-overlap is provably true; a `false`
+/// return is inconclusive and the caller must enumerate. This is the
+/// same pattern NumPy uses in `PyArray_NonZeroDimsNonOverlapping`
+/// and gives O(ndim²) performance for the common cases.
+fn is_non_overlapping_by_stride_order(shape: &[usize], strides: &[isize]) -> bool {
+    // Drop size-1 axes; their stride doesn't matter.
+    let mut axes: Vec<(usize, isize)> = shape
+        .iter()
+        .copied()
+        .zip(strides.iter().copied())
+        .filter(|&(n, _)| n > 1)
+        .collect();
+    // Sort by absolute stride ascending.
+    axes.sort_by_key(|&(_, s)| s.unsigned_abs());
+
+    // Walk the sorted axes. Each axis' absolute stride must be >= the
+    // total span spanned by all previously-seen axes. The span of an
+    // axis of length `n` with stride `|s|` is `(n - 1) * |s| + 1`.
+    // We track the cumulative span starting from 1 (a single point).
+    let mut cum_span: u128 = 1;
+    for (n, s) in axes {
+        let abs_s = s.unsigned_abs() as u128;
+        if abs_s < cum_span {
+            // Not provably non-overlapping — the enumeration path
+            // can still decide correctly; return false to delegate.
+            return false;
+        }
+        cum_span = (n as u128 - 1) * abs_s + 1;
+    }
+    true
 }
 
 /// Enumerate all offsets and check for duplicates.
@@ -103,7 +145,7 @@ fn has_overlapping_enumerate(shape: &[usize], strides: &[isize], n_elements: usi
 /// `[0, buf_len)` when measured from the base pointer.
 ///
 /// Returns `true` if all offsets are in bounds, `false` otherwise.
-pub fn all_offsets_in_bounds(shape: &[usize], strides: &[isize], buf_len: usize) -> bool {
+pub(crate) fn all_offsets_in_bounds(shape: &[usize], strides: &[isize], buf_len: usize) -> bool {
     let ndim = shape.len();
 
     if ndim == 0 || shape.contains(&0) {
@@ -182,6 +224,44 @@ mod tests {
         // but they go negative. However for overlap detection we only care
         // about distinct vs. duplicate offsets.
         assert!(!has_overlapping_strides(&[3], &[-1]));
+    }
+
+    // ----- analytical non-overlap proof (#288) -----
+
+    #[test]
+    fn analytical_fast_path_contiguous_3d() {
+        // 2 x 3 x 4, row-major: strides (12, 4, 1). The analytical
+        // sort-by-|stride| check should accept this without entering
+        // the HashSet enumeration.
+        assert!(is_non_overlapping_by_stride_order(&[2, 3, 4], &[12, 4, 1]));
+    }
+
+    #[test]
+    fn analytical_fast_path_transposed() {
+        // A 4 x 3 transpose of a 3 x 4 row-major layout has strides
+        // (1, 4). That's "outer axis has stride 1" which still sorts
+        // correctly by |stride| and proves non-overlap.
+        assert!(is_non_overlapping_by_stride_order(&[4, 3], &[1, 4]));
+    }
+
+    #[test]
+    fn analytical_fast_path_rejects_sliding_window() {
+        // shape (3, 3) strides (1, 1) is a sliding window → overlapping.
+        // The analytical pass should not claim non-overlap here.
+        assert!(!is_non_overlapping_by_stride_order(&[3, 3], &[1, 1]));
+    }
+
+    #[test]
+    fn analytical_fast_path_single_axis() {
+        assert!(is_non_overlapping_by_stride_order(&[5], &[1]));
+        assert!(is_non_overlapping_by_stride_order(&[5], &[-1]));
+    }
+
+    #[test]
+    fn analytical_fast_path_drops_size_one_axes() {
+        // A trailing size-1 axis with arbitrary stride should not
+        // confuse the analytical check.
+        assert!(is_non_overlapping_by_stride_order(&[3, 1, 2], &[2, 99, 1]));
     }
 
     #[test]

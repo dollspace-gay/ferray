@@ -148,10 +148,27 @@ mod tests {
 
     #[test]
     fn sliding_window_2d() {
-        // 3x4 array with 2x2 window -> (2, 3, 2, 2) output
+        // 3x4 array with 2x2 window -> (2, 3, 2, 2) output.
+        // Issue #290: check element values, not just shape.
         let a = Array::<i32, Ix2>::from_vec(Ix2::new([3, 4]), (1..=12).collect()).unwrap();
         let v = sliding_window_view(&a, &[2, 2]).unwrap();
         assert_eq!(v.shape(), &[2, 3, 2, 2]);
+
+        // Spot-check a few windows. Source:
+        //   1  2  3  4
+        //   5  6  7  8
+        //   9 10 11 12
+        // Output shape (2, 3, 2, 2) means (win_row, win_col, row, col).
+        // Row-major flat indexing: offset = (wr * 3 + wc) * 4.
+        let data: Vec<i32> = v.iter().copied().collect();
+        // Window (0, 0): rows 0-1, cols 0-1 -> [1, 2, 5, 6].
+        assert_eq!(&data[0..4], &[1, 2, 5, 6]);
+        // Window (0, 2): rows 0-1, cols 2-3 -> [3, 4, 7, 8]. Offset 8.
+        assert_eq!(&data[8..12], &[3, 4, 7, 8]);
+        // Window (1, 1): rows 1-2, cols 1-2 -> [6, 7, 10, 11]. Offset (1*3+1)*4 = 16.
+        assert_eq!(&data[16..20], &[6, 7, 10, 11]);
+        // Window (1, 2): rows 1-2, cols 2-3 -> [7, 8, 11, 12]. Offset 20.
+        assert_eq!(&data[20..24], &[7, 8, 11, 12]);
     }
 
     #[test]

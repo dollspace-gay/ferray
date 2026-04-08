@@ -7,6 +7,7 @@ use ferray_core::Array;
 use ferray_core::dimension::{Axis, Dimension, Ix1, IxDyn};
 use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
+use num_traits::Zero;
 
 /// Wrap a scalar function to operate elementwise on arrays of any dimension.
 ///
@@ -36,19 +37,6 @@ where
     }
 }
 
-/// Alias for [`vectorize`] — kept for backward compatibility.
-///
-/// `vectorize` is now generic over dimension; this function is identical.
-pub fn vectorize_nd<T, U, F, D>(f: F) -> impl Fn(&Array<T, D>) -> FerrayResult<Array<U, D>>
-where
-    T: Element + Copy,
-    U: Element,
-    D: Dimension,
-    F: Fn(T) -> U,
-{
-    vectorize(f)
-}
-
 /// Evaluate a piecewise-defined function.
 ///
 /// For each element position, the first condition in `condlist` that is `true`
@@ -60,7 +48,10 @@ where
 /// # Arguments
 /// * `x` - The input array.
 /// * `condlist` - A slice of boolean arrays, each the same shape as `x`.
-/// * `funclist` - A slice of functions, one per condition. Each function maps `T -> T`.
+/// * `funclist` - A slice of function references, one per condition. The
+///   slice element type is `&dyn Fn(T) -> T` (not `Box<dyn Fn>`) so
+///   callers can pass stack-allocated closures without heap allocation
+///   (#297).
 /// * `default` - The default value for elements where no condition is true.
 ///
 /// # Errors
@@ -69,7 +60,7 @@ where
 pub fn piecewise<T, D>(
     x: &Array<T, D>,
     condlist: &[Array<bool, D>],
-    funclist: &[Box<dyn Fn(T) -> T>],
+    funclist: &[&dyn Fn(T) -> T],
     default: T,
 ) -> FerrayResult<Array<T, D>>
 where
@@ -177,22 +168,23 @@ where
 /// After each application, the axis dimension is kept with size 1 (keepdims
 /// semantics) to maintain dimensionality alignment for subsequent reductions.
 ///
-/// This is equivalent to `numpy.apply_over_axes(func, a, axes)`.
-///
-/// # Arguments
-/// * `func` - A function that reduces an array along a single axis, returning
-///   a dynamic-rank array with the axis dimension reduced (but kept as size 1).
-/// * `a` - The input array.
-/// * `axes` - The axes over which to apply the function.
+/// This is equivalent to `numpy.apply_over_axes(func, a, axes)`. Generic
+/// over any `T: Element + Copy` so f32/i32/etc. arrays work too — the
+/// previous signature hard-coded `Array<f64, IxDyn>` for no real
+/// reason (#182).
 ///
 /// # Errors
 /// - Returns `FerrayError::AxisOutOfBounds` if any axis is out of bounds.
 /// - Propagates any error from the function.
-pub fn apply_over_axes(
-    func: impl Fn(&Array<f64, IxDyn>, Axis) -> FerrayResult<Array<f64, IxDyn>>,
-    a: &Array<f64, IxDyn>,
+pub fn apply_over_axes<T, F>(
+    func: F,
+    a: &Array<T, IxDyn>,
     axes: &[usize],
-) -> FerrayResult<Array<f64, IxDyn>> {
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Copy,
+    F: Fn(&Array<T, IxDyn>, Axis) -> FerrayResult<Array<T, IxDyn>>,
+{
     let ndim = a.ndim();
     for &ax in axes {
         if ax >= ndim {
@@ -213,23 +205,28 @@ pub fn apply_over_axes(
 
 /// Helper: sum along an axis with keepdims semantics (keeps the axis as size 1).
 ///
-/// This is useful as a `func` argument for [`apply_over_axes`].
+/// This is useful as a `func` argument for [`apply_over_axes`]. Generic
+/// over any `T: Element + Copy + Zero + Add` so it works for any
+/// addable numeric type (#182).
 ///
 /// # Errors
 /// Returns `FerrayError::AxisOutOfBounds` if `axis >= ndim`.
-pub fn sum_axis_keepdims(a: &Array<f64, IxDyn>, axis: Axis) -> FerrayResult<Array<f64, IxDyn>> {
+pub fn sum_axis_keepdims<T>(a: &Array<T, IxDyn>, axis: Axis) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Copy + Zero + core::ops::Add<Output = T>,
+{
     let ndim = a.ndim();
     let ax = axis.index();
     if ax >= ndim {
         return Err(FerrayError::axis_out_of_bounds(ax, ndim));
     }
 
-    let reduced = a.fold_axis(axis, 0.0, |acc, &x| *acc + x)?;
+    let reduced = a.fold_axis(axis, <T as Zero>::zero(), |acc, &x| *acc + x)?;
 
     // Reinsert the axis as size 1 (keepdims)
     let mut new_shape: Vec<usize> = reduced.shape().to_vec();
     new_shape.insert(ax, 1);
-    let data: Vec<f64> = reduced.iter().copied().collect();
+    let data: Vec<T> = reduced.iter().copied().collect();
     Array::from_vec(IxDyn::new(&new_shape), data)
 }
 
@@ -256,8 +253,10 @@ mod tests {
         let square = vectorize(|x: f64| x.powi(2));
         let input = arr1(vec![1.0, 2.0, 3.0, 4.0, 5.0]);
         let result = square(&input).unwrap();
-        let expected = vec![1.0, 4.0, 9.0, 16.0, 25.0];
-        assert_eq!(result.as_slice().unwrap(), &expected[..]);
+        assert_eq!(
+            result.as_slice().unwrap(),
+            &[1.0, 4.0, 9.0, 16.0, 25.0][..]
+        );
     }
 
     #[test]
@@ -274,15 +273,19 @@ mod tests {
     }
 
     #[test]
-    fn vectorize_nd_2d() {
-        let square = vectorize_nd(|x: f64| x * x);
+    fn vectorize_2d_generic_dimension() {
+        // vectorize is now generic over dimension — this used to live
+        // in a separate `vectorize_nd` that has been removed (#293).
+        let square = vectorize(|x: f64| x * x);
         let input =
             Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
                 .unwrap();
         let result = square(&input).unwrap();
         assert_eq!(result.shape(), &[2, 3]);
-        let expected = vec![1.0, 4.0, 9.0, 16.0, 25.0, 36.0];
-        assert_eq!(result.as_slice().unwrap(), &expected[..]);
+        assert_eq!(
+            result.as_slice().unwrap(),
+            &[1.0, 4.0, 9.0, 16.0, 25.0, 36.0][..]
+        );
     }
 
     #[test]
@@ -302,14 +305,15 @@ mod tests {
         let cond_neg = arr1_bool(vec![true, true, false, false, false]);
         let cond_pos = arr1_bool(vec![false, false, false, true, true]);
 
+        // piecewise now takes `&[&dyn Fn]` rather than `&[Box<dyn Fn>]`
+        // so callers don't need a heap allocation per branch (#297).
+        let neg: &dyn Fn(f64) -> f64 = &|v| -v;
+        let pos: &dyn Fn(f64) -> f64 = &|v| v * 2.0;
         let result = piecewise(
             &x,
             &[cond_neg, cond_pos],
-            &[
-                Box::new(|v: f64| -v),      // negate for negatives
-                Box::new(|v: f64| v * 2.0), // double for positives
-            ],
-            0.0, // default for zero
+            &[neg, pos],
+            0.0,
         )
         .unwrap();
 
@@ -324,13 +328,9 @@ mod tests {
         let cond1 = arr1_bool(vec![true, true, true]);
         let cond2 = arr1_bool(vec![true, true, true]);
 
-        let result = piecewise(
-            &x,
-            &[cond1, cond2],
-            &[Box::new(|v: f64| v * 10.0), Box::new(|v: f64| v * 100.0)],
-            0.0,
-        )
-        .unwrap();
+        let f1: &dyn Fn(f64) -> f64 = &|v| v * 10.0;
+        let f2: &dyn Fn(f64) -> f64 = &|v| v * 100.0;
+        let result = piecewise(&x, &[cond1, cond2], &[f1, f2], 0.0).unwrap();
 
         // First condition wins
         let s = result.as_slice().unwrap();
@@ -342,7 +342,8 @@ mod tests {
         let x = arr1(vec![1.0, 2.0, 3.0]);
         let cond = arr1_bool(vec![false, false, false]);
 
-        let result = piecewise(&x, &[cond], &[Box::new(|v: f64| v * 10.0)], -999.0).unwrap();
+        let f: &dyn Fn(f64) -> f64 = &|v| v * 10.0;
+        let result = piecewise(&x, &[cond], &[f], -999.0).unwrap();
 
         let s = result.as_slice().unwrap();
         assert_eq!(s, &[-999.0, -999.0, -999.0]);
@@ -352,22 +353,17 @@ mod tests {
     fn piecewise_length_mismatch() {
         let x = arr1(vec![1.0, 2.0]);
         let cond = arr1_bool(vec![true, false]);
-        assert!(
-            piecewise(
-                &x,
-                &[cond],
-                &[Box::new(|v: f64| v), Box::new(|v: f64| v)],
-                0.0
-            )
-            .is_err()
-        );
+        let f1: &dyn Fn(f64) -> f64 = &|v| v;
+        let f2: &dyn Fn(f64) -> f64 = &|v| v;
+        assert!(piecewise(&x, &[cond], &[f1, f2], 0.0).is_err());
     }
 
     #[test]
     fn piecewise_shape_mismatch() {
         let x = arr1(vec![1.0, 2.0]);
         let cond = arr1_bool(vec![true, false, true]); // wrong shape
-        assert!(piecewise(&x, &[cond], &[Box::new(|v: f64| v)], 0.0).is_err());
+        let f: &dyn Fn(f64) -> f64 = &|v| v;
+        assert!(piecewise(&x, &[cond], &[f], 0.0).is_err());
     }
 
     // -----------------------------------------------------------------------

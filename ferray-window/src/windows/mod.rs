@@ -108,7 +108,12 @@ pub fn hanning(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 /// - `m == 1`: returns `[1.0]`.
 ///
 /// # Errors
-/// Returns `FerrayError::InvalidValue` if `beta` is NaN.
+/// Returns `FerrayError::InvalidValue` if `beta` is NaN or if `beta`
+/// exceeds the range where `I_0(beta)` can be computed in f64. The
+/// asymptotic branch uses `exp(beta) / sqrt(beta)` internally, so
+/// `|beta| > ~709` overflows to infinity and the normalized kaiser
+/// window would reduce to `Inf / Inf = NaN` for every sample
+/// (#294).
 pub fn kaiser(m: usize, beta: f64) -> FerrayResult<Array<f64, Ix1>> {
     if beta.is_nan() {
         return Err(FerrayError::invalid_value(
@@ -118,6 +123,17 @@ pub fn kaiser(m: usize, beta: f64) -> FerrayResult<Array<f64, Ix1>> {
     // I_0 is an even function, so kaiser(m, -beta) == kaiser(m, beta).
     // Accept negative beta for NumPy compatibility.
     let beta = beta.abs();
+    // Reject beta values where `exp(beta)` overflows f64 (ln(f64::MAX)
+    // ≈ 709.78). We use a slightly conservative threshold so the
+    // clipped output stays finite even after the asymptotic-series
+    // polynomial corrections.
+    const BETA_OVERFLOW_THRESHOLD: f64 = 708.0;
+    if beta > BETA_OVERFLOW_THRESHOLD {
+        return Err(FerrayError::invalid_value(format!(
+            "kaiser: |beta| = {beta} exceeds the safe range ({BETA_OVERFLOW_THRESHOLD}) \
+             for f64 I_0; the window would be NaN everywhere"
+        )));
+    }
     let i0_beta = bessel_i0_scalar::<f64>(beta);
     let alpha = (m.saturating_sub(1)) as f64 / 2.0;
     gen_window(m, |n| {
@@ -380,9 +396,79 @@ mod tests {
 
     #[test]
     fn bessel_i0_scalar_known() {
-        // I0(1) ~ 1.2660658
-        assert!((bessel_i0_scalar::<f64>(1.0) - 1.2660658).abs() < 1e-4);
-        // I0(5) ~ 27.2398718 (tests the asymptotic branch)
-        assert!((bessel_i0_scalar::<f64>(5.0) - 27.2398718).abs() < 1e-2);
+        // Issue #296: tighten the tolerances. The Abramowitz & Stegun
+        // approximation is rated ~1e-7 in the polynomial branch and
+        // ~1e-7 in the asymptotic branch per its documentation.
+        // I0(1) ~ 1.2660658777520082
+        assert!((bessel_i0_scalar::<f64>(1.0) - 1.266_065_877_752_008_2).abs() < 1e-7);
+        // I0(5) ~ 27.239871823604443 (asymptotic branch)
+        assert!((bessel_i0_scalar::<f64>(5.0) - 27.239_871_823_604_443).abs() < 1e-5);
+        // I0(10) ~ 2815.7166284662544
+        let expected_i0_10 = 2_815.716_628_466_254;
+        assert!(
+            (bessel_i0_scalar::<f64>(10.0) - expected_i0_10).abs() / expected_i0_10 < 1e-5
+        );
+    }
+
+    // ----- Edge-length window coverage (#295) -----
+
+    #[test]
+    fn bartlett_m2_is_zeros() {
+        // Bartlett of length 2: w(n) = 1 - |2n/(M-1) - 1|
+        // n=0: 1 - |0 - 1| = 0
+        // n=1: 1 - |2 - 1| = 0
+        let w = bartlett(2).unwrap();
+        assert_eq!(w.as_slice().unwrap(), &[0.0, 0.0]);
+    }
+
+    #[test]
+    fn hanning_m2_is_zeros() {
+        // Hann of length 2: w(n) = 0.5 * (1 - cos(2*pi*n/(M-1)))
+        // n=0: 0.5 * (1 - cos(0)) = 0
+        // n=1: 0.5 * (1 - cos(2*pi)) = 0
+        let w = hanning(2).unwrap();
+        let s = w.as_slice().unwrap();
+        assert!(s[0].abs() < 1e-14);
+        assert!(s[1].abs() < 1e-14);
+    }
+
+    #[test]
+    fn bartlett_even_length_is_symmetric() {
+        // Even-length windows have no single "center"; symmetry holds
+        // around the midpoint between indices (M/2 - 1) and (M/2).
+        for &m in &[4usize, 6, 8, 10] {
+            let w = bartlett(m).unwrap();
+            let s = w.as_slice().unwrap();
+            for i in 0..m / 2 {
+                assert!(
+                    (s[i] - s[m - 1 - i]).abs() < 1e-14,
+                    "bartlett({m}) not symmetric at {i}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn blackman_even_length_is_symmetric() {
+        for &m in &[4usize, 6, 8, 10] {
+            let w = blackman(m).unwrap();
+            let s = w.as_slice().unwrap();
+            for i in 0..m / 2 {
+                assert!(
+                    (s[i] - s[m - 1 - i]).abs() < 1e-14,
+                    "blackman({m}) not symmetric at {i}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn kaiser_large_beta_errors() {
+        // Issue #294: beta above the f64 safe range should error,
+        // not silently produce NaN.
+        assert!(kaiser(8, 800.0).is_err());
+        assert!(kaiser(8, 1000.0).is_err());
+        // 700 is still safe.
+        assert!(kaiser(8, 700.0).is_ok());
     }
 }
