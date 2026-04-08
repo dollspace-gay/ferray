@@ -7,3 +7,33 @@
 pub mod advanced;
 pub mod basic;
 pub mod extended;
+
+use crate::error::{FerrayError, FerrayResult};
+
+/// Normalize a (possibly negative) index into a non-negative `usize`
+/// suitable for array access along `axis`. Negative indices count from the
+/// end (`-1` is the last element, etc.). Returns `IndexOutOfBounds` when
+/// the normalized index falls outside `[0, size)`.
+///
+/// Shared by all three indexing submodules; see issue #121 for the
+/// original triplication.
+#[inline]
+pub(crate) fn normalize_index(
+    index: isize,
+    size: usize,
+    axis: usize,
+) -> FerrayResult<usize> {
+    if index < 0 {
+        let pos = size as isize + index;
+        if pos < 0 {
+            return Err(FerrayError::index_out_of_bounds(index, axis, size));
+        }
+        Ok(pos as usize)
+    } else {
+        let idx = index as usize;
+        if idx >= size {
+            return Err(FerrayError::index_out_of_bounds(index, axis, size));
+        }
+        Ok(idx)
+    }
+}

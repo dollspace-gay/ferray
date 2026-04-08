@@ -77,13 +77,11 @@ impl<'a, T: Element, D: Dimension> ArrayViewMut<'a, T, D> {
 
     /// Memory layout.
     pub fn layout(&self) -> MemoryLayout {
-        if self.inner.is_standard_layout() {
-            MemoryLayout::C
-        } else {
-            let shape = self.dim.as_slice();
-            let strides: Vec<isize> = self.inner.strides().to_vec();
-            crate::layout::detect_layout(shape, &strides)
-        }
+        crate::layout::classify_layout(
+            self.inner.is_standard_layout(),
+            self.dim.as_slice(),
+            self.inner.strides(),
+        )
     }
 
     /// Return a reference to the internal dimension descriptor.

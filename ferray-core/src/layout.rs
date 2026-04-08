@@ -41,6 +41,25 @@ impl core::fmt::Display for MemoryLayout {
     }
 }
 
+/// Classify the memory layout for an ndarray-backed array given
+/// whether it is already known to be C-standard and its current shape +
+/// element strides. Used by `Array::layout`, `ArrayView::layout` and
+/// `ArrayViewMut::layout` so all three share one implementation
+/// (see issue #127).
+#[cfg(not(feature = "no_std"))]
+#[inline]
+pub(crate) fn classify_layout(
+    is_standard: bool,
+    shape: &[usize],
+    strides: &[isize],
+) -> MemoryLayout {
+    if is_standard {
+        MemoryLayout::C
+    } else {
+        detect_layout(shape, strides)
+    }
+}
+
 /// Determine memory layout from shape and strides.
 #[cfg(not(feature = "no_std"))]
 pub(crate) fn detect_layout(shape: &[usize], strides: &[isize]) -> MemoryLayout {

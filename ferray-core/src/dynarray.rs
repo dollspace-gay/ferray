@@ -57,6 +57,36 @@ pub enum DynArray {
     BF16(Array<half::bf16, IxDyn>),
 }
 
+/// Dispatch a single expression across every DynArray variant, binding
+/// the inner `Array<T, IxDyn>` to `$binding`. This turns repeated 17-way
+/// match arms into one-line methods (see issue #125); the f16/bf16
+/// variants are conditionally compiled in the same way as the enum.
+macro_rules! dispatch {
+    ($value:expr, $binding:ident => $expr:expr) => {
+        match $value {
+            Self::Bool($binding) => $expr,
+            Self::U8($binding) => $expr,
+            Self::U16($binding) => $expr,
+            Self::U32($binding) => $expr,
+            Self::U64($binding) => $expr,
+            Self::U128($binding) => $expr,
+            Self::I8($binding) => $expr,
+            Self::I16($binding) => $expr,
+            Self::I32($binding) => $expr,
+            Self::I64($binding) => $expr,
+            Self::I128($binding) => $expr,
+            Self::F32($binding) => $expr,
+            Self::F64($binding) => $expr,
+            Self::Complex32($binding) => $expr,
+            Self::Complex64($binding) => $expr,
+            #[cfg(feature = "f16")]
+            Self::F16($binding) => $expr,
+            #[cfg(feature = "bf16")]
+            Self::BF16($binding) => $expr,
+        }
+    };
+}
+
 impl DynArray {
     /// The runtime dtype of the elements in this array.
     pub fn dtype(&self) -> DType {
@@ -85,27 +115,7 @@ impl DynArray {
 
     /// Shape as a slice.
     pub fn shape(&self) -> &[usize] {
-        match self {
-            Self::Bool(a) => a.shape(),
-            Self::U8(a) => a.shape(),
-            Self::U16(a) => a.shape(),
-            Self::U32(a) => a.shape(),
-            Self::U64(a) => a.shape(),
-            Self::U128(a) => a.shape(),
-            Self::I8(a) => a.shape(),
-            Self::I16(a) => a.shape(),
-            Self::I32(a) => a.shape(),
-            Self::I64(a) => a.shape(),
-            Self::I128(a) => a.shape(),
-            Self::F32(a) => a.shape(),
-            Self::F64(a) => a.shape(),
-            Self::Complex32(a) => a.shape(),
-            Self::Complex64(a) => a.shape(),
-            #[cfg(feature = "f16")]
-            Self::F16(a) => a.shape(),
-            #[cfg(feature = "bf16")]
-            Self::BF16(a) => a.shape(),
-        }
+        dispatch!(self, a => a.shape())
     }
 
     /// Number of dimensions.
@@ -300,27 +310,7 @@ impl DynArray {
 
 impl std::fmt::Display for DynArray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Bool(a) => write!(f, "{a}"),
-            Self::U8(a) => write!(f, "{a}"),
-            Self::U16(a) => write!(f, "{a}"),
-            Self::U32(a) => write!(f, "{a}"),
-            Self::U64(a) => write!(f, "{a}"),
-            Self::U128(a) => write!(f, "{a}"),
-            Self::I8(a) => write!(f, "{a}"),
-            Self::I16(a) => write!(f, "{a}"),
-            Self::I32(a) => write!(f, "{a}"),
-            Self::I64(a) => write!(f, "{a}"),
-            Self::I128(a) => write!(f, "{a}"),
-            Self::F32(a) => write!(f, "{a}"),
-            Self::F64(a) => write!(f, "{a}"),
-            Self::Complex32(a) => write!(f, "{a}"),
-            Self::Complex64(a) => write!(f, "{a}"),
-            #[cfg(feature = "f16")]
-            Self::F16(a) => write!(f, "{a}"),
-            #[cfg(feature = "bf16")]
-            Self::BF16(a) => write!(f, "{a}"),
-        }
+        dispatch!(self, a => write!(f, "{a}"))
     }
 }
 

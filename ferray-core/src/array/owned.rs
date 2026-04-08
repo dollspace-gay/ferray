@@ -126,19 +126,11 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
     /// Return the memory layout of this array.
     pub fn layout(&self) -> MemoryLayout {
-        if self.inner.is_standard_layout() {
-            MemoryLayout::C
-        } else {
-            // Check for F-contiguous
-            let shape = self.dim.as_slice();
-            let strides = self.strides_isize();
-            crate::layout::detect_layout(shape, &strides)
-        }
-    }
-
-    /// Return strides as isize values (element counts, not bytes).
-    pub(crate) fn strides_isize(&self) -> Vec<isize> {
-        self.inner.strides().to_vec()
+        crate::layout::classify_layout(
+            self.inner.is_standard_layout(),
+            self.dim.as_slice(),
+            self.inner.strides(),
+        )
     }
 
     /// Number of dimensions.
@@ -200,18 +192,17 @@ impl<T: Element, D: Dimension> Array<T, D> {
     }
 }
 
-// REQ-5: From/Into ndarray conversions (crate-internal, not public)
-impl<T: Element, D: Dimension> From<ndarray::Array<T, D::NdarrayDim>> for Array<T, D> {
-    fn from(inner: ndarray::Array<T, D::NdarrayDim>) -> Self {
-        Self::from_ndarray(inner)
-    }
-}
-
-impl<T: Element, D: Dimension> From<Array<T, D>> for ndarray::Array<T, D::NdarrayDim> {
-    fn from(arr: Array<T, D>) -> Self {
-        arr.into_ndarray()
-    }
-}
+// REQ-5: ndarray conversions.
+//
+// Historically we exposed blanket `From<ndarray::Array>` / `From<Array>`
+// impls here, which let downstream users implicitly move values between
+// `ferray::Array` and `ndarray::Array` via `.into()`. That leaked
+// ndarray into the public API surface even for users who never wanted
+// to depend on ndarray types (see issue #76). The inward wrapper lives
+// on as a crate-internal constructor (`Array::from_ndarray`) and the
+// outward escape hatch is still available via the public
+// `into_ndarray` method — both are called explicitly so the ndarray
+// dependency is visible at every use site.
 
 impl<T: Element, D: Dimension> Clone for Array<T, D> {
     fn clone(&self) -> Self {
@@ -289,8 +280,10 @@ mod tests {
     fn ndarray_roundtrip() {
         let original = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0];
         let arr = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), original.clone()).unwrap();
-        let nd: ndarray::Array<f64, ndarray::Ix2> = arr.into();
-        let arr2: Array<f64, Ix2> = nd.into();
+        // Use the explicit methods rather than `Into`/`From` so the
+        // ndarray dependency is not implicit in the public API (#76).
+        let nd: ndarray::Array<f64, ndarray::Ix2> = arr.into_ndarray();
+        let arr2: Array<f64, Ix2> = Array::from_ndarray(nd);
         assert_eq!(arr2.as_slice().unwrap(), &original[..]);
     }
 

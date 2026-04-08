@@ -31,86 +31,46 @@ pub trait AsRawBuffer {
     fn is_f_contiguous(&self) -> bool;
 }
 
-impl<T: Element, D: Dimension> AsRawBuffer for Array<T, D> {
-    fn raw_ptr(&self) -> *const u8 {
-        self.as_ptr() as *const u8
-    }
+// The three concrete array types (`Array`, `ArrayView`, `ArcArray`) all
+// expose the same `as_ptr`/`shape`/`strides`/`layout` inherent methods,
+// so each `AsRawBuffer` impl is identical save for the receiver type.
+// The prior hand-written three-way copy (six methods × three types) is
+// factored through a macro so future additions to the trait only need
+// to be made once (see issue #123).
+macro_rules! impl_as_raw_buffer {
+    ($ty:ty, $($lt:lifetime)?) => {
+        impl<$($lt,)? T: Element, D: Dimension> AsRawBuffer for $ty {
+            fn raw_ptr(&self) -> *const u8 {
+                self.as_ptr() as *const u8
+            }
 
-    fn raw_shape(&self) -> &[usize] {
-        self.shape()
-    }
+            fn raw_shape(&self) -> &[usize] {
+                self.shape()
+            }
 
-    fn raw_strides_bytes(&self) -> Vec<isize> {
-        let itemsize = std::mem::size_of::<T>() as isize;
-        self.strides().iter().map(|&s| s * itemsize).collect()
-    }
+            fn raw_strides_bytes(&self) -> Vec<isize> {
+                let itemsize = std::mem::size_of::<T>() as isize;
+                self.strides().iter().map(|&s| s * itemsize).collect()
+            }
 
-    fn raw_dtype(&self) -> DType {
-        T::dtype()
-    }
+            fn raw_dtype(&self) -> DType {
+                T::dtype()
+            }
 
-    fn is_c_contiguous(&self) -> bool {
-        self.layout().is_c_contiguous()
-    }
+            fn is_c_contiguous(&self) -> bool {
+                self.layout().is_c_contiguous()
+            }
 
-    fn is_f_contiguous(&self) -> bool {
-        self.layout().is_f_contiguous()
-    }
+            fn is_f_contiguous(&self) -> bool {
+                self.layout().is_f_contiguous()
+            }
+        }
+    };
 }
 
-impl<T: Element, D: Dimension> AsRawBuffer for ArrayView<'_, T, D> {
-    fn raw_ptr(&self) -> *const u8 {
-        self.as_ptr() as *const u8
-    }
-
-    fn raw_shape(&self) -> &[usize] {
-        self.shape()
-    }
-
-    fn raw_strides_bytes(&self) -> Vec<isize> {
-        let itemsize = std::mem::size_of::<T>() as isize;
-        self.strides().iter().map(|&s| s * itemsize).collect()
-    }
-
-    fn raw_dtype(&self) -> DType {
-        T::dtype()
-    }
-
-    fn is_c_contiguous(&self) -> bool {
-        self.layout().is_c_contiguous()
-    }
-
-    fn is_f_contiguous(&self) -> bool {
-        self.layout().is_f_contiguous()
-    }
-}
-
-impl<T: Element, D: Dimension> AsRawBuffer for ArcArray<T, D> {
-    fn raw_ptr(&self) -> *const u8 {
-        self.as_ptr() as *const u8
-    }
-
-    fn raw_shape(&self) -> &[usize] {
-        self.shape()
-    }
-
-    fn raw_strides_bytes(&self) -> Vec<isize> {
-        let itemsize = std::mem::size_of::<T>() as isize;
-        self.strides().iter().map(|&s| s * itemsize).collect()
-    }
-
-    fn raw_dtype(&self) -> DType {
-        T::dtype()
-    }
-
-    fn is_c_contiguous(&self) -> bool {
-        self.layout().is_c_contiguous()
-    }
-
-    fn is_f_contiguous(&self) -> bool {
-        self.layout().is_f_contiguous()
-    }
-}
+impl_as_raw_buffer!(Array<T, D>,);
+impl_as_raw_buffer!(ArrayView<'a, T, D>, 'a);
+impl_as_raw_buffer!(ArcArray<T, D>,);
 
 #[cfg(test)]
 mod tests {

@@ -9,27 +9,11 @@
 // because usize is not an Element type. Callers can wrap these into arrays
 // of u64 or i64 if needed.
 
+use super::normalize_index;
 use crate::array::owned::Array;
 use crate::dimension::{Axis, Dimension, IxDyn};
 use crate::dtype::Element;
 use crate::error::{FerrayError, FerrayResult};
-
-/// Normalize a potentially negative index, returning an error on out-of-bounds.
-fn normalize_index(index: isize, size: usize, axis: usize) -> FerrayResult<usize> {
-    if index < 0 {
-        let pos = size as isize + index;
-        if pos < 0 {
-            return Err(FerrayError::index_out_of_bounds(index, axis, size));
-        }
-        Ok(pos as usize)
-    } else {
-        let idx = index as usize;
-        if idx >= size {
-            return Err(FerrayError::index_out_of_bounds(index, axis, size));
-        }
-        Ok(idx)
-    }
-}
 
 // ===========================================================================
 // take / take_along_axis

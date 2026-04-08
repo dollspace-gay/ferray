@@ -1,5 +1,7 @@
 // ferray-core: Iterator implementations (REQ-37)
 
+use ndarray::{Dimension as NdarrayDimension, IntoDimension};
+
 use crate::dimension::{Axis, Dimension, Ix1, IxDyn};
 use crate::dtype::Element;
 use crate::error::{FerrayError, FerrayResult};
@@ -27,20 +29,17 @@ impl<T: Element, D: Dimension> Array<T, D> {
     ///
     /// Yields `(Vec<usize>, &T)` pairs in logical order. The index vector
     /// has one entry per dimension.
+    ///
+    /// Delegates to ndarray's cached `indexed_iter`, which carries a
+    /// typed index through the walk (no per-element divmod on a flat
+    /// index as the previous hand-rolled implementation did, see
+    /// issue #80). The public `Vec<usize>` return type forces a single
+    /// allocation per yielded element; any further win requires an API
+    /// change to a streaming iterator or `&[usize]` signature.
     pub fn indexed_iter(&self) -> impl Iterator<Item = (Vec<usize>, &T)> + '_ {
-        let shape = self.shape().to_vec();
-        let ndim = shape.len();
-        self.inner.iter().enumerate().map(move |(flat_idx, val)| {
-            let mut idx = vec![0usize; ndim];
-            let mut rem = flat_idx;
-            // Convert flat index to multi-dimensional (assuming C-order iteration)
-            for (d, s) in shape.iter().enumerate().rev() {
-                if *s > 0 {
-                    idx[d] = rem % s;
-                    rem /= s;
-                }
-            }
-            (idx, val)
+        self.inner.indexed_iter().map(|(pat, val)| {
+            let dim = pat.into_dimension();
+            (dim.slice().to_vec(), val)
         })
     }
 
@@ -166,20 +165,11 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
         self.inner.iter()
     }
 
-    /// Iterate with multi-dimensional indices.
+    /// Iterate with multi-dimensional indices. See [`Array::indexed_iter`].
     pub fn indexed_iter(&self) -> impl Iterator<Item = (Vec<usize>, &T)> + '_ {
-        let shape = self.shape().to_vec();
-        let ndim = shape.len();
-        self.inner.iter().enumerate().map(move |(flat_idx, val)| {
-            let mut idx = vec![0usize; ndim];
-            let mut rem = flat_idx;
-            for (d, s) in shape.iter().enumerate().rev() {
-                if *s > 0 {
-                    idx[d] = rem % s;
-                    rem /= s;
-                }
-            }
-            (idx, val)
+        self.inner.indexed_iter().map(|(pat, val)| {
+            let dim = pat.into_dimension();
+            (dim.slice().to_vec(), val)
         })
     }
 }

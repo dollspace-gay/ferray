@@ -18,7 +18,11 @@ use crate::error::{FerrayError, FerrayResult};
 ///
 /// The total number of elements must remain the same.
 ///
-/// Analogous to `numpy.reshape()`.
+/// Analogous to `numpy.reshape()`. Delegates to ndarray's `to_shape`,
+/// which re-uses the existing buffer (zero copy on the data side) for
+/// contiguous inputs and only does a bulk memcpy via `to_owned` — the
+/// old path ran an element-by-element `iter().cloned().collect()`
+/// instead (issue #82).
 ///
 /// # Errors
 /// Returns `FerrayError::ShapeMismatch` if the new shape has a different
@@ -35,17 +39,33 @@ pub fn reshape<T: Element, D: Dimension>(
             old_size, new_shape, new_size,
         )));
     }
-    let data: Vec<T> = a.iter().cloned().collect();
-    Array::from_vec(IxDyn::new(new_shape), data)
+    let view = a.inner.view().into_dyn();
+    let reshaped = view
+        .to_shape(ndarray::IxDyn(new_shape))
+        .map_err(|e| FerrayError::shape_mismatch(e.to_string()))?;
+    // `as_standard_layout` ensures the final buffer is C-contiguous so
+    // `as_slice()` works for callers, even when the source view was
+    // F-contiguous / strided.
+    Ok(Array::from_ndarray(
+        reshaped.as_standard_layout().into_owned(),
+    ))
 }
 
 /// Return a flattened (1-D) copy of the array.
 ///
-/// Analogous to `numpy.ravel()`.
+/// Analogous to `numpy.ravel()`. Uses ndarray's `to_shape` rather than
+/// the element-wise collect path (issue #82).
 pub fn ravel<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrayResult<Array<T, Ix1>> {
-    let data: Vec<T> = a.iter().cloned().collect();
-    let n = data.len();
-    Array::from_vec(Ix1::new([n]), data)
+    let n = a.size();
+    let view = a.inner.view().into_dyn();
+    let reshaped = view
+        .to_shape(ndarray::IxDyn(&[n]))
+        .expect("1-D reshape always succeeds for a size-preserving target");
+    let standard = reshaped.as_standard_layout().into_owned();
+    let one_d = standard
+        .into_dimensionality::<ndarray::Ix1>()
+        .expect("reshape result has ndim == 1 by construction");
+    Ok(Array::from_ndarray(one_d))
 }
 
 /// Return a flattened (1-D) copy of the array.
@@ -131,7 +151,11 @@ pub fn expand_dims<T: Element, D: Dimension>(
 ///
 /// The array is replicated along size-1 dimensions to match the target shape.
 ///
-/// Analogous to `numpy.broadcast_to()`.
+/// Analogous to `numpy.broadcast_to()`. Uses ndarray's `broadcast` to
+/// produce a zero-copy stride-0 view and then materializes it with a
+/// single `to_owned` — the prior implementation allocated a source
+/// buffer via `iter().cloned().collect()` and walked every output
+/// index in a hand-rolled nested loop (issue #81).
 ///
 /// # Errors
 /// Returns `FerrayError::BroadcastFailure` if the shapes are incompatible.
@@ -140,63 +164,20 @@ pub fn broadcast_to<T: Element, D: Dimension>(
     new_shape: &[usize],
 ) -> FerrayResult<Array<T, IxDyn>> {
     let src_shape = a.shape();
-    let src_ndim = src_shape.len();
-    let dst_ndim = new_shape.len();
-
-    if dst_ndim < src_ndim {
-        return Err(FerrayError::BroadcastFailure {
-            shape_a: src_shape.to_vec(),
-            shape_b: new_shape.to_vec(),
-        });
-    }
-
-    // Check compatibility: walk from the right
-    let pad = dst_ndim - src_ndim;
-    for i in 0..src_ndim {
-        let s = src_shape[i];
-        let d = new_shape[pad + i];
-        if s != d && s != 1 {
-            return Err(FerrayError::BroadcastFailure {
+    let dyn_view = a.inner.view().into_dyn();
+    let broadcast_view =
+        dyn_view
+            .broadcast(ndarray::IxDyn(new_shape))
+            .ok_or_else(|| FerrayError::BroadcastFailure {
                 shape_a: src_shape.to_vec(),
                 shape_b: new_shape.to_vec(),
-            });
-        }
-    }
-
-    // Build the broadcast array
-    let total: usize = new_shape.iter().product();
-    let mut data = Vec::with_capacity(total);
-    let src_data: Vec<T> = a.iter().cloned().collect();
-
-    // Precompute source strides (C-order)
-    let mut src_strides = vec![1usize; src_ndim];
-    for i in (0..src_ndim.saturating_sub(1)).rev() {
-        src_strides[i] = src_strides[i + 1] * src_shape[i + 1];
-    }
-
-    // Precompute output strides (C-order)
-    let mut out_strides = vec![1usize; dst_ndim];
-    for i in (0..dst_ndim.saturating_sub(1)).rev() {
-        out_strides[i] = out_strides[i + 1] * new_shape[i + 1];
-    }
-
-    for flat in 0..total {
-        let mut rem = flat;
-        let mut s_idx = 0usize;
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..dst_ndim {
-            let idx = rem / out_strides[i];
-            rem %= out_strides[i];
-            if i >= pad {
-                let src_i = i - pad;
-                let src_idx = if src_shape[src_i] == 1 { 0 } else { idx };
-                s_idx += src_idx * src_strides[src_i];
-            }
-        }
-        data.push(src_data[s_idx].clone());
-    }
-
-    Array::from_vec(IxDyn::new(new_shape), data)
+            })?;
+    // `as_standard_layout` turns the stride-0 broadcast view into a
+    // proper C-contiguous owned buffer in one pass; the previous
+    // hand-rolled loop walked every destination index separately.
+    Ok(Array::from_ndarray(
+        broadcast_view.as_standard_layout().into_owned(),
+    ))
 }
 
 // ============================================================================
@@ -705,8 +686,7 @@ pub fn transpose<T: Element, D: Dimension>(
     a: &Array<T, D>,
     axes: Option<&[usize]>,
 ) -> FerrayResult<Array<T, IxDyn>> {
-    let shape = a.shape();
-    let ndim = shape.len();
+    let ndim = a.ndim();
     let perm: Vec<usize> = match axes {
         Some(ax) => {
             if ax.len() != ndim {
@@ -735,38 +715,22 @@ pub fn transpose<T: Element, D: Dimension>(
         None => (0..ndim).rev().collect(),
     };
 
-    let new_shape: Vec<usize> = perm.iter().map(|&ax| shape[ax]).collect();
-    let total: usize = new_shape.iter().product();
-    let src_data: Vec<T> = a.iter().cloned().collect();
-
-    // Compute source strides (C-order)
-    let mut src_strides = vec![1usize; ndim];
-    for i in (0..ndim.saturating_sub(1)).rev() {
-        src_strides[i] = src_strides[i + 1] * shape[i + 1];
-    }
-
-    // Compute output strides (C-order)
-    let mut out_strides = vec![1usize; ndim];
-    for i in (0..ndim.saturating_sub(1)).rev() {
-        out_strides[i] = out_strides[i + 1] * new_shape[i + 1];
-    }
-
-    let mut data = Vec::with_capacity(total);
-    for flat_out in 0..total {
-        // Convert to nd-index in output
-        let mut rem = flat_out;
-        let mut src_flat = 0usize;
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..ndim {
-            let idx = rem / out_strides[i];
-            rem %= out_strides[i];
-            // This output dimension i corresponds to source dimension perm[i]
-            src_flat += idx * src_strides[perm[i]];
-        }
-        data.push(src_data[src_flat].clone());
-    }
-
-    Array::from_vec(IxDyn::new(&new_shape), data)
+    // Permute axes is a zero-copy stride rearrangement in ndarray; we
+    // then call `as_standard_layout` which returns a borrowed view when
+    // already C-contiguous or materializes a single standard-layout
+    // owned buffer otherwise. The old implementation walked every
+    // output index in a hand-rolled scatter loop (issue #82). Plain
+    // `to_owned()` would preserve the F-contiguous stride pattern from
+    // the permutation, which downstream callers don't want because
+    // `as_slice()` only succeeds on standard layouts.
+    let permuted = a
+        .inner
+        .view()
+        .into_dyn()
+        .permuted_axes(ndarray::IxDyn(&perm));
+    Ok(Array::from_ndarray(
+        permuted.as_standard_layout().into_owned(),
+    ))
 }
 
 /// Swap two axes of an array.

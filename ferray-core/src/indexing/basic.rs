@@ -13,27 +13,7 @@ use crate::dimension::{Axis, Dimension, IxDyn};
 use crate::dtype::Element;
 use crate::error::{FerrayError, FerrayResult};
 
-/// Normalize a potentially negative index to a positive one.
-///
-/// Negative indices count from the end: -1 is the last element, -2 is
-/// second-to-last, etc. Returns `Err` if the normalized index is out of
-/// bounds.
-fn normalize_index(index: isize, size: usize, axis: usize) -> FerrayResult<usize> {
-    let normalized = if index < 0 {
-        let pos = size as isize + index;
-        if pos < 0 {
-            return Err(FerrayError::index_out_of_bounds(index, axis, size));
-        }
-        pos as usize
-    } else {
-        let idx = index as usize;
-        if idx >= size {
-            return Err(FerrayError::index_out_of_bounds(index, axis, size));
-        }
-        idx
-    };
-    Ok(normalized)
-}
+use super::normalize_index;
 
 /// A slice specification for one axis, mirroring Python's `start:stop:step`.
 ///

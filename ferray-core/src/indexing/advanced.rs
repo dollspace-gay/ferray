@@ -6,6 +6,7 @@
 //
 // All advanced indexing operations return COPIES, not views.
 
+use super::normalize_index;
 use crate::array::owned::Array;
 use crate::array::view::ArrayView;
 use crate::dimension::{Axis, Dimension, Ix1, IxDyn};
@@ -39,7 +40,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
         // Normalize all indices
         let normalized: Vec<usize> = indices
             .iter()
-            .map(|&idx| normalize_index_adv(idx, axis_size, ax))
+            .map(|&idx| normalize_index(idx, axis_size, ax))
             .collect::<FerrayResult<Vec<_>>>()?;
 
         let dyn_view = self.inner.view().into_dyn();
@@ -185,7 +186,7 @@ impl<T: Element, D: Dimension> ArrayView<'_, T, D> {
 
         let normalized: Vec<usize> = indices
             .iter()
-            .map(|&idx| normalize_index_adv(idx, axis_size, ax))
+            .map(|&idx| normalize_index(idx, axis_size, ax))
             .collect::<FerrayResult<Vec<_>>>()?;
 
         let dyn_view = self.inner.clone().into_dyn();
@@ -213,23 +214,6 @@ impl<T: Element, D: Dimension> ArrayView<'_, T, D> {
 
         let len = data.len();
         Array::from_vec(Ix1::new([len]), data)
-    }
-}
-
-/// Normalize a (potentially negative) index for advanced indexing.
-fn normalize_index_adv(index: isize, size: usize, axis: usize) -> FerrayResult<usize> {
-    if index < 0 {
-        let pos = size as isize + index;
-        if pos < 0 {
-            return Err(FerrayError::index_out_of_bounds(index, axis, size));
-        }
-        Ok(pos as usize)
-    } else {
-        let idx = index as usize;
-        if idx >= size {
-            return Err(FerrayError::index_out_of_bounds(index, axis, size));
-        }
-        Ok(idx)
     }
 }
 
