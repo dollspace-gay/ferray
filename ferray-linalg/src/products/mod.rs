@@ -929,6 +929,53 @@ mod tests {
     }
 
     #[test]
+    fn multi_dot_first_arg_1d() {
+        // Issue #217: NumPy allows the first matrix in multi_dot to be a
+        // 1-D array, treating it as a row vector. The result should be a
+        // 1-D array of length matching the last matrix's column count.
+        let v = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let m = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[3, 2]),
+            vec![1.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+        )
+        .unwrap();
+        let n = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![1.0, 2.0, 3.0, 4.0],
+        )
+        .unwrap();
+        let result = multi_dot(&[&v, &m, &n]).unwrap();
+        // v @ m = [1*1+2*0+3*1, 1*0+2*1+3*1] = [4, 5]
+        // [4, 5] @ n = [4*1+5*3, 4*2+5*4] = [19, 28]
+        let r: Vec<f64> = result.iter().copied().collect();
+        assert!((r[0] - 19.0).abs() < 1e-10, "got {:?}", r);
+        assert!((r[1] - 28.0).abs() < 1e-10, "got {:?}", r);
+    }
+
+    #[test]
+    fn multi_dot_last_arg_1d() {
+        // Issue #217: NumPy allows the last matrix to be 1-D (treated
+        // as a column vector). Result is 1-D length matching first
+        // matrix's row count.
+        let m = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 3]),
+            vec![1.0, 0.0, 1.0, 0.0, 1.0, 1.0],
+        )
+        .unwrap();
+        let n = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[3, 3]),
+            vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        )
+        .unwrap();
+        let v = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let result = multi_dot(&[&m, &n, &v]).unwrap();
+        // n is identity, so it's m @ v = [1+0+3, 0+2+3] = [4, 5]
+        let r: Vec<f64> = result.iter().copied().collect();
+        assert!((r[0] - 4.0).abs() < 1e-10, "got {:?}", r);
+        assert!((r[1] - 5.0).abs() < 1e-10, "got {:?}", r);
+    }
+
+    #[test]
     fn vecdot_test() {
         let a =
             Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])

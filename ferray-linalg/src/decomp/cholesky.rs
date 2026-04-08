@@ -141,4 +141,66 @@ mod tests {
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
         assert!(cholesky(&a).is_err());
     }
+
+    // ----- cholesky_batched coverage (#219) -----
+
+    #[test]
+    fn cholesky_batched_2d_matches_unbatched() {
+        // 2-D input goes through the early-return shortcut.
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![4.0, 2.0, 2.0, 3.0]).unwrap();
+        let l_batched = cholesky_batched(&a).unwrap();
+        let a2 = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![4.0, 2.0, 2.0, 3.0]).unwrap();
+        let l_unbatched = cholesky(&a2).unwrap();
+        for (a, b) in l_batched.iter().zip(l_unbatched.iter()) {
+            assert!((a - b).abs() < 1e-12, "2D path mismatch");
+        }
+    }
+
+    #[test]
+    fn cholesky_batched_3d_two_matrices() {
+        // Two stacked 2x2 SPD matrices: A1 = [[4,2],[2,3]],
+        // A2 = [[9,3],[3,5]]. Verify each batch is correctly factored.
+        let data = vec![
+            // batch 0
+            4.0, 2.0, 2.0, 3.0, // batch 1
+            9.0, 3.0, 3.0, 5.0,
+        ];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let l = cholesky_batched(&a).unwrap();
+        assert_eq!(l.shape(), &[2, 2, 2]);
+
+        // For each batch, reconstruct L*L^T and compare to A.
+        let l_data: Vec<f64> = l.iter().copied().collect();
+        let a_data: Vec<f64> = a.iter().copied().collect();
+        for batch in 0..2 {
+            let off = batch * 4;
+            for i in 0..2 {
+                for j in 0..2 {
+                    let mut sum = 0.0;
+                    for k in 0..2 {
+                        sum += l_data[off + i * 2 + k] * l_data[off + j * 2 + k];
+                    }
+                    let expected = a_data[off + i * 2 + j];
+                    assert!(
+                        (sum - expected).abs() < 1e-10,
+                        "batch {} L*L^T[{},{}] = {} != {}",
+                        batch,
+                        i,
+                        j,
+                        sum,
+                        expected
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cholesky_batched_rejects_non_spd_in_one_batch() {
+        // First batch SPD, second batch indefinite — should error.
+        let data = vec![4.0, 2.0, 2.0, 3.0, -1.0, 0.0, 0.0, -1.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        assert!(cholesky_batched(&a).is_err());
+    }
 }
