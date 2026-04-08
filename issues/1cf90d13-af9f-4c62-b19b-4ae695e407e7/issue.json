@@ -3,11 +3,12 @@
   "display_id": 175,
   "title": "ferray-stats: quantile/median via full sort is O(n log n)",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nquantile.rs L43-47: select_nth_unstable would give O(n) for median.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:40:08.761768321Z",
-  "updated_at": "2026-03-25T15:40:30.776694276Z",
+  "updated_at": "2026-04-08T05:22:05.847833897Z",
+  "closed_at": "2026-04-08T05:22:05.847833897Z",
   "labels": [
     "refactor",
     "qa-audit"
