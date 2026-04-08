@@ -2,16 +2,11 @@
   "next_display_id": 1,
   "next_comment_id": 1,
   "display_id_map": {},
-  "locks": {
-    "366": {
-      "agent_id": "phase-4-coordinator",
-      "claimed_at": "2026-04-08T22:35:09.311713130Z"
-    }
-  },
+  "locks": {},
   "issues": {},
   "watermark": {
-    "timestamp": "2026-04-08T22:35:09.311713130Z",
+    "timestamp": "2026-04-08T22:37:29.886256032Z",
     "agent_id": "phase-4-coordinator",
-    "agent_seq": 293
+    "agent_seq": 294
   }
 }
