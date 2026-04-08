@@ -30,38 +30,7 @@ impl<T: Read + std::io::Seek + ?Sized> ReadSeek for T {}
 /// # Errors
 /// Returns `FerrayError::IoError` on file creation or write failures.
 pub fn savez<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -> FerrayResult<()> {
-    let file = File::create(path.as_ref()).map_err(|e| {
-        FerrayError::io_error(format!(
-            "failed to create .npz file '{}': {e}",
-            path.as_ref().display()
-        ))
-    })?;
-
-    let mut zip_writer = zip::ZipWriter::new(file);
-
-    for (name, array) in arrays {
-        let entry_name = if name.ends_with(".npy") {
-            name.to_string()
-        } else {
-            format!("{name}.npy")
-        };
-
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-
-        zip_writer.start_file(&entry_name, options).map_err(|e| {
-            FerrayError::io_error(format!("failed to create zip entry '{entry_name}': {e}"))
-        })?;
-
-        // Write .npy data directly into the zip entry — no intermediate buffer.
-        npy::save_dynamic_to_writer(&mut zip_writer, array)?;
-    }
-
-    zip_writer
-        .finish()
-        .map_err(|e| FerrayError::io_error(format!("failed to finalize .npz file: {e}")))?;
-
-    Ok(())
+    savez_impl(path, arrays, zip::CompressionMethod::Stored)
 }
 
 /// Save multiple arrays to a gzip-compressed `.npz` file.
@@ -71,6 +40,16 @@ pub fn savez<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -> FerrayRes
 /// # Errors
 /// Returns `FerrayError::IoError` on file creation or write failures.
 pub fn savez_compressed<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -> FerrayResult<()> {
+    savez_impl(path, arrays, zip::CompressionMethod::Deflated)
+}
+
+/// Shared implementation for [`savez`] and [`savez_compressed`]; the
+/// only difference between the two is the compression method (#233).
+fn savez_impl<P: AsRef<Path>>(
+    path: P,
+    arrays: &[(&str, &DynArray)],
+    method: zip::CompressionMethod,
+) -> FerrayResult<()> {
     let file = File::create(path.as_ref()).map_err(|e| {
         FerrayError::io_error(format!(
             "failed to create .npz file '{}': {e}",
@@ -87,14 +66,12 @@ pub fn savez_compressed<P: AsRef<Path>>(path: P, arrays: &[(&str, &DynArray)]) -
             format!("{name}.npy")
         };
 
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+        let options = zip::write::SimpleFileOptions::default().compression_method(method);
 
         zip_writer.start_file(&entry_name, options).map_err(|e| {
             FerrayError::io_error(format!("failed to create zip entry '{entry_name}': {e}"))
         })?;
 
-        // Write .npy data directly into the compressed zip entry.
         npy::save_dynamic_to_writer(&mut zip_writer, array)?;
     }
 

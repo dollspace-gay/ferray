@@ -263,12 +263,13 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
 
 /// Combined entry point matching NumPy's `memmap` function signature.
 ///
-/// Dispatches to `memmap_readonly` or `memmap_mut` based on `mode`.
-/// For ReadOnly mode, copies the data to an owned array (since the return type
-/// must be uniform). For mutable modes, returns the data copied into an owned array
-/// after applying the mapping.
+/// Dispatches to `memmap_readonly` or `memmap_mut` based on `mode`,
+/// then copies the mapped data into an owned `Array<T, IxDyn>`.
 ///
-/// For zero-copy access, use `memmap_readonly` or `memmap_mut` directly.
+/// **This always copies** because `Array<T, IxDyn>` owns its buffer.
+/// For zero-copy access, use [`memmap_readonly`] or [`memmap_mut`]
+/// directly and call `.view()` on the result to get an `ArrayView`
+/// backed by the mmap (#239, #496).
 pub fn open_memmap<T: Element + NpyElement, P: AsRef<Path>>(
     path: P,
     mode: MemmapMode,

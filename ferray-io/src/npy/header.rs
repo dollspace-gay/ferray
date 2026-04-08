@@ -167,9 +167,18 @@ fn compute_padding(current_total: usize) -> usize {
     }
 }
 
+/// Write `count` space bytes as header padding. Uses a single
+/// `write_all` call instead of one per byte (#237).
 fn write_padding<W: std::io::Write>(writer: &mut W, count: usize) -> FerrayResult<()> {
-    for _ in 0..count {
-        writer.write_all(b" ")?;
+    // Stack buffer covers all realistic header padding; the .npy
+    // spec aligns to 64 bytes, so count is always < 64.
+    const MAX_STACK: usize = 128;
+    if count <= MAX_STACK {
+        let buf = [b' '; MAX_STACK];
+        writer.write_all(&buf[..count])?;
+    } else {
+        let buf = vec![b' '; count];
+        writer.write_all(&buf)?;
     }
     Ok(())
 }
