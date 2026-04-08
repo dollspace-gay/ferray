@@ -82,7 +82,9 @@ pub use ops::comparison::{
 };
 
 // Logical
-pub use ops::logical::{Logical, all, any, logical_and, logical_not, logical_or, logical_xor};
+pub use ops::logical::{
+    Logical, all, all_axis, any, any_axis, logical_and, logical_not, logical_or, logical_xor,
+};
 
 // Special
 pub use ops::special::{i0, sinc};

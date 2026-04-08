@@ -185,7 +185,9 @@ pub use ferray_ufunc::{
 };
 
 // Logical
-pub use ferray_ufunc::{all, any, logical_and, logical_not, logical_or, logical_xor};
+pub use ferray_ufunc::{
+    all, all_axis, any, any_axis, logical_and, logical_not, logical_or, logical_xor,
+};
 
 // Special
 pub use ferray_ufunc::{i0, sinc};
