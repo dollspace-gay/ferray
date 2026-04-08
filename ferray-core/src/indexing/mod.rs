@@ -8,11 +8,12 @@ pub mod advanced;
 pub mod basic;
 pub mod extended;
 
-// Flat re-exports of the multi-dim <-> flat index converters so users
-// can write `ferray_core::indexing::{ravel_multi_index, unravel_index}`
-// instead of reaching into the `extended` submodule. Matches NumPy's
-// flat top-level namespace (`np.ravel_multi_index`, `np.unravel_index`).
-pub use extended::{ravel_multi_index, unravel_index};
+// Flat re-exports of the most NumPy-namespace-adjacent extended
+// indexing functions so users don't need to reach into the `extended`
+// submodule for the common cases. Matches NumPy's flat top-level
+// namespace (`np.ravel_multi_index`, `np.unravel_index`, `np.nonzero`,
+// `np.argwhere`, `np.flatnonzero`).
+pub use extended::{argwhere, flatnonzero, nonzero, ravel_multi_index, unravel_index};
 
 use crate::error::{FerrayError, FerrayResult};
 

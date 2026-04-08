@@ -11,7 +11,7 @@
 
 use super::normalize_index;
 use crate::array::owned::Array;
-use crate::dimension::{Axis, Dimension, IxDyn};
+use crate::dimension::{Axis, Dimension, Ix2, IxDyn};
 use crate::dtype::Element;
 use crate::error::{FerrayError, FerrayResult};
 
@@ -599,6 +599,69 @@ pub fn flatnonzero<T: Element + PartialEq, D: Dimension>(a: &Array<T, D>) -> Vec
 }
 
 // ===========================================================================
+// nonzero / argwhere (#373)
+// ===========================================================================
+
+/// Return the indices of non-zero elements, one index vector per axis.
+///
+/// Equivalent to `np.nonzero(a)`. For an N-dimensional array with K
+/// non-zero elements, the returned `Vec<Vec<usize>>` has length N, and
+/// each inner vector has length K. `result[d][i]` is the coordinate
+/// along axis `d` of the `i`-th non-zero element (in row-major order).
+///
+/// For a 1-D array this is equivalent to wrapping `flatnonzero` in a
+/// single-element outer vector. For 2-D, the two inner vectors give
+/// (row_indices, col_indices) — the typical pair used to reconstruct
+/// sparse matrices or index back into the original array.
+///
+/// Returns `usize` coordinates because `usize` is not an `Element` type;
+/// callers who need a `Array<i64, _>` can cast via
+/// [`argwhere`] or by wrapping each inner vector in an `Array<i64, Ix1>`.
+pub fn nonzero<T: Element + PartialEq, D: Dimension>(a: &Array<T, D>) -> Vec<Vec<usize>> {
+    let zero = T::zero();
+    let ndim = a.ndim();
+    let mut result: Vec<Vec<usize>> = vec![Vec::new(); ndim];
+    for (idx, val) in a.indexed_iter() {
+        if *val != zero {
+            for (d, &c) in idx.iter().enumerate() {
+                result[d].push(c);
+            }
+        }
+    }
+    result
+}
+
+/// Return the coordinates of non-zero elements as a 2-D `(N, ndim)` array.
+///
+/// Equivalent to `np.argwhere(a)`. Each row of the result is the
+/// multi-index of one non-zero element, in row-major order. The output
+/// dtype is `i64` to match NumPy's default signed integer index type
+/// (and because `usize` is not an `Element`). For a 0-D (scalar) input
+/// the result has shape `(0, 0)` or `(1, 0)` depending on whether the
+/// scalar is zero.
+///
+/// # Errors
+/// Returns an error only if constructing the result `Array` fails, which
+/// should never happen for a well-formed input.
+pub fn argwhere<T: Element + PartialEq, D: Dimension>(
+    a: &Array<T, D>,
+) -> FerrayResult<Array<i64, Ix2>> {
+    let zero = T::zero();
+    let ndim = a.ndim();
+    let mut data: Vec<i64> = Vec::new();
+    let mut count: usize = 0;
+    for (idx, val) in a.indexed_iter() {
+        if *val != zero {
+            for &c in &idx {
+                data.push(c as i64);
+            }
+            count += 1;
+        }
+    }
+    Array::<i64, Ix2>::from_vec(Ix2::new([count, ndim]), data)
+}
+
+// ===========================================================================
 // ndindex / ndenumerate iterators
 // ===========================================================================
 
@@ -1061,6 +1124,78 @@ mod tests {
         let arr = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![0, 0, 0]).unwrap();
         let nz = flatnonzero(&arr);
         assert_eq!(nz.len(), 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // nonzero / argwhere (#373)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn nonzero_1d() {
+        let arr = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![0, 1, 0, 3, 0]).unwrap();
+        let nz = nonzero(&arr);
+        // One axis, one inner vec with the hit positions.
+        assert_eq!(nz.len(), 1);
+        assert_eq!(nz[0], vec![1, 3]);
+    }
+
+    #[test]
+    fn nonzero_2d_yields_row_and_col_indices() {
+        // [[0, 1, 0],
+        //  [2, 0, 3]]
+        // Non-zero coordinates (row-major): (0,1), (1,0), (1,2).
+        let arr = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![0, 1, 0, 2, 0, 3]).unwrap();
+        let nz = nonzero(&arr);
+        assert_eq!(nz.len(), 2);
+        assert_eq!(nz[0], vec![0, 1, 1]);
+        assert_eq!(nz[1], vec![1, 0, 2]);
+    }
+
+    #[test]
+    fn nonzero_all_zero_returns_empty_per_axis() {
+        let arr = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![0; 6]).unwrap();
+        let nz = nonzero(&arr);
+        assert_eq!(nz.len(), 2);
+        assert!(nz[0].is_empty());
+        assert!(nz[1].is_empty());
+    }
+
+    #[test]
+    fn nonzero_f64_treats_negative_zero_as_zero() {
+        // -0.0 == 0.0 for PartialEq, so -0.0 is "zero" per numpy semantics.
+        let arr = Array::<f64, Ix1>::from_vec(
+            Ix1::new([4]),
+            vec![-0.0, 1.5, 0.0, -2.5],
+        )
+        .unwrap();
+        let nz = nonzero(&arr);
+        assert_eq!(nz[0], vec![1, 3]);
+    }
+
+    #[test]
+    fn argwhere_2d_has_one_row_per_nonzero() {
+        // Same input as nonzero_2d_yields_row_and_col_indices.
+        let arr = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![0, 1, 0, 2, 0, 3]).unwrap();
+        let coords = argwhere(&arr).unwrap();
+        assert_eq!(coords.shape(), &[3, 2]);
+        assert_eq!(coords.as_slice().unwrap(), &[0, 1, 1, 0, 1, 2]);
+    }
+
+    #[test]
+    fn argwhere_1d_is_column_vector() {
+        // A (K, 1) shape means K non-zero rows for a 1-D array.
+        let arr = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![0, 7, 0, 9, 3]).unwrap();
+        let coords = argwhere(&arr).unwrap();
+        assert_eq!(coords.shape(), &[3, 1]);
+        assert_eq!(coords.as_slice().unwrap(), &[1, 3, 4]);
+    }
+
+    #[test]
+    fn argwhere_all_zero_returns_empty() {
+        let arr = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![0; 6]).unwrap();
+        let coords = argwhere(&arr).unwrap();
+        assert_eq!(coords.shape(), &[0, 2]);
+        assert_eq!(coords.size(), 0);
     }
 
     // -----------------------------------------------------------------------
