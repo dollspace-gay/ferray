@@ -1,0 +1,10 @@
+{
+  "uuid": "b0fe1fc2-f507-44e0-bfcd-6a6fc68bd86a",
+  "issue_uuid": "a1c38017-e4e2-440f-b15e-50b8c0483927",
+  "author": "phase-4-coordinator",
+  "content": "Audited every operation in ferray-strings for shape preservation on ND StringArrays. All map-based operations (case.rs upper/lower/capitalize/title, align.rs center/ljust/rjust/zfill, strip.rs strip/lstrip/rstrip, concat.rs multiply) delegate to StringArray::map which threads D through the output. Search ops (search.rs find/count/startswith/endswith/replace) use Array::from_vec(a.dim().clone(), ...). regex_ops match_ preserves D; concat.rs add intentionally returns IxDyn because it supports cross-rank broadcasting — which is the correct NumPy semantic.\\n\\nThe audit found no actual shape-flattening bugs (the fear in the issue title turned out to be unfounded — kudos to whoever set up map() as the central dispatch early on). But the ND shape contract was entirely untested. Added 7 regression tests that pin shape preservation on 2x2 and 2x2x2 inputs: case ops (2D + 3D), align ops, strip ops, concat ops, search ops (find/count/startswith/endswith/replace), regex match_. 94 lib tests (up from 87) + 12 property tests + 0 doctests pass. Clippy clean. Future additions that accidentally flatten will fail one of these shape assertions immediately.",
+  "created_at": "2026-04-08T00:54:19.441231195Z",
+  "kind": "note",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAQb/0003WWqZhkUweXBiAnzF7dFIBm5B/w4dtX5xBV1CGKJ1pcN1gjcWRrOU66JdOwGbkhmM59rcQF7PrHfxBBA=="
+}
