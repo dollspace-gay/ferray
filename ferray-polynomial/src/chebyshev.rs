@@ -180,6 +180,7 @@ fn chebyshev_to_power(cheb_coeffs: &[f64]) -> Vec<f64> {
 
     let mut t_prev = vec![0.0; n]; // T_{k-1}
     let mut t_curr = vec![0.0; n]; // T_k
+    let mut t_next = vec![0.0; n]; // scratch reused across iterations (#257)
     t_prev[0] = 1.0; // T_0
 
     // Add c[0] * T_0
@@ -197,7 +198,9 @@ fn chebyshev_to_power(cheb_coeffs: &[f64]) -> Vec<f64> {
 
     for &ck in &cheb_coeffs[2..n] {
         // T_k = 2x * T_{k-1} - T_{k-2}
-        let mut t_next = vec![0.0; n];
+        // Reset the scratch buffer in place — previously we
+        // allocated a fresh `vec![0.0; n]` here per term (#257).
+        t_next.fill(0.0);
         // 2x * t_curr
         for i in 0..(n - 1) {
             t_next[i + 1] += 2.0 * t_curr[i];
@@ -212,8 +215,11 @@ fn chebyshev_to_power(cheb_coeffs: &[f64]) -> Vec<f64> {
             power_coeffs[i] += ck * c;
         }
 
-        t_prev = t_curr;
-        t_curr = t_next;
+        // Rotate buffers without allocating: t_prev <- t_curr,
+        // t_curr <- t_next, and t_next becomes the old t_prev which
+        // we'll re-zero on the next iteration.
+        std::mem::swap(&mut t_prev, &mut t_curr);
+        std::mem::swap(&mut t_curr, &mut t_next);
     }
 
     power_coeffs

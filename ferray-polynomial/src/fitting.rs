@@ -181,6 +181,17 @@ pub fn least_squares_fit(
                 n
             )));
         }
+        // Issue #256: weights are squared via sqrt() to build the
+        // weighted system; a negative weight would silently produce
+        // NaN. Reject up front so the caller gets a useful error
+        // instead of "polynomial fit returned NaN coefficients".
+        for (i, &wi) in w.iter().enumerate() {
+            if !wi.is_finite() || wi < 0.0 {
+                return Err(FerrayError::invalid_value(format!(
+                    "weights must be non-negative finite numbers; w[{i}] = {wi}"
+                )));
+            }
+        }
     }
 
     // Build the weighted system: A = sqrt(W) * V, b = sqrt(W) * y
@@ -288,6 +299,26 @@ mod tests {
         let c = least_squares_fit(&v, x.len(), 2, &y, Some(&w)).unwrap();
         assert!((c[0] - 1.0).abs() < 1e-10);
         assert!((c[1] - 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn fit_weighted_negative_weight_errors() {
+        // Issue #256: a negative weight would silently produce NaN via
+        // sqrt(); the validation now rejects it up front.
+        let x = vec![0.0, 1.0, 2.0];
+        let y = vec![1.0, 3.0, 5.0];
+        let w = vec![1.0, -1.0, 1.0];
+        let v = power_vandermonde(&x, 1);
+        assert!(least_squares_fit(&v, x.len(), 2, &y, Some(&w)).is_err());
+    }
+
+    #[test]
+    fn fit_weighted_nan_weight_errors() {
+        let x = vec![0.0, 1.0, 2.0];
+        let y = vec![1.0, 3.0, 5.0];
+        let w = vec![1.0, f64::NAN, 1.0];
+        let v = power_vandermonde(&x, 1);
+        assert!(least_squares_fit(&v, x.len(), 2, &y, Some(&w)).is_err());
     }
 
     #[test]
