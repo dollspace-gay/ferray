@@ -1485,6 +1485,518 @@ where
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// `*_with` reductions: NumPy `initial=` and `where=` parameters (#459)
+//
+// NumPy reductions accept two extra parameters that ferray-stats was
+// missing entirely:
+//
+//   - `initial`: starting value for the accumulator. Lets `np.sum([])`
+//     return a non-zero seed, lets `np.min(arr, initial=999)` provide
+//     a fallback for empty inputs, and lets cumulative-style code
+//     thread an initial state through a reduction.
+//
+//   - `where`: same-shape boolean mask. Only positions where the mask
+//     is `true` contribute to the reduction. This is the masked-array
+//     equivalent without materializing a MaskedArray — `np.sum(arr,
+//     where=arr > 0)` is the canonical "sum the positives" idiom.
+//
+// The `*_with` family adds these as `Option<T>` / `Option<&Array<bool,
+// D>>` parameters. Mask broadcasting is intentionally not supported in
+// this first cut — the mask must have exactly the same shape as the
+// input. NumPy allows broadcast-compatible masks, but the same-shape
+// path covers every common use case (predicates produced by comparison
+// ufuncs against the same input always have a matching shape).
+// ---------------------------------------------------------------------------
+
+/// Validate that an optional `where` mask has the same shape as the
+/// input. Returns `Ok(())` if `mask` is `None` or shapes match.
+fn validate_mask_shape<T, D>(
+    a: &Array<T, D>,
+    mask: Option<&Array<bool, D>>,
+    op_name: &str,
+) -> FerrayResult<()>
+where
+    T: Element,
+    D: Dimension,
+{
+    if let Some(m) = mask {
+        if m.shape() != a.shape() {
+            return Err(FerrayError::shape_mismatch(format!(
+                "{op_name}: where mask shape {:?} does not match array shape {:?}",
+                m.shape(),
+                a.shape()
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Walk a single axis-Some output position, gathering masked-true lane
+/// values into `lane_buf` (cleared first). Used by every `*_with` axis
+/// path so the lane-gather logic exists in one place.
+///
+/// `out_multi` is the output multi-index excluding `axis`. The function
+/// reconstructs the corresponding input flat positions and consults the
+/// mask in lockstep.
+fn gather_lane_with_mask<T: Copy>(
+    data: &[T],
+    mask: Option<&[bool]>,
+    shape: &[usize],
+    strides: &[usize],
+    axis: usize,
+    out_multi: &[usize],
+    lane_buf: &mut Vec<T>,
+) {
+    let ndim = shape.len();
+    let axis_len = shape[axis];
+    let mut in_multi = vec![0usize; ndim];
+    let mut out_dim = 0;
+    for (d, idx) in in_multi.iter_mut().enumerate() {
+        if d == axis {
+            *idx = 0;
+        } else {
+            *idx = out_multi[out_dim];
+            out_dim += 1;
+        }
+    }
+    lane_buf.clear();
+    for k in 0..axis_len {
+        in_multi[axis] = k;
+        let idx = flat_index(&in_multi, strides);
+        match mask {
+            Some(m) if !m[idx] => {}
+            _ => lane_buf.push(data[idx]),
+        }
+    }
+}
+
+/// Sum reduction with `initial` and `where` parameters.
+///
+/// Equivalent to `np.sum(a, axis=axis, initial=initial, where=where_mask)`.
+///
+/// `initial` defaults to `T::zero()` when `None`. `where_mask`, when
+/// provided, must have exactly the same shape as `a` — broadcasting is
+/// not supported in this first cut. Positions where the mask is `false`
+/// are skipped.
+///
+/// # Errors
+/// - `FerrayError::AxisOutOfBounds` if `axis` is out of range.
+/// - `FerrayError::ShapeMismatch` if `where_mask.shape() != a.shape()`.
+pub fn sum_with<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    initial: Option<T>,
+    where_mask: Option<&Array<bool, D>>,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + std::ops::Add<Output = T> + Copy,
+    D: Dimension,
+{
+    validate_mask_shape(a, where_mask, "sum")?;
+    let init = initial.unwrap_or_else(<T as Element>::zero);
+    let data = borrow_data(a);
+    let mask_vec: Option<Vec<bool>> = where_mask.map(|m| m.iter().copied().collect());
+    let mask_slice: Option<&[bool]> = mask_vec.as_deref();
+
+    match axis {
+        None => {
+            let total = match mask_slice {
+                None => data.iter().copied().fold(init, |acc, x| acc + x),
+                Some(mask) => data
+                    .iter()
+                    .zip(mask.iter())
+                    .filter(|&(_, &m)| m)
+                    .fold(init, |acc, (&x, _)| acc + x),
+            };
+            make_result(&[], vec![total])
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape_vec = a.shape().to_vec();
+            let out_s = output_shape(&shape_vec, ax);
+            let strides = compute_strides(&shape_vec);
+
+            let out_size: usize = if out_s.is_empty() {
+                1
+            } else {
+                out_s.iter().product()
+            };
+            let mut result: Vec<T> = Vec::with_capacity(out_size);
+            let mut out_multi = vec![0usize; out_s.len()];
+            let mut lane_buf: Vec<T> = Vec::with_capacity(shape_vec[ax]);
+
+            for _ in 0..out_size {
+                gather_lane_with_mask(
+                    &data,
+                    mask_slice,
+                    &shape_vec,
+                    &strides,
+                    ax,
+                    &out_multi,
+                    &mut lane_buf,
+                );
+                let lane_sum = lane_buf.iter().copied().fold(init, |acc, x| acc + x);
+                result.push(lane_sum);
+                if !out_s.is_empty() {
+                    increment_multi_index(&mut out_multi, &out_s);
+                }
+            }
+            make_result(&out_s, result)
+        }
+    }
+}
+
+/// Product reduction with `initial` and `where` parameters.
+///
+/// Equivalent to `np.prod(a, axis=axis, initial=initial, where=where_mask)`.
+/// `initial` defaults to `T::one()` when `None`.
+pub fn prod_with<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    initial: Option<T>,
+    where_mask: Option<&Array<bool, D>>,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + std::ops::Mul<Output = T> + Copy,
+    D: Dimension,
+{
+    validate_mask_shape(a, where_mask, "prod")?;
+    let init = initial.unwrap_or_else(<T as Element>::one);
+    let data = borrow_data(a);
+    let mask_vec: Option<Vec<bool>> = where_mask.map(|m| m.iter().copied().collect());
+    let mask_slice: Option<&[bool]> = mask_vec.as_deref();
+
+    match axis {
+        None => {
+            let total = match mask_slice {
+                None => data.iter().copied().fold(init, |acc, x| acc * x),
+                Some(mask) => data
+                    .iter()
+                    .zip(mask.iter())
+                    .filter(|&(_, &m)| m)
+                    .fold(init, |acc, (&x, _)| acc * x),
+            };
+            make_result(&[], vec![total])
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape_vec = a.shape().to_vec();
+            let out_s = output_shape(&shape_vec, ax);
+            let strides = compute_strides(&shape_vec);
+
+            let out_size: usize = if out_s.is_empty() {
+                1
+            } else {
+                out_s.iter().product()
+            };
+            let mut result: Vec<T> = Vec::with_capacity(out_size);
+            let mut out_multi = vec![0usize; out_s.len()];
+            let mut lane_buf: Vec<T> = Vec::with_capacity(shape_vec[ax]);
+
+            for _ in 0..out_size {
+                gather_lane_with_mask(
+                    &data,
+                    mask_slice,
+                    &shape_vec,
+                    &strides,
+                    ax,
+                    &out_multi,
+                    &mut lane_buf,
+                );
+                let lane_prod = lane_buf.iter().copied().fold(init, |acc, x| acc * x);
+                result.push(lane_prod);
+                if !out_s.is_empty() {
+                    increment_multi_index(&mut out_multi, &out_s);
+                }
+            }
+            make_result(&out_s, result)
+        }
+    }
+}
+
+/// Min reduction with `initial` and `where` parameters.
+///
+/// Equivalent to `np.min(a, axis=axis, initial=initial, where=where_mask)`.
+/// Unlike plain `min`, an empty input (or a fully-masked-out lane) is
+/// allowed when `initial` is supplied — the result is `initial`. Without
+/// `initial`, an empty lane is an error.
+pub fn min_with<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    initial: Option<T>,
+    where_mask: Option<&Array<bool, D>>,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + PartialOrd + Copy,
+    D: Dimension,
+{
+    validate_mask_shape(a, where_mask, "min")?;
+    let nan_min = |a: T, b: T| -> T {
+        if a <= b {
+            a
+        } else if a > b {
+            b
+        } else {
+            a
+        }
+    };
+    let data = borrow_data(a);
+    let mask_vec: Option<Vec<bool>> = where_mask.map(|m| m.iter().copied().collect());
+    let mask_slice: Option<&[bool]> = mask_vec.as_deref();
+
+    let lane_min = |lane: &[T], initial: Option<T>| -> FerrayResult<T> {
+        let mut iter = lane.iter().copied();
+        let seed = match initial {
+            Some(v) => Some(v),
+            None => iter.next(),
+        };
+        match seed {
+            Some(s) => Ok(iter.fold(s, nan_min)),
+            None => Err(FerrayError::invalid_value(
+                "min: empty lane and no initial value",
+            )),
+        }
+    };
+
+    match axis {
+        None => {
+            let total = match mask_slice {
+                None => lane_min(&data, initial)?,
+                Some(mask) => {
+                    let filtered: Vec<T> = data
+                        .iter()
+                        .copied()
+                        .zip(mask.iter().copied())
+                        .filter_map(|(x, m)| if m { Some(x) } else { None })
+                        .collect();
+                    lane_min(&filtered, initial)?
+                }
+            };
+            make_result(&[], vec![total])
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape_vec = a.shape().to_vec();
+            let out_s = output_shape(&shape_vec, ax);
+            let strides = compute_strides(&shape_vec);
+
+            let out_size: usize = if out_s.is_empty() {
+                1
+            } else {
+                out_s.iter().product()
+            };
+            let mut result: Vec<T> = Vec::with_capacity(out_size);
+            let mut out_multi = vec![0usize; out_s.len()];
+            let mut lane_buf: Vec<T> = Vec::with_capacity(shape_vec[ax]);
+
+            for _ in 0..out_size {
+                gather_lane_with_mask(
+                    &data,
+                    mask_slice,
+                    &shape_vec,
+                    &strides,
+                    ax,
+                    &out_multi,
+                    &mut lane_buf,
+                );
+                result.push(lane_min(&lane_buf, initial)?);
+                if !out_s.is_empty() {
+                    increment_multi_index(&mut out_multi, &out_s);
+                }
+            }
+            make_result(&out_s, result)
+        }
+    }
+}
+
+/// Max reduction with `initial` and `where` parameters.
+///
+/// Symmetric to [`min_with`].
+pub fn max_with<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    initial: Option<T>,
+    where_mask: Option<&Array<bool, D>>,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + PartialOrd + Copy,
+    D: Dimension,
+{
+    validate_mask_shape(a, where_mask, "max")?;
+    let nan_max = |a: T, b: T| -> T {
+        if a >= b {
+            a
+        } else if a < b {
+            b
+        } else {
+            a
+        }
+    };
+    let data = borrow_data(a);
+    let mask_vec: Option<Vec<bool>> = where_mask.map(|m| m.iter().copied().collect());
+    let mask_slice: Option<&[bool]> = mask_vec.as_deref();
+
+    let lane_max = |lane: &[T], initial: Option<T>| -> FerrayResult<T> {
+        let mut iter = lane.iter().copied();
+        let seed = match initial {
+            Some(v) => Some(v),
+            None => iter.next(),
+        };
+        match seed {
+            Some(s) => Ok(iter.fold(s, nan_max)),
+            None => Err(FerrayError::invalid_value(
+                "max: empty lane and no initial value",
+            )),
+        }
+    };
+
+    match axis {
+        None => {
+            let total = match mask_slice {
+                None => lane_max(&data, initial)?,
+                Some(mask) => {
+                    let filtered: Vec<T> = data
+                        .iter()
+                        .copied()
+                        .zip(mask.iter().copied())
+                        .filter_map(|(x, m)| if m { Some(x) } else { None })
+                        .collect();
+                    lane_max(&filtered, initial)?
+                }
+            };
+            make_result(&[], vec![total])
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape_vec = a.shape().to_vec();
+            let out_s = output_shape(&shape_vec, ax);
+            let strides = compute_strides(&shape_vec);
+
+            let out_size: usize = if out_s.is_empty() {
+                1
+            } else {
+                out_s.iter().product()
+            };
+            let mut result: Vec<T> = Vec::with_capacity(out_size);
+            let mut out_multi = vec![0usize; out_s.len()];
+            let mut lane_buf: Vec<T> = Vec::with_capacity(shape_vec[ax]);
+
+            for _ in 0..out_size {
+                gather_lane_with_mask(
+                    &data,
+                    mask_slice,
+                    &shape_vec,
+                    &strides,
+                    ax,
+                    &out_multi,
+                    &mut lane_buf,
+                );
+                result.push(lane_max(&lane_buf, initial)?);
+                if !out_s.is_empty() {
+                    increment_multi_index(&mut out_multi, &out_s);
+                }
+            }
+            make_result(&out_s, result)
+        }
+    }
+}
+
+/// Mean reduction with a `where` mask.
+///
+/// Equivalent to `np.mean(a, axis=axis, where=where_mask)`. The divisor
+/// is the count of `true` positions in the mask, NOT the lane length —
+/// fully-masked-out lanes return `T::nan()` (matching NumPy's
+/// "RuntimeWarning: Mean of empty slice" behavior, but without the
+/// warning machinery). `initial` is intentionally not modeled because
+/// the divisor for an "initial-bumped" mean is ambiguous in NumPy too.
+pub fn mean_where<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    where_mask: Option<&Array<bool, D>>,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    validate_mask_shape(a, where_mask, "mean")?;
+    let data = borrow_data(a);
+    let mask_vec: Option<Vec<bool>> = where_mask.map(|m| m.iter().copied().collect());
+    let mask_slice: Option<&[bool]> = mask_vec.as_deref();
+
+    match axis {
+        None => {
+            let (sum, count) = match mask_slice {
+                None => {
+                    let total = data
+                        .iter()
+                        .copied()
+                        .fold(<T as Element>::zero(), |acc, x| acc + x);
+                    (total, data.len())
+                }
+                Some(mask) => {
+                    let mut s = <T as Element>::zero();
+                    let mut c = 0usize;
+                    for (&x, &m) in data.iter().zip(mask.iter()) {
+                        if m {
+                            s = s + x;
+                            c += 1;
+                        }
+                    }
+                    (s, c)
+                }
+            };
+            let result = if count == 0 {
+                <T as Float>::nan()
+            } else {
+                sum / T::from(count).unwrap()
+            };
+            make_result(&[], vec![result])
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape_vec = a.shape().to_vec();
+            let out_s = output_shape(&shape_vec, ax);
+            let strides = compute_strides(&shape_vec);
+
+            let out_size: usize = if out_s.is_empty() {
+                1
+            } else {
+                out_s.iter().product()
+            };
+            let mut result: Vec<T> = Vec::with_capacity(out_size);
+            let mut out_multi = vec![0usize; out_s.len()];
+            let mut lane_buf: Vec<T> = Vec::with_capacity(shape_vec[ax]);
+
+            for _ in 0..out_size {
+                gather_lane_with_mask(
+                    &data,
+                    mask_slice,
+                    &shape_vec,
+                    &strides,
+                    ax,
+                    &out_multi,
+                    &mut lane_buf,
+                );
+                let lane_mean = if lane_buf.is_empty() {
+                    <T as Float>::nan()
+                } else {
+                    let s = lane_buf
+                        .iter()
+                        .copied()
+                        .fold(<T as Element>::zero(), |acc, x| acc + x);
+                    s / T::from(lane_buf.len()).unwrap()
+                };
+                result.push(lane_mean);
+                if !out_s.is_empty() {
+                    increment_multi_index(&mut out_multi, &out_s);
+                }
+            }
+            make_result(&out_s, result)
+        }
+    }
+}
+
 /// Single-axis argmin with optional `keepdims`.
 ///
 /// NumPy's `argmin` only accepts a single axis (or `None`); this mirrors
@@ -2344,6 +2856,262 @@ mod tests {
         assert!((got - expected).abs() < 1e-12);
         // Sanity: result is not the variance.
         assert!((got - 1.25).abs() > 1e-3);
+    }
+
+    // ---- *_with reductions: initial= and where= (#459) ----
+
+    #[test]
+    fn sum_with_initial_only() {
+        // Initial = 100; sum becomes 100 + 1 + 2 + 3 + 4 = 110
+        let a = arr1d(vec![1.0, 2.0, 3.0, 4.0]);
+        let r = sum_with(&a, None, Some(100.0), None).unwrap();
+        assert_eq!(r.iter().next().copied().unwrap(), 110.0);
+    }
+
+    #[test]
+    fn sum_with_where_mask_only() {
+        // Sum positives only.
+        let a = arr1d(vec![1.0, -2.0, 3.0, -4.0, 5.0]);
+        let mask = Array::<bool, Ix1>::from_vec(
+            Ix1::new([5]),
+            vec![true, false, true, false, true],
+        )
+        .unwrap();
+        let r = sum_with(&a, None, None, Some(&mask)).unwrap();
+        assert_eq!(r.iter().next().copied().unwrap(), 9.0);
+    }
+
+    #[test]
+    fn sum_with_initial_and_mask_combined() {
+        let a = arr1d(vec![1.0, 2.0, 3.0, 4.0]);
+        let mask = Array::<bool, Ix1>::from_vec(
+            Ix1::new([4]),
+            vec![true, false, true, false],
+        )
+        .unwrap();
+        let r = sum_with(&a, None, Some(50.0), Some(&mask)).unwrap();
+        // 50 + 1 + 3 = 54
+        assert_eq!(r.iter().next().copied().unwrap(), 54.0);
+    }
+
+    #[test]
+    fn sum_with_axis_and_mask() {
+        // (2, 3); mask zeroes out the first column; row sums become
+        // [2+3, 5+6] = [5, 11].
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![false, true, true, false, true, true],
+        )
+        .unwrap();
+        let r = sum_with(&a, Some(1), None, Some(&mask)).unwrap();
+        assert_eq!(r.shape(), &[2]);
+        assert_eq!(r.as_slice().unwrap(), &[5.0, 11.0]);
+    }
+
+    #[test]
+    fn sum_with_axis_and_initial() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        // axis=1 with initial=10 → row sums become [10+6, 10+15] = [16, 25]
+        let r = sum_with(&a, Some(1), Some(10.0), None).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[16.0, 25.0]);
+    }
+
+    #[test]
+    fn sum_with_no_initial_no_mask_matches_legacy_sum() {
+        // Sanity: omitting both knobs should match the existing sum().
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let legacy = sum(&a, Some(1)).unwrap();
+        let with_form = sum_with(&a, Some(1), None, None).unwrap();
+        assert_eq!(legacy.as_slice().unwrap(), with_form.as_slice().unwrap());
+    }
+
+    #[test]
+    fn sum_with_rejects_mismatched_mask_shape() {
+        let a = arr1d(vec![1.0, 2.0, 3.0]);
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![true; 4]).unwrap();
+        assert!(sum_with(&a, None, None, Some(&mask)).is_err());
+    }
+
+    #[test]
+    fn prod_with_initial_only() {
+        let a = arr1d(vec![2.0, 3.0, 4.0]);
+        let r = prod_with(&a, None, Some(10.0), None).unwrap();
+        // 10 * 2 * 3 * 4 = 240
+        assert_eq!(r.iter().next().copied().unwrap(), 240.0);
+    }
+
+    #[test]
+    fn prod_with_where_mask() {
+        let a = arr1d(vec![2.0, 0.0, 3.0, 0.0, 4.0]);
+        let mask = Array::<bool, Ix1>::from_vec(
+            Ix1::new([5]),
+            vec![true, false, true, false, true],
+        )
+        .unwrap();
+        let r = prod_with(&a, None, None, Some(&mask)).unwrap();
+        // 2 * 3 * 4 = 24 (zero positions skipped)
+        assert_eq!(r.iter().next().copied().unwrap(), 24.0);
+    }
+
+    #[test]
+    fn min_with_initial_provides_fallback_for_empty_lane() {
+        // Empty array + initial = the initial value.
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([0]), vec![]).unwrap();
+        let r = min_with(&a, None, Some(99.0), None).unwrap();
+        assert_eq!(r.iter().next().copied().unwrap(), 99.0);
+    }
+
+    #[test]
+    fn min_with_initial_caps_actual_min() {
+        // Initial=0, data=[1,2,3] → min(0, 1, 2, 3) = 0.
+        let a = arr1d(vec![1.0, 2.0, 3.0]);
+        let r = min_with(&a, None, Some(0.0), None).unwrap();
+        assert_eq!(r.iter().next().copied().unwrap(), 0.0);
+    }
+
+    #[test]
+    fn min_with_where_mask_filters_then_reduces() {
+        let a = arr1d(vec![5.0, 1.0, 4.0, 2.0, 3.0]);
+        // Mask out positions 1 and 3 (values 1 and 2).
+        let mask = Array::<bool, Ix1>::from_vec(
+            Ix1::new([5]),
+            vec![true, false, true, false, true],
+        )
+        .unwrap();
+        let r = min_with(&a, None, None, Some(&mask)).unwrap();
+        // Filtered: [5, 4, 3] → min = 3
+        assert_eq!(r.iter().next().copied().unwrap(), 3.0);
+    }
+
+    #[test]
+    fn min_with_empty_lane_no_initial_errors() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([0]), vec![]).unwrap();
+        assert!(min_with(&a, None, None, None).is_err());
+    }
+
+    #[test]
+    fn min_with_fully_masked_axis_lane_no_initial_errors() {
+        // Each row fully masked out → error per lane.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mask =
+            Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
+        assert!(min_with(&a, Some(1), None, Some(&mask)).is_err());
+    }
+
+    #[test]
+    fn min_with_fully_masked_axis_lane_with_initial_uses_initial() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mask =
+            Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
+        let r = min_with(&a, Some(1), Some(99.0), Some(&mask)).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[99.0, 99.0]);
+    }
+
+    #[test]
+    fn max_with_initial_caps_actual_max() {
+        let a = arr1d(vec![1.0, 2.0, 3.0]);
+        let r = max_with(&a, None, Some(99.0), None).unwrap();
+        assert_eq!(r.iter().next().copied().unwrap(), 99.0);
+    }
+
+    #[test]
+    fn max_with_where_mask_filters_then_reduces() {
+        let a = arr1d(vec![5.0, 10.0, 4.0, 20.0, 3.0]);
+        // Mask out positions 1 and 3 (values 10 and 20).
+        let mask = Array::<bool, Ix1>::from_vec(
+            Ix1::new([5]),
+            vec![true, false, true, false, true],
+        )
+        .unwrap();
+        let r = max_with(&a, None, None, Some(&mask)).unwrap();
+        // Filtered: [5, 4, 3] → max = 5
+        assert_eq!(r.iter().next().copied().unwrap(), 5.0);
+    }
+
+    #[test]
+    fn mean_where_filters_and_divides_by_count() {
+        // [1, 2, 3, 4, 5] with mask [T, F, T, F, T] → (1+3+5)/3 = 3.0
+        let a = arr1d(vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+        let mask = Array::<bool, Ix1>::from_vec(
+            Ix1::new([5]),
+            vec![true, false, true, false, true],
+        )
+        .unwrap();
+        let r = mean_where(&a, None, Some(&mask)).unwrap();
+        assert!((r.iter().next().copied().unwrap() - 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn mean_where_no_mask_matches_legacy_mean() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let legacy = mean(&a, Some(1)).unwrap();
+        let where_form = mean_where(&a, Some(1), None).unwrap();
+        assert_eq!(legacy.as_slice().unwrap(), where_form.as_slice().unwrap());
+    }
+
+    #[test]
+    fn mean_where_fully_masked_lane_returns_nan() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![true, true, true, false, false, false],
+        )
+        .unwrap();
+        let r = mean_where(&a, Some(1), Some(&mask)).unwrap();
+        let s = r.as_slice().unwrap();
+        assert!((s[0] - 2.0).abs() < 1e-12);
+        assert!(s[1].is_nan());
+    }
+
+    #[test]
+    fn mean_where_axis_with_partial_mask() {
+        // (2, 3); mask = [[T,T,F],[F,T,T]]
+        // Row 0 mean: (1+2)/2 = 1.5
+        // Row 1 mean: (5+6)/2 = 5.5
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![true, true, false, false, true, true],
+        )
+        .unwrap();
+        let r = mean_where(&a, Some(1), Some(&mask)).unwrap();
+        assert_eq!(r.shape(), &[2]);
+        let s = r.as_slice().unwrap();
+        assert!((s[0] - 1.5).abs() < 1e-12);
+        assert!((s[1] - 5.5).abs() < 1e-12);
     }
 
     #[test]
