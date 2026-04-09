@@ -141,8 +141,7 @@ mod tests {
 
     #[test]
     fn index_2d() {
-        let arr =
-            Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 5, 6]).unwrap();
+        let arr = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 5, 6]).unwrap();
         assert_eq!(arr[[0, 0]], 1);
         assert_eq!(arr[[0, 2]], 3);
         assert_eq!(arr[[1, 0]], 4);
@@ -152,9 +151,11 @@ mod tests {
     #[test]
     fn index_3d() {
         // 2x2x2 = 8 elements
-        let arr =
-            Array::<f32, Ix3>::from_vec(Ix3::new([2, 2, 2]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
-                .unwrap();
+        let arr = Array::<f32, Ix3>::from_vec(
+            Ix3::new([2, 2, 2]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        )
+        .unwrap();
         assert_eq!(arr[[0, 0, 0]], 1.0);
         assert_eq!(arr[[0, 0, 1]], 2.0);
         assert_eq!(arr[[1, 1, 1]], 8.0);
@@ -172,8 +173,7 @@ mod tests {
 
     #[test]
     fn index_mut_2d() {
-        let mut arr =
-            Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![0; 6]).unwrap();
+        let mut arr = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![0; 6]).unwrap();
         arr[[0, 1]] = 42;
         arr[[1, 2]] = 99;
         assert_eq!(arr[[0, 1]], 42);
@@ -192,8 +192,7 @@ mod tests {
 
     #[test]
     fn index_mut_dyn() {
-        let mut arr =
-            Array::<i32, IxDyn>::from_vec(IxDyn::new(&[3]), vec![0, 0, 0]).unwrap();
+        let mut arr = Array::<i32, IxDyn>::from_vec(IxDyn::new(&[3]), vec![0, 0, 0]).unwrap();
         arr[&[1][..]] = 77;
         assert_eq!(arr[&[1][..]], 77);
     }

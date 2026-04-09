@@ -22,7 +22,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
-use ferray_core::dtype::promotion::{Promoted, PromoteTo};
+use ferray_core::dtype::promotion::{PromoteTo, Promoted};
 use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
@@ -215,17 +215,11 @@ mod tests {
     #[test]
     fn promoted_2d_shape_preserved() {
         let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1i32, 2, 3, 4, 5, 6]).unwrap();
-        let b = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
-        )
-        .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+            .unwrap();
         let c = add_promoted(&a, &b).unwrap();
         assert_eq!(c.shape(), &[2, 3]);
-        assert_eq!(
-            c.as_slice().unwrap(),
-            &[1.5, 2.5, 3.5, 4.5, 5.5, 6.5]
-        );
+        assert_eq!(c.as_slice().unwrap(), &[1.5, 2.5, 3.5, 4.5, 5.5, 6.5]);
     }
 
     #[test]

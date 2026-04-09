@@ -44,11 +44,7 @@ where
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if shapes differ.
 /// - `FerrayError::InvalidValue` if any array is non-contiguous.
-pub fn add_into<T, D>(
-    a: &Array<T, D>,
-    b: &Array<T, D>,
-    out: &mut Array<T, D>,
-) -> FerrayResult<()>
+pub fn add_into<T, D>(a: &Array<T, D>, b: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
@@ -485,11 +481,7 @@ where
 /// For float-typed arrays, use [`gcd`] instead.
 pub fn gcd_int<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
-    T: Element
-        + Copy
-        + PartialEq
-        + std::ops::Rem<Output = T>
-        + num_traits::Signed,
+    T: Element + Copy + PartialEq + std::ops::Rem<Output = T> + num_traits::Signed,
     D: Dimension,
 {
     binary_elementwise_op(a, b, |x, y| {
@@ -651,13 +643,9 @@ where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_axes(
-        input,
-        axes,
-        <T as Element>::zero(),
-        keepdims,
-        |acc, x| acc + x,
-    )
+    crate::ufunc_methods::reduce_axes(input, axes, <T as Element>::zero(), keepdims, |acc, x| {
+        acc + x
+    })
 }
 
 /// Reduce by addition over the entire array (the `axis=None` form).
@@ -725,13 +713,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_axes(
-        input,
-        axes,
-        <T as Element>::zero(),
-        keepdims,
-        |acc, x| acc + nan_to_zero(x),
-    )
+    crate::ufunc_methods::reduce_axes(input, axes, <T as Element>::zero(), keepdims, |acc, x| {
+        acc + nan_to_zero(x)
+    })
 }
 
 /// Reduce by NaN-skipping addition over the entire array.
@@ -744,9 +728,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_all(input, <T as Element>::zero(), |acc, x| {
-        acc + nan_to_zero(x)
-    })
+    crate::ufunc_methods::reduce_all(input, <T as Element>::zero(), |acc, x| acc + nan_to_zero(x))
 }
 
 /// Reduce by NaN-skipping multiplication along an axis with optional keepdims.
@@ -781,13 +763,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_axes(
-        input,
-        axes,
-        <T as Element>::one(),
-        keepdims,
-        |acc, x| acc * nan_to_one(x),
-    )
+    crate::ufunc_methods::reduce_axes(input, axes, <T as Element>::one(), keepdims, |acc, x| {
+        acc * nan_to_one(x)
+    })
 }
 
 /// Reduce by NaN-skipping multiplication over the entire array.
@@ -796,9 +774,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_all(input, <T as Element>::one(), |acc, x| {
-        acc * nan_to_one(x)
-    })
+    crate::ufunc_methods::reduce_all(input, <T as Element>::one(), |acc, x| acc * nan_to_one(x))
 }
 
 /// Reduce by NaN-skipping maximum along an axis with optional keepdims.
@@ -920,21 +896,15 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_axes(
-        input,
-        axes,
-        <T as Float>::infinity(),
-        keepdims,
-        |acc, x| {
-            if x.is_nan() {
-                acc
-            } else if x < acc {
-                x
-            } else {
-                acc
-            }
-        },
-    )
+    crate::ufunc_methods::reduce_axes(input, axes, <T as Float>::infinity(), keepdims, |acc, x| {
+        if x.is_nan() {
+            acc
+        } else if x < acc {
+            x
+        } else {
+            acc
+        }
+    })
 }
 
 /// Reduce by NaN-skipping minimum over the entire array.
@@ -965,11 +935,7 @@ fn nan_to_zero<T: Float + Element>(x: T) -> T {
 
 #[inline]
 fn nan_to_one<T: Float + Element>(x: T) -> T {
-    if x.is_nan() {
-        <T as Element>::one()
-    } else {
-        x
-    }
+    if x.is_nan() { <T as Element>::one() } else { x }
 }
 
 /// Running (cumulative) addition along an axis.
@@ -1111,11 +1077,7 @@ where
         input,
         axis,
         |x| {
-            if x.is_nan() {
-                <T as Element>::one()
-            } else {
-                x
-            }
+            if x.is_nan() { <T as Element>::one() } else { x }
         },
         |a, b| a * b,
     )
@@ -1662,11 +1624,8 @@ mod tests {
     #[test]
     fn add_reduce_keepdims_true_preserves_row_axis() {
         // (2,3) + axis=1 + keepdims=true → (2,1) with row sums.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let r = add_reduce_keepdims(&a, 1, true).unwrap();
         assert_eq!(r.shape(), &[2, 1]);
         assert_eq!(r.as_slice().unwrap(), &[6.0, 15.0]);
@@ -1675,11 +1634,8 @@ mod tests {
     #[test]
     fn add_reduce_keepdims_true_preserves_col_axis() {
         // (2,3) + axis=0 + keepdims=true → (1,3) with column sums.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let r = add_reduce_keepdims(&a, 0, true).unwrap();
         assert_eq!(r.shape(), &[1, 3]);
         assert_eq!(r.as_slice().unwrap(), &[5.0, 7.0, 9.0]);
@@ -1687,11 +1643,8 @@ mod tests {
 
     #[test]
     fn add_reduce_keepdims_false_matches_legacy_add_reduce() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let legacy = add_reduce(&a, 1).unwrap();
         let new_false = add_reduce_keepdims(&a, 1, false).unwrap();
         assert_eq!(legacy.shape(), new_false.shape());
@@ -1732,11 +1685,8 @@ mod tests {
 
     #[test]
     fn add_reduce_axes_all_axes_collapses_to_scalar_array() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let r = add_reduce_axes(&a, &[0, 1], false).unwrap();
         assert_eq!(r.shape(), &[1]);
         assert_eq!(r.as_slice().unwrap(), &[21.0]);
@@ -1744,11 +1694,8 @@ mod tests {
 
     #[test]
     fn add_reduce_all_returns_scalar_sum() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let s = add_reduce_all(&a);
         assert!((s - 21.0).abs() < 1e-12);
     }
@@ -1780,11 +1727,9 @@ mod tests {
     #[test]
     fn nan_add_reduce_axis_skips_nans_per_row() {
         // (2, 3) with row-1 having a NaN; reduce axis=1 → row sums.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, f64::NAN, 6.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, f64::NAN, 6.0])
+                .unwrap();
         let r = nan_add_reduce(&a, 1, false).unwrap();
         assert_eq!(r.shape(), &[2]);
         let s = r.as_slice().unwrap();
@@ -1796,16 +1741,7 @@ mod tests {
     fn nan_add_reduce_axes_multi_axis_skips_nans() {
         use ferray_core::dimension::Ix3;
         // (2, 2, 2) with one NaN; reduce axes (0, 2).
-        let data = vec![
-            1.0,
-            2.0,
-            3.0,
-            4.0,
-            f64::NAN,
-            6.0,
-            7.0,
-            8.0,
-        ];
+        let data = vec![1.0, 2.0, 3.0, 4.0, f64::NAN, 6.0, 7.0, 8.0];
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 2, 2]), data).unwrap();
         let r = nan_add_reduce_axes(&a, &[0, 2], false).unwrap();
         assert_eq!(r.shape(), &[2]);
@@ -1832,11 +1768,9 @@ mod tests {
 
     #[test]
     fn nan_multiply_reduce_axis_per_row() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![2.0, 3.0, 4.0, 5.0, f64::NAN, 6.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![2.0, 3.0, 4.0, 5.0, f64::NAN, 6.0])
+                .unwrap();
         let r = nan_multiply_reduce(&a, 1, false).unwrap();
         let s = r.as_slice().unwrap();
         assert!((s[0] - 24.0).abs() < 1e-12); // 2*3*4
@@ -1910,11 +1844,9 @@ mod tests {
 
     #[test]
     fn nan_add_reduce_keepdims_preserves_axis() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, f64::NAN, 6.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, f64::NAN, 6.0])
+                .unwrap();
         let r = nan_add_reduce(&a, 1, true).unwrap();
         assert_eq!(r.shape(), &[2, 1]);
     }
@@ -1995,8 +1927,7 @@ mod tests {
     #[test]
     fn test_add_broadcasts_within_same_rank() {
         // (3, 1) + (1, 4) -> (3, 4) — both Ix2
-        let col =
-            Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![1.0, 2.0, 3.0]).unwrap();
+        let col = Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![1.0, 2.0, 3.0]).unwrap();
         let row =
             Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![10.0, 20.0, 30.0, 40.0]).unwrap();
         let r = add(&col, &row).unwrap();
@@ -2011,11 +1942,9 @@ mod tests {
 
     #[test]
     fn test_subtract_broadcasts() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0])
+                .unwrap();
         let b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
         let r = subtract(&a, &b).unwrap();
         assert_eq!(r.shape(), &[2, 3]);
@@ -2039,11 +1968,9 @@ mod tests {
 
     #[test]
     fn test_divide_broadcasts() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0])
+                .unwrap();
         let b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![10.0, 5.0, 2.0]).unwrap();
         let r = divide(&a, &b).unwrap();
         assert_eq!(r.shape(), &[2, 3]);
@@ -2067,8 +1994,9 @@ mod tests {
 
     #[test]
     fn test_remainder_broadcasts() {
-        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
-            .unwrap();
+        let a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+                .unwrap();
         let b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![3.0, 4.0, 5.0]).unwrap();
         let r = remainder(&a, &b).unwrap();
         assert_eq!(r.shape(), &[2, 3]);
@@ -2321,7 +2249,12 @@ mod tests {
             let expected = exp(&a).unwrap();
             let mut out = arr(&[0.0; 3]);
             exp_into(&a, &mut out).unwrap();
-            for (&x, &y) in expected.as_slice().unwrap().iter().zip(out.as_slice().unwrap().iter()) {
+            for (&x, &y) in expected
+                .as_slice()
+                .unwrap()
+                .iter()
+                .zip(out.as_slice().unwrap().iter())
+            {
                 assert!((x - y).abs() < 1e-14);
             }
         }
@@ -2333,7 +2266,12 @@ mod tests {
             let expected = sin(&a).unwrap();
             let mut out = arr(&[0.0; 3]);
             sin_into(&a, &mut out).unwrap();
-            for (&x, &y) in expected.as_slice().unwrap().iter().zip(out.as_slice().unwrap().iter()) {
+            for (&x, &y) in expected
+                .as_slice()
+                .unwrap()
+                .iter()
+                .zip(out.as_slice().unwrap().iter())
+            {
                 assert!((x - y).abs() < 1e-14);
             }
         }
@@ -2345,7 +2283,12 @@ mod tests {
             let expected = cos(&a).unwrap();
             let mut out = arr(&[0.0; 3]);
             cos_into(&a, &mut out).unwrap();
-            for (&x, &y) in expected.as_slice().unwrap().iter().zip(out.as_slice().unwrap().iter()) {
+            for (&x, &y) in expected
+                .as_slice()
+                .unwrap()
+                .iter()
+                .zip(out.as_slice().unwrap().iter())
+            {
                 assert!((x - y).abs() < 1e-14);
             }
         }
@@ -2357,7 +2300,12 @@ mod tests {
             let expected = log(&a).unwrap();
             let mut out = arr(&[0.0; 3]);
             log_into(&a, &mut out).unwrap();
-            for (&x, &y) in expected.as_slice().unwrap().iter().zip(out.as_slice().unwrap().iter()) {
+            for (&x, &y) in expected
+                .as_slice()
+                .unwrap()
+                .iter()
+                .zip(out.as_slice().unwrap().iter())
+            {
                 assert!((x - y).abs() < 1e-14);
             }
         }

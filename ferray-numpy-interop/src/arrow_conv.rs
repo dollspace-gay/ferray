@@ -311,9 +311,7 @@ where
 ///
 /// # Errors
 /// - `FerrayError::InvalidDtype` if the element type has no Arrow equivalent.
-pub fn arrayd_to_arrow_flat<T>(
-    a: &ArrayD<T>,
-) -> Result<PrimitiveArray<T::ArrowType>, FerrayError>
+pub fn arrayd_to_arrow_flat<T>(a: &ArrayD<T>) -> Result<PrimitiveArray<T::ArrowType>, FerrayError>
 where
     T: ArrowElement,
     T::ArrowType: ArrowPrimitiveType<Native = T>,

@@ -3,20 +3,22 @@
 // These types mirror ndarray's Ix1..Ix6 and IxDyn but live in ferray-core's
 // namespace so that ndarray never appears in the public API.
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub mod broadcast;
-#[cfg(feature = "const_shapes")]
+// static_shape depends on Array, Vec, format!, and the ndarray-gated methods
+// on Dimension, so it's only available when std is in scope.
+#[cfg(all(feature = "const_shapes", feature = "std"))]
 pub mod static_shape;
 
 use core::fmt;
 
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 extern crate alloc;
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
 // We need ndarray's Dimension trait in scope for `as_array_view()` etc.
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 use ndarray::Dimension as NdDimension;
 
 /// Trait for types that describe the dimensionality of an array.
@@ -29,7 +31,7 @@ pub trait Dimension: Clone + PartialEq + Eq + fmt::Debug + Send + Sync + 'static
 
     /// The corresponding `ndarray` dimension type (private, not exposed in public API).
     #[doc(hidden)]
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     type NdarrayDim: ndarray::Dimension;
 
     /// Return the shape as a slice.
@@ -50,12 +52,12 @@ pub trait Dimension: Clone + PartialEq + Eq + fmt::Debug + Send + Sync + 'static
 
     /// Convert to the internal ndarray dimension type.
     #[doc(hidden)]
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     fn to_ndarray_dim(&self) -> Self::NdarrayDim;
 
     /// Create from the internal ndarray dimension type.
     #[doc(hidden)]
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     fn from_ndarray_dim(dim: &Self::NdarrayDim) -> Self;
 
     /// Construct a dimension from a slice of axis lengths.
@@ -104,7 +106,7 @@ macro_rules! impl_fixed_dimension {
         impl Dimension for $name {
             const NDIM: Option<usize> = Some($n);
 
-            #[cfg(not(feature = "no_std"))]
+            #[cfg(feature = "std")]
             type NdarrayDim = $ndarray_ty;
 
             #[inline]
@@ -117,13 +119,13 @@ macro_rules! impl_fixed_dimension {
                 &mut self.shape
             }
 
-            #[cfg(not(feature = "no_std"))]
+            #[cfg(feature = "std")]
             fn to_ndarray_dim(&self) -> Self::NdarrayDim {
                 // ndarray::Dim implements From<[usize; N]> for N=1..6
                 ndarray::Dim(self.shape)
             }
 
-            #[cfg(not(feature = "no_std"))]
+            #[cfg(feature = "std")]
             fn from_ndarray_dim(dim: &Self::NdarrayDim) -> Self {
                 let view = dim.as_array_view();
                 let s = view.as_slice().expect("ndarray dim should be contiguous");
@@ -168,7 +170,7 @@ impl fmt::Debug for Ix0 {
 impl Dimension for Ix0 {
     const NDIM: Option<usize> = Some(0);
 
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     type NdarrayDim = ndarray::Ix0;
 
     #[inline]
@@ -181,12 +183,12 @@ impl Dimension for Ix0 {
         &mut []
     }
 
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     fn to_ndarray_dim(&self) -> Self::NdarrayDim {
         ndarray::Dim(())
     }
 
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     fn from_ndarray_dim(_dim: &Self::NdarrayDim) -> Self {
         Ix0
     }
@@ -236,7 +238,7 @@ impl From<&[usize]> for IxDyn {
 impl Dimension for IxDyn {
     const NDIM: Option<usize> = None;
 
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     type NdarrayDim = ndarray::IxDyn;
 
     #[inline]
@@ -249,12 +251,12 @@ impl Dimension for IxDyn {
         &mut self.shape
     }
 
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     fn to_ndarray_dim(&self) -> Self::NdarrayDim {
         ndarray::IxDyn(&self.shape)
     }
 
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     fn from_ndarray_dim(dim: &Self::NdarrayDim) -> Self {
         let view = dim.as_array_view();
         let s = view.as_slice().expect("ndarray IxDyn should be contiguous");
@@ -262,7 +264,9 @@ impl Dimension for IxDyn {
     }
 
     fn from_dim_slice(shape: &[usize]) -> Option<Self> {
-        Some(Self { shape: shape.to_vec() })
+        Some(Self {
+            shape: shape.to_vec(),
+        })
     }
 }
 

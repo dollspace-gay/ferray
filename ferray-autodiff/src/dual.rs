@@ -5,9 +5,7 @@
 
 use num_traits::Float;
 use std::fmt;
-use std::ops::{
-    Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, Sub, SubAssign,
-};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, Sub, SubAssign};
 
 /// A dual number for forward-mode automatic differentiation.
 ///

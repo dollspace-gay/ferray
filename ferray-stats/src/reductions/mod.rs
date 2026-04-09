@@ -87,12 +87,7 @@ pub(crate) fn increment_multi_index(multi: &mut [usize], shape: &[usize]) -> boo
 /// Used as the shared backbone for `reduce_axis_general` (T=T path) and
 /// `reduce_axis_general_u64` (T=T, U=u64 path). The two used to have
 /// copy-pasted bodies differing only in return type (#161).
-pub(crate) fn reduce_axis_typed<T, U, F>(
-    data: &[T],
-    shape: &[usize],
-    axis: usize,
-    f: F,
-) -> Vec<U>
+pub(crate) fn reduce_axis_typed<T, U, F>(data: &[T], shape: &[usize], axis: usize, f: F) -> Vec<U>
 where
     T: Copy,
     F: Fn(&[T]) -> U,
@@ -153,12 +148,7 @@ where
 /// Thin wrapper: `T -> T` reduction. Preserved for the many call sites
 /// that pass `Fn(&[T]) -> T` kernels.
 #[inline]
-pub(crate) fn reduce_axis_general<T, F>(
-    data: &[T],
-    shape: &[usize],
-    axis: usize,
-    f: F,
-) -> Vec<T>
+pub(crate) fn reduce_axis_general<T, F>(data: &[T], shape: &[usize], axis: usize, f: F) -> Vec<T>
 where
     T: Copy,
     F: Fn(&[T]) -> T,
@@ -326,9 +316,7 @@ pub(crate) fn check_out_shape<'a, T: Element + Copy>(
         )));
     }
     out.as_slice_mut().ok_or_else(|| {
-        FerrayError::invalid_value(format!(
-            "{op_name}_into: out must be C-contiguous"
-        ))
+        FerrayError::invalid_value(format!("{op_name}_into: out must be C-contiguous"))
     })
 }
 
@@ -533,9 +521,7 @@ where
             let shape = a.shape();
             let out_s = output_shape(shape, ax);
             let f64_data: Vec<f64> = a.iter().map(|x| x.to_f64().unwrap_or(0.0)).collect();
-            let result = reduce_axis_general(&f64_data, shape, ax, |lane| {
-                lane.iter().sum()
-            });
+            let result = reduce_axis_general(&f64_data, shape, ax, |lane| lane.iter().sum());
             make_result(&out_s, result)
         }
     }
@@ -1476,9 +1462,9 @@ where
 {
     var_into(a, axis, ddof, out)?;
     // Variance is now in `out`; sqrt each element in place.
-    let dst = out.as_slice_mut().ok_or_else(|| {
-        FerrayError::invalid_value("std_into: out must be C-contiguous")
-    })?;
+    let dst = out
+        .as_slice_mut()
+        .ok_or_else(|| FerrayError::invalid_value("std_into: out must be C-contiguous"))?;
     for slot in dst.iter_mut() {
         *slot = slot.sqrt();
     }
@@ -2370,11 +2356,8 @@ mod tests {
     #[test]
     fn test_sum_as_f64_large_values() {
         // Values that would overflow i32 if summed as i32
-        let a = Array::<i32, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![i32::MAX, i32::MAX, i32::MAX],
-        )
-        .unwrap();
+        let a =
+            Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![i32::MAX, i32::MAX, i32::MAX]).unwrap();
         let s = sum_as_f64(&a, None).unwrap();
         let expected = 3.0 * (i32::MAX as f64);
         assert!((s.iter().next().unwrap() - expected).abs() < 1.0);
@@ -2661,11 +2644,8 @@ mod tests {
     #[test]
     fn sum_into_axis_writes_into_destination() {
         // (2, 3) sum along axis=1 → shape (2,)
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0; 2]).unwrap();
         sum_into(&a, Some(1), &mut out).unwrap();
         assert_eq!(out.as_slice().unwrap(), &[6.0, 15.0]);
@@ -2681,11 +2661,8 @@ mod tests {
 
     #[test]
     fn sum_into_rejects_wrong_shape() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         // axis=1 reduces to shape (2,), but out has shape (3,)
         let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![0.0; 3]).unwrap();
         let err = sum_into(&a, Some(1), &mut out);
@@ -2709,11 +2686,8 @@ mod tests {
 
     #[test]
     fn min_into_axis_basic() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 5.0, 2.0, 4.0, 3.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 5.0, 2.0, 4.0, 3.0, 6.0])
+            .unwrap();
         let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0; 2]).unwrap();
         min_into(&a, Some(1), &mut out).unwrap();
         assert_eq!(out.as_slice().unwrap(), &[1.0, 3.0]);
@@ -2721,11 +2695,8 @@ mod tests {
 
     #[test]
     fn max_into_axis_basic() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 5.0, 2.0, 4.0, 3.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 5.0, 2.0, 4.0, 3.0, 6.0])
+            .unwrap();
         let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0; 2]).unwrap();
         max_into(&a, Some(1), &mut out).unwrap();
         assert_eq!(out.as_slice().unwrap(), &[5.0, 6.0]);
@@ -2733,11 +2704,8 @@ mod tests {
 
     #[test]
     fn mean_into_axis_basic() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0; 2]).unwrap();
         mean_into(&a, Some(1), &mut out).unwrap();
         assert_eq!(out.as_slice().unwrap(), &[2.0, 5.0]);
@@ -2796,13 +2764,9 @@ mod tests {
         // The new kernel writes results directly into `out` rather than
         // routing through write_into's copy_from_slice; make sure existing
         // garbage is fully overwritten and never bleeds through.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
-        let mut out =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![999.0, -999.0]).unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![999.0, -999.0]).unwrap();
         sum_into(&a, Some(1), &mut out).unwrap();
         assert_eq!(out.as_slice().unwrap(), &[6.0, 15.0]);
     }
@@ -2813,19 +2777,12 @@ mod tests {
         // allocating kernel for any (shape, axis, fn).
         use super::{reduce_axis_typed, reduce_axis_typed_into};
         let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
-        for shape in [
-            vec![24usize],
-            vec![4, 6],
-            vec![2, 3, 4],
-            vec![2, 2, 2, 3],
-        ] {
+        for shape in [vec![24usize], vec![4, 6], vec![2, 3, 4], vec![2, 2, 2, 3]] {
             for ax in 0..shape.len() {
                 let allocated: Vec<f64> =
                     reduce_axis_typed(&data, &shape, ax, |lane| lane.iter().sum());
                 let mut dst = vec![0.0; allocated.len()];
-                reduce_axis_typed_into(&data, &shape, ax, &mut dst, |lane| {
-                    lane.iter().sum()
-                });
+                reduce_axis_typed_into(&data, &shape, ax, &mut dst, |lane| lane.iter().sum());
                 assert_eq!(dst, allocated, "shape {shape:?} axis {ax}");
             }
         }
@@ -2842,9 +2799,7 @@ mod tests {
         // Hand check: out[i, k] = sum_{j} a[i, j, k] = sum_{j} (i*12 + j*4 + k)
         let expected: Vec<f64> = (0..2)
             .flat_map(|i| {
-                (0..4).map(move |k| {
-                    (0..3).map(|j| (i * 12 + j * 4 + k) as f64).sum::<f64>()
-                })
+                (0..4).map(move |k| (0..3).map(|j| (i * 12 + j * 4 + k) as f64).sum::<f64>())
             })
             .collect();
         assert_eq!(out.as_slice().unwrap(), expected.as_slice());
@@ -2901,11 +2856,9 @@ mod tests {
     fn sum_with_where_mask_only() {
         // Sum positives only.
         let a = arr1d(vec![1.0, -2.0, 3.0, -4.0, 5.0]);
-        let mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![true, false, true, false, true],
-        )
-        .unwrap();
+        let mask =
+            Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![true, false, true, false, true])
+                .unwrap();
         let r = sum_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
         assert_eq!(r.iter().next().copied().unwrap(), 9.0);
     }
@@ -2913,11 +2866,8 @@ mod tests {
     #[test]
     fn sum_with_initial_and_mask_combined() {
         let a = arr1d(vec![1.0, 2.0, 3.0, 4.0]);
-        let mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([4]),
-            vec![true, false, true, false],
-        )
-        .unwrap();
+        let mask =
+            Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![true, false, true, false]).unwrap();
         let r = sum_with(&a, None, Some(50.0), Some(&mask.to_dyn())).unwrap();
         // 50 + 1 + 3 = 54
         assert_eq!(r.iter().next().copied().unwrap(), 54.0);
@@ -2927,11 +2877,8 @@ mod tests {
     fn sum_with_axis_and_mask() {
         // (2, 3); mask zeroes out the first column; row sums become
         // [2+3, 5+6] = [5, 11].
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let mask = Array::<bool, Ix2>::from_vec(
             Ix2::new([2, 3]),
             vec![false, true, true, false, true, true],
@@ -2944,11 +2891,8 @@ mod tests {
 
     #[test]
     fn sum_with_axis_and_initial() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         // axis=1 with initial=10 → row sums become [10+6, 10+15] = [16, 25]
         let r = sum_with(&a, Some(1), Some(10.0), None).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[16.0, 25.0]);
@@ -2957,11 +2901,8 @@ mod tests {
     #[test]
     fn sum_with_no_initial_no_mask_matches_legacy_sum() {
         // Sanity: omitting both knobs should match the existing sum().
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let legacy = sum(&a, Some(1)).unwrap();
         let with_form = sum_with(&a, Some(1), None, None).unwrap();
         assert_eq!(legacy.as_slice().unwrap(), with_form.as_slice().unwrap());
@@ -2985,11 +2926,9 @@ mod tests {
     #[test]
     fn prod_with_where_mask() {
         let a = arr1d(vec![2.0, 0.0, 3.0, 0.0, 4.0]);
-        let mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![true, false, true, false, true],
-        )
-        .unwrap();
+        let mask =
+            Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![true, false, true, false, true])
+                .unwrap();
         let r = prod_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
         // 2 * 3 * 4 = 24 (zero positions skipped)
         assert_eq!(r.iter().next().copied().unwrap(), 24.0);
@@ -3015,11 +2954,9 @@ mod tests {
     fn min_with_where_mask_filters_then_reduces() {
         let a = arr1d(vec![5.0, 1.0, 4.0, 2.0, 3.0]);
         // Mask out positions 1 and 3 (values 1 and 2).
-        let mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![true, false, true, false, true],
-        )
-        .unwrap();
+        let mask =
+            Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![true, false, true, false, true])
+                .unwrap();
         let r = min_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
         // Filtered: [5, 4, 3] → min = 3
         assert_eq!(r.iter().next().copied().unwrap(), 3.0);
@@ -3034,25 +2971,17 @@ mod tests {
     #[test]
     fn min_with_fully_masked_axis_lane_no_initial_errors() {
         // Each row fully masked out → error per lane.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
-        let mask =
-            Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
         assert!(min_with(&a, Some(1), None, Some(&mask.to_dyn())).is_err());
     }
 
     #[test]
     fn min_with_fully_masked_axis_lane_with_initial_uses_initial() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
-        let mask =
-            Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
         let r = min_with(&a, Some(1), Some(99.0), Some(&mask.to_dyn())).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[99.0, 99.0]);
     }
@@ -3068,11 +2997,9 @@ mod tests {
     fn max_with_where_mask_filters_then_reduces() {
         let a = arr1d(vec![5.0, 10.0, 4.0, 20.0, 3.0]);
         // Mask out positions 1 and 3 (values 10 and 20).
-        let mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![true, false, true, false, true],
-        )
-        .unwrap();
+        let mask =
+            Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![true, false, true, false, true])
+                .unwrap();
         let r = max_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
         // Filtered: [5, 4, 3] → max = 5
         assert_eq!(r.iter().next().copied().unwrap(), 5.0);
@@ -3082,22 +3009,17 @@ mod tests {
     fn mean_where_filters_and_divides_by_count() {
         // [1, 2, 3, 4, 5] with mask [T, F, T, F, T] → (1+3+5)/3 = 3.0
         let a = arr1d(vec![1.0, 2.0, 3.0, 4.0, 5.0]);
-        let mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![true, false, true, false, true],
-        )
-        .unwrap();
+        let mask =
+            Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![true, false, true, false, true])
+                .unwrap();
         let r = mean_where(&a, None, Some(&mask.to_dyn())).unwrap();
         assert!((r.iter().next().copied().unwrap() - 3.0).abs() < 1e-12);
     }
 
     #[test]
     fn mean_where_no_mask_matches_legacy_mean() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let legacy = mean(&a, Some(1)).unwrap();
         let where_form = mean_where(&a, Some(1), None).unwrap();
         assert_eq!(legacy.as_slice().unwrap(), where_form.as_slice().unwrap());
@@ -3105,11 +3027,8 @@ mod tests {
 
     #[test]
     fn mean_where_fully_masked_lane_returns_nan() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let mask = Array::<bool, Ix2>::from_vec(
             Ix2::new([2, 3]),
             vec![true, true, true, false, false, false],
@@ -3126,11 +3045,8 @@ mod tests {
         // (2, 3); mask = [[T,T,F],[F,T,T]]
         // Row 0 mean: (1+2)/2 = 1.5
         // Row 1 mean: (5+6)/2 = 5.5
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let mask = Array::<bool, Ix2>::from_vec(
             Ix2::new([2, 3]),
             vec![true, true, false, false, true, true],
@@ -3150,16 +3066,9 @@ mod tests {
         // (2, 3) input; mask of shape (3,) — broadcasts to (2, 3) with
         // every row identical. sum ignores the first column, so both
         // row sums skip that column's contribution.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
-        let mask_1d = Array::<bool, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![false, true, true],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
+        let mask_1d = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, true]).unwrap();
         let r = sum_with(&a, None, None, Some(&mask_1d.to_dyn())).unwrap();
         // Sum with first column masked out: 2 + 3 + 5 + 6 = 16.0
         assert!((r.iter().next().copied().unwrap() - 16.0).abs() < 1e-12);
@@ -3179,11 +3088,8 @@ mod tests {
             ],
         )
         .unwrap();
-        let mask_col = Array::<bool, Ix2>::from_vec(
-            Ix2::new([3, 1]),
-            vec![true, false, true],
-        )
-        .unwrap();
+        let mask_col =
+            Array::<bool, Ix2>::from_vec(Ix2::new([3, 1]), vec![true, false, true]).unwrap();
         let r = sum_with(&a, None, None, Some(&mask_col.to_dyn())).unwrap();
         // Rows 0 and 2 kept: 1+2+3+4 + 9+10+11+12 = 10 + 42 = 52
         assert!((r.iter().next().copied().unwrap() - 52.0).abs() < 1e-12);
@@ -3193,16 +3099,9 @@ mod tests {
     fn sum_with_mask_broadcasts_row_vector_against_axis_reduction() {
         // (2, 3) reducing axis=1; mask shape (3,) broadcasts against
         // each row.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
-        let mask_1d = Array::<bool, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![true, false, true],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
+        let mask_1d = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, false, true]).unwrap();
         let r = sum_with(&a, Some(1), None, Some(&mask_1d.to_dyn())).unwrap();
         assert_eq!(r.shape(), &[2]);
         // Row 0: 1 + 3 = 4; row 1: 4 + 6 = 10
@@ -3212,16 +3111,9 @@ mod tests {
     #[test]
     fn prod_with_mask_broadcasts_ix1() {
         // (2, 3); mask shape (3,) keeps columns 0 and 2.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
-        )
-        .unwrap();
-        let mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![true, false, true],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![2.0, 3.0, 4.0, 5.0, 6.0, 7.0])
+            .unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, false, true]).unwrap();
         let r = prod_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
         // Product of kept values: 2 * 4 * 5 * 7 = 280
         assert!((r.iter().next().copied().unwrap() - 280.0).abs() < 1e-12);
@@ -3230,16 +3122,9 @@ mod tests {
     #[test]
     fn min_with_mask_broadcasts_ix1() {
         // Column mask; find min across the kept columns.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![5.0, 1.0, 4.0, 2.0, 10.0, 3.0],
-        )
-        .unwrap();
-        let mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![true, false, true],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![5.0, 1.0, 4.0, 2.0, 10.0, 3.0])
+            .unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, false, true]).unwrap();
         let r = min_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
         // Kept values: 5, 4, 2, 3 → min = 2
         assert!((r.iter().next().copied().unwrap() - 2.0).abs() < 1e-12);
@@ -3247,16 +3132,10 @@ mod tests {
 
     #[test]
     fn max_with_mask_broadcasts_ix1() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![5.0, 100.0, 4.0, 2.0, 200.0, 3.0],
-        )
-        .unwrap();
-        let mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![true, false, true],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![5.0, 100.0, 4.0, 2.0, 200.0, 3.0])
+                .unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, false, true]).unwrap();
         let r = max_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
         // Kept values: 5, 4, 2, 3 → max = 5
         assert!((r.iter().next().copied().unwrap() - 5.0).abs() < 1e-12);
@@ -3266,16 +3145,9 @@ mod tests {
     fn mean_where_mask_broadcasts_ix1() {
         // (2, 3); mask (3,) keeps columns 0 and 2. Mean of 4 kept
         // values: (1 + 3 + 4 + 6) / 4 = 3.5
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
-        let mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![true, false, true],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, false, true]).unwrap();
         let r = mean_where(&a, None, Some(&mask.to_dyn())).unwrap();
         assert!((r.iter().next().copied().unwrap() - 3.5).abs() < 1e-12);
     }
@@ -3285,16 +3157,9 @@ mod tests {
         // Mask rank compatible but length wrong: shape (2,) against a
         // (2, 3) input cannot broadcast (the 2 aligns with the last
         // dim which is 3, not the first which is 2).
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
-        let bad_mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([2]),
-            vec![true, false],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
+        let bad_mask = Array::<bool, Ix1>::from_vec(Ix1::new([2]), vec![true, false]).unwrap();
         assert!(sum_with(&a, None, None, Some(&bad_mask.to_dyn())).is_err());
     }
 
@@ -3303,11 +3168,8 @@ mod tests {
         // A shape-(1,) mask is the scalar case — broadcasts to every
         // position of the input, which for `true` is an identity and
         // for `false` yields 0 (everything masked out).
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let true_mask = Array::<bool, Ix1>::from_vec(Ix1::new([1]), vec![true]).unwrap();
         let r = sum_with(&a, None, None, Some(&true_mask.to_dyn())).unwrap();
         // All positions kept: 1+2+3+4+5+6 = 21
@@ -3329,38 +3191,32 @@ mod tests {
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
 
         let s_alloc = sum(&a, Some(2)).unwrap();
-        let mut s_out =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        let mut s_out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
         sum_into(&a, Some(2), &mut s_out).unwrap();
         assert_eq!(s_alloc.as_slice().unwrap(), s_out.as_slice().unwrap());
 
         let p_alloc = prod(&a, Some(2)).unwrap();
-        let mut p_out =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        let mut p_out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
         prod_into(&a, Some(2), &mut p_out).unwrap();
         assert_eq!(p_alloc.as_slice().unwrap(), p_out.as_slice().unwrap());
 
         let mn_alloc = min(&a, Some(2)).unwrap();
-        let mut mn_out =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        let mut mn_out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
         min_into(&a, Some(2), &mut mn_out).unwrap();
         assert_eq!(mn_alloc.as_slice().unwrap(), mn_out.as_slice().unwrap());
 
         let mx_alloc = max(&a, Some(2)).unwrap();
-        let mut mx_out =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        let mut mx_out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
         max_into(&a, Some(2), &mut mx_out).unwrap();
         assert_eq!(mx_alloc.as_slice().unwrap(), mx_out.as_slice().unwrap());
 
         let me_alloc = mean(&a, Some(2)).unwrap();
-        let mut me_out =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        let mut me_out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
         mean_into(&a, Some(2), &mut me_out).unwrap();
         assert_eq!(me_alloc.as_slice().unwrap(), me_out.as_slice().unwrap());
 
         let v_alloc = var(&a, Some(2), 0).unwrap();
-        let mut v_out =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        let mut v_out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
         var_into(&a, Some(2), 0, &mut v_out).unwrap();
         // var output may have small numerical drift between the two-pass
         // and one-shot kernels — compare element-wise within tolerance.
@@ -3374,8 +3230,7 @@ mod tests {
         }
 
         let sd_alloc = std_(&a, Some(2), 0).unwrap();
-        let mut sd_out =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        let mut sd_out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
         std_into(&a, Some(2), 0, &mut sd_out).unwrap();
         for (a, b) in sd_alloc
             .as_slice()

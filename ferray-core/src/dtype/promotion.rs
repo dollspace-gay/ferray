@@ -6,9 +6,9 @@
 // - `promoted_type!()` is a compile-time proc macro (in ferray-core-macros)
 // - `result_type()` is the runtime equivalent using DType
 
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 extern crate alloc;
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 use alloc::format;
 
 use num_complex::Complex;

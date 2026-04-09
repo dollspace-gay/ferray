@@ -116,9 +116,7 @@ pub fn hanning(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 /// (#294).
 pub fn kaiser(m: usize, beta: f64) -> FerrayResult<Array<f64, Ix1>> {
     if beta.is_nan() {
-        return Err(FerrayError::invalid_value(
-            "kaiser: beta must not be NaN",
-        ));
+        return Err(FerrayError::invalid_value("kaiser: beta must not be NaN"));
     }
     // I_0 is an even function, so kaiser(m, -beta) == kaiser(m, beta).
     // Accept negative beta for NumPy compatibility.
@@ -405,9 +403,7 @@ mod tests {
         assert!((bessel_i0_scalar::<f64>(5.0) - 27.239_871_823_604_443).abs() < 1e-5);
         // I0(10) ~ 2815.7166284662544
         let expected_i0_10 = 2_815.716_628_466_254;
-        assert!(
-            (bessel_i0_scalar::<f64>(10.0) - expected_i0_10).abs() / expected_i0_10 < 1e-5
-        );
+        assert!((bessel_i0_scalar::<f64>(10.0) - expected_i0_10).abs() / expected_i0_10 < 1e-5);
     }
 
     // ----- Edge-length window coverage (#295) -----

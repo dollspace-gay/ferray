@@ -7,10 +7,10 @@ pub mod aliases;
 pub mod arc;
 pub mod cow;
 pub mod display;
+mod index_impl;
 pub mod introspect;
 pub mod iter;
 pub mod methods;
-mod index_impl;
 pub mod owned;
 pub mod reductions;
 #[cfg(feature = "serde")]

@@ -209,10 +209,7 @@ pub fn matrix_norm<T: LinalgFloat>(a: &Array<T, Ix2>, ord: NormOrder) -> FerrayR
 /// Helper that runs the same vector-norm math as `vector_norm_scalar` but
 /// on a plain slice, avoiding the `&Array<T, IxDyn>` allocation that would
 /// otherwise be required per-lane in [`norm_axis`].
-fn vector_norm_from_slice<T: LinalgFloat>(
-    data: &[T],
-    ord: NormOrder,
-) -> FerrayResult<T> {
+fn vector_norm_from_slice<T: LinalgFloat>(data: &[T], ord: NormOrder) -> FerrayResult<T> {
     use num_traits::Float;
     let zero = T::from_f64_const(0.0);
     match ord {
@@ -294,12 +291,12 @@ fn vector_norm_scalar<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> Fe
             Ok(max)
         }
         NormOrder::NegInf => {
-            let min = data
-                .iter()
-                .map(|x| x.abs())
-                .fold(<T as num_traits::Float>::infinity(), |a, b| {
-                    if a < b { a } else { b }
-                });
+            let min =
+                data.iter()
+                    .map(|x| x.abs())
+                    .fold(<T as num_traits::Float>::infinity(), |a, b| {
+                        if a < b { a } else { b }
+                    });
             Ok(min)
         }
         NormOrder::Nuc => {
@@ -323,12 +320,12 @@ fn vector_norm_scalar<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> Fe
                     .fold(T::from_f64_const(0.0), |a, b| if a > b { a } else { b });
                 Ok(max)
             } else if p == f64::NEG_INFINITY {
-                let min = data
-                    .iter()
-                    .map(|x| x.abs())
-                    .fold(<T as num_traits::Float>::infinity(), |a, b| {
+                let min = data.iter().map(|x| x.abs()).fold(
+                    <T as num_traits::Float>::infinity(),
+                    |a, b| {
                         if a < b { a } else { b }
-                    });
+                    },
+                );
                 Ok(min)
             } else {
                 let p_t = T::from_f64_const(p);
@@ -615,10 +612,8 @@ pub fn slogdet_batched<T: LinalgFloat>(
 ) -> FerrayResult<(Array<T, Ix1>, Array<T, Ix1>)> {
     let shape = a.shape();
     if shape.len() == 2 {
-        let a2 = Array::<T, Ix2>::from_vec(
-            Ix2::new([shape[0], shape[1]]),
-            a.iter().copied().collect(),
-        )?;
+        let a2 =
+            Array::<T, Ix2>::from_vec(Ix2::new([shape[0], shape[1]]), a.iter().copied().collect())?;
         let (sign, logdet) = slogdet(&a2)?;
         return Ok((
             Array::from_vec(Ix1::new([1]), vec![sign])?,
@@ -701,10 +696,8 @@ pub fn matrix_rank_batched<T: LinalgFloat>(
 ) -> FerrayResult<Array<i64, Ix1>> {
     let shape = a.shape();
     if shape.len() == 2 {
-        let a2 = Array::<T, Ix2>::from_vec(
-            Ix2::new([shape[0], shape[1]]),
-            a.iter().copied().collect(),
-        )?;
+        let a2 =
+            Array::<T, Ix2>::from_vec(Ix2::new([shape[0], shape[1]]), a.iter().copied().collect())?;
         let r = matrix_rank(&a2, tol)? as i64;
         return Array::from_vec(Ix1::new([1]), vec![r]);
     }
@@ -1067,11 +1060,8 @@ mod tests {
     #[test]
     fn diagonal_wide_matrix() {
         // 2x3 main diagonal is (0,0),(1,1) → length 2
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let d = diagonal(&a, 0).unwrap();
         assert_eq!(d.shape(), &[2]);
         assert_eq!(d.as_slice().unwrap(), &[1.0, 5.0]);
@@ -1080,11 +1070,8 @@ mod tests {
     #[test]
     fn diagonal_tall_matrix() {
         // 3x2 main diagonal is (0,0),(1,1) → length 2
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([3, 2]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 2]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let d = diagonal(&a, 0).unwrap();
         assert_eq!(d.shape(), &[2]);
         assert_eq!(d.as_slice().unwrap(), &[1.0, 4.0]);
@@ -1094,11 +1081,7 @@ mod tests {
     fn diagonal_offset_out_of_range_is_empty() {
         // Matches NumPy: offsets past the matrix yield an empty result, not
         // an error.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 2]),
-            vec![1.0, 2.0, 3.0, 4.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
         let d = diagonal(&a, 5).unwrap();
         assert_eq!(d.shape(), &[0]);
         let d2 = diagonal(&a, -5).unwrap();
@@ -1109,8 +1092,8 @@ mod tests {
     fn diagonal_on_non_float_element_type() {
         // Non-LinalgFloat element type: i64 works because diagonal only
         // requires Element, not LinalgFloat.
-        let a = Array::<i64, Ix2>::from_vec(Ix2::new([3, 3]), vec![1, 2, 3, 4, 5, 6, 7, 8, 9])
-            .unwrap();
+        let a =
+            Array::<i64, Ix2>::from_vec(Ix2::new([3, 3]), vec![1, 2, 3, 4, 5, 6, 7, 8, 9]).unwrap();
         let d = diagonal(&a, 0).unwrap();
         assert_eq!(d.shape(), &[3]);
         assert_eq!(d.as_slice().unwrap(), &[1, 5, 9]);
@@ -1136,11 +1119,8 @@ mod tests {
     fn matrix_transpose_swaps_axes() {
         // [[1,2,3],[4,5,6]] transposes to a view with shape [3,2]:
         // [[1,4],[2,5],[3,6]]
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let t = matrix_transpose(&a);
         assert_eq!(t.shape(), &[3, 2]);
         // Walk the transposed view in logical order.
@@ -1151,11 +1131,8 @@ mod tests {
     #[test]
     fn matrix_transpose_identity_roundtrip() {
         // Transposing twice yields a view over the original.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let t = matrix_transpose(&a);
         // Collect logical values by iterating the double-transposed view via
         // ndarray's reversed_axes twice: done through the owned array.
@@ -1177,11 +1154,9 @@ mod tests {
     #[test]
     fn vector_norm_with_axis_matches_norm_axis() {
         // (2, 3) L2 along axis=1 → shape (2,)
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 3]),
-            vec![3.0, 4.0, 0.0, 1.0, 2.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![3.0, 4.0, 0.0, 1.0, 2.0, 2.0])
+                .unwrap();
         let v = vector_norm(&a, NormOrder::L2, Some(1), false).unwrap();
         assert_eq!(v.shape(), &[2]);
         let s = v.as_slice().unwrap();
@@ -1191,11 +1166,9 @@ mod tests {
 
     #[test]
     fn vector_norm_with_keepdims_preserves_axis() {
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 3]),
-            vec![3.0, 4.0, 0.0, 1.0, 2.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![3.0, 4.0, 0.0, 1.0, 2.0, 2.0])
+                .unwrap();
         let v = vector_norm(&a, NormOrder::L2, Some(1), true).unwrap();
         assert_eq!(v.shape(), &[2, 1]);
     }
@@ -1212,11 +1185,9 @@ mod tests {
     #[test]
     fn vector_norm_no_axis_keepdims_gives_size_1_shape() {
         // keepdims=true + axis=None → shape (1, 1, ..., 1) matching ndim.
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 3]),
-            vec![3.0, 4.0, 0.0, 1.0, 2.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![3.0, 4.0, 0.0, 1.0, 2.0, 2.0])
+                .unwrap();
         let v = vector_norm(&a, NormOrder::L2, None, true).unwrap();
         assert_eq!(v.shape(), &[1, 1]);
     }
@@ -1310,11 +1281,8 @@ mod tests {
     #[test]
     fn trace_offset_matches_diagonal_sum() {
         // trace_offset(a, k) == diagonal(a, k).sum() for any valid k.
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([4, 5]),
-            (1..=20).map(|x| x as f64).collect(),
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([4, 5]), (1..=20).map(|x| x as f64).collect())
+            .unwrap();
         for k in -3..=4 {
             let via_trace = trace_offset(&a, k).unwrap();
             let via_diag: f64 = diagonal(&a, k).unwrap().iter().copied().sum();
@@ -1356,12 +1324,14 @@ mod tests {
             vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0],
         )
         .unwrap();
-        let dyn_a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[3, 3]),
-            a.iter().copied().collect(),
-        )
-        .unwrap();
-        for ord in [NormOrder::Fro, NormOrder::L1, NormOrder::Inf, NormOrder::NegInf] {
+        let dyn_a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 3]), a.iter().copied().collect())
+            .unwrap();
+        for ord in [
+            NormOrder::Fro,
+            NormOrder::L1,
+            NormOrder::Inf,
+            NormOrder::NegInf,
+        ] {
             let via_matrix = matrix_norm(&a, ord).unwrap();
             let via_norm = norm(&dyn_a, ord).unwrap();
             assert!(

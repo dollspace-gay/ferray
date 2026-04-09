@@ -363,8 +363,7 @@ mod tests {
     fn test_unique_inverse_with_2d_flattens_first() {
         // NumPy's unique flattens the input; inverse has length
         // shape.iter().product(), indexing into the flat logical traversal.
-        let a =
-            Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 1, 3, 2, 1]).unwrap();
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 1, 3, 2, 1]).unwrap();
         let u = unique(&a, false, true, false).unwrap();
         let vals: Vec<i32> = u.values.iter().copied().collect();
         let inv: Vec<u64> = u.inverse.unwrap().iter().copied().collect();

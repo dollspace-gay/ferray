@@ -38,9 +38,8 @@ pub use masked_array::MaskedArray;
 
 // Re-export masking constructors
 pub use constructors::{
-    fix_invalid, masked_equal, masked_greater, masked_greater_equal, masked_inside,
-    masked_invalid, masked_less, masked_less_equal, masked_not_equal, masked_outside,
-    masked_where,
+    fix_invalid, masked_equal, masked_greater, masked_greater_equal, masked_inside, masked_invalid,
+    masked_less, masked_less_equal, masked_not_equal, masked_outside, masked_where,
 };
 
 // Re-export arithmetic operations
@@ -65,8 +64,8 @@ pub use ufunc_support::{masked_binary, masked_unary};
 // Domain-aware ufunc wrappers (#503) — auto-mask out-of-domain
 // inputs so the result mask carries a "safe to use" contract.
 pub use ufunc_support::{
-    arccos_domain, arccosh_domain, arcsin_domain, arctanh_domain, divide_domain, log10_domain,
-    log2_domain, log_domain, masked_binary_domain, masked_unary_domain, sqrt_domain,
+    arccos_domain, arccosh_domain, arcsin_domain, arctanh_domain, divide_domain, log_domain,
+    log2_domain, log10_domain, masked_binary_domain, masked_unary_domain, sqrt_domain,
 };
 
 #[cfg(test)]
@@ -675,8 +674,7 @@ mod tests {
     #[test]
     fn masked_2d_add_operator() {
         use ferray_core::dimension::Ix2;
-        let d1 =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let d1 = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
         let m1 = Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![false, true, false, false])
             .unwrap();
         let ma1 = MaskedArray::new(d1, m1).unwrap();
@@ -698,10 +696,9 @@ mod tests {
     #[test]
     fn masked_2d_compressed() {
         use ferray_core::dimension::Ix2;
-        let data =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
-        let mask = Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![false, true, false, true])
-            .unwrap();
+        let data = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let mask =
+            Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![false, true, false, true]).unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
         let compressed = ma.compressed().unwrap();
         assert_eq!(compressed.as_slice().unwrap(), &[1.0, 3.0]);

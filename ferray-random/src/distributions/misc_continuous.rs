@@ -92,7 +92,11 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `scale <= 0` or `size` is zero.
-    pub fn rayleigh(&mut self, scale: f64, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
+    pub fn rayleigh(
+        &mut self,
+        scale: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if scale <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "scale must be positive, got {scale}"
@@ -116,7 +120,11 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `a <= 0` or `size` is zero.
-    pub fn weibull(&mut self, a: f64, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
+    pub fn weibull(
+        &mut self,
+        a: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if a <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "a must be positive, got {a}"
@@ -124,9 +132,7 @@ impl<B: BitGenerator> Generator<B> {
         }
         let shape_vec = size.into_shape()?;
         let n = shape_size(&shape_vec);
-        let data = generate_vec(self, n, |bg| {
-            standard_exponential_single(bg).powf(1.0 / a)
-        });
+        let data = generate_vec(self, n, |bg| standard_exponential_single(bg).powf(1.0 / a));
         vec_to_array_f64(data, &shape_vec)
     }
 
@@ -141,7 +147,11 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `a <= 0` or `size` is zero.
-    pub fn pareto(&mut self, a: f64, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
+    pub fn pareto(
+        &mut self,
+        a: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if a <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "a must be positive, got {a}"
@@ -202,7 +212,11 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `a <= 0` or `size` is zero.
-    pub fn power(&mut self, a: f64, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
+    pub fn power(
+        &mut self,
+        a: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         if a <= 0.0 {
             return Err(FerrayError::invalid_value(format!(
                 "a must be positive, got {a}"
@@ -371,7 +385,10 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `size` is zero.
-    pub fn standard_cauchy(&mut self, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
+    pub fn standard_cauchy(
+        &mut self,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
         let shape_vec = size.into_shape()?;
         let n = shape_size(&shape_vec);
         let data = generate_vec(self, n, |bg| {
@@ -510,7 +527,10 @@ mod tests {
         let mut rng = default_rng_seeded(42);
         let arr = rng.triangular(1.0, 3.0, 5.0, 10_000).unwrap();
         for &v in arr.as_slice().unwrap() {
-            assert!((1.0..=5.0).contains(&v), "triangular value {v} out of [1,5]");
+            assert!(
+                (1.0..=5.0).contains(&v),
+                "triangular value {v} out of [1,5]"
+            );
         }
     }
 

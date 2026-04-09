@@ -96,7 +96,11 @@ impl<const N: usize> Dimension for Shape1<N> {
     }
 
     fn from_dim_slice(shape: &[usize]) -> Option<Self> {
-        if shape == [N] { Some(Self::new()) } else { None }
+        if shape == [N] {
+            Some(Self::new())
+        } else {
+            None
+        }
     }
 }
 
@@ -170,7 +174,11 @@ impl<const M: usize, const N: usize> Dimension for Shape2<M, N> {
     }
 
     fn from_dim_slice(shape: &[usize]) -> Option<Self> {
-        if shape == [M, N] { Some(Self::new()) } else { None }
+        if shape == [M, N] {
+            Some(Self::new())
+        } else {
+            None
+        }
     }
 }
 
@@ -244,7 +252,11 @@ impl<const A: usize, const B: usize, const C: usize> Dimension for Shape3<A, B, 
     }
 
     fn from_dim_slice(shape: &[usize]) -> Option<Self> {
-        if shape == [A, B, C] { Some(Self::new()) } else { None }
+        if shape == [A, B, C] {
+            Some(Self::new())
+        } else {
+            None
+        }
     }
 }
 
@@ -319,7 +331,11 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize> Dimension
     }
 
     fn from_dim_slice(shape: &[usize]) -> Option<Self> {
-        if shape == [A, B, C, D] { Some(Self::new()) } else { None }
+        if shape == [A, B, C, D] {
+            Some(Self::new())
+        } else {
+            None
+        }
     }
 }
 
@@ -396,7 +412,11 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
     }
 
     fn from_dim_slice(shape: &[usize]) -> Option<Self> {
-        if shape == [A, B, C, D, E] { Some(Self::new()) } else { None }
+        if shape == [A, B, C, D, E] {
+            Some(Self::new())
+        } else {
+            None
+        }
     }
 }
 
@@ -480,7 +500,11 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
     }
 
     fn from_dim_slice(shape: &[usize]) -> Option<Self> {
-        if shape == [A, B, C, D, E, F] { Some(Self::new()) } else { None }
+        if shape == [A, B, C, D, E, F] {
+            Some(Self::new())
+        } else {
+            None
+        }
     }
 }
 
@@ -590,18 +614,18 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
 // Array conversion methods: static-shaped -> dynamic-shaped
 // ===========================================================================
 
+// Note: `into_dyn` for static-shape arrays is provided by the generic
+// `Array::into_dyn` impl in `array/methods.rs` — it already works for any
+// `D: Dimension`, including `Shape1..Shape6`. We only need the narrower
+// `into_dynamic_ix` helpers here, which produce `Ix1`/`Ix2`/`Ix3` rather
+// than fully dynamic `IxDyn`.
+
 impl<T: Element, const N: usize> Array<T, Shape1<N>> {
     /// Convert this statically-shaped array into a dynamically-shaped `Array<T, Ix1>`.
     ///
     /// This is a zero-cost operation that reinterprets the dimension type.
     pub fn into_dynamic_ix(self) -> Array<T, Ix1> {
         Array::from_ndarray(self.inner)
-    }
-
-    /// Convert this statically-shaped array into a dynamically-shaped `Array<T, IxDyn>`.
-    pub fn into_dyn(self) -> Array<T, IxDyn> {
-        let inner = self.inner.into_dyn();
-        Array::from_ndarray(inner)
     }
 }
 
@@ -612,24 +636,12 @@ impl<T: Element, const M: usize, const N: usize> Array<T, Shape2<M, N>> {
     pub fn into_dynamic_ix(self) -> Array<T, Ix2> {
         Array::from_ndarray(self.inner)
     }
-
-    /// Convert this statically-shaped array into a dynamically-shaped `Array<T, IxDyn>`.
-    pub fn into_dyn(self) -> Array<T, IxDyn> {
-        let inner = self.inner.into_dyn();
-        Array::from_ndarray(inner)
-    }
 }
 
 impl<T: Element, const A: usize, const B: usize, const C: usize> Array<T, Shape3<A, B, C>> {
     /// Convert this statically-shaped array into a dynamically-shaped `Array<T, Ix3>`.
     pub fn into_dynamic_ix(self) -> Array<T, Ix3> {
         Array::from_ndarray(self.inner)
-    }
-
-    /// Convert this statically-shaped array into a dynamically-shaped `Array<T, IxDyn>`.
-    pub fn into_dyn(self) -> Array<T, IxDyn> {
-        let inner = self.inner.into_dyn();
-        Array::from_ndarray(inner)
     }
 }
 
@@ -656,6 +668,18 @@ impl<T: Element, const A: usize, const B: usize, const C: usize> Array<T, Shape3
 /// ).unwrap();
 /// let c = a.static_matmul(b).unwrap();
 /// assert_eq!(c.shape(), &[2, 2]);
+/// ```
+///
+/// Mismatched inner dimensions produce a compile error:
+///
+/// ```compile_fail
+/// use ferray_core::dimension::static_shape::{Shape2, StaticMatMul};
+/// use ferray_core::array::owned::Array;
+///
+/// let a = Array::<f64, Shape2<3, 4>>::ones(Shape2::new()).unwrap();
+/// let b = Array::<f64, Shape2<5, 2>>::ones(Shape2::new()).unwrap();
+/// // K=4 vs K=5 — should not compile
+/// let _c = a.static_matmul(b);
 /// ```
 pub trait StaticMatMul<Rhs> {
     /// The output array type with a statically-known shape.
@@ -697,6 +721,17 @@ where
 /// Only the most common broadcast patterns are covered:
 /// - Same shape -> same shape
 /// - Dimension of size 1 broadcasts with any size
+///
+/// Incompatible shapes are rejected at compile time — there is simply
+/// no `StaticBroadcast` impl connecting them:
+///
+/// ```compile_fail
+/// use ferray_core::dimension::static_shape::{Shape2, StaticBroadcast};
+///
+/// // Shape2<3, 4> and Shape2<5, 6> are not broadcast-compatible
+/// fn check<A: StaticBroadcast<B>, B>() {}
+/// check::<Shape2<3, 4>, Shape2<5, 6>>();
+/// ```
 pub trait StaticBroadcast<Rhs> {
     /// The resulting shape after broadcasting.
     type Output;
@@ -1338,34 +1373,7 @@ mod tests {
         assert_eq!(s.as_slice(), &[3, 4]);
     }
 
-    // -----------------------------------------------------------------------
-    // compile_fail doc tests for matmul shape mismatch
-    // -----------------------------------------------------------------------
-
-    /// Verifies that mismatched inner dimensions in static matmul
-    /// produce a compile error (the K dimension must match).
-    ///
-    /// ```compile_fail
-    /// use ferray_core::dimension::static_shape::{Shape2, StaticMatMul};
-    /// use ferray_core::array::owned::Array;
-    ///
-    /// let a = Array::<f64, Shape2<3, 4>>::ones(Shape2::new()).unwrap();
-    /// let b = Array::<f64, Shape2<5, 2>>::ones(Shape2::new()).unwrap();
-    /// // K=4 vs K=5 — should not compile
-    /// let _c = a.static_matmul(b);
-    /// ```
-    #[allow(dead_code)]
-    fn _compile_fail_matmul_shape_mismatch() {}
-
-    /// Verifies that incompatible broadcast shapes produce a compile error.
-    ///
-    /// ```compile_fail
-    /// use ferray_core::dimension::static_shape::{Shape2, StaticBroadcast};
-    ///
-    /// // Shape2<3, 4> and Shape2<5, 6> are not broadcast-compatible
-    /// fn check<A: StaticBroadcast<B>, B>() {}
-    /// check::<Shape2<3, 4>, Shape2<5, 6>>();
-    /// ```
-    #[allow(dead_code)]
-    fn _compile_fail_broadcast_mismatch() {}
+    // The compile_fail proofs for matmul-K-mismatch and broadcast-shape-mismatch
+    // live as doctests on `StaticMatMul` and `StaticBroadcast` themselves
+    // (see their trait definitions above).
 }

@@ -97,8 +97,7 @@ impl<B: BitGenerator> Generator<B> {
         }
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
-        let data =
-            generate_vec_f32(self, n, |bg| scale * standard_exponential_single_f32(bg));
+        let data = generate_vec_f32(self, n, |bg| scale * standard_exponential_single_f32(bg));
         vec_to_array_f32(data, &shape)
     }
 }
@@ -210,7 +209,10 @@ mod tests {
         let mut rng = default_rng_seeded(42);
         let arr = rng.standard_exponential_f32(10_000).unwrap();
         for &v in arr.as_slice().unwrap() {
-            assert!(v > 0.0, "standard_exponential_f32 produced non-positive: {v}");
+            assert!(
+                v > 0.0,
+                "standard_exponential_f32 produced non-positive: {v}"
+            );
         }
     }
 
@@ -221,7 +223,10 @@ mod tests {
         let arr = rng.standard_exponential_f32(n).unwrap();
         let slice = arr.as_slice().unwrap();
         let mean: f64 = slice.iter().map(|&x| x as f64).sum::<f64>() / n as f64;
-        assert!((mean - 1.0).abs() < 0.02, "f32 exp mean {mean} too far from 1");
+        assert!(
+            (mean - 1.0).abs() < 0.02,
+            "f32 exp mean {mean} too far from 1"
+        );
     }
 
     #[test]

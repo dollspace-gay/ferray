@@ -70,10 +70,8 @@ pub fn qr_batched<T: LinalgFloat>(
         ));
     }
     if shape.len() == 2 {
-        let a2 = Array::<T, Ix2>::from_vec(
-            Ix2::new([shape[0], shape[1]]),
-            a.iter().copied().collect(),
-        )?;
+        let a2 =
+            Array::<T, Ix2>::from_vec(Ix2::new([shape[0], shape[1]]), a.iter().copied().collect())?;
         let (q, r) = qr(&a2, mode)?;
         return Ok((
             Array::from_vec(IxDyn::new(q.shape()), q.iter().copied().collect())?,

@@ -165,13 +165,12 @@ pub fn broadcast_to<T: Element, D: Dimension>(
 ) -> FerrayResult<Array<T, IxDyn>> {
     let src_shape = a.shape();
     let dyn_view = a.inner.view().into_dyn();
-    let broadcast_view =
-        dyn_view
-            .broadcast(ndarray::IxDyn(new_shape))
-            .ok_or_else(|| FerrayError::BroadcastFailure {
-                shape_a: src_shape.to_vec(),
-                shape_b: new_shape.to_vec(),
-            })?;
+    let broadcast_view = dyn_view
+        .broadcast(ndarray::IxDyn(new_shape))
+        .ok_or_else(|| FerrayError::BroadcastFailure {
+            shape_a: src_shape.to_vec(),
+            shape_b: new_shape.to_vec(),
+        })?;
     // `as_standard_layout` turns the stride-0 broadcast view into a
     // proper C-contiguous owned buffer in one pass; the previous
     // hand-rolled loop walked every destination index separately.
@@ -614,9 +613,7 @@ pub fn array_split_n<T: Element>(
     axis: usize,
 ) -> FerrayResult<Vec<Array<T, IxDyn>>> {
     if n == 0 {
-        return Err(FerrayError::invalid_value(
-            "array_split_n: n must be > 0",
-        ));
+        return Err(FerrayError::invalid_value("array_split_n: n must be > 0"));
     }
     let shape = a.shape();
     if axis >= shape.len() {
@@ -1447,7 +1444,10 @@ mod tests {
         let a = dyn_arr(&[7], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
         let parts = array_split_n(&a, 3, 0).unwrap();
         assert_eq!(parts.len(), 3);
-        assert_eq!(parts[0].iter().copied().collect::<Vec<_>>(), vec![1.0, 2.0, 3.0]);
+        assert_eq!(
+            parts[0].iter().copied().collect::<Vec<_>>(),
+            vec![1.0, 2.0, 3.0]
+        );
         assert_eq!(parts[1].iter().copied().collect::<Vec<_>>(), vec![4.0, 5.0]);
         assert_eq!(parts[2].iter().copied().collect::<Vec<_>>(), vec![6.0, 7.0]);
     }
@@ -1475,19 +1475,23 @@ mod tests {
         assert_eq!(parts[0].iter().copied().collect::<Vec<_>>(), vec![1.0]);
         assert_eq!(parts[1].iter().copied().collect::<Vec<_>>(), vec![2.0]);
         assert_eq!(parts[2].iter().copied().collect::<Vec<_>>(), vec![3.0]);
-        assert_eq!(parts[3].iter().copied().collect::<Vec<_>>(), Vec::<f64>::new());
-        assert_eq!(parts[4].iter().copied().collect::<Vec<_>>(), Vec::<f64>::new());
+        assert_eq!(
+            parts[3].iter().copied().collect::<Vec<_>>(),
+            Vec::<f64>::new()
+        );
+        assert_eq!(
+            parts[4].iter().copied().collect::<Vec<_>>(),
+            Vec::<f64>::new()
+        );
     }
 
     #[test]
     fn test_to_dyn_from_typed() {
         use crate::Array;
         use crate::dimension::Ix2;
-        let typed = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let typed =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
         let dy = typed.to_dyn();
         assert_eq!(dy.shape(), &[2, 3]);
         assert_eq!(

@@ -359,8 +359,7 @@ mod tests {
 
     #[test]
     fn cholesky_upper_rejects_non_positive_definite() {
-        let a =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![-1.0, 0.0, 0.0, -1.0]).unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![-1.0, 0.0, 0.0, -1.0]).unwrap();
         assert!(cholesky_upper(&a).is_err());
     }
 
@@ -399,11 +398,8 @@ mod tests {
     fn cholesky_upper_batched_2d_input_matches_unbatched() {
         // 2-D input routes through the early-return path in
         // cholesky_batched. Verify it still produces the correct U.
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![4.0, 2.0, 2.0, 3.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![4.0, 2.0, 2.0, 3.0]).unwrap();
         let u_batched = cholesky_upper_batched(&a).unwrap();
         let a2 = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![4.0, 2.0, 2.0, 3.0]).unwrap();
         let u_unbatched = cholesky_upper(&a2).unwrap();

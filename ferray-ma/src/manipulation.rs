@@ -154,10 +154,7 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
     ///
     /// # Errors
     /// - `FerrayError::ShapeMismatch` if `bool_mask.shape() != self.shape()`.
-    pub fn boolean_index(
-        &self,
-        bool_mask: &Array<bool, D>,
-    ) -> FerrayResult<MaskedArray<T, Ix1>> {
+    pub fn boolean_index(&self, bool_mask: &Array<bool, D>) -> FerrayResult<MaskedArray<T, Ix1>> {
         if bool_mask.shape() != self.shape() {
             return Err(FerrayError::shape_mismatch(format!(
                 "boolean_index: selector shape {:?} does not match masked array shape {:?}",
@@ -333,7 +330,12 @@ mod tests {
 
     #[test]
     fn flatten_is_alias_for_ravel() {
-        let ma = ma2d(2, 2, vec![1.0, 2.0, 3.0, 4.0], vec![false, true, false, true]);
+        let ma = ma2d(
+            2,
+            2,
+            vec![1.0, 2.0, 3.0, 4.0],
+            vec![false, true, false, true],
+        );
         let r1 = ma.ravel().unwrap();
         let r2 = ma.flatten().unwrap();
         assert_eq!(
@@ -381,8 +383,7 @@ mod tests {
         // 3-D with explicit permutation [2, 0, 1] — 2x3x4 → 4x2x3
         let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
         let mask = vec![false; 24];
-        let d =
-            Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
+        let d = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
         let m = Array::<bool, Ix3>::from_vec(Ix3::new([2, 3, 4]), mask).unwrap();
         let ma = MaskedArray::new(d, m).unwrap();
         let t = ma.transpose(Some(&[2, 0, 1])).unwrap();
@@ -392,10 +393,9 @@ mod tests {
     #[test]
     fn squeeze_removes_all_size_1_dims_when_axis_none() {
         // (1, 3, 1) → (3,)
-        let d =
-            Array::<f64, Ix3>::from_vec(Ix3::new([1, 3, 1]), vec![10.0, 20.0, 30.0]).unwrap();
-        let m = Array::<bool, Ix3>::from_vec(Ix3::new([1, 3, 1]), vec![false, true, false])
-            .unwrap();
+        let d = Array::<f64, Ix3>::from_vec(Ix3::new([1, 3, 1]), vec![10.0, 20.0, 30.0]).unwrap();
+        let m =
+            Array::<bool, Ix3>::from_vec(Ix3::new([1, 3, 1]), vec![false, true, false]).unwrap();
         let ma = MaskedArray::new(d, m).unwrap();
         let s = ma.squeeze(None).unwrap();
         assert_eq!(s.shape(), &[3]);
@@ -408,10 +408,9 @@ mod tests {
     #[test]
     fn squeeze_single_axis() {
         // (1, 3, 1), squeeze axis=0 → (3, 1)
-        let d =
-            Array::<f64, Ix3>::from_vec(Ix3::new([1, 3, 1]), vec![10.0, 20.0, 30.0]).unwrap();
-        let m = Array::<bool, Ix3>::from_vec(Ix3::new([1, 3, 1]), vec![false, true, false])
-            .unwrap();
+        let d = Array::<f64, Ix3>::from_vec(Ix3::new([1, 3, 1]), vec![10.0, 20.0, 30.0]).unwrap();
+        let m =
+            Array::<bool, Ix3>::from_vec(Ix3::new([1, 3, 1]), vec![false, true, false]).unwrap();
         let ma = MaskedArray::new(d, m).unwrap();
         let s = ma.squeeze(Some(0)).unwrap();
         assert_eq!(s.shape(), &[3, 1]);
@@ -473,8 +472,7 @@ mod tests {
     #[test]
     fn boolean_index_rejects_wrong_shape() {
         let ma = ma2d(2, 3, vec![1.0; 6], vec![false; 6]);
-        let wrong =
-            Array::<bool, Ix2>::from_vec(Ix2::new([3, 2]), vec![false; 6]).unwrap();
+        let wrong = Array::<bool, Ix2>::from_vec(Ix2::new([3, 2]), vec![false; 6]).unwrap();
         assert!(ma.boolean_index(&wrong).is_err());
     }
 

@@ -311,10 +311,7 @@ pub fn ulp_distance_f64(a: f64, b: f64) -> Option<u64> {
     // `(a - b).abs() < floor` check avoids the opposite-sign pair
     // `(+floor/2, -floor/2)` being reported as identical even though
     // their cross-sign ULP distance is huge (#321).
-    if a.abs() < F64_NOISE_FLOOR
-        && b.abs() < F64_NOISE_FLOOR
-        && (a - b).abs() < F64_NOISE_FLOOR
-    {
+    if a.abs() < F64_NOISE_FLOOR && b.abs() < F64_NOISE_FLOOR && (a - b).abs() < F64_NOISE_FLOOR {
         return Some(0);
     }
     if a.is_sign_negative() != b.is_sign_negative() {
@@ -340,10 +337,7 @@ pub fn ulp_distance_f32(a: f32, b: f32) -> Option<u64> {
     if a == b {
         return Some(0);
     }
-    if a.abs() < F32_NOISE_FLOOR
-        && b.abs() < F32_NOISE_FLOOR
-        && (a - b).abs() < F32_NOISE_FLOOR
-    {
+    if a.abs() < F32_NOISE_FLOOR && b.abs() < F32_NOISE_FLOOR && (a - b).abs() < F32_NOISE_FLOOR {
         return Some(0);
     }
     if a.is_sign_negative() != b.is_sign_negative() {
@@ -857,7 +851,10 @@ mod tests {
         assert_eq!(ulp_distance_f64(0.0, 0.0), Some(0));
         assert_eq!(ulp_distance_f64(-1.5, -1.5), Some(0));
         assert_eq!(ulp_distance_f64(f64::INFINITY, f64::INFINITY), Some(0));
-        assert_eq!(ulp_distance_f64(f64::NEG_INFINITY, f64::NEG_INFINITY), Some(0));
+        assert_eq!(
+            ulp_distance_f64(f64::NEG_INFINITY, f64::NEG_INFINITY),
+            Some(0)
+        );
     }
 
     #[test]
@@ -888,8 +885,7 @@ mod tests {
         // #199: this is the case the old code got wrong. The correct
         // cross-sign distance is (|a|.to_bits()) + (|b|.to_bits()),
         // using the sign-magnitude representation of IEEE 754 floats.
-        let expected = (1.0f64.to_bits() & !F64_SIGN_MASK)
-            + ((-1.0f64).to_bits() & !F64_SIGN_MASK);
+        let expected = (1.0f64.to_bits() & !F64_SIGN_MASK) + ((-1.0f64).to_bits() & !F64_SIGN_MASK);
         assert_eq!(ulp_distance_f64(1.0, -1.0), Some(expected));
         assert_eq!(ulp_distance_f64(-1.0, 1.0), Some(expected));
     }

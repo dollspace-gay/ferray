@@ -166,9 +166,9 @@ impl NpzFile {
         // We can't pass `entry` directly to `load_dynamic_from_reader`
         // because the npy parser uses Seek and `ZipFile` does not.
         let mut data = Vec::new();
-        entry.read_to_end(&mut data).map_err(|e| {
-            FerrayError::io_error(format!("failed to read .npz entry data: {e}"))
-        })?;
+        entry
+            .read_to_end(&mut data)
+            .map_err(|e| FerrayError::io_error(format!("failed to read .npz entry data: {e}")))?;
         let mut cursor = Cursor::new(data);
         npy::load_dynamic_from_reader(&mut cursor)
     }

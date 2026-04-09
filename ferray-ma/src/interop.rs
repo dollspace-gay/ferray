@@ -272,8 +272,8 @@ mod tests {
 
     #[test]
     fn apply_unary_propagates_mask() {
-        let ma = ma1(vec![1.0, 4.0, 9.0, 16.0], vec![false, false, true, false])
-            .with_fill_value(-1.0);
+        let ma =
+            ma1(vec![1.0, 4.0, 9.0, 16.0], vec![false, false, true, false]).with_fill_value(-1.0);
         let result = ma
             .apply_unary(|arr| {
                 // Squaring closure as a stand-in for any ferray-ufunc function
@@ -295,18 +295,15 @@ mod tests {
     #[test]
     fn apply_unary_forwards_error() {
         let ma = ma1(vec![1.0, 2.0], vec![false, false]);
-        let result: FerrayResult<MaskedArray<f64, Ix1>> = ma.apply_unary(|_| {
-            Err(FerrayError::invalid_value("simulated failure"))
-        });
+        let result: FerrayResult<MaskedArray<f64, Ix1>> =
+            ma.apply_unary(|_| Err(FerrayError::invalid_value("simulated failure")));
         assert!(result.is_err());
     }
 
     #[test]
     fn apply_unary_rejects_shape_change() {
         let ma = ma1(vec![1.0, 2.0, 3.0], vec![false, false, false]);
-        let result = ma.apply_unary(|_| {
-            Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![1.0, 2.0])
-        });
+        let result = ma.apply_unary(|_| Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![1.0, 2.0]));
         assert!(result.is_err());
     }
 
@@ -333,16 +330,11 @@ mod tests {
 
     #[test]
     fn apply_binary_unions_masks() {
-        let a = ma1(vec![10.0, 20.0, 30.0], vec![false, true, false])
-            .with_fill_value(-1.0);
+        let a = ma1(vec![10.0, 20.0, 30.0], vec![false, true, false]).with_fill_value(-1.0);
         let b = ma1(vec![1.0, 2.0, 3.0], vec![false, false, true]);
         let result = a
             .apply_binary(&b, |x, y| {
-                let data: Vec<f64> = x
-                    .iter()
-                    .zip(y.iter())
-                    .map(|(&a, &b)| a + b)
-                    .collect();
+                let data: Vec<f64> = x.iter().zip(y.iter()).map(|(&a, &b)| a + b).collect();
                 Array::<f64, Ix1>::from_vec(Ix1::new([x.size()]), data)
             })
             .unwrap();
@@ -536,8 +528,7 @@ where
                 .zip(mask.iter())
                 .map(|(v, m)| if *m { fill } else { *v })
                 .collect();
-            let final_data =
-                Array::from_vec(input.data().dim().clone(), masked_data)?;
+            let final_data = Array::from_vec(input.data().dim().clone(), masked_data)?;
             let mut result = MaskedArray::new(final_data, mask.clone())?;
             result.set_fill_value(fill);
             Ok(result)
@@ -573,10 +564,7 @@ mod mask_aware_tests {
             <Array<f64, Ix1> as MaskAware<f64, Ix1>>::fill_value(&a),
             0.0
         );
-        assert_eq!(
-            <Array<f64, Ix1> as MaskAware<f64, Ix1>>::shape(&a),
-            &[3]
-        );
+        assert_eq!(<Array<f64, Ix1> as MaskAware<f64, Ix1>>::shape(&a), &[3]);
     }
 
     #[test]

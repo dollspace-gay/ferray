@@ -22,10 +22,8 @@ macro_rules! reduction_oracle {
     ($test_name:ident, $file:expr, $func:path) => {
         #[test]
         fn $test_name() {
-            let func: fn(
-                &Array<f64, IxDyn>,
-                Option<usize>,
-            ) -> FerrayResult<Array<f64, IxDyn>> = $func;
+            let func: fn(&Array<f64, IxDyn>, Option<usize>) -> FerrayResult<Array<f64, IxDyn>> =
+                $func;
             run_reduction_f64_oracle(&stats_path($file), func);
         }
     };
@@ -408,10 +406,7 @@ fn oracle_argsort() {
             .iter()
             .map(|&i| flat_input[i as usize])
             .collect();
-        let expected_sorted: Vec<f64> = expected
-            .iter()
-            .map(|&i| flat_input[i as usize])
-            .collect();
+        let expected_sorted: Vec<f64> = expected.iter().map(|&i| flat_input[i as usize]).collect();
         for (i, (a, e)) in actual_sorted.iter().zip(expected_sorted.iter()).enumerate() {
             assert_eq!(
                 a.to_bits(),

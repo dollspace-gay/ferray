@@ -2,9 +2,9 @@
 
 use core::fmt;
 
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 extern crate alloc;
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 use alloc::{string::String, string::ToString, vec::Vec};
 
 /// The primary error type for all ferray operations.
@@ -146,7 +146,7 @@ impl FerrayError {
     }
 }
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 impl From<std::io::Error> for FerrayError {
     fn from(e: std::io::Error) -> Self {
         Self::IoError {

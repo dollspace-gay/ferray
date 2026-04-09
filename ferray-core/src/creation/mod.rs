@@ -860,10 +860,7 @@ mod tests {
         // byte is a valid bool per `Element`).
         let bytes: Vec<u8> = vec![0, 1, 0, 1, 1];
         let a = frombuffer::<bool, Ix1>(Ix1::new([5]), &bytes).unwrap();
-        assert_eq!(
-            a.as_slice().unwrap(),
-            &[false, true, false, true, true]
-        );
+        assert_eq!(a.as_slice().unwrap(), &[false, true, false, true, true]);
     }
 
     #[test]
@@ -883,11 +880,7 @@ mod tests {
         let mut out = vec![0u8; n];
         // SAFETY: src is &[T], out is a byte buffer of exactly n bytes.
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                src.as_ptr() as *const u8,
-                out.as_mut_ptr(),
-                n,
-            );
+            std::ptr::copy_nonoverlapping(src.as_ptr() as *const u8, out.as_mut_ptr(), n);
         }
         out
     }
@@ -1026,11 +1019,8 @@ mod tests {
     #[test]
     fn test_empty_like_matches_shape_2d() {
         use crate::dimension::Ix2;
-        let src = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let src = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let mut u = empty_like(&src);
         assert_eq!(u.shape(), &[2, 3]);
         assert_eq!(u.size(), 6);
@@ -1043,7 +1033,10 @@ mod tests {
         // SAFETY: every slot just written.
         let out = unsafe { u.assume_init() };
         assert_eq!(out.shape(), &[2, 3]);
-        assert_eq!(out.as_slice().unwrap(), &[0.0, -1.0, -2.0, -3.0, -4.0, -5.0]);
+        assert_eq!(
+            out.as_slice().unwrap(),
+            &[0.0, -1.0, -2.0, -3.0, -4.0, -5.0]
+        );
         // Source is unchanged.
         assert_eq!(src.as_slice().unwrap(), &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     }

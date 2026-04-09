@@ -50,8 +50,7 @@ pub use correlation::{CorrelateMode, corrcoef, correlate, cov};
 
 // Histogram
 pub use histogram::{
-    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram2d,
-    histogramdd,
+    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram2d, histogramdd,
 };
 
 // Sorting

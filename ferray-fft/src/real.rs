@@ -109,8 +109,7 @@ where
     // Delegate to the realfft-backed lane helper, which runs the
     // complex-to-real transform directly without extending to full length.
     let complex_data: Vec<Complex<T>> = a.iter().copied().collect();
-    let (out_shape, out_data) =
-        irfft_along_axis::<T>(&complex_data, &shape, ax, output_len, norm)?;
+    let (out_shape, out_data) = irfft_along_axis::<T>(&complex_data, &shape, ax, output_len, norm)?;
     Array::from_vec(IxDyn::new(&out_shape), out_data)
 }
 
@@ -481,12 +480,7 @@ mod tests {
         let recovered = irfft(&spectrum, Some(3), Some(0), FftNorm::Backward).unwrap();
         let rec_data: Vec<f64> = recovered.iter().copied().collect();
         for (o, r) in data.iter().zip(rec_data.iter()) {
-            assert!(
-                (o - r).abs() < 1e-9,
-                "axis0 roundtrip: {} vs {}",
-                o,
-                r
-            );
+            assert!((o - r).abs() < 1e-9, "axis0 roundtrip: {} vs {}", o, r);
         }
     }
 
@@ -502,12 +496,7 @@ mod tests {
         let recovered = irfft(&spectrum, Some(4), Some(1), FftNorm::Backward).unwrap();
         let rec_data: Vec<f64> = recovered.iter().copied().collect();
         for (o, r) in data.iter().zip(rec_data.iter()) {
-            assert!(
-                (o - r).abs() < 1e-9,
-                "axis1 roundtrip: {} vs {}",
-                o,
-                r
-            );
+            assert!((o - r).abs() < 1e-9, "axis1 roundtrip: {} vs {}", o, r);
         }
     }
 
@@ -549,12 +538,7 @@ mod tests {
                 assert!(bin.im.abs() < 1e-10);
             } else {
                 // All other bins should be near zero.
-                assert!(
-                    bin.norm() < 1e-10,
-                    "bin {} should be ~0, got {:?}",
-                    i,
-                    bin
-                );
+                assert!(bin.norm() < 1e-10, "bin {} should be ~0, got {:?}", i, bin);
             }
         }
     }
@@ -580,19 +564,17 @@ mod tests {
         for row in 0..rows {
             // Sum of |x[i]|^2 for this lane.
             let lane_start = row * cols;
-            let time_energy: f64 =
-                data[lane_start..lane_start + cols].iter().map(|&v| v * v).sum();
+            let time_energy: f64 = data[lane_start..lane_start + cols]
+                .iter()
+                .map(|&v| v * v)
+                .sum();
 
             // Sum of |X[k]|^2 for this lane in the folded representation.
             let spec_row = row * (cols / 2 + 1);
             let half_len = cols / 2 + 1;
             let mut freq_energy = 0.0;
             for k in 0..half_len {
-                let bin = spectrum
-                    .iter()
-                    .nth(spec_row + k)
-                    .copied()
-                    .unwrap();
+                let bin = spectrum.iter().nth(spec_row + k).copied().unwrap();
                 let mag_sq = bin.norm_sqr();
                 // Bins 0 and cols/2 (for even n) count once; others count
                 // twice to account for their unstored conjugate.

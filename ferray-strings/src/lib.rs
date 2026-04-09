@@ -351,4 +351,27 @@ mod integration_tests {
         let ends = endswith(&a, "世界").unwrap();
         assert_eq!(ends.as_slice().unwrap(), &[true, false]);
     }
+
+    // ----- Empty array tests (#282) -----
+
+    #[test]
+    fn empty_array_upper() {
+        let a = StringArray1::from_vec(ferray_core::dimension::Ix1::new([0]), vec![]).unwrap();
+        let u = upper(&a).unwrap();
+        assert_eq!(u.len(), 0);
+    }
+
+    #[test]
+    fn empty_array_str_len() {
+        let a = StringArray1::from_vec(ferray_core::dimension::Ix1::new([0]), vec![]).unwrap();
+        let l = str_len(&a).unwrap();
+        assert_eq!(l.size(), 0);
+    }
+
+    #[test]
+    fn empty_array_find() {
+        let a = StringArray1::from_vec(ferray_core::dimension::Ix1::new([0]), vec![]).unwrap();
+        let f = find(&a, "x").unwrap();
+        assert_eq!(f.size(), 0);
+    }
 }

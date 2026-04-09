@@ -46,7 +46,7 @@ impl core::fmt::Display for MemoryLayout {
 /// element strides. Used by `Array::layout`, `ArrayView::layout` and
 /// `ArrayViewMut::layout` so all three share one implementation
 /// (see issue #127).
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 #[inline]
 pub(crate) fn classify_layout(
     is_standard: bool,
@@ -61,7 +61,7 @@ pub(crate) fn classify_layout(
 }
 
 /// Determine memory layout from shape and strides.
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub(crate) fn detect_layout(shape: &[usize], strides: &[isize]) -> MemoryLayout {
     if shape.is_empty() {
         return MemoryLayout::C; // scalar-like
@@ -79,7 +79,7 @@ pub(crate) fn detect_layout(shape: &[usize], strides: &[isize]) -> MemoryLayout 
     }
 }
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 fn is_c_contiguous(shape: &[usize], strides: &[isize]) -> bool {
     if shape.len() != strides.len() {
         return false;
@@ -101,7 +101,7 @@ fn is_c_contiguous(shape: &[usize], strides: &[isize]) -> bool {
     true
 }
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 fn is_f_contiguous(shape: &[usize], strides: &[isize]) -> bool {
     if shape.len() != strides.len() {
         return false;

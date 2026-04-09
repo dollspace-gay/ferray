@@ -84,9 +84,7 @@ where
     F: Fn(DualNumber<T>) -> DualNumber<T>,
 {
     let x_slice = x.as_slice().ok_or_else(|| {
-        FerrayError::invalid_value(
-            "value_and_derivative_elementwise: input must be C-contiguous",
-        )
+        FerrayError::invalid_value("value_and_derivative_elementwise: input must be C-contiguous")
     })?;
     let n = x_slice.len();
     let mut values = Vec::with_capacity(n);
@@ -145,16 +143,15 @@ where
     T: Element + Float,
     F: Fn(&[DualNumber<T>]) -> DualNumber<T>,
 {
-    let x_slice = x.as_slice().ok_or_else(|| {
-        FerrayError::invalid_value("gradient_vector: input must be C-contiguous")
-    })?;
+    let x_slice = x
+        .as_slice()
+        .ok_or_else(|| FerrayError::invalid_value("gradient_vector: input must be C-contiguous"))?;
     let n = x_slice.len();
     let mut grad = Vec::with_capacity(n);
 
     // Scratch buffer for the seed vector; reused across iterations to
     // avoid per-pass allocation.
-    let mut seed: Vec<DualNumber<T>> =
-        x_slice.iter().map(|&v| DualNumber::constant(v)).collect();
+    let mut seed: Vec<DualNumber<T>> = x_slice.iter().map(|&v| DualNumber::constant(v)).collect();
 
     for i in 0..n {
         // Seed only element i as the active variable.
@@ -181,8 +178,7 @@ where
     })?;
     let n = x_slice.len();
     let mut grad = Vec::with_capacity(n);
-    let mut seed: Vec<DualNumber<T>> =
-        x_slice.iter().map(|&v| DualNumber::constant(v)).collect();
+    let mut seed: Vec<DualNumber<T>> = x_slice.iter().map(|&v| DualNumber::constant(v)).collect();
 
     let mut value = <T as num_traits::Zero>::zero();
     for i in 0..n {
@@ -222,13 +218,12 @@ where
     T: Element + Float,
     F: Fn(&[DualNumber<T>]) -> Vec<DualNumber<T>>,
 {
-    let x_slice = x.as_slice().ok_or_else(|| {
-        FerrayError::invalid_value("jacobian: input must be C-contiguous")
-    })?;
+    let x_slice = x
+        .as_slice()
+        .ok_or_else(|| FerrayError::invalid_value("jacobian: input must be C-contiguous"))?;
     let n = x_slice.len();
 
-    let mut seed: Vec<DualNumber<T>> =
-        x_slice.iter().map(|&v| DualNumber::constant(v)).collect();
+    let mut seed: Vec<DualNumber<T>> = x_slice.iter().map(|&v| DualNumber::constant(v)).collect();
 
     // Pass 0: seed element 0, evaluate. That tells us `m` and gives us
     // the first column of the Jacobian.
@@ -292,11 +287,8 @@ mod tests {
 
     #[test]
     fn elementwise_2d_shape_preserved() {
-        let x = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let x = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         // d/dx (x^3) = 3*x^2
         let dx = derivative_elementwise(|v| v * v * v, &x).unwrap();
         assert_eq!(dx.shape(), &[2, 3]);
@@ -321,14 +313,9 @@ mod tests {
     fn gradient_quadratic_form() {
         // f(x) = x[0]^2 + 2*x[1]^2 + 3*x[2]^2
         // ∇f(x) = [2*x[0], 4*x[1], 6*x[2]]
-        let x =
-            Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let x = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let grad = gradient_vector(
-            |xs: &[DualNumber<f64>]| {
-                xs[0] * xs[0]
-                    + xs[1] * xs[1] * 2.0
-                    + xs[2] * xs[2] * 3.0
-            },
+            |xs: &[DualNumber<f64>]| xs[0] * xs[0] + xs[1] * xs[1] * 2.0 + xs[2] * xs[2] * 3.0,
             &x,
         )
         .unwrap();
@@ -343,13 +330,9 @@ mod tests {
         // f(x) = x[0] + x[1]*x[2]
         // f(1, 2, 3) = 1 + 2*3 = 7
         // ∇f = [1, x[2], x[1]] = [1, 3, 2]
-        let x =
-            Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
-        let (value, grad) = value_and_gradient(
-            |xs: &[DualNumber<f64>]| xs[0] + xs[1] * xs[2],
-            &x,
-        )
-        .unwrap();
+        let x = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let (value, grad) =
+            value_and_gradient(|xs: &[DualNumber<f64>]| xs[0] + xs[1] * xs[2], &x).unwrap();
         assert!((value - 7.0).abs() < 1e-10);
         let g = grad.as_slice().unwrap();
         assert!((g[0] - 1.0).abs() < 1e-10);
@@ -395,10 +378,10 @@ mod tests {
         let j_slice = j.as_slice().unwrap();
         let ct = theta.cos();
         let st = theta.sin();
-        assert!((j_slice[0] - ct).abs() < 1e-10);          // ∂(r cos θ)/∂r = cos θ
-        assert!((j_slice[1] - (-r * st)).abs() < 1e-10);   // ∂(r cos θ)/∂θ = -r sin θ
-        assert!((j_slice[2] - st).abs() < 1e-10);          // ∂(r sin θ)/∂r = sin θ
-        assert!((j_slice[3] - (r * ct)).abs() < 1e-10);    // ∂(r sin θ)/∂θ = r cos θ
+        assert!((j_slice[0] - ct).abs() < 1e-10); // ∂(r cos θ)/∂r = cos θ
+        assert!((j_slice[1] - (-r * st)).abs() < 1e-10); // ∂(r cos θ)/∂θ = -r sin θ
+        assert!((j_slice[2] - st).abs() < 1e-10); // ∂(r sin θ)/∂r = sin θ
+        assert!((j_slice[3] - (r * ct)).abs() < 1e-10); // ∂(r sin θ)/∂θ = r cos θ
     }
 
     #[test]

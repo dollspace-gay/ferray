@@ -365,7 +365,10 @@ where
         let bi = b as usize;
         // Iterate keys from primary (last) to secondary (earlier).
         for k in key_data.iter().rev() {
-            match k[ai].partial_cmp(&k[bi]).unwrap_or(std::cmp::Ordering::Equal) {
+            match k[ai]
+                .partial_cmp(&k[bi])
+                .unwrap_or(std::cmp::Ordering::Equal)
+            {
                 std::cmp::Ordering::Equal => continue,
                 ord => return ord,
             }
@@ -582,8 +585,7 @@ mod tests {
 
     #[test]
     fn test_searchsorted_with_sorter_length_mismatch_errors() {
-        let a =
-            Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![3.0, 1.0, 5.0, 2.0]).unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![3.0, 1.0, 5.0, 2.0]).unwrap();
         let bad_sorter = Array::<u64, Ix1>::from_vec(Ix1::new([3]), vec![1, 3, 0]).unwrap();
         let v = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![2.5]).unwrap();
         assert!(searchsorted_with_sorter(&a, &v, Side::Left, &bad_sorter).is_err());

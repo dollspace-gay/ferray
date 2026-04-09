@@ -45,10 +45,7 @@ pub fn count<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn startswith<D: Dimension>(
-    a: &StringArray<D>,
-    prefix: &str,
-) -> FerrayResult<Array<bool, D>> {
+pub fn startswith<D: Dimension>(a: &StringArray<D>, prefix: &str) -> FerrayResult<Array<bool, D>> {
     let data: Vec<bool> = a.map_to_vec(|s| s.starts_with(prefix));
     Array::from_vec(a.dim().clone(), data)
 }

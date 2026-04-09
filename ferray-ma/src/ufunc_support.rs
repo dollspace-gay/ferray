@@ -270,10 +270,7 @@ where
 /// # Errors
 /// Returns the underlying `from_vec` shape mismatch if the result
 /// buffer is malformed (not possible in practice).
-pub fn masked_unary<T, D, F>(
-    ma: &MaskedArray<T, D>,
-    f: F,
-) -> FerrayResult<MaskedArray<T, D>>
+pub fn masked_unary<T, D, F>(ma: &MaskedArray<T, D>, f: F) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Copy,
     D: Dimension,
@@ -746,10 +743,7 @@ mod tests {
     #[test]
     fn masked_unary_applies_closure_to_unmasked_only() {
         // Closure that's not exposed as a named wrapper: `x * 10 + 1`.
-        let ma = make_ma(
-            vec![1.0, 2.0, 3.0, 4.0],
-            vec![false, true, false, false],
-        );
+        let ma = make_ma(vec![1.0, 2.0, 3.0, 4.0], vec![false, true, false, false]);
         let r = masked_unary(&ma, |x| x * 10.0 + 1.0).unwrap();
         let d: Vec<f64> = r.data().iter().copied().collect();
         // Position 1 is masked → retains the fill_value (default: 0.0).
@@ -773,7 +767,10 @@ mod tests {
     fn masked_binary_mask_union_and_custom_closure() {
         // Custom binary op: `a * 2 + b`.
         let a = make_ma(vec![1.0, 2.0, 3.0, 4.0], vec![false, true, false, false]);
-        let b = make_ma(vec![10.0, 20.0, 30.0, 40.0], vec![false, false, true, false]);
+        let b = make_ma(
+            vec![10.0, 20.0, 30.0, 40.0],
+            vec![false, false, true, false],
+        );
         let r = masked_binary(&a, &b, |x, y| x * 2.0 + y, "test_op").unwrap();
         let d: Vec<f64> = r.data().iter().copied().collect();
         // Position 0: 2*1 + 10 = 12; position 1: masked; position 2: masked;
@@ -789,15 +786,11 @@ mod tests {
     fn masked_binary_broadcasts_cross_shape() {
         // masked_binary inherits broadcasting from masked_binary_op.
         use ferray_core::dimension::Ix2;
-        let d1 = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let d1 = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let m1 = Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
         let a = MaskedArray::new(d1, m1).unwrap();
-        let d2 =
-            Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![10.0, 20.0, 30.0]).unwrap();
+        let d2 = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![10.0, 20.0, 30.0]).unwrap();
         let m2 = Array::<bool, Ix2>::from_vec(Ix2::new([1, 3]), vec![false; 3]).unwrap();
         let b = MaskedArray::new(d2, m2).unwrap();
         let r = masked_binary(&a, &b, |x, y| x + y, "add_broadcast").unwrap();
@@ -840,10 +833,7 @@ mod tests {
 
     #[test]
     fn trunc_round_sign_basic() {
-        let ma = make_ma(
-            vec![1.7, -2.5, 0.0, -3.2],
-            vec![false, false, false, false],
-        );
+        let ma = make_ma(vec![1.7, -2.5, 0.0, -3.2], vec![false, false, false, false]);
         let t = trunc(&ma).unwrap();
         let r = round(&ma).unwrap();
         let s = sign(&ma).unwrap();
@@ -859,10 +849,7 @@ mod tests {
 
     #[test]
     fn arcsinh_arccosh_arctanh_masked_positions_use_fill() {
-        let ma = make_ma(
-            vec![0.0, 2.0, 0.5, -1.0],
-            vec![false, true, false, true],
-        );
+        let ma = make_ma(vec![0.0, 2.0, 0.5, -1.0], vec![false, true, false, true]);
         let a = arcsinh(&ma).unwrap();
         let ad: Vec<f64> = a.data().iter().copied().collect();
         assert!((ad[0] - 0.0_f64.asinh()).abs() < 1e-12);
@@ -887,10 +874,7 @@ mod tests {
     #[test]
     fn masked_unary_and_named_sin_agree() {
         // Generic path and named wrapper must produce identical results.
-        let ma = make_ma(
-            vec![0.0, 1.0, 2.0, 3.0],
-            vec![false, true, false, false],
-        );
+        let ma = make_ma(vec![0.0, 1.0, 2.0, 3.0], vec![false, true, false, false]);
         let via_named = sin(&ma).unwrap();
         let via_generic = masked_unary(&ma, f64::sin).unwrap();
         let vn: Vec<f64> = via_named.data().iter().copied().collect();
@@ -938,10 +922,7 @@ mod tests {
     #[test]
     fn log_domain_preserves_existing_mask() {
         // Position 1 is already masked; position 3 goes to masked via domain.
-        let ma = make_ma(
-            vec![1.0, 2.0, 5.0, -1.0],
-            vec![false, true, false, false],
-        );
+        let ma = make_ma(vec![1.0, 2.0, 5.0, -1.0], vec![false, true, false, false]);
         let r = log_domain(&ma).unwrap();
         let m: Vec<bool> = r.mask().iter().copied().collect();
         assert_eq!(m, vec![false, true, false, true]);
@@ -1056,12 +1037,7 @@ mod tests {
             vec![1.0, 2.0, 3.0, 4.0, 5.0],
             vec![false, false, false, false, false],
         );
-        let r = masked_unary_domain(
-            &ma,
-            |x| x * 2.0,
-            |x| (x as i32) % 2 == 0,
-        )
-        .unwrap();
+        let r = masked_unary_domain(&ma, |x| x * 2.0, |x| (x as i32) % 2 == 0).unwrap();
         let m: Vec<bool> = r.mask().iter().copied().collect();
         assert_eq!(m, vec![true, false, true, false, true]);
         let d: Vec<f64> = r.data().iter().copied().collect();

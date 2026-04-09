@@ -450,8 +450,8 @@ mod tests {
 
     #[test]
     fn dynarray_astype_bool_to_u8_safe() {
-        let arr = Array::<bool, IxDyn>::from_vec(IxDyn::new(&[3]), vec![true, false, true])
-            .unwrap();
+        let arr =
+            Array::<bool, IxDyn>::from_vec(IxDyn::new(&[3]), vec![true, false, true]).unwrap();
         let dy = DynArray::Bool(arr);
         let casted = dy.astype(DType::U8, CastKind::Safe).unwrap();
         match casted {
@@ -506,8 +506,7 @@ mod tests {
     fn dynarray_f16_from_typed_roundtrips() {
         use half::f16;
         let raw = [f16::from_f32(1.0), f16::from_f32(2.5), f16::from_f32(-3.0)];
-        let arr =
-            Array::<f16, IxDyn>::from_vec(IxDyn::new(&[3]), raw.to_vec()).unwrap();
+        let arr = Array::<f16, IxDyn>::from_vec(IxDyn::new(&[3]), raw.to_vec()).unwrap();
         let da: DynArray = arr.into();
         assert_eq!(da.dtype(), DType::F16);
         assert_eq!(da.shape(), &[3]);
@@ -526,12 +525,8 @@ mod tests {
     #[test]
     fn dynarray_bf16_from_typed_roundtrips() {
         use half::bf16;
-        let raw = [
-            bf16::from_f32(1.0),
-            bf16::from_f32(2.0),
-        ];
-        let arr =
-            Array::<bf16, IxDyn>::from_vec(IxDyn::new(&[2]), raw.to_vec()).unwrap();
+        let raw = [bf16::from_f32(1.0), bf16::from_f32(2.0)];
+        let arr = Array::<bf16, IxDyn>::from_vec(IxDyn::new(&[2]), raw.to_vec()).unwrap();
         let da: DynArray = arr.into();
         assert_eq!(da.dtype(), DType::BF16);
     }

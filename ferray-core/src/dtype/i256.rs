@@ -132,9 +132,7 @@ impl I256 {
             let mut carry: u128 = 0;
             let mut j = 0;
             while i + j < 4 {
-                let prod = (self.limbs[i] as u128) * (rhs.limbs[j] as u128)
-                    + out[i + j]
-                    + carry;
+                let prod = (self.limbs[i] as u128) * (rhs.limbs[j] as u128) + out[i + j] + carry;
                 out[i + j] = prod & 0xFFFF_FFFF_FFFF_FFFF;
                 carry = prod >> 64;
                 j += 1;
@@ -142,12 +140,7 @@ impl I256 {
             i += 1;
         }
         Self {
-            limbs: [
-                out[0] as u64,
-                out[1] as u64,
-                out[2] as u64,
-                out[3] as u64,
-            ],
+            limbs: [out[0] as u64, out[1] as u64, out[2] as u64, out[3] as u64],
         }
     }
 }
@@ -491,9 +484,9 @@ mod tests {
     fn i256_is_a_valid_ferray_element_type() {
         // Verify the Element trait impl actually compiles and that
         // `Array<I256, _>` construction works end-to-end.
+        use crate::Array;
         use crate::dimension::Ix1;
         use crate::dtype::Element;
-        use crate::Array;
 
         assert_eq!(<I256 as Element>::dtype(), crate::dtype::DType::I256);
         assert_eq!(<I256 as Element>::zero(), I256::ZERO);
@@ -511,11 +504,8 @@ mod tests {
     fn promotion_returns_i256_for_u128_plus_i128() {
         // End-to-end: the public result_type API returns I256 for
         // the motivating mixed pair.
-        use crate::dtype::promotion::result_type;
         use crate::dtype::DType;
-        assert_eq!(
-            result_type(DType::U128, DType::I128).unwrap(),
-            DType::I256
-        );
+        use crate::dtype::promotion::result_type;
+        assert_eq!(result_type(DType::U128, DType::I128).unwrap(), DType::I256);
     }
 }

@@ -204,10 +204,7 @@ pub fn eigvalsh<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix1>
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if matrix is not square.
 /// - `FerrayError::InvalidValue` if computation fails.
-pub fn eigvalsh_uplo<T: LinalgFloat>(
-    a: &Array<T, Ix2>,
-    uplo: UPLO,
-) -> FerrayResult<Array<T, Ix1>> {
+pub fn eigvalsh_uplo<T: LinalgFloat>(a: &Array<T, Ix2>, uplo: UPLO) -> FerrayResult<Array<T, Ix1>> {
     let shape = a.shape();
     if shape[0] != shape[1] {
         return Err(FerrayError::shape_mismatch(format!(
@@ -262,10 +259,8 @@ pub fn eigh_batched_uplo<T: LinalgFloat>(
         ));
     }
     if shape.len() == 2 {
-        let a2 = Array::<T, Ix2>::from_vec(
-            Ix2::new([shape[0], shape[1]]),
-            a.iter().copied().collect(),
-        )?;
+        let a2 =
+            Array::<T, Ix2>::from_vec(Ix2::new([shape[0], shape[1]]), a.iter().copied().collect())?;
         let (vals, vecs) = eigh_uplo(&a2, uplo)?;
         return Ok((
             Array::from_vec(IxDyn::new(vals.shape()), vals.iter().copied().collect())?,
@@ -342,10 +337,8 @@ pub fn eigvalsh_batched_uplo<T: LinalgFloat>(
         ));
     }
     if shape.len() == 2 {
-        let a2 = Array::<T, Ix2>::from_vec(
-            Ix2::new([shape[0], shape[1]]),
-            a.iter().copied().collect(),
-        )?;
+        let a2 =
+            Array::<T, Ix2>::from_vec(Ix2::new([shape[0], shape[1]]), a.iter().copied().collect())?;
         let vals = eigvalsh_uplo(&a2, uplo)?;
         return Array::from_vec(IxDyn::new(vals.shape()), vals.iter().copied().collect());
     }
@@ -609,11 +602,7 @@ mod tests {
         let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
         let (v_lower, _) = eigh_batched_uplo(&a, UPLO::Lower).unwrap();
         let (v_upper, _) = eigh_batched_uplo(&a, UPLO::Upper).unwrap();
-        for (l, u) in v_lower
-            .iter()
-            .copied()
-            .zip(v_upper.iter().copied())
-        {
+        for (l, u) in v_lower.iter().copied().zip(v_upper.iter().copied()) {
             assert!((l - u).abs() < 1e-10);
         }
     }
@@ -638,7 +627,10 @@ mod tests {
         assert!((vl[1] - 5.0).abs() < 1e-10);
         // Upper must differ from Lower somewhere
         let any_diff = vl.iter().zip(vu.iter()).any(|(l, u)| (l - u).abs() > 0.1);
-        assert!(any_diff, "upper batched should differ from lower on asymmetric input");
+        assert!(
+            any_diff,
+            "upper batched should differ from lower on asymmetric input"
+        );
     }
 
     #[test]
@@ -646,15 +638,11 @@ mod tests {
         // 2-D input: the shape.len() == 2 early return routes to
         // eigh_uplo directly. Verify the result matches the non-batched
         // eigh_uplo.
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![2.0, 1.0, 1.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![2.0, 1.0, 1.0, 2.0]).unwrap();
         let (v_batched, _) = eigh_batched_uplo(&a, UPLO::Upper).unwrap();
 
-        let a2 = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![2.0, 1.0, 1.0, 2.0])
-            .unwrap();
+        let a2 = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![2.0, 1.0, 1.0, 2.0]).unwrap();
         let (v_unbatched, _) = eigh_uplo(&a2, UPLO::Upper).unwrap();
         assert_eq!(
             v_batched.iter().copied().collect::<Vec<_>>(),

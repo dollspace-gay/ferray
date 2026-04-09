@@ -75,10 +75,7 @@ impl<B: BitGenerator> Generator<B> {
     ///     assert!((0.0..1.0).contains(&x));
     /// }
     /// ```
-    pub fn random_f32(
-        &mut self,
-        size: impl IntoShape,
-    ) -> Result<Array<f32, IxDyn>, FerrayError> {
+    pub fn random_f32(&mut self, size: impl IntoShape) -> Result<Array<f32, IxDyn>, FerrayError> {
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
         let data = generate_vec_f32(self, n, |bg| bg.next_f32());
@@ -377,7 +374,10 @@ mod tests {
         let arr = rng.random_f32(n).unwrap();
         let sum: f64 = arr.as_slice().unwrap().iter().map(|&v| v as f64).sum();
         let mean = sum / n as f64;
-        assert!((mean - 0.5).abs() < 0.01, "f32 random mean {mean} too far from 0.5");
+        assert!(
+            (mean - 0.5).abs() < 0.01,
+            "f32 random mean {mean} too far from 0.5"
+        );
     }
 
     #[test]
@@ -385,7 +385,10 @@ mod tests {
         let mut rng = default_rng_seeded(42);
         let arr = rng.uniform_f32(5.0, 10.0, 10_000).unwrap();
         for &v in arr.as_slice().unwrap() {
-            assert!((5.0..10.0).contains(&v), "f32 uniform value out of range: {v}");
+            assert!(
+                (5.0..10.0).contains(&v),
+                "f32 uniform value out of range: {v}"
+            );
         }
     }
 

@@ -166,11 +166,7 @@ mod integration_tests {
 
     #[test]
     fn sliding_window_2d() {
-        let a = Array::<i32, Ix2>::from_vec(
-            Ix2::new([3, 4]),
-            (0..12).collect(),
-        )
-        .unwrap();
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([3, 4]), (0..12).collect()).unwrap();
         // 2x2 sliding window on 3x4 -> shape (2, 3, 2, 2)
         let v = sliding_window_view(&a, &[2, 2]).unwrap();
         assert_eq!(v.shape(), &[2, 3, 2, 2]);
@@ -202,11 +198,8 @@ mod integration_tests {
     #[test]
     fn overlap_check_large_stride_no_overlap() {
         // Large strides that skip elements: no overlap
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([20]),
-            (0..20).map(|i| i as f64).collect(),
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([20]), (0..20).map(|i| i as f64).collect())
+            .unwrap();
         let v = as_strided(&a, &[2, 3], &[10, 3]).unwrap();
         assert_eq!(v.shape(), &[2, 3]);
         let data: Vec<f64> = v.iter().copied().collect();

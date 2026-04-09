@@ -442,7 +442,10 @@ mod tests {
         // After calling .mask(), we get a full all-false Array<bool, D>.
         let m = ma.mask();
         assert_eq!(m.shape(), &[3]);
-        assert_eq!(m.iter().copied().collect::<Vec<_>>(), vec![false, false, false]);
+        assert_eq!(
+            m.iter().copied().collect::<Vec<_>>(),
+            vec![false, false, false]
+        );
         // Subsequent calls return the same cached array (no re-alloc).
         let m2 = ma.mask();
         assert_eq!(m as *const _, m2 as *const _);

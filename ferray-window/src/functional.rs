@@ -253,10 +253,7 @@ mod tests {
         let square = vectorize(|x: f64| x.powi(2));
         let input = arr1(vec![1.0, 2.0, 3.0, 4.0, 5.0]);
         let result = square(&input).unwrap();
-        assert_eq!(
-            result.as_slice().unwrap(),
-            &[1.0, 4.0, 9.0, 16.0, 25.0][..]
-        );
+        assert_eq!(result.as_slice().unwrap(), &[1.0, 4.0, 9.0, 16.0, 25.0][..]);
     }
 
     #[test]
@@ -309,13 +306,7 @@ mod tests {
         // so callers don't need a heap allocation per branch (#297).
         let neg: &dyn Fn(f64) -> f64 = &|v| -v;
         let pos: &dyn Fn(f64) -> f64 = &|v| v * 2.0;
-        let result = piecewise(
-            &x,
-            &[cond_neg, cond_pos],
-            &[neg, pos],
-            0.0,
-        )
-        .unwrap();
+        let result = piecewise(&x, &[cond_neg, cond_pos], &[neg, pos], 0.0).unwrap();
 
         let s = result.as_slice().unwrap();
         assert_eq!(s, &[2.0, 1.0, 0.0, 2.0, 4.0]);

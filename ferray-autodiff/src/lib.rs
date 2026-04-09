@@ -44,7 +44,7 @@ pub use array_ops::{
 };
 pub use dual::DualNumber;
 pub use functions::{
-    abs, acos, asin, atan, atan2, cos, cosh, exp, ln, log10, log2, sin, sinh, sqrt, tan, tanh,
+    abs, acos, asin, atan, atan2, cos, cosh, exp, ln, log2, log10, sin, sinh, sqrt, tan, tanh,
 };
 
 // Existing test suite (unit, finite-difference, property) lives in a

@@ -11,7 +11,7 @@ use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::axes::{resolve_axes, resolve_axis};
 use crate::float::FftFloat;
-use crate::nd::{fft_along_axis, fft_along_axes};
+use crate::nd::{fft_along_axes, fft_along_axis};
 use crate::norm::FftNorm;
 
 // ---------------------------------------------------------------------------
@@ -41,9 +41,7 @@ where
     }
 }
 
-fn borrow_complex_flat<T: FftFloat, D: Dimension>(
-    a: &Array<Complex<T>, D>,
-) -> ComplexData<'_, T>
+fn borrow_complex_flat<T: FftFloat, D: Dimension>(a: &Array<Complex<T>, D>) -> ComplexData<'_, T>
 where
     Complex<T>: ferray_core::Element,
 {
@@ -411,8 +409,7 @@ where
 
     let axes_and_sizes: Vec<(usize, Option<usize>)> = axes.iter().copied().zip(sizes).collect();
 
-    let (new_shape, result) =
-        fft_along_axes::<T>(&data, &shape, &axes_and_sizes, inverse, norm)?;
+    let (new_shape, result) = fft_along_axes::<T>(&data, &shape, &axes_and_sizes, inverse, norm)?;
 
     Array::from_vec(IxDyn::new(&new_shape), result)
 }
@@ -464,12 +461,7 @@ mod tests {
     fn fft_negative_axis_matches_explicit() {
         // axis=-1 on a 2-D array should match axis=1 (#434).
         use ferray_core::dimension::Ix2;
-        let data = vec![
-            c(1.0, 0.0),
-            c(2.0, 0.0),
-            c(3.0, 0.0),
-            c(4.0, 0.0),
-        ];
+        let data = vec![c(1.0, 0.0), c(2.0, 0.0), c(3.0, 0.0), c(4.0, 0.0)];
         let a = Array::<Complex<f64>, Ix2>::from_vec(Ix2::new([2, 2]), data).unwrap();
         let neg = fft(&a, None, Some(-1), FftNorm::Backward).unwrap();
         let pos = fft(&a, None, Some(1), FftNorm::Backward).unwrap();
@@ -692,10 +684,7 @@ mod tests {
         let spectrum = fft(&a, None, None, FftNorm::Ortho).unwrap();
 
         let energy_time: f64 = data.iter().map(|x| x.re * x.re + x.im * x.im).sum();
-        let energy_freq: f64 = spectrum
-            .iter()
-            .map(|x| x.re * x.re + x.im * x.im)
-            .sum();
+        let energy_freq: f64 = spectrum.iter().map(|x| x.re * x.re + x.im * x.im).sum();
         assert!(
             (energy_time - energy_freq).abs() < 1e-10,
             "Parseval: time={energy_time}, freq={energy_freq}"

@@ -130,7 +130,6 @@ where
     Array::from_vec(IxDyn::new(&out_shape), conj_data)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

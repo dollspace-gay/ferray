@@ -141,9 +141,8 @@ mod tests {
 
     #[test]
     fn round_trip_2d() {
-        let arr =
-            Array::<f32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-                .unwrap();
+        let arr = Array::<f32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let json = serde_json::to_string(&arr).unwrap();
         let restored: Array<f32, Ix2> = serde_json::from_str(&json).unwrap();
         assert_eq!(arr, restored);

@@ -714,9 +714,7 @@ mod tests {
 
     #[test]
     fn mapparms_basic() {
-        let p = Polynomial::new(&[1.0])
-            .with_domain([0.0, 4.0])
-            .unwrap();
+        let p = Polynomial::new(&[1.0]).with_domain([0.0, 4.0]).unwrap();
         let (offset, scale) = p.mapparms().unwrap();
         assert_eq!(scale, 0.5);
         assert_eq!(offset, -1.0);

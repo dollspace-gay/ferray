@@ -1163,11 +1163,7 @@ mod tests {
     #[test]
     fn nonzero_f64_treats_negative_zero_as_zero() {
         // -0.0 == 0.0 for PartialEq, so -0.0 is "zero" per numpy semantics.
-        let arr = Array::<f64, Ix1>::from_vec(
-            Ix1::new([4]),
-            vec![-0.0, 1.5, 0.0, -2.5],
-        )
-        .unwrap();
+        let arr = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![-0.0, 1.5, 0.0, -2.5]).unwrap();
         let nz = nonzero(&arr);
         assert_eq!(nz[0], vec![1, 3]);
     }
@@ -1306,11 +1302,8 @@ mod tests {
 
     #[test]
     fn where_2d() {
-        let cond = Array::<bool, Ix2>::from_vec(
-            Ix2::new([2, 2]),
-            vec![true, false, false, true],
-        )
-        .unwrap();
+        let cond =
+            Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![true, false, false, true]).unwrap();
         let x = Array::<i32, Ix2>::from_vec(Ix2::new([2, 2]), vec![1, 2, 3, 4]).unwrap();
         let y = Array::<i32, Ix2>::from_vec(Ix2::new([2, 2]), vec![10, 20, 30, 40]).unwrap();
         let result = where_select(&cond, &x, &y).unwrap();

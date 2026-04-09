@@ -49,8 +49,8 @@ pub use products::{
 
 // Decompositions (Section 8.2)
 pub use decomp::{
-    QrMode, UPLO, cholesky, cholesky_batched, cholesky_upper, cholesky_upper_batched, eig,
-    eigh, eigh_batched, eigh_batched_uplo, eigh_uplo, eigvals, eigvalsh, eigvalsh_batched,
+    QrMode, UPLO, cholesky, cholesky_batched, cholesky_upper, cholesky_upper_batched, eig, eigh,
+    eigh_batched, eigh_batched_uplo, eigh_uplo, eigvals, eigvalsh, eigvalsh_batched,
     eigvalsh_batched_uplo, eigvalsh_uplo, lu, qr, qr_batched, svd, svd_batched, svdvals,
 };
 
@@ -63,12 +63,9 @@ pub use solve::{
 // Norms and measures (Section 8.4)
 pub use norms::{
     NormOrder, cond, det, det_batched, diagonal, matrix_norm, matrix_rank, matrix_rank_batched,
-    matrix_transpose, norm, norm_axis, slogdet, slogdet_batched, trace, trace_offset,
-    vector_norm,
+    matrix_transpose, norm, norm_axis, slogdet, slogdet_batched, trace, trace_offset, vector_norm,
 };
 
 // Complex matrix operations (#404) — take `Array<Complex<T>, Ix2>` directly
 // since `LinalgFloat` is sealed to real floats.
-pub use complex::{
-    det_complex, inv_complex, matmul_complex, solve_complex, solve_complex_vec,
-};
+pub use complex::{det_complex, inv_complex, matmul_complex, solve_complex, solve_complex_vec};

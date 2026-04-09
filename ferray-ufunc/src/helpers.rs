@@ -125,10 +125,7 @@ where
 /// transcendentals (sin, cos, exp, log) use [`unary_float_op_compute`]
 /// instead, which parallelizes above the 100k-element threshold.
 #[inline]
-pub fn unary_float_op<T, D>(
-    input: &Array<T, D>,
-    f: impl Fn(T) -> T,
-) -> FerrayResult<Array<T, D>>
+pub fn unary_float_op<T, D>(input: &Array<T, D>, f: impl Fn(T) -> T) -> FerrayResult<Array<T, D>>
 where
     T: Element + Copy,
     D: Dimension,
@@ -790,19 +787,13 @@ where
     }
     check_into_shapes::<T, D>(out, a.shape(), op_name)?;
     let a_slice = a.as_slice().ok_or_else(|| {
-        FerrayError::invalid_value(format!(
-            "{op_name}_into: a must be contiguous (C-order)"
-        ))
+        FerrayError::invalid_value(format!("{op_name}_into: a must be contiguous (C-order)"))
     })?;
     let b_slice = b.as_slice().ok_or_else(|| {
-        FerrayError::invalid_value(format!(
-            "{op_name}_into: b must be contiguous (C-order)"
-        ))
+        FerrayError::invalid_value(format!("{op_name}_into: b must be contiguous (C-order)"))
     })?;
     let out_slice = out.as_slice_mut().ok_or_else(|| {
-        FerrayError::invalid_value(format!(
-            "{op_name}_into: out must be contiguous (C-order)"
-        ))
+        FerrayError::invalid_value(format!("{op_name}_into: out must be contiguous (C-order)"))
     })?;
     for ((o, &x), &y) in out_slice.iter_mut().zip(a_slice.iter()).zip(b_slice.iter()) {
         *o = f(x, y);
@@ -904,11 +895,8 @@ mod tests {
 
     #[test]
     fn contig_input_borrows_for_c_order() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         // C-contig owned arrays must take the borrow branch.
         let cow = contig_input(&a);
         match cow {
@@ -923,11 +911,8 @@ mod tests {
         // C-order request, so contig_input must materialize a fresh
         // row-major Vec. The materialized values must match the logical
         // C-order traversal of the input.
-        let f = Array::<f64, Ix2>::from_vec_f(
-            Ix2::new([2, 3]),
-            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
-        )
-        .unwrap();
+        let f = Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+            .unwrap();
         // Logical layout is [[1,2,3],[4,5,6]] regardless of memory order.
         assert_eq!(
             f.iter().copied().collect::<Vec<_>>(),
@@ -951,11 +936,8 @@ mod tests {
 
     #[test]
     fn unary_float_op_works_on_fortran_layout() {
-        let f = Array::<f64, Ix2>::from_vec_f(
-            Ix2::new([2, 3]),
-            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
-        )
-        .unwrap();
+        let f = Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+            .unwrap();
         // sqrt over the logical [[1,2,3],[4,5,6]] → [[1,√2,√3],[2,√5,√6]]
         let r = unary_float_op(&f, f64::sqrt).unwrap();
         let s = r.as_slice().unwrap();
@@ -968,11 +950,8 @@ mod tests {
 
     #[test]
     fn unary_map_op_works_on_fortran_layout() {
-        let f = Array::<f64, Ix2>::from_vec_f(
-            Ix2::new([2, 3]),
-            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
-        )
-        .unwrap();
+        let f = Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+            .unwrap();
         // Mapping each element to its truncated integer.
         let r = unary_map_op(&f, |x| x as i32).unwrap();
         let s = r.as_slice().unwrap();
@@ -983,55 +962,35 @@ mod tests {
     fn binary_elementwise_op_handles_fortran_lhs() {
         // F-order LHS, C-order RHS, same shape — must produce a correct
         // C-order result without losing track of the logical positions.
-        let a = Array::<f64, Ix2>::from_vec_f(
-            Ix2::new([2, 3]),
-            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
-        )
-        .unwrap();
-        let b = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+            .unwrap();
+        let b =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0])
+                .unwrap();
         let r = binary_elementwise_op(&a, &b, |x, y| x + y).unwrap();
-        assert_eq!(
-            r.as_slice().unwrap(),
-            &[11.0, 22.0, 33.0, 44.0, 55.0, 66.0]
-        );
+        assert_eq!(r.as_slice().unwrap(), &[11.0, 22.0, 33.0, 44.0, 55.0, 66.0]);
     }
 
     #[test]
     fn binary_elementwise_op_handles_two_fortran_inputs() {
-        let a = Array::<f64, Ix2>::from_vec_f(
-            Ix2::new([2, 3]),
-            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+            .unwrap();
         let b = Array::<f64, Ix2>::from_vec_f(
             Ix2::new([2, 3]),
             vec![10.0, 40.0, 20.0, 50.0, 30.0, 60.0],
         )
         .unwrap();
         let r = binary_elementwise_op(&a, &b, |x, y| x + y).unwrap();
-        assert_eq!(
-            r.as_slice().unwrap(),
-            &[11.0, 22.0, 33.0, 44.0, 55.0, 66.0]
-        );
+        assert_eq!(r.as_slice().unwrap(), &[11.0, 22.0, 33.0, 44.0, 55.0, 66.0]);
     }
 
     #[test]
     fn binary_map_op_handles_fortran_layout() {
         // Comparison ops should also work on F-order inputs.
-        let a = Array::<f64, Ix2>::from_vec_f(
-            Ix2::new([2, 3]),
-            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
-        )
-        .unwrap();
-        let b = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 1.0, 4.0, 5.0, 5.0, 5.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+            .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 1.0, 4.0, 5.0, 5.0, 5.0])
+            .unwrap();
         let r = binary_map_op(&a, &b, |x, y| x > y).unwrap();
         assert_eq!(
             r.iter().copied().collect::<Vec<_>>(),
@@ -1049,17 +1008,11 @@ mod tests {
                 *o = x * 2.0;
             }
         }
-        let f = Array::<f64, Ix2>::from_vec_f(
-            Ix2::new([2, 3]),
-            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
-        )
-        .unwrap();
+        let f = Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+            .unwrap();
         let r = try_simd_f64_unary(&f, double_kernel)
             .expect("try_simd_f64_unary should succeed for f64 input")
             .unwrap();
-        assert_eq!(
-            r.as_slice().unwrap(),
-            &[2.0, 4.0, 6.0, 8.0, 10.0, 12.0]
-        );
+        assert_eq!(r.as_slice().unwrap(), &[2.0, 4.0, 6.0, 8.0, 10.0, 12.0]);
     }
 }

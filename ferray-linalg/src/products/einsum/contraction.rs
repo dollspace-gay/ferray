@@ -117,7 +117,6 @@ pub fn generic_contraction<T: LinalgFloat>(
     let op_label_dims: Vec<Vec<(usize, usize)>> = expr
         .inputs
         .iter()
-        
         .map(|labels| {
             labels
                 .iter()

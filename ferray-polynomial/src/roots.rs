@@ -598,10 +598,7 @@ mod tests {
         real_roots.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let expected = [-3.0, -2.0, -1.0, 1.0, 2.0, 3.0];
         for (i, (&r, &e)) in real_roots.iter().zip(expected.iter()).enumerate() {
-            assert!(
-                (r - e).abs() < 1e-4,
-                "root {i}: expected {e}, got {r}"
-            );
+            assert!((r - e).abs() < 1e-4, "root {i}: expected {e}, got {r}");
         }
     }
 }

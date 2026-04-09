@@ -364,9 +364,8 @@ mod tests {
         // a standard-layout copy, and wrapping that in ArcArray must
         // yield a usable shared array whose `as_slice` succeeds.
         use crate::dimension::Ix2;
-        let arr =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-                .unwrap();
+        let arr = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let transposed = crate::manipulation::transpose(&arr, None).unwrap();
         assert_eq!(transposed.shape(), &[3, 2]);
         let arc = ArcArray::<f64, crate::dimension::IxDyn>::from_owned(transposed);

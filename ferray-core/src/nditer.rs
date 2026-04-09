@@ -147,11 +147,7 @@ impl NdIter {
         let b_view = b.broadcast_to(&shape)?;
 
         if let Some(out_slice) = out.as_slice_mut() {
-            for ((o, &ai), &bi) in out_slice
-                .iter_mut()
-                .zip(a_view.iter())
-                .zip(b_view.iter())
-            {
+            for ((o, &ai), &bi) in out_slice.iter_mut().zip(a_view.iter()).zip(b_view.iter()) {
                 *o = f(ai, bi);
             }
         } else {
@@ -168,10 +164,7 @@ impl NdIter {
     ///
     /// This is simpler than the binary case (no broadcasting needed) but
     /// provides the same contiguous-slice optimization.
-    pub fn unary_map<T, U, D, F>(
-        a: &Array<T, D>,
-        f: F,
-    ) -> FerrayResult<Array<U, IxDyn>>
+    pub fn unary_map<T, U, D, F>(a: &Array<T, D>, f: F) -> FerrayResult<Array<U, IxDyn>>
     where
         T: Element + Copy,
         U: Element,
@@ -229,10 +222,7 @@ impl NdIter {
     /// Compute the broadcast shape of two arrays without iterating.
     ///
     /// Useful for pre-allocating output arrays.
-    pub fn broadcast_shape(
-        a_shape: &[usize],
-        b_shape: &[usize],
-    ) -> FerrayResult<Vec<usize>> {
+    pub fn broadcast_shape(a_shape: &[usize], b_shape: &[usize]) -> FerrayResult<Vec<usize>> {
         broadcast_shapes(a_shape, b_shape)
     }
 
@@ -382,7 +372,9 @@ mod tests {
         let data: Vec<f64> = c.iter().copied().collect();
         assert_eq!(
             data,
-            vec![11.0, 21.0, 31.0, 41.0, 12.0, 22.0, 32.0, 42.0, 13.0, 23.0, 33.0, 43.0]
+            vec![
+                11.0, 21.0, 31.0, 41.0, 12.0, 22.0, 32.0, 42.0, 13.0, 23.0, 33.0, 43.0
+            ]
         );
     }
 
@@ -473,11 +465,8 @@ mod tests {
     fn binary_map_3d_broadcast() {
         // (2, 1, 4) + (3, 1) -> (2, 3, 4)
         use crate::dimension::Ix3;
-        let a = Array::<i32, Ix3>::from_vec(
-            Ix3::new([2, 1, 4]),
-            vec![1, 2, 3, 4, 5, 6, 7, 8],
-        )
-        .unwrap();
+        let a =
+            Array::<i32, Ix3>::from_vec(Ix3::new([2, 1, 4]), vec![1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
         let b = Array::<i32, Ix2>::from_vec(Ix2::new([3, 1]), vec![10, 20, 30]).unwrap();
         let c = NdIter::binary_map(&a, &b, |x, y| x + y).unwrap();
         assert_eq!(c.shape(), &[2, 3, 4]);
@@ -518,8 +507,12 @@ mod tests {
         assert_eq!(
             pairs,
             vec![
-                (1.0, 10.0), (1.0, 20.0), (1.0, 30.0),
-                (2.0, 10.0), (2.0, 20.0), (2.0, 30.0),
+                (1.0, 10.0),
+                (1.0, 20.0),
+                (1.0, 30.0),
+                (2.0, 10.0),
+                (2.0, 20.0),
+                (2.0, 30.0),
             ]
         );
     }

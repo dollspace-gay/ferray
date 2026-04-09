@@ -110,10 +110,8 @@ pub fn svd_batched<T: LinalgFloat>(
         ));
     }
     if shape.len() == 2 {
-        let a2 = Array::<T, Ix2>::from_vec(
-            Ix2::new([shape[0], shape[1]]),
-            a.iter().copied().collect(),
-        )?;
+        let a2 =
+            Array::<T, Ix2>::from_vec(Ix2::new([shape[0], shape[1]]), a.iter().copied().collect())?;
         let (u, s, vt) = svd(&a2, full_matrices)?;
         return Ok((
             Array::from_vec(IxDyn::new(u.shape()), u.iter().copied().collect())?,
@@ -298,8 +296,9 @@ mod tests {
                 for j in 0..2 {
                     let mut sum = 0.0;
                     for p in 0..2 {
-                        sum +=
-                            u_data[u_off + i * 2 + p] * s_data[s_off + p] * vt_data[vt_off + p * 2 + j];
+                        sum += u_data[u_off + i * 2 + p]
+                            * s_data[s_off + p]
+                            * vt_data[vt_off + p * 2 + j];
                     }
                     assert!(
                         (sum - data[a_off + i * 2 + j]).abs() < 1e-10,

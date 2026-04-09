@@ -31,9 +31,9 @@ pub fn set_num_threads(n: usize) -> FerrayResult<()> {
         .num_threads(n)
         .build()
         .map_err(|e| FerrayError::invalid_value(format!("failed to create thread pool: {e}")))?;
-    GLOBAL_POOL.set(pool).map_err(|_| {
-        FerrayError::invalid_value("ferray thread pool already initialized")
-    })
+    GLOBAL_POOL
+        .set(pool)
+        .map_err(|_| FerrayError::invalid_value("ferray thread pool already initialized"))
 }
 
 /// Execute a closure on a thread pool with `n` threads.
@@ -49,9 +49,9 @@ where
     F: FnOnce() -> R + Send,
     R: Send,
 {
-    let mut cache = POOL_CACHE.lock().map_err(|e| {
-        FerrayError::invalid_value(format!("pool cache lock poisoned: {e}"))
-    })?;
+    let mut cache = POOL_CACHE
+        .lock()
+        .map_err(|e| FerrayError::invalid_value(format!("pool cache lock poisoned: {e}")))?;
     let pool = if let Some(existing) = cache.get(&n) {
         existing.clone()
     } else {
@@ -59,9 +59,7 @@ where
             .num_threads(n)
             .build()
             .map_err(|e| {
-                FerrayError::invalid_value(format!(
-                    "failed to create cached thread pool: {e}"
-                ))
+                FerrayError::invalid_value(format!("failed to create cached thread pool: {e}"))
             })?;
         let arc = std::sync::Arc::new(new_pool);
         cache.insert(n, arc.clone());

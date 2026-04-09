@@ -118,23 +118,14 @@ where
     }
 
     /// `ufunc.outer(a, b)` — 1-D × 1-D outer product with `op`.
-    pub fn outer(
-        &self,
-        a: &Array<T, Ix1>,
-        b: &Array<T, Ix1>,
-    ) -> FerrayResult<Array<T, IxDyn>> {
+    pub fn outer(&self, a: &Array<T, Ix1>, b: &Array<T, Ix1>) -> FerrayResult<Array<T, IxDyn>> {
         outer(a, b, &self.op)
     }
 
     /// `ufunc.at(arr, indices, values)` — unbuffered scatter-reduce
     /// in place. Duplicate indices are applied in the order they
     /// appear (matches NumPy semantics).
-    pub fn at(
-        &self,
-        arr: &mut Array<T, Ix1>,
-        indices: &[usize],
-        values: &[T],
-    ) -> FerrayResult<()> {
+    pub fn at(&self, arr: &mut Array<T, Ix1>, indices: &[usize], values: &[T]) -> FerrayResult<()> {
         at(arr, indices, values, &self.op)
     }
 }
@@ -155,7 +146,11 @@ where
     fn add_kernel<T: std::ops::Add<Output = T>>(a: T, b: T) -> T {
         a + b
     }
-    Ufunc::new("add", <T as Element>::zero(), add_kernel::<T> as fn(T, T) -> T)
+    Ufunc::new(
+        "add",
+        <T as Element>::zero(),
+        add_kernel::<T> as fn(T, T) -> T,
+    )
 }
 
 /// Build the `subtract` ufunc (`identity = 0`).
@@ -166,7 +161,11 @@ where
     fn sub_kernel<T: std::ops::Sub<Output = T>>(a: T, b: T) -> T {
         a - b
     }
-    Ufunc::new("subtract", <T as Element>::zero(), sub_kernel::<T> as fn(T, T) -> T)
+    Ufunc::new(
+        "subtract",
+        <T as Element>::zero(),
+        sub_kernel::<T> as fn(T, T) -> T,
+    )
 }
 
 /// Build the `multiply` ufunc (`identity = 1`).
@@ -177,7 +176,11 @@ where
     fn mul_kernel<T: std::ops::Mul<Output = T>>(a: T, b: T) -> T {
         a * b
     }
-    Ufunc::new("multiply", <T as Element>::one(), mul_kernel::<T> as fn(T, T) -> T)
+    Ufunc::new(
+        "multiply",
+        <T as Element>::one(),
+        mul_kernel::<T> as fn(T, T) -> T,
+    )
 }
 
 /// Build the `divide` ufunc (`identity = 1`).
@@ -188,7 +191,11 @@ where
     fn div_kernel<T: std::ops::Div<Output = T>>(a: T, b: T) -> T {
         a / b
     }
-    Ufunc::new("divide", <T as Element>::one(), div_kernel::<T> as fn(T, T) -> T)
+    Ufunc::new(
+        "divide",
+        <T as Element>::one(),
+        div_kernel::<T> as fn(T, T) -> T,
+    )
 }
 
 #[cfg(test)]
@@ -242,10 +249,7 @@ mod tests {
         let b = arr1(&[10.0, 20.0]);
         let r = mul.outer(&a, &b).unwrap();
         assert_eq!(r.shape(), &[3, 2]);
-        assert_eq!(
-            r.as_slice().unwrap(),
-            &[10.0, 20.0, 20.0, 40.0, 30.0, 60.0]
-        );
+        assert_eq!(r.as_slice().unwrap(), &[10.0, 20.0, 20.0, 40.0, 30.0, 60.0]);
     }
 
     #[test]
@@ -280,11 +284,8 @@ mod tests {
         use ferray_core::dimension::Ix2;
         let add = add_ufunc::<f64>();
         // 2x3 array, reduce axis=1 → row sums
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let r = add.reduce(&a, 1).unwrap();
         assert_eq!(r.shape(), &[2]);
         assert_eq!(r.as_slice().unwrap(), &[6.0, 15.0]);

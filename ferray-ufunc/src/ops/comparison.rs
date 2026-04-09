@@ -441,11 +441,8 @@ mod tests {
         // The most common pattern: arr > threshold where threshold is a
         // length-1 1-D stand-in for a scalar.
         use ferray_core::dimension::Ix2;
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let threshold = arr1(vec![3.0]);
         let r = less_broadcast(&a, &threshold).unwrap();
         assert_eq!(r.shape(), &[2, 3]);
@@ -458,11 +455,8 @@ mod tests {
     #[test]
     fn greater_broadcast_ix2_against_ix1() {
         use ferray_core::dimension::Ix2;
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![0.0, 5.0, 10.0, 1.0, 5.0, 9.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0, 5.0, 10.0, 1.0, 5.0, 9.0])
+            .unwrap();
         let b = arr1(vec![1.0, 5.0, 9.0]);
         let r = greater_broadcast(&a, &b).unwrap();
         assert_eq!(
@@ -476,11 +470,8 @@ mod tests {
         // The reverse direction: 1-D LHS broadcast against 2-D RHS.
         use ferray_core::dimension::Ix2;
         let a = arr1(vec![1.0, 5.0, 9.0]);
-        let b = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 5.0, 9.0, 0.5, 5.0, 10.0],
-        )
-        .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 5.0, 9.0, 0.5, 5.0, 10.0])
+            .unwrap();
         let r = less_equal_broadcast(&a, &b).unwrap();
         assert_eq!(r.shape(), &[2, 3]);
         assert_eq!(
@@ -493,11 +484,8 @@ mod tests {
     fn greater_equal_broadcast_ix1_against_ix2() {
         use ferray_core::dimension::Ix2;
         let a = arr1(vec![5.0, 5.0, 5.0]);
-        let b = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![5.0, 4.0, 6.0, 5.0, 5.0, 5.0],
-        )
-        .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![5.0, 4.0, 6.0, 5.0, 5.0, 5.0])
+            .unwrap();
         let r = greater_equal_broadcast(&a, &b).unwrap();
         assert_eq!(
             r.iter().copied().collect::<Vec<_>>(),
@@ -508,11 +496,9 @@ mod tests {
     #[test]
     fn isclose_broadcast_ix2_against_ix1() {
         use ferray_core::dimension::Ix2;
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 1.0001, 2.5, 3.0001],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 1.0001, 2.5, 3.0001])
+                .unwrap();
         let b = arr1(vec![1.0, 2.0, 3.0]);
         let r = isclose_broadcast(&a, &b, 1e-3, 1e-8, false).unwrap();
         assert_eq!(r.shape(), &[2, 3]);

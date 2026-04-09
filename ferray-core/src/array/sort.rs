@@ -101,11 +101,8 @@ mod tests {
 
     #[test]
     fn sorted_f64_nans_go_last() {
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![3.0, f64::NAN, 1.0, f64::NAN, 2.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![3.0, f64::NAN, 1.0, f64::NAN, 2.0])
+            .unwrap();
         let s = a.sorted();
         let data = s.as_slice().unwrap();
         assert_eq!(data[0], 1.0);
@@ -130,17 +127,18 @@ mod tests {
         assert_eq!(idx.shape(), &[5]);
         // Applying the index permutation to `a` must yield the sorted array.
         let data = a.as_slice().unwrap();
-        let picked: Vec<i32> = idx.as_slice().unwrap().iter().map(|&i| data[i as usize]).collect();
+        let picked: Vec<i32> = idx
+            .as_slice()
+            .unwrap()
+            .iter()
+            .map(|&i| data[i as usize])
+            .collect();
         assert_eq!(picked, vec![1, 1, 3, 4, 5]);
     }
 
     #[test]
     fn argsort_f64_sends_nans_last() {
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([4]),
-            vec![2.0, f64::NAN, 0.5, 5.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![2.0, f64::NAN, 0.5, 5.0]).unwrap();
         let idx = a.argsort();
         let data = a.as_slice().unwrap();
         let picked: Vec<f64> = idx

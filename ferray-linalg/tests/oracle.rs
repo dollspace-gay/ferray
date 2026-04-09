@@ -474,12 +474,7 @@ fn oracle_qr() {
 
 /// Match two 1-D slices of f64 eigenvalues up to reordering. LAPACK may
 /// return eigenvalues in any order, so we sort both before comparing.
-fn assert_eigenvalues_match(
-    actual: &[f64],
-    expected: &[f64],
-    tol_ulps: u64,
-    context: &str,
-) {
+fn assert_eigenvalues_match(actual: &[f64], expected: &[f64], tol_ulps: u64, context: &str) {
     assert_eq!(
         actual.len(),
         expected.len(),
@@ -633,4 +628,3 @@ fn oracle_tensordot() {
         );
     }
 }
-

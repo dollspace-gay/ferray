@@ -230,11 +230,8 @@ mod tests {
 
     #[test]
     fn fix_invalid_all_nan_input() {
-        let data = Array::<f64, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![f64::NAN, f64::NAN, f64::NAN],
-        )
-        .unwrap();
+        let data =
+            Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![f64::NAN, f64::NAN, f64::NAN]).unwrap();
         let ma = fix_invalid(&data, 0.0).unwrap();
         assert_eq!(
             ma.mask().iter().copied().collect::<Vec<_>>(),
@@ -252,11 +249,7 @@ mod tests {
     #[test]
     fn fix_invalid_vs_masked_invalid_data_difference() {
         // masked_invalid leaves NaN in the data; fix_invalid substitutes.
-        let data = Array::<f64, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![1.0, f64::NAN, 3.0],
-        )
-        .unwrap();
+        let data = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, f64::NAN, 3.0]).unwrap();
         let via_masked = masked_invalid(&data).unwrap();
         let via_fixed = fix_invalid(&data, -1.0).unwrap();
 

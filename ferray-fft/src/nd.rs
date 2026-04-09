@@ -299,9 +299,7 @@ where
         let mut output_buf: Vec<Complex<T>> = vec![Complex::zero(); half_len];
         let mut scratch = plan.make_scratch_vec();
         plan.process_with_scratch(&mut input_buf, &mut output_buf, &mut scratch)
-            .map_err(|e| {
-                FerrayError::invalid_value(format!("real FFT process failed: {e}"))
-            })?;
+            .map_err(|e| FerrayError::invalid_value(format!("real FFT process failed: {e}")))?;
         if scale != one {
             for c in &mut output_buf {
                 *c = *c * scale;
@@ -387,7 +385,9 @@ where
         return Err(FerrayError::axis_out_of_bounds(axis, ndim));
     }
     if output_len == 0 {
-        return Err(FerrayError::invalid_value("irfft output length must be > 0"));
+        return Err(FerrayError::invalid_value(
+            "irfft output length must be > 0",
+        ));
     }
 
     let half_len = output_len / 2 + 1;
@@ -701,9 +701,12 @@ mod tests {
         // 3×2 input, FFT along axis 1 with n=4 → 3 lanes of length 4 each
         // (each input lane padded from 2 to 4 elements).
         let data = vec![
-            Complex::<f64>::new(1.0, 0.0), Complex::<f64>::new(1.0, 0.0),
-            Complex::<f64>::new(2.0, 0.0), Complex::<f64>::new(0.0, 0.0),
-            Complex::<f64>::new(0.0, 0.0), Complex::<f64>::new(3.0, 0.0),
+            Complex::<f64>::new(1.0, 0.0),
+            Complex::<f64>::new(1.0, 0.0),
+            Complex::<f64>::new(2.0, 0.0),
+            Complex::<f64>::new(0.0, 0.0),
+            Complex::<f64>::new(0.0, 0.0),
+            Complex::<f64>::new(3.0, 0.0),
         ];
         let (shape, result) =
             fft_along_axis(&data, &[3, 2], 1, Some(4), false, FftNorm::Backward).unwrap();

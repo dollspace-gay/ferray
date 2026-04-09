@@ -122,11 +122,7 @@ fn round_half_to_even<T: Float>(x: T) -> T {
 /// sorted[lo_i + 1]`. For all discrete methods and for integer virtual
 /// indices `gamma = 0`, which short-circuits to `sorted[lo_i]` and
 /// avoids the second-pass scan for `hi_val`.
-fn method_index_and_gamma<T: Float>(
-    n: usize,
-    q: T,
-    method: QuantileMethod,
-) -> (usize, T) {
+fn method_index_and_gamma<T: Float>(n: usize, q: T, method: QuantileMethod) -> (usize, T) {
     let zero = T::zero();
     let one = T::one();
     let half = T::from(0.5).unwrap();
@@ -208,7 +204,11 @@ fn method_index_and_gamma<T: Float>(
             let k = if nq <= zero {
                 0
             } else {
-                nq.ceil().to_usize().unwrap_or(0).saturating_sub(1).min(n - 1)
+                nq.ceil()
+                    .to_usize()
+                    .unwrap_or(0)
+                    .saturating_sub(1)
+                    .min(n - 1)
             };
             (k, zero)
         }
@@ -233,7 +233,11 @@ fn method_index_and_gamma<T: Float>(
                 let k = if nq <= zero {
                     0
                 } else {
-                    nq.ceil().to_usize().unwrap_or(0).saturating_sub(1).min(n - 1)
+                    nq.ceil()
+                        .to_usize()
+                        .unwrap_or(0)
+                        .saturating_sub(1)
+                        .min(n - 1)
                 };
                 (k, zero)
             }
@@ -480,7 +484,11 @@ where
 /// Quantile, skipping NaN values. Equivalent to `numpy.nanquantile`
 /// (#93 — was previously private, only accessible indirectly through
 /// `nanmedian`/`nanpercentile`).
-pub fn nanquantile<T, D>(a: &Array<T, D>, q: T, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
+pub fn nanquantile<T, D>(
+    a: &Array<T, D>,
+    q: T,
+    axis: Option<usize>,
+) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
@@ -587,8 +595,7 @@ mod tests {
         // Default quantile uses Linear; explicit Linear must match.
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
         let legacy = quantile(&a, 0.25, None).unwrap();
-        let with_flag =
-            quantile_with_method(&a, 0.25, None, QuantileMethod::Linear).unwrap();
+        let with_flag = quantile_with_method(&a, 0.25, None, QuantileMethod::Linear).unwrap();
         assert_eq!(
             legacy.iter().next().unwrap(),
             with_flag.iter().next().unwrap()
@@ -658,16 +665,11 @@ mod tests {
         // n=5, q=0.5 → idx=2.0, exactly on sorted[2]. All five methods
         // must return the same value.
         let a = arr_1_5();
-        let linear =
-            quantile_with_method(&a, 0.5, None, QuantileMethod::Linear).unwrap();
-        let lower =
-            quantile_with_method(&a, 0.5, None, QuantileMethod::Lower).unwrap();
-        let higher =
-            quantile_with_method(&a, 0.5, None, QuantileMethod::Higher).unwrap();
-        let nearest =
-            quantile_with_method(&a, 0.5, None, QuantileMethod::Nearest).unwrap();
-        let midpoint =
-            quantile_with_method(&a, 0.5, None, QuantileMethod::Midpoint).unwrap();
+        let linear = quantile_with_method(&a, 0.5, None, QuantileMethod::Linear).unwrap();
+        let lower = quantile_with_method(&a, 0.5, None, QuantileMethod::Lower).unwrap();
+        let higher = quantile_with_method(&a, 0.5, None, QuantileMethod::Higher).unwrap();
+        let nearest = quantile_with_method(&a, 0.5, None, QuantileMethod::Nearest).unwrap();
+        let midpoint = quantile_with_method(&a, 0.5, None, QuantileMethod::Midpoint).unwrap();
         let expected = 3.0;
         assert!((linear.iter().next().unwrap() - expected).abs() < 1e-12);
         assert!((lower.iter().next().unwrap() - expected).abs() < 1e-12);
@@ -695,16 +697,11 @@ mod tests {
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
         // q=50 (percentile) → 0.5 (quantile), n=4, idx=1.5
         // Linear: 2.5, Lower: 2.0, Higher: 3.0, Nearest (tie, lo_i=1 odd): 3.0, Midpoint: 2.5
-        let lin =
-            percentile_with_method(&a, 50.0, None, QuantileMethod::Linear).unwrap();
-        let lo =
-            percentile_with_method(&a, 50.0, None, QuantileMethod::Lower).unwrap();
-        let hi =
-            percentile_with_method(&a, 50.0, None, QuantileMethod::Higher).unwrap();
-        let nr =
-            percentile_with_method(&a, 50.0, None, QuantileMethod::Nearest).unwrap();
-        let mp =
-            percentile_with_method(&a, 50.0, None, QuantileMethod::Midpoint).unwrap();
+        let lin = percentile_with_method(&a, 50.0, None, QuantileMethod::Linear).unwrap();
+        let lo = percentile_with_method(&a, 50.0, None, QuantileMethod::Lower).unwrap();
+        let hi = percentile_with_method(&a, 50.0, None, QuantileMethod::Higher).unwrap();
+        let nr = percentile_with_method(&a, 50.0, None, QuantileMethod::Nearest).unwrap();
+        let mp = percentile_with_method(&a, 50.0, None, QuantileMethod::Midpoint).unwrap();
         assert!((lin.iter().next().unwrap() - 2.5).abs() < 1e-12);
         assert!((lo.iter().next().unwrap() - 2.0).abs() < 1e-12);
         assert!((hi.iter().next().unwrap() - 3.0).abs() < 1e-12);
@@ -715,12 +712,8 @@ mod tests {
     #[test]
     fn test_percentile_with_method_rejects_out_of_range() {
         let a = arr_1_5();
-        assert!(
-            percentile_with_method(&a, -1.0, None, QuantileMethod::Linear).is_err()
-        );
-        assert!(
-            percentile_with_method(&a, 101.0, None, QuantileMethod::Linear).is_err()
-        );
+        assert!(percentile_with_method(&a, -1.0, None, QuantileMethod::Linear).is_err());
+        assert!(percentile_with_method(&a, 101.0, None, QuantileMethod::Linear).is_err());
     }
 
     // ---- remaining 8 NumPy quantile methods (#566) ----
@@ -829,8 +822,7 @@ mod tests {
         // n=4, q=0.5 → nq=2 (integer) → average of sorted[1] and sorted[2]
         // = 0.5*2 + 0.5*3 = 2.5
         let a = arr_1_4();
-        let q =
-            quantile_with_method(&a, 0.5, None, QuantileMethod::AveragedInvertedCdf).unwrap();
+        let q = quantile_with_method(&a, 0.5, None, QuantileMethod::AveragedInvertedCdf).unwrap();
         assert!((q.iter().next().copied().unwrap() - 2.5).abs() < 1e-12);
     }
 
@@ -839,8 +831,7 @@ mod tests {
         // n=5, q=0.3 → nq=1.5 (non-integer) → same as InvertedCdf:
         //   ceil(1.5) - 1 = 1 → sorted[1] = 2
         let a = arr_1_5();
-        let q1 =
-            quantile_with_method(&a, 0.3, None, QuantileMethod::AveragedInvertedCdf).unwrap();
+        let q1 = quantile_with_method(&a, 0.3, None, QuantileMethod::AveragedInvertedCdf).unwrap();
         let q2 = quantile_with_method(&a, 0.3, None, QuantileMethod::InvertedCdf).unwrap();
         assert_eq!(
             q1.iter().next().copied().unwrap(),
@@ -855,14 +846,12 @@ mod tests {
         //   nq=2, adj=1.5, round_half_to_even(1.5) = 2 (2 is even) → k=2
         //   → sorted[2] = 3
         let a = arr_1_4();
-        let q =
-            quantile_with_method(&a, 0.5, None, QuantileMethod::ClosestObservation).unwrap();
+        let q = quantile_with_method(&a, 0.5, None, QuantileMethod::ClosestObservation).unwrap();
         assert!((q.iter().next().copied().unwrap() - 3.0).abs() < 1e-12);
 
         // n=4, q=0.125:
         //   nq=0.5, adj=0, round_half_to_even(0) = 0 → k=0 → sorted[0] = 1
-        let q2 =
-            quantile_with_method(&a, 0.125, None, QuantileMethod::ClosestObservation).unwrap();
+        let q2 = quantile_with_method(&a, 0.125, None, QuantileMethod::ClosestObservation).unwrap();
         assert!((q2.iter().next().copied().unwrap() - 1.0).abs() < 1e-12);
     }
 
@@ -871,8 +860,7 @@ mod tests {
         // n=4, q=0.875:
         //   nq=3.5, adj=3, round_half_to_even(3) = 3 → k=3 → sorted[3] = 4
         let a = arr_1_4();
-        let q =
-            quantile_with_method(&a, 0.875, None, QuantileMethod::ClosestObservation).unwrap();
+        let q = quantile_with_method(&a, 0.875, None, QuantileMethod::ClosestObservation).unwrap();
         assert!((q.iter().next().copied().unwrap() - 4.0).abs() < 1e-12);
     }
 

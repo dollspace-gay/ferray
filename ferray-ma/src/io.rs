@@ -75,10 +75,7 @@ where
 /// - `FerrayError::InvalidDtype` if the data file's dtype doesn't
 ///   match `T` or the mask file isn't bool.
 /// - `FerrayError::ShapeMismatch` if the shapes don't line up.
-pub fn load_masked<T, D, P1, P2>(
-    data_path: P1,
-    mask_path: P2,
-) -> FerrayResult<MaskedArray<T, D>>
+pub fn load_masked<T, D, P1, P2>(data_path: P1, mask_path: P2) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + NpyElement,
     D: Dimension,
@@ -97,8 +94,7 @@ mod tests {
     use ferray_core::dimension::{Ix1, Ix2};
 
     fn test_dir() -> std::path::PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("ferray_ma_io_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("ferray_ma_io_{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         dir
     }
@@ -109,16 +105,9 @@ mod tests {
 
     #[test]
     fn save_and_load_roundtrips_1d_f64_masked_array() {
-        let d = Array::<f64, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0],
-        )
-        .unwrap();
-        let m = Array::<bool, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![false, true, false, false, true],
-        )
-        .unwrap();
+        let d = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
+        let m = Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![false, true, false, false, true])
+            .unwrap();
         let ma = MaskedArray::new(d, m).unwrap();
 
         let data_path = test_file("test_1d.data.npy");
@@ -143,11 +132,8 @@ mod tests {
     #[test]
     fn save_and_load_roundtrips_2d_i32_masked_array() {
         // Integer data type — exercises the NpyElement path for non-float.
-        let d = Array::<i32, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![10, 20, 30, 40, 50, 60],
-        )
-        .unwrap();
+        let d =
+            Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![10, 20, 30, 40, 50, 60]).unwrap();
         let m = Array::<bool, Ix2>::from_vec(
             Ix2::new([2, 3]),
             vec![false, false, true, true, false, false],
@@ -179,8 +165,7 @@ mod tests {
         // The binary format doesn't persist fill_value or hard_mask;
         // a freshly loaded MaskedArray should have the defaults.
         let d = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
-        let m =
-            Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
+        let m = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
         let mut ma = MaskedArray::new(d, m).unwrap();
         // Set non-default values before save — these should NOT survive.
         ma.set_fill_value(-999.0);
@@ -203,8 +188,7 @@ mod tests {
         // Save two files with different shapes, then try to load as
         // a masked array — the MaskedArray::new shape check should fire.
         let d = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
-        let wrong_mask =
-            Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![false; 4]).unwrap();
+        let wrong_mask = Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![false; 4]).unwrap();
 
         let data_path = test_file("test_bad_shape.data.npy");
         let mask_path = test_file("test_bad_shape.mask.npy");
@@ -223,8 +207,7 @@ mod tests {
         // Save a data file as f32, try to load as f64 — should fail
         // with an InvalidDtype error from ferray_io.
         let d = Array::<f32, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
-        let m =
-            Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
+        let m = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
 
         let data_path = test_file("test_wrong_dtype.data.npy");
         let mask_path = test_file("test_wrong_dtype.mask.npy");

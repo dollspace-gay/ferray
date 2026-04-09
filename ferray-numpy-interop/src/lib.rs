@@ -67,9 +67,8 @@ pub mod polars_conv;
 
 #[cfg(feature = "arrow")]
 pub use arrow_conv::{
-    FromArrow, FromArrowBool, ToArrow, ToArrowBool,
-    array2_from_arrow_columns, array2_to_arrow_columns, arrayd_from_arrow_flat,
-    arrayd_to_arrow_flat,
+    FromArrow, FromArrowBool, ToArrow, ToArrowBool, array2_from_arrow_columns,
+    array2_to_arrow_columns, arrayd_from_arrow_flat, arrayd_to_arrow_flat,
 };
 
 #[cfg(feature = "polars")]

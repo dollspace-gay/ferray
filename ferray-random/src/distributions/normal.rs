@@ -105,8 +105,7 @@ impl<B: BitGenerator> Generator<B> {
         }
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
-        let data =
-            generate_vec_f32(self, n, |bg| loc + scale * standard_normal_single_f32(bg));
+        let data = generate_vec_f32(self, n, |bg| loc + scale * standard_normal_single_f32(bg));
         vec_to_array_f32(data, &shape)
     }
 
@@ -337,7 +336,10 @@ mod tests {
             / n as f64;
         let se = (1.0 / n as f64).sqrt();
         assert!(mean.abs() < 5.0 * se, "f32 mean {mean} too far from 0");
-        assert!((var - 1.0).abs() < 0.05, "f32 variance {var} too far from 1");
+        assert!(
+            (var - 1.0).abs() < 0.05,
+            "f32 variance {var} too far from 1"
+        );
     }
 
     #[test]

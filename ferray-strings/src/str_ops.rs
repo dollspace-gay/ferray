@@ -38,10 +38,7 @@ pub fn swapcase<D: Dimension>(a: &StringArray<D>) -> FerrayResult<StringArray<D>
 // ---------------------------------------------------------------------------
 
 /// Elementwise string equality. Both arrays must have the same shape.
-pub fn equal<D: Dimension>(
-    a: &StringArray<D>,
-    b: &StringArray<D>,
-) -> FerrayResult<Array<bool, D>> {
+pub fn equal<D: Dimension>(a: &StringArray<D>, b: &StringArray<D>) -> FerrayResult<Array<bool, D>> {
     let data: Vec<bool> = a.iter().zip(b.iter()).map(|(x, y)| x == y).collect();
     Array::from_vec(a.dim().clone(), data)
 }
@@ -56,10 +53,7 @@ pub fn not_equal<D: Dimension>(
 }
 
 /// Elementwise lexicographic less-than.
-pub fn less<D: Dimension>(
-    a: &StringArray<D>,
-    b: &StringArray<D>,
-) -> FerrayResult<Array<bool, D>> {
+pub fn less<D: Dimension>(a: &StringArray<D>, b: &StringArray<D>) -> FerrayResult<Array<bool, D>> {
     let data: Vec<bool> = a.iter().zip(b.iter()).map(|(x, y)| x < y).collect();
     Array::from_vec(a.dim().clone(), data)
 }
@@ -107,10 +101,7 @@ mod tests {
     fn test_swapcase() {
         let a = array(&["Hello World", "ABC", "abc", "123"]).unwrap();
         let r = swapcase(&a).unwrap();
-        assert_eq!(
-            r.as_slice(),
-            &["hELLO wORLD", "abc", "ABC", "123"]
-        );
+        assert_eq!(r.as_slice(), &["hELLO wORLD", "abc", "ABC", "123"]);
     }
 
     #[test]

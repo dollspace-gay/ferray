@@ -781,8 +781,7 @@ mod tests {
     #[test]
     fn test_broadcast_2d_row_plus_column() {
         // (3, 1) + (1, 4) -> (3, 4) — both Ix2
-        let col =
-            Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![1.0, 2.0, 3.0]).unwrap();
+        let col = Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![1.0, 2.0, 3.0]).unwrap();
         let row =
             Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![10.0, 20.0, 30.0, 40.0]).unwrap();
         let result = (&col + &row).unwrap();
@@ -802,7 +801,9 @@ mod tests {
         // (3, 4) + (1, 4) -> (3, 4)
         let a = Array::<f64, Ix2>::from_vec(
             Ix2::new([3, 4]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+            ],
         )
         .unwrap();
         let b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![100.0, 200.0, 300.0, 400.0])
@@ -820,10 +821,12 @@ mod tests {
     #[test]
     fn test_broadcast_3d_with_2d_axis() {
         // (2, 3, 4) - (1, 3, 4) -> (2, 3, 4) — both Ix3
-        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), (1..=24).map(|i| i as f64).collect())
-            .unwrap();
-        let b = Array::<f64, Ix3>::from_vec(Ix3::new([1, 3, 4]), (1..=12).map(|i| i as f64).collect())
-            .unwrap();
+        let a =
+            Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), (1..=24).map(|i| i as f64).collect())
+                .unwrap();
+        let b =
+            Array::<f64, Ix3>::from_vec(Ix3::new([1, 3, 4]), (1..=12).map(|i| i as f64).collect())
+                .unwrap();
         let result = (&a - &b).unwrap();
         assert_eq!(result.shape(), &[2, 3, 4]);
         // First 12 elements: a[0..12] - b
@@ -869,11 +872,9 @@ mod tests {
     fn test_add_broadcast_1d_plus_2d() {
         // (3,) + (2, 3) -> (2, 3)
         let v = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
-        let m = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
-        )
-        .unwrap();
+        let m =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0])
+                .unwrap();
         let result = v.add_broadcast(&m).unwrap();
         assert_eq!(result.shape(), &[2, 3]);
         assert_eq!(
@@ -886,8 +887,7 @@ mod tests {
     fn test_add_broadcast_1d_plus_column() {
         // (3,) + (2, 1) -> (2, 3) — the canonical NumPy example from issue #346
         let v = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
-        let col =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![10.0, 20.0]).unwrap();
+        let col = Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![10.0, 20.0]).unwrap();
         let result = v.add_broadcast(&col).unwrap();
         assert_eq!(result.shape(), &[2, 3]);
         assert_eq!(
@@ -899,11 +899,9 @@ mod tests {
     #[test]
     fn test_sub_broadcast_2d_minus_1d() {
         // (2, 3) - (3,) -> (2, 3)
-        let m = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
-        )
-        .unwrap();
+        let m =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0])
+                .unwrap();
         let v = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let result = m.sub_broadcast(&v).unwrap();
         assert_eq!(result.shape(), &[2, 3]);
@@ -916,8 +914,7 @@ mod tests {
     #[test]
     fn test_mul_broadcast_returns_dyn() {
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
-        let b =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![10.0, 20.0]).unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![10.0, 20.0]).unwrap();
         let result: Array<f64, IxDyn> = a.mul_broadcast(&b).unwrap();
         assert_eq!(result.shape(), &[2, 3]);
         assert_eq!(
@@ -935,11 +932,15 @@ mod tests {
 
     #[test]
     fn test_rem_broadcast_2d() {
-        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![10, 20, 30, 40, 50, 60]).unwrap();
+        let a =
+            Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![10, 20, 30, 40, 50, 60]).unwrap();
         let b = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![3, 7, 11]).unwrap();
         let result = a.rem_broadcast(&b).unwrap();
         assert_eq!(result.shape(), &[2, 3]);
-        assert_eq!(result.as_slice().unwrap(), &[10 % 3, 20 % 7, 30 % 11, 40 % 3, 50 % 7, 60 % 11]);
+        assert_eq!(
+            result.as_slice().unwrap(),
+            &[10 % 3, 20 % 7, 30 % 11, 40 % 3, 50 % 7, 60 % 11]
+        );
     }
 
     // ------------------------------------------------------------------
@@ -1007,8 +1008,7 @@ mod tests {
         let mut a =
             Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
                 .unwrap();
-        let b =
-            Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![10.0, 20.0, 30.0]).unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![10.0, 20.0, 30.0]).unwrap();
         a.add_inplace(&b).unwrap();
         assert_eq!(a.shape(), &[2, 3]);
         assert_eq!(a.as_slice().unwrap(), &[11.0, 22.0, 33.0, 14.0, 25.0, 36.0]);
@@ -1022,7 +1022,10 @@ mod tests {
                 .unwrap();
         let b = Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![100.0, 200.0]).unwrap();
         a.add_inplace(&b).unwrap();
-        assert_eq!(a.as_slice().unwrap(), &[101.0, 102.0, 103.0, 204.0, 205.0, 206.0]);
+        assert_eq!(
+            a.as_slice().unwrap(),
+            &[101.0, 102.0, 103.0, 204.0, 205.0, 206.0]
+        );
     }
 
     #[test]
@@ -1039,10 +1042,8 @@ mod tests {
     fn add_inplace_rejects_growing_shape() {
         // (1, 3) += (2, 3) — RHS bigger than LHS; the destination shape is
         // fixed for in-place operations, so this must error.
-        let mut a =
-            Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
-        let b =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![10.0; 6]).unwrap();
+        let mut a = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![10.0; 6]).unwrap();
         assert!(a.add_inplace(&b).is_err());
         assert_eq!(a.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
     }
@@ -1058,10 +1059,8 @@ mod tests {
     #[test]
     fn copyto_broadcasts_row_into_matrix() {
         // (2, 3) <= (1, 3)
-        let mut dst =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0; 6]).unwrap();
-        let src =
-            Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![10.0, 20.0, 30.0]).unwrap();
+        let mut dst = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0; 6]).unwrap();
+        let src = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![10.0, 20.0, 30.0]).unwrap();
         copyto(&mut dst, &src).unwrap();
         assert_eq!(
             dst.as_slice().unwrap(),
@@ -1072,8 +1071,7 @@ mod tests {
     #[test]
     fn copyto_broadcasts_cross_rank_src() {
         // (2, 3) <= (3,)  — a lower-rank src broadcasts against a higher-rank dst.
-        let mut dst =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0; 6]).unwrap();
+        let mut dst = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0; 6]).unwrap();
         let src = arr(vec![7.0, 8.0, 9.0]);
         copyto(&mut dst, &src).unwrap();
         assert_eq!(dst.as_slice().unwrap(), &[7.0, 8.0, 9.0, 7.0, 8.0, 9.0]);
@@ -1082,8 +1080,7 @@ mod tests {
     #[test]
     fn copyto_scalar_src_broadcasts_to_full_dst() {
         // (2, 3) <= () via a length-1 1D stand-in.
-        let mut dst =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0; 6]).unwrap();
+        let mut dst = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0; 6]).unwrap();
         let src = arr(vec![42.0]);
         copyto(&mut dst, &src).unwrap();
         assert_eq!(dst.as_slice().unwrap(), &[42.0; 6]);
@@ -1092,8 +1089,7 @@ mod tests {
     #[test]
     fn copyto_rejects_growing_dst() {
         // (1, 3) <= (2, 3) — src wants to grow dst; must error, dst untouched.
-        let mut dst =
-            Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let mut dst = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
         let src = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![99.0; 6]).unwrap();
         assert!(copyto(&mut dst, &src).is_err());
         assert_eq!(dst.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
@@ -1141,18 +1137,12 @@ mod tests {
         let mut dst =
             Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
                 .unwrap();
-        let src = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
-        )
-        .unwrap();
-        let mask =
-            Array::<bool, Ix2>::from_vec(Ix2::new([1, 3]), vec![true, false, true]).unwrap();
+        let src =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0])
+                .unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(Ix2::new([1, 3]), vec![true, false, true]).unwrap();
         copyto_where(&mut dst, &src, &mask).unwrap();
-        assert_eq!(
-            dst.as_slice().unwrap(),
-            &[10.0, 2.0, 30.0, 40.0, 5.0, 60.0]
-        );
+        assert_eq!(dst.as_slice().unwrap(), &[10.0, 2.0, 30.0, 40.0, 5.0, 60.0]);
     }
 
     #[test]
@@ -1168,10 +1158,7 @@ mod tests {
         )
         .unwrap();
         copyto_where(&mut dst, &src, &mask).unwrap();
-        assert_eq!(
-            dst.as_slice().unwrap(),
-            &[99.0, 2.0, 99.0, 4.0, 99.0, 6.0]
-        );
+        assert_eq!(dst.as_slice().unwrap(), &[99.0, 2.0, 99.0, 4.0, 99.0, 6.0]);
     }
 
     #[test]

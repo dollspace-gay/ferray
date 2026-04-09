@@ -137,7 +137,9 @@ where
     D: Dimension,
 {
     if a_min > a_max {
-        return Err(FerrayError::invalid_value("clip_ord: a_min must be <= a_max"));
+        return Err(FerrayError::invalid_value(
+            "clip_ord: a_min must be <= a_max",
+        ));
     }
     let data: Vec<T> = input
         .iter()

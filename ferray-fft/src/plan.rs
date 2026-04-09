@@ -40,12 +40,10 @@ struct CacheKey {
 // statics below.
 type ComplexPlanMap<T> = RwLock<HashMap<CacheKey, Arc<dyn Fft<T>>>>;
 
-static F64_PLANS: LazyLock<ComplexPlanMap<f64>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+static F64_PLANS: LazyLock<ComplexPlanMap<f64>> = LazyLock::new(|| RwLock::new(HashMap::new()));
 static F64_PLANNER: LazyLock<Mutex<FftPlanner<f64>>> =
     LazyLock::new(|| Mutex::new(FftPlanner::new()));
-static F32_PLANS: LazyLock<ComplexPlanMap<f32>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+static F32_PLANS: LazyLock<ComplexPlanMap<f32>> = LazyLock::new(|| RwLock::new(HashMap::new()));
 static F32_PLANNER: LazyLock<Mutex<FftPlanner<f32>>> =
     LazyLock::new(|| Mutex::new(FftPlanner::new()));
 

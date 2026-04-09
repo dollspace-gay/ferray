@@ -27,7 +27,9 @@ pub fn isalpha<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D>>
 /// Return `true` where every character is a digit and the string is
 /// non-empty. Matches `numpy.strings.isdigit`.
 pub fn isdigit<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D>> {
-    classify(a, |s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()))
+    classify(a, |s| {
+        !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
+    })
 }
 
 /// Return `true` where every character is whitespace and the string is
@@ -55,7 +57,9 @@ pub fn islower<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D>>
 /// Return `true` where every character is alphanumeric and the string
 /// is non-empty. Matches `numpy.strings.isalnum`.
 pub fn isalnum<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D>> {
-    classify(a, |s| !s.is_empty() && s.chars().all(|c| c.is_alphanumeric()))
+    classify(a, |s| {
+        !s.is_empty() && s.chars().all(|c| c.is_alphanumeric())
+    })
 }
 
 /// Return `true` where the string could be a valid numeric literal.

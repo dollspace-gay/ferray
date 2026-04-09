@@ -34,9 +34,7 @@ fn bench_add(n: usize) {
     let elapsed = start.elapsed();
     let per = elapsed / iters as u32;
     let throughput = (n as f64) / per.as_secs_f64() / 1e9;
-    println!(
-        "add     n={n:>9}: {per:>10?} / call   ({throughput:5.2} Gelem/s)"
-    );
+    println!("add     n={n:>9}: {per:>10?} / call   ({throughput:5.2} Gelem/s)");
 }
 
 fn bench_sqrt(n: usize) {
@@ -50,9 +48,7 @@ fn bench_sqrt(n: usize) {
     let elapsed = start.elapsed();
     let per = elapsed / iters as u32;
     let throughput = (n as f64) / per.as_secs_f64() / 1e9;
-    println!(
-        "sqrt    n={n:>9}: {per:>10?} / call   ({throughput:5.2} Gelem/s)"
-    );
+    println!("sqrt    n={n:>9}: {per:>10?} / call   ({throughput:5.2} Gelem/s)");
 }
 
 fn bench_exp(n: usize) {
@@ -66,9 +62,7 @@ fn bench_exp(n: usize) {
     let elapsed = start.elapsed();
     let per = elapsed / iters as u32;
     let throughput = (n as f64) / per.as_secs_f64() / 1e9;
-    println!(
-        "exp     n={n:>9}: {per:>10?} / call   ({throughput:5.2} Gelem/s)"
-    );
+    println!("exp     n={n:>9}: {per:>10?} / call   ({throughput:5.2} Gelem/s)");
 }
 
 fn main() {

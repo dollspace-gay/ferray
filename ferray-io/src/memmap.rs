@@ -136,9 +136,7 @@ impl<T: Element> MemmapArrayMut<T> {
         }
         // SAFETY: same invariants as MemmapArray::view; the *mut T is
         // immediately demoted to *const T.
-        unsafe {
-            ArrayView::from_shape_ptr(self.data_ptr as *const T, &self.shape, &strides)
-        }
+        unsafe { ArrayView::from_shape_ptr(self.data_ptr as *const T, &self.shape, &strides) }
     }
 
     /// Flush changes to disk (only meaningful for ReadWrite mode).
@@ -448,12 +446,11 @@ mod tests {
         // can be passed to ferray functions that take `&Array` /
         // `ArrayView` without an intermediate copy.
         let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0];
-        let arr =
-            Array::<f64, ferray_core::dimension::Ix2>::from_vec(
-                ferray_core::dimension::Ix2::new([2, 3]),
-                data.clone(),
-            )
-            .unwrap();
+        let arr = Array::<f64, ferray_core::dimension::Ix2>::from_vec(
+            ferray_core::dimension::Ix2::new([2, 3]),
+            data.clone(),
+        )
+        .unwrap();
 
         let path = test_file("mm_view.npy");
         npy::save(&path, &arr).unwrap();

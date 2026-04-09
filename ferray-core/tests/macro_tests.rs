@@ -367,15 +367,13 @@ fn promoted_type_complex_f32() {
 #[test]
 fn promoted_type_complex_f32_complex_f64() {
     // Issue #325: Complex<f32> + Complex<f64> should widen to Complex<f64>.
-    let _: ferray_core::promoted_type!(Complex<f32>, Complex<f64>) =
-        Complex::new(1.0f64, 0.0f64);
+    let _: ferray_core::promoted_type!(Complex<f32>, Complex<f64>) = Complex::new(1.0f64, 0.0f64);
 }
 
 #[test]
 fn promoted_type_complex_f64_complex_f32() {
     // Symmetry check.
-    let _: ferray_core::promoted_type!(Complex<f64>, Complex<f32>) =
-        Complex::new(1.0f64, 0.0f64);
+    let _: ferray_core::promoted_type!(Complex<f64>, Complex<f32>) = Complex::new(1.0f64, 0.0f64);
 }
 
 // ---------------------------------------------------------------------------

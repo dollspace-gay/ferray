@@ -518,8 +518,7 @@ mod tests {
     fn masked_div_array_by_zero_yields_infinity_unmasked() {
         // Same behavior holds for the masked-by-regular-array variant.
         let a = ma1d(vec![5.0, 6.0], vec![false; 2]);
-        let divisor =
-            Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.0, 2.0]).unwrap();
+        let divisor = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.0, 2.0]).unwrap();
         let r = masked_div_array(&a, &divisor).unwrap();
         let rd: Vec<f64> = r.data().iter().copied().collect();
         assert!(rd[0].is_infinite() && rd[0].is_sign_positive());

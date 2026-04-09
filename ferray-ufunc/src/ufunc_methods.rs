@@ -213,7 +213,13 @@ where
         shape
             .iter()
             .enumerate()
-            .map(|(i, &d)| if sorted_axes.binary_search(&i).is_ok() { 1 } else { d })
+            .map(|(i, &d)| {
+                if sorted_axes.binary_search(&i).is_ok() {
+                    1
+                } else {
+                    d
+                }
+            })
             .collect()
     } else {
         kept_dims.clone()
@@ -424,9 +430,9 @@ where
         )));
     }
     let n = arr.size();
-    let slice = arr.as_slice_mut().ok_or_else(|| {
-        FerrayError::invalid_value("at: array must be contiguous (C-order)")
-    })?;
+    let slice = arr
+        .as_slice_mut()
+        .ok_or_else(|| FerrayError::invalid_value("at: array must be contiguous (C-order)"))?;
     for (&i, &v) in indices.iter().zip(values.iter()) {
         if i >= n {
             return Err(FerrayError::invalid_value(format!(
@@ -547,8 +553,7 @@ mod tests {
         // The whole point of keepdims: the result shape broadcasts back
         // against the input for row centering / normalization patterns.
         let a = arr2(2, 3, &[1.0, 2.0, 3.0, 10.0, 20.0, 30.0]);
-        let row_sums =
-            reduce_axis_keepdims(&a, 1, 0.0, true, |acc, x| acc + x).unwrap();
+        let row_sums = reduce_axis_keepdims(&a, 1, 0.0, true, |acc, x| acc + x).unwrap();
         // row_sums shape is (2, 1) which broadcasts against (2, 3).
         assert_eq!(row_sums.shape(), &[2, 1]);
         let row_sums_slice = row_sums.as_slice().unwrap();
@@ -664,8 +669,7 @@ mod tests {
         let data: Vec<f64> = (0..60).map(|i| i as f64).collect();
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([3, 4, 5]), data).unwrap();
 
-        let single_pass =
-            reduce_axes(&a, &[0, 2], 0.0, false, |acc, x| acc + x).unwrap();
+        let single_pass = reduce_axes(&a, &[0, 2], 0.0, false, |acc, x| acc + x).unwrap();
 
         // Reduce axis 2 first (rightmost), then axis 0 of the result.
         let step1 = reduce_axis(&a, 2, 0.0, |acc, x| acc + x).unwrap();
@@ -748,10 +752,7 @@ mod tests {
         let b = arr1(&[10.0, 20.0]);
         let r = outer(&a, &b, |x, y| x * y).unwrap();
         assert_eq!(r.shape(), &[3, 2]);
-        assert_eq!(
-            r.as_slice().unwrap(),
-            &[10.0, 20.0, 20.0, 40.0, 30.0, 60.0]
-        );
+        assert_eq!(r.as_slice().unwrap(), &[10.0, 20.0, 20.0, 40.0, 30.0, 60.0]);
     }
 
     #[test]
@@ -778,8 +779,10 @@ mod tests {
         // Duplicate index 0 -> both writes apply (adding twice), unlike
         // simple indexed assignment which would only keep the last.
         let mut a = arr1(&[0.0, 0.0, 0.0]);
-        at(&mut a, &[0, 0, 1, 2], &[1.0, 2.0, 5.0, 10.0], |acc, x| acc + x)
-            .unwrap();
+        at(&mut a, &[0, 0, 1, 2], &[1.0, 2.0, 5.0, 10.0], |acc, x| {
+            acc + x
+        })
+        .unwrap();
         assert_eq!(a.as_slice().unwrap(), &[3.0, 5.0, 10.0]);
     }
 

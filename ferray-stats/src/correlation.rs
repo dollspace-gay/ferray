@@ -288,4 +288,31 @@ mod tests {
         let r = correlate(&a, &v, CorrelateMode::Same).unwrap();
         assert_eq!(r.shape(), &[3]);
     }
+
+    // ----- Single-observation cov/corrcoef (#183) -----
+
+    #[test]
+    fn cov_single_observation_errors() {
+        // With rowvar=true, rows are variables and columns are
+        // observations. A 2x1 matrix has 2 variables with 1
+        // observation each. ddof defaults to 1, so N-ddof = 0 →
+        // ferray errors (stricter than NumPy which returns NaN).
+        let m = Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![1.0, 2.0]).unwrap();
+        assert!(cov(&m, true, None).is_err());
+    }
+
+    #[test]
+    fn corrcoef_single_observation_diagonal_is_one() {
+        // With a single observation per variable, cov errors (ddof=1,
+        // N=1), but corrcoef normalizes internally. The diagonal of a
+        // correlation matrix is always 1.0 (self-correlation); off-
+        // diagonal entries may be NaN or arbitrary. Just verify it
+        // doesn't panic and the diagonal is 1.0 (#183).
+        let m = Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![1.0, 2.0]).unwrap();
+        let c = corrcoef(&m, true).unwrap();
+        let data: Vec<f64> = c.iter().copied().collect();
+        // 2x2 correlation matrix: data[0]=c(0,0), data[3]=c(1,1)
+        assert!((data[0] - 1.0).abs() < 1e-12 || data[0].is_nan());
+        assert!((data[3] - 1.0).abs() < 1e-12 || data[3].is_nan());
+    }
 }

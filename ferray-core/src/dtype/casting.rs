@@ -10,14 +10,14 @@
 // - isrealobj / iscomplexobj — type inspection predicates
 // - astype() / view_cast() — methods on Array for explicit casting
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 use crate::dimension::Dimension;
 use crate::dtype::{DType, Element};
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 use crate::error::FerrayError;
 use crate::error::FerrayResult;
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 use super::promotion::PromoteTo;
 
 // ---------------------------------------------------------------------------
@@ -227,7 +227,7 @@ pub fn iscomplexobj<T: Element>() -> bool {
 /// This is intentionally a separate trait so that mixed-type binary operations
 /// do NOT compile implicitly (REQ-24). Users must call `.astype::<T>()` or use
 /// `add_promoted()` etc.
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub trait AsType<D: Dimension> {
     /// Cast all elements to type `U`, returning a new array.
     ///
@@ -240,13 +240,13 @@ pub trait AsType<D: Dimension> {
 
 /// Internal trait that performs the actual casting. Implemented for specific
 /// (T, U) pairs where `T: PromoteTo<U>` or where unsafe casting is valid.
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub trait AsTypeInner<U: Element, D: Dimension> {
     /// Perform the cast.
     fn astype_inner(&self) -> FerrayResult<crate::array::owned::Array<U, D>>;
 }
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 impl<T: Element, D: Dimension> AsType<D> for crate::array::owned::Array<T, D> {
     fn astype<U: Element>(&self) -> FerrayResult<crate::array::owned::Array<U, D>>
     where
@@ -257,7 +257,7 @@ impl<T: Element, D: Dimension> AsType<D> for crate::array::owned::Array<T, D> {
 }
 
 /// Blanket implementation: any T that can PromoteTo<U> can astype.
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 impl<T, U, D> AsTypeInner<U, D> for crate::array::owned::Array<T, D>
 where
     T: Element + PromoteTo<U>,
@@ -280,7 +280,7 @@ where
 // the cast against the chosen safety level via `can_cast`.
 // ---------------------------------------------------------------------------
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 impl<T, D> crate::array::owned::Array<T, D>
 where
     T: Element,
@@ -351,7 +351,7 @@ where
 ///
 /// # Errors
 /// Returns `FerrayError::InvalidDtype` if the element sizes are incompatible.
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub fn view_cast<T: Element, U: Element, D: Dimension>(
     arr: &crate::array::owned::Array<T, D>,
 ) -> FerrayResult<crate::array::owned::Array<U, D>> {
@@ -398,7 +398,7 @@ pub fn view_cast<T: Element, U: Element, D: Dimension>(
 // add_promoted / mul_promoted etc. — promoted binary operations (REQ-24)
 // ---------------------------------------------------------------------------
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 impl<T: Element, D: Dimension> crate::array::owned::Array<T, D> {
     /// Add two arrays after promoting both to their common type.
     ///
@@ -684,44 +684,33 @@ mod tests {
 
     #[test]
     fn cast_safe_narrowing_errors() {
-        let a = crate::array::owned::Array::<f64, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![1.0, 2.0, 3.0],
-        )
-        .unwrap();
+        let a =
+            crate::array::owned::Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0])
+                .unwrap();
         let result = a.cast::<i32>(CastKind::Safe);
         assert!(result.is_err());
     }
 
     #[test]
     fn cast_same_kind_int_narrowing_succeeds() {
-        let a = crate::array::owned::Array::<i64, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![1, 2, 3],
-        )
-        .unwrap();
+        let a =
+            crate::array::owned::Array::<i64, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
         let b = a.cast::<i32>(CastKind::SameKind).unwrap();
         assert_eq!(b.as_slice().unwrap(), &[1, 2, 3]);
     }
 
     #[test]
     fn cast_same_kind_float_to_int_errors() {
-        let a = crate::array::owned::Array::<f64, Ix1>::from_vec(
-            Ix1::new([2]),
-            vec![1.0, 2.0],
-        )
-        .unwrap();
+        let a = crate::array::owned::Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![1.0, 2.0])
+            .unwrap();
         let result = a.cast::<i32>(CastKind::SameKind);
         assert!(result.is_err());
     }
 
     #[test]
     fn cast_no_requires_identity() {
-        let a = crate::array::owned::Array::<f64, Ix1>::from_vec(
-            Ix1::new([2]),
-            vec![1.0, 2.0],
-        )
-        .unwrap();
+        let a = crate::array::owned::Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![1.0, 2.0])
+            .unwrap();
         // Same type allowed
         assert!(a.cast::<f64>(CastKind::No).is_ok());
         // Different type rejected
@@ -741,11 +730,8 @@ mod tests {
 
     #[test]
     fn cast_real_to_complex_safe() {
-        let a = crate::array::owned::Array::<f32, Ix1>::from_vec(
-            Ix1::new([2]),
-            vec![1.0, 2.0],
-        )
-        .unwrap();
+        let a = crate::array::owned::Array::<f32, Ix1>::from_vec(Ix1::new([2]), vec![1.0, 2.0])
+            .unwrap();
         let b = a.cast::<Complex<f64>>(CastKind::Safe).unwrap();
         assert_eq!(
             b.as_slice().unwrap(),
@@ -755,11 +741,8 @@ mod tests {
 
     #[test]
     fn cast_int_to_bool_unsafe() {
-        let a = crate::array::owned::Array::<i32, Ix1>::from_vec(
-            Ix1::new([4]),
-            vec![0, 1, -3, 0],
-        )
-        .unwrap();
+        let a = crate::array::owned::Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![0, 1, -3, 0])
+            .unwrap();
         let b = a.cast::<bool>(CastKind::Unsafe).unwrap();
         assert_eq!(b.as_slice().unwrap(), &[false, true, true, false]);
     }

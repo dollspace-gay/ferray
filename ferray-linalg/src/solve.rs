@@ -454,7 +454,11 @@ pub fn solve_batched<T: LinalgFloat>(
         (true, &b_shape[..b_shape.len() - 1], 1usize)
     } else if b_shape.len() == a_batch.len() + 2 {
         // b has shape (..., M, K): K right-hand sides per batch.
-        (false, &b_shape[..b_shape.len() - 2], b_shape[b_shape.len() - 1])
+        (
+            false,
+            &b_shape[..b_shape.len() - 2],
+            b_shape[b_shape.len() - 1],
+        )
     } else {
         return Err(FerrayError::shape_mismatch(format!(
             "solve_batched: b has incompatible rank ({} dims) for a ({} dims)",
@@ -531,10 +535,8 @@ pub fn solve_batched<T: LinalgFloat>(
 pub fn inv_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     if shape.len() == 2 {
-        let a2 = Array::<T, Ix2>::from_vec(
-            Ix2::new([shape[0], shape[1]]),
-            a.iter().copied().collect(),
-        )?;
+        let a2 =
+            Array::<T, Ix2>::from_vec(Ix2::new([shape[0], shape[1]]), a.iter().copied().collect())?;
         let result = inv(&a2)?;
         return Array::from_vec(IxDyn::new(shape), result.iter().copied().collect());
     }
@@ -582,10 +584,8 @@ pub fn pinv_batched<T: LinalgFloat>(
         ));
     }
     if shape.len() == 2 {
-        let a2 = Array::<T, Ix2>::from_vec(
-            Ix2::new([shape[0], shape[1]]),
-            a.iter().copied().collect(),
-        )?;
+        let a2 =
+            Array::<T, Ix2>::from_vec(Ix2::new([shape[0], shape[1]]), a.iter().copied().collect())?;
         let result = pinv(&a2, rcond)?;
         return Array::from_vec(
             IxDyn::new(&[shape[1], shape[0]]),
@@ -622,10 +622,8 @@ pub fn matrix_power_batched<T: LinalgFloat>(
 ) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     if shape.len() == 2 {
-        let a2 = Array::<T, Ix2>::from_vec(
-            Ix2::new([shape[0], shape[1]]),
-            a.iter().copied().collect(),
-        )?;
+        let a2 =
+            Array::<T, Ix2>::from_vec(Ix2::new([shape[0], shape[1]]), a.iter().copied().collect())?;
         let result = matrix_power(&a2, power)?;
         return Array::from_vec(IxDyn::new(shape), result.iter().copied().collect());
     }
@@ -928,16 +926,11 @@ mod tests {
     fn lstsq_2d_b_multiple_rhs() {
         // A = [[1,0],[0,1],[1,1]], b = [[1,2],[3,4],[5,6]]
         // Overdetermined system with 2 right-hand sides
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([3, 2]),
-            vec![1.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-        )
-        .unwrap();
-        let b = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[3, 2]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 2]), vec![1.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+            .unwrap();
+        let b =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 2]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
         let (x, _residuals, rank, _sv) = lstsq(&a, &b, None).unwrap();
         assert_eq!(rank, 2);
         assert_eq!(x.shape(), &[2, 2]);
@@ -1014,11 +1007,8 @@ mod tests {
         // A = [[1, 0], [0, 2]], b = [[3, 5], [4, 6]]
         // x = [[3, 5], [2, 3]]
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 0.0, 0.0, 2.0]).unwrap();
-        let b = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![3.0, 5.0, 4.0, 6.0],
-        )
-        .unwrap();
+        let b =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![3.0, 5.0, 4.0, 6.0]).unwrap();
         let x = solve(&a, &b).unwrap();
         assert_eq!(x.shape(), &[2, 2]);
         let data: Vec<f64> = x.iter().copied().collect();
@@ -1034,11 +1024,8 @@ mod tests {
     fn tensorsolve_2d_as_matrix() {
         // tensorsolve with 2D tensors is equivalent to regular solve
         // A(2,2) @ x(2) = b(2) -> tensorsolve(A, b) = solve(A, b)
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 0.0, 0.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 0.0, 0.0, 2.0]).unwrap();
         let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
         let x = tensorsolve(&a, &b, None).unwrap();
         let data: Vec<f64> = x.iter().copied().collect();
@@ -1054,11 +1041,8 @@ mod tests {
         // Same input as tensorsolve_2d_as_matrix but passing axes=None
         // explicitly — must produce the identical result, confirming
         // the new axes branch leaves the default path untouched.
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 0.0, 0.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 0.0, 0.0, 2.0]).unwrap();
         let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
         let x_default = tensorsolve(&a, &b, None).unwrap();
         let x_none = tensorsolve(&a, &b, None).unwrap();
@@ -1080,11 +1064,8 @@ mod tests {
         // A (as laid out in memory): [[1, 0], [0, 2]] — already diagonal
         // so the transpose is identical and this also cross-checks that
         // moving an axis doesn't break the symmetric-input case.
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 0.0, 0.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 0.0, 0.0, 2.0]).unwrap();
         let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
         let x = tensorsolve(&a, &b, Some(&[0])).unwrap();
         // Expected: after moving axis 0 to the right, a has shape [2, 2]
@@ -1119,11 +1100,8 @@ mod tests {
         //   A_mem = [[2, 1], [3, 4]], flat = [2, 1, 3, 4]
         // With axes=[0], permutation is [1, 0], transposing A_mem back
         // to A_logical, then solving gives x = [3, 2].
-        let a_mem = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![2.0, 1.0, 3.0, 4.0],
-        )
-        .unwrap();
+        let a_mem =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![2.0, 1.0, 3.0, 4.0]).unwrap();
         let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![12.0, 11.0]).unwrap();
         let x = tensorsolve(&a_mem, &b, Some(&[0])).unwrap();
         let data: Vec<f64> = x.iter().copied().collect();
@@ -1133,22 +1111,16 @@ mod tests {
 
     #[test]
     fn tensorsolve_axes_out_of_bounds_errors() {
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 0.0, 0.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 0.0, 0.0, 2.0]).unwrap();
         let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
         assert!(tensorsolve(&a, &b, Some(&[5])).is_err());
     }
 
     #[test]
     fn tensorsolve_axes_duplicate_errors() {
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 0.0, 0.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 0.0, 0.0, 2.0]).unwrap();
         let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
         assert!(tensorsolve(&a, &b, Some(&[0, 0])).is_err());
     }
@@ -1156,11 +1128,8 @@ mod tests {
     #[test]
     fn tensorinv_2d_as_matrix() {
         // tensorinv of a 2D array with ind=1 is equivalent to matrix inverse
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 0.0, 0.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 0.0, 0.0, 2.0]).unwrap();
         let inv_a = tensorinv(&a, 1).unwrap();
         let data: Vec<f64> = inv_a.iter().copied().collect();
         // inv([[1,0],[0,2]]) = [[1,0],[0,0.5]]
@@ -1213,11 +1182,8 @@ mod tests {
             vec![1.0, 2.0, 3.0, 4.0, 2.0, 0.0, 0.0, 3.0],
         )
         .unwrap();
-        let b = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![5.0, 11.0, 4.0, 9.0],
-        )
-        .unwrap();
+        let b =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![5.0, 11.0, 4.0, 9.0]).unwrap();
         let x = solve_batched(&a, &b).unwrap();
         assert_eq!(x.shape(), &[2, 2]);
 
@@ -1242,16 +1208,10 @@ mod tests {
     #[test]
     fn solve_batched_matrix_rhs() {
         // Single batch, 2 RHS columns.
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[1, 2, 2]),
-            vec![1.0, 0.0, 0.0, 2.0],
-        )
-        .unwrap();
-        let b = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[1, 2, 2]),
-            vec![1.0, 3.0, 4.0, 8.0],
-        )
-        .unwrap();
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1, 2, 2]), vec![1.0, 0.0, 0.0, 2.0])
+            .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1, 2, 2]), vec![1.0, 3.0, 4.0, 8.0])
+            .unwrap();
         let x = solve_batched(&a, &b).unwrap();
         assert_eq!(x.shape(), &[1, 2, 2]);
         // x = [[1, 3], [2, 4]]
@@ -1324,11 +1284,8 @@ mod tests {
     #[test]
     fn solve_batched_forwards_2d_to_solve() {
         // 2-D input should just call through to solve without error.
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 0.0, 0.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 0.0, 0.0, 2.0]).unwrap();
         let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
         let x = solve_batched(&a, &b).unwrap();
         assert_eq!(x.shape(), &[2]);

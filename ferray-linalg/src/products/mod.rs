@@ -251,11 +251,9 @@ pub fn matmul<T: LinalgFloat>(
     let zero = T::from_f64_const(0.0);
 
     match (a_shape.len(), b_shape.len()) {
-        (1, 1) => {
-            Err(FerrayError::shape_mismatch(
-                "matmul: cannot multiply two 1D arrays (use dot instead)",
-            ))
-        }
+        (1, 1) => Err(FerrayError::shape_mismatch(
+            "matmul: cannot multiply two 1D arrays (use dot instead)",
+        )),
         (1, 2) => {
             // Vector-matrix: treat a as (1, k)
             let k = a_shape[0];
@@ -321,13 +319,7 @@ const FAER_PARALLEL_THRESHOLD: usize = 256;
 /// parallelism enabled for larger sizes. Used by every 2-D matmul site in
 /// this crate (`matmul_2d`, `einsum` matmul shortcut, `matrix_power`) so
 /// they all share the same small/large dispatch policy.
-pub(crate) fn matmul_raw<T: LinalgFloat>(
-    a: &[T],
-    b: &[T],
-    m: usize,
-    k: usize,
-    n: usize,
-) -> Vec<T> {
+pub(crate) fn matmul_raw<T: LinalgFloat>(a: &[T], b: &[T], m: usize, k: usize, n: usize) -> Vec<T> {
     debug_assert_eq!(a.len(), m * k);
     debug_assert_eq!(b.len(), k * n);
 
@@ -984,16 +976,11 @@ mod tests {
         // 1-D array, treating it as a row vector. The result should be a
         // 1-D array of length matching the last matrix's column count.
         let v = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1.0, 2.0, 3.0]).unwrap();
-        let m = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[3, 2]),
-            vec![1.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-        )
-        .unwrap();
-        let n = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 2.0, 3.0, 4.0],
-        )
-        .unwrap();
+        let m =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 2]), vec![1.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+                .unwrap();
+        let n =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
         let result = multi_dot(&[&v, &m, &n]).unwrap();
         // v @ m = [1*1+2*0+3*1, 1*0+2*1+3*1] = [4, 5]
         // [4, 5] @ n = [4*1+5*3, 4*2+5*4] = [19, 28]
@@ -1007,11 +994,9 @@ mod tests {
         // Issue #217: NumPy allows the last matrix to be 1-D (treated
         // as a column vector). Result is 1-D length matching first
         // matrix's row count.
-        let m = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 3]),
-            vec![1.0, 0.0, 1.0, 0.0, 1.0, 1.0],
-        )
-        .unwrap();
+        let m =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0, 0.0, 1.0, 0.0, 1.0, 1.0])
+                .unwrap();
         let n = Array::<f64, IxDyn>::from_vec(
             IxDyn::new(&[3, 3]),
             vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],

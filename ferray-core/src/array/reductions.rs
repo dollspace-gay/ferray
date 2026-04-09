@@ -276,12 +276,9 @@ where
             return None;
         }
         let mean = self.mean()?;
-        let sum_sq: T = self
-            .iter()
-            .copied()
-            .fold(<T as Element>::zero(), |acc, x| {
-                acc + (x - mean) * (x - mean)
-            });
+        let sum_sq: T = self.iter().copied().fold(<T as Element>::zero(), |acc, x| {
+            acc + (x - mean) * (x - mean)
+        });
         Some(sum_sq / T::from(n - ddof).unwrap())
     }
 
@@ -441,7 +438,10 @@ mod tests {
     fn prod_axis_2d() {
         let a = arr2(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let p0 = a.prod_axis(Axis(0)).unwrap();
-        assert_eq!(p0.iter().copied().collect::<Vec<_>>(), vec![4.0, 10.0, 18.0]);
+        assert_eq!(
+            p0.iter().copied().collect::<Vec<_>>(),
+            vec![4.0, 10.0, 18.0]
+        );
 
         let p1 = a.prod_axis(Axis(1)).unwrap();
         assert_eq!(p1.iter().copied().collect::<Vec<_>>(), vec![6.0, 120.0]);
@@ -541,8 +541,7 @@ mod tests {
 
     #[test]
     fn any_all_bool() {
-        let true_arr =
-            Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, true, true]).unwrap();
+        let true_arr = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, true, true]).unwrap();
         let mixed = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, false, true]).unwrap();
         let false_arr =
             Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, false, false]).unwrap();

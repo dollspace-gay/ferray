@@ -11,9 +11,9 @@
 // (simplified), dimension types (without ndarray conversions), constants, and
 // layout enums. The full Array type and related features require `std`.
 
-#![cfg_attr(feature = "no_std", no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 extern crate alloc;
 
 // Modules that work in both std and no_std modes
@@ -25,46 +25,46 @@ pub mod layout;
 pub mod record;
 
 // Modules that require std (depend on ndarray or std-only features)
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub mod array;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub mod buffer;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub mod creation;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub mod dynarray;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub mod indexing;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub mod manipulation;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub mod nditer;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub mod ops;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub mod prelude;
 
 // Re-export key types at crate root for ergonomics (std only)
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub use array::ArrayFlags;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub use array::aliases;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub use array::arc::ArcArray;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub use array::cow::CowArray;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub use array::display::{get_print_options, set_print_options};
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub use array::owned::Array;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub use array::view::ArrayView;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub use array::view_mut::ArrayViewMut;
 
 pub use dimension::{Axis, Dimension, Ix0, Ix1, Ix2, Ix3, Ix4, Ix5, Ix6, IxDyn};
 
-#[cfg(feature = "const_shapes")]
+#[cfg(all(feature = "const_shapes", feature = "std"))]
 pub use dimension::static_shape::{
     Assert, DefaultNdarrayDim, IsTrue, Shape1, Shape2, Shape3, Shape4, Shape5, Shape6,
     StaticBroadcast, StaticMatMul, StaticSize, static_reshape_array,
@@ -76,13 +76,13 @@ pub use error::{FerrayError, FerrayResult};
 
 pub use layout::MemoryLayout;
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub use buffer::AsRawBuffer;
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub use dynarray::DynArray;
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub use nditer::NdIter;
 
 pub use record::FieldDescriptor;

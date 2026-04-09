@@ -77,11 +77,7 @@ pub fn faer_to_arrayd<T: LinalgFloat>(mat: &faer::Mat<T>) -> FerrayResult<Array<
 /// stride but there's no better option without directly touching faer
 /// internals.
 #[inline]
-fn faer_mat_to_row_major_vec<T: LinalgFloat>(
-    mat: &faer::Mat<T>,
-    m: usize,
-    n: usize,
-) -> Vec<T> {
+fn faer_mat_to_row_major_vec<T: LinalgFloat>(mat: &faer::Mat<T>, m: usize, n: usize) -> Vec<T> {
     let mut data = Vec::with_capacity(m * n);
     for i in 0..m {
         for j in 0..n {

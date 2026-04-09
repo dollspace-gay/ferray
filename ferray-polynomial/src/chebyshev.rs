@@ -725,9 +725,7 @@ mod tests {
     fn chebyshev_with_domain_evaluates_via_mapping() {
         // T_1(u) = u with domain [0, 4] mapped to canonical [-1, 1]:
         // u = -1 + 0.5*x, so x=0->u=-1, x=2->u=0, x=4->u=1.
-        let p = Chebyshev::new(&[0.0, 1.0])
-            .with_domain([0.0, 4.0])
-            .unwrap();
+        let p = Chebyshev::new(&[0.0, 1.0]).with_domain([0.0, 4.0]).unwrap();
         assert!((p.eval(0.0).unwrap() - (-1.0)).abs() < 1e-12);
         assert!((p.eval(2.0).unwrap() - 0.0).abs() < 1e-12);
         assert!((p.eval(4.0).unwrap() - 1.0).abs() < 1e-12);
@@ -753,12 +751,8 @@ mod tests {
 
     #[test]
     fn chebyshev_binary_op_rejects_mismatched_mapping() {
-        let a = Chebyshev::new(&[1.0, 2.0])
-            .with_domain([0.0, 1.0])
-            .unwrap();
-        let b = Chebyshev::new(&[3.0, 4.0])
-            .with_domain([0.0, 2.0])
-            .unwrap();
+        let a = Chebyshev::new(&[1.0, 2.0]).with_domain([0.0, 1.0]).unwrap();
+        let b = Chebyshev::new(&[3.0, 4.0]).with_domain([0.0, 2.0]).unwrap();
         assert!(a.add(&b).is_err());
     }
 }

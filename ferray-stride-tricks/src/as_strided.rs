@@ -362,11 +362,8 @@ mod tests {
     #[test]
     fn as_strided_view_zero_copy() {
         // The returned view should share the original buffer.
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([6]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, Ix1>::from_vec(Ix1::new([6]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
         let view = a.view();
         let v = as_strided(&view, &[2, 3], &[3, 1]).unwrap();
         assert_eq!(v.as_ptr(), a.as_ptr());

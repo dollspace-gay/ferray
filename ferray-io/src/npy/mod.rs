@@ -25,8 +25,9 @@ use self::dtype_parse::Endianness;
 /// multiplication to guard against overflow from untrusted `.npy` files.
 pub(crate) fn checked_total_elements(shape: &[usize]) -> FerrayResult<usize> {
     shape.iter().try_fold(1usize, |acc, &dim| {
-        acc.checked_mul(dim)
-            .ok_or_else(|| FerrayError::io_error("shape overflow: total elements exceed usize::MAX"))
+        acc.checked_mul(dim).ok_or_else(|| {
+            FerrayError::io_error("shape overflow: total elements exceed usize::MAX")
+        })
     })
 }
 
@@ -483,9 +484,8 @@ macro_rules! impl_npy_element {
                 let byte_len = data.len() * $size;
                 // SAFETY: &[T] is contiguous and properly aligned; reinterpreting
                 // as &[u8] of length len*size_of::<T> is valid for any Copy type.
-                let bytes = unsafe {
-                    std::slice::from_raw_parts(data.as_ptr() as *const u8, byte_len)
-                };
+                let bytes =
+                    unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, byte_len) };
                 writer.write_all(bytes)?;
                 Ok(())
             }
@@ -756,8 +756,7 @@ mod tests {
         //   Fortran storage: [1, 4, 2, 5, 3, 6] (columns first)
         let mut buf = Vec::new();
         // Write header manually
-        let header_str =
-            "{'descr': '<f8', 'fortran_order': True, 'shape': (2, 3), }";
+        let header_str = "{'descr': '<f8', 'fortran_order': True, 'shape': (2, 3), }";
         let header_len = header_str.len();
         // Pad to 64-byte alignment (magic=6 + version=2 + hdr_len=2 + header)
         let total_before_pad = 6 + 2 + 2 + header_len;
@@ -821,7 +820,10 @@ mod tests {
         let result = load_from_reader::<f64, Ix1, _>(&mut cursor);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("magic") || msg.contains("not a valid"), "got: {msg}");
+        assert!(
+            msg.contains("magic") || msg.contains("not a valid"),
+            "got: {msg}"
+        );
     }
 
     #[test]
@@ -991,8 +993,7 @@ mod tests {
     fn roundtrip_f16_dynamic() {
         use half::f16;
         let data: Vec<f16> = (0..8).map(|i| f16::from_f32(i as f32)).collect();
-        let arr =
-            Array::<f16, IxDyn>::from_vec(IxDyn::new(&[2, 4]), data.clone()).unwrap();
+        let arr = Array::<f16, IxDyn>::from_vec(IxDyn::new(&[2, 4]), data.clone()).unwrap();
         let dyn_in = DynArray::F16(arr);
 
         let path = test_file("rt_f16_dyn.npy");
@@ -1011,8 +1012,7 @@ mod tests {
     #[test]
     fn f16_descriptor_is_f2() {
         use half::f16;
-        let arr = Array::<f16, Ix1>::from_vec(Ix1::new([2]), vec![f16::ZERO, f16::ONE])
-            .unwrap();
+        let arr = Array::<f16, Ix1>::from_vec(Ix1::new([2]), vec![f16::ZERO, f16::ONE]).unwrap();
         let mut buf = Vec::new();
         save_to_writer(&mut buf, &arr).unwrap();
         // The header must contain the standard NumPy `f2` dtype descriptor
@@ -1049,8 +1049,7 @@ mod tests {
     fn roundtrip_bf16_dynamic() {
         use half::bf16;
         let data: Vec<bf16> = (0..6).map(|i| bf16::from_f32(i as f32 * 0.5)).collect();
-        let arr =
-            Array::<bf16, IxDyn>::from_vec(IxDyn::new(&[2, 3]), data.clone()).unwrap();
+        let arr = Array::<bf16, IxDyn>::from_vec(IxDyn::new(&[2, 3]), data.clone()).unwrap();
         let dyn_in = DynArray::BF16(arr);
 
         let path = test_file("rt_bf16_dyn.npy");
@@ -1069,8 +1068,7 @@ mod tests {
     #[test]
     fn bf16_descriptor_is_bf16_tag() {
         use half::bf16;
-        let arr = Array::<bf16, Ix1>::from_vec(Ix1::new([2]), vec![bf16::ZERO, bf16::ONE])
-            .unwrap();
+        let arr = Array::<bf16, Ix1>::from_vec(Ix1::new([2]), vec![bf16::ZERO, bf16::ONE]).unwrap();
         let mut buf = Vec::new();
         save_to_writer(&mut buf, &arr).unwrap();
         // ferray-specific non-NumPy tag for bfloat16.

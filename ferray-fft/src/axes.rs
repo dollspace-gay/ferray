@@ -52,10 +52,7 @@ pub(crate) fn resolve_axis(ndim: usize, axis: Option<isize>) -> FerrayResult<usi
 ///
 /// Returns an error if any axis is out of bounds.
 #[inline]
-pub(crate) fn resolve_axes(
-    ndim: usize,
-    axes: Option<&[isize]>,
-) -> FerrayResult<Vec<usize>> {
+pub(crate) fn resolve_axes(ndim: usize, axes: Option<&[isize]>) -> FerrayResult<Vec<usize>> {
     match axes {
         Some(ax) => ax.iter().map(|&a| normalize_axis(ndim, a)).collect(),
         None => Ok((0..ndim).collect()),

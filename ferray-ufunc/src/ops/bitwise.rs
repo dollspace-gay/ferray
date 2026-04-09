@@ -302,7 +302,10 @@ mod tests {
         let r = left_shift(&a, &s).unwrap();
         assert_eq!(r.shape(), &[2, 3]);
         // 1 << {0,1,2} = {1,2,4}, 2 << {0,1,2} = {2,4,8}
-        assert_eq!(r.iter().copied().collect::<Vec<_>>(), vec![1, 2, 4, 2, 4, 8]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![1, 2, 4, 2, 4, 8]
+        );
     }
 
     #[test]

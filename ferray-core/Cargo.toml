@@ -28,11 +28,15 @@ optional = true
 
 [features]
 default = ["std"]
+# `std` gates everything that needs the ndarray-backed Array type,
+# Vec/format!/thiserror's std variants, and the std-only methods on
+# Dimension. Build with `--no-default-features` for no_std environments;
+# only DType, Element, FerrayError, dimension types, constants, and
+# layout enums are available in that mode.
 std = []
 f16 = ["dep:half"]
 bf16 = ["dep:half"]
 serde = ["dep:serde", "ndarray/serde"]
-no_std = []
 const_shapes = []
 
 [lints.rust]

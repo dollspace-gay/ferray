@@ -53,11 +53,7 @@ fn oracle_arange() {
         }
         let start = parse_f64_value(&case.inputs["start"]);
         let stop = parse_f64_value(&case.inputs["stop"]);
-        let step = case
-            .inputs
-            .get("step")
-            .map(parse_f64_value)
-            .unwrap_or(1.0);
+        let step = case.inputs.get("step").map(parse_f64_value).unwrap_or(1.0);
         let result = creation::arange(start, stop, step).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
         assert_f64_slice_ulp(

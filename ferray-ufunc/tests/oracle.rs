@@ -97,7 +97,11 @@ unary_oracle!(oracle_negative, "negative.json", ferray_ufunc::negative);
 unary_oracle!(oracle_sqrt, "sqrt.json", ferray_ufunc::sqrt);
 unary_oracle!(oracle_cbrt, "cbrt.json", ferray_ufunc::cbrt);
 unary_oracle!(oracle_square, "square.json", ferray_ufunc::square);
-unary_oracle!(oracle_reciprocal, "reciprocal.json", ferray_ufunc::reciprocal);
+unary_oracle!(
+    oracle_reciprocal,
+    "reciprocal.json",
+    ferray_ufunc::reciprocal
+);
 unary_oracle!(oracle_sinc, "sinc.json", ferray_ufunc::sinc);
 
 // ---------------------------------------------------------------------------

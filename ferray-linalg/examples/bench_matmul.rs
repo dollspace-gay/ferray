@@ -34,19 +34,14 @@ fn bench_matmul(n: usize) {
     // GFLOPS for matmul = 2 * n^3 per call
     let flops_per_call = 2.0 * (n as f64).powi(3);
     let gflops = flops_per_call / per_call.as_secs_f64() / 1e9;
-    println!(
-        "matmul({n}x{n}): {per_call:?} per call, {gflops:.1} GFLOPS (avg of {iters} iters)"
-    );
+    println!("matmul({n}x{n}): {per_call:?} per call, {gflops:.1} GFLOPS (avg of {iters} iters)");
 }
 
 fn bench_matrix_power(n: usize, power: i64) {
     use ferray_core::dimension::Ix2;
     let a_d = make_matrix(n, 3);
-    let a = Array::<f64, Ix2>::from_vec(
-        Ix2::new([n, n]),
-        a_d.as_slice().unwrap().to_vec(),
-    )
-    .unwrap();
+    let a =
+        Array::<f64, Ix2>::from_vec(Ix2::new([n, n]), a_d.as_slice().unwrap().to_vec()).unwrap();
 
     let _ = ferray_linalg::matrix_power(&a, power).unwrap();
 

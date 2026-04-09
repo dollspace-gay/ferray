@@ -17,6 +17,4 @@ pub use windows::{bartlett, blackman, hamming, hanning, kaiser};
 // Re-export functional utilities at crate root. `vectorize_nd` was
 // removed as a redundant alias for `vectorize` — vectorize itself is
 // generic over dimension (#293).
-pub use functional::{
-    apply_along_axis, apply_over_axes, piecewise, sum_axis_keepdims, vectorize,
-};
+pub use functional::{apply_along_axis, apply_over_axes, piecewise, sum_axis_keepdims, vectorize};

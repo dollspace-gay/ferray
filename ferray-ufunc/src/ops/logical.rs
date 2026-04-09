@@ -302,10 +302,8 @@ mod tests {
     #[test]
     fn test_logical_and_broadcasts() {
         use ferray_core::dimension::Ix2;
-        let a =
-            Array::<bool, Ix2>::from_vec(Ix2::new([2, 1]), vec![true, false]).unwrap();
-        let b = Array::<bool, Ix2>::from_vec(Ix2::new([1, 3]), vec![true, false, true])
-            .unwrap();
+        let a = Array::<bool, Ix2>::from_vec(Ix2::new([2, 1]), vec![true, false]).unwrap();
+        let b = Array::<bool, Ix2>::from_vec(Ix2::new([1, 3]), vec![true, false, true]).unwrap();
         let r = logical_and(&a, &b).unwrap();
         assert_eq!(r.shape(), &[2, 3]);
         assert_eq!(
@@ -317,10 +315,8 @@ mod tests {
     #[test]
     fn test_logical_or_broadcasts() {
         use ferray_core::dimension::Ix2;
-        let a =
-            Array::<bool, Ix2>::from_vec(Ix2::new([2, 1]), vec![true, false]).unwrap();
-        let b = Array::<bool, Ix2>::from_vec(Ix2::new([1, 3]), vec![true, false, true])
-            .unwrap();
+        let a = Array::<bool, Ix2>::from_vec(Ix2::new([2, 1]), vec![true, false]).unwrap();
+        let b = Array::<bool, Ix2>::from_vec(Ix2::new([1, 3]), vec![true, false, true]).unwrap();
         let r = logical_or(&a, &b).unwrap();
         assert_eq!(r.shape(), &[2, 3]);
         assert_eq!(
@@ -391,8 +387,7 @@ mod tests {
     fn all_axis_numeric_integer_input() {
         use ferray_core::dimension::Ix2;
         // Integer truthiness: 0 is false, nonzero is true.
-        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 0, 6])
-            .unwrap();
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 0, 6]).unwrap();
         let r = all_axis(&a, 1).unwrap();
         assert_eq!(r.shape(), &[2]);
         assert_eq!(r.as_slice().unwrap(), &[true, false]);
@@ -402,11 +397,7 @@ mod tests {
     fn any_axis_numeric_float_input_with_nan() {
         use ferray_core::dimension::Ix1;
         // NaN is truthy (nonzero), Inf is truthy, 0 is falsy.
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([4]),
-            vec![0.0, 0.0, f64::NAN, 0.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![0.0, 0.0, f64::NAN, 0.0]).unwrap();
         let r = any_axis(&a, 0).unwrap();
         // Reducing a 1-D array along its only axis produces a length-1 result.
         assert_eq!(r.shape(), &[1]);
@@ -476,11 +467,8 @@ mod tests {
         // Regression: ensure that once we find a `false`, the output is
         // actually set to `false` (not the `true` identity seed).
         use ferray_core::dimension::Ix2;
-        let a = Array::<bool, Ix2>::from_vec(
-            Ix2::new([1, 4]),
-            vec![false, true, true, true],
-        )
-        .unwrap();
+        let a =
+            Array::<bool, Ix2>::from_vec(Ix2::new([1, 4]), vec![false, true, true, true]).unwrap();
         let r = all_axis(&a, 1).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[false]);
     }

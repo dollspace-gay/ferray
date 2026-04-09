@@ -105,9 +105,7 @@ where
 /// - [`FerrayError::ShapeMismatch`] if the matrix is not square.
 /// - [`FerrayError::SingularMatrix`] if the result contains NaN/inf
 ///   (indicating faer's LU hit a near-zero pivot).
-pub fn inv_complex<T>(
-    a: &Array<Complex<T>, Ix2>,
-) -> FerrayResult<Array<Complex<T>, Ix2>>
+pub fn inv_complex<T>(a: &Array<Complex<T>, Ix2>) -> FerrayResult<Array<Complex<T>, Ix2>>
 where
     T: Copy + 'static,
     Complex<T>: Element + Copy + faer_traits::ComplexField,
@@ -275,7 +273,10 @@ mod tests {
         );
         let c = matmul_complex(&a, &b).unwrap();
         let data: Vec<Complex<f64>> = c.iter().copied().collect();
-        assert_eq!(data, vec![c64(1.0, 1.0), c64(2.0, 0.0), c64(3.0, 0.0), c64(4.0, -1.0)]);
+        assert_eq!(
+            data,
+            vec![c64(1.0, 1.0), c64(2.0, 0.0), c64(3.0, 0.0), c64(4.0, -1.0)]
+        );
     }
 
     #[test]
@@ -298,12 +299,7 @@ mod tests {
         );
         let c = matmul_complex(&a, &b).unwrap();
         let d: Vec<Complex<f64>> = c.iter().copied().collect();
-        let expected = [
-            c64(2.0, 3.0),
-            c64(3.0, -2.0),
-            c64(3.0, 1.0),
-            c64(1.0, -3.0),
-        ];
+        let expected = [c64(2.0, 3.0), c64(3.0, -2.0), c64(3.0, 1.0), c64(1.0, -3.0)];
         for (got, want) in d.iter().zip(expected.iter()) {
             assert!(
                 (got.re - want.re).abs() < 1e-12,
@@ -376,11 +372,9 @@ mod tests {
             2,
             vec![c64(1.0, 0.0), c64(0.0, 0.0), c64(0.0, 0.0), c64(1.0, 0.0)],
         );
-        let b = Array::<Complex<f64>, Ix1>::from_vec(
-            Ix1::new([2]),
-            vec![c64(1.0, 2.0), c64(3.0, 4.0)],
-        )
-        .unwrap();
+        let b =
+            Array::<Complex<f64>, Ix1>::from_vec(Ix1::new([2]), vec![c64(1.0, 2.0), c64(3.0, 4.0)])
+                .unwrap();
         let x = solve_complex_vec(&i, &b).unwrap();
         let d: Vec<Complex<f64>> = x.iter().copied().collect();
         assert_eq!(d, vec![c64(1.0, 2.0), c64(3.0, 4.0)]);

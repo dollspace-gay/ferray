@@ -213,9 +213,8 @@ pub use ferray_ufunc::{
 // above, so the stats versions are aliased in under different names
 // via full paths at use sites rather than re-exported here (#335).
 pub use ferray_stats::{
-    argmax, argmin, max, max_into, max_with, mean, mean_into, mean_where, min, min_into,
-    min_with, prod, prod_into, prod_with, std_, std_into, sum, sum_into, sum_with, var,
-    var_into,
+    argmax, argmin, max, max_into, max_with, mean, mean_into, mean_where, min, min_into, min_with,
+    prod, prod_into, prod_with, std_, std_into, sum, sum_into, sum_with, var, var_into,
 };
 
 // Quantile-based
@@ -235,8 +234,7 @@ pub use ferray_stats::{CorrelateMode, corrcoef, correlate, cov};
 
 // Histogram
 pub use ferray_stats::{
-    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram2d,
-    histogramdd,
+    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram2d, histogramdd,
 };
 
 // Sorting and searching

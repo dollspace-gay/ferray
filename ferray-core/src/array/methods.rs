@@ -242,9 +242,8 @@ mod tests {
 
     #[test]
     fn as_standard_layout_copies_f_contig_input_to_c() {
-        let a =
-            Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
-                .unwrap();
+        let a = Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+            .unwrap();
         // Logical shape is (2, 3), but storage is F-order.
         assert_eq!(a.layout(), MemoryLayout::Fortran);
         let cow = a.as_standard_layout();
@@ -258,9 +257,8 @@ mod tests {
 
     #[test]
     fn as_fortran_layout_borrows_when_already_f_contig() {
-        let a =
-            Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
-                .unwrap();
+        let a = Array::<f64, Ix2>::from_vec_f(Ix2::new([2, 3]), vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0])
+            .unwrap();
         assert_eq!(a.layout(), MemoryLayout::Fortran);
         let cow = a.as_fortran_layout();
         assert!(cow.is_borrowed(), "F-contig input must borrow, not copy");
@@ -287,8 +285,7 @@ mod tests {
     #[test]
     fn layout_roundtrip_preserves_values() {
         // C -> F -> C returns the same logical contents.
-        let original =
-            Array::<i32, Ix2>::from_vec(Ix2::new([3, 4]), (0..12i32).collect()).unwrap();
+        let original = Array::<i32, Ix2>::from_vec(Ix2::new([3, 4]), (0..12i32).collect()).unwrap();
         let f_cow = original.as_fortran_layout();
         let f_owned = f_cow.into_owned();
         assert_eq!(f_owned.layout(), MemoryLayout::Fortran);

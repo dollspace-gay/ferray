@@ -139,10 +139,7 @@ where
 
 /// Per-axis count of unmasked elements. Returns a plain `Array<u64, IxDyn>`
 /// (not masked, since count is always defined) with the reduced axis dropped.
-fn count_axis<T, D>(
-    ma: &MaskedArray<T, D>,
-    axis: usize,
-) -> FerrayResult<Array<u64, IxDyn>>
+fn count_axis<T, D>(ma: &MaskedArray<T, D>, axis: usize) -> FerrayResult<Array<u64, IxDyn>>
 where
     T: Element + Copy,
     D: Dimension,
@@ -294,7 +291,13 @@ where
                 Some(match acc {
                     Some(a) => {
                         // NaN-propagating: if comparison is unordered, propagate NaN
-                        if a <= v { a } else if a > v { v } else { a }
+                        if a <= v {
+                            a
+                        } else if a > v {
+                            v
+                        } else {
+                            a
+                        }
                     }
                     None => v,
                 })
@@ -317,7 +320,13 @@ where
             .fold(None, |acc: Option<T>, v| {
                 Some(match acc {
                     Some(a) => {
-                        if a >= v { a } else if a < v { v } else { a }
+                        if a >= v {
+                            a
+                        } else if a < v {
+                            v
+                        } else {
+                            a
+                        }
                     }
                     None => v,
                 })
@@ -585,12 +594,7 @@ mod tests {
 
     #[test]
     fn min_max_axis() {
-        let ma = ma2d(
-            2,
-            3,
-            vec![3.0, 1.0, 5.0, 2.0, 4.0, 0.0],
-            vec![false; 6],
-        );
+        let ma = ma2d(2, 3, vec![3.0, 1.0, 5.0, 2.0, 4.0, 0.0], vec![false; 6]);
         let mn = ma.min_axis(0).unwrap();
         let mx = ma.max_axis(0).unwrap();
         let mn_d: Vec<f64> = mn.data().iter().copied().collect();
@@ -657,11 +661,8 @@ mod tests {
     #[test]
     fn filled_default_uses_stored_fill_value() {
         let d = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
-        let m = Array::<bool, Ix1>::from_vec(
-            Ix1::new([4]),
-            vec![false, true, false, true],
-        )
-        .unwrap();
+        let m =
+            Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![false, true, false, true]).unwrap();
         let ma = MaskedArray::new(d, m).unwrap().with_fill_value(-1.0);
         let filled = ma.filled_default().unwrap();
         let v: Vec<f64> = filled.iter().copied().collect();
@@ -674,8 +675,7 @@ mod tests {
         // be the receiver's fill_value, not zero.
         use crate::masked_add;
         let d_a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
-        let m_a =
-            Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
+        let m_a = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
         let d_b = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![10.0, 20.0, 30.0]).unwrap();
         let m_b = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false; 3]).unwrap();
         let a = MaskedArray::new(d_a, m_a).unwrap().with_fill_value(-999.0);
@@ -695,8 +695,7 @@ mod tests {
         let d_a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![1.0, 2.0, 3.0]).unwrap();
         let m_a = Array::<bool, Ix2>::from_vec(Ix2::new([3, 1]), vec![false; 3]).unwrap();
         let d_b =
-            Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![10.0, 20.0, 30.0, 40.0])
-                .unwrap();
+            Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![10.0, 20.0, 30.0, 40.0]).unwrap();
         let m_b = Array::<bool, Ix2>::from_vec(Ix2::new([1, 4]), vec![false; 4]).unwrap();
         let a = MaskedArray::new(d_a, m_a).unwrap();
         let b = MaskedArray::new(d_b, m_b).unwrap();
@@ -721,10 +720,8 @@ mod tests {
         // Mask one element in `a`. After broadcasting (3,1) -> (3,4),
         // the masked row becomes a fully-masked row in the result.
         let d_a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 1]), vec![10.0, 20.0, 30.0]).unwrap();
-        let m_a = Array::<bool, Ix2>::from_vec(Ix2::new([3, 1]), vec![false, true, false])
-            .unwrap();
-        let d_b =
-            Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let m_a = Array::<bool, Ix2>::from_vec(Ix2::new([3, 1]), vec![false, true, false]).unwrap();
+        let d_b = Array::<f64, Ix2>::from_vec(Ix2::new([1, 4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
         let m_b = Array::<bool, Ix2>::from_vec(Ix2::new([1, 4]), vec![false; 4]).unwrap();
         let a = MaskedArray::new(d_a, m_a).unwrap();
         let b = MaskedArray::new(d_b, m_b).unwrap();

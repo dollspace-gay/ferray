@@ -566,10 +566,7 @@ mod unit_tests {
     fn test_jacobian_2x2() {
         // f(x, y) = (x*y, x + y)
         // J = [[y, x], [1, 1]]
-        let (jac, m) = jacobian(
-            |v| vec![v[0] * v[1], v[0] + v[1]],
-            &[3.0_f64, 4.0],
-        );
+        let (jac, m) = jacobian(|v| vec![v[0] * v[1], v[0] + v[1]], &[3.0_f64, 4.0]);
         assert_eq!(m, 2);
         assert!(approx_eq(jac[0], 4.0)); // df0/dx = y
         assert!(approx_eq(jac[1], 3.0)); // df0/dy = x
@@ -939,8 +936,16 @@ mod finite_difference_tests {
         let fd_dx = (f(1.0 + h, 2.0) - f(1.0 - h, 2.0)) / (2.0 * h);
         let fd_dy = (f(1.0, 2.0 + h) - f(1.0, 2.0 - h)) / (2.0 * h);
 
-        assert!((g[0] - fd_dx).abs() < 1e-6, "df/dx: AD={}, FD={fd_dx}", g[0]);
-        assert!((g[1] - fd_dy).abs() < 1e-6, "df/dy: AD={}, FD={fd_dy}", g[1]);
+        assert!(
+            (g[0] - fd_dx).abs() < 1e-6,
+            "df/dx: AD={}, FD={fd_dx}",
+            g[0]
+        );
+        assert!(
+            (g[1] - fd_dy).abs() < 1e-6,
+            "df/dy: AD={}, FD={fd_dy}",
+            g[1]
+        );
     }
 }
 

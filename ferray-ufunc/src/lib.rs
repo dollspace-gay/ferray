@@ -54,14 +54,14 @@ pub use ops::rounding::{around, ceil, fix, floor, rint, round, trunc};
 pub use ops::arithmetic::{
     absolute, absolute_into, add, add_accumulate, add_broadcast, add_into, add_reduce,
     add_reduce_all, add_reduce_axes, add_reduce_keepdims, cbrt, cross, cumprod, cumsum, diff,
-    divide, divide_broadcast, divide_into, divmod, ediff1d, fabs, floor_divide, fmod, gcd,
-    gcd_int, gradient, heaviside, lcm, lcm_int, mod_, multiply, multiply_broadcast,
-    multiply_into, multiply_outer, nan_add_reduce, nan_add_reduce_all, nan_add_reduce_axes,
-    nan_max_reduce, nan_max_reduce_all, nan_max_reduce_axes, nan_min_reduce, nan_min_reduce_all,
+    divide, divide_broadcast, divide_into, divmod, ediff1d, fabs, floor_divide, fmod, gcd, gcd_int,
+    gradient, heaviside, lcm, lcm_int, mod_, multiply, multiply_broadcast, multiply_into,
+    multiply_outer, nan_add_reduce, nan_add_reduce_all, nan_add_reduce_axes, nan_max_reduce,
+    nan_max_reduce_all, nan_max_reduce_axes, nan_min_reduce, nan_min_reduce_all,
     nan_min_reduce_axes, nan_multiply_reduce, nan_multiply_reduce_all, nan_multiply_reduce_axes,
-    nancumprod, nancumsum, negative, negative_into, positive, power, reciprocal, remainder,
-    sign, sqrt, sqrt_into, square, square_into, subtract, subtract_broadcast, subtract_into,
-    trapezoid, true_divide,
+    nancumprod, nancumsum, negative, negative_into, positive, power, reciprocal, remainder, sign,
+    sqrt, sqrt_into, square, square_into, subtract, subtract_broadcast, subtract_into, trapezoid,
+    true_divide,
 };
 
 // Float intrinsics

@@ -173,8 +173,8 @@ fn binomial_single<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> i64 {
                 // Full acceptance/rejection via log-factorial comparison
                 let kf = k as f64;
                 let yf = y as f64;
-                let rho = (kf / (np * q))
-                    * ((kf * (kf / 3.0 + 0.625) + 1.0 / 6.0) / (np * q) + 0.5);
+                let rho =
+                    (kf / (np * q)) * ((kf * (kf / 3.0 + 0.625) + 1.0 / 6.0) / (np * q) + 0.5);
                 let t = -kf * kf / (2.0 * np * q);
                 let log_a = t - rho;
                 if v.ln() <= log_a {
@@ -182,10 +182,10 @@ fn binomial_single<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> i64 {
                 }
                 // Full log-factorial test
                 let log_v = v.ln();
-                let log_accept = ln_factorial(m as u64) - ln_factorial(y as u64)
-                    - ln_factorial(n - y as u64)
-                    + ln_factorial(n - m as u64)
-                    + (yf - mf) * (pp / q).ln();
+                let log_accept =
+                    ln_factorial(m as u64) - ln_factorial(y as u64) - ln_factorial(n - y as u64)
+                        + ln_factorial(n - m as u64)
+                        + (yf - mf) * (pp / q).ln();
                 if log_v <= log_accept {
                     break y;
                 }
