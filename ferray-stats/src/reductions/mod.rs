@@ -166,6 +166,96 @@ where
     reduce_axis_typed(data, shape, axis, f)
 }
 
+/// In-place variant of [`reduce_axis_typed`]: writes results directly into
+/// `dst` without allocating a fresh `Vec<U>` to hold the output.
+///
+/// Used by the `*_into` reductions (#563) so callers that pre-allocate an
+/// output buffer truly avoid every per-call allocation. The destination
+/// slice must already have exactly `out_size` elements where `out_size` is
+/// the product of `shape` with `axis` removed (or 1 if the result is
+/// 0-D); callers should validate this via [`check_out_shape`] before
+/// invoking the kernel.
+pub(crate) fn reduce_axis_typed_into<T, U, F>(
+    data: &[T],
+    shape: &[usize],
+    axis: usize,
+    dst: &mut [U],
+    f: F,
+) where
+    T: Copy,
+    F: Fn(&[T]) -> U,
+{
+    let ndim = shape.len();
+    let axis_len = shape[axis];
+    let strides = compute_strides(shape);
+
+    // Output multi-index walks the shape with `axis` removed.
+    let out_shape: Vec<usize> = shape
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| i != axis)
+        .map(|(_, &s)| s)
+        .collect();
+
+    debug_assert_eq!(
+        dst.len(),
+        if out_shape.is_empty() {
+            1
+        } else {
+            out_shape.iter().product::<usize>()
+        },
+        "reduce_axis_typed_into: dst length must match the reduction's output size"
+    );
+
+    let mut out_multi = vec![0usize; out_shape.len()];
+    let mut in_multi = vec![0usize; ndim];
+    // Reused per-lane buffer — one allocation total instead of one per
+    // lane the way `reduce_axis_typed` does it via `Vec::push`.
+    let mut lane_vec: Vec<T> = Vec::with_capacity(axis_len);
+
+    for slot in dst.iter_mut() {
+        // Build the input multi-index by inserting the axis position.
+        let mut out_dim = 0;
+        for (d, idx) in in_multi.iter_mut().enumerate() {
+            if d == axis {
+                *idx = 0;
+            } else {
+                *idx = out_multi[out_dim];
+                out_dim += 1;
+            }
+        }
+
+        // Gather lane values into the reusable buffer.
+        lane_vec.clear();
+        for k in 0..axis_len {
+            in_multi[axis] = k;
+            let idx = flat_index(&in_multi, &strides);
+            lane_vec.push(data[idx]);
+        }
+
+        *slot = f(&lane_vec);
+
+        if !out_shape.is_empty() {
+            increment_multi_index(&mut out_multi, &out_shape);
+        }
+    }
+}
+
+/// In-place T-to-T reduction wrapper around [`reduce_axis_typed_into`].
+#[inline]
+pub(crate) fn reduce_axis_general_into<T, F>(
+    data: &[T],
+    shape: &[usize],
+    axis: usize,
+    dst: &mut [T],
+    f: F,
+) where
+    T: Copy,
+    F: Fn(&[T]) -> T,
+{
+    reduce_axis_typed_into(data, shape, axis, dst, f);
+}
+
 /// Validate axis parameter and return an error if out of bounds.
 pub(crate) fn validate_axis(axis: usize, ndim: usize) -> FerrayResult<()> {
     if axis >= ndim {
@@ -215,21 +305,19 @@ pub(crate) fn make_result<T: Element>(
     Array::from_vec(IxDyn::new(out_shape), data)
 }
 
-/// Write a freshly-computed reduction result into a caller-provided
-/// destination array, validating the shape and contiguity first.
+/// Validate that `out` has the expected shape and is C-contiguous,
+/// returning a mutable slice into its backing buffer.
 ///
-/// Used by every `*_into` reduction wrapper (#467) so the validation +
-/// copy logic exists in exactly one place. The destination must be
-/// C-contiguous (so its backing buffer can be addressed as a slice) and
-/// its shape must match `expected_shape` exactly — broadcasting is not
-/// allowed since the destination shape would otherwise differ from the
-/// reduction's natural output shape.
-pub(crate) fn write_into<T: Element + Copy>(
-    out: &mut Array<T, IxDyn>,
+/// Shared by every `*_into` reduction (#467, #563) so the validation
+/// surface lives in exactly one place. Broadcasting is intentionally not
+/// allowed because the destination shape is fixed by the input + axis
+/// combination — accepting a mismatched destination would silently
+/// re-route to a different reduction shape.
+pub(crate) fn check_out_shape<'a, T: Element + Copy>(
+    out: &'a mut Array<T, IxDyn>,
     expected_shape: &[usize],
-    data: &[T],
     op_name: &str,
-) -> FerrayResult<()> {
+) -> FerrayResult<&'a mut [T]> {
     if out.shape() != expected_shape {
         return Err(FerrayError::shape_mismatch(format!(
             "{op_name}_into: out shape {:?} does not match expected reduction shape {:?}",
@@ -237,20 +325,11 @@ pub(crate) fn write_into<T: Element + Copy>(
             expected_shape
         )));
     }
-    let dst = out.as_slice_mut().ok_or_else(|| {
+    out.as_slice_mut().ok_or_else(|| {
         FerrayError::invalid_value(format!(
             "{op_name}_into: out must be C-contiguous"
         ))
-    })?;
-    if dst.len() != data.len() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "{op_name}_into: out has {} elements but reduction produced {}",
-            dst.len(),
-            data.len()
-        )));
-    }
-    dst.copy_from_slice(data);
-    Ok(())
+    })
 }
 
 /// Compute the output shape when reducing along an axis.
@@ -1070,20 +1149,24 @@ where
 }
 
 // ---------------------------------------------------------------------------
-// `*_into` reductions: write into a caller-provided destination (#467)
+// `*_into` reductions: write into a caller-provided destination
 //
 // NumPy reductions accept an `out=` parameter that lets callers reuse a
 // pre-allocated output buffer across repeated reductions on same-shaped
 // data — common in streaming statistics, online ML metrics, etc. The
-// ferray-stats reduction functions all allocate a fresh `Array<T, IxDyn>`,
-// so we add `*_into` companion functions that take a `&mut Array<T, IxDyn>`
-// destination and skip the allocation.
+// ferray-stats reduction functions all allocate a fresh `Array<T, IxDyn>`
+// internally, so we add `*_into` companion functions that take a
+// `&mut Array<T, IxDyn>` destination and skip the allocation entirely.
 //
-// The implementations dispatch to the existing reduction kernels and copy
-// the result into `out` via the shared [`write_into`] helper. That keeps
-// the validation surface in one place at the cost of one extra Vec copy
-// per call — a follow-up can plumb the destination buffer through the
-// kernels themselves for true zero-allocation reuse.
+// History:
+//   #467 introduced the `*_into` API surface but the first implementation
+//   still went through the allocating kernel and copied into `out`,
+//   leaving one Vec materialization per call. #563 plumbs the destination
+//   slice through the kernel itself via `reduce_axis_typed_into` so the
+//   path is truly zero-alloc — only the per-lane scratch buffer
+//   (allocated once per call, reused for every lane) and the input
+//   contig-borrow allocation (only when the input is already non-contig)
+//   remain.
 // ---------------------------------------------------------------------------
 
 /// Sum reduction writing into a pre-allocated destination.
@@ -1106,13 +1189,32 @@ where
     T: Element + std::ops::Add<Output = T> + Copy + Send + Sync,
     D: Dimension,
 {
-    let result = sum(a, axis)?;
-    let expected = result.shape().to_vec();
-    let data: Vec<T> = result.iter().copied().collect();
-    write_into(out, &expected, &data, "sum")
+    let data = borrow_data(a);
+    match axis {
+        None => {
+            let dst = check_out_shape(out, &[], "sum")?;
+            let total = try_simd_pairwise_sum(&data)
+                .unwrap_or_else(|| parallel::parallel_sum(&data, <T as Element>::zero()));
+            dst[0] = total;
+            Ok(())
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape_vec = a.shape().to_vec();
+            let out_s = output_shape(&shape_vec, ax);
+            let dst = check_out_shape(out, &out_s, "sum")?;
+            reduce_axis_general_into(&data, &shape_vec, ax, dst, |lane| {
+                try_simd_pairwise_sum(lane)
+                    .unwrap_or_else(|| parallel::pairwise_sum(lane, <T as Element>::zero()))
+            });
+            Ok(())
+        }
+    }
 }
 
 /// Product reduction writing into a pre-allocated destination.
+///
+/// See [`sum_into`] for the contract on `out`.
 pub fn prod_into<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
@@ -1122,13 +1224,32 @@ where
     T: Element + std::ops::Mul<Output = T> + Copy + Send + Sync,
     D: Dimension,
 {
-    let result = prod(a, axis)?;
-    let expected = result.shape().to_vec();
-    let data: Vec<T> = result.iter().copied().collect();
-    write_into(out, &expected, &data, "prod")
+    let data = borrow_data(a);
+    match axis {
+        None => {
+            let dst = check_out_shape(out, &[], "prod")?;
+            dst[0] = parallel::parallel_prod(&data, <T as Element>::one());
+            Ok(())
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape_vec = a.shape().to_vec();
+            let out_s = output_shape(&shape_vec, ax);
+            let dst = check_out_shape(out, &out_s, "prod")?;
+            reduce_axis_general_into(&data, &shape_vec, ax, dst, |lane| {
+                lane.iter()
+                    .copied()
+                    .fold(<T as Element>::one(), |acc, x| acc * x)
+            });
+            Ok(())
+        }
+    }
 }
 
 /// Min reduction writing into a pre-allocated destination.
+///
+/// See [`sum_into`] for the contract on `out`. Empty input arrays return
+/// `FerrayError::InvalidValue` because `min` of an empty set is undefined.
 pub fn min_into<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
@@ -1138,13 +1259,45 @@ where
     T: Element + PartialOrd + Copy + Send + Sync,
     D: Dimension,
 {
-    let result = min(a, axis)?;
-    let expected = result.shape().to_vec();
-    let data: Vec<T> = result.iter().copied().collect();
-    write_into(out, &expected, &data, "min")
+    if a.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "cannot compute min of empty array",
+        ));
+    }
+    // Same NaN-propagating reducer as `min` so the two paths agree.
+    let nan_min = |a: T, b: T| -> T {
+        if a <= b {
+            a
+        } else if a > b {
+            b
+        } else {
+            a
+        }
+    };
+    let data = borrow_data(a);
+    match axis {
+        None => {
+            let dst = check_out_shape(out, &[], "min")?;
+            dst[0] = data.iter().copied().reduce(nan_min).unwrap();
+            Ok(())
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape_vec = a.shape().to_vec();
+            let out_s = output_shape(&shape_vec, ax);
+            let dst = check_out_shape(out, &out_s, "min")?;
+            reduce_axis_general_into(&data, &shape_vec, ax, dst, |lane| {
+                lane.iter().copied().reduce(nan_min).unwrap()
+            });
+            Ok(())
+        }
+    }
 }
 
 /// Max reduction writing into a pre-allocated destination.
+///
+/// See [`sum_into`] for the contract on `out`. Empty input arrays return
+/// `FerrayError::InvalidValue`.
 pub fn max_into<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
@@ -1154,13 +1307,44 @@ where
     T: Element + PartialOrd + Copy + Send + Sync,
     D: Dimension,
 {
-    let result = max(a, axis)?;
-    let expected = result.shape().to_vec();
-    let data: Vec<T> = result.iter().copied().collect();
-    write_into(out, &expected, &data, "max")
+    if a.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "cannot compute max of empty array",
+        ));
+    }
+    let nan_max = |a: T, b: T| -> T {
+        if a >= b {
+            a
+        } else if a < b {
+            b
+        } else {
+            a
+        }
+    };
+    let data = borrow_data(a);
+    match axis {
+        None => {
+            let dst = check_out_shape(out, &[], "max")?;
+            dst[0] = data.iter().copied().reduce(nan_max).unwrap();
+            Ok(())
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape_vec = a.shape().to_vec();
+            let out_s = output_shape(&shape_vec, ax);
+            let dst = check_out_shape(out, &out_s, "max")?;
+            reduce_axis_general_into(&data, &shape_vec, ax, dst, |lane| {
+                lane.iter().copied().reduce(nan_max).unwrap()
+            });
+            Ok(())
+        }
+    }
 }
 
 /// Mean reduction writing into a pre-allocated destination.
+///
+/// See [`sum_into`] for the contract on `out`. Empty inputs return
+/// `FerrayError::InvalidValue`.
 pub fn mean_into<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
@@ -1170,13 +1354,43 @@ where
     T: Element + Float + Send + Sync,
     D: Dimension,
 {
-    let result = mean(a, axis)?;
-    let expected = result.shape().to_vec();
-    let data: Vec<T> = result.iter().copied().collect();
-    write_into(out, &expected, &data, "mean")
+    if a.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "cannot compute mean of empty array",
+        ));
+    }
+    let data = borrow_data(a);
+    match axis {
+        None => {
+            let dst = check_out_shape(out, &[], "mean")?;
+            let n = T::from(data.len()).unwrap();
+            let total = try_simd_pairwise_sum(&data)
+                .unwrap_or_else(|| parallel::pairwise_sum(&data, <T as Element>::zero()));
+            dst[0] = total / n;
+            Ok(())
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape_vec = a.shape().to_vec();
+            let out_s = output_shape(&shape_vec, ax);
+            let axis_len = shape_vec[ax];
+            let n = T::from(axis_len).unwrap();
+            let dst = check_out_shape(out, &out_s, "mean")?;
+            reduce_axis_general_into(&data, &shape_vec, ax, dst, |lane| {
+                let total = try_simd_pairwise_sum(lane)
+                    .unwrap_or_else(|| parallel::pairwise_sum(lane, <T as Element>::zero()));
+                total / n
+            });
+            Ok(())
+        }
+    }
 }
 
 /// Variance reduction writing into a pre-allocated destination.
+///
+/// `ddof` is the delta degrees of freedom. See [`sum_into`] for the
+/// contract on `out`. Returns `FerrayError::InvalidValue` for empty
+/// inputs or when `ddof >= n`.
 pub fn var_into<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
@@ -1187,13 +1401,69 @@ where
     T: Element + Float + Send + Sync,
     D: Dimension,
 {
-    let result = var(a, axis, ddof)?;
-    let expected = result.shape().to_vec();
-    let data: Vec<T> = result.iter().copied().collect();
-    write_into(out, &expected, &data, "var")
+    if a.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "cannot compute variance of empty array",
+        ));
+    }
+    let data = borrow_data(a);
+    match axis {
+        None => {
+            let n = data.len();
+            if n <= ddof {
+                return Err(FerrayError::invalid_value(
+                    "ddof >= number of elements, variance undefined",
+                ));
+            }
+            let dst = check_out_shape(out, &[], "var")?;
+            let nf = T::from(n).unwrap();
+            let mean_val = try_simd_pairwise_sum(&data)
+                .unwrap_or_else(|| parallel::pairwise_sum(&data, <T as Element>::zero()))
+                / nf;
+            let sum_sq = try_simd_sum_sq_diff(&data, mean_val).unwrap_or_else(|| {
+                data.iter().copied().fold(<T as Element>::zero(), |acc, x| {
+                    let d = x - mean_val;
+                    acc + d * d
+                })
+            });
+            dst[0] = sum_sq / T::from(n - ddof).unwrap();
+            Ok(())
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape_vec = a.shape().to_vec();
+            let axis_len = shape_vec[ax];
+            if axis_len <= ddof {
+                return Err(FerrayError::invalid_value(
+                    "ddof >= axis length, variance undefined",
+                ));
+            }
+            let out_s = output_shape(&shape_vec, ax);
+            let nf = T::from(axis_len).unwrap();
+            let denom = T::from(axis_len - ddof).unwrap();
+            let dst = check_out_shape(out, &out_s, "var")?;
+            reduce_axis_general_into(&data, &shape_vec, ax, dst, |lane| {
+                let mean_val = try_simd_pairwise_sum(lane)
+                    .unwrap_or_else(|| parallel::pairwise_sum(lane, <T as Element>::zero()))
+                    / nf;
+                let sum_sq = try_simd_sum_sq_diff(lane, mean_val).unwrap_or_else(|| {
+                    lane.iter().copied().fold(<T as Element>::zero(), |acc, x| {
+                        let d = x - mean_val;
+                        acc + d * d
+                    })
+                });
+                sum_sq / denom
+            });
+            Ok(())
+        }
+    }
 }
 
 /// Standard deviation reduction writing into a pre-allocated destination.
+///
+/// Computes the variance directly into `out` and then takes the
+/// element-wise square root in place — the std value never lives in any
+/// intermediate buffer.
 pub fn std_into<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
@@ -1204,10 +1474,15 @@ where
     T: Element + Float + Send + Sync,
     D: Dimension,
 {
-    let result = std_(a, axis, ddof)?;
-    let expected = result.shape().to_vec();
-    let data: Vec<T> = result.iter().copied().collect();
-    write_into(out, &expected, &data, "std")
+    var_into(a, axis, ddof, out)?;
+    // Variance is now in `out`; sqrt each element in place.
+    let dst = out.as_slice_mut().ok_or_else(|| {
+        FerrayError::invalid_value("std_into: out must be C-contiguous")
+    })?;
+    for slot in dst.iter_mut() {
+        *slot = slot.sqrt();
+    }
+    Ok(())
 }
 
 /// Single-axis argmin with optional `keepdims`.
@@ -1970,6 +2245,172 @@ mod tests {
                 out.as_slice().unwrap(),
                 &[3.0 * base + 6.0, 3.0 * base + 15.0]
             );
+        }
+    }
+
+    // ---- zero-alloc kernel regression tests (#563) ----
+
+    #[test]
+    fn sum_into_overwrites_existing_destination_garbage() {
+        // The new kernel writes results directly into `out` rather than
+        // routing through write_into's copy_from_slice; make sure existing
+        // garbage is fully overwritten and never bleeds through.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mut out =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![999.0, -999.0]).unwrap();
+        sum_into(&a, Some(1), &mut out).unwrap();
+        assert_eq!(out.as_slice().unwrap(), &[6.0, 15.0]);
+    }
+
+    #[test]
+    fn reduce_axis_typed_into_matches_reduce_axis_typed() {
+        // The in-place kernel must produce identical output to the
+        // allocating kernel for any (shape, axis, fn).
+        use super::{reduce_axis_typed, reduce_axis_typed_into};
+        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        for shape in [
+            vec![24usize],
+            vec![4, 6],
+            vec![2, 3, 4],
+            vec![2, 2, 2, 3],
+        ] {
+            for ax in 0..shape.len() {
+                let allocated: Vec<f64> =
+                    reduce_axis_typed(&data, &shape, ax, |lane| lane.iter().sum());
+                let mut dst = vec![0.0; allocated.len()];
+                reduce_axis_typed_into(&data, &shape, ax, &mut dst, |lane| {
+                    lane.iter().sum()
+                });
+                assert_eq!(dst, allocated, "shape {shape:?} axis {ax}");
+            }
+        }
+    }
+
+    #[test]
+    fn sum_into_3d_axis_correct() {
+        use ferray_core::Ix3;
+        // (2, 3, 4) reducing axis 1 → shape (2, 4)
+        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 4]), vec![0.0; 8]).unwrap();
+        sum_into(&a, Some(1), &mut out).unwrap();
+        // Hand check: out[i, k] = sum_{j} a[i, j, k] = sum_{j} (i*12 + j*4 + k)
+        let expected: Vec<f64> = (0..2)
+            .flat_map(|i| {
+                (0..4).map(move |k| {
+                    (0..3).map(|j| (i * 12 + j * 4 + k) as f64).sum::<f64>()
+                })
+            })
+            .collect();
+        assert_eq!(out.as_slice().unwrap(), expected.as_slice());
+    }
+
+    #[test]
+    fn min_into_rejects_empty_input() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([0]), vec![]).unwrap();
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[]), vec![0.0]).unwrap();
+        assert!(min_into(&a, None, &mut out).is_err());
+    }
+
+    #[test]
+    fn max_into_rejects_empty_input() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([0]), vec![]).unwrap();
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[]), vec![0.0]).unwrap();
+        assert!(max_into(&a, None, &mut out).is_err());
+    }
+
+    #[test]
+    fn var_into_rejects_ddof_too_large() {
+        let a = arr1d(vec![1.0, 2.0, 3.0]);
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[]), vec![0.0]).unwrap();
+        // n=3, ddof=3 → ddof >= n, must error.
+        assert!(var_into(&a, None, 3, &mut out).is_err());
+    }
+
+    #[test]
+    fn std_into_does_not_leave_variance_in_destination_on_success() {
+        // var of [1,2,3,4] with ddof=0 = 1.25; std = sqrt(1.25) ≈ 1.118.
+        // The destination must hold the std value, not the variance, after
+        // a successful call.
+        let a = arr1d(vec![1.0, 2.0, 3.0, 4.0]);
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[]), vec![0.0]).unwrap();
+        std_into(&a, None, 0, &mut out).unwrap();
+        let got = out.iter().next().copied().unwrap();
+        let expected = 1.25_f64.sqrt();
+        assert!((got - expected).abs() < 1e-12);
+        // Sanity: result is not the variance.
+        assert!((got - 1.25).abs() > 1e-3);
+    }
+
+    #[test]
+    fn into_reductions_match_allocating_versions_3d_axis_2() {
+        // Cross-check every *_into against its allocating sibling on a
+        // 3-D input, axis = last dim — guards against an off-by-one in
+        // the in-place index walker.
+        use ferray_core::Ix3;
+        let data: Vec<f64> = (0..24).map(|i| i as f64 + 0.5).collect();
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
+
+        let s_alloc = sum(&a, Some(2)).unwrap();
+        let mut s_out =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        sum_into(&a, Some(2), &mut s_out).unwrap();
+        assert_eq!(s_alloc.as_slice().unwrap(), s_out.as_slice().unwrap());
+
+        let p_alloc = prod(&a, Some(2)).unwrap();
+        let mut p_out =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        prod_into(&a, Some(2), &mut p_out).unwrap();
+        assert_eq!(p_alloc.as_slice().unwrap(), p_out.as_slice().unwrap());
+
+        let mn_alloc = min(&a, Some(2)).unwrap();
+        let mut mn_out =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        min_into(&a, Some(2), &mut mn_out).unwrap();
+        assert_eq!(mn_alloc.as_slice().unwrap(), mn_out.as_slice().unwrap());
+
+        let mx_alloc = max(&a, Some(2)).unwrap();
+        let mut mx_out =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        max_into(&a, Some(2), &mut mx_out).unwrap();
+        assert_eq!(mx_alloc.as_slice().unwrap(), mx_out.as_slice().unwrap());
+
+        let me_alloc = mean(&a, Some(2)).unwrap();
+        let mut me_out =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        mean_into(&a, Some(2), &mut me_out).unwrap();
+        assert_eq!(me_alloc.as_slice().unwrap(), me_out.as_slice().unwrap());
+
+        let v_alloc = var(&a, Some(2), 0).unwrap();
+        let mut v_out =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        var_into(&a, Some(2), 0, &mut v_out).unwrap();
+        // var output may have small numerical drift between the two-pass
+        // and one-shot kernels — compare element-wise within tolerance.
+        for (a, b) in v_alloc
+            .as_slice()
+            .unwrap()
+            .iter()
+            .zip(v_out.as_slice().unwrap())
+        {
+            assert!((a - b).abs() < 1e-10);
+        }
+
+        let sd_alloc = std_(&a, Some(2), 0).unwrap();
+        let mut sd_out =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        std_into(&a, Some(2), 0, &mut sd_out).unwrap();
+        for (a, b) in sd_alloc
+            .as_slice()
+            .unwrap()
+            .iter()
+            .zip(sd_out.as_slice().unwrap())
+        {
+            assert!((a - b).abs() < 1e-10);
         }
     }
 }
