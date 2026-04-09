@@ -1,6 +1,6 @@
 // ferray-ma: MaskedArray<T, D> type (REQ-1, REQ-2, REQ-3)
 
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
@@ -42,7 +42,12 @@ pub struct MaskedArray<T: Element, D: Dimension> {
     /// when explicitly queried via [`MaskedArray::mask`] — a
     /// `from_data`-constructed array with no masked elements pays
     /// zero allocation cost until that first query.
-    mask: OnceLock<Array<bool, D>>,
+    ///
+    /// Wrapped in `Arc` for structural sharing across clones (#512):
+    /// cloning a `MaskedArray` bumps the Arc refcount instead of
+    /// deep-copying the mask, and any mutation that needs a unique
+    /// mask does copy-on-write via [`Self::make_mask_unique`].
+    mask: Arc<OnceLock<Array<bool, D>>>,
     /// `true` when a non-trivial mask has been explicitly provided
     /// (via [`MaskedArray::new`] or [`MaskedArray::set_mask`]),
     /// `false` when the array is in the nomask-sentinel state.
@@ -71,18 +76,18 @@ impl<T: Element, D: Dimension> std::fmt::Debug for MaskedArray<T, D> {
 
 impl<T: Element + Clone, D: Dimension> Clone for MaskedArray<T, D> {
     fn clone(&self) -> Self {
-        // Clone the lazy state: if the original already materialized a
-        // mask, the clone gets a fresh OnceLock already initialized to
-        // a copy. If the original is still in the nomask-sentinel state
-        // (OnceLock empty + `real_mask == false`), the clone stays in
-        // the same state so it can also skip the allocation.
-        let new_lock = OnceLock::new();
-        if let Some(m) = self.mask.get() {
-            let _ = new_lock.set(m.clone());
-        }
+        // Structural sharing (#512): just bump the Arc refcount instead
+        // of cloning the underlying mask array. Copy-on-write kicks in
+        // via `make_mask_unique` whenever either the parent or the
+        // clone tries to mutate its mask.
+        //
+        // The data array is still deep-cloned because ferray-core's
+        // Array doesn't have Arc-based structural sharing; sharing the
+        // mask alone still saves the larger-of-the-two allocations in
+        // the common "unmasked data transformations" path.
         Self {
             data: self.data.clone(),
-            mask: new_lock,
+            mask: Arc::clone(&self.mask),
             real_mask: self.real_mask,
             hard_mask: self.hard_mask,
             fill_value: self.fill_value.clone(),
@@ -110,7 +115,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
         let _ = lock.set(mask);
         Ok(Self {
             data,
-            mask: lock,
+            mask: Arc::new(lock),
             real_mask: true,
             hard_mask: false,
             fill_value: T::zero(),
@@ -131,7 +136,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     pub fn from_data(data: Array<T, D>) -> FerrayResult<Self> {
         Ok(Self {
             data,
-            mask: OnceLock::new(),
+            mask: Arc::new(OnceLock::new()),
             real_mask: false,
             hard_mask: false,
             fill_value: T::zero(),
@@ -252,26 +257,48 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     }
 
     /// Internal helper: force the lazy nomask sentinel to materialize a
-    /// concrete `Array<bool, D>` and return a mutable reference to it.
+    /// concrete `Array<bool, D>` AND ensure the mask's `Arc` is
+    /// uniquely owned (copy-on-write), then return a mutable reference
+    /// to the inner mask.
     ///
-    /// After this call `real_mask` is `true` and `self.mask` is
-    /// guaranteed to contain an initialized `Array<bool, D>`. Used by
-    /// `set_mask_flat` and the crate-internal paths that need an owned
-    /// mask to mutate.
+    /// After this call `real_mask` is `true`, `self.mask` is guaranteed
+    /// to contain an initialized `Array<bool, D>`, and the underlying
+    /// `Arc` has refcount exactly 1 so it's safe to mutate without
+    /// aliasing any other `MaskedArray` that may have cloned from us.
     fn ensure_materialized_mut(&mut self) -> &mut Array<bool, D> {
+        // Step 1: materialize if we're still in the nomask sentinel
+        // state. We install a fresh Arc<OnceLock> containing an
+        // all-false mask.
         if !self.real_mask || self.mask.get().is_none() {
-            // Create a fresh all-false mask and install it.
             let fresh = Array::<bool, D>::from_elem(self.data.dim().clone(), false)
                 .expect("from_elem with matching dim cannot fail");
-            // Replace the OnceLock entirely — get_mut() returns None
-            // if the cell is empty, so we can't just .set() + .get_mut().
-            self.mask = OnceLock::new();
-            let _ = self.mask.set(fresh);
+            let lock = OnceLock::new();
+            let _ = lock.set(fresh);
+            self.mask = Arc::new(lock);
             self.real_mask = true;
         }
-        self.mask
+
+        // Step 2: copy-on-write — if this Arc is shared with any
+        // clones, deep-copy the inner mask into a fresh Arc so our
+        // mutation doesn't affect the clones. Arc::get_mut returns
+        // None when refcount > 1.
+        if Arc::get_mut(&mut self.mask).is_none() {
+            let cloned_mask = self
+                .mask
+                .get()
+                .expect("real_mask implies OnceLock set")
+                .clone();
+            let new_lock = OnceLock::new();
+            let _ = new_lock.set(cloned_mask);
+            self.mask = Arc::new(new_lock);
+        }
+
+        // Step 3: now we're the unique owner — get_mut on the OnceLock
+        // for the inner Array<bool, D>.
+        Arc::get_mut(&mut self.mask)
+            .expect("just made the Arc unique above")
             .get_mut()
-            .expect("OnceLock was just initialized above")
+            .expect("OnceLock was initialized above")
     }
 
     /// Set a mask value at a flat index.
@@ -341,16 +368,33 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
                 .map(|(old, new)| *old || *new)
                 .collect();
             let merged_arr = Array::from_vec(self.data.dim().clone(), merged)?;
-            self.mask = OnceLock::new();
-            let _ = self.mask.set(merged_arr);
+            let lock = OnceLock::new();
+            let _ = lock.set(merged_arr);
+            // Install a fresh Arc; any clones keep their own snapshot.
+            self.mask = Arc::new(lock);
         } else {
             // Either not hardened or currently in the nomask sentinel
-            // state — unconditionally install the new mask.
-            self.mask = OnceLock::new();
-            let _ = self.mask.set(new_mask);
+            // state — unconditionally install the new mask in a fresh
+            // Arc (copy-on-write: clones remain unaffected).
+            let lock = OnceLock::new();
+            let _ = lock.set(new_mask);
+            self.mask = Arc::new(lock);
         }
         self.real_mask = true;
         Ok(())
+    }
+
+    /// Return `true` when this masked array's underlying mask is
+    /// structurally shared with at least one other `MaskedArray`.
+    ///
+    /// After a `clone()` the original and the clone share the same
+    /// mask via `Arc` until one of them mutates it (copy-on-write, #512).
+    /// Hot-path code can use this to reason about memory sharing —
+    /// `shares_mask() == false` means the mask is uniquely owned and
+    /// can be mutated without affecting any other MaskedArray.
+    #[inline]
+    pub fn shares_mask(&self) -> bool {
+        Arc::strong_count(&self.mask) > 1
     }
 }
 
@@ -482,6 +526,103 @@ mod tests {
             cloned.mask().iter().copied().collect::<Vec<_>>(),
             vec![false, true, false]
         );
+    }
+
+    // ---- shared mask with copy-on-write (#512) ----
+
+    #[test]
+    fn clone_shares_mask_via_arc() {
+        let ma = MaskedArray::new(
+            arr_f64(vec![1.0, 2.0, 3.0]),
+            arr_bool(vec![false, true, false]),
+        )
+        .unwrap();
+        let cloned = ma.clone();
+        // Both copies should report structural sharing.
+        assert!(ma.shares_mask());
+        assert!(cloned.shares_mask());
+    }
+
+    #[test]
+    fn unique_masked_array_does_not_share() {
+        let ma = MaskedArray::new(
+            arr_f64(vec![1.0, 2.0, 3.0]),
+            arr_bool(vec![false, true, false]),
+        )
+        .unwrap();
+        assert!(!ma.shares_mask());
+    }
+
+    #[test]
+    fn copy_on_write_isolates_parent_from_child_mutation() {
+        // Clone, then mutate the mask of the clone. The parent's mask
+        // must be unchanged even though they started sharing an Arc.
+        let parent = MaskedArray::new(
+            arr_f64(vec![1.0, 2.0, 3.0]),
+            arr_bool(vec![false, false, false]),
+        )
+        .unwrap();
+        let mut child = parent.clone();
+        assert!(parent.shares_mask());
+        assert!(child.shares_mask());
+
+        // Mutate the child — triggers copy-on-write.
+        child.set_mask_flat(1, true).unwrap();
+
+        // Parent's mask is still the original all-false.
+        assert_eq!(
+            parent.mask().iter().copied().collect::<Vec<_>>(),
+            vec![false, false, false]
+        );
+        // Child's mask reflects the mutation.
+        assert_eq!(
+            child.mask().iter().copied().collect::<Vec<_>>(),
+            vec![false, true, false]
+        );
+
+        // Parent no longer shares (the child's CoW broke the Arc's
+        // dual ownership by installing its own).
+        assert!(!parent.shares_mask());
+        assert!(!child.shares_mask());
+    }
+
+    #[test]
+    fn copy_on_write_via_set_mask() {
+        // set_mask replaces the Arc entirely, which also implicitly
+        // isolates the two.
+        let parent = MaskedArray::new(
+            arr_f64(vec![1.0, 2.0, 3.0]),
+            arr_bool(vec![false, false, false]),
+        )
+        .unwrap();
+        let mut child = parent.clone();
+        assert!(parent.shares_mask());
+
+        child.set_mask(arr_bool(vec![true, true, true])).unwrap();
+        // Parent still has the original mask.
+        assert_eq!(
+            parent.mask().iter().copied().collect::<Vec<_>>(),
+            vec![false, false, false]
+        );
+        // Child has the new mask.
+        assert_eq!(
+            child.mask().iter().copied().collect::<Vec<_>>(),
+            vec![true, true, true]
+        );
+        assert!(!parent.shares_mask());
+    }
+
+    #[test]
+    fn nomask_sentinel_clones_share_empty_arc() {
+        // A from_data-constructed array in the nomask-sentinel state
+        // still uses an Arc; clones share it.
+        let parent = MaskedArray::from_data(arr_f64(vec![1.0, 2.0, 3.0])).unwrap();
+        let cloned = parent.clone();
+        assert!(parent.shares_mask());
+        assert!(cloned.shares_mask());
+        // Neither has a real mask yet.
+        assert!(!parent.has_real_mask());
+        assert!(!cloned.has_real_mask());
     }
 
     #[test]
