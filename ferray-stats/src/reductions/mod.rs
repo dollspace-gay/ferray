@@ -1509,27 +1509,54 @@ where
 // ufuncs against the same input always have a matching shape).
 // ---------------------------------------------------------------------------
 
-/// Validate that an optional `where` mask has the same shape as the
-/// input. Returns `Ok(())` if `mask` is `None` or shapes match.
-fn validate_mask_shape<T, D>(
+/// Prepare a `where` mask for use by a `*_with` reduction kernel.
+///
+/// Accepts an `Option<&Array<bool, IxDyn>>` so the mask can have any
+/// rank independently of the input — callers with typed masks should
+/// call `.to_dyn()` before passing in.
+///
+/// Returns:
+/// - `Ok(None)` if the caller passed no mask.
+/// - `Ok(Some(vec))` where `vec` is a row-major materialization of the
+///   mask aligned with `a`'s flat logical order. For same-shape masks
+///   this is a direct copy; for broadcast-compatible masks the mask is
+///   broadcast into `a.shape()` first via
+///   [`ferray_core::dimension::broadcast::broadcast_to`] (#565) and
+///   then materialized.
+/// - `Err(FerrayError::ShapeMismatch)` if the mask is not
+///   broadcast-compatible with `a.shape()`.
+fn prepare_where_mask<T, D>(
     a: &Array<T, D>,
-    mask: Option<&Array<bool, D>>,
+    mask: Option<&Array<bool, IxDyn>>,
     op_name: &str,
-) -> FerrayResult<()>
+) -> FerrayResult<Option<Vec<bool>>>
 where
     T: Element,
     D: Dimension,
 {
-    if let Some(m) = mask {
-        if m.shape() != a.shape() {
-            return Err(FerrayError::shape_mismatch(format!(
-                "{op_name}: where mask shape {:?} does not match array shape {:?}",
-                m.shape(),
-                a.shape()
-            )));
-        }
+    use ferray_core::dimension::broadcast::broadcast_to;
+
+    let Some(m) = mask else {
+        return Ok(None);
+    };
+
+    // Fast path: the mask is already the same shape as the input.
+    if m.shape() == a.shape() {
+        return Ok(Some(m.iter().copied().collect()));
     }
-    Ok(())
+
+    // Broadcast path: let the core machinery check compatibility and
+    // produce a stride-tricked view at the target shape. We then
+    // materialize it into a flat Vec<bool> aligned with `a`'s logical
+    // row-major order.
+    let view = broadcast_to(m, a.shape()).map_err(|_| {
+        FerrayError::shape_mismatch(format!(
+            "{op_name}: where mask shape {:?} is not broadcast-compatible with array shape {:?}",
+            m.shape(),
+            a.shape()
+        ))
+    })?;
+    Ok(Some(view.iter().copied().collect()))
 }
 
 /// Walk a single axis-Some output position, gathering masked-true lane
@@ -1576,27 +1603,28 @@ fn gather_lane_with_mask<T: Copy>(
 /// Equivalent to `np.sum(a, axis=axis, initial=initial, where=where_mask)`.
 ///
 /// `initial` defaults to `T::zero()` when `None`. `where_mask`, when
-/// provided, must have exactly the same shape as `a` — broadcasting is
-/// not supported in this first cut. Positions where the mask is `false`
-/// are skipped.
+/// provided, must be broadcast-compatible with `a.shape()` (#565).
+/// Callers with typed masks (e.g. `Array<bool, Ix1>`) should call
+/// `.to_dyn()` before passing. Positions where the broadcast mask is
+/// `false` are skipped.
 ///
 /// # Errors
 /// - `FerrayError::AxisOutOfBounds` if `axis` is out of range.
-/// - `FerrayError::ShapeMismatch` if `where_mask.shape() != a.shape()`.
+/// - `FerrayError::ShapeMismatch` if `where_mask` is not
+///   broadcast-compatible with `a.shape()`.
 pub fn sum_with<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
     initial: Option<T>,
-    where_mask: Option<&Array<bool, D>>,
+    where_mask: Option<&Array<bool, IxDyn>>,
 ) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
 {
-    validate_mask_shape(a, where_mask, "sum")?;
     let init = initial.unwrap_or_else(<T as Element>::zero);
     let data = borrow_data(a);
-    let mask_vec: Option<Vec<bool>> = where_mask.map(|m| m.iter().copied().collect());
+    let mask_vec = prepare_where_mask(a, where_mask, "sum")?;
     let mask_slice: Option<&[bool]> = mask_vec.as_deref();
 
     match axis {
@@ -1650,21 +1678,21 @@ where
 /// Product reduction with `initial` and `where` parameters.
 ///
 /// Equivalent to `np.prod(a, axis=axis, initial=initial, where=where_mask)`.
-/// `initial` defaults to `T::one()` when `None`.
+/// `initial` defaults to `T::one()` when `None`. `where_mask` is
+/// broadcast-compatible with `a.shape()` (#565).
 pub fn prod_with<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
     initial: Option<T>,
-    where_mask: Option<&Array<bool, D>>,
+    where_mask: Option<&Array<bool, IxDyn>>,
 ) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
     D: Dimension,
 {
-    validate_mask_shape(a, where_mask, "prod")?;
     let init = initial.unwrap_or_else(<T as Element>::one);
     let data = borrow_data(a);
-    let mask_vec: Option<Vec<bool>> = where_mask.map(|m| m.iter().copied().collect());
+    let mask_vec = prepare_where_mask(a, where_mask, "prod")?;
     let mask_slice: Option<&[bool]> = mask_vec.as_deref();
 
     match axis {
@@ -1720,18 +1748,18 @@ where
 /// Equivalent to `np.min(a, axis=axis, initial=initial, where=where_mask)`.
 /// Unlike plain `min`, an empty input (or a fully-masked-out lane) is
 /// allowed when `initial` is supplied — the result is `initial`. Without
-/// `initial`, an empty lane is an error.
+/// `initial`, an empty lane is an error. `where_mask` is
+/// broadcast-compatible with `a.shape()` (#565).
 pub fn min_with<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
     initial: Option<T>,
-    where_mask: Option<&Array<bool, D>>,
+    where_mask: Option<&Array<bool, IxDyn>>,
 ) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
 {
-    validate_mask_shape(a, where_mask, "min")?;
     let nan_min = |a: T, b: T| -> T {
         if a <= b {
             a
@@ -1742,7 +1770,7 @@ where
         }
     };
     let data = borrow_data(a);
-    let mask_vec: Option<Vec<bool>> = where_mask.map(|m| m.iter().copied().collect());
+    let mask_vec = prepare_where_mask(a, where_mask, "min")?;
     let mask_slice: Option<&[bool]> = mask_vec.as_deref();
 
     let lane_min = |lane: &[T], initial: Option<T>| -> FerrayResult<T> {
@@ -1812,18 +1840,18 @@ where
 
 /// Max reduction with `initial` and `where` parameters.
 ///
-/// Symmetric to [`min_with`].
+/// Symmetric to [`min_with`]. `where_mask` is broadcast-compatible with
+/// `a.shape()` (#565).
 pub fn max_with<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
     initial: Option<T>,
-    where_mask: Option<&Array<bool, D>>,
+    where_mask: Option<&Array<bool, IxDyn>>,
 ) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
 {
-    validate_mask_shape(a, where_mask, "max")?;
     let nan_max = |a: T, b: T| -> T {
         if a >= b {
             a
@@ -1834,7 +1862,7 @@ where
         }
     };
     let data = borrow_data(a);
-    let mask_vec: Option<Vec<bool>> = where_mask.map(|m| m.iter().copied().collect());
+    let mask_vec = prepare_where_mask(a, where_mask, "max")?;
     let mask_slice: Option<&[bool]> = mask_vec.as_deref();
 
     let lane_max = |lane: &[T], initial: Option<T>| -> FerrayResult<T> {
@@ -1905,23 +1933,24 @@ where
 /// Mean reduction with a `where` mask.
 ///
 /// Equivalent to `np.mean(a, axis=axis, where=where_mask)`. The divisor
-/// is the count of `true` positions in the mask, NOT the lane length —
-/// fully-masked-out lanes return `T::nan()` (matching NumPy's
-/// "RuntimeWarning: Mean of empty slice" behavior, but without the
-/// warning machinery). `initial` is intentionally not modeled because
-/// the divisor for an "initial-bumped" mean is ambiguous in NumPy too.
+/// is the count of `true` positions in the (broadcast) mask, NOT the
+/// lane length — fully-masked-out lanes return `T::nan()` (matching
+/// NumPy's "RuntimeWarning: Mean of empty slice" behavior, but without
+/// the warning machinery). `initial` is intentionally not modeled
+/// because the divisor for an "initial-bumped" mean is ambiguous in
+/// NumPy too. `where_mask` is broadcast-compatible with `a.shape()`
+/// (#565).
 pub fn mean_where<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
-    where_mask: Option<&Array<bool, D>>,
+    where_mask: Option<&Array<bool, IxDyn>>,
 ) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + Float,
     D: Dimension,
 {
-    validate_mask_shape(a, where_mask, "mean")?;
     let data = borrow_data(a);
-    let mask_vec: Option<Vec<bool>> = where_mask.map(|m| m.iter().copied().collect());
+    let mask_vec = prepare_where_mask(a, where_mask, "mean")?;
     let mask_slice: Option<&[bool]> = mask_vec.as_deref();
 
     match axis {
@@ -2877,7 +2906,7 @@ mod tests {
             vec![true, false, true, false, true],
         )
         .unwrap();
-        let r = sum_with(&a, None, None, Some(&mask)).unwrap();
+        let r = sum_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
         assert_eq!(r.iter().next().copied().unwrap(), 9.0);
     }
 
@@ -2889,7 +2918,7 @@ mod tests {
             vec![true, false, true, false],
         )
         .unwrap();
-        let r = sum_with(&a, None, Some(50.0), Some(&mask)).unwrap();
+        let r = sum_with(&a, None, Some(50.0), Some(&mask.to_dyn())).unwrap();
         // 50 + 1 + 3 = 54
         assert_eq!(r.iter().next().copied().unwrap(), 54.0);
     }
@@ -2908,7 +2937,7 @@ mod tests {
             vec![false, true, true, false, true, true],
         )
         .unwrap();
-        let r = sum_with(&a, Some(1), None, Some(&mask)).unwrap();
+        let r = sum_with(&a, Some(1), None, Some(&mask.to_dyn())).unwrap();
         assert_eq!(r.shape(), &[2]);
         assert_eq!(r.as_slice().unwrap(), &[5.0, 11.0]);
     }
@@ -2942,7 +2971,7 @@ mod tests {
     fn sum_with_rejects_mismatched_mask_shape() {
         let a = arr1d(vec![1.0, 2.0, 3.0]);
         let mask = Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![true; 4]).unwrap();
-        assert!(sum_with(&a, None, None, Some(&mask)).is_err());
+        assert!(sum_with(&a, None, None, Some(&mask.to_dyn())).is_err());
     }
 
     #[test]
@@ -2961,7 +2990,7 @@ mod tests {
             vec![true, false, true, false, true],
         )
         .unwrap();
-        let r = prod_with(&a, None, None, Some(&mask)).unwrap();
+        let r = prod_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
         // 2 * 3 * 4 = 24 (zero positions skipped)
         assert_eq!(r.iter().next().copied().unwrap(), 24.0);
     }
@@ -2991,7 +3020,7 @@ mod tests {
             vec![true, false, true, false, true],
         )
         .unwrap();
-        let r = min_with(&a, None, None, Some(&mask)).unwrap();
+        let r = min_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
         // Filtered: [5, 4, 3] → min = 3
         assert_eq!(r.iter().next().copied().unwrap(), 3.0);
     }
@@ -3012,7 +3041,7 @@ mod tests {
         .unwrap();
         let mask =
             Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
-        assert!(min_with(&a, Some(1), None, Some(&mask)).is_err());
+        assert!(min_with(&a, Some(1), None, Some(&mask.to_dyn())).is_err());
     }
 
     #[test]
@@ -3024,7 +3053,7 @@ mod tests {
         .unwrap();
         let mask =
             Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
-        let r = min_with(&a, Some(1), Some(99.0), Some(&mask)).unwrap();
+        let r = min_with(&a, Some(1), Some(99.0), Some(&mask.to_dyn())).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[99.0, 99.0]);
     }
 
@@ -3044,7 +3073,7 @@ mod tests {
             vec![true, false, true, false, true],
         )
         .unwrap();
-        let r = max_with(&a, None, None, Some(&mask)).unwrap();
+        let r = max_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
         // Filtered: [5, 4, 3] → max = 5
         assert_eq!(r.iter().next().copied().unwrap(), 5.0);
     }
@@ -3058,7 +3087,7 @@ mod tests {
             vec![true, false, true, false, true],
         )
         .unwrap();
-        let r = mean_where(&a, None, Some(&mask)).unwrap();
+        let r = mean_where(&a, None, Some(&mask.to_dyn())).unwrap();
         assert!((r.iter().next().copied().unwrap() - 3.0).abs() < 1e-12);
     }
 
@@ -3086,7 +3115,7 @@ mod tests {
             vec![true, true, true, false, false, false],
         )
         .unwrap();
-        let r = mean_where(&a, Some(1), Some(&mask)).unwrap();
+        let r = mean_where(&a, Some(1), Some(&mask.to_dyn())).unwrap();
         let s = r.as_slice().unwrap();
         assert!((s[0] - 2.0).abs() < 1e-12);
         assert!(s[1].is_nan());
@@ -3107,11 +3136,187 @@ mod tests {
             vec![true, true, false, false, true, true],
         )
         .unwrap();
-        let r = mean_where(&a, Some(1), Some(&mask)).unwrap();
+        let r = mean_where(&a, Some(1), Some(&mask.to_dyn())).unwrap();
         assert_eq!(r.shape(), &[2]);
         let s = r.as_slice().unwrap();
         assert!((s[0] - 1.5).abs() < 1e-12);
         assert!((s[1] - 5.5).abs() < 1e-12);
+    }
+
+    // ---- broadcast-compatible where masks (#565) ----
+
+    #[test]
+    fn sum_with_mask_broadcasts_ix1_into_ix2() {
+        // (2, 3) input; mask of shape (3,) — broadcasts to (2, 3) with
+        // every row identical. sum ignores the first column, so both
+        // row sums skip that column's contribution.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mask_1d = Array::<bool, Ix1>::from_vec(
+            Ix1::new([3]),
+            vec![false, true, true],
+        )
+        .unwrap();
+        let r = sum_with(&a, None, None, Some(&mask_1d.to_dyn())).unwrap();
+        // Sum with first column masked out: 2 + 3 + 5 + 6 = 16.0
+        assert!((r.iter().next().copied().unwrap() - 16.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn sum_with_mask_broadcasts_column_vector_across_rows() {
+        // (3, 4) input; mask of shape (3, 1) — broadcasts across the
+        // four columns, so each row is either fully kept or fully
+        // masked out.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 4]),
+            vec![
+                1.0, 2.0, 3.0, 4.0, // row 0
+                5.0, 6.0, 7.0, 8.0, // row 1
+                9.0, 10.0, 11.0, 12.0, // row 2
+            ],
+        )
+        .unwrap();
+        let mask_col = Array::<bool, Ix2>::from_vec(
+            Ix2::new([3, 1]),
+            vec![true, false, true],
+        )
+        .unwrap();
+        let r = sum_with(&a, None, None, Some(&mask_col.to_dyn())).unwrap();
+        // Rows 0 and 2 kept: 1+2+3+4 + 9+10+11+12 = 10 + 42 = 52
+        assert!((r.iter().next().copied().unwrap() - 52.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn sum_with_mask_broadcasts_row_vector_against_axis_reduction() {
+        // (2, 3) reducing axis=1; mask shape (3,) broadcasts against
+        // each row.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mask_1d = Array::<bool, Ix1>::from_vec(
+            Ix1::new([3]),
+            vec![true, false, true],
+        )
+        .unwrap();
+        let r = sum_with(&a, Some(1), None, Some(&mask_1d.to_dyn())).unwrap();
+        assert_eq!(r.shape(), &[2]);
+        // Row 0: 1 + 3 = 4; row 1: 4 + 6 = 10
+        assert_eq!(r.as_slice().unwrap(), &[4.0, 10.0]);
+    }
+
+    #[test]
+    fn prod_with_mask_broadcasts_ix1() {
+        // (2, 3); mask shape (3,) keeps columns 0 and 2.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+        )
+        .unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(
+            Ix1::new([3]),
+            vec![true, false, true],
+        )
+        .unwrap();
+        let r = prod_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
+        // Product of kept values: 2 * 4 * 5 * 7 = 280
+        assert!((r.iter().next().copied().unwrap() - 280.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn min_with_mask_broadcasts_ix1() {
+        // Column mask; find min across the kept columns.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![5.0, 1.0, 4.0, 2.0, 10.0, 3.0],
+        )
+        .unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(
+            Ix1::new([3]),
+            vec![true, false, true],
+        )
+        .unwrap();
+        let r = min_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
+        // Kept values: 5, 4, 2, 3 → min = 2
+        assert!((r.iter().next().copied().unwrap() - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn max_with_mask_broadcasts_ix1() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![5.0, 100.0, 4.0, 2.0, 200.0, 3.0],
+        )
+        .unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(
+            Ix1::new([3]),
+            vec![true, false, true],
+        )
+        .unwrap();
+        let r = max_with(&a, None, None, Some(&mask.to_dyn())).unwrap();
+        // Kept values: 5, 4, 2, 3 → max = 5
+        assert!((r.iter().next().copied().unwrap() - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn mean_where_mask_broadcasts_ix1() {
+        // (2, 3); mask (3,) keeps columns 0 and 2. Mean of 4 kept
+        // values: (1 + 3 + 4 + 6) / 4 = 3.5
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(
+            Ix1::new([3]),
+            vec![true, false, true],
+        )
+        .unwrap();
+        let r = mean_where(&a, None, Some(&mask.to_dyn())).unwrap();
+        assert!((r.iter().next().copied().unwrap() - 3.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn with_mask_rejects_incompatible_broadcast_shape() {
+        // Mask rank compatible but length wrong: shape (2,) against a
+        // (2, 3) input cannot broadcast (the 2 aligns with the last
+        // dim which is 3, not the first which is 2).
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let bad_mask = Array::<bool, Ix1>::from_vec(
+            Ix1::new([2]),
+            vec![true, false],
+        )
+        .unwrap();
+        assert!(sum_with(&a, None, None, Some(&bad_mask.to_dyn())).is_err());
+    }
+
+    #[test]
+    fn sum_with_mask_broadcast_scalar_like_length_1() {
+        // A shape-(1,) mask is the scalar case — broadcasts to every
+        // position of the input, which for `true` is an identity and
+        // for `false` yields 0 (everything masked out).
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let true_mask = Array::<bool, Ix1>::from_vec(Ix1::new([1]), vec![true]).unwrap();
+        let r = sum_with(&a, None, None, Some(&true_mask.to_dyn())).unwrap();
+        // All positions kept: 1+2+3+4+5+6 = 21
+        assert!((r.iter().next().copied().unwrap() - 21.0).abs() < 1e-12);
+
+        let false_mask = Array::<bool, Ix1>::from_vec(Ix1::new([1]), vec![false]).unwrap();
+        let r2 = sum_with(&a, None, Some(100.0), Some(&false_mask.to_dyn())).unwrap();
+        // Nothing kept, initial = 100 → result = 100
+        assert!((r2.iter().next().copied().unwrap() - 100.0).abs() < 1e-12);
     }
 
     #[test]
