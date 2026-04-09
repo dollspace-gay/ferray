@@ -388,3 +388,300 @@ mod tests {
         assert_eq!(m, vec![false, true, false]);
     }
 }
+
+// ---------------------------------------------------------------------------
+// MaskAware trait: common interface for Array and MaskedArray (#505)
+//
+// NumPy's MaskedArray subclasses ndarray so any ndarray-accepting function
+// automatically accepts MaskedArray (with __array_ufunc__ handling mask
+// propagation). Rust doesn't have inheritance, so the ferray equivalent is a
+// trait both types implement: mask-aware functions take
+// `&impl MaskAware<T, D>` and dispatch via the trait methods.
+//
+// Array<T, D> is treated as "always fully unmasked" — `mask_opt()` returns
+// None and `fill_value()` falls back to `T::zero()`. MaskedArray<T, D>
+// delegates to its actual accessors. This lets callers write one function
+// that works on both and still propagates masks correctly.
+// ---------------------------------------------------------------------------
+
+/// Shared view contract for functions that want to accept either an
+/// `Array` or a `MaskedArray` (#505).
+///
+/// Implementations:
+/// - `Array<T, D>`: `data()` returns `self`, `mask_opt()` returns `None`
+///   (no mask), `fill_value()` returns `T::zero()`. The array is treated
+///   as fully unmasked.
+/// - `MaskedArray<T, D>`: delegates to the existing accessors.
+///
+/// Downstream code that wants to write "one function, works on both"
+/// should take `&impl MaskAware<T, D>` and consult `mask_opt()` to
+/// decide whether to do mask propagation.
+pub trait MaskAware<T: Element, D: Dimension> {
+    /// Return a reference to the underlying data array.
+    fn data(&self) -> &Array<T, D>;
+
+    /// Return the mask array if one is explicitly present, or `None`
+    /// when the input carries no mask (treated as fully unmasked).
+    ///
+    /// For `Array<T, D>` this always returns `None`. For
+    /// `MaskedArray<T, D>` it returns `Some` when a real mask has
+    /// been explicitly set and `None` when the array is in the
+    /// nomask-sentinel state (#506).
+    fn mask_opt(&self) -> Option<&Array<bool, D>>;
+
+    /// Return the fill value to use for masked positions in
+    /// derived results.
+    fn fill_value(&self) -> T
+    where
+        T: Copy;
+
+    /// Return the shape of the underlying data.
+    fn shape(&self) -> &[usize] {
+        self.data().shape()
+    }
+}
+
+impl<T: Element, D: Dimension> MaskAware<T, D> for Array<T, D> {
+    #[inline]
+    fn data(&self) -> &Array<T, D> {
+        self
+    }
+
+    /// A plain `Array<T, D>` has no mask — always returns `None`.
+    #[inline]
+    fn mask_opt(&self) -> Option<&Array<bool, D>> {
+        None
+    }
+
+    /// A plain `Array<T, D>` has no fill value; returns `T::zero()`.
+    #[inline]
+    fn fill_value(&self) -> T
+    where
+        T: Copy,
+    {
+        T::zero()
+    }
+}
+
+impl<T: Element, D: Dimension> MaskAware<T, D> for MaskedArray<T, D> {
+    #[inline]
+    fn data(&self) -> &Array<T, D> {
+        MaskedArray::data(self)
+    }
+
+    #[inline]
+    fn mask_opt(&self) -> Option<&Array<bool, D>> {
+        MaskedArray::mask_opt(self)
+    }
+
+    #[inline]
+    fn fill_value(&self) -> T
+    where
+        T: Copy,
+    {
+        MaskedArray::fill_value(self)
+    }
+}
+
+/// Apply a unary function to any `MaskAware` input, propagating the
+/// mask if one is present.
+///
+/// When the input is a plain `Array<T, D>` (or a nomask-sentinel
+/// `MaskedArray`), the function is applied directly and the result
+/// is returned as a nomask `MaskedArray`. When the input has a real
+/// mask, this delegates to the existing [`MaskedArray::apply_unary`]
+/// path so masked positions are overwritten with the fill value.
+///
+/// Use this to write "one function, works on both" adapters:
+///
+/// ```ignore
+/// fn my_op<X: MaskAware<f64, Ix1>>(x: &X) -> FerrayResult<MaskedArray<f64, Ix1>> {
+///     ma_apply_unary(x, |a| ferray_ufunc::sin(a))
+/// }
+/// ```
+///
+/// # Errors
+/// Forwards any error from `f`, plus shape-mismatch errors if `f`
+/// returns a differently-shaped array.
+pub fn ma_apply_unary<T, D, X, F>(input: &X, f: F) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+    X: MaskAware<T, D>,
+    F: FnOnce(&Array<T, D>) -> FerrayResult<Array<T, D>>,
+{
+    let data_out = f(input.data())?;
+    if data_out.shape() != input.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "ma_apply_unary: function changed shape from {:?} to {:?}",
+            input.shape(),
+            data_out.shape()
+        )));
+    }
+
+    match input.mask_opt() {
+        None => {
+            // No mask — wrap the result in a nomask-sentinel
+            // MaskedArray so the caller gets a uniform return type.
+            let mut out = MaskedArray::from_data(data_out)?;
+            out.set_fill_value(input.fill_value());
+            Ok(out)
+        }
+        Some(mask) => {
+            // Overwrite masked positions with fill_value so downstream
+            // operations can't see stale data at masked slots.
+            let fill = input.fill_value();
+            let masked_data: Vec<T> = data_out
+                .iter()
+                .zip(mask.iter())
+                .map(|(v, m)| if *m { fill } else { *v })
+                .collect();
+            let final_data =
+                Array::from_vec(input.data().dim().clone(), masked_data)?;
+            let mut result = MaskedArray::new(final_data, mask.clone())?;
+            result.set_fill_value(fill);
+            Ok(result)
+        }
+    }
+}
+
+#[cfg(test)]
+mod mask_aware_tests {
+    use super::*;
+    use ferray_core::dimension::Ix1;
+
+    fn arr_f64(data: Vec<f64>) -> Array<f64, Ix1> {
+        let n = data.len();
+        Array::<f64, Ix1>::from_vec(Ix1::new([n]), data).unwrap()
+    }
+
+    fn ma_f64(data: Vec<f64>, mask: Vec<bool>) -> MaskedArray<f64, Ix1> {
+        let d = arr_f64(data);
+        let n = d.size();
+        let m = Array::<bool, Ix1>::from_vec(Ix1::new([n]), mask).unwrap();
+        MaskedArray::new(d, m).unwrap()
+    }
+
+    // ---- MaskAware trait impls (#505) ----
+
+    #[test]
+    fn array_implements_mask_aware_with_none_mask() {
+        let a = arr_f64(vec![1.0, 2.0, 3.0]);
+        // Plain Array carries no mask.
+        assert!(<Array<f64, Ix1> as MaskAware<f64, Ix1>>::mask_opt(&a).is_none());
+        assert_eq!(
+            <Array<f64, Ix1> as MaskAware<f64, Ix1>>::fill_value(&a),
+            0.0
+        );
+        assert_eq!(
+            <Array<f64, Ix1> as MaskAware<f64, Ix1>>::shape(&a),
+            &[3]
+        );
+    }
+
+    #[test]
+    fn masked_array_implements_mask_aware_with_real_mask() {
+        let ma = ma_f64(vec![1.0, 2.0, 3.0], vec![false, true, false]);
+        let via_trait = <MaskedArray<f64, Ix1> as MaskAware<f64, Ix1>>::mask_opt(&ma);
+        assert!(via_trait.is_some());
+        assert_eq!(
+            via_trait.unwrap().iter().copied().collect::<Vec<_>>(),
+            vec![false, true, false]
+        );
+    }
+
+    #[test]
+    fn nomask_sentinel_masked_array_reports_none_via_trait() {
+        // A from_data-constructed MaskedArray (nomask sentinel) should
+        // report None through the MaskAware trait, matching the
+        // behavior of a plain Array.
+        let ma = MaskedArray::from_data(arr_f64(vec![1.0, 2.0, 3.0])).unwrap();
+        let via_trait = <MaskedArray<f64, Ix1> as MaskAware<f64, Ix1>>::mask_opt(&ma);
+        assert!(via_trait.is_none());
+    }
+
+    #[test]
+    fn ma_apply_unary_on_plain_array_returns_nomask_result() {
+        let a = arr_f64(vec![1.0, 2.0, 3.0]);
+        let result = ma_apply_unary(&a, |x| {
+            let data: Vec<f64> = x.iter().map(|v| v * 2.0).collect();
+            Ok(Array::from_vec(x.dim().clone(), data)?)
+        })
+        .unwrap();
+        assert_eq!(
+            result.data().iter().copied().collect::<Vec<_>>(),
+            vec![2.0, 4.0, 6.0]
+        );
+        // Plain-Array input → nomask-sentinel result.
+        assert!(!result.has_real_mask());
+    }
+
+    #[test]
+    fn ma_apply_unary_on_masked_array_propagates_mask() {
+        let ma = ma_f64(vec![1.0, 2.0, 3.0], vec![false, true, false]);
+        let result = ma_apply_unary(&ma, |x| {
+            let data: Vec<f64> = x.iter().map(|v| v * 2.0).collect();
+            Ok(Array::from_vec(x.dim().clone(), data)?)
+        })
+        .unwrap();
+        // Mask survives the operation.
+        assert!(result.has_real_mask());
+        assert_eq!(
+            result.mask().iter().copied().collect::<Vec<_>>(),
+            vec![false, true, false]
+        );
+        // Masked position was overwritten with fill_value (0.0 default).
+        let d: Vec<f64> = result.data().iter().copied().collect();
+        assert_eq!(d[0], 2.0);
+        assert_eq!(d[1], 0.0); // masked → fill value
+        assert_eq!(d[2], 6.0);
+    }
+
+    #[test]
+    fn ma_apply_unary_generic_over_both_types() {
+        // Write a helper that works on both Array and MaskedArray.
+        fn double_it<T: Element, D: Dimension, X: MaskAware<T, D>>(
+            x: &X,
+        ) -> FerrayResult<MaskedArray<T, D>>
+        where
+            T: Copy + std::ops::Mul<Output = T> + num_traits::FromPrimitive,
+        {
+            let two = T::from_f64(2.0).unwrap();
+            ma_apply_unary(x, move |a| {
+                let data: Vec<T> = a.iter().map(|v| *v * two).collect();
+                Ok(Array::from_vec(a.dim().clone(), data)?)
+            })
+        }
+
+        let plain = arr_f64(vec![1.0, 2.0, 3.0]);
+        let masked = ma_f64(vec![1.0, 2.0, 3.0], vec![false, true, false]);
+
+        // Both inputs go through the same helper.
+        let r_plain = double_it(&plain).unwrap();
+        let r_masked = double_it(&masked).unwrap();
+
+        // Plain result: no mask, all values doubled.
+        assert!(!r_plain.has_real_mask());
+        assert_eq!(
+            r_plain.data().iter().copied().collect::<Vec<_>>(),
+            vec![2.0, 4.0, 6.0]
+        );
+
+        // Masked result: mask preserved, masked position holds fill.
+        assert!(r_masked.has_real_mask());
+        assert_eq!(
+            r_masked.mask().iter().copied().collect::<Vec<_>>(),
+            vec![false, true, false]
+        );
+    }
+
+    #[test]
+    fn ma_apply_unary_rejects_shape_changing_function() {
+        let a = arr_f64(vec![1.0, 2.0, 3.0]);
+        let result = ma_apply_unary(&a, |_| {
+            // Return a wrong-shape result deliberately.
+            Ok(arr_f64(vec![1.0, 2.0]))
+        });
+        assert!(result.is_err());
+    }
+}

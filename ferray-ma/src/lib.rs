@@ -52,6 +52,10 @@ pub use arithmetic::{
 // Re-export mask manipulation functions
 pub use mask_ops::{count_masked, getdata, getmask, is_masked};
 
+// Re-export MaskAware trait (#505) for downstream code that wants
+// to write functions polymorphic over Array and MaskedArray.
+pub use interop::{MaskAware, ma_apply_unary};
+
 // Re-export generic ufunc helpers (#513) — the escape hatch for
 // ufuncs that don't have a dedicated named wrapper. Users with an
 // arbitrary `Fn(T) -> T` / `Fn(T, T) -> T` closure can call
