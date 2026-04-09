@@ -1,0 +1,10 @@
+{
+  "uuid": "2f791146-ab59-4de7-b15c-fc5708125c5b",
+  "display_id": 564,
+  "title": "ferray-linalg: extend UPLO/upper to batched eigh/eigvalsh/cholesky (follow-up to #409 #410)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-09T02:32:49.915091404Z",
+  "updated_at": "2026-04-09T02:32:49.915091404Z"
+}
