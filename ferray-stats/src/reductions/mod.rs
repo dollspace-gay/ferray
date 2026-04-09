@@ -215,6 +215,44 @@ pub(crate) fn make_result<T: Element>(
     Array::from_vec(IxDyn::new(out_shape), data)
 }
 
+/// Write a freshly-computed reduction result into a caller-provided
+/// destination array, validating the shape and contiguity first.
+///
+/// Used by every `*_into` reduction wrapper (#467) so the validation +
+/// copy logic exists in exactly one place. The destination must be
+/// C-contiguous (so its backing buffer can be addressed as a slice) and
+/// its shape must match `expected_shape` exactly — broadcasting is not
+/// allowed since the destination shape would otherwise differ from the
+/// reduction's natural output shape.
+pub(crate) fn write_into<T: Element + Copy>(
+    out: &mut Array<T, IxDyn>,
+    expected_shape: &[usize],
+    data: &[T],
+    op_name: &str,
+) -> FerrayResult<()> {
+    if out.shape() != expected_shape {
+        return Err(FerrayError::shape_mismatch(format!(
+            "{op_name}_into: out shape {:?} does not match expected reduction shape {:?}",
+            out.shape(),
+            expected_shape
+        )));
+    }
+    let dst = out.as_slice_mut().ok_or_else(|| {
+        FerrayError::invalid_value(format!(
+            "{op_name}_into: out must be C-contiguous"
+        ))
+    })?;
+    if dst.len() != data.len() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "{op_name}_into: out has {} elements but reduction produced {}",
+            dst.len(),
+            data.len()
+        )));
+    }
+    dst.copy_from_slice(data);
+    Ok(())
+}
+
 /// Compute the output shape when reducing along an axis.
 pub(crate) fn output_shape(shape: &[usize], axis: usize) -> Vec<usize> {
     shape
@@ -1031,6 +1069,147 @@ where
     make_result(v.shape(), data)
 }
 
+// ---------------------------------------------------------------------------
+// `*_into` reductions: write into a caller-provided destination (#467)
+//
+// NumPy reductions accept an `out=` parameter that lets callers reuse a
+// pre-allocated output buffer across repeated reductions on same-shaped
+// data — common in streaming statistics, online ML metrics, etc. The
+// ferray-stats reduction functions all allocate a fresh `Array<T, IxDyn>`,
+// so we add `*_into` companion functions that take a `&mut Array<T, IxDyn>`
+// destination and skip the allocation.
+//
+// The implementations dispatch to the existing reduction kernels and copy
+// the result into `out` via the shared [`write_into`] helper. That keeps
+// the validation surface in one place at the cost of one extra Vec copy
+// per call — a follow-up can plumb the destination buffer through the
+// kernels themselves for true zero-allocation reuse.
+// ---------------------------------------------------------------------------
+
+/// Sum reduction writing into a pre-allocated destination.
+///
+/// Equivalent to `np.sum(a, axis=axis, out=out)`. The destination must
+/// be C-contiguous and have exactly the shape that `sum(a, axis)` would
+/// produce; broadcasting is not supported.
+///
+/// # Errors
+/// - `FerrayError::AxisOutOfBounds` if `axis` is out of range.
+/// - `FerrayError::ShapeMismatch` if `out.shape()` does not match the
+///   expected reduction shape.
+/// - `FerrayError::InvalidValue` if `out` is not C-contiguous.
+pub fn sum_into<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    out: &mut Array<T, IxDyn>,
+) -> FerrayResult<()>
+where
+    T: Element + std::ops::Add<Output = T> + Copy + Send + Sync,
+    D: Dimension,
+{
+    let result = sum(a, axis)?;
+    let expected = result.shape().to_vec();
+    let data: Vec<T> = result.iter().copied().collect();
+    write_into(out, &expected, &data, "sum")
+}
+
+/// Product reduction writing into a pre-allocated destination.
+pub fn prod_into<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    out: &mut Array<T, IxDyn>,
+) -> FerrayResult<()>
+where
+    T: Element + std::ops::Mul<Output = T> + Copy + Send + Sync,
+    D: Dimension,
+{
+    let result = prod(a, axis)?;
+    let expected = result.shape().to_vec();
+    let data: Vec<T> = result.iter().copied().collect();
+    write_into(out, &expected, &data, "prod")
+}
+
+/// Min reduction writing into a pre-allocated destination.
+pub fn min_into<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    out: &mut Array<T, IxDyn>,
+) -> FerrayResult<()>
+where
+    T: Element + PartialOrd + Copy + Send + Sync,
+    D: Dimension,
+{
+    let result = min(a, axis)?;
+    let expected = result.shape().to_vec();
+    let data: Vec<T> = result.iter().copied().collect();
+    write_into(out, &expected, &data, "min")
+}
+
+/// Max reduction writing into a pre-allocated destination.
+pub fn max_into<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    out: &mut Array<T, IxDyn>,
+) -> FerrayResult<()>
+where
+    T: Element + PartialOrd + Copy + Send + Sync,
+    D: Dimension,
+{
+    let result = max(a, axis)?;
+    let expected = result.shape().to_vec();
+    let data: Vec<T> = result.iter().copied().collect();
+    write_into(out, &expected, &data, "max")
+}
+
+/// Mean reduction writing into a pre-allocated destination.
+pub fn mean_into<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    out: &mut Array<T, IxDyn>,
+) -> FerrayResult<()>
+where
+    T: Element + Float + Send + Sync,
+    D: Dimension,
+{
+    let result = mean(a, axis)?;
+    let expected = result.shape().to_vec();
+    let data: Vec<T> = result.iter().copied().collect();
+    write_into(out, &expected, &data, "mean")
+}
+
+/// Variance reduction writing into a pre-allocated destination.
+pub fn var_into<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    ddof: usize,
+    out: &mut Array<T, IxDyn>,
+) -> FerrayResult<()>
+where
+    T: Element + Float + Send + Sync,
+    D: Dimension,
+{
+    let result = var(a, axis, ddof)?;
+    let expected = result.shape().to_vec();
+    let data: Vec<T> = result.iter().copied().collect();
+    write_into(out, &expected, &data, "var")
+}
+
+/// Standard deviation reduction writing into a pre-allocated destination.
+pub fn std_into<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    ddof: usize,
+    out: &mut Array<T, IxDyn>,
+) -> FerrayResult<()>
+where
+    T: Element + Float + Send + Sync,
+    D: Dimension,
+{
+    let result = std_(a, axis, ddof)?;
+    let expected = result.shape().to_vec();
+    let data: Vec<T> = result.iter().copied().collect();
+    write_into(out, &expected, &data, "std")
+}
+
 /// Single-axis argmin with optional `keepdims`.
 ///
 /// NumPy's `argmin` only accepts a single axis (or `None`); this mirrors
@@ -1391,6 +1570,11 @@ mod tests {
 
     use ferray_core::Ix3;
 
+    fn arr1d(data: Vec<f64>) -> Array<f64, Ix1> {
+        let n = data.len();
+        Array::<f64, Ix1>::from_vec(Ix1::new([n]), data).unwrap()
+    }
+
     fn arr2d(rows: usize, cols: usize, data: Vec<f64>) -> Array<f64, Ix2> {
         Array::<f64, Ix2>::from_vec(Ix2::new([rows, cols]), data).unwrap()
     }
@@ -1593,5 +1777,199 @@ mod tests {
     fn test_axes_duplicate_error() {
         let a = arr3d(2, 3, 4, vec![0.0; 24]);
         assert!(sum_axes(&a, Some(&[0, 0]), false).is_err());
+    }
+
+    // ----- Infinity tests (#177) -----
+
+    #[test]
+    fn sum_with_infinity() {
+        let a = arr1d(vec![1.0, f64::INFINITY, 3.0]);
+        let s = sum(&a, None).unwrap();
+        assert_eq!(s.iter().next().copied().unwrap(), f64::INFINITY);
+    }
+
+    #[test]
+    fn sum_inf_minus_inf_is_nan() {
+        let a = arr1d(vec![f64::INFINITY, f64::NEG_INFINITY]);
+        let s = sum(&a, None).unwrap();
+        assert!(s.iter().next().copied().unwrap().is_nan());
+    }
+
+    #[test]
+    fn mean_with_infinity() {
+        let a = arr1d(vec![1.0, f64::INFINITY, 3.0]);
+        let m = mean(&a, None).unwrap();
+        assert_eq!(m.iter().next().copied().unwrap(), f64::INFINITY);
+    }
+
+    #[test]
+    fn min_with_neg_infinity() {
+        let a = arr1d(vec![1.0, f64::NEG_INFINITY, 3.0]);
+        let m = min(&a, None).unwrap();
+        assert_eq!(m.iter().next().copied().unwrap(), f64::NEG_INFINITY);
+    }
+
+    #[test]
+    fn max_with_infinity() {
+        let a = arr1d(vec![1.0, f64::INFINITY, 3.0]);
+        let m = max(&a, None).unwrap();
+        assert_eq!(m.iter().next().copied().unwrap(), f64::INFINITY);
+    }
+
+    // ----- Single-element var/std with ddof (#178) -----
+
+    #[test]
+    fn var_single_element_ddof0() {
+        let a = arr1d(vec![5.0]);
+        let v = var(&a, None, 0).unwrap();
+        assert_eq!(v.iter().next().copied().unwrap(), 0.0);
+    }
+
+    #[test]
+    fn var_single_element_ddof1_errors() {
+        // ddof=1 with N=1 → ddof >= N, ferray errors instead of
+        // returning NaN (stricter than NumPy which returns NaN).
+        let a = arr1d(vec![5.0]);
+        assert!(var(&a, None, 1).is_err());
+    }
+
+    #[test]
+    fn std_single_element_ddof0() {
+        let a = arr1d(vec![5.0]);
+        let s = std_(&a, None, 0).unwrap();
+        assert_eq!(s.iter().next().copied().unwrap(), 0.0);
+    }
+
+    // ---- *_into reductions (#467) ----
+
+    #[test]
+    fn sum_into_axis_writes_into_destination() {
+        // (2, 3) sum along axis=1 → shape (2,)
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0; 2]).unwrap();
+        sum_into(&a, Some(1), &mut out).unwrap();
+        assert_eq!(out.as_slice().unwrap(), &[6.0, 15.0]);
+    }
+
+    #[test]
+    fn sum_into_no_axis_writes_scalar_destination() {
+        let a = arr1d(vec![1.0, 2.0, 3.0, 4.0]);
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[]), vec![0.0]).unwrap();
+        sum_into(&a, None, &mut out).unwrap();
+        assert_eq!(out.iter().next().copied().unwrap(), 10.0);
+    }
+
+    #[test]
+    fn sum_into_rejects_wrong_shape() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        // axis=1 reduces to shape (2,), but out has shape (3,)
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![0.0; 3]).unwrap();
+        let err = sum_into(&a, Some(1), &mut out);
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn sum_into_rejects_axis_out_of_bounds() {
+        let a = arr1d(vec![1.0, 2.0, 3.0]);
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1]), vec![0.0]).unwrap();
+        assert!(sum_into(&a, Some(5), &mut out).is_err());
+    }
+
+    #[test]
+    fn prod_into_basic() {
+        let a = arr1d(vec![1.0, 2.0, 3.0, 4.0]);
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[]), vec![0.0]).unwrap();
+        prod_into(&a, None, &mut out).unwrap();
+        assert_eq!(out.iter().next().copied().unwrap(), 24.0);
+    }
+
+    #[test]
+    fn min_into_axis_basic() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 5.0, 2.0, 4.0, 3.0, 6.0],
+        )
+        .unwrap();
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0; 2]).unwrap();
+        min_into(&a, Some(1), &mut out).unwrap();
+        assert_eq!(out.as_slice().unwrap(), &[1.0, 3.0]);
+    }
+
+    #[test]
+    fn max_into_axis_basic() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 5.0, 2.0, 4.0, 3.0, 6.0],
+        )
+        .unwrap();
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0; 2]).unwrap();
+        max_into(&a, Some(1), &mut out).unwrap();
+        assert_eq!(out.as_slice().unwrap(), &[5.0, 6.0]);
+    }
+
+    #[test]
+    fn mean_into_axis_basic() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0; 2]).unwrap();
+        mean_into(&a, Some(1), &mut out).unwrap();
+        assert_eq!(out.as_slice().unwrap(), &[2.0, 5.0]);
+    }
+
+    #[test]
+    fn var_into_basic() {
+        // Variance with ddof=0 of [1,2,3,4] = 1.25
+        let a = arr1d(vec![1.0, 2.0, 3.0, 4.0]);
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[]), vec![0.0]).unwrap();
+        var_into(&a, None, 0, &mut out).unwrap();
+        assert!((out.iter().next().copied().unwrap() - 1.25).abs() < 1e-12);
+    }
+
+    #[test]
+    fn std_into_basic() {
+        // sqrt(var) for [1,2,3,4] with ddof=0 = sqrt(1.25)
+        let a = arr1d(vec![1.0, 2.0, 3.0, 4.0]);
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[]), vec![0.0]).unwrap();
+        std_into(&a, None, 0, &mut out).unwrap();
+        let expected = 1.25_f64.sqrt();
+        assert!((out.iter().next().copied().unwrap() - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn into_reductions_can_reuse_destination_across_calls() {
+        // The whole point of the out= API: a single allocation reused
+        // across many reductions on same-shaped data.
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0; 2]).unwrap();
+        for k in 0..3 {
+            let base = k as f64;
+            let a = Array::<f64, Ix2>::from_vec(
+                Ix2::new([2, 3]),
+                vec![
+                    base + 1.0,
+                    base + 2.0,
+                    base + 3.0,
+                    base + 4.0,
+                    base + 5.0,
+                    base + 6.0,
+                ],
+            )
+            .unwrap();
+            sum_into(&a, Some(1), &mut out).unwrap();
+            assert_eq!(
+                out.as_slice().unwrap(),
+                &[3.0 * base + 6.0, 3.0 * base + 15.0]
+            );
+        }
     }
 }

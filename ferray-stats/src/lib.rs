@@ -29,7 +29,8 @@ pub mod sorting;
 
 // Reductions
 pub use reductions::{
-    argmax, argmin, cumprod, cumsum, max, mean, mean_as_f64, min, prod, std_, sum, sum_as_f64, var,
+    argmax, argmin, cumprod, cumsum, max, max_into, mean, mean_as_f64, mean_into, min, min_into,
+    prod, prod_into, std_, std_into, sum, sum_as_f64, sum_into, var, var_into,
 };
 
 // Quantile-based
