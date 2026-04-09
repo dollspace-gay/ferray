@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "agent_id": "phase-4-coordinator",
+    "event_description": "LockClaimed(#459)",
+    "event_timestamp": "2026-04-09T01:45:28.544787016Z",
+    "commit_timestamp": "2026-04-09T02:10:21Z",
+    "skew_seconds": 1492
+  }
+]
