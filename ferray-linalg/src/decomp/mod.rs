@@ -13,9 +13,10 @@ pub mod qr;
 /// Singular Value Decomposition.
 pub mod svd;
 
-pub use cholesky::{cholesky, cholesky_batched, cholesky_upper};
+pub use cholesky::{cholesky, cholesky_batched, cholesky_upper, cholesky_upper_batched};
 pub use eigen::{
-    UPLO, eig, eigh, eigh_batched, eigh_uplo, eigvals, eigvalsh, eigvalsh_batched, eigvalsh_uplo,
+    UPLO, eig, eigh, eigh_batched, eigh_batched_uplo, eigh_uplo, eigvals, eigvalsh,
+    eigvalsh_batched, eigvalsh_batched_uplo, eigvalsh_uplo,
 };
 pub use lu::lu;
 pub use qr::{QrMode, qr, qr_batched};

@@ -69,6 +69,8 @@ pub fn cholesky_upper<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T
 /// Batched Cholesky decomposition for 3D+ arrays.
 ///
 /// Applies Cholesky along the last two dimensions, parallelized via Rayon.
+/// Returns lower-triangular factors — see [`cholesky_upper_batched`] for
+/// the NumPy `upper=True` variant (#564).
 pub fn cholesky_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     if shape.len() == 2 {
@@ -97,6 +99,47 @@ pub fn cholesky_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Arr
 
     let flat: Vec<T> = results.into_iter().flatten().collect();
     Array::from_vec(IxDyn::new(shape), flat)
+}
+
+/// Batched upper-triangular Cholesky decomposition.
+///
+/// Equivalent to `np.linalg.cholesky(a, upper=True)` on a stack of
+/// matrices (`shape = (..., N, N)`). Each batch element is decomposed
+/// into the upper triangular factor `U` such that `A = U^T * U`.
+///
+/// Implemented by calling [`cholesky_batched`] to get the per-batch
+/// lower factors and then transposing each matrix in place: for a
+/// factor at offset `off` in the flat result, `U[i, j] = L[j, i]` for
+/// all (i, j). The underlying decomposition runs exactly once.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if the last two dims are not square.
+/// - `FerrayError::SingularMatrix` if any batch is not positive definite.
+pub fn cholesky_upper_batched<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
+    let lower = cholesky_batched(a)?;
+    let shape = lower.shape().to_vec();
+    if shape.len() < 2 {
+        return Ok(lower);
+    }
+    let n = shape[shape.len() - 1];
+    // Flat mat_size = n * n. Total batches = product of leading dims.
+    let mat_size = n * n;
+    let num_batches: usize = shape[..shape.len() - 2].iter().product::<usize>().max(1);
+
+    let lower_data: Vec<T> = lower.iter().copied().collect();
+    let mut upper_data = vec![<T as ferray_core::dtype::Element>::zero(); num_batches * mat_size];
+    for b in 0..num_batches {
+        let off = b * mat_size;
+        for i in 0..n {
+            for j in 0..n {
+                // U[i, j] = L[j, i]
+                upper_data[off + i * n + j] = lower_data[off + j * n + i];
+            }
+        }
+    }
+    Array::from_vec(IxDyn::new(&shape), upper_data)
 }
 
 #[cfg(test)]
@@ -319,5 +362,106 @@ mod tests {
         let a =
             Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![-1.0, 0.0, 0.0, -1.0]).unwrap();
         assert!(cholesky_upper(&a).is_err());
+    }
+
+    // ---- cholesky_upper_batched (#564) ----
+
+    #[test]
+    fn cholesky_upper_batched_stack_reconstructs_each_batch() {
+        // Two stacked SPD matrices: A1 = [[4,2],[2,3]], A2 = [[9,3],[3,5]].
+        // For each batch, verify U^T * U == A.
+        let data = vec![4.0, 2.0, 2.0, 3.0, 9.0, 3.0, 3.0, 5.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data.clone()).unwrap();
+        let u = cholesky_upper_batched(&a).unwrap();
+        assert_eq!(u.shape(), &[2, 2, 2]);
+
+        let u_data: Vec<f64> = u.iter().copied().collect();
+        for batch in 0..2 {
+            let off = batch * 4;
+            for i in 0..2 {
+                for j in 0..2 {
+                    // (U^T * U)[i, j] = sum_k U[k, i] * U[k, j]
+                    let mut sum = 0.0;
+                    for k in 0..2 {
+                        sum += u_data[off + k * 2 + i] * u_data[off + k * 2 + j];
+                    }
+                    let expected = data[off + i * 2 + j];
+                    assert!(
+                        (sum - expected).abs() < 1e-10,
+                        "batch {batch} U^T*U[{i},{j}] = {sum} != {expected}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cholesky_upper_batched_2d_input_matches_unbatched() {
+        // 2-D input routes through the early-return path in
+        // cholesky_batched. Verify it still produces the correct U.
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![4.0, 2.0, 2.0, 3.0],
+        )
+        .unwrap();
+        let u_batched = cholesky_upper_batched(&a).unwrap();
+        let a2 = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![4.0, 2.0, 2.0, 3.0]).unwrap();
+        let u_unbatched = cholesky_upper(&a2).unwrap();
+        for (a, b) in u_batched.iter().zip(u_unbatched.iter()) {
+            assert!((a - b).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn cholesky_upper_batched_is_transpose_of_lower_batched() {
+        // U from cholesky_upper_batched must be the per-batch transpose
+        // of L from cholesky_batched.
+        let data = vec![4.0, 2.0, 2.0, 3.0, 9.0, 3.0, 3.0, 5.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let l = cholesky_batched(&a).unwrap();
+        let u = cholesky_upper_batched(&a).unwrap();
+        let l_data: Vec<f64> = l.iter().copied().collect();
+        let u_data: Vec<f64> = u.iter().copied().collect();
+        for batch in 0..2 {
+            let off = batch * 4;
+            for i in 0..2 {
+                for j in 0..2 {
+                    assert!(
+                        (u_data[off + i * 2 + j] - l_data[off + j * 2 + i]).abs() < 1e-14,
+                        "batch {batch} U[{i},{j}] != L[{j},{i}]"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cholesky_upper_batched_each_block_is_upper_triangular() {
+        let data = vec![
+            4.0, 2.0, 1.0, 2.0, 5.0, 3.0, 1.0, 3.0, 6.0, // 3x3 batch 0
+            9.0, 3.0, 0.0, 3.0, 5.0, 1.0, 0.0, 1.0, 4.0, // 3x3 batch 1
+        ];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3, 3]), data).unwrap();
+        let u = cholesky_upper_batched(&a).unwrap();
+        let u_data: Vec<f64> = u.iter().copied().collect();
+        for batch in 0..2 {
+            let off = batch * 9;
+            for i in 1..3 {
+                for j in 0..i {
+                    assert!(
+                        u_data[off + i * 3 + j].abs() < 1e-14,
+                        "batch {batch} U[{i},{j}]={} should be zero",
+                        u_data[off + i * 3 + j]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cholesky_upper_batched_rejects_non_spd_in_one_batch() {
+        let data = vec![4.0, 2.0, 2.0, 3.0, -1.0, 0.0, 0.0, -1.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        assert!(cholesky_upper_batched(&a).is_err());
     }
 }

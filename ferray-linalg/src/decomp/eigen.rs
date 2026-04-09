@@ -229,12 +229,31 @@ pub fn eigvalsh_uplo<T: LinalgFloat>(
 ///
 /// Returns `(eigenvalues, eigenvectors)` where eigenvalues has shape
 /// `(..., N)` and eigenvectors has shape `(..., N, N)`, matching NumPy.
+/// Reads the lower triangle of each matrix — see [`eigh_batched_uplo`]
+/// for the UPLO-explicit variant (#564).
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the last two dims are not square.
 /// - `FerrayError::InvalidValue` if decomposition fails for any batch.
 pub fn eigh_batched<T: LinalgFloat>(
     a: &Array<T, IxDyn>,
+) -> FerrayResult<(Array<T, IxDyn>, Array<T, IxDyn>)> {
+    eigh_batched_uplo(a, UPLO::Lower)
+}
+
+/// Batched symmetric eigendecomposition with an explicit [`UPLO`] choice.
+///
+/// Equivalent to `np.linalg.eigh(a, UPLO=...)` on a stack of matrices.
+/// Each batch element reads the specified triangle via
+/// [`eigh_uplo`], so any asymmetry between the two halves of the input
+/// affects every batch element identically.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if the last two dims are not square.
+/// - `FerrayError::InvalidValue` if decomposition fails for any batch.
+pub fn eigh_batched_uplo<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    uplo: UPLO,
 ) -> FerrayResult<(Array<T, IxDyn>, Array<T, IxDyn>)> {
     let shape = a.shape();
     if shape.len() < 2 {
@@ -247,7 +266,7 @@ pub fn eigh_batched<T: LinalgFloat>(
             Ix2::new([shape[0], shape[1]]),
             a.iter().copied().collect(),
         )?;
-        let (vals, vecs) = eigh(&a2)?;
+        let (vals, vecs) = eigh_uplo(&a2, uplo)?;
         return Ok((
             Array::from_vec(IxDyn::new(vals.shape()), vals.iter().copied().collect())?,
             Array::from_vec(IxDyn::new(vecs.shape()), vecs.iter().copied().collect())?,
@@ -273,7 +292,7 @@ pub fn eigh_batched<T: LinalgFloat>(
         .map(|b| {
             let slice = &data[b * mat_size..(b + 1) * mat_size];
             let mat = Array::<T, Ix2>::from_vec(Ix2::new([n, n]), slice.to_vec())?;
-            let (vals, vecs) = eigh(&mat)?;
+            let (vals, vecs) = eigh_uplo(&mat, uplo)?;
             Ok((
                 vals.iter().copied().collect::<Vec<T>>(),
                 vecs.iter().copied().collect::<Vec<T>>(),
@@ -301,12 +320,21 @@ pub fn eigh_batched<T: LinalgFloat>(
 /// Batched symmetric eigenvalues-only for arrays of shape `(..., N, N)`.
 ///
 /// Returns an array with shape `(..., N)` containing eigenvalues in
-/// ascending order per batch element.
+/// ascending order per batch element. Reads the lower triangle — see
+/// [`eigvalsh_batched_uplo`] for the UPLO-explicit variant (#564).
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the last two dims are not square.
 /// - `FerrayError::InvalidValue` if computation fails for any batch.
 pub fn eigvalsh_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Array<T, IxDyn>> {
+    eigvalsh_batched_uplo(a, UPLO::Lower)
+}
+
+/// Batched symmetric eigenvalues-only with an explicit [`UPLO`] choice.
+pub fn eigvalsh_batched_uplo<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    uplo: UPLO,
+) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     if shape.len() < 2 {
         return Err(FerrayError::shape_mismatch(
@@ -318,7 +346,7 @@ pub fn eigvalsh_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Arr
             Ix2::new([shape[0], shape[1]]),
             a.iter().copied().collect(),
         )?;
-        let vals = eigvalsh(&a2)?;
+        let vals = eigvalsh_uplo(&a2, uplo)?;
         return Array::from_vec(IxDyn::new(vals.shape()), vals.iter().copied().collect());
     }
 
@@ -341,7 +369,7 @@ pub fn eigvalsh_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Arr
         .map(|b| {
             let slice = &data[b * mat_size..(b + 1) * mat_size];
             let mat = Array::<T, Ix2>::from_vec(Ix2::new([n, n]), slice.to_vec())?;
-            let vals = eigvalsh(&mat)?;
+            let vals = eigvalsh_uplo(&mat, uplo)?;
             Ok(vals.iter().copied().collect::<Vec<T>>())
         })
         .collect();
@@ -557,5 +585,100 @@ mod tests {
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
         assert!(eigvalsh_uplo(&a, UPLO::Lower).is_err());
         assert!(eigvalsh_uplo(&a, UPLO::Upper).is_err());
+    }
+
+    // ---- batched UPLO (#564) ----
+
+    #[test]
+    fn eigh_batched_uplo_lower_matches_default() {
+        // Stack of two symmetric matrices; Lower variant matches the
+        // default (non-UPLO) eigh_batched bit-exact.
+        let data = vec![2.0, 1.0, 1.0, 2.0, 4.0, 0.0, 0.0, 5.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let (v_default, e_default) = eigh_batched(&a).unwrap();
+        let (v_lower, e_lower) = eigh_batched_uplo(&a, UPLO::Lower).unwrap();
+        assert_eq!(v_default.as_slice().unwrap(), v_lower.as_slice().unwrap());
+        assert_eq!(e_default.as_slice().unwrap(), e_lower.as_slice().unwrap());
+    }
+
+    #[test]
+    fn eigh_batched_uplo_symmetric_input_same_for_both_triangles() {
+        // Truly-symmetric batched input: Upper and Lower produce the
+        // same eigenvalues within numerical noise.
+        let data = vec![2.0, 1.0, 1.0, 2.0, 4.0, 0.0, 0.0, 5.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let (v_lower, _) = eigh_batched_uplo(&a, UPLO::Lower).unwrap();
+        let (v_upper, _) = eigh_batched_uplo(&a, UPLO::Upper).unwrap();
+        for (l, u) in v_lower
+            .iter()
+            .copied()
+            .zip(v_upper.iter().copied())
+        {
+            assert!((l - u).abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn eigh_batched_uplo_asymmetric_lower_differs_from_upper() {
+        // Each batch element is asymmetric: Lower and Upper read
+        // different data, so they should differ in at least one batch.
+        //
+        // Batch 0: [[3, 10], [0, 5]]
+        //   Lower sees [[3, 0], [0, 5]] → eigenvalues {3, 5}
+        //   Upper sees [[3, 10], [10, 5]] → eigenvalues different
+        // Batch 1: same shape pattern.
+        let data = vec![3.0, 10.0, 0.0, 5.0, 3.0, 10.0, 0.0, 5.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let (v_lower, _) = eigh_batched_uplo(&a, UPLO::Lower).unwrap();
+        let (v_upper, _) = eigh_batched_uplo(&a, UPLO::Upper).unwrap();
+        let vl = v_lower.as_slice().unwrap();
+        let vu = v_upper.as_slice().unwrap();
+        // Lower → {3, 5} per batch
+        assert!((vl[0] - 3.0).abs() < 1e-10);
+        assert!((vl[1] - 5.0).abs() < 1e-10);
+        // Upper must differ from Lower somewhere
+        let any_diff = vl.iter().zip(vu.iter()).any(|(l, u)| (l - u).abs() > 0.1);
+        assert!(any_diff, "upper batched should differ from lower on asymmetric input");
+    }
+
+    #[test]
+    fn eigh_batched_uplo_2d_input_goes_through_unbatched_path() {
+        // 2-D input: the shape.len() == 2 early return routes to
+        // eigh_uplo directly. Verify the result matches the non-batched
+        // eigh_uplo.
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![2.0, 1.0, 1.0, 2.0],
+        )
+        .unwrap();
+        let (v_batched, _) = eigh_batched_uplo(&a, UPLO::Upper).unwrap();
+
+        let a2 = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![2.0, 1.0, 1.0, 2.0])
+            .unwrap();
+        let (v_unbatched, _) = eigh_uplo(&a2, UPLO::Upper).unwrap();
+        assert_eq!(
+            v_batched.iter().copied().collect::<Vec<_>>(),
+            v_unbatched.as_slice().unwrap().to_vec()
+        );
+    }
+
+    #[test]
+    fn eigvalsh_batched_uplo_lower_matches_default() {
+        let data = vec![1.0, 0.0, 0.0, 2.0, 3.0, 0.0, 0.0, 4.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let v_default = eigvalsh_batched(&a).unwrap();
+        let v_lower = eigvalsh_batched_uplo(&a, UPLO::Lower).unwrap();
+        assert_eq!(v_default.as_slice().unwrap(), v_lower.as_slice().unwrap());
+    }
+
+    #[test]
+    fn eigvalsh_batched_uplo_symmetric_matches_across_triangles() {
+        let data = vec![2.0, 1.0, 1.0, 2.0, 4.0, 0.0, 0.0, 5.0];
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
+        let v_lower = eigvalsh_batched_uplo(&a, UPLO::Lower).unwrap();
+        let v_upper = eigvalsh_batched_uplo(&a, UPLO::Upper).unwrap();
+        for (l, u) in v_lower.iter().copied().zip(v_upper.iter().copied()) {
+            assert!((l - u).abs() < 1e-10);
+        }
     }
 }
