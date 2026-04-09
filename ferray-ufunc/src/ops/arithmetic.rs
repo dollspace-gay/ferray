@@ -675,6 +675,303 @@ where
     crate::ufunc_methods::reduce_all(input, <T as Element>::zero(), |acc, x| acc + x)
 }
 
+// ---------------------------------------------------------------------------
+// NaN-aware reductions (#388)
+//
+// Parallel to add_reduce / multiply_reduce / max_reduce / min_reduce but
+// with NaN-skipping kernels. ferray-stats already exposes high-level
+// nansum / nanmean / etc. wrappers; these are the lower-level ufunc
+// primitives that match the cumulative nancumsum/nancumprod pattern in
+// the same module — they live here so the full reduction family
+// (whole-array + axis + axes + keepdims) is available without depending
+// on ferray-stats.
+//
+// All four functions require `T: Element + Float` so the kernel can call
+// `.is_nan()`. NaNs are dropped via per-element preprocessing into the
+// reduction identity (0 for sum, 1 for product, +inf for min, -inf for
+// max). Whole-array forms return a scalar; axis-aware forms delegate to
+// the generic reduce_axes / reduce_axis_keepdims helpers.
+// ---------------------------------------------------------------------------
+
+/// Reduce by NaN-skipping addition along an axis with optional keepdims.
+///
+/// Equivalent to `np.nansum(arr, axis=axis, keepdims=keepdims)`. NaN
+/// elements are treated as zero and contribute nothing to the sum.
+pub fn nan_add_reduce<T, D>(
+    input: &Array<T, D>,
+    axis: usize,
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_axis_keepdims(
+        input,
+        axis,
+        <T as Element>::zero(),
+        keepdims,
+        |acc, x| acc + nan_to_zero(x),
+    )
+}
+
+/// Reduce by NaN-skipping addition over multiple axes simultaneously.
+pub fn nan_add_reduce_axes<T, D>(
+    input: &Array<T, D>,
+    axes: &[usize],
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_axes(
+        input,
+        axes,
+        <T as Element>::zero(),
+        keepdims,
+        |acc, x| acc + nan_to_zero(x),
+    )
+}
+
+/// Reduce by NaN-skipping addition over the entire array.
+///
+/// Equivalent to `np.nansum(arr)` / `np.nansum(arr, axis=None)`. Returns
+/// a scalar. NaN elements contribute nothing to the sum; an array of all
+/// NaNs sums to zero.
+pub fn nan_add_reduce_all<T, D>(input: &Array<T, D>) -> T
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_all(input, <T as Element>::zero(), |acc, x| {
+        acc + nan_to_zero(x)
+    })
+}
+
+/// Reduce by NaN-skipping multiplication along an axis with optional keepdims.
+///
+/// Equivalent to `np.nanprod(arr, axis=axis, keepdims=keepdims)`. NaN
+/// elements are treated as one and contribute nothing to the product.
+pub fn nan_multiply_reduce<T, D>(
+    input: &Array<T, D>,
+    axis: usize,
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_axis_keepdims(
+        input,
+        axis,
+        <T as Element>::one(),
+        keepdims,
+        |acc, x| acc * nan_to_one(x),
+    )
+}
+
+/// Reduce by NaN-skipping multiplication over multiple axes.
+pub fn nan_multiply_reduce_axes<T, D>(
+    input: &Array<T, D>,
+    axes: &[usize],
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_axes(
+        input,
+        axes,
+        <T as Element>::one(),
+        keepdims,
+        |acc, x| acc * nan_to_one(x),
+    )
+}
+
+/// Reduce by NaN-skipping multiplication over the entire array.
+pub fn nan_multiply_reduce_all<T, D>(input: &Array<T, D>) -> T
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_all(input, <T as Element>::one(), |acc, x| {
+        acc * nan_to_one(x)
+    })
+}
+
+/// Reduce by NaN-skipping maximum along an axis with optional keepdims.
+///
+/// Equivalent to `np.nanmax(arr, axis=axis, keepdims=keepdims)`. NaN
+/// elements are skipped (treated as `-inf`).
+pub fn nan_max_reduce<T, D>(
+    input: &Array<T, D>,
+    axis: usize,
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_axis_keepdims(
+        input,
+        axis,
+        <T as Float>::neg_infinity(),
+        keepdims,
+        |acc, x| {
+            if x.is_nan() {
+                acc
+            } else if x > acc {
+                x
+            } else {
+                acc
+            }
+        },
+    )
+}
+
+/// Reduce by NaN-skipping maximum over multiple axes.
+pub fn nan_max_reduce_axes<T, D>(
+    input: &Array<T, D>,
+    axes: &[usize],
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_axes(
+        input,
+        axes,
+        <T as Float>::neg_infinity(),
+        keepdims,
+        |acc, x| {
+            if x.is_nan() {
+                acc
+            } else if x > acc {
+                x
+            } else {
+                acc
+            }
+        },
+    )
+}
+
+/// Reduce by NaN-skipping maximum over the entire array.
+///
+/// Equivalent to `np.nanmax(arr)`. Returns `-inf` for an all-NaN input
+/// rather than raising — callers that need the all-NaN error semantics
+/// should use ferray-stats' `nanmax` (which checks the result and errors
+/// out instead of returning the seed).
+pub fn nan_max_reduce_all<T, D>(input: &Array<T, D>) -> T
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_all(input, <T as Float>::neg_infinity(), |acc, x| {
+        if x.is_nan() {
+            acc
+        } else if x > acc {
+            x
+        } else {
+            acc
+        }
+    })
+}
+
+/// Reduce by NaN-skipping minimum along an axis with optional keepdims.
+///
+/// Equivalent to `np.nanmin(arr, axis=axis, keepdims=keepdims)`. NaN
+/// elements are skipped (treated as `+inf`).
+pub fn nan_min_reduce<T, D>(
+    input: &Array<T, D>,
+    axis: usize,
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_axis_keepdims(
+        input,
+        axis,
+        <T as Float>::infinity(),
+        keepdims,
+        |acc, x| {
+            if x.is_nan() {
+                acc
+            } else if x < acc {
+                x
+            } else {
+                acc
+            }
+        },
+    )
+}
+
+/// Reduce by NaN-skipping minimum over multiple axes.
+pub fn nan_min_reduce_axes<T, D>(
+    input: &Array<T, D>,
+    axes: &[usize],
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_axes(
+        input,
+        axes,
+        <T as Float>::infinity(),
+        keepdims,
+        |acc, x| {
+            if x.is_nan() {
+                acc
+            } else if x < acc {
+                x
+            } else {
+                acc
+            }
+        },
+    )
+}
+
+/// Reduce by NaN-skipping minimum over the entire array.
+pub fn nan_min_reduce_all<T, D>(input: &Array<T, D>) -> T
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_all(input, <T as Float>::infinity(), |acc, x| {
+        if x.is_nan() {
+            acc
+        } else if x < acc {
+            x
+        } else {
+            acc
+        }
+    })
+}
+
+#[inline]
+fn nan_to_zero<T: Float + Element>(x: T) -> T {
+    if x.is_nan() {
+        <T as Element>::zero()
+    } else {
+        x
+    }
+}
+
+#[inline]
+fn nan_to_one<T: Float + Element>(x: T) -> T {
+    if x.is_nan() {
+        <T as Element>::one()
+    } else {
+        x
+    }
+}
+
 /// Running (cumulative) addition along an axis.
 ///
 /// AC-2: `add_accumulate` produces running sums.
@@ -1462,6 +1759,164 @@ mod tests {
         let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 5, 6]).unwrap();
         let s = add_reduce_all(&a);
         assert_eq!(s, 21);
+    }
+
+    // ---- nan-aware reductions (#388) ----
+
+    #[test]
+    fn nan_add_reduce_all_skips_nans() {
+        let a = arr1(vec![1.0, f64::NAN, 3.0, f64::NAN, 5.0]);
+        let s = nan_add_reduce_all(&a);
+        assert!((s - 9.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nan_add_reduce_all_nans_only_returns_zero() {
+        let a = arr1(vec![f64::NAN, f64::NAN]);
+        let s = nan_add_reduce_all(&a);
+        assert!((s - 0.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nan_add_reduce_axis_skips_nans_per_row() {
+        // (2, 3) with row-1 having a NaN; reduce axis=1 → row sums.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, f64::NAN, 6.0],
+        )
+        .unwrap();
+        let r = nan_add_reduce(&a, 1, false).unwrap();
+        assert_eq!(r.shape(), &[2]);
+        let s = r.as_slice().unwrap();
+        assert!((s[0] - 6.0).abs() < 1e-12);
+        assert!((s[1] - 10.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nan_add_reduce_axes_multi_axis_skips_nans() {
+        use ferray_core::dimension::Ix3;
+        // (2, 2, 2) with one NaN; reduce axes (0, 2).
+        let data = vec![
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            f64::NAN,
+            6.0,
+            7.0,
+            8.0,
+        ];
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 2, 2]), data).unwrap();
+        let r = nan_add_reduce_axes(&a, &[0, 2], false).unwrap();
+        assert_eq!(r.shape(), &[2]);
+        // For j=0: sum(1, 2, NaN→0, 6) = 9.0
+        // For j=1: sum(3, 4, 7, 8) = 22.0
+        let s = r.as_slice().unwrap();
+        assert!((s[0] - 9.0).abs() < 1e-12);
+        assert!((s[1] - 22.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nan_multiply_reduce_all_skips_nans() {
+        let a = arr1(vec![2.0, f64::NAN, 3.0, f64::NAN, 4.0]);
+        let p = nan_multiply_reduce_all(&a);
+        assert!((p - 24.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nan_multiply_reduce_all_nans_only_returns_one() {
+        let a = arr1(vec![f64::NAN, f64::NAN]);
+        let p = nan_multiply_reduce_all(&a);
+        assert!((p - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nan_multiply_reduce_axis_per_row() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![2.0, 3.0, 4.0, 5.0, f64::NAN, 6.0],
+        )
+        .unwrap();
+        let r = nan_multiply_reduce(&a, 1, false).unwrap();
+        let s = r.as_slice().unwrap();
+        assert!((s[0] - 24.0).abs() < 1e-12); // 2*3*4
+        assert!((s[1] - 30.0).abs() < 1e-12); // 5*1*6
+    }
+
+    #[test]
+    fn nan_max_reduce_all_skips_nans() {
+        let a = arr1(vec![1.0, f64::NAN, 3.0, f64::NAN, 5.0, 2.0]);
+        let m = nan_max_reduce_all(&a);
+        assert!((m - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nan_max_reduce_all_nans_only_returns_neg_infinity() {
+        let a = arr1(vec![f64::NAN, f64::NAN]);
+        let m = nan_max_reduce_all(&a);
+        assert!(m.is_infinite() && m.is_sign_negative());
+    }
+
+    #[test]
+    fn nan_max_reduce_axis_per_row_with_nans() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, f64::NAN, 3.0, f64::NAN, 5.0, 4.0],
+        )
+        .unwrap();
+        let r = nan_max_reduce(&a, 1, false).unwrap();
+        let s = r.as_slice().unwrap();
+        assert!((s[0] - 3.0).abs() < 1e-12);
+        assert!((s[1] - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nan_min_reduce_all_skips_nans() {
+        let a = arr1(vec![5.0, f64::NAN, 3.0, f64::NAN, 1.0, 4.0]);
+        let m = nan_min_reduce_all(&a);
+        assert!((m - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nan_min_reduce_all_nans_only_returns_infinity() {
+        let a = arr1(vec![f64::NAN, f64::NAN]);
+        let m = nan_min_reduce_all(&a);
+        assert!(m.is_infinite() && m.is_sign_positive());
+    }
+
+    #[test]
+    fn nan_min_reduce_axis_per_row_with_nans() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![5.0, f64::NAN, 3.0, f64::NAN, 5.0, 4.0],
+        )
+        .unwrap();
+        let r = nan_min_reduce(&a, 1, false).unwrap();
+        let s = r.as_slice().unwrap();
+        assert!((s[0] - 3.0).abs() < 1e-12);
+        assert!((s[1] - 4.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nan_reductions_with_no_nans_match_regular_reductions() {
+        // When the input has no NaNs the nan-aware versions must give
+        // the exact same result as the regular reductions.
+        let a = arr1(vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+        assert!((nan_add_reduce_all(&a) - 15.0).abs() < 1e-12);
+        assert!((nan_multiply_reduce_all(&a) - 120.0).abs() < 1e-12);
+        assert!((nan_max_reduce_all(&a) - 5.0).abs() < 1e-12);
+        assert!((nan_min_reduce_all(&a) - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nan_add_reduce_keepdims_preserves_axis() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, f64::NAN, 6.0],
+        )
+        .unwrap();
+        let r = nan_add_reduce(&a, 1, true).unwrap();
+        assert_eq!(r.shape(), &[2, 1]);
     }
 
     #[test]
