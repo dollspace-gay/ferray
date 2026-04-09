@@ -114,7 +114,7 @@ proptest! {
         // Round to integers so we get some duplicates
         let rounded: Vec<f64> = data.iter().map(|x| x.round()).collect();
         let a = arr1(rounded);
-        let result = unique(&a, false, false).unwrap();
+        let result = unique(&a, false, false, false).unwrap();
         let vals: Vec<f64> = result.values.iter().copied().collect();
         for i in 1..vals.len() {
             prop_assert!(
@@ -132,7 +132,7 @@ proptest! {
     fn prop_unique_sorted(data in proptest::collection::vec(-50.0f64..50.0, 1..=50)) {
         let rounded: Vec<f64> = data.iter().map(|x| x.round()).collect();
         let a = arr1(rounded);
-        let result = unique(&a, false, false).unwrap();
+        let result = unique(&a, false, false, false).unwrap();
         let vals: Vec<f64> = result.values.iter().copied().collect();
         for i in 1..vals.len() {
             prop_assert!(

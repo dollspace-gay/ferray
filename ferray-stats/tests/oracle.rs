@@ -441,7 +441,7 @@ fn oracle_unique() {
             .get("return_counts")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        let result = ferray_stats::unique(&arr, false, return_counts).unwrap();
+        let result = ferray_stats::unique(&arr, false, false, return_counts).unwrap();
 
         if return_counts {
             // with_counts layout: expected = { "values": {...}, "counts": {...} }

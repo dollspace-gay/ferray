@@ -19,18 +19,28 @@ pub struct UniqueResult<T: Element> {
     /// If requested, the indices of the first occurrence of each unique value
     /// in the original array (as u64).
     pub indices: Option<Array<u64, Ix1>>,
+    /// If requested, the inverse index array such that
+    /// `values[inverse]` reconstructs the flattened input. Essential for
+    /// label encoding (#463).
+    pub inverse: Option<Array<u64, Ix1>>,
     /// If requested, the count of each unique value (as u64).
     pub counts: Option<Array<u64, Ix1>>,
 }
 
 /// Find the sorted unique elements of an array.
 ///
-/// The input is flattened. Optionally returns indices and/or counts.
+/// The input is flattened. Optionally returns:
+/// - `return_index`: indices of the first occurrence of each unique value.
+/// - `return_inverse`: an array of the same length as the flattened input,
+///   where each entry is the index into `values` of the corresponding
+///   original element. Satisfies `values[inverse] == flat_input`.
+/// - `return_counts`: count of each unique value.
 ///
 /// Equivalent to `numpy.unique`.
 pub fn unique<T, D>(
     a: &Array<T, D>,
     return_index: bool,
+    return_inverse: bool,
     return_counts: bool,
 ) -> FerrayResult<UniqueResult<T>>
 where
@@ -38,8 +48,9 @@ where
     D: Dimension,
 {
     let data: Vec<T> = a.iter().copied().collect();
+    let n_data = data.len();
 
-    // Create (value, original_index) pairs, then sort by value
+    // Create (value, original_index) pairs, then sort by value.
     let mut pairs: Vec<(T, usize)> = data
         .iter()
         .copied()
@@ -48,15 +59,29 @@ where
         .collect();
     pairs.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
-    // Deduplicate
+    // Deduplicate. The inverse is built in lockstep: for each original
+    // position `orig_idx`, `inverse[orig_idx]` is the u64 index into
+    // `unique_vals` where that original's value ended up. We walk the
+    // sorted pairs, advancing the unique position whenever we see a new
+    // value, and use the sorted pair's `original_idx` to write into the
+    // right inverse slot.
     let mut unique_vals = Vec::new();
     let mut unique_indices: Vec<u64> = Vec::new();
     let mut unique_counts: Vec<u64> = Vec::new();
+    let mut inverse_vec: Vec<u64> = if return_inverse {
+        vec![0u64; n_data]
+    } else {
+        Vec::new()
+    };
 
     if !pairs.is_empty() {
         unique_vals.push(pairs[0].0);
         unique_indices.push(pairs[0].1 as u64);
+        if return_inverse {
+            inverse_vec[pairs[0].1] = 0;
+        }
         let mut count = 1u64;
+        let mut unique_pos: u64 = 0;
 
         for i in 1..pairs.len() {
             if pairs[i].0.partial_cmp(&pairs[i - 1].0) != Some(std::cmp::Ordering::Equal) {
@@ -66,14 +91,18 @@ where
                 unique_vals.push(pairs[i].0);
                 unique_indices.push(pairs[i].1 as u64);
                 count = 1;
+                unique_pos += 1;
             } else {
                 count += 1;
-                // Keep the first occurrence index (smallest original index)
+                // Keep the first occurrence index (smallest original index).
                 let last = unique_indices.len() - 1;
                 let new_idx = pairs[i].1 as u64;
                 if new_idx < unique_indices[last] {
                     unique_indices[last] = new_idx;
                 }
+            }
+            if return_inverse {
+                inverse_vec[pairs[i].1] = unique_pos;
             }
         }
         if return_counts {
@@ -88,6 +117,11 @@ where
     } else {
         None
     };
+    let inverse = if return_inverse {
+        Some(Array::from_vec(Ix1::new([n_data]), inverse_vec)?)
+    } else {
+        None
+    };
     let counts = if return_counts {
         Some(Array::from_vec(Ix1::new([n]), unique_counts)?)
     } else {
@@ -97,6 +131,7 @@ where
     Ok(UniqueResult {
         values,
         indices,
+        inverse,
         counts,
     })
 }
@@ -264,7 +299,7 @@ mod tests {
     #[test]
     fn test_unique_basic() {
         let a = Array::<i32, Ix1>::from_vec(Ix1::new([6]), vec![3, 1, 2, 1, 3, 2]).unwrap();
-        let u = unique(&a, false, false).unwrap();
+        let u = unique(&a, false, false, false).unwrap();
         let data: Vec<i32> = u.values.iter().copied().collect();
         assert_eq!(data, vec![1, 2, 3]);
     }
@@ -272,7 +307,7 @@ mod tests {
     #[test]
     fn test_unique_with_counts() {
         let a = Array::<i32, Ix1>::from_vec(Ix1::new([6]), vec![3, 1, 2, 1, 3, 2]).unwrap();
-        let u = unique(&a, false, true).unwrap();
+        let u = unique(&a, false, false, true).unwrap();
         let vals: Vec<i32> = u.values.iter().copied().collect();
         let cnts: Vec<u64> = u.counts.unwrap().iter().copied().collect();
         assert_eq!(vals, vec![1, 2, 3]);
@@ -282,11 +317,87 @@ mod tests {
     #[test]
     fn test_unique_with_index() {
         let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![5, 3, 3, 1, 5]).unwrap();
-        let u = unique(&a, true, false).unwrap();
+        let u = unique(&a, true, false, false).unwrap();
         let vals: Vec<i32> = u.values.iter().copied().collect();
         let idxs: Vec<u64> = u.indices.unwrap().iter().copied().collect();
         assert_eq!(vals, vec![1, 3, 5]);
         assert_eq!(idxs, vec![3, 1, 0]);
+    }
+
+    // ---- return_inverse (#463) ----
+
+    #[test]
+    fn test_unique_inverse_reconstructs_input() {
+        // The canonical label-encoding use case.
+        let input = vec![3, 1, 2, 1, 3, 2];
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([6]), input.clone()).unwrap();
+        let u = unique(&a, false, true, false).unwrap();
+        let vals: Vec<i32> = u.values.iter().copied().collect();
+        let inv: Vec<u64> = u.inverse.unwrap().iter().copied().collect();
+        // Unique values must be sorted.
+        assert_eq!(vals, vec![1, 2, 3]);
+        // values[inverse] must reconstruct the flattened input.
+        let reconstructed: Vec<i32> = inv.iter().map(|&i| vals[i as usize]).collect();
+        assert_eq!(reconstructed, input);
+    }
+
+    #[test]
+    fn test_unique_inverse_all_together() {
+        // Request indices + inverse + counts in one call; each field must
+        // independently match what a single-flag call would produce.
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([7]), vec![2, 1, 2, 3, 1, 2, 3]).unwrap();
+        let u = unique(&a, true, true, true).unwrap();
+        let vals: Vec<i32> = u.values.iter().copied().collect();
+        let idxs: Vec<u64> = u.indices.unwrap().iter().copied().collect();
+        let inv: Vec<u64> = u.inverse.unwrap().iter().copied().collect();
+        let cnts: Vec<u64> = u.counts.unwrap().iter().copied().collect();
+        assert_eq!(vals, vec![1, 2, 3]);
+        assert_eq!(idxs, vec![1, 0, 3]); // first positions of 1, 2, 3
+        assert_eq!(cnts, vec![2, 3, 2]);
+        // Reconstruct via inverse.
+        let reconstructed: Vec<i32> = inv.iter().map(|&i| vals[i as usize]).collect();
+        assert_eq!(reconstructed, vec![2, 1, 2, 3, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_unique_inverse_with_2d_flattens_first() {
+        // NumPy's unique flattens the input; inverse has length
+        // shape.iter().product(), indexing into the flat logical traversal.
+        let a =
+            Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 1, 3, 2, 1]).unwrap();
+        let u = unique(&a, false, true, false).unwrap();
+        let vals: Vec<i32> = u.values.iter().copied().collect();
+        let inv: Vec<u64> = u.inverse.unwrap().iter().copied().collect();
+        assert_eq!(vals, vec![1, 2, 3]);
+        assert_eq!(inv.len(), 6);
+        let flat: Vec<i32> = vec![1, 2, 1, 3, 2, 1];
+        let reconstructed: Vec<i32> = inv.iter().map(|&i| vals[i as usize]).collect();
+        assert_eq!(reconstructed, flat);
+    }
+
+    #[test]
+    fn test_unique_inverse_empty_input() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([0]), vec![]).unwrap();
+        let u = unique(&a, false, true, false).unwrap();
+        assert_eq!(u.values.shape(), &[0]);
+        let inv = u.inverse.unwrap();
+        assert_eq!(inv.shape(), &[0]);
+    }
+
+    #[test]
+    fn test_unique_inverse_single_value() {
+        // Every element identical → all inverse entries point at position 0.
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![7, 7, 7, 7]).unwrap();
+        let u = unique(&a, false, true, false).unwrap();
+        let inv: Vec<u64> = u.inverse.unwrap().iter().copied().collect();
+        assert_eq!(inv, vec![0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn test_unique_without_inverse_leaves_field_none() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 1]).unwrap();
+        let u = unique(&a, false, false, false).unwrap();
+        assert!(u.inverse.is_none());
     }
 
     #[test]
