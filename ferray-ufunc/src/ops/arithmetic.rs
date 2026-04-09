@@ -634,6 +634,47 @@ where
     )
 }
 
+/// Reduce by addition over multiple axes simultaneously.
+///
+/// Equivalent to `np.add.reduce(arr, axis=axes, keepdims=keepdims)` /
+/// `np.sum(arr, axis=axes, keepdims=keepdims)` where `axes` is a tuple
+/// of axes to collapse. Reduces every listed axis in a single pass over
+/// the input — never materializes intermediates the way chained
+/// `add_reduce` calls would, and the order of `axes` is irrelevant.
+/// Added for #395.
+pub fn add_reduce_axes<T, D>(
+    input: &Array<T, D>,
+    axes: &[usize],
+    keepdims: bool,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + std::ops::Add<Output = T> + Copy,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_axes(
+        input,
+        axes,
+        <T as Element>::zero(),
+        keepdims,
+        |acc, x| acc + x,
+    )
+}
+
+/// Reduce by addition over the entire array (the `axis=None` form).
+///
+/// Equivalent to `np.add.reduce(arr, axis=None)` / `np.sum(arr)`.
+/// Returns a single scalar — use [`add_reduce_axes`] when you want a
+/// wrapped array result that supports `keepdims`.
+///
+/// Added for #395.
+pub fn add_reduce_all<T, D>(input: &Array<T, D>) -> T
+where
+    T: Element + std::ops::Add<Output = T> + Copy,
+    D: Dimension,
+{
+    crate::ufunc_methods::reduce_all(input, <T as Element>::zero(), |acc, x| acc + x)
+}
+
 /// Running (cumulative) addition along an axis.
 ///
 /// AC-2: `add_accumulate` produces running sums.
@@ -1358,6 +1399,69 @@ mod tests {
         let new_false = add_reduce_keepdims(&a, 1, false).unwrap();
         assert_eq!(legacy.shape(), new_false.shape());
         assert_eq!(legacy.as_slice().unwrap(), new_false.as_slice().unwrap());
+    }
+
+    #[test]
+    fn add_reduce_axes_two_axes_3d() {
+        // (2, 3, 4) reducing axes (0, 2) → length-3 result.
+        use ferray_core::dimension::Ix3;
+        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
+        let r = add_reduce_axes(&a, &[0, 2], false).unwrap();
+        assert_eq!(r.shape(), &[3]);
+        // For each j in 0..3: sum_{i,k} (i*12 + j*4 + k)
+        let expected: Vec<f64> = (0..3)
+            .map(|j| {
+                let mut s = 0.0;
+                for i in 0..2 {
+                    for k in 0..4 {
+                        s += (i * 12 + j * 4 + k) as f64;
+                    }
+                }
+                s
+            })
+            .collect();
+        assert_eq!(r.as_slice().unwrap(), expected.as_slice());
+    }
+
+    #[test]
+    fn add_reduce_axes_keepdims_preserves_rank() {
+        use ferray_core::dimension::Ix3;
+        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
+        let r = add_reduce_axes(&a, &[0, 2], true).unwrap();
+        assert_eq!(r.shape(), &[1, 3, 1]);
+    }
+
+    #[test]
+    fn add_reduce_axes_all_axes_collapses_to_scalar_array() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let r = add_reduce_axes(&a, &[0, 1], false).unwrap();
+        assert_eq!(r.shape(), &[1]);
+        assert_eq!(r.as_slice().unwrap(), &[21.0]);
+    }
+
+    #[test]
+    fn add_reduce_all_returns_scalar_sum() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let s = add_reduce_all(&a);
+        assert!((s - 21.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn add_reduce_all_integer_input_works() {
+        // Multi-axis reductions must work for integer Element types too.
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 5, 6]).unwrap();
+        let s = add_reduce_all(&a);
+        assert_eq!(s, 21);
     }
 
     #[test]

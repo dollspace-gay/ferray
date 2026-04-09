@@ -152,11 +152,12 @@ pub use ferray_ufunc::{around, ceil, fix, floor, rint, round, trunc};
 
 // Arithmetic
 pub use ferray_ufunc::{
-    absolute, add, add_accumulate, add_broadcast, add_reduce, add_reduce_keepdims, cbrt, cross,
-    cumprod, cumsum, diff, divide, divide_broadcast, divmod, ediff1d, fabs, floor_divide, fmod,
-    gcd, gradient, heaviside, lcm, mod_, multiply, multiply_broadcast, multiply_outer, nancumprod,
-    nancumsum, negative, positive, power, reciprocal, remainder, sign, sqrt, square, subtract,
-    subtract_broadcast, trapezoid, true_divide,
+    absolute, add, add_accumulate, add_broadcast, add_reduce, add_reduce_all, add_reduce_axes,
+    add_reduce_keepdims, cbrt, cross, cumprod, cumsum, diff, divide, divide_broadcast, divmod,
+    ediff1d, fabs, floor_divide, fmod, gcd, gradient, heaviside, lcm, mod_, multiply,
+    multiply_broadcast, multiply_outer, nancumprod, nancumsum, negative, positive, power,
+    reciprocal, remainder, sign, sqrt, square, subtract, subtract_broadcast, trapezoid,
+    true_divide,
 };
 
 // Float intrinsics

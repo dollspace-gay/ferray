@@ -146,6 +146,168 @@ where
     Array::from_vec(IxDyn::new(&kept_shape), data)
 }
 
+/// Generic reduction over multiple axes simultaneously.
+///
+/// Equivalent to `np.<ufunc>.reduce(input, axis=axes, keepdims=keepdims)`
+/// where `axes` is a tuple of axes to collapse. Reduces all listed axes in
+/// a single pass over the input — unlike chaining
+/// `reduce_axis(reduce_axis(...))`, this never materializes an
+/// intermediate buffer and is immune to the "axes shift after a reduction"
+/// pitfall the issue calls out (#395).
+///
+/// `axes` may be empty: in that case the input is copied through unchanged
+/// (matching NumPy's `axis=()` semantics — no axes are reduced). When
+/// `axes` covers every axis the result collapses to a single scalar; with
+/// `keepdims=false` it is wrapped in a length-1 1-D array (the same
+/// convention used by [`reduce_axis`]), and with `keepdims=true` it has
+/// shape `(1, 1, …, 1)` matching the original rank.
+///
+/// # Errors
+/// - `FerrayError::AxisOutOfBounds` if any axis is `>= input.ndim()`.
+/// - `FerrayError::InvalidValue` if `axes` contains duplicates.
+pub fn reduce_axes<T, D, F>(
+    input: &Array<T, D>,
+    axes: &[usize],
+    identity: T,
+    keepdims: bool,
+    op: F,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Copy,
+    D: Dimension,
+    F: Fn(T, T) -> T,
+{
+    let ndim = input.ndim();
+    let shape: Vec<usize> = input.shape().to_vec();
+
+    // Validate axes: in-bounds and unique. We sort a local copy so the
+    // public API can pass them in any order.
+    let mut sorted_axes: Vec<usize> = axes.to_vec();
+    sorted_axes.sort_unstable();
+    for window in sorted_axes.windows(2) {
+        if window[0] == window[1] {
+            return Err(FerrayError::invalid_value(format!(
+                "reduce_axes: duplicate axis {}",
+                window[0]
+            )));
+        }
+    }
+    for &ax in &sorted_axes {
+        if ax >= ndim {
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
+        }
+    }
+
+    // Build the index of "kept" axes (those NOT being reduced) once. We
+    // use binary_search against sorted_axes to test membership in O(log k).
+    let kept_axes: Vec<usize> = (0..ndim)
+        .filter(|i| sorted_axes.binary_search(i).is_err())
+        .collect();
+    let kept_dims: Vec<usize> = kept_axes.iter().map(|&i| shape[i]).collect();
+
+    // Output shape: drop reduced axes (keepdims=false) or set them to 1
+    // (keepdims=true). Note that 0-D output is collapsed to a length-1
+    // 1-D array on the keepdims=false path so callers always receive a
+    // shape they can index into.
+    let mut out_shape: Vec<usize> = if keepdims {
+        shape
+            .iter()
+            .enumerate()
+            .map(|(i, &d)| if sorted_axes.binary_search(&i).is_ok() { 1 } else { d })
+            .collect()
+    } else {
+        kept_dims.clone()
+    };
+    let out_size: usize = if keepdims {
+        out_shape.iter().product()
+    } else {
+        kept_dims.iter().product::<usize>().max(1)
+    };
+
+    // Empty `axes` is a no-op reduction in NumPy: just return a copy of
+    // the input (with the original shape).
+    if sorted_axes.is_empty() {
+        let data = contiguous_data(input);
+        return Array::from_vec(IxDyn::new(&shape), data);
+    }
+
+    // C-order strides for the input. We'll decompose every flat index into
+    // a multi-index and then collapse the kept axes back into an output
+    // flat offset.
+    let mut in_strides = vec![1usize; ndim];
+    for i in (0..ndim.saturating_sub(1)).rev() {
+        in_strides[i] = in_strides[i + 1] * shape[i + 1];
+    }
+
+    // C-order strides for the *output* axes — only the kept ones contribute.
+    let mut out_strides = vec![1usize; kept_dims.len()];
+    for i in (0..kept_dims.len().saturating_sub(1)).rev() {
+        out_strides[i] = out_strides[i + 1] * kept_dims[i + 1];
+    }
+
+    let data = contiguous_data(input);
+    let mut result = vec![identity; out_size];
+
+    for (flat, &x) in data.iter().enumerate() {
+        // Decompose `flat` into the input multi-index using in_strides,
+        // then project to the output flat index by walking only the kept
+        // axes. This single-pass scheme is the whole point — no
+        // intermediate buffers and no per-reduction shape recomputation.
+        let mut rem = flat;
+        let mut out_flat = 0usize;
+        let mut kept_pos = 0usize;
+        for (i, &stride) in in_strides.iter().enumerate() {
+            let idx = rem / stride;
+            rem %= stride;
+            if sorted_axes.binary_search(&i).is_err() {
+                // i is a kept axis — accumulate its contribution to the
+                // output flat index.
+                if !out_strides.is_empty() {
+                    out_flat += idx * out_strides[kept_pos];
+                }
+                kept_pos += 1;
+            }
+        }
+        result[out_flat] = op(result[out_flat], x);
+    }
+
+    // Match reduce_axis: a fully-collapsed result becomes a length-1 1-D
+    // array rather than a true 0-D so callers can always `.as_slice()`.
+    if out_shape.is_empty() {
+        out_shape.push(1);
+    }
+    Array::from_vec(IxDyn::new(&out_shape), result)
+}
+
+/// Generic reduction over the entire array (the `axis=None` form).
+///
+/// Equivalent to `np.<ufunc>.reduce(input, axis=None)`. Folds every
+/// element through `op` starting from `identity` and returns the single
+/// scalar result. Use [`reduce_axes`] when you want axis-aware reductions
+/// and a wrapped array result.
+///
+/// # Errors
+/// Returns `FerrayError` only via the `Array::from_vec` round-trip in
+/// [`contiguous_data`]; the reduction itself is infallible.
+pub fn reduce_all<T, D, F>(input: &Array<T, D>, identity: T, op: F) -> T
+where
+    T: Element + Copy,
+    D: Dimension,
+    F: Fn(T, T) -> T,
+{
+    let mut acc = identity;
+    if let Some(slice) = input.as_slice() {
+        for &x in slice {
+            acc = op(acc, x);
+        }
+    } else {
+        for x in input.iter().copied() {
+            acc = op(acc, x);
+        }
+    }
+    acc
+}
+
 /// Generic cumulative reduction along an axis.
 ///
 /// For each position in the output, the running accumulator starts at the
@@ -391,6 +553,156 @@ mod tests {
         assert_eq!(row_sums.shape(), &[2, 1]);
         let row_sums_slice = row_sums.as_slice().unwrap();
         assert_eq!(row_sums_slice, &[6.0, 60.0]);
+    }
+
+    // ---- reduce_axes / reduce_all multi-axis reductions (#395) ----
+
+    #[test]
+    fn reduce_axes_single_axis_matches_reduce_axis() {
+        // Single-axis reduce_axes must agree with the dedicated reduce_axis.
+        let a = arr2(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let multi = reduce_axes(&a, &[1], 0.0, false, |acc, x| acc + x).unwrap();
+        let single = reduce_axis(&a, 1, 0.0, |acc, x| acc + x).unwrap();
+        assert_eq!(multi.shape(), single.shape());
+        assert_eq!(multi.as_slice().unwrap(), single.as_slice().unwrap());
+    }
+
+    #[test]
+    fn reduce_axes_two_axes_3d_collapse_to_vector() {
+        // Shape (2, 3, 4); reduce axes (0, 2) → length-3 result with the
+        // axis-1 sums of the corresponding 8-element strips.
+        use ferray_core::dimension::Ix3;
+        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
+        let r = reduce_axes(&a, &[0, 2], 0.0, false, |acc, x| acc + x).unwrap();
+        assert_eq!(r.shape(), &[3]);
+
+        // Hand-checked: for j in 0..3, sum over i,k of a[i,j,k] = sum of
+        // values where flat = i*12 + j*4 + k.
+        let expected: Vec<f64> = (0..3)
+            .map(|j| {
+                let mut s = 0.0;
+                for i in 0..2 {
+                    for k in 0..4 {
+                        s += (i * 12 + j * 4 + k) as f64;
+                    }
+                }
+                s
+            })
+            .collect();
+        assert_eq!(r.as_slice().unwrap(), expected.as_slice());
+    }
+
+    #[test]
+    fn reduce_axes_unsorted_axes_input_works() {
+        // Pass axes in reverse — the implementation should sort them
+        // internally and produce the same result.
+        use ferray_core::dimension::Ix3;
+        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
+        let r1 = reduce_axes(&a, &[0, 2], 0.0, false, |acc, x| acc + x).unwrap();
+        let r2 = reduce_axes(&a, &[2, 0], 0.0, false, |acc, x| acc + x).unwrap();
+        assert_eq!(r1.shape(), r2.shape());
+        assert_eq!(r1.as_slice().unwrap(), r2.as_slice().unwrap());
+    }
+
+    #[test]
+    fn reduce_axes_keepdims_preserves_reduced_axes_as_size_1() {
+        // (2, 3, 4) reducing axes (0, 2) with keepdims=true → (1, 3, 1).
+        use ferray_core::dimension::Ix3;
+        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
+        let r = reduce_axes(&a, &[0, 2], 0.0, true, |acc, x| acc + x).unwrap();
+        assert_eq!(r.shape(), &[1, 3, 1]);
+    }
+
+    #[test]
+    fn reduce_axes_all_axes_collapses_to_scalar() {
+        // All axes → length-1 result (the keepdims=false collapse convention).
+        let a = arr2(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let r = reduce_axes(&a, &[0, 1], 0.0, false, |acc, x| acc + x).unwrap();
+        assert_eq!(r.shape(), &[1]);
+        assert_eq!(r.as_slice().unwrap(), &[21.0]);
+    }
+
+    #[test]
+    fn reduce_axes_all_axes_keepdims_gives_size_1_per_axis() {
+        let a = arr2(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let r = reduce_axes(&a, &[0, 1], 0.0, true, |acc, x| acc + x).unwrap();
+        assert_eq!(r.shape(), &[1, 1]);
+        assert_eq!(r.as_slice().unwrap(), &[21.0]);
+    }
+
+    #[test]
+    fn reduce_axes_empty_axes_is_identity_copy() {
+        // axis=() in NumPy returns the input unchanged.
+        let a = arr2(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let r = reduce_axes(&a, &[], 0.0, false, |acc, x| acc + x).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(r.as_slice().unwrap(), &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    fn reduce_axes_duplicate_axis_errors() {
+        let a = arr2(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        assert!(reduce_axes(&a, &[1, 1], 0.0, false, |x, y| x + y).is_err());
+    }
+
+    #[test]
+    fn reduce_axes_out_of_bounds_errors() {
+        let a = arr2(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        assert!(reduce_axes(&a, &[5], 0.0, false, |x, y| x + y).is_err());
+        assert!(reduce_axes(&a, &[0, 5], 0.0, false, |x, y| x + y).is_err());
+    }
+
+    #[test]
+    fn reduce_axes_chained_via_single_pass_matches_sequential() {
+        // Sanity check: chaining single-axis reductions in the right order
+        // (descending so axes don't shift) must produce the same numbers as
+        // the single-pass reduce_axes implementation.
+        use ferray_core::dimension::Ix3;
+        let data: Vec<f64> = (0..60).map(|i| i as f64).collect();
+        let a = Array::<f64, Ix3>::from_vec(Ix3::new([3, 4, 5]), data).unwrap();
+
+        let single_pass =
+            reduce_axes(&a, &[0, 2], 0.0, false, |acc, x| acc + x).unwrap();
+
+        // Reduce axis 2 first (rightmost), then axis 0 of the result.
+        let step1 = reduce_axis(&a, 2, 0.0, |acc, x| acc + x).unwrap();
+        let step2 = reduce_axis(&step1, 0, 0.0, |acc, x| acc + x).unwrap();
+
+        assert_eq!(single_pass.shape(), step2.shape());
+        for (a, b) in single_pass
+            .as_slice()
+            .unwrap()
+            .iter()
+            .zip(step2.as_slice().unwrap().iter())
+        {
+            assert!((a - b).abs() < 1e-10, "{a} vs {b}");
+        }
+    }
+
+    #[test]
+    fn reduce_all_sums_full_array() {
+        let a = arr2(2, 3, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let s = reduce_all(&a, 0.0, |acc, x| acc + x);
+        assert!((s - 21.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn reduce_all_max_returns_global_max() {
+        let a = arr2(2, 3, &[3.0, 1.0, 4.0, 1.0, 5.0, 9.0]);
+        let m = reduce_all(&a, f64::NEG_INFINITY, f64::max);
+        assert!((m - 9.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn reduce_all_empty_array_returns_identity() {
+        // 0-element array → reduction returns the identity.
+        use ferray_core::dimension::Ix1;
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([0]), vec![]).unwrap();
+        let s = reduce_all(&a, 0.0, |acc, x| acc + x);
+        assert_eq!(s, 0.0);
     }
 
     #[test]
