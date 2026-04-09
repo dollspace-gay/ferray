@@ -212,7 +212,10 @@ pub use ferray_ufunc::{
 // Reductions — `cumsum`/`cumprod` already come from `ferray_ufunc`
 // above, so the stats versions are aliased in under different names
 // via full paths at use sites rather than re-exported here (#335).
-pub use ferray_stats::{argmax, argmin, max, mean, min, prod, std_, sum, var};
+pub use ferray_stats::{
+    argmax, argmin, max, max_into, mean, mean_into, min, min_into, prod, prod_into, std_,
+    std_into, sum, sum_into, var, var_into,
+};
 
 // Quantile-based
 pub use ferray_stats::{median, percentile, quantile};
