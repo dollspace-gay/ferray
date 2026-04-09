@@ -251,7 +251,7 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferray_core::dimension::{Ix1, Ix2, Ix3};
+    use ferray_core::dimension::{Ix2, Ix3};
 
     fn ma2d(rows: usize, cols: usize, data: Vec<f64>, mask: Vec<bool>) -> MaskedArray<f64, Ix2> {
         let d = Array::<f64, Ix2>::from_vec(Ix2::new([rows, cols]), data).unwrap();

@@ -17,7 +17,20 @@ ferray-core = { workspace = true }
 # the interop module references them only in doc comments.
 num-traits = { workspace = true }
 
+[dependencies.ferray-io]
+workspace = true
+optional = true
+
 [dev-dependencies]
 proptest = { workspace = true }
 ferray-test-oracle = { path = "../ferray-test-oracle" }
+ferray-io = { workspace = true }
 num-traits = { workspace = true }
+
+[features]
+default = []
+# `io` enables MaskedArray I/O (save/load) via the ferray-io .npz
+# writer/reader. Optional because ferray-ma's core functionality
+# doesn't require touching disk, and pulling in the zip + binary I/O
+# dependency tree just for the .npz writer would bloat minimal users.
+io = ["dep:ferray-io"]

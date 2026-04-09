@@ -19,6 +19,13 @@ pub mod arithmetic;
 pub mod constructors;
 pub mod filled;
 pub mod interop;
+/// Binary I/O (save/load) for MaskedArray via ferray-io (#509).
+///
+/// Gated behind the `io` cargo feature so callers who don't need
+/// disk I/O don't have to pull in the zip + binary reader dependency
+/// tree through ferray-io.
+#[cfg(feature = "io")]
+pub mod io;
 pub mod manipulation;
 pub mod mask_ops;
 pub mod masked_array;
