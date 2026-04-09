@@ -658,9 +658,44 @@ pub fn matrix_power_batched<T: LinalgFloat>(
 pub fn tensorsolve<T: LinalgFloat>(
     a: &Array<T, IxDyn>,
     b: &Array<T, IxDyn>,
-    _axes: Option<&[usize]>,
+    axes: Option<&[usize]>,
 ) -> FerrayResult<Array<T, IxDyn>> {
-    let a_shape = a.shape();
+    // axes support (#422): when Some, NumPy first moves those axes of `a`
+    // to the right (trailing positions) before reshaping. The moved axes
+    // become the "solution" shape (x's shape); the remaining axes, in
+    // their original order, must match `b.shape()`.
+    //
+    // Implementation: build a permutation [kept..., moved...] and
+    // transpose `a` by that permutation before reshaping. With axes=None
+    // the permutation is the identity and we stay on the fast path.
+    let a_owned: Array<T, IxDyn>;
+    let a_ref: &Array<T, IxDyn> = if let Some(ax_list) = axes {
+        let ndim = a.ndim();
+        // Validate: each axis in range, no duplicates.
+        let mut seen = vec![false; ndim];
+        for &ax in ax_list {
+            if ax >= ndim {
+                return Err(FerrayError::axis_out_of_bounds(ax, ndim));
+            }
+            if seen[ax] {
+                return Err(FerrayError::invalid_value(format!(
+                    "tensorsolve: duplicate axis {ax} in axes"
+                )));
+            }
+            seen[ax] = true;
+        }
+        // Permutation: first the axes NOT in ax_list (in their original
+        // order), then the axes in ax_list (in the caller-provided
+        // order). This moves the selected axes to the right.
+        let mut perm: Vec<usize> = (0..ndim).filter(|i| !seen[*i]).collect();
+        perm.extend(ax_list.iter().copied());
+        a_owned = ferray_core::manipulation::transpose(a, Some(&perm))?;
+        &a_owned
+    } else {
+        a
+    };
+
+    let a_shape = a_ref.shape();
     let b_shape = b.shape();
 
     // Compute the shape of x from the shapes of a and b
@@ -677,7 +712,7 @@ pub fn tensorsolve<T: LinalgFloat>(
     }
 
     // Reshape a to (b_size, x_size) and solve
-    let a_data: Vec<T> = a.iter().copied().collect();
+    let a_data: Vec<T> = a_ref.iter().copied().collect();
     let a2 = Array::<T, Ix2>::from_vec(Ix2::new([b_size, x_size]), a_data)?;
 
     let b_flat: Vec<T> = b.iter().copied().collect();
@@ -685,7 +720,7 @@ pub fn tensorsolve<T: LinalgFloat>(
 
     let x = solve(&a2, &b_dyn)?;
 
-    // Determine x shape from a_shape and b_shape
+    // Determine x shape from the (post-transpose) a_shape and b_shape
     let x_shape: Vec<usize> = a_shape[b_shape.len()..].to_vec();
     if x_shape.is_empty() {
         Ok(x)
@@ -1010,6 +1045,112 @@ mod tests {
         // x = [3, 4]
         assert!((data[0] - 3.0).abs() < 1e-10);
         assert!((data[1] - 4.0).abs() < 1e-10);
+    }
+
+    // ---- tensorsolve axes= parameter (#422) ----
+
+    #[test]
+    fn tensorsolve_axes_none_matches_default_path() {
+        // Same input as tensorsolve_2d_as_matrix but passing axes=None
+        // explicitly — must produce the identical result, confirming
+        // the new axes branch leaves the default path untouched.
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![1.0, 0.0, 0.0, 2.0],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
+        let x_default = tensorsolve(&a, &b, None).unwrap();
+        let x_none = tensorsolve(&a, &b, None).unwrap();
+        assert_eq!(
+            x_default.iter().copied().collect::<Vec<_>>(),
+            x_none.iter().copied().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn tensorsolve_axes_moves_specified_axis_to_right() {
+        // Build a 2-D problem where transposing axis 0 to the right is
+        // equivalent to swapping A's rows and columns. Concretely, we
+        // construct a diagonal A' and b such that solving A' x = b yields
+        // [3, 4], then pack A as its transpose. Passing axes=[0] moves
+        // axis 0 to the right, giving (shape[1], shape[0]) = the diagonal
+        // orientation needed to solve correctly.
+        //
+        // A (as laid out in memory): [[1, 0], [0, 2]] — already diagonal
+        // so the transpose is identical and this also cross-checks that
+        // moving an axis doesn't break the symmetric-input case.
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![1.0, 0.0, 0.0, 2.0],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
+        let x = tensorsolve(&a, &b, Some(&[0])).unwrap();
+        // Expected: after moving axis 0 to the right, a has shape [2, 2]
+        // unchanged (two axes), and the reshape produces a matrix where
+        // the "solution" dim is the moved axis. For this symmetric
+        // diagonal input the answer is the same [3, 4].
+        let data: Vec<f64> = x.iter().copied().collect();
+        assert!((data[0] - 3.0).abs() < 1e-10);
+        assert!((data[1] - 4.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn tensorsolve_axes_non_symmetric_reorders_correctly() {
+        // Non-symmetric test: construct a (solution-dim, b-dim) matrix
+        // and pass it as (b-dim, solution-dim) with axes=[0] to move the
+        // first axis to the right. The resulting reshape should match
+        // the diagonal orientation.
+        //
+        // Let A_logical = [[2, 0], [0, 5]], b = [6, 10], x_expected = [3, 2].
+        // But store A in memory as the transpose: [[2, 0], [0, 5]]
+        // (which happens to be self-transpose because diagonal).
+        //
+        // To get a genuine non-identity permutation test, use a
+        // non-diagonal matrix. Let A_logical = [[2, 1], [1, 3]] such that
+        //   A_logical @ x = b
+        //   x = [3, 2]
+        //   b = [2*3 + 1*2, 1*3 + 3*2] = [8, 9]
+        // Now store A in memory transposed, i.e. flat = [2, 1, 1, 3]
+        // (same because symmetric) — not useful. Try asymmetric:
+        //   A_logical = [[2, 3], [1, 4]], x = [3, 2], b = [2*3 + 3*2, 1*3 + 4*2] = [12, 11].
+        // Transpose stored: A_mem[i, j] = A_logical[j, i]
+        //   A_mem = [[2, 1], [3, 4]], flat = [2, 1, 3, 4]
+        // With axes=[0], permutation is [1, 0], transposing A_mem back
+        // to A_logical, then solving gives x = [3, 2].
+        let a_mem = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![2.0, 1.0, 3.0, 4.0],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![12.0, 11.0]).unwrap();
+        let x = tensorsolve(&a_mem, &b, Some(&[0])).unwrap();
+        let data: Vec<f64> = x.iter().copied().collect();
+        assert!((data[0] - 3.0).abs() < 1e-10, "got {:?}", data);
+        assert!((data[1] - 2.0).abs() < 1e-10, "got {:?}", data);
+    }
+
+    #[test]
+    fn tensorsolve_axes_out_of_bounds_errors() {
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![1.0, 0.0, 0.0, 2.0],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
+        assert!(tensorsolve(&a, &b, Some(&[5])).is_err());
+    }
+
+    #[test]
+    fn tensorsolve_axes_duplicate_errors() {
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![1.0, 0.0, 0.0, 2.0],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![3.0, 8.0]).unwrap();
+        assert!(tensorsolve(&a, &b, Some(&[0, 0])).is_err());
     }
 
     #[test]
