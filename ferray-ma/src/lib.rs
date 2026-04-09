@@ -38,8 +38,9 @@ pub use masked_array::MaskedArray;
 
 // Re-export masking constructors
 pub use constructors::{
-    masked_equal, masked_greater, masked_greater_equal, masked_inside, masked_invalid, masked_less,
-    masked_less_equal, masked_not_equal, masked_outside, masked_where,
+    fix_invalid, masked_equal, masked_greater, masked_greater_equal, masked_inside,
+    masked_invalid, masked_less, masked_less_equal, masked_not_equal, masked_outside,
+    masked_where,
 };
 
 // Re-export arithmetic operations
