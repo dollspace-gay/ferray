@@ -2,14 +2,19 @@
 //
 // equal, not_equal, less, less_equal, greater, greater_equal,
 // array_equal, array_equiv, allclose, isclose
+//
+// Cross-rank broadcasting variants (`equal_broadcast`, …) added for #387:
+// they accept different dimension types and return `Array<bool, IxDyn>`,
+// matching the `add_broadcast` / `subtract_broadcast` pattern from
+// arithmetic.rs.
 
 use ferray_core::Array;
-use ferray_core::dimension::Dimension;
+use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::dtype::Element;
 use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
-use crate::helpers::binary_map_op;
+use crate::helpers::{binary_broadcast_map_op, binary_map_op};
 
 /// Elementwise equality test.
 pub fn equal<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<bool, D>>
@@ -63,6 +68,122 @@ where
     D: Dimension,
 {
     binary_map_op(a, b, |x, y| x >= y)
+}
+
+// ---------------------------------------------------------------------------
+// Cross-rank broadcasting variants (#387)
+//
+// Same semantics as the same-D versions above but accept distinct dimension
+// types `D1` / `D2`, broadcasting both inputs into a common shape and
+// returning `Array<bool, IxDyn>`. Mirrors the `add_broadcast` /
+// `subtract_broadcast` family in arithmetic.rs so callers can use either
+// `equal(a, b)` (same shape / same rank) or `equal_broadcast(a, b)` (Ix2
+// against Ix1, scalar threshold against ND, etc.).
+// ---------------------------------------------------------------------------
+
+/// Cross-rank broadcasting equality test.
+pub fn equal_broadcast<T, D1, D2>(
+    a: &Array<T, D1>,
+    b: &Array<T, D2>,
+) -> FerrayResult<Array<bool, IxDyn>>
+where
+    T: Element + PartialEq + Copy,
+    D1: Dimension,
+    D2: Dimension,
+{
+    binary_broadcast_map_op(a, b, |x, y| x == y)
+}
+
+/// Cross-rank broadcasting inequality test.
+pub fn not_equal_broadcast<T, D1, D2>(
+    a: &Array<T, D1>,
+    b: &Array<T, D2>,
+) -> FerrayResult<Array<bool, IxDyn>>
+where
+    T: Element + PartialEq + Copy,
+    D1: Dimension,
+    D2: Dimension,
+{
+    binary_broadcast_map_op(a, b, |x, y| x != y)
+}
+
+/// Cross-rank broadcasting less-than test.
+pub fn less_broadcast<T, D1, D2>(
+    a: &Array<T, D1>,
+    b: &Array<T, D2>,
+) -> FerrayResult<Array<bool, IxDyn>>
+where
+    T: Element + PartialOrd + Copy,
+    D1: Dimension,
+    D2: Dimension,
+{
+    binary_broadcast_map_op(a, b, |x, y| x < y)
+}
+
+/// Cross-rank broadcasting less-than-or-equal test.
+pub fn less_equal_broadcast<T, D1, D2>(
+    a: &Array<T, D1>,
+    b: &Array<T, D2>,
+) -> FerrayResult<Array<bool, IxDyn>>
+where
+    T: Element + PartialOrd + Copy,
+    D1: Dimension,
+    D2: Dimension,
+{
+    binary_broadcast_map_op(a, b, |x, y| x <= y)
+}
+
+/// Cross-rank broadcasting greater-than test.
+pub fn greater_broadcast<T, D1, D2>(
+    a: &Array<T, D1>,
+    b: &Array<T, D2>,
+) -> FerrayResult<Array<bool, IxDyn>>
+where
+    T: Element + PartialOrd + Copy,
+    D1: Dimension,
+    D2: Dimension,
+{
+    binary_broadcast_map_op(a, b, |x, y| x > y)
+}
+
+/// Cross-rank broadcasting greater-than-or-equal test.
+pub fn greater_equal_broadcast<T, D1, D2>(
+    a: &Array<T, D1>,
+    b: &Array<T, D2>,
+) -> FerrayResult<Array<bool, IxDyn>>
+where
+    T: Element + PartialOrd + Copy,
+    D1: Dimension,
+    D2: Dimension,
+{
+    binary_broadcast_map_op(a, b, |x, y| x >= y)
+}
+
+/// Cross-rank broadcasting close-within-tolerance test.
+///
+/// Same `|a - b| <= atol + rtol * |b|` semantics as [`isclose`], but
+/// accepts inputs with distinct ranks. Returns `Array<bool, IxDyn>`.
+pub fn isclose_broadcast<T, D1, D2>(
+    a: &Array<T, D1>,
+    b: &Array<T, D2>,
+    rtol: T,
+    atol: T,
+    equal_nan: bool,
+) -> FerrayResult<Array<bool, IxDyn>>
+where
+    T: Element + Float,
+    D1: Dimension,
+    D2: Dimension,
+{
+    binary_broadcast_map_op(a, b, |x, y| {
+        if equal_nan && x.is_nan() && y.is_nan() {
+            return true;
+        }
+        if x.is_nan() || y.is_nan() {
+            return false;
+        }
+        (x - y).abs() <= atol + rtol * y.abs()
+    })
 }
 
 /// Test whether two arrays have the same shape and elements.
@@ -284,5 +405,139 @@ mod tests {
             r.iter().copied().collect::<Vec<_>>(),
             vec![true, true, true, true, true, true]
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-rank broadcasting comparison ops (#387)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn equal_broadcast_ix2_against_ix1() {
+        use ferray_core::dimension::Ix2;
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 2, 6]).unwrap();
+        let b = arr1_i32(vec![1, 2, 3]);
+        let r = equal_broadcast(&a, &b).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![true, true, true, false, true, false]
+        );
+    }
+
+    #[test]
+    fn not_equal_broadcast_ix2_against_ix1() {
+        use ferray_core::dimension::Ix2;
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 2, 6]).unwrap();
+        let b = arr1_i32(vec![1, 2, 3]);
+        let r = not_equal_broadcast(&a, &b).unwrap();
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![false, false, false, true, false, true]
+        );
+    }
+
+    #[test]
+    fn less_broadcast_ix2_against_scalar_like_ix1() {
+        // The most common pattern: arr > threshold where threshold is a
+        // length-1 1-D stand-in for a scalar.
+        use ferray_core::dimension::Ix2;
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let threshold = arr1(vec![3.0]);
+        let r = less_broadcast(&a, &threshold).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![true, true, false, false, false, false]
+        );
+    }
+
+    #[test]
+    fn greater_broadcast_ix2_against_ix1() {
+        use ferray_core::dimension::Ix2;
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![0.0, 5.0, 10.0, 1.0, 5.0, 9.0],
+        )
+        .unwrap();
+        let b = arr1(vec![1.0, 5.0, 9.0]);
+        let r = greater_broadcast(&a, &b).unwrap();
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![false, false, true, false, false, false]
+        );
+    }
+
+    #[test]
+    fn less_equal_broadcast_ix1_against_ix2() {
+        // The reverse direction: 1-D LHS broadcast against 2-D RHS.
+        use ferray_core::dimension::Ix2;
+        let a = arr1(vec![1.0, 5.0, 9.0]);
+        let b = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 5.0, 9.0, 0.5, 5.0, 10.0],
+        )
+        .unwrap();
+        let r = less_equal_broadcast(&a, &b).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![true, true, true, false, true, true]
+        );
+    }
+
+    #[test]
+    fn greater_equal_broadcast_ix1_against_ix2() {
+        use ferray_core::dimension::Ix2;
+        let a = arr1(vec![5.0, 5.0, 5.0]);
+        let b = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![5.0, 4.0, 6.0, 5.0, 5.0, 5.0],
+        )
+        .unwrap();
+        let r = greater_equal_broadcast(&a, &b).unwrap();
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![true, true, false, true, true, true]
+        );
+    }
+
+    #[test]
+    fn isclose_broadcast_ix2_against_ix1() {
+        use ferray_core::dimension::Ix2;
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 1.0001, 2.5, 3.0001],
+        )
+        .unwrap();
+        let b = arr1(vec![1.0, 2.0, 3.0]);
+        let r = isclose_broadcast(&a, &b, 1e-3, 1e-8, false).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![true, true, true, true, false, true]
+        );
+    }
+
+    #[test]
+    fn equal_broadcast_returns_ixdyn_dim_type() {
+        // The return type must be Array<bool, IxDyn> regardless of the
+        // input dimension types — that's the whole point of the *_broadcast
+        // family.
+        use ferray_core::dimension::{Ix2, IxDyn};
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 2]), vec![1, 2, 3, 4]).unwrap();
+        let b = arr1_i32(vec![1, 2]);
+        let r: Array<bool, IxDyn> = equal_broadcast(&a, &b).unwrap();
+        assert_eq!(r.ndim(), 2);
+    }
+
+    #[test]
+    fn equal_broadcast_incompatible_shapes_errors() {
+        let a = arr1_i32(vec![1, 2, 3]);
+        let b = arr1_i32(vec![1, 2]);
+        assert!(equal_broadcast(&a, &b).is_err());
     }
 }

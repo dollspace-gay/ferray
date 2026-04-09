@@ -181,8 +181,9 @@ pub use ferray_ufunc::Logical;
 
 // Comparison
 pub use ferray_ufunc::{
-    allclose, array_equal, array_equiv, equal, greater, greater_equal, isclose, less, less_equal,
-    not_equal,
+    allclose, array_equal, array_equiv, equal, equal_broadcast, greater, greater_broadcast,
+    greater_equal, greater_equal_broadcast, isclose, isclose_broadcast, less, less_broadcast,
+    less_equal, less_equal_broadcast, not_equal, not_equal_broadcast,
 };
 
 // Logical
