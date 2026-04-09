@@ -9,8 +9,242 @@ use ferray_core::dtype::Element;
 use ferray_core::error::FerrayResult;
 use num_traits::Float;
 
+use ferray_core::Array;
+use ferray_core::error::FerrayError;
+
 use crate::MaskedArray;
 use crate::arithmetic::{masked_binary_op, masked_unary_op};
+
+// ---------------------------------------------------------------------------
+// Domain-aware ufunc wrappers (#503)
+//
+// NumPy's masked ufuncs have domain checking: `ma.log(masked_array)`
+// automatically masks elements that are out of the log domain
+// (negative values). Similarly `ma.sqrt` masks negative inputs,
+// `ma.divide` masks zero denominators, `ma.arcsin`/`ma.arccos` mask
+// |x| > 1 inputs. The masked positions in the result combine the
+// existing mask with a freshly-computed "domain mask" via OR.
+//
+// The plain `log`/`sqrt`/`arcsin`/… wrappers above call the raw Float
+// method, so an in-domain masked element whose *underlying data* is
+// out of domain silently produces NaN in the result data — annoying
+// for pipelines that assume "masked = bad" but "unmasked = valid".
+// The `_domain` variants fix that by computing a new mask = old_mask
+// || !in_domain(x) and substituting the fill_value at positions
+// newly marked as masked.
+// ---------------------------------------------------------------------------
+
+/// Apply a unary function to a masked array, additionally masking any
+/// position where the underlying data is out of the function's domain.
+///
+/// `in_domain(x)` should return `true` when `x` is a valid input to
+/// `f`. For any unmasked position where `in_domain(x)` returns
+/// `false`, the result mask is set to `true` and the result data
+/// carries the masked array's `fill_value`.
+///
+/// This is the generic helper backing [`log_domain`], [`sqrt_domain`],
+/// [`arcsin_domain`], [`arccos_domain`] (#503).
+pub fn masked_unary_domain<T, D, F, Dom>(
+    ma: &MaskedArray<T, D>,
+    f: F,
+    in_domain: Dom,
+) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+    F: Fn(T) -> T,
+    Dom: Fn(T) -> bool,
+{
+    let fill = ma.fill_value();
+    let n = ma.size();
+    let mut data_out: Vec<T> = Vec::with_capacity(n);
+    let mut mask_out: Vec<bool> = Vec::with_capacity(n);
+    for (&v, &m) in ma.data().iter().zip(ma.mask().iter()) {
+        // Mask if already masked OR the domain predicate rejects v.
+        let should_mask = m || !in_domain(v);
+        if should_mask {
+            data_out.push(fill);
+            mask_out.push(true);
+        } else {
+            data_out.push(f(v));
+            mask_out.push(false);
+        }
+    }
+    let data_arr = Array::from_vec(ma.dim().clone(), data_out)?;
+    let mask_arr = Array::from_vec(ma.dim().clone(), mask_out)?;
+    let mut out = MaskedArray::new(data_arr, mask_arr)?;
+    out.set_fill_value(fill);
+    Ok(out)
+}
+
+/// Apply a binary function to two masked arrays, additionally masking
+/// any position where `in_domain(a, b)` returns `false`.
+///
+/// The result's mask is `old_a_mask OR old_b_mask OR !in_domain(a, b)`.
+/// Used by [`divide_domain`] to auto-mask zero denominators.
+///
+/// Requires same shape — broadcasting domain-aware ops is left as a
+/// follow-up because the per-position domain check interacts awkwardly
+/// with broadcast strides.
+pub fn masked_binary_domain<T, D, F, Dom>(
+    a: &MaskedArray<T, D>,
+    b: &MaskedArray<T, D>,
+    f: F,
+    in_domain: Dom,
+    op_name: &str,
+) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+    F: Fn(T, T) -> T,
+    Dom: Fn(T, T) -> bool,
+{
+    if a.shape() != b.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "{op_name}: shapes {:?} and {:?} differ (broadcasting not supported for domain-aware ops)",
+            a.shape(),
+            b.shape()
+        )));
+    }
+    let fill = a.fill_value();
+    let n = a.size();
+    let mut data_out: Vec<T> = Vec::with_capacity(n);
+    let mut mask_out: Vec<bool> = Vec::with_capacity(n);
+    for (((&x, &y), &ma_bit), &mb_bit) in a
+        .data()
+        .iter()
+        .zip(b.data().iter())
+        .zip(a.mask().iter())
+        .zip(b.mask().iter())
+    {
+        // Mask the result if either input is already masked OR the
+        // domain predicate rejects the pair.
+        let should_mask = ma_bit || mb_bit || !in_domain(x, y);
+        if should_mask {
+            data_out.push(fill);
+            mask_out.push(true);
+        } else {
+            data_out.push(f(x, y));
+            mask_out.push(false);
+        }
+    }
+    let data_arr = Array::from_vec(a.dim().clone(), data_out)?;
+    let mask_arr = Array::from_vec(a.dim().clone(), mask_out)?;
+    let mut out = MaskedArray::new(data_arr, mask_arr)?;
+    out.set_fill_value(fill);
+    Ok(out)
+}
+
+/// Natural log with auto-masking of non-positive inputs.
+///
+/// Equivalent to `numpy.ma.log`. Any unmasked element `x <= 0` is
+/// added to the result mask and replaced with the fill value in the
+/// result data.
+pub fn log_domain<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    let zero = <T as Element>::zero();
+    masked_unary_domain(ma, T::ln, move |x| x > zero)
+}
+
+/// Base-2 log with auto-masking of non-positive inputs.
+pub fn log2_domain<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    let zero = <T as Element>::zero();
+    masked_unary_domain(ma, T::log2, move |x| x > zero)
+}
+
+/// Base-10 log with auto-masking of non-positive inputs.
+pub fn log10_domain<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    let zero = <T as Element>::zero();
+    masked_unary_domain(ma, T::log10, move |x| x > zero)
+}
+
+/// Square root with auto-masking of negative inputs.
+///
+/// Equivalent to `numpy.ma.sqrt`. Any unmasked element `x < 0` is
+/// added to the result mask.
+pub fn sqrt_domain<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    let zero = <T as Element>::zero();
+    masked_unary_domain(ma, T::sqrt, move |x| x >= zero)
+}
+
+/// Arc sine with auto-masking of out-of-domain (`|x| > 1`) inputs.
+///
+/// Equivalent to `numpy.ma.arcsin`.
+pub fn arcsin_domain<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    let one = <T as Element>::one();
+    masked_unary_domain(ma, T::asin, move |x| x.abs() <= one)
+}
+
+/// Arc cosine with auto-masking of out-of-domain (`|x| > 1`) inputs.
+///
+/// Equivalent to `numpy.ma.arccos`.
+pub fn arccos_domain<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    let one = <T as Element>::one();
+    masked_unary_domain(ma, T::acos, move |x| x.abs() <= one)
+}
+
+/// Inverse hyperbolic cosine with auto-masking of inputs `< 1`.
+///
+/// Equivalent to `numpy.ma.arccosh`.
+pub fn arccosh_domain<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    let one = <T as Element>::one();
+    masked_unary_domain(ma, T::acosh, move |x| x >= one)
+}
+
+/// Inverse hyperbolic tangent with auto-masking of inputs `|x| >= 1`.
+///
+/// Equivalent to `numpy.ma.arctanh`.
+pub fn arctanh_domain<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    let one = <T as Element>::one();
+    masked_unary_domain(ma, T::atanh, move |x| x.abs() < one)
+}
+
+/// Division with auto-masking of zero denominators.
+///
+/// Equivalent to `numpy.ma.divide`. Any position where the denominator
+/// is exactly zero is added to the result mask.
+pub fn divide_domain<T, D>(
+    a: &MaskedArray<T, D>,
+    b: &MaskedArray<T, D>,
+) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    let zero = <T as Element>::zero();
+    masked_binary_domain(a, b, |x, y| x / y, move |_x, y| y != zero, "divide_domain")
+}
 
 // ---------------------------------------------------------------------------
 // Generic ufunc wrappers (#513)
@@ -676,5 +910,180 @@ mod tests {
         let vn: Vec<f64> = via_named.data().iter().copied().collect();
         let vg: Vec<f64> = via_generic.data().iter().copied().collect();
         assert_eq!(vn, vg);
+    }
+
+    // ---- domain-aware ufuncs (#503) ----
+
+    #[test]
+    fn log_domain_masks_non_positive_inputs() {
+        // [1.0, 2.0, -1.0, 0.0, 3.0] with no existing mask
+        let ma = make_ma(
+            vec![1.0, 2.0, -1.0, 0.0, 3.0],
+            vec![false, false, false, false, false],
+        );
+        let r = log_domain(&ma).unwrap();
+        let m: Vec<bool> = r.mask().iter().copied().collect();
+        // Positions 2 (-1) and 3 (0) are out of domain → masked.
+        assert_eq!(m, vec![false, false, true, true, false]);
+        // Unmasked positions have correct log values.
+        let d: Vec<f64> = r.data().iter().copied().collect();
+        assert!((d[0] - 0.0).abs() < 1e-12);
+        assert!((d[1] - 2.0_f64.ln()).abs() < 1e-12);
+        assert!((d[4] - 3.0_f64.ln()).abs() < 1e-12);
+        // Masked positions carry the fill value (0.0 default).
+        assert_eq!(d[2], 0.0);
+        assert_eq!(d[3], 0.0);
+    }
+
+    #[test]
+    fn log_domain_preserves_existing_mask() {
+        // Position 1 is already masked; position 3 goes to masked via domain.
+        let ma = make_ma(
+            vec![1.0, 2.0, 5.0, -1.0],
+            vec![false, true, false, false],
+        );
+        let r = log_domain(&ma).unwrap();
+        let m: Vec<bool> = r.mask().iter().copied().collect();
+        assert_eq!(m, vec![false, true, false, true]);
+    }
+
+    #[test]
+    fn log_domain_vs_plain_log_on_negative_input() {
+        // Plain `log` produces NaN at the negative position; `log_domain`
+        // masks it and substitutes the fill value.
+        let ma = make_ma(vec![1.0, -2.0, 3.0], vec![false, false, false]);
+        let plain = log(&ma).unwrap();
+        let domain = log_domain(&ma).unwrap();
+        let pd: Vec<f64> = plain.data().iter().copied().collect();
+        let dd: Vec<f64> = domain.data().iter().copied().collect();
+        // Plain: position 1 is NaN.
+        assert!(pd[1].is_nan());
+        // Domain: position 1 is the fill value, and the mask is set.
+        assert_eq!(dd[1], 0.0);
+        assert!(domain.mask().as_slice().unwrap()[1]);
+    }
+
+    #[test]
+    fn sqrt_domain_masks_negative_inputs() {
+        let ma = make_ma(
+            vec![0.0, 1.0, 4.0, -9.0, -1e-10],
+            vec![false, false, false, false, false],
+        );
+        let r = sqrt_domain(&ma).unwrap();
+        let m: Vec<bool> = r.mask().iter().copied().collect();
+        // 0.0 and positive values pass; negatives are masked.
+        assert_eq!(m, vec![false, false, false, true, true]);
+        let d: Vec<f64> = r.data().iter().copied().collect();
+        assert!((d[0] - 0.0).abs() < 1e-12);
+        assert!((d[1] - 1.0).abs() < 1e-12);
+        assert!((d[2] - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn arcsin_domain_masks_out_of_range() {
+        let ma = make_ma(
+            vec![-1.5, -0.5, 0.0, 0.5, 1.5],
+            vec![false, false, false, false, false],
+        );
+        let r = arcsin_domain(&ma).unwrap();
+        let m: Vec<bool> = r.mask().iter().copied().collect();
+        // |x| > 1 → masked; |x| <= 1 passes.
+        assert_eq!(m, vec![true, false, false, false, true]);
+        let d: Vec<f64> = r.data().iter().copied().collect();
+        assert!((d[1] - (-0.5_f64).asin()).abs() < 1e-12);
+        assert!((d[2] - 0.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn arccos_domain_masks_out_of_range() {
+        let ma = make_ma(vec![-1.5, 0.0, 1.0, 2.0], vec![false, false, false, false]);
+        let r = arccos_domain(&ma).unwrap();
+        let m: Vec<bool> = r.mask().iter().copied().collect();
+        assert_eq!(m, vec![true, false, false, true]);
+    }
+
+    #[test]
+    fn arccosh_domain_masks_below_one() {
+        // arccosh domain is x >= 1.
+        let ma = make_ma(vec![0.5, 1.0, 2.0, 10.0], vec![false, false, false, false]);
+        let r = arccosh_domain(&ma).unwrap();
+        let m: Vec<bool> = r.mask().iter().copied().collect();
+        assert_eq!(m, vec![true, false, false, false]);
+        let d: Vec<f64> = r.data().iter().copied().collect();
+        assert!((d[1] - 0.0).abs() < 1e-12); // acosh(1) = 0
+        assert!((d[2] - 2.0_f64.acosh()).abs() < 1e-12);
+    }
+
+    #[test]
+    fn arctanh_domain_masks_boundary_and_beyond() {
+        // arctanh domain is |x| < 1 strictly (not <=).
+        let ma = make_ma(
+            vec![-1.0, -0.5, 0.0, 0.5, 1.0],
+            vec![false, false, false, false, false],
+        );
+        let r = arctanh_domain(&ma).unwrap();
+        let m: Vec<bool> = r.mask().iter().copied().collect();
+        assert_eq!(m, vec![true, false, false, false, true]);
+    }
+
+    #[test]
+    fn divide_domain_masks_zero_denominators() {
+        let num = make_ma(vec![1.0, 2.0, 3.0, 4.0], vec![false, false, false, false]);
+        let den = make_ma(vec![2.0, 0.0, 1.0, 0.0], vec![false, false, false, false]);
+        let r = divide_domain(&num, &den).unwrap();
+        let m: Vec<bool> = r.mask().iter().copied().collect();
+        // Positions 1 and 3 have zero denominators → masked.
+        assert_eq!(m, vec![false, true, false, true]);
+        let d: Vec<f64> = r.data().iter().copied().collect();
+        assert!((d[0] - 0.5).abs() < 1e-12);
+        assert!((d[2] - 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn divide_domain_preserves_numerator_and_denominator_masks() {
+        let num = make_ma(vec![1.0, 2.0, 3.0, 4.0], vec![false, true, false, false]);
+        let den = make_ma(vec![2.0, 5.0, 0.0, 4.0], vec![false, false, false, true]);
+        let r = divide_domain(&num, &den).unwrap();
+        let m: Vec<bool> = r.mask().iter().copied().collect();
+        // pos 1: num masked; pos 2: zero denom; pos 3: denom masked.
+        assert_eq!(m, vec![false, true, true, true]);
+    }
+
+    #[test]
+    fn masked_unary_domain_generic_path() {
+        // Custom domain: only positions where x is even allowed.
+        let ma = make_ma(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0],
+            vec![false, false, false, false, false],
+        );
+        let r = masked_unary_domain(
+            &ma,
+            |x| x * 2.0,
+            |x| (x as i32) % 2 == 0,
+        )
+        .unwrap();
+        let m: Vec<bool> = r.mask().iter().copied().collect();
+        assert_eq!(m, vec![true, false, true, false, true]);
+        let d: Vec<f64> = r.data().iter().copied().collect();
+        assert_eq!(d[1], 4.0);
+        assert_eq!(d[3], 8.0);
+    }
+
+    #[test]
+    fn masked_binary_domain_rejects_mismatched_shapes() {
+        let a = make_ma(vec![1.0, 2.0], vec![false, false]);
+        let b = make_ma(vec![1.0, 2.0, 3.0], vec![false, false, false]);
+        assert!(divide_domain(&a, &b).is_err());
+    }
+
+    #[test]
+    fn log_domain_with_custom_fill_value() {
+        let mut ma = make_ma(vec![1.0, -1.0, 2.0], vec![false, false, false]);
+        ma.set_fill_value(-999.0);
+        let r = log_domain(&ma).unwrap();
+        let d: Vec<f64> = r.data().iter().copied().collect();
+        // Position 1 is auto-masked → carries fill value.
+        assert_eq!(d[1], -999.0);
+        assert_eq!(r.fill_value(), -999.0);
     }
 }

@@ -49,6 +49,13 @@ pub use mask_ops::{count_masked, getdata, getmask, is_masked};
 // `ferray_ma::masked_unary(ma, my_fn)` directly.
 pub use ufunc_support::{masked_binary, masked_unary};
 
+// Domain-aware ufunc wrappers (#503) — auto-mask out-of-domain
+// inputs so the result mask carries a "safe to use" contract.
+pub use ufunc_support::{
+    arccos_domain, arccosh_domain, arcsin_domain, arctanh_domain, divide_domain, log10_domain,
+    log2_domain, log_domain, masked_binary_domain, masked_unary_domain, sqrt_domain,
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
