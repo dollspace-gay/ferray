@@ -6,16 +6,12 @@
     "409": {
       "agent_id": "phase-4-coordinator",
       "claimed_at": "2026-04-09T02:19:58.976554279Z"
-    },
-    "410": {
-      "agent_id": "phase-4-coordinator",
-      "claimed_at": "2026-04-09T02:16:50.634678622Z"
     }
   },
   "issues": {},
   "watermark": {
-    "timestamp": "2026-04-09T02:19:58.976554279Z",
+    "timestamp": "2026-04-09T02:22:46.287559361Z",
     "agent_id": "phase-4-coordinator",
-    "agent_seq": 328
+    "agent_seq": 329
   }
 }
