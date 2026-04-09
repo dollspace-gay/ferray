@@ -43,6 +43,12 @@ pub use arithmetic::{
 // Re-export mask manipulation functions
 pub use mask_ops::{count_masked, getdata, getmask, is_masked};
 
+// Re-export generic ufunc helpers (#513) — the escape hatch for
+// ufuncs that don't have a dedicated named wrapper. Users with an
+// arbitrary `Fn(T) -> T` / `Fn(T, T) -> T` closure can call
+// `ferray_ma::masked_unary(ma, my_fn)` directly.
+pub use ufunc_support::{masked_binary, masked_unary};
+
 #[cfg(test)]
 mod tests {
     use super::*;
