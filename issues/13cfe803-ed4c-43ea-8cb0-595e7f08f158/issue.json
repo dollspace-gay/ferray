@@ -1,0 +1,10 @@
+{
+  "uuid": "13cfe803-ed4c-43ea-8cb0-595e7f08f158",
+  "display_id": 563,
+  "title": "ferray-stats: plumb out= destinations through reduction kernels for zero-alloc",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-09T01:33:03.565971320Z",
+  "updated_at": "2026-04-09T01:33:03.565971320Z"
+}
