@@ -1,0 +1,10 @@
+{
+  "uuid": "8d41d2dc-869d-4e92-bc38-6c8767a44f64",
+  "display_id": 568,
+  "title": "ferray-core: Shape6 missing Debug derive breaks --all-features",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "phase-4-coordinator",
+  "created_at": "2026-04-09T05:16:59.654616045Z",
+  "updated_at": "2026-04-09T05:16:59.654616045Z"
+}
