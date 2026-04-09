@@ -13,6 +13,8 @@ use crate::scalar::LinalgFloat;
 /// Compute the Cholesky decomposition of a symmetric positive-definite matrix.
 ///
 /// Returns the lower triangular matrix `L` such that `A = L * L^T`.
+/// See [`cholesky_upper`] for the NumPy `upper=True` variant that returns
+/// the upper triangular factor `U` such that `A = U^T * U`.
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if the matrix is not square.
@@ -34,6 +36,34 @@ pub fn cholesky<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix2>
         })?;
     let l = llt.L();
     faer_bridge::faer_to_array2(&l.to_owned())
+}
+
+/// Compute the upper-triangular Cholesky decomposition.
+///
+/// Returns the upper triangular matrix `U` such that `A = U^T * U`.
+/// Equivalent to `np.linalg.cholesky(a, upper=True)` (#409).
+///
+/// Implemented as a transpose of the lower-triangular factor produced by
+/// [`cholesky`]: `U = L^T`. The underlying decomposition runs exactly
+/// once; only the result is reshaped in a single pass.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if the matrix is not square.
+/// - `FerrayError::SingularMatrix` if the matrix is not positive definite.
+pub fn cholesky_upper<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix2>> {
+    let l = cholesky(a)?;
+    let n = l.shape()[0];
+    let l_data = l.as_slice().ok_or_else(|| {
+        FerrayError::invalid_value("cholesky_upper: lower factor was not contiguous")
+    })?;
+    // U[i][j] = L[j][i] — single-pass swap into a fresh buffer.
+    let mut u_data = vec![<T as ferray_core::dtype::Element>::zero(); n * n];
+    for i in 0..n {
+        for j in 0..n {
+            u_data[i * n + j] = l_data[j * n + i];
+        }
+    }
+    Array::from_vec(Ix2::new([n, n]), u_data)
 }
 
 /// Batched Cholesky decomposition for 3D+ arrays.
@@ -202,5 +232,92 @@ mod tests {
         let data = vec![4.0, 2.0, 2.0, 3.0, -1.0, 0.0, 0.0, -1.0];
         let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 2]), data).unwrap();
         assert!(cholesky_batched(&a).is_err());
+    }
+
+    // ---- cholesky_upper (#409) ----
+
+    #[test]
+    fn cholesky_upper_2x2_reconstructs_input() {
+        // A = [[4, 2], [2, 3]]; U such that U^T * U == A.
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![4.0, 2.0, 2.0, 3.0]).unwrap();
+        let u = cholesky_upper(&a).unwrap();
+        let ud = u.as_slice().unwrap();
+        let n = 2;
+        for i in 0..n {
+            for j in 0..n {
+                // (U^T * U)[i, j] = sum_k U[k, i] * U[k, j]
+                let mut sum = 0.0;
+                for k in 0..n {
+                    sum += ud[k * n + i] * ud[k * n + j];
+                }
+                let expected = a.as_slice().unwrap()[i * n + j];
+                assert!(
+                    (sum - expected).abs() < 1e-10,
+                    "U^T*U[{i},{j}] = {sum} != {expected}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cholesky_upper_is_transpose_of_lower() {
+        // L from the default cholesky and U from cholesky_upper must
+        // satisfy U[i, j] == L[j, i] exactly.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![
+                4.0, 2.0, 1.0, 2.0, 5.0, 3.0, 1.0, 3.0, 6.0, //
+            ],
+        )
+        .unwrap();
+        let l = cholesky(&a).unwrap();
+        let u = cholesky_upper(&a).unwrap();
+        let ld = l.as_slice().unwrap();
+        let ud = u.as_slice().unwrap();
+        let n = 3;
+        for i in 0..n {
+            for j in 0..n {
+                assert!(
+                    (ud[i * n + j] - ld[j * n + i]).abs() < 1e-14,
+                    "U[{i},{j}]={} != L[{j},{i}]={}",
+                    ud[i * n + j],
+                    ld[j * n + i]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cholesky_upper_is_upper_triangular() {
+        // All entries strictly below the diagonal must be zero.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![4.0, 2.0, 1.0, 2.0, 5.0, 3.0, 1.0, 3.0, 6.0],
+        )
+        .unwrap();
+        let u = cholesky_upper(&a).unwrap();
+        let ud = u.as_slice().unwrap();
+        for i in 1..3 {
+            for j in 0..i {
+                assert!(
+                    ud[i * 3 + j].abs() < 1e-14,
+                    "U[{i},{j}]={} should be zero",
+                    ud[i * 3 + j]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cholesky_upper_rejects_non_square() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
+        assert!(cholesky_upper(&a).is_err());
+    }
+
+    #[test]
+    fn cholesky_upper_rejects_non_positive_definite() {
+        let a =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![-1.0, 0.0, 0.0, -1.0]).unwrap();
+        assert!(cholesky_upper(&a).is_err());
     }
 }

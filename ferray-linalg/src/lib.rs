@@ -49,8 +49,9 @@ pub use products::{
 
 // Decompositions (Section 8.2)
 pub use decomp::{
-    QrMode, cholesky, cholesky_batched, eig, eigh, eigh_batched, eigvals, eigvalsh,
-    eigvalsh_batched, lu, qr, qr_batched, svd, svd_batched, svdvals,
+    QrMode, UPLO, cholesky, cholesky_batched, cholesky_upper, eig, eigh, eigh_batched,
+    eigh_uplo, eigvals, eigvalsh, eigvalsh_batched, eigvalsh_uplo, lu, qr, qr_batched, svd,
+    svd_batched, svdvals,
 };
 
 // Solving and inversion (Section 8.3)

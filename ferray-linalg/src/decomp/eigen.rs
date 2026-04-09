@@ -13,6 +13,31 @@ use crate::batch;
 use crate::faer_bridge;
 use crate::scalar::LinalgFloat;
 
+/// Which triangle of a symmetric/Hermitian matrix to read during
+/// [`eigh`] / [`eigvalsh`] and their batched / UPLO-explicit variants.
+///
+/// Matches NumPy's `UPLO='L'` / `UPLO='U'` parameter on
+/// `np.linalg.eigh` (#410). The lower triangle is the default — it
+/// matches ferray's historical behaviour and NumPy's default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UPLO {
+    /// Read the lower triangle (default). Equivalent to `UPLO='L'`.
+    Lower,
+    /// Read the upper triangle. Equivalent to `UPLO='U'`.
+    Upper,
+}
+
+impl UPLO {
+    /// Translate to the faer `Side` enum used by the underlying solver.
+    #[inline]
+    fn to_faer_side(self) -> faer::Side {
+        match self {
+            UPLO::Lower => faer::Side::Lower,
+            UPLO::Upper => faer::Side::Upper,
+        }
+    }
+}
+
 /// Compute eigenvalues and right eigenvectors of a general square matrix.
 ///
 /// Returns `(eigenvalues, eigenvectors)` where eigenvalues is a 1D array
@@ -71,10 +96,35 @@ where
 /// of real `T` in nondecreasing order, and eigenvectors is a 2D real matrix
 /// whose columns are orthonormal eigenvectors.
 ///
+/// Reads the lower triangle — see [`eigh_uplo`] for the
+/// upper-triangle variant.
+///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if matrix is not square.
 /// - `FerrayError::InvalidValue` if eigendecomposition fails.
 pub fn eigh<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<(Array<T, Ix1>, Array<T, Ix2>)> {
+    eigh_uplo(a, UPLO::Lower)
+}
+
+/// Compute eigenvalues and eigenvectors of a symmetric (Hermitian) matrix,
+/// reading the specified triangle of the input.
+///
+/// Equivalent to `np.linalg.eigh(a, UPLO=...)` (#410). The lower
+/// triangle is ferray's historical default (and also NumPy's default);
+/// pass [`UPLO::Upper`] to read the upper triangle instead.
+///
+/// For a truly-symmetric matrix the two triangles should produce
+/// numerically-identical results; the parameter matters when the input
+/// is "assumed symmetric" and the two halves differ (e.g. a matrix
+/// built by filling only one triangle and leaving the other untouched).
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if matrix is not square.
+/// - `FerrayError::InvalidValue` if eigendecomposition fails.
+pub fn eigh_uplo<T: LinalgFloat>(
+    a: &Array<T, Ix2>,
+    uplo: UPLO,
+) -> FerrayResult<(Array<T, Ix1>, Array<T, Ix2>)> {
     let shape = a.shape();
     if shape[0] != shape[1] {
         return Err(FerrayError::shape_mismatch(format!(
@@ -86,7 +136,7 @@ pub fn eigh<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<(Array<T, Ix1>, A
     let mat = faer_bridge::array2_to_faer(a);
     let decomp = mat
         .as_ref()
-        .self_adjoint_eigen(faer::Side::Lower)
+        .self_adjoint_eigen(uplo.to_faer_side())
         .map_err(|e| FerrayError::InvalidValue {
             message: format!("symmetric eigendecomposition failed: {e:?}"),
         })?;
@@ -136,11 +186,28 @@ where
 /// Compute eigenvalues of a symmetric (Hermitian) matrix.
 ///
 /// Returns a 1D array of real `T` eigenvalues in nondecreasing order.
+/// Reads the lower triangle — see [`eigvalsh_uplo`] for the
+/// upper-triangle variant.
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if matrix is not square.
 /// - `FerrayError::InvalidValue` if computation fails.
 pub fn eigvalsh<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix1>> {
+    eigvalsh_uplo(a, UPLO::Lower)
+}
+
+/// Compute eigenvalues of a symmetric (Hermitian) matrix, reading the
+/// specified triangle.
+///
+/// Equivalent to `np.linalg.eigvalsh(a, UPLO=...)` (#410).
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if matrix is not square.
+/// - `FerrayError::InvalidValue` if computation fails.
+pub fn eigvalsh_uplo<T: LinalgFloat>(
+    a: &Array<T, Ix2>,
+    uplo: UPLO,
+) -> FerrayResult<Array<T, Ix1>> {
     let shape = a.shape();
     if shape[0] != shape[1] {
         return Err(FerrayError::shape_mismatch(format!(
@@ -151,7 +218,7 @@ pub fn eigvalsh<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix1>
     let mat = faer_bridge::array2_to_faer(a);
     let vals = mat
         .as_ref()
-        .self_adjoint_eigenvalues(faer::Side::Lower)
+        .self_adjoint_eigenvalues(uplo.to_faer_side())
         .map_err(|e| FerrayError::InvalidValue {
             message: format!("symmetric eigenvalue computation failed: {e:?}"),
         })?;
@@ -386,5 +453,109 @@ mod tests {
         assert!((v[1] - 2.0).abs() < 1e-10);
         assert!((v[2] - 3.0).abs() < 1e-10);
         assert!((v[3] - 4.0).abs() < 1e-10);
+    }
+
+    // ---- UPLO parameter (#410) ----
+
+    #[test]
+    fn eigh_uplo_lower_matches_default_eigh() {
+        // The default eigh always uses Lower; eigh_uplo(a, Lower) must
+        // produce identical results.
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![2.0, 1.0, 1.0, 2.0]).unwrap();
+        let (v_default, e_default) = eigh(&a).unwrap();
+        let (v_lower, e_lower) = eigh_uplo(&a, UPLO::Lower).unwrap();
+        assert_eq!(v_default.as_slice().unwrap(), v_lower.as_slice().unwrap());
+        assert_eq!(e_default.as_slice().unwrap(), e_lower.as_slice().unwrap());
+    }
+
+    #[test]
+    fn eigh_uplo_symmetric_input_same_for_both_triangles() {
+        // For a truly-symmetric input the two triangles carry identical
+        // data, so eigh_uplo(Upper) and eigh_uplo(Lower) must produce
+        // the same eigenvalues (up to numerical noise).
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![4.0, 1.0, 2.0, 1.0, 3.0, 0.5, 2.0, 0.5, 5.0],
+        )
+        .unwrap();
+        let (v_lower, _) = eigh_uplo(&a, UPLO::Lower).unwrap();
+        let (v_upper, _) = eigh_uplo(&a, UPLO::Upper).unwrap();
+        for (l, u) in v_lower
+            .as_slice()
+            .unwrap()
+            .iter()
+            .zip(v_upper.as_slice().unwrap())
+        {
+            assert!((l - u).abs() < 1e-10, "lower {l} vs upper {u}");
+        }
+    }
+
+    #[test]
+    fn eigh_uplo_asymmetric_lower_vs_upper_differ() {
+        // An asymmetric matrix: Lower reads only the lower triangle
+        // (interpreting the rest as its mirror); Upper reads only the
+        // upper triangle. The two should produce different eigenvalues
+        // because they're actually factoring different symmetric
+        // matrices derived from the input.
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 2]),
+            vec![
+                3.0, 10.0, // Lower reads (0,0)=3 and (1,0)=0
+                0.0, 5.0, // Upper reads (0,0)=3, (0,1)=10, (1,1)=5
+            ],
+        )
+        .unwrap();
+        let (v_lower, _) = eigh_uplo(&a, UPLO::Lower).unwrap();
+        let (v_upper, _) = eigh_uplo(&a, UPLO::Upper).unwrap();
+        // Lower triangle = [[3, 0], [0, 5]] → eigenvalues {3, 5}
+        assert!((v_lower.as_slice().unwrap()[0] - 3.0).abs() < 1e-10);
+        assert!((v_lower.as_slice().unwrap()[1] - 5.0).abs() < 1e-10);
+        // Upper triangle = [[3, 10], [10, 5]] → eigenvalues != {3, 5}
+        let vu = v_upper.as_slice().unwrap();
+        assert!(
+            (vu[0] - 3.0).abs() > 0.1 || (vu[1] - 5.0).abs() > 0.1,
+            "upper eigenvalues should differ from lower: got {vu:?}"
+        );
+    }
+
+    #[test]
+    fn eigvalsh_uplo_lower_matches_default() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![2.0, 1.0, 1.0, 2.0]).unwrap();
+        let v_default = eigvalsh(&a).unwrap();
+        let v_lower = eigvalsh_uplo(&a, UPLO::Lower).unwrap();
+        assert_eq!(v_default.as_slice().unwrap(), v_lower.as_slice().unwrap());
+    }
+
+    #[test]
+    fn eigvalsh_uplo_symmetric_upper_matches_lower() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![4.0, 1.0, 2.0, 1.0, 3.0, 0.5, 2.0, 0.5, 5.0],
+        )
+        .unwrap();
+        let v_lower = eigvalsh_uplo(&a, UPLO::Lower).unwrap();
+        let v_upper = eigvalsh_uplo(&a, UPLO::Upper).unwrap();
+        for (l, u) in v_lower
+            .as_slice()
+            .unwrap()
+            .iter()
+            .zip(v_upper.as_slice().unwrap())
+        {
+            assert!((l - u).abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn eigh_uplo_rejects_non_square() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
+        assert!(eigh_uplo(&a, UPLO::Lower).is_err());
+        assert!(eigh_uplo(&a, UPLO::Upper).is_err());
+    }
+
+    #[test]
+    fn eigvalsh_uplo_rejects_non_square() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
+        assert!(eigvalsh_uplo(&a, UPLO::Lower).is_err());
+        assert!(eigvalsh_uplo(&a, UPLO::Upper).is_err());
     }
 }
