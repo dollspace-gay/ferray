@@ -1,0 +1,10 @@
+{
+  "uuid": "51a7fe9e-9bc2-4dd8-ad31-192b8c5e63f5",
+  "issue_uuid": "b5b522f5-f7c1-4bd9-abb9-7e4bb232ebd1",
+  "author": "phase-4-coordinator",
+  "content": "Bumped workspace to 0.2.10 and re-synced internal dep specifiers (were stale at 0.2.8 from dd99b0e8's partial bump). cargo check --workspace passes.",
+  "created_at": "2026-04-09T05:13:19.111052308Z",
+  "kind": "handoff",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABATwodE/6YB5GiAVX4UngY/gfs1HhQH61Axsx7Se/PjW03LSo6lLUhhMqemCXKQpfCEq0uejTEEFX8YlvRhc16AA=="
+}
