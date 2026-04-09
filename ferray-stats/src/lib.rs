@@ -36,7 +36,8 @@ pub use reductions::{
 
 // Quantile-based
 pub use reductions::quantile::{
-    median, nanmedian, nanpercentile, nanquantile, percentile, quantile,
+    QuantileMethod, median, nanmedian, nanpercentile, nanquantile, percentile,
+    percentile_with_method, quantile, quantile_with_method,
 };
 
 // NaN-aware reductions
