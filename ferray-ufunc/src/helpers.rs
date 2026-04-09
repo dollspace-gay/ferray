@@ -87,6 +87,34 @@ where
 // slice kernels (`unary_slice_op_f64/f32`, `try_simd_f64_unary`) *do* benefit
 // from parallelism and have parallel dispatch at the compute-bound threshold.
 
+/// Borrow the input as a contiguous slice when possible, otherwise
+/// materialize the elements into a fresh row-major Vec.
+///
+/// Used by the unary fast paths so non-contiguous inputs (e.g. transposed
+/// or strided views) can still feed SIMD / parallel slice kernels —
+/// previously these inputs fell straight through to the generic
+/// `input.iter().map().collect()` scalar path with no chance of SIMD
+/// acceleration (#385). The cost on the non-contig branch is one
+/// allocation + one element-by-element copy, which is still far cheaper
+/// than scalar evaluation of a transcendental kernel over millions of
+/// elements.
+///
+/// On the contig branch the returned `Cow::Borrowed` aliases the
+/// underlying buffer with no copy at all, so the existing C-contig fast
+/// path keeps its zero-overhead behaviour.
+#[inline]
+pub(crate) fn contig_input<T, D>(input: &Array<T, D>) -> std::borrow::Cow<'_, [T]>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    if let Some(slice) = input.as_slice() {
+        std::borrow::Cow::Borrowed(slice)
+    } else {
+        std::borrow::Cow::Owned(input.iter().copied().collect())
+    }
+}
+
 /// Apply a unary function elementwise, preserving dimension.
 /// Works for any `T: Element + Float` (or any Copy type with the given fn).
 ///
@@ -105,22 +133,22 @@ where
     T: Element + Copy,
     D: Dimension,
 {
-    if let Some(slice) = input.as_slice() {
-        let n = slice.len();
-        let mut data = Vec::with_capacity(n);
-        // SAFETY: every element is written below before the Vec is read.
-        #[allow(clippy::uninit_vec)]
-        unsafe {
-            data.set_len(n);
-        }
-        for (o, &x) in data.iter_mut().zip(slice.iter()) {
-            *o = f(x);
-        }
-        Array::from_vec(input.dim().clone(), data)
-    } else {
-        let data: Vec<T> = input.iter().map(|&x| f(x)).collect();
-        Array::from_vec(input.dim().clone(), data)
+    // Run the same auto-vectorizable loop on contig and non-contig inputs.
+    // For non-contig views `contig_input` materializes a row-major Vec
+    // first (#385) so the loop below can still benefit from auto-SIMD
+    // instead of going through the generic per-element iterator path.
+    let src = contig_input(input);
+    let n = src.len();
+    let mut data = Vec::with_capacity(n);
+    // SAFETY: every element is written below before the Vec is read.
+    #[allow(clippy::uninit_vec)]
+    unsafe {
+        data.set_len(n);
     }
+    for (o, &x) in data.iter_mut().zip(src.iter()) {
+        *o = f(x);
+    }
+    Array::from_vec(input.dim().clone(), data)
 }
 
 /// Parallel variant of [`unary_float_op`] for compute-bound scalar kernels.
@@ -139,20 +167,19 @@ where
     T: Element + Copy,
     D: Dimension,
 {
-    if let Some(slice) = input.as_slice() {
-        let n = slice.len();
-        let mut data = Vec::with_capacity(n);
-        // SAFETY: every element is written below before the Vec is read.
-        #[allow(clippy::uninit_vec)]
-        unsafe {
-            data.set_len(n);
-        }
-        parallel_unary_fill_threshold(slice, &mut data, THRESHOLD_COMPUTE_BOUND, f);
-        Array::from_vec(input.dim().clone(), data)
-    } else {
-        let data: Vec<T> = input.iter().map(|&x| f(x)).collect();
-        Array::from_vec(input.dim().clone(), data)
+    // Materialize non-contig inputs once so the parallel kernel can run
+    // on the resulting Vec — for compute-bound transcendentals this is
+    // a clear win even with the extra allocation (#385).
+    let src = contig_input(input);
+    let n = src.len();
+    let mut data = Vec::with_capacity(n);
+    // SAFETY: every element is written below before the Vec is read.
+    #[allow(clippy::uninit_vec)]
+    unsafe {
+        data.set_len(n);
     }
+    parallel_unary_fill_threshold(&src, &mut data, THRESHOLD_COMPUTE_BOUND, f);
+    Array::from_vec(input.dim().clone(), data)
 }
 
 /// Apply a unary operation using a pre-written slice-to-slice kernel.
@@ -165,26 +192,28 @@ where
 pub fn unary_slice_op_f64<D>(
     input: &Array<f64, D>,
     kernel: fn(&[f64], &mut [f64]),
-    scalar_fallback: fn(f64) -> f64,
 ) -> FerrayResult<Array<f64, D>>
 where
     D: Dimension,
 {
     let n = input.size();
-    if let Some(slice) = input.as_slice() {
-        // SAFETY: kernel writes all n elements. We allocate uninit memory and let
-        // the kernel fill it, avoiding a pointless zeroing pass over 8*n bytes.
-        let mut data = Vec::with_capacity(n);
-        #[allow(clippy::uninit_vec)]
-        unsafe {
-            data.set_len(n);
-        }
-        run_slice_kernel_f64(slice, &mut data, kernel);
-        Array::from_vec(input.dim().clone(), data)
-    } else {
-        let data: Vec<f64> = input.iter().map(|&x| scalar_fallback(x)).collect();
-        Array::from_vec(input.dim().clone(), data)
+    // Always go through the SIMD slice kernel — for non-contig inputs we
+    // pay one allocation to materialize a row-major Vec<f64> and then the
+    // kernel runs on bulk slices instead of falling back to a per-element
+    // scalar loop (#385). Previously this function took a separate
+    // `scalar_fallback: fn(f64) -> f64` for the non-contig branch; that
+    // parameter has been removed because the contig_input helper makes
+    // the slice kernel work uniformly.
+    let src = contig_input(input);
+    // SAFETY: kernel writes all n elements. We allocate uninit memory and let
+    // the kernel fill it, avoiding a pointless zeroing pass over 8*n bytes.
+    let mut data = Vec::with_capacity(n);
+    #[allow(clippy::uninit_vec)]
+    unsafe {
+        data.set_len(n);
     }
+    run_slice_kernel_f64(&src, &mut data, kernel);
+    Array::from_vec(input.dim().clone(), data)
 }
 
 /// Apply a unary operation using a pre-written slice-to-slice kernel for f32.
@@ -192,24 +221,21 @@ where
 pub fn unary_slice_op_f32<D>(
     input: &Array<f32, D>,
     kernel: fn(&[f32], &mut [f32]),
-    scalar_fallback: fn(f32) -> f32,
 ) -> FerrayResult<Array<f32, D>>
 where
     D: Dimension,
 {
     let n = input.size();
-    if let Some(slice) = input.as_slice() {
-        let mut data = Vec::with_capacity(n);
-        #[allow(clippy::uninit_vec)]
-        unsafe {
-            data.set_len(n);
-        }
-        run_slice_kernel_f32(slice, &mut data, kernel);
-        Array::from_vec(input.dim().clone(), data)
-    } else {
-        let data: Vec<f32> = input.iter().map(|&x| scalar_fallback(x)).collect();
-        Array::from_vec(input.dim().clone(), data)
+    // See unary_slice_op_f64 for the rationale on dropping the
+    // scalar_fallback parameter (#385).
+    let src = contig_input(input);
+    let mut data = Vec::with_capacity(n);
+    #[allow(clippy::uninit_vec)]
+    unsafe {
+        data.set_len(n);
     }
+    run_slice_kernel_f32(&src, &mut data, kernel);
+    Array::from_vec(input.dim().clone(), data)
 }
 
 /// Run a SIMD f64 kernel on potentially-parallel chunks via rayon's global pool.
@@ -246,10 +272,16 @@ fn run_slice_kernel_f32(src: &[f32], out: &mut [f32], kernel: fn(&[f32], &mut [f
     }
 }
 
-/// Try to run a SIMD f64 kernel on a contiguous array.
+/// Try to run a SIMD f64 kernel on an array, regardless of memory layout.
 ///
-/// Returns `None` if `T` is not `f64` or the array is not contiguous,
-/// allowing the caller to fall back to the generic scalar path.
+/// Returns `None` only when `T` is not `f64`. For non-contig f64 inputs
+/// the elements are first materialized into a fresh row-major Vec<f64>
+/// (#385) and the kernel runs on that — previously this short-circuited
+/// to `None` for any non-contig view, forcing callers down the scalar
+/// fallback path even on transposed/strided f64 arrays where the SIMD
+/// win is large.
+///
+/// The result is always a fresh C-contig owned array.
 #[inline]
 pub fn try_simd_f64_unary<T, D>(
     input: &Array<T, D>,
@@ -264,17 +296,24 @@ where
     if TypeId::of::<T>() != TypeId::of::<f64>() {
         return None;
     }
-    let slice = input.as_slice()?;
-    let n = slice.len();
+
+    // Borrow the f64 slice if the input is contig, otherwise materialize
+    // a row-major Vec<f64>. The Cow's Owned variant is held alive for the
+    // duration of the kernel call below; we need an explicit binding so
+    // the borrow lasts long enough.
+    let n = input.size();
+    let src_t = contig_input(input);
     // SAFETY: T is f64, verified by TypeId check above. f64 and T have
     // identical size, alignment, and bit representation.
-    let f64_slice: &[f64] = unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const f64, n) };
+    let src_f64: &[f64] = unsafe { std::slice::from_raw_parts(src_t.as_ptr() as *const f64, n) };
+
     let mut output = Vec::with_capacity(n);
     #[allow(clippy::uninit_vec)]
     unsafe {
         output.set_len(n);
     }
-    run_slice_kernel_f64(f64_slice, &mut output, kernel);
+    run_slice_kernel_f64(src_f64, &mut output, kernel);
+
     // SAFETY: T is f64. Reinterpret Vec<f64> as Vec<T> without copying.
     let t_vec: Vec<T> = unsafe {
         let mut md = std::mem::ManuallyDrop::new(output);
@@ -291,7 +330,11 @@ where
     U: Element,
     D: Dimension,
 {
-    let data: Vec<U> = input.iter().map(|&x| f(x)).collect();
+    // Materialize non-contig inputs first (#385) so the inner loop iterates
+    // a flat slice — much friendlier to auto-vectorization than the
+    // generic ndarray iterator and uniform with the other unary helpers.
+    let src = contig_input(input);
+    let data: Vec<U> = src.iter().map(|&x| f(x)).collect();
     Array::from_vec(input.dim().clone(), data)
 }
 
@@ -318,23 +361,23 @@ where
     T: Element + Copy,
     D: Dimension,
 {
-    // Fast path: identical shapes — no broadcasting needed.
+    // Fast path: identical shapes — no broadcasting needed. Materialize
+    // any non-contig operand into a row-major Vec first (#385) so the
+    // inner zip-loop sees two flat slices and can auto-vectorize.
     if a.shape() == b.shape() {
-        // Contiguous subpath: iterate over raw slices so the compiler
-        // auto-vectorizes the inner loop. Memory-bound, no parallelism.
-        if let (Some(a_slice), Some(b_slice)) = (a.as_slice(), b.as_slice()) {
-            let data: Vec<T> = a_slice
-                .iter()
-                .zip(b_slice.iter())
-                .map(|(&x, &y)| f(x, y))
-                .collect();
-            return Array::from_vec(a.dim().clone(), data);
-        }
-        let data: Vec<T> = a.iter().zip(b.iter()).map(|(&x, &y)| f(x, y)).collect();
+        let a_src = contig_input(a);
+        let b_src = contig_input(b);
+        let data: Vec<T> = a_src
+            .iter()
+            .zip(b_src.iter())
+            .map(|(&x, &y)| f(x, y))
+            .collect();
         return Array::from_vec(a.dim().clone(), data);
     }
 
-    // Broadcasting path.
+    // Broadcasting path. Broadcast views are stride-tricked, never
+    // contig — there is no contig fast path to take here, so we walk
+    // them via the iterator interface.
     let target_shape = broadcast_shapes(a.shape(), b.shape()).map_err(|_| {
         FerrayError::shape_mismatch(format!(
             "binary op: shapes {:?} and {:?} are not broadcast-compatible",
@@ -375,20 +418,21 @@ where
     D: Dimension,
 {
     // Fast path: identical shapes — no broadcasting needed.
+    // Materialize non-contig operands first (#385) so the inner zip-loop
+    // sees flat slices.
     if a.shape() == b.shape() {
-        if let (Some(a_slice), Some(b_slice)) = (a.as_slice(), b.as_slice()) {
-            let data: Vec<U> = a_slice
-                .iter()
-                .zip(b_slice.iter())
-                .map(|(&x, &y)| f(x, y))
-                .collect();
-            return Array::from_vec(a.dim().clone(), data);
-        }
-        let data: Vec<U> = a.iter().zip(b.iter()).map(|(&x, &y)| f(x, y)).collect();
+        let a_src = contig_input(a);
+        let b_src = contig_input(b);
+        let data: Vec<U> = a_src
+            .iter()
+            .zip(b_src.iter())
+            .map(|(&x, &y)| f(x, y))
+            .collect();
         return Array::from_vec(a.dim().clone(), data);
     }
 
-    // Broadcasting path.
+    // Broadcasting path. Broadcast views are stride-tricked, never
+    // contig — there is no contig fast path to take here.
     let target_shape = broadcast_shapes(a.shape(), b.shape()).map_err(|_| {
         FerrayError::shape_mismatch(format!(
             "binary op: shapes {:?} and {:?} are not broadcast-compatible",
@@ -427,17 +471,16 @@ where
     V: Element,
     D: Dimension,
 {
-    // Fast path: identical shapes.
+    // Fast path: identical shapes. Materialize non-contig operands so the
+    // zip-loop runs over flat slices (#385).
     if a.shape() == b.shape() {
-        if let (Some(a_slice), Some(b_slice)) = (a.as_slice(), b.as_slice()) {
-            let data: Vec<V> = a_slice
-                .iter()
-                .zip(b_slice.iter())
-                .map(|(&x, &y)| f(x, y))
-                .collect();
-            return Array::from_vec(a.dim().clone(), data);
-        }
-        let data: Vec<V> = a.iter().zip(b.iter()).map(|(&x, &y)| f(x, y)).collect();
+        let a_src = contig_input(a);
+        let b_src = contig_input(b);
+        let data: Vec<V> = a_src
+            .iter()
+            .zip(b_src.iter())
+            .map(|(&x, &y)| f(x, y))
+            .collect();
         return Array::from_vec(a.dim().clone(), data);
     }
 
@@ -849,5 +892,174 @@ mod tests {
         let b = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
         assert!(binary_elementwise_op(&a, &b, |x, y| x + y).is_err());
         assert!(binary_map_op(&a, &b, |x, y| x == y).is_err());
+    }
+
+    // -----------------------------------------------------------------------
+    // Stride-aware non-contig path coverage (#385)
+    //
+    // Owned ferray arrays from from_vec are always C-contig, so we use
+    // from_vec_f to construct a Fortran-order array — its `as_slice()`
+    // returns None, exercising the contig_input materialization branch.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn contig_input_borrows_for_c_order() {
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        // C-contig owned arrays must take the borrow branch.
+        let cow = contig_input(&a);
+        match cow {
+            std::borrow::Cow::Borrowed(_) => {}
+            std::borrow::Cow::Owned(_) => panic!("expected borrow for C-contig array"),
+        }
+    }
+
+    #[test]
+    fn contig_input_materializes_for_fortran_order() {
+        // Fortran-order owned array — as_slice() returns None for the
+        // C-order request, so contig_input must materialize a fresh
+        // row-major Vec. The materialized values must match the logical
+        // C-order traversal of the input.
+        let f = Array::<f64, Ix2>::from_vec_f(
+            Ix2::new([2, 3]),
+            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
+        )
+        .unwrap();
+        // Logical layout is [[1,2,3],[4,5,6]] regardless of memory order.
+        assert_eq!(
+            f.iter().copied().collect::<Vec<_>>(),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        );
+        // f.as_slice() must return None — that's the precondition we want
+        // to exercise.
+        assert!(f.as_slice().is_none());
+
+        let cow = contig_input(&f);
+        match cow {
+            std::borrow::Cow::Owned(v) => {
+                // The materialized buffer must be in C order.
+                assert_eq!(v, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+            }
+            std::borrow::Cow::Borrowed(_) => {
+                panic!("expected materialized owned Vec for Fortran-order input")
+            }
+        }
+    }
+
+    #[test]
+    fn unary_float_op_works_on_fortran_layout() {
+        let f = Array::<f64, Ix2>::from_vec_f(
+            Ix2::new([2, 3]),
+            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
+        )
+        .unwrap();
+        // sqrt over the logical [[1,2,3],[4,5,6]] → [[1,√2,√3],[2,√5,√6]]
+        let r = unary_float_op(&f, f64::sqrt).unwrap();
+        let s = r.as_slice().unwrap();
+        let expected: Vec<f64> = [1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0]
+            .iter()
+            .map(|x| x.sqrt())
+            .collect();
+        assert_eq!(s, expected.as_slice());
+    }
+
+    #[test]
+    fn unary_map_op_works_on_fortran_layout() {
+        let f = Array::<f64, Ix2>::from_vec_f(
+            Ix2::new([2, 3]),
+            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
+        )
+        .unwrap();
+        // Mapping each element to its truncated integer.
+        let r = unary_map_op(&f, |x| x as i32).unwrap();
+        let s = r.as_slice().unwrap();
+        assert_eq!(s, &[1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn binary_elementwise_op_handles_fortran_lhs() {
+        // F-order LHS, C-order RHS, same shape — must produce a correct
+        // C-order result without losing track of the logical positions.
+        let a = Array::<f64, Ix2>::from_vec_f(
+            Ix2::new([2, 3]),
+            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
+        )
+        .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+        )
+        .unwrap();
+        let r = binary_elementwise_op(&a, &b, |x, y| x + y).unwrap();
+        assert_eq!(
+            r.as_slice().unwrap(),
+            &[11.0, 22.0, 33.0, 44.0, 55.0, 66.0]
+        );
+    }
+
+    #[test]
+    fn binary_elementwise_op_handles_two_fortran_inputs() {
+        let a = Array::<f64, Ix2>::from_vec_f(
+            Ix2::new([2, 3]),
+            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
+        )
+        .unwrap();
+        let b = Array::<f64, Ix2>::from_vec_f(
+            Ix2::new([2, 3]),
+            vec![10.0, 40.0, 20.0, 50.0, 30.0, 60.0],
+        )
+        .unwrap();
+        let r = binary_elementwise_op(&a, &b, |x, y| x + y).unwrap();
+        assert_eq!(
+            r.as_slice().unwrap(),
+            &[11.0, 22.0, 33.0, 44.0, 55.0, 66.0]
+        );
+    }
+
+    #[test]
+    fn binary_map_op_handles_fortran_layout() {
+        // Comparison ops should also work on F-order inputs.
+        let a = Array::<f64, Ix2>::from_vec_f(
+            Ix2::new([2, 3]),
+            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
+        )
+        .unwrap();
+        let b = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 1.0, 4.0, 5.0, 5.0, 5.0],
+        )
+        .unwrap();
+        let r = binary_map_op(&a, &b, |x, y| x > y).unwrap();
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![false, true, false, false, false, true]
+        );
+    }
+
+    #[test]
+    fn try_simd_f64_unary_runs_on_fortran_layout() {
+        // Previously this short-circuited to None on non-contig f64. Now
+        // it materializes the input and runs the SIMD kernel against the
+        // materialized buffer.
+        fn double_kernel(src: &[f64], dst: &mut [f64]) {
+            for (o, &x) in dst.iter_mut().zip(src.iter()) {
+                *o = x * 2.0;
+            }
+        }
+        let f = Array::<f64, Ix2>::from_vec_f(
+            Ix2::new([2, 3]),
+            vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0],
+        )
+        .unwrap();
+        let r = try_simd_f64_unary(&f, double_kernel)
+            .expect("try_simd_f64_unary should succeed for f64 input")
+            .unwrap();
+        assert_eq!(
+            r.as_slice().unwrap(),
+            &[2.0, 4.0, 6.0, 8.0, 10.0, 12.0]
+        );
     }
 }
