@@ -219,7 +219,9 @@ pub use ferray_stats::{
 };
 
 // Quantile-based
-pub use ferray_stats::{median, percentile, quantile};
+pub use ferray_stats::{
+    QuantileMethod, median, percentile, percentile_with_method, quantile, quantile_with_method,
+};
 
 // NaN-aware reductions — same rationale as above, `nancumsum` /
 // `nancumprod` come from ferray-ufunc so we only re-export the
