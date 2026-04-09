@@ -1,0 +1,10 @@
+{
+  "uuid": "bcbbf4ee-f071-4bf5-80aa-b875c14c4f1f",
+  "issue_uuid": "8d41d2dc-869d-4e92-bc38-6c8767a44f64",
+  "author": "phase-4-coordinator",
+  "content": "Fixed 47-error cascade in ferray-core under --all-features. Root cause was three layered issues: (1) no_std was an additive feature that broke when combined with std — inverted to use 'std' as positive gate across 6 files; (2) dimension/static_shape.rs had bitrotted (used std::fmt, format!, Vec, and Dimension methods only present in std mode) — gated on all(const_shapes, std); (3) static_shape.rs defined duplicate into_dyn methods on Array<T,Shape{1,2,3}> that shadowed the generic in array/methods.rs. Also moved 2 compile_fail doctests from empty carrier functions onto the actual StaticMatMul/StaticBroadcast traits they prove things about. Ran cargo fmt --all as cleanup. Verified: cargo check --workspace --all-features clean, clippy -D warnings clean, 637 ferray-core tests passing, no_std build still works via --no-default-features.",
+  "created_at": "2026-04-09T05:26:39.731571974Z",
+  "kind": "handoff",
+  "signed_by": "SHA256:RSyq73Ni/++U0FAGQPq/3eEWN/DN4FNWZstpmEppo8U",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgNh0kMEY8j/krhmCJbceXja7hFMiijksH0Rph0A0JsoQAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAWdWDWNEBmvQ7AlHoQ9MXN3FtYzZwqcPcrPJ23xyFaQGl5l0+2gu/MkrVcDt5Dalxo4sAEx6Ro1UqbI6NwHlVAw=="
+}
