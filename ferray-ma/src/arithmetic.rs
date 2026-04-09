@@ -108,6 +108,22 @@ where
     F: Fn(T) -> T,
 {
     let fill = ma.fill_value;
+
+    // Fast path: nomask sentinel (#506) — no mask bits to consult, so
+    // `f` is applied to every element unconditionally and the result
+    // inherits the nomask state via `from_data`. Skips two full bool
+    // allocations (iterating ma.mask() materializes the lazy mask, and
+    // MaskedArray::new stores a cloned copy in the result).
+    if !ma.has_real_mask() {
+        let data: Vec<T> = ma.data().iter().map(|&v| f(v)).collect();
+        let result_data = Array::from_vec(ma.dim().clone(), data)?;
+        let mut out = MaskedArray::from_data(result_data)?;
+        out.fill_value = fill;
+        return Ok(out);
+    }
+
+    // Slow path: a real mask is present; apply f only at unmasked
+    // positions and carry fill_value through masked positions.
     let data: Vec<T> = ma
         .data()
         .iter()
@@ -140,8 +156,28 @@ where
 {
     // Fast path: identical shapes — no broadcasting needed.
     if a.shape() == b.shape() {
-        let result_mask = mask_union(a.mask(), b.mask())?;
         let fill = a.fill_value;
+
+        // Double-fast path (#506): neither input has a real mask, so
+        // there's no mask to union and no masked positions to skip.
+        // `op` applies to every element unconditionally and the
+        // result stays in the nomask-sentinel state.
+        if !a.has_real_mask() && !b.has_real_mask() {
+            let data: Vec<T> = a
+                .data()
+                .iter()
+                .zip(b.data().iter())
+                .map(|(&x, &y)| op(x, y))
+                .collect();
+            let result_data = Array::from_vec(a.dim().clone(), data)?;
+            let mut result = MaskedArray::from_data(result_data)?;
+            result.fill_value = fill;
+            return Ok(result);
+        }
+
+        // Slow path: at least one input has a real mask; compute the
+        // union and apply `op` only at unmasked positions.
+        let result_mask = mask_union(a.mask(), b.mask())?;
         let data: Vec<T> = a
             .data()
             .iter()
