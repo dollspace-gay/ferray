@@ -399,7 +399,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-core"
-version = "0.2.4"
+version = "0.2.10"
 dependencies = [
  "ferray-core-macros",
  "ndarray",
@@ -410,7 +410,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-core-macros"
-version = "0.2.4"
+version = "0.2.10"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -419,17 +419,19 @@ dependencies = [
 
 [[package]]
 name = "ferray-fft"
-version = "0.2.4"
+version = "0.2.10"
 dependencies = [
  "ferray-core",
  "num-complex",
+ "num-traits",
  "rayon",
+ "realfft",
  "rustfft",
 ]
 
 [[package]]
 name = "ferray-linalg"
-version = "0.2.4"
+version = "0.2.10"
 dependencies = [
  "faer",
  "faer-traits",
@@ -442,7 +444,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-stats"
-version = "0.2.4"
+version = "0.2.10"
 dependencies = [
  "ferray-core",
  "ferray-ufunc",
@@ -453,7 +455,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-ufunc"
-version = "0.2.4"
+version = "0.2.10"
 dependencies = [
  "core-math",
  "ferray-core",
@@ -909,7 +911,7 @@ checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
 dependencies = [
  "bytemuck",
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.6",
 ]
 
 [[package]]
@@ -1135,9 +1137,9 @@ checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
 
 [[package]]
 name = "rand"
-version = "0.8.5"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+checksum = "5ca0ecfa931c29007047d1bc58e623ab12e5590e8c7cc53200d5202b69266d8a"
 dependencies = [
  "rand_core 0.6.4",
 ]
@@ -1220,6 +1222,15 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "realfft"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f821338fddb99d089116342c46e9f1fbf3828dba077674613e734e01d6ea8677"
+dependencies = [
+ "rustfft",
 ]
 
 [[package]]
