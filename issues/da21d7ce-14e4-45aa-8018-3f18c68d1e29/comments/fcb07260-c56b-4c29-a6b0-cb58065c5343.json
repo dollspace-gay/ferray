@@ -1,0 +1,10 @@
+{
+  "uuid": "fcb07260-c56b-4c29-a6b0-cb58065c5343",
+  "issue_uuid": "da21d7ce-14e4-45aa-8018-3f18c68d1e29",
+  "author": "doll-agent",
+  "content": "Triggered by clippy 1.95 lint set:\n\n- 31x needless_borrows_for_generic_args at ferray-ufunc/src/ufunc_methods.rs (lines 460,486,493,500,546,714,721,730,745,751,752,760,761,769,770,781,791,798,804) and ferray-ufunc/src/ufunc_object.rs (lines 214,215,223,231,240,248,249,259,268,276,298,299) — pattern: `arr1(&[...])` should be `arr1([...])`\n- 1x inconsistent_digit_grouping at ferray-ufunc/src/ops/bitwise.rs:237:53\n\nAll in #[cfg(test)] code, mechanical fix. Discovered during /maintain run on issue #569.",
+  "created_at": "2026-04-29T02:42:39.482587888Z",
+  "kind": "note",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAOpvf0Pj4OSaEl2qDFp1PduLHDRacn4Nx8MCB0DxfJg+cwSXXED26p51JnIYRvNat3Co+I4La/BK2GLHfQJ/FAA=="
+}
