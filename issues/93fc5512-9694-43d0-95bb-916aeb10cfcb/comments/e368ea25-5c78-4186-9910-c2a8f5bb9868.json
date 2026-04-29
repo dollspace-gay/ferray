@@ -1,0 +1,10 @@
+{
+  "uuid": "e368ea25-5c78-4186-9910-c2a8f5bb9868",
+  "issue_uuid": "93fc5512-9694-43d0-95bb-916aeb10cfcb",
+  "author": "doll-agent",
+  "content": "Updated README.md: 15 -> 17 crates (added ferray-core-macros + ferray-test-oracle), 1479 -> 2716 tests.",
+  "created_at": "2026-04-29T02:51:20.472218139Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAFOnhVjaKY2I7KvsQW9oeqlt7c4OZ1afUPA9lEdE9ccDAgq61q04/s+/LbUWo0aYLCWO7cKrC4TcsKaAtNTJaAQ=="
+}
