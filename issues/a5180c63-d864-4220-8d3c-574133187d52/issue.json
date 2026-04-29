@@ -2,11 +2,12 @@
   "uuid": "a5180c63-d864-4220-8d3c-574133187d52",
   "display_id": 571,
   "title": "docs: CHANGELOG.md lists open-issue limitations under [0.1.0] ### Added",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-04-29T02:44:14.340653048Z",
-  "updated_at": "2026-04-29T02:44:16.027392167Z",
+  "updated_at": "2026-04-29T02:51:19.208622850Z",
+  "closed_at": "2026-04-29T02:51:19.208622850Z",
   "labels": [
     "maintenance"
   ]
