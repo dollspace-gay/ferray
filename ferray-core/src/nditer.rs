@@ -274,9 +274,9 @@ pub struct BinaryBroadcastIter<'a, T: Element> {
     a_view: ArrayView<'a, T, IxDyn>,
     /// Broadcast view of the second array.
     b_view: ArrayView<'a, T, IxDyn>,
-    /// Materialized data from a_view for owned iteration.
+    /// Materialized data from `a_view` for owned iteration.
     a_data: Vec<T>,
-    /// Materialized data from b_view for owned iteration.
+    /// Materialized data from `b_view` for owned iteration.
     b_data: Vec<T>,
     /// Current position in the iteration.
     index: usize,
@@ -304,7 +304,7 @@ impl<T: Element + Copy> Iterator for BinaryBroadcastIter<'_, T> {
 
 impl<T: Element + Copy> ExactSizeIterator for BinaryBroadcastIter<'_, T> {}
 
-impl<'a, T: Element> BinaryBroadcastIter<'a, T> {
+impl<T: Element> BinaryBroadcastIter<'_, T> {
     /// Apply a function to each element pair and collect the results.
     ///
     /// This uses the broadcast views directly (no materialization overhead
@@ -333,11 +333,13 @@ impl<'a, T: Element> BinaryBroadcastIter<'a, T> {
     }
 
     /// The broadcast shape of this iterator.
+    #[must_use]
     pub fn shape(&self) -> &[usize] {
         self.a_view.shape()
     }
 
     /// Total number of elements in the broadcast shape.
+    #[must_use]
     pub fn size(&self) -> usize {
         self.a_view.size()
     }
@@ -429,7 +431,7 @@ mod tests {
     #[test]
     fn unary_map_basic() {
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 4.0, 9.0, 16.0]).unwrap();
-        let c = NdIter::unary_map(&a, |x| x.sqrt()).unwrap();
+        let c = NdIter::unary_map(&a, f64::sqrt).unwrap();
         assert_eq!(c.shape(), &[4]);
         let data: Vec<f64> = c.iter().copied().collect();
         assert_eq!(data, vec![1.0, 2.0, 3.0, 4.0]);

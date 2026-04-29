@@ -2,6 +2,18 @@
 //
 // Tests mathematical invariants of linear algebra operations using proptest.
 
+// Property tests sample integer sizes and assert exact float equality on
+// matrix-identity / decomp invariants by design.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::many_single_char_names
+)]
+
 use ferray_core::Array;
 use ferray_core::dimension::{Ix2, IxDyn};
 
@@ -164,7 +176,7 @@ proptest! {
     ) {
         let n = 3;
         let dd = diag_dominant_matrix(n, data);
-        let a = mat2(n, n, dd.clone());
+        let a = mat2(n, n, dd);
         let a_inv = inv(&a).unwrap();
 
         let a_data = a.as_slice().unwrap();

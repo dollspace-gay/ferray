@@ -39,7 +39,7 @@ pub fn extract_batch_matrix<T: Copy>(data: &[T], shape: &[usize], batch_idx: usi
 }
 
 /// Apply a function to each 2D matrix in a batched array, collecting results
-/// into a flat Vec. The function receives (m, n, matrix_data) and returns
+/// into a flat Vec. The function receives (m, n, `matrix_data`) and returns
 /// a result vector for that batch.
 ///
 /// Results are computed in parallel using Rayon.
@@ -127,8 +127,7 @@ where
     let b_batch = &b_shape[..b_shape.len() - 2];
     if a_batch != b_batch {
         return Err(FerrayError::shape_mismatch(format!(
-            "batch dimensions must match: {:?} vs {:?}",
-            a_batch, b_batch
+            "batch dimensions must match: {a_batch:?} vs {b_batch:?}"
         )));
     }
     let am = a_shape[a_shape.len() - 2];
@@ -155,12 +154,13 @@ where
     results.into_iter().collect()
 }
 
-/// Helper: create a faer::Mat from a flat row-major slice.
+/// Helper: create a `faer::Mat` from a flat row-major slice.
 pub fn slice_to_faer<T: LinalgFloat>(m: usize, n: usize, data: &[T]) -> faer::Mat<T> {
     faer::Mat::from_fn(m, n, |i, j| data[i * n + j])
 }
 
-/// Helper: extract flat row-major data from a faer::Mat.
+/// Helper: extract flat row-major data from a `faer::Mat`.
+#[must_use]
 pub fn faer_to_vec<T: LinalgFloat>(mat: &faer::Mat<T>) -> Vec<T> {
     let (m, n) = mat.shape();
     let mut v = Vec::with_capacity(m * n);

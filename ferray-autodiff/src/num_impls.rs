@@ -196,37 +196,37 @@ impl<T: Float> Float for DualNumber<T> {
 
     #[inline]
     fn floor(self) -> Self {
-        DualNumber::floor(self)
+        Self::floor(self)
     }
 
     #[inline]
     fn ceil(self) -> Self {
-        DualNumber::ceil(self)
+        Self::ceil(self)
     }
 
     #[inline]
     fn round(self) -> Self {
-        DualNumber::round(self)
+        Self::round(self)
     }
 
     #[inline]
     fn trunc(self) -> Self {
-        DualNumber::trunc(self)
+        Self::trunc(self)
     }
 
     #[inline]
     fn fract(self) -> Self {
-        DualNumber::fract(self)
+        Self::fract(self)
     }
 
     #[inline]
     fn abs(self) -> Self {
-        DualNumber::abs(self)
+        Self::abs(self)
     }
 
     #[inline]
     fn signum(self) -> Self {
-        DualNumber::signum(self)
+        Self::signum(self)
     }
 
     #[inline]
@@ -241,57 +241,57 @@ impl<T: Float> Float for DualNumber<T> {
 
     #[inline]
     fn mul_add(self, a: Self, b: Self) -> Self {
-        DualNumber::mul_add(self, a, b)
+        Self::mul_add(self, a, b)
     }
 
     #[inline]
     fn recip(self) -> Self {
-        DualNumber::recip(self)
+        Self::recip(self)
     }
 
     #[inline]
     fn powi(self, n: i32) -> Self {
-        DualNumber::powi(self, n)
+        Self::powi(self, n)
     }
 
     #[inline]
     fn powf(self, n: Self) -> Self {
-        DualNumber::powf(self, n)
+        Self::powf(self, n)
     }
 
     #[inline]
     fn sqrt(self) -> Self {
-        DualNumber::sqrt(self)
+        Self::sqrt(self)
     }
 
     #[inline]
     fn exp(self) -> Self {
-        DualNumber::exp(self)
+        Self::exp(self)
     }
 
     #[inline]
     fn exp2(self) -> Self {
-        DualNumber::exp2(self)
+        Self::exp2(self)
     }
 
     #[inline]
     fn ln(self) -> Self {
-        DualNumber::ln(self)
+        Self::ln(self)
     }
 
     #[inline]
     fn log(self, base: Self) -> Self {
-        DualNumber::log(self, base)
+        Self::log(self, base)
     }
 
     #[inline]
     fn log2(self) -> Self {
-        DualNumber::log2(self)
+        Self::log2(self)
     }
 
     #[inline]
     fn log10(self) -> Self {
-        DualNumber::log10(self)
+        Self::log10(self)
     }
 
     #[inline]
@@ -315,92 +315,92 @@ impl<T: Float> Float for DualNumber<T> {
 
     #[inline]
     fn cbrt(self) -> Self {
-        DualNumber::cbrt(self)
+        Self::cbrt(self)
     }
 
     #[inline]
     fn hypot(self, other: Self) -> Self {
-        DualNumber::hypot(self, other)
+        Self::hypot(self, other)
     }
 
     #[inline]
     fn sin(self) -> Self {
-        DualNumber::sin(self)
+        Self::sin(self)
     }
 
     #[inline]
     fn cos(self) -> Self {
-        DualNumber::cos(self)
+        Self::cos(self)
     }
 
     #[inline]
     fn tan(self) -> Self {
-        DualNumber::tan(self)
+        Self::tan(self)
     }
 
     #[inline]
     fn asin(self) -> Self {
-        DualNumber::asin(self)
+        Self::asin(self)
     }
 
     #[inline]
     fn acos(self) -> Self {
-        DualNumber::acos(self)
+        Self::acos(self)
     }
 
     #[inline]
     fn atan(self) -> Self {
-        DualNumber::atan(self)
+        Self::atan(self)
     }
 
     #[inline]
     fn atan2(self, other: Self) -> Self {
-        DualNumber::atan2(self, other)
+        Self::atan2(self, other)
     }
 
     #[inline]
     fn sin_cos(self) -> (Self, Self) {
-        DualNumber::sin_cos(self)
+        Self::sin_cos(self)
     }
 
     #[inline]
     fn exp_m1(self) -> Self {
-        DualNumber::exp_m1(self)
+        Self::exp_m1(self)
     }
 
     #[inline]
     fn ln_1p(self) -> Self {
-        DualNumber::ln_1p(self)
+        Self::ln_1p(self)
     }
 
     #[inline]
     fn sinh(self) -> Self {
-        DualNumber::sinh(self)
+        Self::sinh(self)
     }
 
     #[inline]
     fn cosh(self) -> Self {
-        DualNumber::cosh(self)
+        Self::cosh(self)
     }
 
     #[inline]
     fn tanh(self) -> Self {
-        DualNumber::tanh(self)
+        Self::tanh(self)
     }
 
     #[inline]
     fn asinh(self) -> Self {
-        DualNumber::asinh(self)
+        Self::asinh(self)
     }
 
     #[inline]
     fn acosh(self) -> Self {
-        DualNumber::acosh(self)
+        Self::acosh(self)
     }
 
     #[inline]
     fn atanh(self) -> Self {
-        DualNumber::atanh(self)
+        Self::atanh(self)
     }
 
     #[inline]
@@ -410,11 +410,11 @@ impl<T: Float> Float for DualNumber<T> {
 
     #[inline]
     fn to_degrees(self) -> Self {
-        DualNumber::to_degrees(self)
+        Self::to_degrees(self)
     }
 
     #[inline]
     fn to_radians(self) -> Self {
-        DualNumber::to_radians(self)
+        Self::to_radians(self)
     }
 }

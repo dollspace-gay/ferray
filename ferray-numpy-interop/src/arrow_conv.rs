@@ -77,7 +77,7 @@ pub trait ToArrow {
     fn to_arrow(&self) -> Result<Self::ArrowArray, FerrayError>;
 }
 
-impl<T: ArrowElement> ToArrow for Array1<T>
+impl<T> ToArrow for Array1<T>
 where
     T: ArrowElement,
     T::ArrowType: ArrowPrimitiveType<Native = T>,
@@ -296,7 +296,7 @@ where
     // Interleave into row-major order.
     let mut data: Vec<T> = Vec::with_capacity(nrows * ncols);
     for r in 0..nrows {
-        for c in cols.iter() {
+        for c in cols {
             data.push(c.values()[r]);
         }
     }
@@ -371,6 +371,12 @@ where
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+#[allow(
+    clippy::float_cmp,
+    clippy::unreadable_literal,
+    clippy::type_repetition_in_bounds,
+    clippy::trait_duplication_in_bounds
+)]
 mod tests {
     use super::*;
 

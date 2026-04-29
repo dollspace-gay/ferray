@@ -51,7 +51,7 @@ pub fn read_header<R: std::io::Read>(reader: &mut R) -> FerrayResult<NpyHeader> 
     let major = version[0];
     let minor = version[1];
 
-    if !matches!((major, minor), (1, 0) | (2, 0) | (3, 0)) {
+    if !matches!((major, minor), (1..=3, 0)) {
         return Err(FerrayError::io_error(format!(
             "unsupported .npy format version {major}.{minor}"
         )));
@@ -133,7 +133,6 @@ pub fn write_header<W: std::io::Write>(
         writer.write_all(&(total_header_v1 as u16).to_le_bytes())?;
         writer.write_all(dict.as_bytes())?;
         write_padding(writer, padding_needed_v1)?;
-        writer.write_all(b"\n")?;
     } else {
         // Version 2.0
         let preamble_v2 = format::NPY_MAGIC_LEN + 2 + 4; // 12
@@ -145,20 +144,21 @@ pub fn write_header<W: std::io::Write>(
         writer.write_all(&(total_header_v2 as u32).to_le_bytes())?;
         writer.write_all(dict.as_bytes())?;
         write_padding(writer, padding_needed_v2)?;
-        writer.write_all(b"\n")?;
     }
+    writer.write_all(b"\n")?;
 
     Ok(())
 }
 
 /// Compute the header size (preamble + header dict + padding + newline) for reading purposes.
 /// Returns the byte offset where data begins.
-pub fn compute_data_offset(version: (u8, u8), header_len: usize) -> usize {
+#[must_use]
+pub const fn compute_data_offset(version: (u8, u8), header_len: usize) -> usize {
     let preamble = format::NPY_MAGIC_LEN + 2 + if version.0 == 1 { 2 } else { 4 };
     preamble + header_len
 }
 
-fn compute_padding(current_total: usize) -> usize {
+const fn compute_padding(current_total: usize) -> usize {
     let remainder = current_total % format::HEADER_ALIGNMENT;
     if remainder == 0 {
         0
@@ -188,7 +188,7 @@ fn format_shape(shape: &[usize]) -> String {
         0 => "()".to_string(),
         1 => format!("({},)", shape[0]),
         _ => {
-            let parts: Vec<String> = shape.iter().map(|d| d.to_string()).collect();
+            let parts: Vec<String> = shape.iter().map(std::string::ToString::to_string).collect();
             format!("({})", parts.join(", "))
         }
     }

@@ -13,7 +13,7 @@ use crate::overlap_check::{all_offsets_in_bounds, has_overlapping_strides};
 /// A read-only source for [`as_strided`] / [`as_strided_unchecked`].
 ///
 /// Implemented for both `&Array<T, D>` and `&ArrayView<'_, T, D>` so
-/// callers can hand either type to the as_strided entry points
+/// callers can hand either type to the `as_strided` entry points
 /// without `.to_owned()` materialization (#174, #525).
 pub trait StridedSource<T: Element> {
     /// Raw pointer to the first element.
@@ -106,9 +106,8 @@ where
     let n_elements: usize = shape.iter().product();
     if n_elements > 0 && has_overlapping_strides(shape, &istrides) {
         return Err(FerrayError::invalid_value(format!(
-            "as_strided: strides {:?} with shape {:?} produce overlapping \
+            "as_strided: strides {strides:?} with shape {shape:?} produce overlapping \
              memory accesses; use as_strided_unchecked for overlapping views",
-            strides, shape,
         )));
     }
 
@@ -152,9 +151,8 @@ where
     let buf_len = source.strided_size();
     if !all_offsets_in_bounds(shape, &istrides, buf_len) {
         return Err(FerrayError::invalid_value(format!(
-            "{}: strides {:?} with shape {:?} would access elements \
-             outside the source buffer of length {}",
-            fn_name, strides, shape, buf_len,
+            "{fn_name}: strides {strides:?} with shape {shape:?} would access elements \
+             outside the source buffer of length {buf_len}",
         )));
     }
 
@@ -409,7 +407,7 @@ mod tests {
             k in 1usize..4,
         ) {
             let data: Vec<i32> = (0..buf as i32).collect();
-            let a = Array::<i32, Ix1>::from_vec(Ix1::new([buf]), data.clone()).unwrap();
+            let a = Array::<i32, Ix1>::from_vec(Ix1::new([buf]), data).unwrap();
             // How many elements fit with stride k?
             let out_len = if buf == 0 { 0 } else { (buf - 1) / k + 1 };
             let v = as_strided(&a, &[out_len], &[k]).unwrap();

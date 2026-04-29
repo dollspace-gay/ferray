@@ -1,6 +1,6 @@
 //! First-class ufunc objects (#376).
 //!
-//! NumPy exposes every binary ufunc as a runtime object that carries
+//! `NumPy` exposes every binary ufunc as a runtime object that carries
 //! its own identity element and supports the standard methods —
 //! `np.add.reduce(arr)`, `np.add.accumulate(arr)`, `np.add.outer(a, b)`,
 //! `np.add.at(arr, idx, vals)`, and `np.add(a, b)` itself. These work
@@ -11,7 +11,7 @@
 //! wrapper around a binary op `F: Fn(T, T) -> T` plus an identity
 //! element (the seed for `.reduce()`). All five methods delegate to
 //! the generic machinery already built for [`crate::ufunc_methods`]
-//! (reduce_axis, accumulate_axis, outer, at) and to
+//! (`reduce_axis`, `accumulate_axis`, outer, at) and to
 //! [`crate::helpers::binary_elementwise_op`] for the elementwise call.
 //!
 //! # Example
@@ -30,7 +30,7 @@
 //!
 //! The pre-registered ufuncs at the bottom of this module (`ADD`,
 //! `SUBTRACT`, `MULTIPLY`, `DIVIDE`, `MAX`, `MIN`) cover the common
-//! NumPy names. They're plain `fn()` returning a fresh `Ufunc` each
+//! `NumPy` names. They're plain `fn()` returning a fresh `Ufunc` each
 //! call to avoid hidden global state.
 
 use ferray_core::Array;
@@ -70,13 +70,13 @@ where
 
     /// The ufunc's name, used for diagnostics.
     #[inline]
-    pub fn name(&self) -> &'static str {
+    pub const fn name(&self) -> &'static str {
         self.name
     }
 
     /// The identity element used as the seed for [`reduce`](Self::reduce).
     #[inline]
-    pub fn identity(&self) -> T {
+    pub const fn identity(&self) -> T {
         self.identity
     }
 
@@ -124,7 +124,7 @@ where
 
     /// `ufunc.at(arr, indices, values)` — unbuffered scatter-reduce
     /// in place. Duplicate indices are applied in the order they
-    /// appear (matches NumPy semantics).
+    /// appear (matches `NumPy` semantics).
     pub fn at(&self, arr: &mut Array<T, Ix1>, indices: &[usize], values: &[T]) -> FerrayResult<()> {
         at(arr, indices, values, &self.op)
     }
@@ -139,6 +139,7 @@ where
 // ---------------------------------------------------------------------------
 
 /// Build the `add` ufunc for a given float type (`identity = 0`).
+#[must_use]
 pub fn add_ufunc<T>() -> Ufunc<T, fn(T, T) -> T>
 where
     T: Element + Copy + std::ops::Add<Output = T>,
@@ -154,6 +155,7 @@ where
 }
 
 /// Build the `subtract` ufunc (`identity = 0`).
+#[must_use]
 pub fn subtract_ufunc<T>() -> Ufunc<T, fn(T, T) -> T>
 where
     T: Element + Copy + std::ops::Sub<Output = T>,
@@ -169,6 +171,7 @@ where
 }
 
 /// Build the `multiply` ufunc (`identity = 1`).
+#[must_use]
 pub fn multiply_ufunc<T>() -> Ufunc<T, fn(T, T) -> T>
 where
     T: Element + Copy + std::ops::Mul<Output = T>,
@@ -184,6 +187,7 @@ where
 }
 
 /// Build the `divide` ufunc (`identity = 1`).
+#[must_use]
 pub fn divide_ufunc<T>() -> Ufunc<T, fn(T, T) -> T>
 where
     T: Element + Copy + std::ops::Div<Output = T>,
@@ -211,8 +215,8 @@ mod tests {
         assert_eq!(add.name(), "add");
         assert_eq!(add.identity(), 0.0);
 
-        let a = arr1(&[1.0, 2.0, 3.0]);
-        let b = arr1(&[10.0, 20.0, 30.0]);
+        let a = arr1([1.0, 2.0, 3.0]);
+        let b = arr1([10.0, 20.0, 30.0]);
         let c = add.call(&a, &b).unwrap();
         assert_eq!(c.as_slice().unwrap(), &[11.0, 22.0, 33.0]);
     }
@@ -220,7 +224,7 @@ mod tests {
     #[test]
     fn add_ufunc_reduce() {
         let add = add_ufunc::<f64>();
-        let a = arr1(&[1.0, 2.0, 3.0, 4.0]);
+        let a = arr1([1.0, 2.0, 3.0, 4.0]);
         let r = add.reduce(&a, 0).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[10.0]);
     }
@@ -228,7 +232,7 @@ mod tests {
     #[test]
     fn add_ufunc_accumulate() {
         let add = add_ufunc::<f64>();
-        let a = arr1(&[1.0, 2.0, 3.0, 4.0]);
+        let a = arr1([1.0, 2.0, 3.0, 4.0]);
         let r = add.accumulate(&a, 0).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[1.0, 3.0, 6.0, 10.0]);
     }
@@ -237,7 +241,7 @@ mod tests {
     fn multiply_ufunc_reduce_is_product() {
         let mul = multiply_ufunc::<f64>();
         assert_eq!(mul.identity(), 1.0);
-        let a = arr1(&[1.0, 2.0, 3.0, 4.0]);
+        let a = arr1([1.0, 2.0, 3.0, 4.0]);
         let r = mul.reduce(&a, 0).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[24.0]);
     }
@@ -245,8 +249,8 @@ mod tests {
     #[test]
     fn multiply_ufunc_outer() {
         let mul = multiply_ufunc::<f64>();
-        let a = arr1(&[1.0, 2.0, 3.0]);
-        let b = arr1(&[10.0, 20.0]);
+        let a = arr1([1.0, 2.0, 3.0]);
+        let b = arr1([10.0, 20.0]);
         let r = mul.outer(&a, &b).unwrap();
         assert_eq!(r.shape(), &[3, 2]);
         assert_eq!(r.as_slice().unwrap(), &[10.0, 20.0, 20.0, 40.0, 30.0, 60.0]);
@@ -256,7 +260,7 @@ mod tests {
     fn subtract_ufunc_accumulate_is_running_diff() {
         // subtract.accumulate([10, 3, 2, 1]) = [10, 7, 5, 4]
         let sub = subtract_ufunc::<f64>();
-        let a = arr1(&[10.0, 3.0, 2.0, 1.0]);
+        let a = arr1([10.0, 3.0, 2.0, 1.0]);
         let r = sub.accumulate(&a, 0).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[10.0, 7.0, 5.0, 4.0]);
     }
@@ -265,7 +269,7 @@ mod tests {
     fn user_defined_max_ufunc() {
         // User builds a custom ufunc in one line.
         let max = Ufunc::new("max", f64::NEG_INFINITY, f64::max);
-        let a = arr1(&[3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0, 6.0]);
+        let a = arr1([3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0, 6.0]);
         let m = max.reduce(&a, 0).unwrap();
         assert_eq!(m.as_slice().unwrap(), &[9.0]);
     }
@@ -273,7 +277,7 @@ mod tests {
     #[test]
     fn add_ufunc_at_unbuffered_duplicates() {
         let add = add_ufunc::<f64>();
-        let mut a = arr1(&[0.0, 0.0, 0.0]);
+        let mut a = arr1([0.0, 0.0, 0.0]);
         add.at(&mut a, &[0, 0, 1, 2], &[1.0, 2.0, 5.0, 10.0])
             .unwrap();
         assert_eq!(a.as_slice().unwrap(), &[3.0, 5.0, 10.0]);
@@ -295,8 +299,8 @@ mod tests {
     fn divide_ufunc_elementwise() {
         let div = divide_ufunc::<f64>();
         assert_eq!(div.identity(), 1.0);
-        let a = arr1(&[10.0, 20.0, 30.0]);
-        let b = arr1(&[2.0, 4.0, 5.0]);
+        let a = arr1([10.0, 20.0, 30.0]);
+        let b = arr1([2.0, 4.0, 5.0]);
         let c = div.call(&a, &b).unwrap();
         assert_eq!(c.as_slice().unwrap(), &[5.0, 5.0, 6.0]);
     }

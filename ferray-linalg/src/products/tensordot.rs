@@ -35,8 +35,7 @@ pub fn tensordot<T: LinalgFloat>(
         TensordotAxes::Scalar(n) => {
             if n > a_shape.len() || n > b_shape.len() {
                 return Err(FerrayError::shape_mismatch(format!(
-                    "tensordot: cannot contract {} axes from shapes {:?} and {:?}",
-                    n, a_shape, b_shape
+                    "tensordot: cannot contract {n} axes from shapes {a_shape:?} and {b_shape:?}"
                 )));
             }
             let axes_a: Vec<usize> = (a_shape.len() - n..a_shape.len()).collect();

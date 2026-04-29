@@ -108,7 +108,7 @@ where
     T: Element + Logical,
     D: Dimension,
 {
-    input.iter().all(|x| x.is_truthy())
+    input.iter().all(Logical::is_truthy)
 }
 
 /// Test whether any element is truthy.
@@ -117,7 +117,7 @@ where
     T: Element + Logical,
     D: Dimension,
 {
-    input.iter().any(|x| x.is_truthy())
+    input.iter().any(Logical::is_truthy)
 }
 
 /// Shared axis-reduction kernel for [`all_axis`] and [`any_axis`]. Collapses

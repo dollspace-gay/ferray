@@ -5,7 +5,7 @@
 use super::parser::{EinsumExpr, Label};
 
 /// Strategy for executing an einsum expression.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EinsumStrategy {
     /// Dispatch to matmul: standard matrix multiplication.
     Matmul,
@@ -21,6 +21,7 @@ pub enum EinsumStrategy {
 }
 
 /// Analyze a 2-operand einsum expression and determine the optimal strategy.
+#[must_use]
 pub fn optimize(expr: &EinsumExpr) -> EinsumStrategy {
     if expr.inputs.len() != 2 {
         return EinsumStrategy::Generic;

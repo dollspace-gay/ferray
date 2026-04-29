@@ -82,7 +82,7 @@ impl<B: BitGenerator + Clone> Generator<B> {
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `n` is zero.
-    pub fn spawn(&mut self, n: usize) -> Result<Vec<Generator<B>>, FerrayError> {
+    pub fn spawn(&mut self, n: usize) -> Result<Vec<Self>, FerrayError> {
         crate::generator::spawn_generators(self, n)
     }
 }
@@ -135,7 +135,10 @@ mod tests {
         assert_eq!(children.len(), 4);
 
         // Each child should produce different sequences
-        let outputs: Vec<u64> = children.iter_mut().map(|c| c.next_u64()).collect();
+        let outputs: Vec<u64> = children
+            .iter_mut()
+            .map(super::super::generator::Generator::next_u64)
+            .collect();
         for i in 0..outputs.len() {
             for j in (i + 1)..outputs.len() {
                 assert_ne!(

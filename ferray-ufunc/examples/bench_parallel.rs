@@ -6,6 +6,18 @@
 //!
 //! Run with: `cargo run -p ferray-ufunc --release --example bench_parallel`
 
+// Benchmarks lift integer sizes into f64 throughput numbers and use
+// large iteration-count literals; the casts and unbroken constants are
+// part of the bench output, not bugs.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::unreadable_literal
+)]
+
 use ferray_core::{Array, IxDyn};
 use ferray_ufunc::{add, exp, sqrt};
 use std::time::Instant;

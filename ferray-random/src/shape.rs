@@ -22,7 +22,7 @@ use ferray_core::FerrayError;
 /// - `Vec<usize>`
 ///
 /// Zero-axis shapes (e.g. `0usize`, `[3, 0, 4]`) are now permitted and
-/// produce an empty array, matching NumPy's `np.random.uniform(size=0)`
+/// produce an empty array, matching `NumPy`'s `np.random.uniform(size=0)`
 /// behaviour (#264, #455). The only rejected shape is a totally
 /// rank-empty `&[]`, which would correspond to a 0-d scalar — that is
 /// not yet wired through the distribution machinery.

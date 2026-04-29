@@ -4,11 +4,15 @@
 // Pseudorandom Number Generators", ACM TOMS, 2021.
 // Period: 2^256 - 1. Jump: 2^128.
 
+// Jump-table constants are 64-bit hex magic numbers from the Vigna paper;
+// underscore separators would diverge from the canonical published form.
+#![allow(clippy::unreadable_literal)]
+
 use super::BitGenerator;
 
 /// Xoshiro256** pseudo-random number generator.
 ///
-/// This is the default BitGenerator for ferray-random. It has a period of
+/// This is the default `BitGenerator` for ferray-random. It has a period of
 /// 2^256 - 1 and supports `jump()` for parallel generation (each jump
 /// advances the state by 2^128 steps).
 ///

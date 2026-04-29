@@ -3,6 +3,11 @@
 // PCG-XSL-RR 128/64 (LCG) from Melissa O'Neill's PCG paper.
 // Period: 2^128. No jump support.
 
+// Hex magic constants are 64-bit nothing-up-my-sleeve seeds reproduced
+// verbatim from the PCG and SplitMix64 references; underscore separators
+// would diverge from the canonical published form.
+#![allow(clippy::unreadable_literal)]
+
 use super::BitGenerator;
 
 /// PCG64 (PCG-XSL-RR 128/64) pseudo-random number generator.
@@ -29,7 +34,7 @@ const PCG_DEFAULT_MULTIPLIER: u128 = 0x2360_ED05_1FC6_5DA4_4385_DF64_9FCC_F645;
 impl Pcg64 {
     /// Internal step function: advance the LCG state.
     #[inline]
-    fn step(&mut self) {
+    const fn step(&mut self) {
         self.state = self
             .state
             .wrapping_mul(PCG_DEFAULT_MULTIPLIER)
@@ -38,7 +43,7 @@ impl Pcg64 {
 
     /// Output function: XSL-RR permutation of the 128-bit state to 64-bit output.
     #[inline]
-    fn output(state: u128) -> u64 {
+    const fn output(state: u128) -> u64 {
         let xsl = ((state >> 64) ^ state) as u64;
         let rot = (state >> 122) as u32;
         xsl.rotate_right(rot)
@@ -68,7 +73,7 @@ impl BitGenerator for Pcg64 {
             (((a as u128) << 64) | (b as u128)) | 1
         };
 
-        let mut rng = Pcg64 { state: 0, inc };
+        let mut rng = Self { state: 0, inc };
         rng.step();
         rng.state = rng.state.wrapping_add(seed128);
         rng.step();

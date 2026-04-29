@@ -15,6 +15,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
     ///
     /// The closure receives each element by value (cloned) and must return
     /// the same type. For type-changing maps, collect via iterators.
+    #[must_use]
     pub fn mapv(&self, f: impl Fn(T) -> T) -> Self {
         let inner = self.inner.mapv(&f);
         Self::from_ndarray(inner)
@@ -33,11 +34,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
     ///
     /// # Errors
     /// Returns `FerrayError::ShapeMismatch` if shapes differ.
-    pub fn zip_mut_with(
-        &mut self,
-        other: &Array<T, D>,
-        f: impl Fn(&mut T, &T),
-    ) -> FerrayResult<()> {
+    pub fn zip_mut_with(&mut self, other: &Self, f: impl Fn(&mut T, &T)) -> FerrayResult<()> {
         if self.shape() != other.shape() {
             return Err(FerrayError::shape_mismatch(format!(
                 "cannot zip arrays with shapes {:?} and {:?}",
@@ -110,7 +107,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// Return a C-contiguous (row-major) version of this array, copying
     /// only if the current layout is not already C-contiguous (#351).
     ///
-    /// Equivalent to NumPy's `np.ascontiguousarray`. The returned
+    /// Equivalent to `NumPy`'s `np.ascontiguousarray`. The returned
     /// [`CowArray`] borrows from `self` when no copy is needed, so this
     /// is a zero-cost guard before BLAS calls, SIMD loops, or FFI that
     /// require row-major storage.
@@ -126,7 +123,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
             // the underlying stride pattern, so collecting produces a
             // C-contiguous flat buffer.
             let data: Vec<T> = self.iter().cloned().collect();
-            let owned = Array::from_vec(self.dim().clone(), data)
+            let owned = Self::from_vec(self.dim().clone(), data)
                 .expect("from_vec: data length was just built from self.iter()");
             CowArray::Owned(owned)
         }
@@ -135,7 +132,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// Return a Fortran-contiguous (column-major) version of this array,
     /// copying only if the current layout is not already F-contiguous (#351).
     ///
-    /// Equivalent to NumPy's `np.asfortranarray`. The returned
+    /// Equivalent to `NumPy`'s `np.asfortranarray`. The returned
     /// [`CowArray`] borrows from `self` when no copy is needed. 1-D arrays
     /// are borrowed because they are trivially both C- and F-contiguous.
     pub fn as_fortran_layout(&self) -> CowArray<'_, T, D> {
@@ -150,7 +147,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
             // column-major order, which is exactly what `from_vec_f`
             // expects for Fortran-layout storage.
             let data: Vec<T> = self.inner.t().iter().cloned().collect();
-            let owned = Array::from_vec_f(self.dim().clone(), data)
+            let owned = Self::from_vec_f(self.dim().clone(), data)
                 .expect("from_vec_f: data length was just built from self.inner.t().iter()");
             CowArray::Owned(owned)
         }

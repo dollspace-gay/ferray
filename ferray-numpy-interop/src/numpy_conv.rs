@@ -1,7 +1,7 @@
-//! PyO3 NumPy <-> ferray array conversions (feature-gated behind `"python"`).
+//! `PyO3` `NumPy` <-> ferray array conversions (feature-gated behind `"python"`).
 //!
 //! Provides [`AsFerray`] and [`IntoNumPy`] traits for converting between
-//! PyO3 NumPy arrays and ferray arrays.
+//! `PyO3` `NumPy` arrays and ferray arrays.
 //!
 //! # Memory semantics
 //!
@@ -13,9 +13,9 @@
 //! via a pinned refcount handshake — a larger design change that is
 //! tracked as a follow-up.
 //!
-//! - **NumPy -> ferray**: [`AsFerray::as_ferray`] allocates a fresh
-//!   ferray [`Array`] and copies each element from the NumPy array.
-//! - **ferray -> NumPy**: [`IntoNumPy::into_pyarray`] allocates a new
+//! - **`NumPy` -> ferray**: [`AsFerray::as_ferray`] allocates a fresh
+//!   ferray [`Array`] and copies each element from the `NumPy` array.
+//! - **ferray -> `NumPy`**: [`IntoNumPy::into_pyarray`] allocates a new
 //!   Python-owned [`PyArray`] and copies the flattened ferray buffer
 //!   into it.
 
@@ -35,9 +35,9 @@ use ferray_core::{Array, Element, FerrayError};
 // ---------------------------------------------------------------------------
 
 /// Sealed marker associating a ferray [`Element`] type with the corresponding
-/// NumPy element type.
+/// `NumPy` element type.
 ///
-/// Implemented for all numeric types that both ferray and NumPy support:
+/// Implemented for all numeric types that both ferray and `NumPy` support:
 /// `bool`, `f32`, `f64`, `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`.
 ///
 /// Complex types require special handling and are not covered by this
@@ -56,14 +56,14 @@ impl_np_element!(bool, f32, f64, i8, i16, i32, i64, u8, u16, u32, u64);
 // NumPy -> ferray  (REQ-1)
 // ---------------------------------------------------------------------------
 
-/// Extension trait for converting a NumPy readonly array into a ferray
+/// Extension trait for converting a `NumPy` readonly array into a ferray
 /// array. The data is copied (see the module docstring for why).
 pub trait AsFerray<T: Element, D: ferray_core::Dimension> {
-    /// Copy the NumPy array's contents into a fresh ferray [`Array`].
+    /// Copy the `NumPy` array's contents into a fresh ferray [`Array`].
     ///
     /// # Errors
     ///
-    /// Returns [`FerrayError::InvalidDtype`] if the NumPy dtype does not
+    /// Returns [`FerrayError::InvalidDtype`] if the `NumPy` dtype does not
     /// match `T`, or [`FerrayError::ShapeMismatch`] if the dimensions do
     /// not match `D`.
     fn as_ferray(&self) -> Result<Array<T, D>, FerrayError>;
@@ -103,33 +103,30 @@ impl<T: NpElement> AsFerray<T, IxDyn> for PyReadonlyArrayDyn<'_, T> {
 // ferray -> NumPy  (REQ-2)
 // ---------------------------------------------------------------------------
 
-/// Extension trait for converting an owned ferray array to a NumPy array.
+/// Extension trait for converting an owned ferray array to a `NumPy` array.
 ///
 /// The data is copied into a fresh Python-owned `PyArray` (see the module
 /// docstring for why this is not yet zero-copy).
 pub trait IntoNumPy<T: Element, D: ferray_core::Dimension> {
-    /// The PyO3 NumPy array type produced.
+    /// The `PyO3` `NumPy` array type produced.
     type PyArrayType;
 
-    /// Copy this ferray array's contents into a new Python-owned NumPy
+    /// Copy this ferray array's contents into a new Python-owned `NumPy`
     /// array. The input array's buffer is flattened, the resulting Vec
     /// is handed to `PyArray::from_vec`, and the result is reshaped.
     ///
     /// # Errors
     ///
     /// Returns [`FerrayError::InvalidDtype`] if the element type has no
-    /// NumPy equivalent, or [`FerrayError::ShapeMismatch`] if the
+    /// `NumPy` equivalent, or [`FerrayError::ShapeMismatch`] if the
     /// reshape step fails.
-    fn into_pyarray<'py>(
-        self,
-        py: Python<'py>,
-    ) -> Result<Bound<'py, Self::PyArrayType>, FerrayError>;
+    fn into_pyarray(self, py: Python<'_>) -> Result<Bound<'_, Self::PyArrayType>, FerrayError>;
 }
 
 impl<T: NpElement> IntoNumPy<T, Ix1> for Array1<T> {
     type PyArrayType = PyArray1<T>;
 
-    fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArray1<T>>, FerrayError> {
+    fn into_pyarray(self, py: Python<'_>) -> Result<Bound<'_, PyArray1<T>>, FerrayError> {
         // 1-D has no reshape overhead to worry about; hand the flat Vec
         // straight to PyArray1::from_vec.
         let data = self.to_vec_flat();
@@ -140,7 +137,7 @@ impl<T: NpElement> IntoNumPy<T, Ix1> for Array1<T> {
 impl<T: NpElement> IntoNumPy<T, Ix2> for Array2<T> {
     type PyArrayType = PyArray2<T>;
 
-    fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArray2<T>>, FerrayError> {
+    fn into_pyarray(self, py: Python<'_>) -> Result<Bound<'_, PyArray2<T>>, FerrayError> {
         // #550: the cleanest fix would be to feed the underlying
         // ndarray straight into `numpy::PyArray2::from_owned_array`,
         // avoiding the reshape detour. That path is blocked today
@@ -165,8 +162,7 @@ impl<T: NpElement> IntoNumPy<T, Ix2> for Array2<T> {
         let arr = PyArray1::from_vec(py, data);
         arr.reshape(shape).map_err(|e| {
             FerrayError::shape_mismatch(format!(
-                "into_pyarray: reshape to {:?} failed (should be unreachable): {e}",
-                shape
+                "into_pyarray: reshape to {shape:?} failed (should be unreachable): {e}"
             ))
         })
     }
@@ -175,7 +171,7 @@ impl<T: NpElement> IntoNumPy<T, Ix2> for Array2<T> {
 impl<T: NpElement> IntoNumPy<T, IxDyn> for ArrayD<T> {
     type PyArrayType = PyArrayDyn<T>;
 
-    fn into_pyarray<'py>(self, py: Python<'py>) -> Result<Bound<'py, PyArrayDyn<T>>, FerrayError> {
+    fn into_pyarray(self, py: Python<'_>) -> Result<Bound<'_, PyArrayDyn<T>>, FerrayError> {
         // See the Ix2 impl above for why we still go through the
         // PyArray1 + reshape path rather than
         // `PyArrayDyn::from_owned_array`.
@@ -184,8 +180,7 @@ impl<T: NpElement> IntoNumPy<T, IxDyn> for ArrayD<T> {
         let flat = PyArray1::from_vec(py, data);
         flat.reshape(&shape[..]).map_err(|e| {
             FerrayError::shape_mismatch(format!(
-                "into_pyarray: reshape to {:?} failed (should be unreachable): {e}",
-                shape
+                "into_pyarray: reshape to {shape:?} failed (should be unreachable): {e}"
             ))
         })
     }
@@ -197,13 +192,14 @@ impl<T: NpElement> IntoNumPy<T, IxDyn> for ArrayD<T> {
 // pyo3::prepare_freethreaded_python().
 
 #[cfg(test)]
+#[allow(clippy::float_cmp, clippy::unreadable_literal)] // Roundtrip tests assert exact equality on hand-picked NumPy values.
 mod tests {
     use super::*;
     use numpy::PyUntypedArrayMethods;
 
-    fn with_python<F: FnOnce(Python<'_>)>(f: F) {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(f);
+    fn with_python<F: for<'py> FnOnce(Python<'py>)>(f: F) {
+        Python::initialize();
+        Python::attach(f);
     }
 
     macro_rules! test_roundtrip_1d {

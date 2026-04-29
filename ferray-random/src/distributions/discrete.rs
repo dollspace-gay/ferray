@@ -28,8 +28,8 @@ fn poisson_single<B: BitGenerator>(bg: &mut B, lam: f64) -> i64 {
         // Transformed rejection method (PA algorithm, Ahrens & Dieter)
         let slam = lam.sqrt();
         let loglam = lam.ln();
-        let b = 0.931 + 2.53 * slam;
-        let a = -0.059 + 0.02483 * b;
+        let b = 2.53f64.mul_add(slam, 0.931);
+        let a = 0.02483f64.mul_add(b, -0.059);
         let inv_alpha = 1.1239 + 1.1328 / (b - 3.4);
         let vr = 0.9277 - 3.6224 / (b - 2.0);
 
@@ -37,7 +37,7 @@ fn poisson_single<B: BitGenerator>(bg: &mut B, lam: f64) -> i64 {
             let u = bg.next_f64() - 0.5;
             let v = bg.next_f64();
             let us = 0.5 - u.abs();
-            let k = ((2.0 * a / us + b) * u + lam + 0.43).floor() as i64;
+            let k = ((2.0 * a / us + b).mul_add(u, lam) + 0.43).floor() as i64;
             if k < 0 {
                 continue;
             }
@@ -48,7 +48,10 @@ fn poisson_single<B: BitGenerator>(bg: &mut B, lam: f64) -> i64 {
                 && us >= 0.013
                 && v <= (k as f64)
                     .ln()
-                    .mul_add(-0.5, (k as f64) * loglam - lam - ln_factorial(k as u64))
+                    .mul_add(
+                        -0.5,
+                        (k as f64).mul_add(loglam, -lam) - ln_factorial(k as u64),
+                    )
                     .exp()
                     * inv_alpha
             {
@@ -79,7 +82,7 @@ fn ln_factorial(n: u64) -> f64 {
     } else {
         // Stirling's approximation
         let nf = n as f64;
-        0.5 * (std::f64::consts::TAU).ln() + (nf + 0.5) * nf.ln() - nf + 1.0 / (12.0 * nf)
+        0.5f64.mul_add((std::f64::consts::TAU).ln(), (nf + 0.5) * nf.ln()) - nf + 1.0 / (12.0 * nf)
             - 1.0 / (360.0 * nf * nf * nf)
     }
 }
@@ -98,10 +101,10 @@ fn binomial_single<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> i64 {
     let (pp, flipped) = if p > 0.5 { (1.0 - p, true) } else { (p, false) };
 
     let np = n as f64 * pp;
+    let q = 1.0 - pp;
 
     let result = if np < 30.0 {
         // Inverse transform (waiting time) method
-        let q = 1.0 - pp;
         let s = pp / q;
         let a = (n as f64 + 1.0) * s;
         let mut r = q.powf(n as f64);
@@ -120,20 +123,19 @@ fn binomial_single<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> i64 {
         // BTPE algorithm (Hormann 1993) for large n*p.
         // Based on the transformed rejection method with decomposition
         // into triangular, parallelogram, and exponential regions.
-        let q = 1.0 - pp;
         let fm = np + pp;
         let m = fm.floor() as i64;
         let mf = m as f64;
-        let p1 = (2.195 * (np * q).sqrt() - 4.6 * q).floor() + 0.5;
+        let p1 = 2.195f64.mul_add((np * q).sqrt(), -(4.6 * q)).floor() + 0.5;
         let xm = mf + 0.5;
         let xl = xm - p1;
         let xr = xm + p1;
         let c = 0.134 + 20.5 / (15.3 + mf);
         let a = (fm - xl) / (fm - xl * pp);
-        let lambda_l = a * (1.0 + 0.5 * a);
+        let lambda_l = a * 0.5f64.mul_add(a, 1.0);
         let a2 = (xr - fm) / (xr * q);
-        let lambda_r = a2 * (1.0 + 0.5 * a2);
-        let p2 = p1 * (1.0 + 2.0 * c);
+        let lambda_r = a2 * 0.5f64.mul_add(a2, 1.0);
+        let p2 = p1 * 2.0f64.mul_add(c, 1.0);
         let p3 = p2 + c / lambda_l;
         let p4 = p3 + c / lambda_r;
 
@@ -148,6 +150,11 @@ fn binomial_single<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> i64 {
             } else if u <= p2 {
                 // Parallelogram region
                 let x = xl + (u - p1) / c;
+                // BTPE acceptance test: w = v + (x - xm)^2 / p1^2.
+                // clippy::suspicious_operation_groupings would rewrite the
+                // squared denominator to `x * p1`, which is mathematically
+                // wrong here.
+                #[allow(clippy::suspicious_operation_groupings)]
                 let w = v + (x - xm) * (x - xm) / (p1 * p1);
                 if w > 1.0 {
                     continue;
@@ -169,12 +176,12 @@ fn binomial_single<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> i64 {
 
             // Squeeze acceptance
             let k = (y - m).abs();
-            if k <= 20 || k as f64 >= 0.5 * np * q - 1.0 {
+            if k <= 20 || k as f64 >= (0.5 * np).mul_add(q, -1.0) {
                 // Full acceptance/rejection via log-factorial comparison
                 let kf = k as f64;
                 let yf = y as f64;
                 let rho =
-                    (kf / (np * q)) * ((kf * (kf / 3.0 + 0.625) + 1.0 / 6.0) / (np * q) + 0.5);
+                    (kf / (np * q)) * (kf.mul_add(kf / 3.0 + 0.625, 1.0 / 6.0) / (np * q) + 0.5);
                 let t = -kf * kf / (2.0 * np * q);
                 let log_a = t - rho;
                 if v.ln() <= log_a {
@@ -182,10 +189,11 @@ fn binomial_single<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> i64 {
                 }
                 // Full log-factorial test
                 let log_v = v.ln();
-                let log_accept =
+                let log_accept = (yf - mf).mul_add(
+                    (pp / q).ln(),
                     ln_factorial(m as u64) - ln_factorial(y as u64) - ln_factorial(n - y as u64)
-                        + ln_factorial(n - m as u64)
-                        + (yf - mf) * (pp / q).ln();
+                        + ln_factorial(n - m as u64),
+                );
                 if log_v <= log_accept {
                     break y;
                 }
@@ -402,7 +410,7 @@ impl<B: BitGenerator> Generator<B> {
                     return 1;
                 }
                 if v < q * q {
-                    let k = (1.0 + v.ln() / q.ln()).floor() as i64;
+                    let k = (1.0 + v.log(q)).floor() as i64;
                     return k.max(1);
                 }
                 if v < q {

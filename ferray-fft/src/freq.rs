@@ -121,9 +121,7 @@ mod tests {
         for (a, b) in data.iter().zip(expected.iter()) {
             assert!(
                 (a - b).abs() < 1e-15,
-                "fftfreq mismatch: got {}, expected {}",
-                a,
-                b
+                "fftfreq mismatch: got {a}, expected {b}"
             );
         }
     }

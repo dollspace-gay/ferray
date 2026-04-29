@@ -4,7 +4,57 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.1.0] - 2026-03-07
+> **Note**: Entries in the historical `[0.1.0 .. 0.2.10]` block below were auto-appended
+> from closed-issue titles by the crosslink hook, so wording reads like the original gap
+> rather than the resolution (e.g. "no f32 random generation" closed when f32 random was
+> added). They are kept verbatim for traceability; future versions will use curated
+> entries.
+
+## [Unreleased]
+
+## [0.2.11] - 2026-04-28
+
+### Changed
+- chore: periodic codebase maintenance pass (deps/lint/tests/docs/issues) (#569)
+- chore: bump workspace to 0.2.11 (#576)
+- Bump workspace to 0.2.11
+- Major dep upgrades to highest semver: pyo3 0.24 → 0.28, numpy 0.24 → 0.28, arrow 54 → 58,
+  polars 0.46 → 0.53, zip 2.2 → 8, getrandom 0.2 → 0.4, rand_core 0.6 → 0.10, proptest 1.6 → 1.11,
+  half 2.4 → 2.7, realfft 3.4 → 3.5, rayon 1.11 → 1.12, regex 1.11 → 1.12, flate2 1.0 → 1.1
+- PyO3 0.28 API migration: `prepare_freethreaded_python` + `Python::with_gil` → `Python::initialize`
+  + `Python::attach`
+- getrandom 0.4 API: `getrandom::getrandom` → `getrandom::fill`
+- Workspace clippy clean at `-D warnings -W clippy::pedantic -W clippy::nursery` (started from
+  3529 warnings under that lint set)
+
+### Security
+- Resolved RUSTSEC-2026-0097 (rand 0.9.2 unsound) via dep upgrades. Paste 1.0.15 unmaintained
+  advisory remains, transitive via pulp/gemm with no fix path until upstream migrates.
+
+## [0.2.10] - 2026-04-28
+
+### Added
+- `MaskAware` trait + `ma_apply_unary` helper in ferray-ma for generic mask-preserving unary ops (#505)
+
+### Changed
+- chore: major dep upgrades + finish maintenance issues #570/#571/#572/#573 + strict clippy (#574)
+- tracking: continue issue #574 work (deps + lints) (#575)
+- docs: README.md test count (1479) and crate count (15) stale — actual 2716 tests / 17 crates (#572)
+- docs: CHANGELOG.md lists open-issue limitations under [0.1.0] ### Added (#571)
+- ferray-core: invert `no_std` feature semantics (now opt-in `std`); fix `const_shapes` bitrot; cargo fmt
+- Bump all crates to 0.2.10
+- Cargo deps updated via dependabot group bump
+- ferray-ufunc: fix Rust 1.95 clippy lints in test code — `arr1(&[...])` → `arr1([...])` (×31), inconsistent hex grouping (#570)
+- ferray-ma: fix Rust 1.95 clippy lints — needless `Ok(...)?` and consolidated generic bounds (test code)
+- ferray umbrella: silence `clippy::assertions_on_constants` on intentional re-export-accessibility tests
+
+### Fixed
+- (none worth a separate entry — see the auto-generated history below for prior fixes)
+
+## [0.1.0 .. 0.2.10] - 2026-03-07 .. 2026-04-28
+
+> Auto-generated rolling block from closed-issue titles. Phase callouts and
+> performance notes were curated by hand at the original 0.1.0 release.
 
 ### Added
 - ferray-strings: StringArray is completely separate from Array — no trait interop (#514)
@@ -110,6 +160,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Pinned memory transfers, 6 fused kernels, auto-dispatch
 
 ### Changed
+- ferray-ufunc: clippy errors (needless_borrows_for_generic_args, inconsistent_digit_grouping) on Rust 1.95 (#570)
 - ferray-autodiff: god file — 1866 lines in single lib.rs (#535)
 - ferray-fft: plan cache is f64-only; no f32 FFT support (#109)
 - ferray-fft: rfft computes full FFT then discards half (#108)

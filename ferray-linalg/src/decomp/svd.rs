@@ -203,11 +203,7 @@ mod tests {
                 let expected = a.as_slice().unwrap()[i * n + j];
                 assert!(
                     (val - expected).abs() < 1e-10,
-                    "U*S*Vt[{},{}] = {} != {}",
-                    i,
-                    j,
-                    val,
-                    expected
+                    "U*S*Vt[{i},{j}] = {val} != {expected}"
                 );
             }
         }
@@ -237,11 +233,7 @@ mod tests {
                 let expected = a.as_slice().unwrap()[i * n + j];
                 assert!(
                     (val - expected).abs() < 1e-4,
-                    "U*S*Vt[{},{}] = {} != {}",
-                    i,
-                    j,
-                    val,
-                    expected
+                    "U*S*Vt[{i},{j}] = {val} != {expected}"
                 );
             }
         }
@@ -266,7 +258,7 @@ mod tests {
         .unwrap();
         let (_u, s, _vt) = svd(&a, false).unwrap();
         for &val in s.as_slice().unwrap() {
-            assert!(val >= 0.0, "singular value {} should be >= 0", val);
+            assert!(val >= 0.0, "singular value {val} should be >= 0");
         }
     }
 

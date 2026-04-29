@@ -52,7 +52,8 @@ where
     use std::any::TypeId;
     if TypeId::of::<T>() == TypeId::of::<f64>() {
         // SAFETY: T is f64 — reinterpret the array reference
-        let f64_input = unsafe { &*(input as *const Array<T, D> as *const Array<f64, D>) };
+        let f64_input =
+            unsafe { &*std::ptr::from_ref::<Array<T, D>>(input).cast::<Array<f64, D>>() };
         let n = f64_input.size();
         let result = if let Some(slice) = f64_input.as_slice() {
             let mut data = Vec::with_capacity(n);
@@ -72,7 +73,8 @@ where
         // SAFETY: T was verified to be f64 at the top of this branch.
         Ok(unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) })
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
-        let f32_input = unsafe { &*(input as *const Array<T, D> as *const Array<f32, D>) };
+        let f32_input =
+            unsafe { &*std::ptr::from_ref::<Array<T, D>>(input).cast::<Array<f32, D>>() };
         let n = f32_input.size();
         let result = if let Some(slice) = f32_input.as_slice() {
             let mut data = Vec::with_capacity(n);
@@ -93,7 +95,7 @@ where
         Ok(unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) })
     } else {
         // Fallback for other float types: use libm exp
-        unary_float_op(input, |x| x.exp())
+        unary_float_op(input, num_traits::Float::exp)
     }
 }
 
@@ -355,6 +357,7 @@ mod tests {
     #[cfg(feature = "f16")]
     mod f16_tests {
         use super::*;
+        use ferray_core::dimension::Ix1;
 
         fn arr1_f16(data: &[f32]) -> Array<half::f16, Ix1> {
             let n = data.len();

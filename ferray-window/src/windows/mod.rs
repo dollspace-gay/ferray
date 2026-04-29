@@ -3,6 +3,11 @@
 // Implements NumPy-equivalent window functions: bartlett, blackman, hamming,
 // hanning, and kaiser. Each returns an Array1<f64> of the specified length M.
 
+// Window-function coefficients (Blackman 0.42/0.5/0.08, Hamming 0.54/0.46,
+// Kaiser modified-Bessel I0 series) are textbook constants reproduced
+// without separators to match the reference papers / NumPy source.
+#![allow(clippy::unreadable_literal)]
+
 use ferray_core::Array;
 use ferray_core::dimension::Ix1;
 use ferray_core::error::{FerrayError, FerrayResult};
@@ -62,7 +67,10 @@ pub fn blackman(m: usize) -> FerrayResult<Array<f64, Ix1>> {
     let denom = (m.saturating_sub(1)) as f64;
     gen_window(m, |n| {
         let x = n as f64;
-        0.42 - 0.5 * (2.0 * PI * x / denom).cos() + 0.08 * (4.0 * PI * x / denom).cos()
+        0.08f64.mul_add(
+            (4.0 * PI * x / denom).cos(),
+            0.5f64.mul_add(-(2.0 * PI * x / denom).cos(), 0.42),
+        )
     })
 }
 
@@ -77,7 +85,9 @@ pub fn blackman(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 /// Returns an error only if internal array construction fails.
 pub fn hamming(m: usize) -> FerrayResult<Array<f64, Ix1>> {
     let denom = (m.saturating_sub(1)) as f64;
-    gen_window(m, |n| 0.54 - 0.46 * (2.0 * PI * n as f64 / denom).cos())
+    gen_window(m, |n| {
+        0.46f64.mul_add(-(2.0 * PI * n as f64 / denom).cos(), 0.54)
+    })
 }
 
 /// Return the Hann (Hanning) window of length `m`.
@@ -85,7 +95,7 @@ pub fn hamming(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 /// The Hann window is defined as:
 ///   w(n) = 0.5 * (1 - cos(2*pi*n/(M-1)))
 ///
-/// NumPy calls this function `hanning`. This is equivalent to `numpy.hanning(M)`.
+/// `NumPy` calls this function `hanning`. This is equivalent to `numpy.hanning(M)`.
 ///
 /// # Errors
 /// Returns an error only if internal array construction fails.
@@ -97,9 +107,9 @@ pub fn hanning(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 /// Return the Kaiser window of length `m` with shape parameter `beta`.
 ///
 /// The Kaiser window is defined as:
-///   w(n) = I_0(beta * sqrt(1 - ((2n/(M-1)) - 1)^2)) / I_0(beta)
+///   w(n) = `I_0(beta` * sqrt(1 - ((2n/(M-1)) - 1)^2)) / `I_0(beta)`
 ///
-/// where I_0 is the modified Bessel function of the first kind, order 0.
+/// where `I_0` is the modified Bessel function of the first kind, order 0.
 ///
 /// This is equivalent to `numpy.kaiser(M, beta)`.
 ///

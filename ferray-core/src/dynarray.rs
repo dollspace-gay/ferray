@@ -61,7 +61,7 @@ pub enum DynArray {
     BF16(Array<half::bf16, IxDyn>),
 }
 
-/// Dispatch a single expression across every DynArray variant, binding
+/// Dispatch a single expression across every `DynArray` variant, binding
 /// the inner `Array<T, IxDyn>` to `$binding`. This turns repeated 17-way
 /// match arms into one-line methods (see issue #125); the f16/bf16
 /// variants are conditionally compiled in the same way as the enum.
@@ -94,7 +94,8 @@ macro_rules! dispatch {
 
 impl DynArray {
     /// The runtime dtype of the elements in this array.
-    pub fn dtype(&self) -> DType {
+    #[must_use]
+    pub const fn dtype(&self) -> DType {
         match self {
             Self::Bool(_) => DType::Bool,
             Self::U8(_) => DType::U8,
@@ -120,31 +121,37 @@ impl DynArray {
     }
 
     /// Shape as a slice.
+    #[must_use]
     pub fn shape(&self) -> &[usize] {
         dispatch!(self, a => a.shape())
     }
 
     /// Number of dimensions.
+    #[must_use]
     pub fn ndim(&self) -> usize {
         self.shape().len()
     }
 
     /// Total number of elements.
+    #[must_use]
     pub fn size(&self) -> usize {
         self.shape().iter().product()
     }
 
     /// Whether the array has zero elements.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.size() == 0
     }
 
     /// Size in bytes of one element.
-    pub fn itemsize(&self) -> usize {
+    #[must_use]
+    pub const fn itemsize(&self) -> usize {
         self.dtype().size_of()
     }
 
     /// Total size in bytes.
+    #[must_use]
     pub fn nbytes(&self) -> usize {
         self.size() * self.itemsize()
     }
@@ -209,7 +216,7 @@ impl DynArray {
 
     /// Cast this array to a different element dtype at the requested safety level.
     ///
-    /// Mirrors NumPy's `arr.astype(dtype, casting=...)`. The conversion routes
+    /// Mirrors `NumPy`'s `arr.astype(dtype, casting=...)`. The conversion routes
     /// through [`crate::dtype::unsafe_cast::CastTo`] for the underlying typed
     /// arrays, so it supports the same set of element pairs (every primitive
     /// numeric, bool, and Complex<f32>/Complex<f64> in any combination).

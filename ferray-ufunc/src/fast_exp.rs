@@ -9,6 +9,14 @@
 // - No lookup tables — auto-vectorizes cleanly for SSE/AVX2/AVX-512/NEON
 // - Branchless with explicit NaN re-injection for correct SIMD behavior
 
+// Polynomial coefficients are 17-digit scientific constants taken from a
+// Remez generator and are written without group separators on purpose so
+// they match the published reference coefficients character-for-character.
+// `#[inline(always)]` on `exp_fast_f64` / `exp_fast_f32` is required for
+// auto-vectorization — without it, the function-call boundary blocks
+// SLP/loop vectorizers from fusing the kernel into the caller's loop.
+#![allow(clippy::unreadable_literal, clippy::inline_always)]
+
 /// Fast exp(x) using Even/Odd Remez decomposition with expm1 reconstruction.
 ///
 /// Returns e^x with ≤1 ULP accuracy (faithfully rounded). Handles all IEEE 754
@@ -20,6 +28,7 @@
     clippy::approx_constant,
     clippy::manual_clamp
 )]
+#[must_use]
 pub fn exp_fast_f64(x: f64) -> f64 {
     let x_orig = x;
 
@@ -65,6 +74,12 @@ pub fn exp_fast_f64(x: f64) -> f64 {
 
     // 2^n reconstruction: when n = 1024, 2^n overflows IEEE 754.
     // Split into two steps: 2^(n-1) * 2, so the intermediate is representable.
+    //
+    // The `let mut result = ...; if ... { result = ... }` shape below is
+    // deliberate: each "fix-up" branch (NaN/Inf/0) compiles to a single
+    // vcmpXXpd + vblendvpd in SIMD. Folding them into a chained ternary
+    // (as `useless_let_if_seq` would suggest) defeats vectorization.
+    #[allow(clippy::useless_let_if_seq)]
     let mut result = if ni <= 1023 {
         let scale = f64::from_bits(((ni + 1023) as u64) << 52);
         scale + scale * expm1
@@ -104,8 +119,9 @@ pub fn exp_fast_batch_f64(input: &[f64], output: &mut [f64]) {
 /// f32 has only 24 mantissa bits, so the f64 result rounded to f32 is
 /// correctly rounded for all finite f32 inputs.
 #[inline(always)]
+#[must_use]
 pub fn exp_fast_f32(x: f32) -> f32 {
-    exp_fast_f64(x as f64) as f32
+    exp_fast_f64(f64::from(x)) as f32
 }
 
 /// Batch fast exp for f32 slices.
@@ -141,7 +157,7 @@ mod tests {
     #[test]
     fn accuracy_vs_libm() {
         // Check ≤1 ULP vs libm across a range of values
-        let test_values: Vec<f64> = (-7000..=7097).map(|i| i as f64 * 0.1).collect();
+        let test_values: Vec<f64> = (-7000..=7097).map(|i| f64::from(i) * 0.1).collect();
         for &x in &test_values {
             let fast = exp_fast_f64(x);
             let reference = x.exp();
@@ -158,7 +174,7 @@ mod tests {
 
     #[test]
     fn batch_matches_scalar() {
-        let input: Vec<f64> = (-100..=100).map(|i| i as f64 * 0.1).collect();
+        let input: Vec<f64> = (-100..=100).map(|i| f64::from(i) * 0.1).collect();
         let mut output = vec![0.0f64; input.len()];
         exp_fast_batch_f64(&input, &mut output);
         for (i, &x) in input.iter().enumerate() {

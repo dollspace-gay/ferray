@@ -38,14 +38,15 @@ pub fn mapparms(domain: [f64; 2], window: [f64; 2]) -> Result<(f64, f64), Ferray
         )));
     }
     let scale = (window[1] - window[0]) / span;
-    let offset = window[0] - scale * domain[0];
+    let offset = scale.mul_add(-domain[0], window[0]);
     Ok((offset, scale))
 }
 
 /// Apply the mapping `u = offset + scale * x` to a single value.
 #[inline]
+#[must_use]
 pub fn map_x(x: f64, offset: f64, scale: f64) -> f64 {
-    offset + scale * x
+    scale.mul_add(x, offset)
 }
 
 /// Validate a domain/window pair (both must have non-degenerate spans).
@@ -65,6 +66,7 @@ pub fn validate_domain_window(domain: [f64; 2], window: [f64; 2]) -> Result<(), 
 
 /// Compute the auto domain `[min, max]` from a slice of x values, falling
 /// back to `[-1, 1]` for empty input.
+#[must_use]
 pub fn auto_domain(x: &[f64]) -> [f64; 2] {
     if x.is_empty() {
         return [-1.0, 1.0];

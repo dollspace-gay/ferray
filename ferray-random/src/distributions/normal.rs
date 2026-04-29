@@ -65,14 +65,14 @@ impl<B: BitGenerator> Generator<B> {
         }
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
-        let data = generate_vec(self, n, |bg| loc + scale * standard_normal_single(bg));
+        let data = generate_vec(self, n, |bg| scale.mul_add(standard_normal_single(bg), loc));
         vec_to_array_f64(data, &shape)
     }
 
     /// Generate an array of standard normal (mean=0, std=1) `f32` variates.
     ///
     /// The f32 analogue of [`standard_normal`](Self::standard_normal). Equivalent
-    /// to NumPy's `Generator.standard_normal(size, dtype=np.float32)`. Uses the
+    /// to `NumPy`'s `Generator.standard_normal(size, dtype=np.float32)`. Uses the
     /// same Ziggurat f64 tables, then casts to f32 to preserve tail accuracy.
     ///
     /// # Errors
@@ -105,7 +105,9 @@ impl<B: BitGenerator> Generator<B> {
         }
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
-        let data = generate_vec_f32(self, n, |bg| loc + scale * standard_normal_single_f32(bg));
+        let data = generate_vec_f32(self, n, |bg| {
+            scale.mul_add(standard_normal_single_f32(bg), loc)
+        });
         vec_to_array_f32(data, &shape)
     }
 
@@ -128,7 +130,7 @@ impl<B: BitGenerator> Generator<B> {
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
         let data = generate_vec_f32(self, n, |bg| {
-            (mean + sigma * standard_normal_single_f32(bg)).exp()
+            sigma.mul_add(standard_normal_single_f32(bg), mean).exp()
         });
         vec_to_array_f32(data, &shape)
     }
@@ -153,7 +155,7 @@ impl<B: BitGenerator> Generator<B> {
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
         let data = generate_vec(self, n, |bg| {
-            (mean + sigma * standard_normal_single(bg)).exp()
+            sigma.mul_add(standard_normal_single(bg), mean).exp()
         });
         vec_to_array_f64(data, &shape)
     }
@@ -235,7 +237,7 @@ mod tests {
         let mean: f64 = slice.iter().sum::<f64>() / n as f64;
         // E[X] = exp(mu + sigma^2 / 2)
         let expected_mean = (mu + sigma * sigma / 2.0).exp();
-        let expected_var = ((sigma * sigma).exp() - 1.0) * (2.0 * mu + sigma * sigma).exp();
+        let expected_var = (sigma * sigma).exp_m1() * 2.0f64.mul_add(mu, sigma * sigma).exp();
         let se = (expected_var / n as f64).sqrt();
         assert!(
             (mean - expected_mean).abs() < 3.0 * se,

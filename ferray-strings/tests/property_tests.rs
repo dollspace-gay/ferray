@@ -187,7 +187,7 @@ proptest! {
     ) {
         let a = array(&[&s1, &s2, &s3]).unwrap();
         // Use a width large enough to trigger padding
-        let max_len = a.as_slice().iter().map(|s| s.len()).max().unwrap_or(0);
+        let max_len = a.as_slice().iter().map(std::string::String::len).max().unwrap_or(0);
         let width = max_len + extra_width;
         let centered = center(&a, width, ' ').unwrap();
         let stripped = strip(&centered, None).unwrap();

@@ -16,7 +16,7 @@ use ferray_core::{Array, ArrayView, Element};
 /// Broadcast an array to a target shape via zero-copy stride manipulation.
 ///
 /// The returned view uses stride-0 tricks to virtually expand size-1
-/// dimensions — no data is copied. This is equivalent to NumPy's
+/// dimensions — no data is copied. This is equivalent to `NumPy`'s
 /// `numpy.broadcast_to`.
 ///
 /// # Errors
@@ -63,16 +63,16 @@ pub fn broadcast_to<'a, T: Element, D: Dimension>(
 /// assert_eq!(views[0].shape(), &[4, 3]);
 /// assert_eq!(views[1].shape(), &[4, 3]);
 /// ```
-pub fn broadcast_arrays<'a, T: Element, D: Dimension>(
-    arrays: &'a [Array<T, D>],
-) -> FerrayResult<Vec<ArrayView<'a, T, IxDyn>>> {
+pub fn broadcast_arrays<T: Element, D: Dimension>(
+    arrays: &[Array<T, D>],
+) -> FerrayResult<Vec<ArrayView<'_, T, IxDyn>>> {
     core_broadcast::broadcast_arrays(arrays)
 }
 
 /// Compute the broadcast result shape from multiple shapes, without
 /// allocating any arrays.
 ///
-/// Follows NumPy's broadcasting rules: shapes are right-aligned, size-1
+/// Follows `NumPy`'s broadcasting rules: shapes are right-aligned, size-1
 /// dimensions stretch, and mismatched non-1 dimensions are errors.
 ///
 /// # Errors

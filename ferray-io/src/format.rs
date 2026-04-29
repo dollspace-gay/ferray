@@ -18,7 +18,7 @@ pub const VERSION_3_0: (u8, u8) = (3, 0);
 /// Alignment of the header + preamble in bytes.
 pub const HEADER_ALIGNMENT: usize = 64;
 
-/// Maximum header length for version 1.0 (u16::MAX).
+/// Maximum header length for version 1.0 (`u16::MAX`).
 pub const MAX_HEADER_LEN_V1: usize = u16::MAX as usize;
 
 /// Mode for memory-mapped file access.

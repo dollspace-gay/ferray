@@ -4,6 +4,12 @@
 // elementwise operations. Uses `pulp::Arch` for portable dispatch across
 // SSE2, AVX2, AVX-512 on x86_64 and NEON on aarch64.
 
+// `with_simd` is the pulp dispatch entry point; `#[inline(always)]` is
+// required so the SIMD instruction set selected at the call site can
+// actually inline into the kernel — without it the function-call boundary
+// blocks vectorization and the dispatch becomes a no-op.
+#![allow(clippy::inline_always)]
+
 use pulp::Arch;
 
 use std::sync::atomic::{AtomicU8, Ordering};

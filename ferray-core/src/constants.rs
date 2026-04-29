@@ -2,6 +2,10 @@
 //
 // Mirrors numpy's constants module: np.pi, np.e, np.inf, np.nan, etc.
 
+// `EULER_GAMMA` is a 16-digit canonical mathematical constant; underscore
+// separators would diverge from the form quoted by every reference.
+#![allow(clippy::unreadable_literal)]
+
 /// The ratio of a circle's circumference to its diameter.
 pub const PI: f64 = core::f64::consts::PI;
 
@@ -31,7 +35,7 @@ pub const NZERO: f64 = -0.0_f64;
 
 /// Sentinel value for `expand_dims` indicating a new axis should be inserted.
 ///
-/// In NumPy this is `numpy.newaxis` (an alias for `None`). In ferray it is
+/// In `NumPy` this is `numpy.newaxis` (an alias for `None`). In ferray it is
 /// a `usize` sentinel that is recognized by `expand_dims`.
 pub const NEWAXIS: usize = usize::MAX;
 

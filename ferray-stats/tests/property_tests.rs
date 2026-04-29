@@ -2,6 +2,18 @@
 //
 // Tests mathematical invariants of statistical functions using proptest.
 
+// Property tests sample integer sizes and lift into `f64` for invariant
+// checks; some invariants assert exact float equality (idempotence,
+// permutation invariance) by design.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 use ferray_core::Array;
 use ferray_core::dimension::Ix1;
 

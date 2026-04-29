@@ -2,6 +2,17 @@
 //
 // Tests mathematical invariants of stride-trick operations using proptest.
 
+// Property tests sample integer sizes and assert exact float equality on
+// view roundtrip invariants by design.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 use ferray_core::Array;
 use ferray_core::dimension::{Ix1, Ix2};
 

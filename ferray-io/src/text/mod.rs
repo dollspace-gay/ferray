@@ -50,7 +50,7 @@ impl Default for SaveTxtOptions {
 /// Format a single value using a format string.
 ///
 /// Supports:
-/// - NumPy printf-style: `"%.6e"`, `"%.18e"`, `"%10.5f"`, `"%.4f"`, `"%d"`
+/// - `NumPy` printf-style: `"%.6e"`, `"%.18e"`, `"%10.5f"`, `"%.4f"`, `"%d"`
 /// - Rust-style with braces: `"{:.6}"`, `"{:.6e}"`, `"{:>10.5}"`
 /// - Plain `"{}"` — default Display
 ///
@@ -125,7 +125,7 @@ fn format_value<T: Display>(val: &T, fmt_str: &str) -> String {
 /// Save a 2D array as delimited text.
 ///
 /// The `fmt` field in [`SaveTxtOptions`] supports:
-/// - NumPy printf-style: `"%.6e"`, `"%.18e"`, `"%10.5f"`, `"%d"`
+/// - `NumPy` printf-style: `"%.6e"`, `"%.18e"`, `"%10.5f"`, `"%d"`
 /// - Rust-style: `"{:.6}"`, `"{:.6e}"`
 /// - Default: `None` uses standard `Display` formatting.
 ///
@@ -274,7 +274,7 @@ where
 /// Load a delimited text file with missing value handling.
 ///
 /// Missing values (empty cells or cells matching common missing indicators)
-/// are replaced with `filling_values`. This is analogous to NumPy's `genfromtxt`.
+/// are replaced with `filling_values`. This is analogous to `NumPy`'s `genfromtxt`.
 ///
 /// Returns a 2D `f64` array where missing values are replaced with `filling_value`
 /// (typically `f64::NAN`).
@@ -346,6 +346,7 @@ pub fn genfromtxt_from_str(
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)] // Roundtrip tests assert exact equality on hand-picked text values.
 mod tests {
     use super::*;
 

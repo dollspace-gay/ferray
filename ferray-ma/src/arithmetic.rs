@@ -47,7 +47,7 @@ struct BroadcastedPair<T> {
     b_mask: Vec<bool>,
 }
 
-/// Broadcast two masked arrays to a common shape using NumPy rules.
+/// Broadcast two masked arrays to a common shape using `NumPy` rules.
 ///
 /// Both inputs must share dimension type `D`, so the broadcast result has
 /// the same rank as `D` (or, for `IxDyn`, the maximum of the two ranks).
@@ -213,7 +213,7 @@ where
     Ok(out)
 }
 
-/// Add two masked arrays elementwise with NumPy broadcasting.
+/// Add two masked arrays elementwise with `NumPy` broadcasting.
 ///
 /// Propagates the mask union and fills masked positions in the result data
 /// with the receiver's [`MaskedArray::fill_value`].
@@ -231,7 +231,7 @@ where
     masked_binary_op(a, b, |x, y| x + y, "masked_add")
 }
 
-/// Subtract two masked arrays elementwise with NumPy broadcasting.
+/// Subtract two masked arrays elementwise with `NumPy` broadcasting.
 pub fn masked_sub<T, D>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,
@@ -243,7 +243,7 @@ where
     masked_binary_op(a, b, |x, y| x - y, "masked_sub")
 }
 
-/// Multiply two masked arrays elementwise with NumPy broadcasting.
+/// Multiply two masked arrays elementwise with `NumPy` broadcasting.
 pub fn masked_mul<T, D>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,
@@ -255,7 +255,7 @@ where
     masked_binary_op(a, b, |x, y| x * y, "masked_mul")
 }
 
-/// Divide two masked arrays elementwise with NumPy broadcasting.
+/// Divide two masked arrays elementwise with `NumPy` broadcasting.
 pub fn masked_div<T, D>(
     a: &MaskedArray<T, D>,
     b: &MaskedArray<T, D>,

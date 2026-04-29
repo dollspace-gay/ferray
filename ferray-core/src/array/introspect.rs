@@ -15,7 +15,7 @@ use super::view::ArrayView;
 impl<T: Element, D: Dimension> Array<T, D> {
     /// Size in bytes of a single element.
     #[inline]
-    pub fn itemsize(&self) -> usize {
+    pub const fn itemsize(&self) -> usize {
         std::mem::size_of::<T>()
     }
 
@@ -35,13 +35,14 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
     /// Transposed view (zero-copy). Reverses the axes.
     ///
-    /// This is the equivalent of NumPy's `.T` property.
+    /// This is the equivalent of `NumPy`'s `.T` property.
     pub fn t(&self) -> ArrayView<'_, T, D> {
         let transposed = self.inner.view().reversed_axes();
         ArrayView::from_ndarray(transposed)
     }
 
     /// Deep copy of this array.
+    #[must_use]
     pub fn copy(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -65,7 +66,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
         let slice = self.inner.as_slice().ok_or_else(|| {
             FerrayError::invalid_value("array is not contiguous; cannot produce byte slice")
         })?;
-        let ptr = slice.as_ptr() as *const u8;
+        let ptr = slice.as_ptr().cast::<u8>();
         let len = std::mem::size_of_val(slice);
         // SAFETY: the slice is contiguous and alive for 'self lifetime;
         // reinterpreting as bytes is always safe for Copy-like types.
@@ -91,7 +92,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
 impl<T: Element, D: Dimension> ArrayView<'_, T, D> {
     /// Size in bytes of a single element.
     #[inline]
-    pub fn itemsize(&self) -> usize {
+    pub const fn itemsize(&self) -> usize {
         std::mem::size_of::<T>()
     }
 

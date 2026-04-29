@@ -13,7 +13,7 @@
 /// Algorithm: try a cheap analytical check first (non-overlap is
 /// decidable in O(ndim²) for views whose absolute strides are
 /// "properly ordered" per the axis extents). Fall back to an exact
-/// offset enumeration via HashSet for cases the analytical pass
+/// offset enumeration via `HashSet` for cases the analytical pass
 /// can't prove. The previous version always enumerated and had a
 /// dead "if ≤ 1M then enumerate else enumerate" branch (#286, #288).
 ///
@@ -71,7 +71,7 @@ pub(crate) fn has_overlapping_strides(shape: &[usize], strides: &[isize]) -> boo
 ///
 /// Returns `true` only when non-overlap is provably true; a `false`
 /// return is inconclusive and the caller must enumerate. This is the
-/// same pattern NumPy uses in `PyArray_NonZeroDimsNonOverlapping`
+/// same pattern `NumPy` uses in `PyArray_NonZeroDimsNonOverlapping`
 /// and gives O(ndim²) performance for the common cases.
 fn is_non_overlapping_by_stride_order(shape: &[usize], strides: &[isize]) -> bool {
     // Drop size-1 axes; their stride doesn't matter.

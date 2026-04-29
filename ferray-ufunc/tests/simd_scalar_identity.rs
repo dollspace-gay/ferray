@@ -18,6 +18,18 @@
 //! and once with `FERRAY_FORCE_SCALAR=1` (scalar path) — then compare every
 //! output element at the bit level.
 
+// This test asserts exact float equality between SIMD and scalar paths
+// (it is a SIMD/scalar identity test by name) and lifts integer iteration
+// counts into f64 for comparison addressing.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 use ferray_core::Array;
 use ferray_core::dimension::Ix1;
 use ferray_core::error::FerrayError;
@@ -106,27 +118,27 @@ fn run_binary_both(a_data: &[f64], b_data: &[f64], f: BinaryFn) -> (Vec<f64>, Ve
 
 /// 100 values in [0.0, 10.0) for general unary tests.
 fn general_input() -> Vec<f64> {
-    (0..100).map(|i| i as f64 * 0.1).collect()
+    (0..100).map(|i| f64::from(i) * 0.1).collect()
 }
 
 /// 100 values in [-1.0, 1.0) for domain-restricted functions (arcsin, arctanh).
 fn unit_input() -> Vec<f64> {
-    (0..100).map(|i| (i as f64 - 50.0) * 0.019).collect()
+    (0..100).map(|i| (f64::from(i) - 50.0) * 0.019).collect()
 }
 
 /// 100 positive values in (0.5, 50.5) for log-domain functions.
 fn positive_input() -> Vec<f64> {
-    (1..101).map(|i| i as f64 * 0.5).collect()
+    (1..101).map(|i| f64::from(i) * 0.5).collect()
 }
 
 /// 100 values in [-2.5, 2.5) for exp-domain (avoid overflow).
 fn exp_input() -> Vec<f64> {
-    (0..100).map(|i| i as f64 * 0.05 - 2.5).collect()
+    (0..100).map(|i| f64::from(i).mul_add(0.05, -2.5)).collect()
 }
 
 /// 100 values >= 1.0 for arccosh domain.
 fn arccosh_input() -> Vec<f64> {
-    (0..100).map(|i| 1.0 + i as f64 * 0.1).collect()
+    (0..100).map(|i| f64::from(i).mul_add(0.1, 1.0)).collect()
 }
 
 // ===========================================================================
@@ -267,7 +279,7 @@ fn identity_square() {
 
 #[test]
 fn identity_absolute() {
-    let input: Vec<f64> = (-50..50).map(|i| i as f64 * 0.3).collect();
+    let input: Vec<f64> = (-50..50).map(|i| f64::from(i) * 0.3).collect();
     let (s, c) = run_unary_both(&input, ferray_ufunc::absolute);
     assert_bit_identical_f64(&s, &c, "absolute");
 }
@@ -286,35 +298,35 @@ fn identity_reciprocal() {
 
 #[test]
 fn identity_sign() {
-    let input: Vec<f64> = (-50..50).map(|i| i as f64).collect();
+    let input: Vec<f64> = (-50..50).map(f64::from).collect();
     let (s, c) = run_unary_both(&input, ferray_ufunc::sign);
     assert_bit_identical_f64(&s, &c, "sign");
 }
 
 #[test]
 fn identity_floor() {
-    let input: Vec<f64> = (-50..50).map(|i| i as f64 * 0.3 + 0.1).collect();
+    let input: Vec<f64> = (-50..50).map(|i| f64::from(i).mul_add(0.3, 0.1)).collect();
     let (s, c) = run_unary_both(&input, ferray_ufunc::floor);
     assert_bit_identical_f64(&s, &c, "floor");
 }
 
 #[test]
 fn identity_ceil() {
-    let input: Vec<f64> = (-50..50).map(|i| i as f64 * 0.3 + 0.1).collect();
+    let input: Vec<f64> = (-50..50).map(|i| f64::from(i).mul_add(0.3, 0.1)).collect();
     let (s, c) = run_unary_both(&input, ferray_ufunc::ceil);
     assert_bit_identical_f64(&s, &c, "ceil");
 }
 
 #[test]
 fn identity_trunc() {
-    let input: Vec<f64> = (-50..50).map(|i| i as f64 * 0.3 + 0.1).collect();
+    let input: Vec<f64> = (-50..50).map(|i| f64::from(i).mul_add(0.3, 0.1)).collect();
     let (s, c) = run_unary_both(&input, ferray_ufunc::trunc);
     assert_bit_identical_f64(&s, &c, "trunc");
 }
 
 #[test]
 fn identity_round() {
-    let input: Vec<f64> = (-50..50).map(|i| i as f64 * 0.3 + 0.1).collect();
+    let input: Vec<f64> = (-50..50).map(|i| f64::from(i).mul_add(0.3, 0.1)).collect();
     let (s, c) = run_unary_both(&input, ferray_ufunc::round);
     assert_bit_identical_f64(&s, &c, "round");
 }
@@ -327,7 +339,7 @@ fn identity_degrees() {
 
 #[test]
 fn identity_radians() {
-    let input: Vec<f64> = (0..100).map(|i| i as f64 * 3.6).collect();
+    let input: Vec<f64> = (0..100).map(|i| f64::from(i) * 3.6).collect();
     let (s, c) = run_unary_both(&input, ferray_ufunc::radians);
     assert_bit_identical_f64(&s, &c, "radians");
 }
@@ -338,56 +350,56 @@ fn identity_radians() {
 
 #[test]
 fn identity_add() {
-    let a: Vec<f64> = (0..100).map(|i| i as f64 * 0.7).collect();
-    let b: Vec<f64> = (0..100).map(|i| (100 - i) as f64 * 0.3).collect();
+    let a: Vec<f64> = (0..100).map(|i| f64::from(i) * 0.7).collect();
+    let b: Vec<f64> = (0..100).map(|i| f64::from(100 - i) * 0.3).collect();
     let (s, c) = run_binary_both(&a, &b, ferray_ufunc::add);
     assert_bit_identical_f64(&s, &c, "add");
 }
 
 #[test]
 fn identity_subtract() {
-    let a: Vec<f64> = (0..100).map(|i| i as f64 * 0.7).collect();
-    let b: Vec<f64> = (0..100).map(|i| (100 - i) as f64 * 0.3).collect();
+    let a: Vec<f64> = (0..100).map(|i| f64::from(i) * 0.7).collect();
+    let b: Vec<f64> = (0..100).map(|i| f64::from(100 - i) * 0.3).collect();
     let (s, c) = run_binary_both(&a, &b, ferray_ufunc::subtract);
     assert_bit_identical_f64(&s, &c, "subtract");
 }
 
 #[test]
 fn identity_multiply() {
-    let a: Vec<f64> = (0..100).map(|i| i as f64 * 0.7).collect();
-    let b: Vec<f64> = (0..100).map(|i| (100 - i) as f64 * 0.3).collect();
+    let a: Vec<f64> = (0..100).map(|i| f64::from(i) * 0.7).collect();
+    let b: Vec<f64> = (0..100).map(|i| f64::from(100 - i) * 0.3).collect();
     let (s, c) = run_binary_both(&a, &b, ferray_ufunc::multiply);
     assert_bit_identical_f64(&s, &c, "multiply");
 }
 
 #[test]
 fn identity_divide() {
-    let a: Vec<f64> = (0..100).map(|i| i as f64 * 0.7 + 0.01).collect();
-    let b: Vec<f64> = (1..101).map(|i| i as f64 * 0.3).collect();
+    let a: Vec<f64> = (0..100).map(|i| f64::from(i).mul_add(0.7, 0.01)).collect();
+    let b: Vec<f64> = (1..101).map(|i| f64::from(i) * 0.3).collect();
     let (s, c) = run_binary_both(&a, &b, ferray_ufunc::divide);
     assert_bit_identical_f64(&s, &c, "divide");
 }
 
 #[test]
 fn identity_power() {
-    let a: Vec<f64> = (1..101).map(|i| i as f64 * 0.1).collect();
-    let b: Vec<f64> = (0..100).map(|i| i as f64 * 0.02 + 0.5).collect();
+    let a: Vec<f64> = (1..101).map(|i| f64::from(i) * 0.1).collect();
+    let b: Vec<f64> = (0..100).map(|i| f64::from(i).mul_add(0.02, 0.5)).collect();
     let (s, c) = run_binary_both(&a, &b, ferray_ufunc::power);
     assert_bit_identical_f64(&s, &c, "power");
 }
 
 #[test]
 fn identity_arctan2() {
-    let y: Vec<f64> = (0..100).map(|i| (i as f64 - 50.0) * 0.1).collect();
-    let x: Vec<f64> = (0..100).map(|i| (i as f64 - 30.0) * 0.1).collect();
+    let y: Vec<f64> = (0..100).map(|i| (f64::from(i) - 50.0) * 0.1).collect();
+    let x: Vec<f64> = (0..100).map(|i| (f64::from(i) - 30.0) * 0.1).collect();
     let (s, c) = run_binary_both(&y, &x, ferray_ufunc::arctan2);
     assert_bit_identical_f64(&s, &c, "arctan2");
 }
 
 #[test]
 fn identity_hypot() {
-    let a: Vec<f64> = (0..100).map(|i| i as f64 * 0.3).collect();
-    let b: Vec<f64> = (0..100).map(|i| i as f64 * 0.4).collect();
+    let a: Vec<f64> = (0..100).map(|i| f64::from(i) * 0.3).collect();
+    let b: Vec<f64> = (0..100).map(|i| f64::from(i) * 0.4).collect();
     let (s, c) = run_binary_both(&a, &b, ferray_ufunc::hypot);
     assert_bit_identical_f64(&s, &c, "hypot");
 }
@@ -401,7 +413,7 @@ fn identity_hypot() {
 
 #[test]
 fn dispatch_unary_f64_sqrt_identity() {
-    let input: Vec<f64> = (1..101).map(|i| i as f64).collect();
+    let input: Vec<f64> = (1..101).map(f64::from).collect();
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
@@ -419,7 +431,7 @@ fn dispatch_unary_f64_sqrt_identity() {
 
 #[test]
 fn dispatch_unary_f64_sin_identity() {
-    let input: Vec<f64> = (0..200).map(|i| i as f64 * 0.05).collect();
+    let input: Vec<f64> = (0..200).map(|i| f64::from(i) * 0.05).collect();
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
@@ -435,7 +447,7 @@ fn dispatch_unary_f64_sin_identity() {
 
 #[test]
 fn dispatch_unary_f64_exp_identity() {
-    let input: Vec<f64> = (0..200).map(|i| i as f64 * 0.03 - 3.0).collect();
+    let input: Vec<f64> = (0..200).map(|i| f64::from(i).mul_add(0.03, -3.0)).collect();
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
@@ -451,7 +463,7 @@ fn dispatch_unary_f64_exp_identity() {
 
 #[test]
 fn dispatch_unary_f64_ln_identity() {
-    let input: Vec<f64> = (1..201).map(|i| i as f64 * 0.5).collect();
+    let input: Vec<f64> = (1..201).map(|i| f64::from(i) * 0.5).collect();
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
@@ -467,7 +479,7 @@ fn dispatch_unary_f64_ln_identity() {
 
 #[test]
 fn dispatch_unary_f64_cos_identity() {
-    let input: Vec<f64> = (0..200).map(|i| i as f64 * 0.05).collect();
+    let input: Vec<f64> = (0..200).map(|i| f64::from(i) * 0.05).collect();
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
@@ -483,7 +495,9 @@ fn dispatch_unary_f64_cos_identity() {
 
 #[test]
 fn dispatch_unary_f64_floor_identity() {
-    let input: Vec<f64> = (-100..100).map(|i| i as f64 * 0.37 + 0.1).collect();
+    let input: Vec<f64> = (-100..100)
+        .map(|i| f64::from(i).mul_add(0.37, 0.1))
+        .collect();
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
@@ -499,7 +513,9 @@ fn dispatch_unary_f64_floor_identity() {
 
 #[test]
 fn dispatch_unary_f64_ceil_identity() {
-    let input: Vec<f64> = (-100..100).map(|i| i as f64 * 0.37 + 0.1).collect();
+    let input: Vec<f64> = (-100..100)
+        .map(|i| f64::from(i).mul_add(0.37, 0.1))
+        .collect();
     let mut simd_out = vec![0.0f64; input.len()];
     let mut scalar_out = vec![0.0f64; input.len()];
 
@@ -515,8 +531,8 @@ fn dispatch_unary_f64_ceil_identity() {
 
 #[test]
 fn dispatch_binary_f64_add_identity() {
-    let a: Vec<f64> = (0..200).map(|i| i as f64 * 0.7).collect();
-    let b: Vec<f64> = (0..200).map(|i| (200 - i) as f64 * 0.3).collect();
+    let a: Vec<f64> = (0..200).map(|i| f64::from(i) * 0.7).collect();
+    let b: Vec<f64> = (0..200).map(|i| f64::from(200 - i) * 0.3).collect();
     let mut simd_out = vec![0.0f64; a.len()];
     let mut scalar_out = vec![0.0f64; a.len()];
 
@@ -532,8 +548,8 @@ fn dispatch_binary_f64_add_identity() {
 
 #[test]
 fn dispatch_binary_f64_mul_identity() {
-    let a: Vec<f64> = (0..200).map(|i| i as f64 * 0.7).collect();
-    let b: Vec<f64> = (0..200).map(|i| (200 - i) as f64 * 0.3).collect();
+    let a: Vec<f64> = (0..200).map(|i| f64::from(i) * 0.7).collect();
+    let b: Vec<f64> = (0..200).map(|i| f64::from(200 - i) * 0.3).collect();
     let mut simd_out = vec![0.0f64; a.len()];
     let mut scalar_out = vec![0.0f64; a.len()];
 
@@ -549,8 +565,8 @@ fn dispatch_binary_f64_mul_identity() {
 
 #[test]
 fn dispatch_binary_f64_div_identity() {
-    let a: Vec<f64> = (0..200).map(|i| i as f64 * 0.7 + 0.01).collect();
-    let b: Vec<f64> = (1..201).map(|i| i as f64 * 0.3).collect();
+    let a: Vec<f64> = (0..200).map(|i| f64::from(i).mul_add(0.7, 0.01)).collect();
+    let b: Vec<f64> = (1..201).map(|i| f64::from(i) * 0.3).collect();
     let mut simd_out = vec![0.0f64; a.len()];
     let mut scalar_out = vec![0.0f64; a.len()];
 

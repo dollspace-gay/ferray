@@ -1,7 +1,7 @@
-//! Mapping between ferray [`DType`], Arrow [`DataType`], and NumPy dtype codes.
+//! Mapping between ferray [`DType`], Arrow [`DataType`], and `NumPy` dtype codes.
 //!
 //! This module provides bidirectional conversion functions so that every
-//! interop path (NumPy, Arrow, Polars) shares a single source of truth for
+//! interop path (`NumPy`, Arrow, Polars) shares a single source of truth for
 //! type correspondence.
 
 #[cfg(any(feature = "arrow", feature = "polars"))]

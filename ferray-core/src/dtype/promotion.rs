@@ -214,9 +214,9 @@ impl_promote_int_to_complex!(i64);
 impl_promote_int_to_complex!(i128);
 
 // Float -> Complex
-impl PromoteTo<Complex<f32>> for f32 {
+impl PromoteTo<Complex<Self>> for f32 {
     #[inline]
-    fn promote(self) -> Complex<f32> {
+    fn promote(self) -> Complex<Self> {
         Complex::new(self, 0.0)
     }
 }
@@ -228,9 +228,9 @@ impl PromoteTo<Complex<f64>> for f32 {
     }
 }
 
-impl PromoteTo<Complex<f64>> for f64 {
+impl PromoteTo<Complex<Self>> for f64 {
     #[inline]
-    fn promote(self) -> Complex<f64> {
+    fn promote(self) -> Complex<Self> {
         Complex::new(self, 0.0)
     }
 }
@@ -411,7 +411,7 @@ impl_promoted!(Complex<f32>, Complex<f64> => Complex<f64>);
 
 /// Determine the result type of a binary operation between two dtypes at runtime.
 ///
-/// Follows NumPy's type promotion rules: returns the smallest type that can
+/// Follows `NumPy`'s type promotion rules: returns the smallest type that can
 /// represent both inputs without precision loss.
 ///
 /// # 128-bit promotion behaviour
@@ -430,7 +430,7 @@ impl_promoted!(Complex<f32>, Complex<f64> => Complex<f64>);
 ///
 /// # Errors
 /// Returns `FerrayError::InvalidDtype` if promotion is not possible (should
-/// not happen for valid DType values).
+/// not happen for valid `DType` values).
 pub fn result_type(a: DType, b: DType) -> FerrayResult<DType> {
     if a == b {
         return Ok(a);
@@ -443,7 +443,10 @@ pub fn result_type(a: DType, b: DType) -> FerrayResult<DType> {
 
 /// Internal promotion function returning Option.
 fn promote_dtypes(a: DType, b: DType) -> Option<DType> {
-    use DType::*;
+    use DType::{
+        Bool, Complex32, Complex64, F32, F64, I8, I16, I32, I64, I128, I256, U8, U16, U32, U64,
+        U128,
+    };
 
     if a == b {
         return Some(a);
@@ -520,23 +523,19 @@ fn promote_dtypes(a: DType, b: DType) -> Option<DType> {
         (U128, I128) => I256,
 
         // Integer + Float
-        (U8, F32) | (U16, F32) | (I8, F32) | (I16, F32) => F32,
-        (U8, F64) | (U16, F64) | (U32, F64) | (U64, F64) | (U128, F64) => F64,
-        (I8, F64) | (I16, F64) | (I32, F64) | (I64, F64) | (I128, F64) => F64,
-        (U32, F32) | (U64, F32) | (U128, F32) => F64,
-        (I32, F32) | (I64, F32) | (I128, F32) => F64,
+        (U8 | U16 | I8 | I16, F32) => F32,
+        (U8 | U16 | U32 | U64 | U128, F64) => F64,
+        (I8 | I16 | I32 | I64 | I128, F64) => F64,
+        (U32 | U64 | U128, F32) => F64,
+        (I32 | I64 | I128, F32) => F64,
 
         // Float + Float
         (F32, F64) => F64,
 
         // Real + Complex
-        (U8, Complex32)
-        | (U16, Complex32)
-        | (I8, Complex32)
-        | (I16, Complex32)
-        | (F32, Complex32) => Complex32,
-        (U32, Complex32) | (U64, Complex32) | (U128, Complex32) => Complex64,
-        (I32, Complex32) | (I64, Complex32) | (I128, Complex32) => Complex64,
+        (U8 | U16 | I8 | I16 | F32, Complex32) => Complex32,
+        (U32 | U64 | U128, Complex32) => Complex64,
+        (I32 | I64 | I128, Complex32) => Complex64,
         (F64, Complex32) => Complex64,
 
         // Complex + Complex, and anything + Complex64

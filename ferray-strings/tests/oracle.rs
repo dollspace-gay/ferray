@@ -1,7 +1,18 @@
-/// Oracle tests: validate ferray-strings against NumPy fixture outputs.
-///
-/// String operations are exact (no ULP tolerance needed), but we use the
-/// oracle framework for consistent fixture loading.
+//! Oracle tests: validate ferray-strings against `NumPy` fixture outputs.
+//!
+//! String operations are exact (no ULP tolerance needed), but we use the
+//! oracle framework for consistent fixture loading.
+
+// Oracle tests cross JSON fixture indices through `usize` and tolerate
+// the same dtype roundtrips as the rest of the oracle corpus.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless
+)]
+
 use ferray_strings::{self, StringArray1};
 use ferray_test_oracle::*;
 
@@ -11,7 +22,13 @@ fn strings_path(name: &str) -> std::path::PathBuf {
 
 fn make_string_array(value: &ferray_test_oracle::serde_json::Value) -> StringArray1 {
     let data = parse_string_data(&value["data"]);
-    ferray_strings::array(&data.iter().map(|s| s.as_str()).collect::<Vec<_>>()).unwrap()
+    ferray_strings::array(
+        &data
+            .iter()
+            .map(std::string::String::as_str)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap()
 }
 
 macro_rules! string_case_oracle {
@@ -177,7 +194,7 @@ fn oracle_replace() {
         let count = case
             .inputs
             .get("count")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let result = ferray_strings::replace(&arr, old, new, count).unwrap();
         let expected = parse_string_data(&case.expected["data"]);

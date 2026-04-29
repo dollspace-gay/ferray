@@ -12,6 +12,19 @@
 //
 // See: https://github.com/dollspace-gay/ferray/issues/361
 
+// This module *is* the project's lossy-cast shim. Every `as` here is the
+// contract — NumPy's `casting='unsafe'` semantics — not an oversight.
+// The `i256` saturation tests below also use 78-digit `i256::MAX` /
+// `i256::MIN` literals that span multiple lines uninterrupted by `_`.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::unreadable_literal
+)]
+
 use num_complex::Complex;
 
 use crate::dtype::Element;
@@ -20,7 +33,7 @@ use crate::dtype::Element;
 ///
 /// Unlike [`crate::dtype::promotion::PromoteTo`], this trait covers all
 /// element-type pairs including those that lose information. The semantics
-/// match Rust's `as` operator and NumPy's `casting='unsafe'` default.
+/// match Rust's `as` operator and `NumPy`'s `casting='unsafe'` default.
 ///
 /// To check whether a cast is safe at a given level, use
 /// [`crate::dtype::casting::can_cast`].

@@ -77,8 +77,7 @@ pub fn parse_text_grid(
     let nrows = data_lines.len();
 
     // Parse first line to determine number of columns
-    let first_fields: Vec<&str> = data_lines[0].split(delim).collect();
-    let ncols = first_fields.len();
+    let ncols = data_lines[0].split(delim).count();
 
     let mut cells = Vec::with_capacity(nrows * ncols);
 
@@ -149,8 +148,7 @@ pub fn parse_text_grid_with_missing(
     let delim = opts.delimiter;
     let nrows = data_lines.len();
 
-    let first_fields: Vec<&str> = data_lines[0].split(delim).collect();
-    let ncols = first_fields.len();
+    let ncols = data_lines[0].split(delim).count();
 
     let mut cells = Vec::with_capacity(nrows * ncols);
 

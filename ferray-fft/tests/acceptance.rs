@@ -1,5 +1,17 @@
 // Integration tests covering all acceptance criteria from the design doc.
-//
+
+// Acceptance tests assert exact equality against NumPy fixtures and
+// closed-form FFT identities; integer length<->float lifts are part of
+// the FFT normalization formulae.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 // AC-1: fft(ifft(a)) round-trips to within 4 ULPs for complex f64 input
 // AC-2: fft output matches NumPy fixtures for lengths 8, 64, 1024, 1023
 // AC-3: rfft of a real signal returns n/2+1 complex values matching NumPy
@@ -16,7 +28,7 @@ use ferray_fft::{
 };
 use num_complex::Complex;
 
-fn c(re: f64, im: f64) -> Complex<f64> {
+const fn c(re: f64, im: f64) -> Complex<f64> {
     Complex::new(re, im)
 }
 
@@ -34,7 +46,7 @@ fn make_real_1d(data: Vec<f64>) -> Array<f64, Ix1> {
 ///
 /// Uses a hybrid approach: for values near zero (where ULP comparison
 /// across sign boundaries is problematic), use an absolute tolerance
-/// of 4 * f64::EPSILON. For other values, compute the true ULP distance.
+/// of 4 * `f64::EPSILON`. For other values, compute the true ULP distance.
 fn within_4_ulps(a: f64, b: f64) -> bool {
     if a == b {
         return true;
@@ -135,7 +147,7 @@ fn ac2_fft_length_8() {
     // FFT of [0, 1, 2, 3, 4, 5, 6, 7]
     // NumPy: np.fft.fft([0,1,2,3,4,5,6,7])
     // = [28+0j, -4+9.657j, -4+4j, -4+1.657j, -4+0j, -4-1.657j, -4-4j, -4-9.657j]
-    let data: Vec<Complex<f64>> = (0..8).map(|i| c(i as f64, 0.0)).collect();
+    let data: Vec<Complex<f64>> = (0..8).map(|i| c(f64::from(i), 0.0)).collect();
     let a = make_complex_1d(data);
     let result = fft(&a, None, None, FftNorm::Backward).unwrap();
     let vals: Vec<Complex<f64>> = result.iter().copied().collect();
@@ -157,7 +169,7 @@ fn ac2_fft_length_8() {
 fn ac2_fft_length_64_roundtrip() {
     let data: Vec<Complex<f64>> = (0..64)
         .map(|i| {
-            let t = i as f64 / 64.0;
+            let t = f64::from(i) / 64.0;
             c(
                 (2.0 * std::f64::consts::PI * 3.0 * t).cos(),
                 (2.0 * std::f64::consts::PI * 7.0 * t).sin(),
@@ -176,7 +188,7 @@ fn ac2_fft_length_64_roundtrip() {
 #[test]
 fn ac2_fft_length_1024_roundtrip() {
     let data: Vec<Complex<f64>> = (0..1024)
-        .map(|i| c(i as f64 * 0.001, -(i as f64) * 0.002))
+        .map(|i| c(f64::from(i) * 0.001, -f64::from(i) * 0.002))
         .collect();
     let a = make_complex_1d(data.clone());
     let spectrum = fft(&a, None, None, FftNorm::Backward).unwrap();
@@ -191,7 +203,7 @@ fn ac2_fft_length_1024_roundtrip() {
 fn ac2_fft_length_1023_non_power_of_2() {
     // Non-power-of-two length
     let data: Vec<Complex<f64>> = (0..1023)
-        .map(|i| c((i as f64).sin(), (i as f64).cos()))
+        .map(|i| c(f64::from(i).sin(), f64::from(i).cos()))
         .collect();
     let a = make_complex_1d(data.clone());
     let spectrum = fft(&a, None, None, FftNorm::Backward).unwrap();
@@ -263,13 +275,7 @@ fn ac4_fftfreq_8() {
     let data: Vec<f64> = freq.iter().copied().collect();
     assert_eq!(data.len(), 8);
     for (i, (a, b)) in data.iter().zip(expected.iter()).enumerate() {
-        assert!(
-            (a - b).abs() < 1e-15,
-            "fftfreq[{}]: got {}, expected {}",
-            i,
-            a,
-            b
-        );
+        assert!((a - b).abs() < 1e-15, "fftfreq[{i}]: got {a}, expected {b}");
     }
 }
 
@@ -282,10 +288,7 @@ fn ac4_rfftfreq_8() {
     for (i, (a, b)) in data.iter().zip(expected.iter()).enumerate() {
         assert!(
             (a - b).abs() < 1e-15,
-            "rfftfreq[{}]: got {}, expected {}",
-            i,
-            a,
-            b
+            "rfftfreq[{i}]: got {a}, expected {b}"
         );
     }
 }
@@ -350,7 +353,7 @@ fn ac6_plan_matches_fft() {
         c(1.5, -1.5),
         c(-1.0, 1.0),
     ];
-    let a = make_complex_1d(data.clone());
+    let a = make_complex_1d(data);
 
     // Non-cached FFT
     let fft_result = fft(&a, None, None, FftNorm::Backward).unwrap();
@@ -378,8 +381,8 @@ fn ac6_plan_matches_fft() {
 #[test]
 fn ac6_plan_reuse_consistent() {
     let plan = FftPlan::new(16).unwrap();
-    let data1: Vec<Complex<f64>> = (0..16).map(|i| c(i as f64, 0.0)).collect();
-    let data2: Vec<Complex<f64>> = (0..16).map(|i| c(0.0, i as f64)).collect();
+    let data1: Vec<Complex<f64>> = (0..16).map(|i| c(f64::from(i), 0.0)).collect();
+    let data2: Vec<Complex<f64>> = (0..16).map(|i| c(0.0, f64::from(i))).collect();
 
     let a1 = make_complex_1d(data1);
     let a2 = make_complex_1d(data2);
@@ -464,14 +467,12 @@ fn ac7_ortho_is_unitary() {
 
     let spectrum = fft(&a, None, None, FftNorm::Ortho).unwrap();
 
-    let energy_time: f64 = data.iter().map(|x| x.norm_sqr()).sum();
-    let energy_freq: f64 = spectrum.iter().map(|x| x.norm_sqr()).sum();
+    let energy_time: f64 = data.iter().map(num_complex::Complex::norm_sqr).sum();
+    let energy_freq: f64 = spectrum.iter().map(num_complex::Complex::norm_sqr).sum();
 
     assert!(
         (energy_time - energy_freq).abs() < 1e-10,
-        "Parseval failed: {} vs {}",
-        energy_time,
-        energy_freq
+        "Parseval failed: {energy_time} vs {energy_freq}"
     );
 }
 
@@ -481,7 +482,9 @@ fn ac7_ortho_is_unitary() {
 
 #[test]
 fn fft2_ifft2_roundtrip() {
-    let data: Vec<Complex<f64>> = (0..12).map(|i| c(i as f64, -(i as f64) * 0.5)).collect();
+    let data: Vec<Complex<f64>> = (0..12)
+        .map(|i| c(f64::from(i), -f64::from(i) * 0.5))
+        .collect();
     let a = Array::<Complex<f64>, Ix2>::from_vec(Ix2::new([3, 4]), data.clone()).unwrap();
     let spectrum = fft2(&a, None, None, FftNorm::Backward).unwrap();
     let recovered = ifft2(&spectrum, None, None, FftNorm::Backward).unwrap();
@@ -494,7 +497,7 @@ fn fft2_ifft2_roundtrip() {
 #[test]
 fn fftn_ifftn_roundtrip_3d() {
     let n = 2 * 3 * 4;
-    let data: Vec<Complex<f64>> = (0..n).map(|i| c(i as f64, 0.0)).collect();
+    let data: Vec<Complex<f64>> = (0..n).map(|i| c(f64::from(i), 0.0)).collect();
     let a = Array::<Complex<f64>, Ix3>::from_vec(Ix3::new([2, 3, 4]), data.clone()).unwrap();
     let spectrum = fftn(&a, None, None, FftNorm::Backward).unwrap();
     let recovered = ifftn(&spectrum, None, None, FftNorm::Backward).unwrap();
@@ -513,7 +516,7 @@ fn rfft_irfft_roundtrip_various_lengths() {
         let recovered = irfft(&spectrum, Some(n), None, FftNorm::Backward).unwrap();
         let rec: Vec<f64> = recovered.iter().copied().collect();
         for (i, (o, r)) in data.iter().zip(rec.iter()).enumerate() {
-            assert!((o - r).abs() < 1e-9, "n={}, i={}: {} vs {}", n, i, o, r);
+            assert!((o - r).abs() < 1e-9, "n={n}, i={i}: {o} vs {r}");
         }
     }
 }
@@ -528,20 +531,20 @@ fn rfft2_irfft2_roundtrip() {
     let recovered = irfft2(&spectrum, Some(&[3, 4]), None, FftNorm::Backward).unwrap();
     let rec: Vec<f64> = recovered.iter().copied().collect();
     for (o, r) in data.iter().zip(rec.iter()) {
-        assert!((o - r).abs() < 1e-9, "{} vs {}", o, r);
+        assert!((o - r).abs() < 1e-9, "{o} vs {r}");
     }
 }
 
 #[test]
 fn rfftn_irfftn_roundtrip() {
     let n = 2 * 3 * 4;
-    let data: Vec<f64> = (0..n).map(|i| (i as f64 * 0.3).cos()).collect();
+    let data: Vec<f64> = (0..n).map(|i| (f64::from(i) * 0.3).cos()).collect();
     let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data.clone()).unwrap();
     let spectrum = rfftn(&a, None, None, FftNorm::Backward).unwrap();
     let recovered = irfftn(&spectrum, Some(&[2, 3, 4]), None, FftNorm::Backward).unwrap();
     let rec: Vec<f64> = recovered.iter().copied().collect();
     for (o, r) in data.iter().zip(rec.iter()) {
-        assert!((o - r).abs() < 1e-9, "{} vs {}", o, r);
+        assert!((o - r).abs() < 1e-9, "{o} vs {r}");
     }
 }
 
@@ -554,7 +557,7 @@ fn hfft_ihfft_roundtrip() {
     let recovered = hfft(&spectrum, Some(n), None, FftNorm::Backward).unwrap();
     let rec: Vec<f64> = recovered.iter().copied().collect();
     for (o, r) in data.iter().zip(rec.iter()) {
-        assert!((o - r).abs() < 1e-9, "{} vs {}", o, r);
+        assert!((o - r).abs() < 1e-9, "{o} vs {r}");
     }
 }
 
@@ -574,9 +577,7 @@ fn hfft_ihfft_roundtrip_forward_norm() {
     for (o, r) in data.iter().zip(rec.iter()) {
         assert!(
             (o - r).abs() < 1e-9,
-            "Forward norm roundtrip mismatch: {} vs {}",
-            o,
-            r
+            "Forward norm roundtrip mismatch: {o} vs {r}"
         );
     }
 }
@@ -594,9 +595,7 @@ fn hfft_ihfft_roundtrip_ortho_norm() {
     for (o, r) in data.iter().zip(rec.iter()) {
         assert!(
             (o - r).abs() < 1e-9,
-            "Ortho norm roundtrip mismatch: {} vs {}",
-            o,
-            r
+            "Ortho norm roundtrip mismatch: {o} vs {r}"
         );
     }
 }

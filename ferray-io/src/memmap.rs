@@ -45,12 +45,14 @@ unsafe impl<T: Element> Sync for MemmapArray<T> {}
 
 impl<T: Element> MemmapArray<T> {
     /// Return the shape of the mapped array.
+    #[must_use]
     pub fn shape(&self) -> &[usize] {
         &self.shape
     }
 
     /// Return the mapped data as a slice.
-    pub fn as_slice(&self) -> &[T] {
+    #[must_use]
+    pub const fn as_slice(&self) -> &[T] {
         // SAFETY: data_ptr points to properly aligned, initialized data
         // within the mmap region, and self.len is validated during construction.
         unsafe { std::slice::from_raw_parts(self.data_ptr, self.len) }
@@ -66,6 +68,7 @@ impl<T: Element> MemmapArray<T> {
     /// can be passed directly to ferray functions that expect an
     /// `&Array<_>` or `ArrayView<_>` (#496). The view is C-contiguous
     /// row-major and lives as long as the underlying mmap.
+    #[must_use]
     pub fn view(&self) -> ArrayView<'_, T, IxDyn> {
         // Row-major strides for the shape: stride[i] = product(shape[i+1..]).
         let ndim = self.shape.len();
@@ -86,7 +89,7 @@ impl<T: Element> MemmapArray<T> {
 /// Modifications to the array data are written back to the underlying file.
 pub struct MemmapArrayMut<T: Element> {
     /// The underlying mutable memory map.
-    _mmap: MmapMut,
+    mmap: MmapMut,
     /// Pointer to the start of element data.
     data_ptr: *mut T,
     /// Shape of the array.
@@ -102,20 +105,22 @@ unsafe impl<T: Element> Sync for MemmapArrayMut<T> {}
 
 impl<T: Element> MemmapArrayMut<T> {
     /// Return the shape of the mapped array.
+    #[must_use]
     pub fn shape(&self) -> &[usize] {
         &self.shape
     }
 
     /// Return the mapped data as a slice.
-    pub fn as_slice(&self) -> &[T] {
+    #[must_use]
+    pub const fn as_slice(&self) -> &[T] {
         unsafe { std::slice::from_raw_parts(self.data_ptr, self.len) }
     }
 
     /// Return the mapped data as a mutable slice.
     ///
-    /// Modifications will be persisted to the file (for ReadWrite mode)
-    /// or kept in memory only (for CopyOnWrite mode).
-    pub fn as_slice_mut(&mut self) -> &mut [T] {
+    /// Modifications will be persisted to the file (for `ReadWrite` mode)
+    /// or kept in memory only (for `CopyOnWrite` mode).
+    pub const fn as_slice_mut(&mut self) -> &mut [T] {
         unsafe { std::slice::from_raw_parts_mut(self.data_ptr, self.len) }
     }
 
@@ -128,6 +133,7 @@ impl<T: Element> MemmapArrayMut<T> {
     /// Borrow the memory-mapped data as an immutable
     /// `ArrayView<T, IxDyn>`. See [`MemmapArray::view`] for the
     /// rationale (#496).
+    #[must_use]
     pub fn view(&self) -> ArrayView<'_, T, IxDyn> {
         let ndim = self.shape.len();
         let mut strides = vec![1usize; ndim];
@@ -136,12 +142,12 @@ impl<T: Element> MemmapArrayMut<T> {
         }
         // SAFETY: same invariants as MemmapArray::view; the *mut T is
         // immediately demoted to *const T.
-        unsafe { ArrayView::from_shape_ptr(self.data_ptr as *const T, &self.shape, &strides) }
+        unsafe { ArrayView::from_shape_ptr(self.data_ptr.cast_const(), &self.shape, &strides) }
     }
 
-    /// Flush changes to disk (only meaningful for ReadWrite mode).
+    /// Flush changes to disk (only meaningful for `ReadWrite` mode).
     pub fn flush(&self) -> FerrayResult<()> {
-        self._mmap
+        self.mmap
             .flush()
             .map_err(|e| FerrayError::io_error(format!("failed to flush mmap: {e}")))
     }
@@ -170,7 +176,7 @@ pub fn memmap_readonly<T: Element + NpyElement, P: AsRef<Path>>(
             .map(&file)
             .map_err(|e| FerrayError::io_error(format!("mmap failed: {e}")))?
     };
-    let data_ptr = mmap.as_ptr() as *const T;
+    let data_ptr = mmap.as_ptr().cast::<T>();
 
     // Validate alignment
     if (data_ptr as usize) % std::mem::align_of::<T>() != 0 {
@@ -242,7 +248,7 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
         MemmapMode::ReadOnly => unreachable!(),
     };
 
-    let data_ptr = mmap.as_ptr() as *mut T;
+    let data_ptr = mmap.as_ptr().cast::<T>().cast_mut();
 
     if (data_ptr as usize) % std::mem::align_of::<T>() != 0 {
         return Err(FerrayError::io_error(
@@ -251,7 +257,7 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
     }
 
     Ok(MemmapArrayMut {
-        _mmap: mmap,
+        mmap,
         data_ptr,
         shape: header.shape,
         len,
@@ -259,7 +265,7 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
     })
 }
 
-/// Combined entry point matching NumPy's `memmap` function signature.
+/// Combined entry point matching `NumPy`'s `memmap` function signature.
 ///
 /// Dispatches to `memmap_readonly` or `memmap_mut` based on `mode`,
 /// then copies the mapped data into an owned `Array<T, IxDyn>`.
@@ -272,15 +278,12 @@ pub fn open_memmap<T: Element + NpyElement, P: AsRef<Path>>(
     path: P,
     mode: MemmapMode,
 ) -> FerrayResult<Array<T, IxDyn>> {
-    match mode {
-        MemmapMode::ReadOnly => {
-            let mapped = memmap_readonly::<T, _>(path)?;
-            mapped.to_array()
-        }
-        _ => {
-            let mapped = memmap_mut::<T, _>(path, mode)?;
-            mapped.to_array()
-        }
+    if mode == MemmapMode::ReadOnly {
+        let mapped = memmap_readonly::<T, _>(path)?;
+        mapped.to_array()
+    } else {
+        let mapped = memmap_mut::<T, _>(path, mode)?;
+        mapped.to_array()
     }
 }
 
@@ -325,6 +328,7 @@ fn validate_native_endian(header: &NpyHeader) -> FerrayResult<()> {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)] // Tests assert exact roundtrip equality on hand-picked memmap values.
 mod tests {
     use super::*;
     use crate::npy;

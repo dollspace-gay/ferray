@@ -83,7 +83,7 @@ impl<D: Dimension> StringArray<D> {
 
     /// Return a reference to the dimension descriptor.
     #[inline]
-    pub fn dim(&self) -> &D {
+    pub const fn dim(&self) -> &D {
         &self.dim
     }
 
@@ -106,12 +106,12 @@ impl<D: Dimension> StringArray<D> {
     }
 
     /// Apply a function to each element, producing a new `StringArray`.
-    pub fn map<F>(&self, f: F) -> FerrayResult<StringArray<D>>
+    pub fn map<F>(&self, f: F) -> FerrayResult<Self>
     where
         F: Fn(&str) -> String,
     {
         let data: Vec<String> = self.data.iter().map(|s| f(s)).collect();
-        StringArray::from_vec(self.dim.clone(), data)
+        Self::from_vec(self.dim.clone(), data)
     }
 
     /// Apply a function to each element, producing a `Vec<T>`.
@@ -157,7 +157,7 @@ impl<D: Dimension> StringArray<D> {
     /// row-major traversal order is preserved.
     ///
     /// This is the string analogue of `ndarray::Array::flatten` /
-    /// NumPy's `arr.flatten()`.
+    /// `NumPy`'s `arr.flatten()`.
     pub fn flatten(self) -> StringArray1 {
         let n = self.data.len();
         StringArray::<Ix1>::from_vec(Ix1::new([n]), self.data)
@@ -267,7 +267,7 @@ impl StringArray<Ix2> {
     /// Walks the elements into a new buffer — a `(r, c)` cell of the
     /// input becomes `(c, r)` of the output. Strings are cloned to
     /// avoid disturbing the original array.
-    pub fn transpose(&self) -> FerrayResult<StringArray<Ix2>> {
+    pub fn transpose(&self) -> FerrayResult<Self> {
         let shape = self.shape();
         let (nrows, ncols) = (shape[0], shape[1]);
         let mut data = Vec::with_capacity(nrows * ncols);
@@ -433,13 +433,13 @@ mod tests {
     fn empty_array() {
         let a = StringArray1::empty(Ix1::new([4])).unwrap();
         assert_eq!(a.len(), 4);
-        assert!(a.as_slice().iter().all(|s| s.is_empty()));
+        assert!(a.as_slice().iter().all(std::string::String::is_empty));
     }
 
     #[test]
     fn map_strings() {
         let a = array(&["hello", "world"]).unwrap();
-        let b = a.map(|s| s.to_uppercase()).unwrap();
+        let b = a.map(str::to_uppercase).unwrap();
         assert_eq!(b.as_slice()[0], "HELLO");
         assert_eq!(b.as_slice()[1], "WORLD");
     }

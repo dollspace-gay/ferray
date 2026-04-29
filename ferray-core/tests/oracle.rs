@@ -1,4 +1,18 @@
-/// Oracle tests: validate ferray-core creation and manipulation against NumPy fixtures.
+//! Oracle tests: validate ferray-core creation and manipulation against `NumPy` fixtures.
+
+// Oracle tests cross fixture data through `f64` JSON values, recover bit
+// patterns, and ULP-compare against NumPy reference outputs — both the
+// casts and the float comparisons are part of the contract.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::similar_names
+)]
+
 use ferray_core::Array;
 use ferray_core::creation;
 use ferray_core::dimension::{Ix2, IxDyn};
@@ -53,7 +67,7 @@ fn oracle_arange() {
         }
         let start = parse_f64_value(&case.inputs["start"]);
         let stop = parse_f64_value(&case.inputs["stop"]);
-        let step = case.inputs.get("step").map(parse_f64_value).unwrap_or(1.0);
+        let step = case.inputs.get("step").map_or(1.0, parse_f64_value);
         let result = creation::arange(start, stop, step).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
         assert_f64_slice_ulp(
@@ -167,9 +181,13 @@ fn oracle_eye() {
         let m = case
             .inputs
             .get("m")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .unwrap_or(n as u64) as usize;
-        let k = case.inputs.get("k").and_then(|v| v.as_i64()).unwrap_or(0) as isize;
+        let k = case
+            .inputs
+            .get("k")
+            .and_then(ferray_test_oracle::serde_json::Value::as_i64)
+            .unwrap_or(0) as isize;
         let result = creation::eye::<f64>(n, m, k).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
         assert_f64_slice_ulp(
@@ -277,7 +295,7 @@ fn oracle_squeeze() {
         let axis = case
             .inputs
             .get("axis")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let result = ferray_core::manipulation::squeeze(&arr, axis).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);

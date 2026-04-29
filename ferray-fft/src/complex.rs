@@ -170,16 +170,15 @@ where
     Complex<T>: ferray_core::Element,
 {
     let ndim = a.shape().len();
-    let axes = match axes {
-        Some(ax) => resolve_axes(ndim, Some(ax))?,
-        None => {
-            if ndim < 2 {
-                return Err(FerrayError::invalid_value(
-                    "fft2 requires at least 2 dimensions",
-                ));
-            }
-            vec![ndim - 2, ndim - 1]
+    let axes = if let Some(ax) = axes {
+        resolve_axes(ndim, Some(ax))?
+    } else {
+        if ndim < 2 {
+            return Err(FerrayError::invalid_value(
+                "fft2 requires at least 2 dimensions",
+            ));
         }
+        vec![ndim - 2, ndim - 1]
     };
     fftn_impl::<T, D>(a, s, &axes, false, norm)
 }
@@ -207,16 +206,15 @@ where
     Complex<T>: ferray_core::Element,
 {
     let ndim = a.shape().len();
-    let axes = match axes {
-        Some(ax) => resolve_axes(ndim, Some(ax))?,
-        None => {
-            if ndim < 2 {
-                return Err(FerrayError::invalid_value(
-                    "ifft2 requires at least 2 dimensions",
-                ));
-            }
-            vec![ndim - 2, ndim - 1]
+    let axes = if let Some(ax) = axes {
+        resolve_axes(ndim, Some(ax))?
+    } else {
+        if ndim < 2 {
+            return Err(FerrayError::invalid_value(
+                "ifft2 requires at least 2 dimensions",
+            ));
         }
+        vec![ndim - 2, ndim - 1]
     };
     fftn_impl::<T, D>(a, s, &axes, true, norm)
 }
@@ -476,7 +474,7 @@ mod tests {
     fn fftn_negative_axes_matches_explicit() {
         // axes=[-2, -1] on a 2-D array should match axes=[0, 1] (#434).
         use ferray_core::dimension::Ix2;
-        let data: Vec<Complex<f64>> = (0..6).map(|i| c(i as f64, 0.0)).collect();
+        let data: Vec<Complex<f64>> = (0..6).map(|i| c(f64::from(i), 0.0)).collect();
         let a = Array::<Complex<f64>, Ix2>::from_vec(Ix2::new([2, 3]), data).unwrap();
         let neg = fftn(&a, None, Some(&[-2, -1][..]), FftNorm::Backward).unwrap();
         let pos = fftn(&a, None, Some(&[0, 1][..]), FftNorm::Backward).unwrap();
@@ -557,7 +555,7 @@ mod tests {
     fn fft_non_power_of_two() {
         // AC-2 partial: test non-power-of-2 length
         let n = 7;
-        let data: Vec<Complex<f64>> = (0..n).map(|i| c(i as f64, 0.0)).collect();
+        let data: Vec<Complex<f64>> = (0..n).map(|i| c(f64::from(i), 0.0)).collect();
         let a = make_1d(data.clone());
         let spectrum = fft(&a, None, None, FftNorm::Backward).unwrap();
         let recovered = ifft(&spectrum, None, None, FftNorm::Backward).unwrap();
@@ -587,7 +585,9 @@ mod tests {
     fn fftn_roundtrip_3d() {
         use ferray_core::dimension::Ix3;
         let n = 2 * 3 * 4;
-        let data: Vec<Complex<f64>> = (0..n).map(|i| c(i as f64, -(i as f64) * 0.5)).collect();
+        let data: Vec<Complex<f64>> = (0..n)
+            .map(|i| c(f64::from(i), -f64::from(i) * 0.5))
+            .collect();
         let a = Array::from_vec(Ix3::new([2, 3, 4]), data.clone()).unwrap();
         let spectrum = fftn(&a, None, None, FftNorm::Backward).unwrap();
         let recovered = ifftn(&spectrum, None, None, FftNorm::Backward).unwrap();
@@ -619,7 +619,7 @@ mod tests {
     fn fft2_with_shape_truncation() {
         use ferray_core::dimension::Ix2;
         // 4x4 input, truncate to 2x2 via s parameter
-        let data: Vec<Complex<f64>> = (0..16).map(|i| c(i as f64, 0.0)).collect();
+        let data: Vec<Complex<f64>> = (0..16).map(|i| c(f64::from(i), 0.0)).collect();
         let a = Array::from_vec(Ix2::new([4, 4]), data).unwrap();
         let result = fft2(&a, Some(&[2, 2]), None, FftNorm::Backward).unwrap();
         assert_eq!(result.shape(), &[2, 2]);
@@ -629,7 +629,7 @@ mod tests {
     fn fftn_with_shape_roundtrip() {
         use ferray_core::dimension::Ix2;
         // 3x4 input, pad to 4x8, then ifft with same shape should recover padded version
-        let data: Vec<Complex<f64>> = (0..12).map(|i| c(i as f64, 0.0)).collect();
+        let data: Vec<Complex<f64>> = (0..12).map(|i| c(f64::from(i), 0.0)).collect();
         let a = Array::from_vec(Ix2::new([3, 4]), data).unwrap();
         let spectrum = fftn(&a, Some(&[4, 8]), None, FftNorm::Backward).unwrap();
         assert_eq!(spectrum.shape(), &[4, 8]);
@@ -683,8 +683,11 @@ mod tests {
         let a = make_1d(data.clone());
         let spectrum = fft(&a, None, None, FftNorm::Ortho).unwrap();
 
-        let energy_time: f64 = data.iter().map(|x| x.re * x.re + x.im * x.im).sum();
-        let energy_freq: f64 = spectrum.iter().map(|x| x.re * x.re + x.im * x.im).sum();
+        let energy_time: f64 = data.iter().map(|x| x.re.mul_add(x.re, x.im * x.im)).sum();
+        let energy_freq: f64 = spectrum
+            .iter()
+            .map(|x| x.re.mul_add(x.re, x.im * x.im))
+            .sum();
         assert!(
             (energy_time - energy_freq).abs() < 1e-10,
             "Parseval: time={energy_time}, freq={energy_freq}"
@@ -776,19 +779,19 @@ mod tests {
         assert_eq!(spectrum.shape(), &[8]);
         let recovered = ifft_real::<f64, IxDyn>(&spectrum, None, None, FftNorm::Backward).unwrap();
         for (o, r) in original.iter().zip(recovered.iter()) {
-            assert!((o - r).abs() < 1e-10, "mismatch: {} vs {}", o, r);
+            assert!((o - r).abs() < 1e-10, "mismatch: {o} vs {r}");
         }
     }
 
     #[test]
     fn fft_real_ifft_real_roundtrip_f32() {
         // Same real-input convenience, but on f32 to verify both layers work together.
-        let original: Vec<f32> = (0..16).map(|i| i as f32 * 0.5 - 2.0).collect();
+        let original: Vec<f32> = (0..16).map(|i| (i as f32).mul_add(0.5, -2.0)).collect();
         let a = Array::<f32, Ix1>::from_vec(Ix1::new([16]), original.clone()).unwrap();
         let spectrum = fft_real::<f32, Ix1>(&a, None, None, FftNorm::Backward).unwrap();
         let recovered = ifft_real::<f32, IxDyn>(&spectrum, None, None, FftNorm::Backward).unwrap();
         for (o, r) in original.iter().zip(recovered.iter()) {
-            assert!((o - r).abs() < 1e-4, "f32 mismatch: {} vs {}", o, r);
+            assert!((o - r).abs() < 1e-4, "f32 mismatch: {o} vs {r}");
         }
     }
 
@@ -809,7 +812,7 @@ mod tests {
     #[test]
     fn fft_real2_roundtrip() {
         use ferray_core::dimension::Ix2;
-        let data: Vec<f64> = (0..12).map(|i| i as f64 * 0.3).collect();
+        let data: Vec<f64> = (0..12).map(|i| f64::from(i) * 0.3).collect();
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 4]), data.clone()).unwrap();
         let spectrum = fft_real2::<f64, Ix2>(&a, None, None, FftNorm::Backward).unwrap();
         assert_eq!(spectrum.shape(), &[3, 4]);
@@ -823,7 +826,7 @@ mod tests {
     #[test]
     fn fft_realn_3d_roundtrip() {
         use ferray_core::dimension::Ix3;
-        let data: Vec<f64> = (0..24).map(|i| (i as f64).sin()).collect();
+        let data: Vec<f64> = (0..24).map(|i| f64::from(i).sin()).collect();
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data.clone()).unwrap();
         let spectrum = fft_realn::<f64, Ix3>(&a, None, None, FftNorm::Backward).unwrap();
         assert_eq!(spectrum.shape(), &[2, 3, 4]);

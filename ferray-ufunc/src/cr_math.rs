@@ -7,6 +7,11 @@
 //
 // For types other than f64/f32, falls back to num_traits::Float methods.
 
+// Every method on the `CrMath` trait is a pure transcendental that returns
+// a new `Self`; the contract is uniform and the `#[must_use]` decoration
+// would be strictly redundant noise on every method.
+#![allow(clippy::return_self_not_must_use)]
+
 /// Trait providing correctly-rounded math operations.
 ///
 /// Implemented for f64 and f32 using CORE-MATH, with a blanket fallback

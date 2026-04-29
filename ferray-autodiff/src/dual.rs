@@ -11,7 +11,7 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, Sub, Su
 ///
 /// `DualNumber { real: a, dual: b }` represents `a + b*eps` where `eps^2 = 0`.
 /// The dual part tracks the derivative.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DualNumber<T> {
     /// The primal (real) value.
     pub real: T,
@@ -31,7 +31,7 @@ impl<T: Float> DualNumber<T> {
     /// assert_eq!(d.dual, 1.0);
     /// ```
     #[inline]
-    pub fn new(real: T, dual: T) -> Self {
+    pub const fn new(real: T, dual: T) -> Self {
         Self { real, dual }
     }
 
@@ -252,7 +252,7 @@ impl<T: Float> Rem<T> for DualNumber<T> {
 // the quotient rule respectively.
 // ---------------------------------------------------------------------------
 
-/// Newtype macro for T op DualNumber<T> where op is commutative.
+/// Newtype macro for T op `DualNumber`<T> where op is commutative.
 macro_rules! impl_scalar_lhs {
     (Add, add) => {
         impl<T: Float> Add<DualNumber<T>> for f64 {

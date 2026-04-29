@@ -12,7 +12,7 @@ use super::BitGenerator;
 /// Philox 4x32-10 counter-based pseudo-random number generator.
 ///
 /// This generator natively supports stream IDs, making it ideal for
-/// parallel generation. Each (seed, stream_id) pair produces an
+/// parallel generation. Each (seed, `stream_id`) pair produces an
 /// independent, non-overlapping output sequence.
 ///
 /// # Example
@@ -41,8 +41,13 @@ const PHILOX_W0: u32 = 0x9E37_79B9;
 const PHILOX_W1: u32 = 0xBB67_AE85;
 
 /// Single Philox round: two multiplications with xor-folding.
+///
+/// `key` is taken by reference so the caller's stationary key buffer
+/// stays put across the unrolled round sequence; copying the 8-byte key
+/// every round defeats register allocation in release builds.
 #[inline]
-fn philox_round(ctr: &mut [u32; 4], key: &[u32; 2]) {
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn philox_round(ctr: &mut [u32; 4], key: &[u32; 2]) {
     let lo0 = ctr[0] as u64 * PHILOX_M0 as u64;
     let lo1 = ctr[2] as u64 * PHILOX_M1 as u64;
     let hi0 = (lo0 >> 32) as u32;
@@ -61,13 +66,13 @@ fn philox_round(ctr: &mut [u32; 4], key: &[u32; 2]) {
 
 /// Bump key between rounds.
 #[inline]
-fn philox_bump_key(key: &mut [u32; 2]) {
+const fn philox_bump_key(key: &mut [u32; 2]) {
     key[0] = key[0].wrapping_add(PHILOX_W0);
     key[1] = key[1].wrapping_add(PHILOX_W1);
 }
 
 /// Full Philox 4x32-10 bijection: 10 rounds.
-fn philox4x32_10(counter: [u32; 4], key: [u32; 2]) -> [u32; 4] {
+const fn philox4x32_10(counter: [u32; 4], key: [u32; 2]) -> [u32; 4] {
     let mut ctr = counter;
     let mut k = key;
     // 10 rounds with key bumps between rounds
@@ -113,7 +118,7 @@ impl Philox {
 
     /// Create a Philox generator with explicit key and starting counter.
     fn new_with_key(key: [u32; 2], counter: [u32; 4]) -> Self {
-        let mut rng = Philox {
+        let mut rng = Self {
             counter,
             key,
             buffer: [0; 4],

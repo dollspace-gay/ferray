@@ -12,7 +12,7 @@ use crate::traits::{FromPowerBasis, Poly, ToPowerBasis};
 
 /// Default domain and window for the power basis.
 ///
-/// NumPy uses `[-1, 1]` for both, giving an identity mapping by default.
+/// `NumPy` uses `[-1, 1]` for both, giving an identity mapping by default.
 const POWER_DEFAULT_DOMAIN: [f64; 2] = [-1.0, 1.0];
 const POWER_DEFAULT_WINDOW: [f64; 2] = [-1.0, 1.0];
 
@@ -38,6 +38,7 @@ impl Polynomial {
     /// Coefficients are in ascending order: `coeffs[i]` is the coefficient of x^i.
     /// An empty coefficient slice produces the zero polynomial `[0.0]`.
     /// The domain and window default to `[-1, 1]` (identity mapping).
+    #[must_use]
     pub fn new(coeffs: &[f64]) -> Self {
         let coeffs = if coeffs.is_empty() {
             vec![0.0]
@@ -90,7 +91,7 @@ impl Polynomial {
     /// result. Operations that combine two polynomials (add/sub/mul/divmod)
     /// must explicitly verify both mappings match before calling this.
     #[inline]
-    fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
+    const fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
         Self {
             coeffs,
             domain: self.domain,
@@ -99,7 +100,7 @@ impl Polynomial {
     }
 
     /// Internal: verify that two polynomials share the same domain/window
-    /// before combining them via add/sub/mul/divmod. Matches NumPy's
+    /// before combining them via add/sub/mul/divmod. Matches `NumPy`'s
     /// behavior of raising on mismatched mappings.
     fn check_same_mapping(&self, other: &Self) -> Result<(), FerrayError> {
         if self.domain != other.domain || self.window != other.window {
@@ -306,7 +307,7 @@ impl Poly for Polynomial {
             return Ok((self.with_same_mapping(vec![0.0]), self_trimmed));
         }
 
-        let mut remainder = self_trimmed.coeffs.clone();
+        let mut remainder = self_trimmed.coeffs;
         let divisor_lead = other_trimmed.coeffs[m - 1];
         let quot_len = n - m + 1;
         let mut quotient = vec![0.0; quot_len];
@@ -440,7 +441,7 @@ mod tests {
         let integrated = p.integ(1, &[0.0]).unwrap();
         let recovered = integrated.deriv(1).unwrap();
         for (a, b) in recovered.coeffs.iter().zip(p.coeffs.iter()) {
-            assert!((a - b).abs() < 1e-12, "expected {}, got {}", b, a);
+            assert!((a - b).abs() < 1e-12, "expected {b}, got {a}");
         }
     }
 

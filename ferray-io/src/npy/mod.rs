@@ -223,7 +223,7 @@ fn load_complex32_dynamic<R: Read>(
     load_complex32_from_bytes_copy(&raw, total, dim, fortran_order)
 }
 
-/// Build a Complex32 DynArray from raw bytes, respecting Fortran order.
+/// Build a Complex32 `DynArray` from raw bytes, respecting Fortran order.
 fn load_complex32_from_bytes_copy(
     bytes: &[u8],
     total: usize,
@@ -370,7 +370,7 @@ fn save_complex_raw<T, W: Write>(
     let slice = slice_opt
         .ok_or_else(|| FerrayError::io_error("cannot save non-contiguous complex array"))?;
     let byte_len = slice.len() * elem_size;
-    let bytes = unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const u8, byte_len) };
+    let bytes = unsafe { std::slice::from_raw_parts(slice.as_ptr().cast::<u8>(), byte_len) };
     writer.write_all(bytes)?;
     Ok(())
 }
@@ -381,9 +381,9 @@ fn build_dimension<D: Dimension>(shape: &[usize]) -> FerrayResult<D> {
 }
 
 /// Helper to build a dimension from a shape slice.
-/// This works for all fixed dimensions (Ix0-Ix6) and IxDyn.
+/// This works for all fixed dimensions (Ix0-Ix6) and `IxDyn`.
 fn build_dim_from_shape<D: Dimension>(shape: &[usize]) -> FerrayResult<D> {
-    use ferray_core::dimension::*;
+    use ferray_core::dimension::{Ix0, Ix1, Ix2, Ix3, Ix4, Ix5, Ix6, IxDyn};
     use std::any::Any;
 
     if let Some(ndim) = D::NDIM {
@@ -485,7 +485,7 @@ macro_rules! impl_npy_element {
                 // SAFETY: &[T] is contiguous and properly aligned; reinterpreting
                 // as &[u8] of length len*size_of::<T> is valid for any Copy type.
                 let bytes =
-                    unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, byte_len) };
+                    unsafe { std::slice::from_raw_parts(data.as_ptr().cast::<u8>(), byte_len) };
                 writer.write_all(bytes)?;
                 Ok(())
             }
@@ -528,9 +528,9 @@ macro_rules! impl_npy_element {
 impl private::NpySealed for bool {}
 
 impl NpyElement for bool {
-    fn write_slice<W: Write>(data: &[bool], writer: &mut W) -> FerrayResult<()> {
+    fn write_slice<W: Write>(data: &[Self], writer: &mut W) -> FerrayResult<()> {
         for &val in data {
-            writer.write_all(&[val as u8])?;
+            writer.write_all(&[u8::from(val)])?;
         }
         Ok(())
     }
@@ -539,7 +539,7 @@ impl NpyElement for bool {
         reader: &mut R,
         count: usize,
         _endian: Endianness,
-    ) -> FerrayResult<Vec<bool>> {
+    ) -> FerrayResult<Vec<Self>> {
         let mut result = Vec::with_capacity(count);
         let mut buf = [0u8; 1];
         for _ in 0..count {
@@ -883,8 +883,8 @@ mod tests {
 
     #[test]
     fn malformed_empty_file() {
-        let cursor = Cursor::new(Vec::<u8>::new());
-        let result = load_from_reader::<f64, Ix1, _>(&mut cursor.clone());
+        let mut cursor = Cursor::new(Vec::<u8>::new());
+        let result = load_from_reader::<f64, Ix1, _>(&mut cursor);
         assert!(result.is_err());
     }
 
@@ -976,7 +976,7 @@ mod tests {
     fn roundtrip_f16_2d() {
         use half::f16;
         let data: Vec<f16> = (0..12)
-            .map(|i| f16::from_f32(i as f32 * 0.25 - 1.0))
+            .map(|i| f16::from_f32((i as f32).mul_add(0.25, -1.0)))
             .collect();
         let arr = Array::<f16, Ix2>::from_vec(Ix2::new([3, 4]), data.clone()).unwrap();
 

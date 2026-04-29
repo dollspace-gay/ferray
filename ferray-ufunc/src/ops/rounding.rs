@@ -46,7 +46,7 @@ fn bankers_round<T: Float>(x: T) -> T {
 
 /// Elementwise banker's rounding (round half to even).
 ///
-/// This matches NumPy's `np.round` / `np.around` behavior.
+/// This matches `NumPy`'s `np.round` / `np.around` behavior.
 /// AC-9: `round(0.5)==0`, `round(1.5)==2`.
 pub fn round<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
@@ -56,7 +56,7 @@ where
     unary_float_op(input, bankers_round)
 }
 
-/// Alias for [`round`] -- matches NumPy's `around`.
+/// Alias for [`round`] -- matches `NumPy`'s `around`.
 pub fn around<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
@@ -65,7 +65,7 @@ where
     round(input)
 }
 
-/// Alias for [`round`] -- matches NumPy's `rint`.
+/// Alias for [`round`] -- matches `NumPy`'s `rint`.
 pub fn rint<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,

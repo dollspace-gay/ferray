@@ -140,16 +140,15 @@ where
     Complex<T>: Element,
 {
     let ndim = a.shape().len();
-    let axes = match axes {
-        Some(ax) => resolve_axes(ndim, Some(ax))?,
-        None => {
-            if ndim < 2 {
-                return Err(FerrayError::invalid_value(
-                    "rfft2 requires at least 2 dimensions",
-                ));
-            }
-            vec![ndim - 2, ndim - 1]
+    let axes = if let Some(ax) = axes {
+        resolve_axes(ndim, Some(ax))?
+    } else {
+        if ndim < 2 {
+            return Err(FerrayError::invalid_value(
+                "rfft2 requires at least 2 dimensions",
+            ));
         }
+        vec![ndim - 2, ndim - 1]
     };
     rfftn_impl::<T, D>(a, s, &axes, norm)
 }
@@ -176,16 +175,15 @@ where
     Complex<T>: Element,
 {
     let ndim = a.shape().len();
-    let axes = match axes {
-        Some(ax) => resolve_axes(ndim, Some(ax))?,
-        None => {
-            if ndim < 2 {
-                return Err(FerrayError::invalid_value(
-                    "irfft2 requires at least 2 dimensions",
-                ));
-            }
-            vec![ndim - 2, ndim - 1]
+    let axes = if let Some(ax) = axes {
+        resolve_axes(ndim, Some(ax))?
+    } else {
+        if ndim < 2 {
+            return Err(FerrayError::invalid_value(
+                "irfft2 requires at least 2 dimensions",
+            ));
         }
+        vec![ndim - 2, ndim - 1]
     };
     irfftn_impl::<T, D>(a, s, &axes, norm)
 }
@@ -326,31 +324,28 @@ where
     let last_idx = axes.len() - 1;
 
     // Determine the output sizes for each axis.
-    let sizes: Vec<usize> = match s {
-        Some(sizes) => {
-            if sizes.len() != axes.len() {
-                return Err(FerrayError::invalid_value(format!(
-                    "shape parameter length {} does not match axes length {}",
-                    sizes.len(),
-                    axes.len(),
-                )));
-            }
-            sizes.to_vec()
+    let sizes: Vec<usize> = if let Some(sizes) = s {
+        if sizes.len() != axes.len() {
+            return Err(FerrayError::invalid_value(format!(
+                "shape parameter length {} does not match axes length {}",
+                sizes.len(),
+                axes.len(),
+            )));
         }
-        None => {
-            // For all axes except the last: use input shape (complex FFT
-            // is shape-preserving along each axis unless overridden).
-            // For the last axis: output is `2 * (input_len - 1)`.
-            let mut result = Vec::with_capacity(axes.len());
-            for (i, &ax) in axes.iter().enumerate() {
-                if i < last_idx {
-                    result.push(input_shape[ax]);
-                } else {
-                    result.push(2 * (input_shape[ax] - 1));
-                }
+        sizes.to_vec()
+    } else {
+        // For all axes except the last: use input shape (complex FFT
+        // is shape-preserving along each axis unless overridden).
+        // For the last axis: output is `2 * (input_len - 1)`.
+        let mut result = Vec::with_capacity(axes.len());
+        for (i, &ax) in axes.iter().enumerate() {
+            if i < last_idx {
+                result.push(input_shape[ax]);
+            } else {
+                result.push(2 * (input_shape[ax] - 1));
             }
-            result
         }
+        result
     };
 
     // NumPy's irfftn runs complex inverse FFTs on axes[0..last] first, then
@@ -421,7 +416,7 @@ mod tests {
         assert_eq!(recovered.shape(), &[8]);
         let rec_data: Vec<f64> = recovered.iter().copied().collect();
         for (o, r) in original.iter().zip(rec_data.iter()) {
-            assert!((o - r).abs() < 1e-10, "{} vs {}", o, r);
+            assert!((o - r).abs() < 1e-10, "{o} vs {r}");
         }
     }
 
@@ -454,7 +449,7 @@ mod tests {
         let recovered = irfft(&spectrum, Some(5), None, FftNorm::Backward).unwrap();
         let rec_data: Vec<f64> = recovered.iter().copied().collect();
         for (o, r) in original.iter().zip(rec_data.iter()) {
-            assert!((o - r).abs() < 1e-10, "{} vs {}", o, r);
+            assert!((o - r).abs() < 1e-10, "{o} vs {r}");
         }
     }
 
@@ -474,13 +469,13 @@ mod tests {
     fn rfft_irfft_roundtrip_axis0() {
         use ferray_core::dimension::Ix2;
         // 3x4 array, rfft/irfft along axis 0
-        let data: Vec<f64> = (0..12).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..12).map(f64::from).collect();
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 4]), data.clone()).unwrap();
         let spectrum = rfft(&a, None, Some(0), FftNorm::Backward).unwrap();
         let recovered = irfft(&spectrum, Some(3), Some(0), FftNorm::Backward).unwrap();
         let rec_data: Vec<f64> = recovered.iter().copied().collect();
         for (o, r) in data.iter().zip(rec_data.iter()) {
-            assert!((o - r).abs() < 1e-9, "axis0 roundtrip: {} vs {}", o, r);
+            assert!((o - r).abs() < 1e-9, "axis0 roundtrip: {o} vs {r}");
         }
     }
 
@@ -488,7 +483,7 @@ mod tests {
     fn rfft_irfft_roundtrip_axis1() {
         use ferray_core::dimension::Ix2;
         // 3x4 array, rfft/irfft along axis 1 (default)
-        let data: Vec<f64> = (0..12).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..12).map(f64::from).collect();
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 4]), data.clone()).unwrap();
         let spectrum = rfft(&a, None, Some(1), FftNorm::Backward).unwrap();
         assert_eq!(spectrum.shape()[0], 3);
@@ -496,7 +491,7 @@ mod tests {
         let recovered = irfft(&spectrum, Some(4), Some(1), FftNorm::Backward).unwrap();
         let rec_data: Vec<f64> = recovered.iter().copied().collect();
         for (o, r) in data.iter().zip(rec_data.iter()) {
-            assert!((o - r).abs() < 1e-9, "axis1 roundtrip: {} vs {}", o, r);
+            assert!((o - r).abs() < 1e-9, "axis1 roundtrip: {o} vs {r}");
         }
     }
 
@@ -538,7 +533,7 @@ mod tests {
                 assert!(bin.im.abs() < 1e-10);
             } else {
                 // All other bins should be near zero.
-                assert!(bin.norm() < 1e-10, "bin {} should be ~0, got {:?}", i, bin);
+                assert!(bin.norm() < 1e-10, "bin {i} should be ~0, got {bin:?}");
             }
         }
     }
@@ -588,11 +583,7 @@ mod tests {
             let expected = cols as f64 * time_energy;
             assert!(
                 ((freq_energy - expected) / expected).abs() < 1e-9,
-                "lane {}: freq energy {} vs expected {} (time energy = {})",
-                row,
-                freq_energy,
-                expected,
-                time_energy
+                "lane {row}: freq energy {freq_energy} vs expected {expected} (time energy = {time_energy})"
             );
         }
     }
@@ -647,13 +638,7 @@ mod tests {
         assert_eq!(recovered.shape(), &[rows, cols]);
         let rec_data: Vec<f64> = recovered.iter().copied().collect();
         for (i, (o, r)) in data.iter().zip(rec_data.iter()).enumerate() {
-            assert!(
-                (o - r).abs() < 1e-10,
-                "index {}: expected {}, got {}",
-                i,
-                o,
-                r
-            );
+            assert!((o - r).abs() < 1e-10, "index {i}: expected {o}, got {r}");
         }
     }
 
@@ -670,12 +655,7 @@ mod tests {
         let recovered = irfft::<f32, IxDyn>(&spectrum, Some(16), None, FftNorm::Backward).unwrap();
         assert_eq!(recovered.shape(), &[16]);
         for (o, r) in original.iter().zip(recovered.iter()) {
-            assert!(
-                (o - r).abs() < 1e-5,
-                "f32 rfft/irfft mismatch: {} vs {}",
-                o,
-                r
-            );
+            assert!((o - r).abs() < 1e-5, "f32 rfft/irfft mismatch: {o} vs {r}");
         }
     }
 

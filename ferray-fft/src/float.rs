@@ -92,6 +92,6 @@ impl FftFloat for f32 {
     }
 
     fn scale_factor(norm: FftNorm, n: usize, direction: FftDirection) -> Self {
-        norm.scale_factor_f64(n, direction) as f32
+        norm.scale_factor_f64(n, direction) as Self
     }
 }

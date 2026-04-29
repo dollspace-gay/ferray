@@ -35,8 +35,7 @@ pub fn reshape<T: Element, D: Dimension>(
     let new_size: usize = new_shape.iter().product();
     if old_size != new_size {
         return Err(FerrayError::shape_mismatch(format!(
-            "cannot reshape array of size {} into shape {:?} (size {})",
-            old_size, new_shape, new_size,
+            "cannot reshape array of size {old_size} into shape {new_shape:?} (size {new_size})",
         )));
     }
     let view = a.inner.view().into_dyn();
@@ -90,40 +89,37 @@ pub fn squeeze<T: Element, D: Dimension>(
     axis: Option<usize>,
 ) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
-    match axis {
-        Some(ax) => {
-            if ax >= shape.len() {
-                return Err(FerrayError::axis_out_of_bounds(ax, shape.len()));
-            }
-            if shape[ax] != 1 {
-                return Err(FerrayError::invalid_value(format!(
-                    "cannot select axis {} with size {} for squeeze (must be 1)",
-                    ax, shape[ax],
-                )));
-            }
-            let new_shape: Vec<usize> = shape
-                .iter()
-                .enumerate()
-                .filter(|&(i, _)| i != ax)
-                .map(|(_, &s)| s)
-                .collect();
-            let data: Vec<T> = a.iter().cloned().collect();
-            Array::from_vec(IxDyn::new(&new_shape), data)
+    if let Some(ax) = axis {
+        if ax >= shape.len() {
+            return Err(FerrayError::axis_out_of_bounds(ax, shape.len()));
         }
-        None => {
-            let new_shape: Vec<usize> = shape.iter().copied().filter(|&s| s != 1).collect();
-            // If all dims are 1, the result is a scalar (0-D is tricky), so
-            // make it at least 1-D with a single element.
-            let new_shape = if new_shape.is_empty() && !shape.is_empty() {
-                vec![1]
-            } else if new_shape.is_empty() {
-                vec![]
-            } else {
-                new_shape
-            };
-            let data: Vec<T> = a.iter().cloned().collect();
-            Array::from_vec(IxDyn::new(&new_shape), data)
+        if shape[ax] != 1 {
+            return Err(FerrayError::invalid_value(format!(
+                "cannot select axis {} with size {} for squeeze (must be 1)",
+                ax, shape[ax],
+            )));
         }
+        let new_shape: Vec<usize> = shape
+            .iter()
+            .enumerate()
+            .filter(|&(i, _)| i != ax)
+            .map(|(_, &s)| s)
+            .collect();
+        let data: Vec<T> = a.iter().cloned().collect();
+        Array::from_vec(IxDyn::new(&new_shape), data)
+    } else {
+        let new_shape: Vec<usize> = shape.iter().copied().filter(|&s| s != 1).collect();
+        // If all dims are 1, the result is a scalar (0-D is tricky), so
+        // make it at least 1-D with a single element.
+        let new_shape = if new_shape.is_empty() && !shape.is_empty() {
+            vec![1]
+        } else if new_shape.is_empty() {
+            vec![]
+        } else {
+            new_shape
+        };
+        let data: Vec<T> = a.iter().cloned().collect();
+        Array::from_vec(IxDyn::new(&new_shape), data)
     }
 }
 
@@ -219,8 +215,7 @@ pub fn concatenate<T: Element>(
         for (i, (&s, &base)) in arr.shape().iter().zip(base_shape.iter()).enumerate() {
             if i != axis && s != base {
                 return Err(FerrayError::shape_mismatch(format!(
-                    "shape mismatch on axis {}: {} vs {}",
-                    i, s, base,
+                    "shape mismatch on axis {i}: {s} vs {base}",
                 )));
             }
         }
@@ -455,7 +450,7 @@ pub fn column_stack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrayResult<Arra
 
 /// Stack arrays in sequence vertically (row-wise). Alias for [`vstack`].
 ///
-/// Analogous to `numpy.row_stack()` (deprecated alias for `vstack` in NumPy 2.0
+/// Analogous to `numpy.row_stack()` (deprecated alias for `vstack` in `NumPy` 2.0
 /// but still widely used).
 pub fn row_stack<T: Element>(arrays: &[Array<T, IxDyn>]) -> FerrayResult<Array<T, IxDyn>> {
     vstack(arrays)
@@ -519,8 +514,7 @@ pub fn split<T: Element>(
     }
     if axis_len % n_sections != 0 {
         return Err(FerrayError::invalid_value(format!(
-            "array of size {} along axis {} cannot be evenly split into {} sections",
-            axis_len, axis, n_sections,
+            "array of size {axis_len} along axis {axis} cannot be evenly split into {n_sections} sections",
         )));
     }
     let chunk_size = axis_len / n_sections;
@@ -601,7 +595,7 @@ pub fn array_split<T: Element>(
 /// Split an array into `n` sub-arrays along `axis`, allowing uneven sections.
 ///
 /// Unlike [`split`], this never errors on uneven division: the first
-/// `axis_len % n` sections have one extra element. This matches NumPy's
+/// `axis_len % n` sections have one extra element. This matches `NumPy`'s
 /// `numpy.array_split(ary, n, axis)` (integer-section variant).
 ///
 /// # Errors
@@ -701,8 +695,7 @@ pub fn transpose<T: Element, D: Dimension>(
                 }
                 if seen[a] {
                     return Err(FerrayError::invalid_value(format!(
-                        "duplicate axis {} in transpose",
-                        a,
+                        "duplicate axis {a} in transpose",
                     )));
                 }
                 seen[a] = true;

@@ -16,6 +16,29 @@
 // allow-lists that masked real issues.
 #![allow(clippy::type_complexity)]
 #![allow(clippy::needless_range_loop)]
+// Linear algebra kernels divide by `usize`-typed dimensions (`norm`, mean
+// centering for cov/cond), promote `f16/bf16` through `f32` for BLAS
+// dispatch, and round-trip pivots/ranks across `usize <-> isize`. Oracle
+// and property tests rely on exact float equality against analytic
+// reference values.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::needless_pass_by_value,
+    clippy::match_same_arms,
+    clippy::suboptimal_flops
+)]
 
 /// Batched dispatch for stacked (3D+) arrays with Rayon parallelism.
 pub mod batch;
@@ -27,11 +50,11 @@ pub mod decomp;
 pub mod faer_bridge;
 /// Norms, condition numbers, determinants, and related measures.
 pub mod norms;
-/// Matrix products: dot, matmul, einsum, tensordot, kron, multi_dot.
+/// Matrix products: dot, matmul, einsum, tensordot, kron, `multi_dot`.
 pub mod products;
 /// Sealed trait bounding the float types (f32, f64) supported by linalg.
 pub mod scalar;
-/// Linear solvers: solve, lstsq, inv, pinv, matrix_power, tensorsolve, tensorinv.
+/// Linear solvers: solve, lstsq, inv, pinv, `matrix_power`, tensorsolve, tensorinv.
 pub mod solve;
 
 /// f16 (half-precision) linalg operations with f64 promotion.

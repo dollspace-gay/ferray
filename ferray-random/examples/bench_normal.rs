@@ -1,6 +1,16 @@
-//! Rough throughput microbenchmark for the Ziggurat-based standard_normal.
+//! Rough throughput microbenchmark for the Ziggurat-based `standard_normal`.
 //!
 //! Run with: `cargo run -p ferray-random --release --example bench_normal`
+
+// Benchmarks lift integer sizes into f64 throughput numbers as part of
+// reporting; the casts are part of the bench output, not bugs.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless
+)]
 
 use ferray_random::default_rng_seeded;
 use std::time::Instant;

@@ -108,7 +108,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
     /// Assign a scalar value to elements selected by a boolean mask.
     ///
-    /// Equivalent to `a[mask] = value` in NumPy.
+    /// Equivalent to `a[mask] = value` in `NumPy`.
     ///
     /// # Errors
     /// - `ShapeMismatch` if mask shape differs from array shape

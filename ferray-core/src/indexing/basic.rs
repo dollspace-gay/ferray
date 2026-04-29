@@ -17,7 +17,7 @@ use super::normalize_index;
 
 /// A slice specification for one axis, mirroring Python's `start:stop:step`.
 ///
-/// All fields are optional (represented by `None`), matching NumPy behaviour:
+/// All fields are optional (represented by `None`), matching `NumPy` behaviour:
 /// - `start`: defaults to 0 (or end-1 if step < 0)
 /// - `stop`: defaults to size (or before-start if step < 0)
 /// - `step`: defaults to 1; must not be 0
@@ -33,7 +33,8 @@ pub struct SliceSpec {
 
 impl SliceSpec {
     /// Create a new full-range slice (equivalent to `:`).
-    pub fn full() -> Self {
+    #[must_use]
+    pub const fn full() -> Self {
         Self {
             start: None,
             stop: None,
@@ -42,7 +43,8 @@ impl SliceSpec {
     }
 
     /// Create a slice `start:stop` with step 1.
-    pub fn new(start: isize, stop: isize) -> Self {
+    #[must_use]
+    pub const fn new(start: isize, stop: isize) -> Self {
         Self {
             start: Some(start),
             stop: Some(stop),
@@ -51,7 +53,8 @@ impl SliceSpec {
     }
 
     /// Create a slice `start:stop:step`.
-    pub fn with_step(start: isize, stop: isize, step: isize) -> Self {
+    #[must_use]
+    pub const fn with_step(start: isize, stop: isize, step: isize) -> Self {
         Self {
             start: Some(start),
             stop: Some(stop),
@@ -61,7 +64,7 @@ impl SliceSpec {
 
     /// Validate that the step is not zero.
     fn validate(&self) -> FerrayResult<()> {
-        if let Some(0) = self.step {
+        if self.step == Some(0) {
             return Err(FerrayError::invalid_value("slice step cannot be zero"));
         }
         Ok(())
@@ -73,7 +76,7 @@ impl SliceSpec {
         ndarray::Slice::new(self.start.unwrap_or(0), self.stop, self.step.unwrap_or(1))
     }
 
-    /// Convert to an ndarray SliceInfoElem (used by s![] macro integration).
+    /// Convert to an ndarray `SliceInfoElem` (used by s![] macro integration).
     #[allow(dead_code, clippy::wrong_self_convention)]
     pub(crate) fn to_ndarray_elem(&self) -> ndarray::SliceInfoElem {
         ndarray::SliceInfoElem::Slice {
@@ -441,7 +444,7 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
 // ArrayViewMut methods — basic indexing
 // ---------------------------------------------------------------------------
 
-impl<'a, T: Element, D: Dimension> ArrayViewMut<'a, T, D> {
+impl<T: Element, D: Dimension> ArrayViewMut<'_, T, D> {
     /// Slice the mutable view along a given axis.
     pub fn slice_axis_mut(
         &mut self,

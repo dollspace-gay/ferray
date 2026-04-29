@@ -28,7 +28,7 @@ pub enum NormOrder {
     /// L2 norm / spectral norm: largest singular value (for matrices),
     /// Euclidean norm (for vectors).
     L2,
-    /// General p-norm (for vectors): (sum |x_i|^p)^(1/p).
+    /// General p-norm (for vectors): (sum |`x_i|^p)^(1/p`).
     P(f64),
 }
 
@@ -62,7 +62,7 @@ pub fn norm<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> FerrayResult
 /// norm `ord` and returns an array with shape matching the input except
 /// that `axis` is removed (or set to 1 when `keepdims=true`).
 ///
-/// Matrix-style norm axes (a `(int, int)` tuple in NumPy) are not yet
+/// Matrix-style norm axes (a `(int, int)` tuple in `NumPy`) are not yet
 /// supported; pass the matrix to [`matrix_norm`] directly, or call `norm`
 /// for the scalar form.
 ///
@@ -107,7 +107,7 @@ pub fn norm_axis<T: LinalgFloat>(
     // Each outer index corresponds to a flat base offset in `data`;
     // we iterate through `outer_total` output positions and for each
     // one reconstruct the flat base offset into `data`.
-    let mut outer_shape = shape.clone();
+    let mut outer_shape = shape;
     outer_shape.remove(axis);
     let mut outer_strides = vec![1usize; outer_shape.len()];
     for i in (0..outer_shape.len().saturating_sub(1)).rev() {
@@ -148,7 +148,7 @@ pub fn norm_axis<T: LinalgFloat>(
 
 /// Compute a vector norm, optionally reducing along a single axis.
 ///
-/// NumPy 2.0 Array API standard entry point (`numpy.linalg.vector_norm`).
+/// `NumPy` 2.0 Array API standard entry point (`numpy.linalg.vector_norm`).
 /// When `axis = Some(k)`, delegates to [`norm_axis`] to collapse one axis
 /// at a time. When `axis = None`, reduces the entire flattened array to
 /// a single scalar wrapped in a shape-`[]` (or shape-`[1,1,…]` with
@@ -187,7 +187,7 @@ pub fn vector_norm<T: LinalgFloat>(
 
 /// Compute the matrix norm of a 2-D matrix.
 ///
-/// NumPy 2.0 Array API standard entry point (`numpy.linalg.matrix_norm`).
+/// `NumPy` 2.0 Array API standard entry point (`numpy.linalg.matrix_norm`).
 /// Supports `Fro`, `Nuc`, `L1`, `L2`, `Inf`, and `NegInf` orders. The
 /// `P(_)` vector-only orders return [`FerrayError::InvalidValue`] because
 /// they are not defined on matrices.
@@ -524,8 +524,7 @@ pub fn det_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Array<T,
     batch::apply_batched_scalar(a, |m, n, data| {
         if m != n {
             return Err(FerrayError::shape_mismatch(format!(
-                "det requires square matrices, got {}x{}",
-                m, n
+                "det requires square matrices, got {m}x{n}"
             )));
         }
         let mat = batch::slice_to_faer(m, n, data);
@@ -626,8 +625,7 @@ pub fn slogdet_batched<T: LinalgFloat>(
     let n = shape[shape.len() - 1];
     if m != n {
         return Err(FerrayError::shape_mismatch(format!(
-            "slogdet requires square matrices, got {}x{}",
-            m, n
+            "slogdet requires square matrices, got {m}x{n}"
         )));
     }
 
@@ -686,7 +684,7 @@ pub fn matrix_rank<T: LinalgFloat>(a: &Array<T, Ix2>, tol: Option<T>) -> FerrayR
 /// Batched matrix rank for arrays of shape `(..., M, N)`.
 ///
 /// Returns a flat array of ranks (length = number of batches), matching
-/// NumPy's `numpy.linalg.matrix_rank` which returns `int64` per batch.
+/// `NumPy`'s `numpy.linalg.matrix_rank` which returns `int64` per batch.
 ///
 /// # Errors
 /// - `FerrayError::InvalidValue` if SVD fails for any batch element.
@@ -739,9 +737,9 @@ pub fn trace<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<T> {
 /// the main diagonal (same as [`trace`]); positive offsets walk
 /// super-diagonals (right of the main), negative offsets walk
 /// sub-diagonals. An offset that falls entirely outside the matrix
-/// produces `0` (the sum of an empty set), matching NumPy.
+/// produces `0` (the sum of an empty set), matching `NumPy`.
 ///
-/// The NumPy `dtype=` parameter (for accumulating into a higher-precision
+/// The `NumPy` `dtype=` parameter (for accumulating into a higher-precision
 /// type to avoid overflow on integer inputs) is not modeled — trace only
 /// accepts `T: LinalgFloat`, so the accumulation already happens in the
 /// native float type. An issue tracking dtype-widening trace will be
@@ -797,7 +795,7 @@ pub fn trace_offset<T: LinalgFloat>(a: &Array<T, Ix2>, offset: isize) -> FerrayR
 /// works for any [`Element`] type, not just `LinalgFloat`.
 ///
 /// An `offset` that falls entirely outside the matrix produces an empty
-/// result rather than an error — this matches NumPy (`np.diagonal(a, 999)`
+/// result rather than an error — this matches `NumPy` (`np.diagonal(a, 999)`
 /// yields an empty array).
 ///
 /// # Errors
@@ -852,6 +850,7 @@ where
 /// matrix transpose (swap the last two axes of an N-D array) is covered
 /// by the general batched matmul / batched ops tracked in #412 and will
 /// land alongside that work.
+#[must_use]
 pub fn matrix_transpose<T: Element>(a: &Array<T, Ix2>) -> ArrayView<'_, T, Ix2> {
     a.t()
 }
@@ -1281,17 +1280,14 @@ mod tests {
     #[test]
     fn trace_offset_matches_diagonal_sum() {
         // trace_offset(a, k) == diagonal(a, k).sum() for any valid k.
-        let a = Array::<f64, Ix2>::from_vec(Ix2::new([4, 5]), (1..=20).map(|x| x as f64).collect())
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([4, 5]), (1..=20).map(f64::from).collect())
             .unwrap();
         for k in -3..=4 {
             let via_trace = trace_offset(&a, k).unwrap();
             let via_diag: f64 = diagonal(&a, k).unwrap().iter().copied().sum();
             assert!(
                 (via_trace - via_diag).abs() < 1e-10,
-                "offset {}: trace_offset={}, diagonal.sum()={}",
-                k,
-                via_trace,
-                via_diag
+                "offset {k}: trace_offset={via_trace}, diagonal.sum()={via_diag}"
             );
         }
     }
@@ -1336,10 +1332,7 @@ mod tests {
             let via_norm = norm(&dyn_a, ord).unwrap();
             assert!(
                 (via_matrix - via_norm).abs() < 1e-10,
-                "ord {:?}: matrix_norm={}, norm={}",
-                ord,
-                via_matrix,
-                via_norm
+                "ord {ord:?}: matrix_norm={via_matrix}, norm={via_norm}"
             );
         }
     }

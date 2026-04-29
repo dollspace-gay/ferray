@@ -8,7 +8,7 @@ use crate::mapping::mapparms;
 /// Common trait for polynomial types in all bases.
 ///
 /// Every polynomial class (power, Chebyshev, Legendre, Laguerre, Hermite,
-/// HermiteE) implements this trait, providing evaluation, calculus,
+/// `HermiteE`) implements this trait, providing evaluation, calculus,
 /// arithmetic, root-finding, and fitting.
 pub trait Poly: Clone + Sized {
     /// Evaluate the polynomial at a single point.

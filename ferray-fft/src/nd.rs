@@ -23,7 +23,7 @@ use crate::norm::FftNorm;
 /// The returned `(new_shape, new_data)` reflect the (possibly changed)
 /// size along the transformed axis. Generic over the scalar precision
 /// via [`FftFloat`].
-pub(crate) fn fft_along_axis<T: FftFloat>(
+pub fn fft_along_axis<T: FftFloat>(
     data: &[Complex<T>],
     shape: &[usize],
     axis: usize,
@@ -56,7 +56,7 @@ where
 
     // Fast path: 1D array — skip all lane machinery
     if ndim == 1 {
-        return fft_1d_fast(data, fft_len, axis_len, inverse, norm);
+        return Ok(fft_1d_fast(data, fft_len, axis_len, inverse, norm));
     }
 
     let num_lanes = total / axis_len;
@@ -164,7 +164,7 @@ fn fft_1d_fast<T: FftFloat>(
     input_len: usize,
     inverse: bool,
     norm: FftNorm,
-) -> FerrayResult<(Vec<usize>, Vec<Complex<T>>)>
+) -> (Vec<usize>, Vec<Complex<T>>)
 where
     Complex<T>: ferray_core::Element,
 {
@@ -193,7 +193,7 @@ where
         }
     }
 
-    Ok((vec![fft_len], buffer))
+    (vec![fft_len], buffer)
 }
 
 /// Apply 1-D FFTs along multiple axes sequentially.
@@ -201,7 +201,7 @@ where
 /// `shapes_and_sizes` is a list of `(axis, optional_n)` pairs.
 /// Each axis is transformed in order, feeding the output of one
 /// as the input to the next.
-pub(crate) fn fft_along_axes<T: FftFloat>(
+pub fn fft_along_axes<T: FftFloat>(
     data: &[Complex<T>],
     shape: &[usize],
     axes_and_sizes: &[(usize, Option<usize>)],
@@ -243,9 +243,9 @@ where
 /// before the transform; if `None`, the existing axis length is used.
 ///
 /// Mirrors [`fft_along_axis`] but uses the cached real plan and the
-/// par_chunks_mut allocation pattern from #433. Generic over the scalar
+/// `par_chunks_mut` allocation pattern from #433. Generic over the scalar
 /// precision via [`FftFloat`].
-pub(crate) fn rfft_along_axis<T: FftFloat>(
+pub fn rfft_along_axis<T: FftFloat>(
     data: &[T],
     shape: &[usize],
     axis: usize,
@@ -370,7 +370,7 @@ where
 /// layout (with `shape[axis] == half_len`), and `output_len` is the
 /// desired length of the real output along that axis. Generic over the
 /// scalar precision via [`FftFloat`].
-pub(crate) fn irfft_along_axis<T: FftFloat>(
+pub fn irfft_along_axis<T: FftFloat>(
     data: &[Complex<T>],
     shape: &[usize],
     axis: usize,
@@ -637,7 +637,7 @@ mod tests {
     }
 
     /// Exercises the multi-lane parallel path with enough lanes to actually
-    /// hit the par_chunks_mut codegen and verify the lane→output scatter
+    /// hit the `par_chunks_mut` codegen and verify the lane→output scatter
     /// step lines up. Regression guard for the #433 refactor.
     #[test]
     fn fft_2d_many_lanes_along_axis1() {
@@ -666,7 +666,7 @@ mod tests {
 
     /// Same array, FFT along axis 0 (the strided lanes case). Verifies the
     /// scatter back to non-contiguous output positions works after
-    /// switching to par_chunks_mut on a separate buffer.
+    /// switching to `par_chunks_mut` on a separate buffer.
     #[test]
     fn fft_2d_many_lanes_along_axis0() {
         // 8×4 array, FFT along axis 0 → 4 lanes of length 8, each strided

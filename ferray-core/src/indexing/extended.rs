@@ -118,7 +118,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
         for &idx in &normalized {
             let mut sub = self.inner.index_axis_mut(nd_axis, idx);
-            for elem in sub.iter_mut() {
+            for elem in &mut sub {
                 if let Some(v) = val_iter.next() {
                     *elem = v.clone();
                 }
@@ -275,8 +275,7 @@ pub fn select<T: Element, D: Dimension>(
     for (i, (c, ch)) in condlist.iter().zip(choicelist.iter()).enumerate() {
         if c.shape() != shape || ch.shape() != shape {
             return Err(FerrayError::shape_mismatch(format!(
-                "condlist[{}]/choicelist[{}] shape mismatch with reference shape {:?}",
-                i, i, shape
+                "condlist[{i}]/choicelist[{i}] shape mismatch with reference shape {shape:?}"
             )));
         }
     }
@@ -370,6 +369,7 @@ pub fn ix_(sequences: &[&[u64]]) -> FerrayResult<Vec<Array<u64, IxDyn>>> {
 ///
 /// Equivalent to `np.diag_indices(n, ndim=2)`. Returns `ndim` vectors,
 /// each containing `[0, 1, ..., n-1]`.
+#[must_use]
 pub fn diag_indices(n: usize, ndim: usize) -> Vec<Vec<usize>> {
     let data: Vec<usize> = (0..n).collect();
     vec![data; ndim]
@@ -396,8 +396,7 @@ pub fn diag_indices_from<T: Element, D: Dimension>(
     for &s in &shape[1..] {
         if s != n {
             return Err(FerrayError::shape_mismatch(format!(
-                "all dimensions must be equal for diag_indices_from, got {:?}",
-                shape
+                "all dimensions must be equal for diag_indices_from, got {shape:?}"
             )));
         }
     }
@@ -413,6 +412,7 @@ pub fn diag_indices_from<T: Element, D: Dimension>(
 /// Equivalent to `np.tril_indices(n, k, m)`.
 /// `k` is the diagonal offset: 0 = main diagonal, positive = above,
 /// negative = below.
+#[must_use]
 pub fn tril_indices(n: usize, k: isize, m: Option<usize>) -> (Vec<usize>, Vec<usize>) {
     let m = m.unwrap_or(n);
     let mut rows = Vec::new();
@@ -433,6 +433,7 @@ pub fn tril_indices(n: usize, k: isize, m: Option<usize>) -> (Vec<usize>, Vec<us
 /// Return the indices for the upper triangle of an (n, m) array.
 ///
 /// Equivalent to `np.triu_indices(n, k, m)`.
+#[must_use]
 pub fn triu_indices(n: usize, k: isize, m: Option<usize>) -> (Vec<usize>, Vec<usize>) {
     let m = m.unwrap_or(n);
     let mut rows = Vec::new();
@@ -494,7 +495,7 @@ pub fn triu_indices_from<T: Element, D: Dimension>(
 /// Uses row-major (C) ordering.
 ///
 /// # Errors
-/// - `InvalidValue` if multi_index arrays have different lengths
+/// - `InvalidValue` if `multi_index` arrays have different lengths
 /// - `IndexOutOfBounds` if any index is out of range for its dimension
 #[allow(clippy::needless_range_loop)]
 pub fn ravel_multi_index(multi_index: &[&[usize]], dims: &[usize]) -> FerrayResult<Vec<usize>> {
@@ -594,7 +595,7 @@ pub fn flatnonzero<T: Element + PartialEq, D: Dimension>(a: &Array<T, D>) -> Vec
     a.inner
         .iter()
         .enumerate()
-        .filter_map(|(i, val)| if *val != zero { Some(i) } else { None })
+        .filter_map(|(i, val)| if *val == zero { None } else { Some(i) })
         .collect()
 }
 
@@ -611,7 +612,7 @@ pub fn flatnonzero<T: Element + PartialEq, D: Dimension>(a: &Array<T, D>) -> Vec
 ///
 /// For a 1-D array this is equivalent to wrapping `flatnonzero` in a
 /// single-element outer vector. For 2-D, the two inner vectors give
-/// (row_indices, col_indices) — the typical pair used to reconstruct
+/// (`row_indices`, `col_indices`) — the typical pair used to reconstruct
 /// sparse matrices or index back into the original array.
 ///
 /// Returns `usize` coordinates because `usize` is not an `Element` type;
@@ -635,7 +636,7 @@ pub fn nonzero<T: Element + PartialEq, D: Dimension>(a: &Array<T, D>) -> Vec<Vec
 ///
 /// Equivalent to `np.argwhere(a)`. Each row of the result is the
 /// multi-index of one non-zero element, in row-major order. The output
-/// dtype is `i64` to match NumPy's default signed integer index type
+/// dtype is `i64` to match `NumPy`'s default signed integer index type
 /// (and because `usize` is not an `Element`). For a 0-D (scalar) input
 /// the result has shape `(0, 0)` or `(1, 0)` depending on whether the
 /// scalar is zero.
@@ -736,6 +737,7 @@ impl Iterator for NdIndex {
 /// Create an iterator over all multi-dimensional indices for a shape.
 ///
 /// Equivalent to `np.ndindex(*shape)`.
+#[must_use]
 pub fn ndindex(shape: &[usize]) -> NdIndex {
     NdIndex::new(shape)
 }
@@ -743,9 +745,9 @@ pub fn ndindex(shape: &[usize]) -> NdIndex {
 /// Create an iterator yielding `(index, &value)` pairs.
 ///
 /// Equivalent to `np.ndenumerate(a)`.
-pub fn ndenumerate<'a, T: Element, D: Dimension>(
-    a: &'a Array<T, D>,
-) -> impl Iterator<Item = (Vec<usize>, &'a T)> + 'a {
+pub fn ndenumerate<T: Element, D: Dimension>(
+    a: &Array<T, D>,
+) -> impl Iterator<Item = (Vec<usize>, &T)> + '_ {
     let shape = a.shape().to_vec();
     let ndim = shape.len();
     a.inner.iter().enumerate().map(move |(flat_idx, val)| {
@@ -1220,8 +1222,7 @@ mod tests {
 
     #[test]
     fn ndindex_empty() {
-        let indices: Vec<Vec<usize>> = ndindex(&[0]).collect();
-        assert_eq!(indices.len(), 0);
+        assert_eq!(ndindex(&[0]).count(), 0);
     }
 
     #[test]

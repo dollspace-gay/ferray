@@ -42,8 +42,8 @@ pub enum Side {
 /// array is returned. When an axis is given, the returned array has the
 /// same shape as the input.
 ///
-/// **Note:** NumPy's `np.sort(a)` defaults to `axis=-1` (last axis).
-/// ferray's `sort(a, None, kind)` flattens instead. To match NumPy's
+/// **Note:** `NumPy`'s `np.sort(a)` defaults to `axis=-1` (last axis).
+/// ferray's `sort(a, None, kind)` flattens instead. To match `NumPy`'s
 /// default, pass the last axis explicitly:
 /// `sort(a, Some(a.ndim() - 1), kind)`.
 ///
@@ -170,8 +170,8 @@ fn sort_slice<T: PartialOrd + Copy + Send + Sync>(data: &mut [T], kind: SortKind
 ///
 /// Returns u64 indices.
 ///
-/// **Note:** NumPy's `np.argsort(a)` defaults to `axis=-1` (last axis).
-/// ferray's `argsort(a, None)` flattens instead. To match NumPy's
+/// **Note:** `NumPy`'s `np.argsort(a)` defaults to `axis=-1` (last axis).
+/// ferray's `argsort(a, None)` flattens instead. To match `NumPy`'s
 /// default, pass the last axis explicitly: `argsort(a, Some(a.ndim() - 1))`.
 ///
 /// Equivalent to `numpy.argsort`.
@@ -322,7 +322,7 @@ where
 /// Indirect stable sort using a sequence of keys.
 ///
 /// `keys` is a list of 1-D arrays of the same length. The **last** key
-/// in the list is the primary sort key (matching NumPy's
+/// in the list is the primary sort key (matching `NumPy`'s
 /// `numpy.lexsort` convention); ties are broken by the second-to-last
 /// key, then the third-to-last, and so on. Returns a permutation
 /// `idx` such that `keys[-1][idx]` is non-decreasing.
@@ -330,7 +330,7 @@ where
 /// Implementation notes: the underlying sort is `sort_by` (stable),
 /// applied once with a comparator that walks the keys from primary
 /// (last) to secondary (earlier). This avoids the multi-pass stable
-/// sort that NumPy historically used.
+/// sort that `NumPy` historically used.
 ///
 /// # Errors
 /// - `FerrayError::InvalidValue` if `keys` is empty or the keys have
@@ -369,7 +369,7 @@ where
                 .partial_cmp(&k[bi])
                 .unwrap_or(std::cmp::Ordering::Equal)
             {
-                std::cmp::Ordering::Equal => continue,
+                std::cmp::Ordering::Equal => {}
                 ord => return ord,
             }
         }
@@ -409,7 +409,7 @@ where
 /// order; `sorter[i]` gives the index in `a` of the i-th smallest
 /// element (i.e. `sorter` is the output of an `argsort` over `a`). The
 /// returned indices are positions into the **sorted** view, matching
-/// NumPy's behaviour. See issue #473.
+/// `NumPy`'s behaviour. See issue #473.
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if `sorter.len() != a.len()`.

@@ -17,7 +17,7 @@
 //! Complete `numpy.polynomial` implementation for the ferray ecosystem.
 //!
 //! Provides polynomial operations in six bases: power, Chebyshev, Legendre,
-//! Laguerre, Hermite (physicist's), and HermiteE (probabilist's).
+//! Laguerre, Hermite (physicist's), and `HermiteE` (probabilist's).
 //!
 //! All polynomial types implement the [`Poly`] trait for evaluation,
 //! differentiation, integration, root-finding, arithmetic, and least-squares fitting.
@@ -26,6 +26,30 @@
 //! [`ConvertBasis`] trait.
 
 #![deny(unsafe_code)]
+// Polynomial evaluation, fitting, and basis conversion span integer
+// degrees/indices and floating-point coefficients; the underlying linear
+// algebra (companion-matrix eig, Vandermonde solve) further requires
+// `usize -> f64` lifts. Domain/window equality and trim-tolerance checks
+// rely on exact float comparison by design.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::needless_pass_by_value,
+    clippy::match_same_arms,
+    clippy::suboptimal_flops,
+    clippy::while_float
+)]
 
 pub mod chebyshev;
 pub mod companion;

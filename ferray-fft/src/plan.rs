@@ -12,7 +12,7 @@ use ferray_core::{Array, Ix1};
 
 use crate::norm::{FftDirection, FftNorm};
 
-/// Key for the global FFT plan cache: (transform size, is_inverse).
+/// Key for the global FFT plan cache: (transform size, `is_inverse`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct CacheKey {
     size: usize,
@@ -287,7 +287,8 @@ impl FftPlan {
     }
 
     /// Return the transform size this plan was created for.
-    pub fn size(&self) -> usize {
+    #[must_use]
+    pub const fn size(&self) -> usize {
         self.size
     }
 
@@ -385,7 +386,11 @@ impl FftPlan {
 
 impl std::fmt::Debug for FftPlan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FftPlan").field("size", &self.size).finish()
+        // The cached `Arc<dyn Fft<f64>>` is intentionally elided: it is an
+        // opaque rustfft handle whose Debug repr is noise, not signal.
+        f.debug_struct("FftPlan")
+            .field("size", &self.size)
+            .finish_non_exhaustive()
     }
 }
 

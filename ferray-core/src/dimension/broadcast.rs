@@ -16,7 +16,7 @@ use crate::dimension::{Dimension, IxDyn};
 use crate::dtype::Element;
 use crate::error::{FerrayError, FerrayResult};
 
-/// Compute the broadcast shape from two shapes, following NumPy rules.
+/// Compute the broadcast shape from two shapes, following `NumPy` rules.
 ///
 /// The result shape has `max(a.len(), b.len())` dimensions. Shorter shapes
 /// are left-padded with 1s. For each axis, the result dimension is the
@@ -102,8 +102,7 @@ pub fn broadcast_strides(
 
     if tndim < sndim {
         return Err(FerrayError::shape_mismatch(format!(
-            "cannot broadcast shape {:?} to shape {:?}: target has fewer dimensions",
-            src_shape, target_shape
+            "cannot broadcast shape {src_shape:?} to shape {target_shape:?}: target has fewer dimensions"
         )));
     }
 
@@ -126,8 +125,7 @@ pub fn broadcast_strides(
                 out_strides[i] = 0;
             } else {
                 return Err(FerrayError::shape_mismatch(format!(
-                    "cannot broadcast dimension {} (size {}) to size {}",
-                    si, src_dim, tgt_dim
+                    "cannot broadcast dimension {si} (size {src_dim}) to size {tgt_dim}"
                 )));
             }
         }
@@ -155,8 +153,7 @@ pub fn broadcast_to<'a, T: Element, D: Dimension>(
     let result_shape = broadcast_shapes(src_shape, target_shape)?;
     if result_shape != target_shape {
         return Err(FerrayError::shape_mismatch(format!(
-            "cannot broadcast shape {:?} to shape {:?}",
-            src_shape, target_shape
+            "cannot broadcast shape {src_shape:?} to shape {target_shape:?}"
         )));
     }
 
@@ -174,9 +171,7 @@ pub fn broadcast_to<'a, T: Element, D: Dimension>(
         if s < 0 {
             return Err(FerrayError::shape_mismatch(format!(
                 "cannot broadcast with negative stride {s} on axis {i}; \
-                 call .to_owned() on the reversed/transposed array first",
-                s = s,
-                i = i
+                 call .to_owned() on the reversed/transposed array first"
             )));
         }
     }
@@ -209,8 +204,7 @@ pub fn broadcast_view_to<'a, T: Element, D: Dimension>(
     let result_shape = broadcast_shapes(src_shape, target_shape)?;
     if result_shape != target_shape {
         return Err(FerrayError::shape_mismatch(format!(
-            "cannot broadcast shape {:?} to shape {:?}",
-            src_shape, target_shape
+            "cannot broadcast shape {src_shape:?} to shape {target_shape:?}"
         )));
     }
 
@@ -219,9 +213,8 @@ pub fn broadcast_view_to<'a, T: Element, D: Dimension>(
     for (i, &s) in new_strides.iter().enumerate() {
         if s < 0 {
             return Err(FerrayError::shape_mismatch(format!(
-                "cannot broadcast view with negative stride {} on axis {}; \
-                 call .to_owned() on the reversed/transposed view first",
-                s, i
+                "cannot broadcast view with negative stride {s} on axis {i}; \
+                 call .to_owned() on the reversed/transposed view first"
             )));
         }
     }
@@ -244,15 +237,18 @@ pub fn broadcast_view_to<'a, T: Element, D: Dimension>(
 ///
 /// # Errors
 /// Returns `FerrayError::BroadcastFailure` if shapes are incompatible.
-pub fn broadcast_arrays<'a, T: Element, D: Dimension>(
-    arrays: &'a [Array<T, D>],
-) -> FerrayResult<Vec<ArrayView<'a, T, IxDyn>>> {
+pub fn broadcast_arrays<T: Element, D: Dimension>(
+    arrays: &[Array<T, D>],
+) -> FerrayResult<Vec<ArrayView<'_, T, IxDyn>>> {
     if arrays.is_empty() {
         return Ok(vec![]);
     }
 
     // Compute common broadcast shape
-    let shapes: Vec<&[usize]> = arrays.iter().map(|a| a.shape()).collect();
+    let shapes: Vec<&[usize]> = arrays
+        .iter()
+        .map(super::super::array::owned::Array::shape)
+        .collect();
     let target = broadcast_shapes_multi(&shapes)?;
 
     // Broadcast each array to the common shape
@@ -292,8 +288,7 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
         let result_shape = broadcast_shapes(src_shape, target_shape)?;
         if result_shape != target_shape {
             return Err(FerrayError::shape_mismatch(format!(
-                "cannot broadcast shape {:?} to shape {:?}",
-                src_shape, target_shape
+                "cannot broadcast shape {src_shape:?} to shape {target_shape:?}"
             )));
         }
 
@@ -302,9 +297,8 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
         for (i, &s) in new_strides.iter().enumerate() {
             if s < 0 {
                 return Err(FerrayError::shape_mismatch(format!(
-                    "cannot broadcast view with negative stride {} on axis {}; \
-                     make the array contiguous first",
-                    s, i
+                    "cannot broadcast view with negative stride {s} on axis {i}; \
+                     make the array contiguous first"
                 )));
             }
         }

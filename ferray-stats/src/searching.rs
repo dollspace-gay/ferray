@@ -84,15 +84,7 @@ where
         let mut unique_pos: u64 = 0;
 
         for i in 1..pairs.len() {
-            if pairs[i].0.partial_cmp(&pairs[i - 1].0) != Some(std::cmp::Ordering::Equal) {
-                if return_counts {
-                    unique_counts.push(count);
-                }
-                unique_vals.push(pairs[i].0);
-                unique_indices.push(pairs[i].1 as u64);
-                count = 1;
-                unique_pos += 1;
-            } else {
+            if pairs[i].0.partial_cmp(&pairs[i - 1].0) == Some(std::cmp::Ordering::Equal) {
                 count += 1;
                 // Keep the first occurrence index (smallest original index).
                 let last = unique_indices.len() - 1;
@@ -100,6 +92,14 @@ where
                 if new_idx < unique_indices[last] {
                     unique_indices[last] = new_idx;
                 }
+            } else {
+                if return_counts {
+                    unique_counts.push(count);
+                }
+                unique_vals.push(pairs[i].0);
+                unique_indices.push(pairs[i].1 as u64);
+                count = 1;
+                unique_pos += 1;
             }
             if return_inverse {
                 inverse_vec[pairs[i].1] = unique_pos;
@@ -227,7 +227,7 @@ where
 /// is true, as a vector of 1-D index arrays (one per dimension).
 ///
 /// Equivalent to `numpy.where(condition)` (single-argument form) or
-/// `numpy.nonzero(condition.astype(int))`. Added for NumPy parity
+/// `numpy.nonzero(condition.astype(int))`. Added for `NumPy` parity
 /// (#166) — the three-argument form above is [`where_`].
 pub fn where_condition<D: Dimension>(
     condition: &Array<bool, D>,

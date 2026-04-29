@@ -7,6 +7,10 @@
 //! tests, which masked missing re-exports because the unit tests
 //! could still reach them via `super`.
 
+// These integration tests assert exact float equality on hand-picked
+// inputs (constants, identities, fixed FFT outputs) by design.
+#![allow(clippy::float_cmp)]
+
 use ferray::prelude::*;
 
 #[test]
@@ -50,6 +54,7 @@ fn bitwise_count_is_re_exported() {
 }
 
 #[test]
+#[allow(clippy::assertions_on_constants)]
 fn threshold_constants_are_accessible() {
     assert!(ferray::threshold::PARALLEL_THRESHOLD_ELEMENTWISE > 0);
     assert!(ferray::threshold::PARALLEL_THRESHOLD_COMPUTE > 0);
@@ -73,7 +78,7 @@ fn fft_submodule_exposed() {
     // the re-export works under the feature flag.
     use ferray::fft::{FftNorm, fft};
     let data: Vec<num_complex::Complex<f64>> = (0..8)
-        .map(|i| num_complex::Complex::new(i as f64, 0.0))
+        .map(|i| num_complex::Complex::new(f64::from(i), 0.0))
         .collect();
     let a = ferray::Array::<num_complex::Complex<f64>, Ix1>::from_vec(Ix1::new([8]), data).unwrap();
     let spectrum = fft(&a, None, None, FftNorm::Backward).unwrap();

@@ -16,9 +16,9 @@ use crate::scalar::LinalgFloat;
 /// Which triangle of a symmetric/Hermitian matrix to read during
 /// [`eigh`] / [`eigvalsh`] and their batched / UPLO-explicit variants.
 ///
-/// Matches NumPy's `UPLO='L'` / `UPLO='U'` parameter on
+/// Matches `NumPy`'s `UPLO='L'` / `UPLO='U'` parameter on
 /// `np.linalg.eigh` (#410). The lower triangle is the default — it
-/// matches ferray's historical behaviour and NumPy's default.
+/// matches ferray's historical behaviour and `NumPy`'s default.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UPLO {
     /// Read the lower triangle (default). Equivalent to `UPLO='L'`.
@@ -30,10 +30,10 @@ pub enum UPLO {
 impl UPLO {
     /// Translate to the faer `Side` enum used by the underlying solver.
     #[inline]
-    fn to_faer_side(self) -> faer::Side {
+    const fn to_faer_side(self) -> faer::Side {
         match self {
-            UPLO::Lower => faer::Side::Lower,
-            UPLO::Upper => faer::Side::Upper,
+            Self::Lower => faer::Side::Lower,
+            Self::Upper => faer::Side::Upper,
         }
     }
 }
@@ -110,7 +110,7 @@ pub fn eigh<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<(Array<T, Ix1>, A
 /// reading the specified triangle of the input.
 ///
 /// Equivalent to `np.linalg.eigh(a, UPLO=...)` (#410). The lower
-/// triangle is ferray's historical default (and also NumPy's default);
+/// triangle is ferray's historical default (and also `NumPy`'s default);
 /// pass [`UPLO::Upper`] to read the upper triangle instead.
 ///
 /// For a truly-symmetric matrix the two triangles should produce
@@ -225,7 +225,7 @@ pub fn eigvalsh_uplo<T: LinalgFloat>(a: &Array<T, Ix2>, uplo: UPLO) -> FerrayRes
 /// Batched symmetric eigendecomposition for arrays of shape `(..., N, N)`.
 ///
 /// Returns `(eigenvalues, eigenvectors)` where eigenvalues has shape
-/// `(..., N)` and eigenvectors has shape `(..., N, N)`, matching NumPy.
+/// `(..., N)` and eigenvectors has shape `(..., N, N)`, matching `NumPy`.
 /// Reads the lower triangle of each matrix — see [`eigh_batched_uplo`]
 /// for the UPLO-explicit variant (#564).
 ///
@@ -395,7 +395,7 @@ mod tests {
 
         // Check orthogonality of eigenvectors
         let es = vecs.as_slice().unwrap();
-        let dot = es[0] * es[1] + es[2] * es[3];
+        let dot = es[0].mul_add(es[1], es[2] * es[3]);
         assert!(dot.abs() < 1e-10);
     }
 

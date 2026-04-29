@@ -26,7 +26,7 @@ use crate::helpers::{
 // Basic arithmetic (binary, same-shape)
 // ---------------------------------------------------------------------------
 
-/// Elementwise addition with NumPy broadcasting.
+/// Elementwise addition with `NumPy` broadcasting.
 pub fn add<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
@@ -35,7 +35,7 @@ where
     binary_elementwise_op(a, b, |x, y| x + y)
 }
 
-/// In-place elementwise addition, equivalent to NumPy's
+/// In-place elementwise addition, equivalent to `NumPy`'s
 /// `np.add(a, b, out=out)`. Writes `a + b` directly into `out` without
 /// allocating. All three arrays must be contiguous (C-order) and have the
 /// same shape; broadcasting is not supported on this fast path — use
@@ -52,7 +52,7 @@ where
     binary_elementwise_op_into(a, b, out, "add", |x, y| x + y)
 }
 
-/// Elementwise subtraction with NumPy broadcasting.
+/// Elementwise subtraction with `NumPy` broadcasting.
 pub fn subtract<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Sub<Output = T> + Copy,
@@ -74,7 +74,7 @@ where
     binary_elementwise_op_into(a, b, out, "subtract", |x, y| x - y)
 }
 
-/// Elementwise multiplication with NumPy broadcasting.
+/// Elementwise multiplication with `NumPy` broadcasting.
 pub fn multiply<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
@@ -96,7 +96,7 @@ where
     binary_elementwise_op_into(a, b, out, "multiply", |x, y| x * y)
 }
 
-/// Elementwise division with NumPy broadcasting.
+/// Elementwise division with `NumPy` broadcasting.
 pub fn divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Div<Output = T> + Copy,
@@ -142,7 +142,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_elementwise_op(a, b, |x, y| x.powf(y))
+    binary_elementwise_op(a, b, num_traits::Float::powf)
 }
 
 /// Elementwise remainder (Python-style modulo).
@@ -240,8 +240,7 @@ where
     }
     let result_dim = D::from_dim_slice(&target_shape).ok_or_else(|| {
         FerrayError::shape_mismatch(format!(
-            "divmod: cannot represent broadcast result shape {:?} as the input dimension type",
-            target_shape
+            "divmod: cannot represent broadcast result shape {target_shape:?} as the input dimension type"
         ))
     })?;
     let quot = Array::from_vec(result_dim.clone(), quot_data)?;
@@ -954,7 +953,7 @@ where
 /// Equivalent to `np.multiply.outer(a, b)`. Delegates to the generic
 /// [`crate::ufunc_methods::outer`] with the `*` kernel.
 ///
-/// AC-3: multiply_outer produces correct outer product.
+/// AC-3: `multiply_outer` produces correct outer product.
 pub fn multiply_outer<T>(a: &Array<T, Ix1>, b: &Array<T, Ix1>) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
@@ -1022,7 +1021,7 @@ where
 /// Cumulative sum along an axis (or flattened if axis is None).
 ///
 /// When `axis=None`, data is flattened and accumulated, but the result retains
-/// the original shape (unlike NumPy which returns a 1-D array). This is due to
+/// the original shape (unlike `NumPy` which returns a 1-D array). This is due to
 /// the generic return type `Array<T, D>`.
 ///
 /// AC-11: `cumsum([1,2,3,4]) == [1,3,6,10]`.
@@ -1037,7 +1036,7 @@ where
 /// Cumulative product along an axis (or flattened if axis is None).
 ///
 /// When `axis=None`, data is flattened and accumulated, but the result retains
-/// the original shape (unlike NumPy which returns a 1-D array). This is due to
+/// the original shape (unlike `NumPy` which returns a 1-D array). This is due to
 /// the generic return type `Array<T, D>`.
 pub fn cumprod<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
@@ -1655,7 +1654,7 @@ mod tests {
     fn add_reduce_axes_two_axes_3d() {
         // (2, 3, 4) reducing axes (0, 2) → length-3 result.
         use ferray_core::dimension::Ix3;
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
         let r = add_reduce_axes(&a, &[0, 2], false).unwrap();
         assert_eq!(r.shape(), &[3]);
@@ -1665,7 +1664,7 @@ mod tests {
                 let mut s = 0.0;
                 for i in 0..2 {
                     for k in 0..4 {
-                        s += (i * 12 + j * 4 + k) as f64;
+                        s += f64::from(i * 12 + j * 4 + k);
                     }
                 }
                 s
@@ -1677,7 +1676,7 @@ mod tests {
     #[test]
     fn add_reduce_axes_keepdims_preserves_rank() {
         use ferray_core::dimension::Ix3;
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
         let r = add_reduce_axes(&a, &[0, 2], true).unwrap();
         assert_eq!(r.shape(), &[1, 3, 1]);

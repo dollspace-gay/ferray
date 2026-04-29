@@ -9,7 +9,7 @@
 //! # ferray-strings
 //!
 //! Vectorized string operations on arrays of strings, analogous to
-//! `numpy.strings` in NumPy 2.0+.
+//! `numpy.strings` in `NumPy` 2.0+.
 //!
 //! The primary type is [`StringArray`], a specialized N-dimensional array
 //! backed by `Vec<String>`. Since `String` does not implement
@@ -24,6 +24,21 @@
 //! let b = upper(&a).unwrap();
 //! assert_eq!(b.as_slice(), &["HELLO", "WORLD"]);
 //! ```
+
+// Workspace convention: every public function returns FerrayResult<T> and
+// the FerrayError variants are documented once on the type, not on every
+// returning function.
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::needless_pass_by_value,
+    clippy::match_same_arms
+)]
 
 pub mod align;
 pub mod case;

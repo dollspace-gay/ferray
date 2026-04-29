@@ -301,6 +301,7 @@ where
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+#[allow(clippy::float_cmp, clippy::unreadable_literal)] // Roundtrip tests assert exact equality on hand-picked Polars values.
 mod tests {
     use super::*;
 

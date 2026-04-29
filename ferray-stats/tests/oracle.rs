@@ -1,9 +1,22 @@
-//! Oracle tests: validate ferray-stats against NumPy fixture outputs.
+//! Oracle tests: validate ferray-stats against `NumPy` fixture outputs.
 //!
 //! The `reduction_oracle!` macro takes a bare function `path` and pins its
 //! concrete type via an internal `let` binding to a `fn` pointer, so callers
 //! can write `reduction_oracle!(oracle_sum, "sum.json", ferray_stats::sum)`
 //! without a closure or turbofish. Same pattern as ferray-ufunc/tests/oracle.rs.
+
+// Oracle tests cross fixture data through `f64` JSON values, recover bit
+// patterns, and ULP-compare against NumPy reference outputs — both the
+// casts and the float comparisons are part of the contract.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::option_if_let_else
+)]
 
 use ferray_core::Array;
 use ferray_core::dimension::IxDyn;
@@ -56,12 +69,12 @@ fn oracle_var() {
         let axis = case
             .inputs
             .get("axis")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let ddof = case
             .inputs
             .get("ddof")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .unwrap_or(0) as usize;
         let result = ferray_stats::var(&arr, axis, ddof).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
@@ -91,12 +104,12 @@ fn oracle_std() {
         let axis = case
             .inputs
             .get("axis")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let ddof = case
             .inputs
             .get("ddof")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .unwrap_or(0) as usize;
         let result = ferray_stats::std_(&arr, axis, ddof).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
@@ -130,7 +143,7 @@ fn oracle_cumsum() {
         let axis = case
             .inputs
             .get("axis")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let result = ferray_stats::cumsum(&arr, axis).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
@@ -166,7 +179,7 @@ fn oracle_cumprod() {
         let axis = case
             .inputs
             .get("axis")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let result = ferray_stats::cumprod(&arr, axis).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
@@ -201,7 +214,7 @@ fn oracle_percentile() {
         let axis = case
             .inputs
             .get("axis")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let result = ferray_stats::percentile(&arr, q, axis).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
@@ -232,7 +245,7 @@ fn oracle_quantile() {
         let axis = case
             .inputs
             .get("axis")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let result = ferray_stats::quantile(&arr, q, axis).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
@@ -266,7 +279,7 @@ fn oracle_sort() {
         let axis = case
             .inputs
             .get("axis")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let result = ferray_stats::sort(&arr, axis, ferray_stats::SortKind::Quick).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
@@ -300,7 +313,7 @@ fn oracle_argmin() {
         let axis = case
             .inputs
             .get("axis")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let result = ferray_stats::argmin(&arr, axis).unwrap();
         let expected: Vec<u64> = parse_usize_data(&case.expected["data"])
@@ -340,7 +353,7 @@ fn oracle_argmax() {
         let axis = case
             .inputs
             .get("axis")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let result = ferray_stats::argmax(&arr, axis).unwrap();
         let expected: Vec<u64> = parse_usize_data(&case.expected["data"])
@@ -384,7 +397,7 @@ fn oracle_argsort() {
         let axis = case
             .inputs
             .get("axis")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let result = ferray_stats::argsort(&arr, axis).unwrap();
         let expected: Vec<u64> = parse_usize_data(&case.expected["data"])
@@ -434,7 +447,7 @@ fn oracle_unique() {
         let return_counts = case
             .inputs
             .get("return_counts")
-            .and_then(|v| v.as_bool())
+            .and_then(ferray_test_oracle::serde_json::Value::as_bool)
             .unwrap_or(false);
         let result = ferray_stats::unique(&arr, false, false, return_counts).unwrap();
 

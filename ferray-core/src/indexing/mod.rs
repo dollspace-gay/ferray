@@ -25,7 +25,7 @@ use crate::error::{FerrayError, FerrayResult};
 /// Shared by all three indexing submodules; see issue #121 for the
 /// original triplication.
 #[inline]
-pub(crate) fn normalize_index(index: isize, size: usize, axis: usize) -> FerrayResult<usize> {
+pub(crate) const fn normalize_index(index: isize, size: usize, axis: usize) -> FerrayResult<usize> {
     if index < 0 {
         let pos = size as isize + index;
         if pos < 0 {

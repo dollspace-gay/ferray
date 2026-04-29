@@ -58,24 +58,28 @@ impl I256 {
 
     /// Construct from explicit limbs (little-endian).
     #[inline]
+    #[must_use]
     pub const fn from_limbs(limbs: [u64; 4]) -> Self {
         Self { limbs }
     }
 
     /// Return the raw little-endian limbs.
     #[inline]
+    #[must_use]
     pub const fn to_limbs(self) -> [u64; 4] {
         self.limbs
     }
 
     /// Is this value negative? (inspects the top bit of the highest limb).
     #[inline]
+    #[must_use]
     pub const fn is_negative(self) -> bool {
         (self.limbs[3] >> 63) & 1 == 1
     }
 
     /// Two's-complement negation: `-self`.
     #[inline]
+    #[must_use]
     pub const fn wrapping_neg(self) -> Self {
         // `-x = !x + 1` in two's complement.
         let mut out = [0u64; 4];
@@ -98,6 +102,7 @@ impl I256 {
 
     /// Wrapping add modulo 2^256.
     #[inline]
+    #[must_use]
     pub const fn wrapping_add(self, rhs: Self) -> Self {
         let mut out = [0u64; 4];
         let mut carry = false;
@@ -114,6 +119,7 @@ impl I256 {
 
     /// Wrapping subtract modulo 2^256.
     #[inline]
+    #[must_use]
     pub const fn wrapping_sub(self, rhs: Self) -> Self {
         self.wrapping_add(rhs.wrapping_neg())
     }
@@ -125,6 +131,7 @@ impl I256 {
     /// handled automatically by two's complement wrapping — the
     /// low-order limbs of a signed multiply are the same as the
     /// corresponding unsigned multiply.
+    #[must_use]
     pub const fn wrapping_mul(self, rhs: Self) -> Self {
         let mut out = [0u128; 4];
         let mut i = 0;
@@ -219,7 +226,7 @@ impl Ord for I256 {
         // (within same sign the bit patterns are monotonic).
         for i in (0..4).rev() {
             match self.limbs[i].cmp(&other.limbs[i]) {
-                Ordering::Equal => continue,
+                Ordering::Equal => {}
                 ord => return ord,
             }
         }
@@ -296,7 +303,8 @@ impl fmt::Display for I256 {
 impl I256 {
     /// Try to narrow to `i128`. Returns `None` if the value is
     /// outside `[i128::MIN, i128::MAX]`.
-    pub fn try_to_i128(self) -> Option<i128> {
+    #[must_use]
+    pub const fn try_to_i128(self) -> Option<i128> {
         // For positive values, limbs[2] and limbs[3] must be zero.
         // For negative values, limbs[2] and limbs[3] must be
         // sign-extended (all ones) and the top bit of limbs[1]
@@ -312,23 +320,21 @@ impl I256 {
                     return Some(as_i128);
                 }
             }
-            None
-        } else {
-            if self.limbs[2] == 0 && self.limbs[3] == 0 {
-                let lo = self.limbs[0] as u128;
-                let hi = self.limbs[1] as u128;
-                let bits = lo | (hi << 64);
-                if bits <= i128::MAX as u128 {
-                    return Some(bits as i128);
-                }
+        } else if self.limbs[2] == 0 && self.limbs[3] == 0 {
+            let lo = self.limbs[0] as u128;
+            let hi = self.limbs[1] as u128;
+            let bits = lo | (hi << 64);
+            if bits <= i128::MAX as u128 {
+                return Some(bits as i128);
             }
-            None
         }
+        None
     }
 
     /// Try to narrow to `u128`. Returns `None` if negative or
     /// above `u128::MAX`.
-    pub fn try_to_u128(self) -> Option<u128> {
+    #[must_use]
+    pub const fn try_to_u128(self) -> Option<u128> {
         if self.is_negative() {
             return None;
         }

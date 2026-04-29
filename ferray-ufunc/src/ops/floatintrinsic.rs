@@ -22,7 +22,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_map_op(input, |x| x.is_nan())
+    unary_map_op(input, num_traits::Float::is_nan)
 }
 
 /// Elementwise test for infinity (positive or negative).
@@ -31,7 +31,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_map_op(input, |x| x.is_infinite())
+    unary_map_op(input, num_traits::Float::is_infinite)
 }
 
 /// Elementwise test for finiteness.
@@ -40,7 +40,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_map_op(input, |x| x.is_finite())
+    unary_map_op(input, num_traits::Float::is_finite)
 }
 
 /// Elementwise test for negative infinity.
@@ -67,7 +67,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_map_op(input, |x| x.is_sign_negative())
+    unary_map_op(input, num_traits::Float::is_sign_negative)
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ where
     })
 }
 
-/// Clip (limit) values to [a_min, a_max] for float types.
+/// Clip (limit) values to [`a_min`, `a_max`] for float types.
 pub fn clip<T, D>(input: &Array<T, D>, a_min: T, a_max: T) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
@@ -125,7 +125,7 @@ where
     })
 }
 
-/// Clip (limit) values to [a_min, a_max] for any ordered type, including integers.
+/// Clip (limit) values to [`a_min`, `a_max`] for any ordered type, including integers.
 ///
 /// This is a more general version of [`clip`] that works on integer arrays
 /// (i8, i16, i32, i64, u8, u16, u32, u64) as well as floats.
@@ -223,14 +223,14 @@ where
 
     if TypeId::of::<T>() == TypeId::of::<f64>() {
         // SAFETY: T is f64, verified by TypeId check above.
-        let a_f64 = unsafe { &*(x1 as *const Array<T, D> as *const Array<f64, D>) };
-        let b_f64 = unsafe { &*(x2 as *const Array<T, D> as *const Array<f64, D>) };
+        let a_f64 = unsafe { &*std::ptr::from_ref::<Array<T, D>>(x1).cast::<Array<f64, D>>() };
+        let b_f64 = unsafe { &*std::ptr::from_ref::<Array<T, D>>(x2).cast::<Array<f64, D>>() };
         let result = binary_elementwise_op(a_f64, b_f64, nextafter_f64)?;
         Ok(unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) })
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
         // SAFETY: T is f32, verified by TypeId check above.
-        let a_f32 = unsafe { &*(x1 as *const Array<T, D> as *const Array<f32, D>) };
-        let b_f32 = unsafe { &*(x2 as *const Array<T, D> as *const Array<f32, D>) };
+        let a_f32 = unsafe { &*std::ptr::from_ref::<Array<T, D>>(x1).cast::<Array<f32, D>>() };
+        let b_f32 = unsafe { &*std::ptr::from_ref::<Array<T, D>>(x2).cast::<Array<f32, D>>() };
         let result = binary_elementwise_op(a_f32, b_f32, nextafter_f32)?;
         Ok(unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) })
     } else {
@@ -279,11 +279,13 @@ where
     use std::any::TypeId;
 
     if TypeId::of::<T>() == TypeId::of::<f64>() {
-        let f64_input = unsafe { &*(input as *const Array<T, D> as *const Array<f64, D>) };
+        let f64_input =
+            unsafe { &*std::ptr::from_ref::<Array<T, D>>(input).cast::<Array<f64, D>>() };
         let result = unary_float_op(f64_input, spacing_f64)?;
         Ok(unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) })
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
-        let f32_input = unsafe { &*(input as *const Array<T, D> as *const Array<f32, D>) };
+        let f32_input =
+            unsafe { &*std::ptr::from_ref::<Array<T, D>>(input).cast::<Array<f32, D>>() };
         let result = unary_float_op(f32_input, spacing_f32)?;
         Ok(unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) })
     } else {
@@ -295,7 +297,7 @@ where
     }
 }
 
-/// Multiply `x` by `2^n` (ldexp), with NumPy broadcasting.
+/// Multiply `x` by `2^n` (ldexp), with `NumPy` broadcasting.
 ///
 /// `n` is provided as an integer array; broadcast-compatible with `x`.
 pub fn ldexp<T, D>(x: &Array<T, D>, n: &Array<i32, D>) -> FerrayResult<Array<T, D>>
@@ -357,7 +359,7 @@ fn frexp_f32(x: f32) -> (f32, i32) {
 
 /// Decompose into mantissa and exponent: x = m * 2^e.
 ///
-/// Returns (mantissa_array, exponent_array) where mantissa is in [0.5, 1.0).
+/// Returns (`mantissa_array`, `exponent_array`) where mantissa is in [0.5, 1.0).
 /// This matches C's `frexp`: for x=4.0, returns (0.5, 3) since 0.5 * 2^3 = 4.
 ///
 /// Uses IEEE 754 bit extraction for f64 and f32 (O(1) per element), with
@@ -371,7 +373,8 @@ where
 
     if TypeId::of::<T>() == TypeId::of::<f64>() {
         // SAFETY: T is f64, verified by TypeId check above.
-        let f64_input = unsafe { &*(input as *const Array<T, D> as *const Array<f64, D>) };
+        let f64_input =
+            unsafe { &*std::ptr::from_ref::<Array<T, D>>(input).cast::<Array<f64, D>>() };
         let mut mantissas = Vec::with_capacity(f64_input.size());
         let mut exponents = Vec::with_capacity(f64_input.size());
         for &x in f64_input.iter() {
@@ -385,7 +388,8 @@ where
         Ok((m_result, e_arr))
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
         // SAFETY: T is f32, verified by TypeId check above.
-        let f32_input = unsafe { &*(input as *const Array<T, D> as *const Array<f32, D>) };
+        let f32_input =
+            unsafe { &*std::ptr::from_ref::<Array<T, D>>(input).cast::<Array<f32, D>>() };
         let mut mantissas = Vec::with_capacity(f32_input.size());
         let mut exponents = Vec::with_capacity(f32_input.size());
         for &x in f32_input.iter() {
@@ -534,7 +538,7 @@ where
     crate::helpers::unary_f16_to_bool_op(input, f32::is_finite)
 }
 
-/// Clip (limit) values to [a_min, a_max] for f16 arrays via f32 promotion.
+/// Clip (limit) values to [`a_min`, `a_max`] for f16 arrays via f32 promotion.
 #[cfg(feature = "f16")]
 pub fn clip_f16<D>(
     input: &Array<half::f16, D>,

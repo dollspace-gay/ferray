@@ -77,7 +77,7 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
 
     /// Return a reference to the internal dimension descriptor.
     #[inline]
-    pub fn dim(&self) -> &D {
+    pub const fn dim(&self) -> &D {
         &self.dim
     }
 
@@ -108,7 +108,7 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
 
 use crate::dimension::IxDyn;
 
-impl<'a, T: Element> ArrayView<'a, T, IxDyn> {
+impl<T: Element> ArrayView<'_, T, IxDyn> {
     /// Construct a dynamic-rank view from a raw pointer, shape, and strides.
     ///
     /// This is the primary escape hatch for crates that need to build views

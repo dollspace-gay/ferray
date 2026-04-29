@@ -107,6 +107,7 @@ impl FerrayError {
     }
 
     /// Create a `BroadcastFailure` error.
+    #[must_use]
     pub fn broadcast_failure(a: &[usize], b: &[usize]) -> Self {
         Self::BroadcastFailure {
             shape_a: a.to_vec(),
@@ -115,12 +116,14 @@ impl FerrayError {
     }
 
     /// Create an `AxisOutOfBounds` error.
-    pub fn axis_out_of_bounds(axis: usize, ndim: usize) -> Self {
+    #[must_use]
+    pub const fn axis_out_of_bounds(axis: usize, ndim: usize) -> Self {
         Self::AxisOutOfBounds { axis, ndim }
     }
 
     /// Create an `IndexOutOfBounds` error.
-    pub fn index_out_of_bounds(index: isize, axis: usize, size: usize) -> Self {
+    #[must_use]
+    pub const fn index_out_of_bounds(index: isize, axis: usize, size: usize) -> Self {
         Self::IndexOutOfBounds { index, axis, size }
     }
 

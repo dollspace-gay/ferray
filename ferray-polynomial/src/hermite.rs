@@ -12,13 +12,13 @@ use crate::mapping::{auto_domain, map_x, mapparms, validate_domain_window};
 use crate::roots::find_roots_from_power_coeffs;
 use crate::traits::{FromPowerBasis, Poly, ToPowerBasis};
 
-/// Default domain and window for the Hermite basis. NumPy uses `[-1, 1]` for both.
+/// Default domain and window for the Hermite basis. `NumPy` uses `[-1, 1]` for both.
 const HERMITE_DEFAULT_DOMAIN: [f64; 2] = [-1.0, 1.0];
 const HERMITE_DEFAULT_WINDOW: [f64; 2] = [-1.0, 1.0];
 
 /// A polynomial in the physicist's Hermite basis.
 ///
-/// Represents p(x) = c[0]*H_0(u) + c[1]*H_1(u) + ... + c[n]*H_n(u) where
+/// Represents p(x) = c[0]*`H_0(u)` + c[1]*`H_1(u)` + ... + c[n]*`H_n(u)` where
 /// `u = offset + scale * x` is the affine map from `domain` to `window`.
 /// By default the mapping is identity.
 #[derive(Debug, Clone, PartialEq)]
@@ -34,6 +34,7 @@ pub struct Hermite {
 impl Hermite {
     /// Create a new Hermite polynomial from coefficients. Defaults to
     /// identity mapping (`domain = window = [-1, 1]`).
+    #[must_use]
     pub fn new(coeffs: &[f64]) -> Self {
         let coeffs = if coeffs.is_empty() {
             vec![0.0]
@@ -87,7 +88,7 @@ impl Hermite {
 
     /// Internal: build a new Hermite with the same mapping as self.
     #[inline]
-    fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
+    const fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
         Self {
             coeffs,
             domain: self.domain,
@@ -122,12 +123,12 @@ fn clenshaw_hermite(coeffs: &[f64], x: f64) -> f64 {
     let mut b_k2 = 0.0;
 
     for k in (1..n).rev() {
-        let b_k = coeffs[k] + 2.0 * x * b_k1 - 2.0 * (k as f64) * b_k2;
+        let b_k = (2.0 * (k as f64)).mul_add(-b_k2, (2.0 * x).mul_add(b_k1, coeffs[k]));
         b_k2 = b_k1;
         b_k1 = b_k;
     }
 
-    coeffs[0] + 2.0 * x * b_k1 - 2.0 * b_k2
+    2.0f64.mul_add(-b_k2, (2.0 * x).mul_add(b_k1, coeffs[0]))
 }
 
 /// Convert Hermite coefficients to power basis coefficients.
@@ -450,7 +451,7 @@ impl From<crate::power::Polynomial> for Hermite {
 
 impl From<Hermite> for crate::power::Polynomial {
     fn from(h: Hermite) -> Self {
-        crate::power::Polynomial::new(&hermite_to_power(&h.coeffs))
+        Self::new(&hermite_to_power(&h.coeffs))
     }
 }
 
@@ -487,13 +488,7 @@ mod tests {
         let recovered = power_to_hermite(&power);
 
         for (i, (&orig, &rec)) in original.iter().zip(recovered.iter()).enumerate() {
-            assert!(
-                (orig - rec).abs() < 1e-10,
-                "index {}: {} != {}",
-                i,
-                orig,
-                rec
-            );
+            assert!((orig - rec).abs() < 1e-10, "index {i}: {orig} != {rec}");
         }
     }
 
@@ -508,10 +503,7 @@ mod tests {
             let got = recovered.eval(x).unwrap();
             assert!(
                 (expected - got).abs() < 1e-6,
-                "at x={}: expected {}, got {}",
-                x,
-                expected,
-                got
+                "at x={x}: expected {expected}, got {got}"
             );
         }
     }

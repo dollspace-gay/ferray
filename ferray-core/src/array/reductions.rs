@@ -22,7 +22,7 @@ use crate::dimension::{Axis, Dimension, IxDyn};
 use crate::dtype::Element;
 use crate::error::FerrayResult;
 
-/// Generic min/max fold step that propagates NaN per NumPy semantics.
+/// Generic min/max fold step that propagates NaN per `NumPy` semantics.
 ///
 /// Once any NaN enters the fold, all subsequent steps return NaN. Detected
 /// generically via `x.partial_cmp(&x).is_none()`, which is true iff `x` is
@@ -123,7 +123,7 @@ where
 {
     /// Minimum value across the entire array.
     ///
-    /// Returns `None` if the array is empty. NaN values follow NumPy semantics:
+    /// Returns `None` if the array is empty. NaN values follow `NumPy` semantics:
     /// once a NaN is seen the result stays NaN, detected via self-comparison
     /// (`x.partial_cmp(&x).is_none()`).
     pub fn min(&self) -> Option<T> {
@@ -134,7 +134,7 @@ where
 
     /// Maximum value across the entire array.
     ///
-    /// Returns `None` if the array is empty. NaN values propagate per NumPy.
+    /// Returns `None` if the array is empty. NaN values propagate per `NumPy`.
     pub fn max(&self) -> Option<T> {
         let mut iter = self.iter().copied();
         let first = iter.next()?;
@@ -197,7 +197,7 @@ where
     }
 
     /// Internal: per-lane min/max via manual lane iteration. Avoids the
-    /// init-bias problem of fold_axis (which applies a single init to every
+    /// init-bias problem of `fold_axis` (which applies a single init to every
     /// lane, even though min/max have no identity element).
     fn fold_axis_min_max(&self, axis: Axis, take_min: bool) -> FerrayResult<Array<T, IxDyn>>
     where
@@ -284,7 +284,7 @@ where
 
     /// Standard deviation with `ddof` degrees of freedom.
     pub fn std(&self, ddof: usize) -> Option<T> {
-        self.var(ddof).map(|v| v.sqrt())
+        self.var(ddof).map(num_traits::Float::sqrt)
     }
 }
 

@@ -10,7 +10,7 @@
 //! - **Frequency utilities**: [`fftfreq`], [`rfftfreq`]
 //! - **Shift utilities**: [`fftshift`], [`ifftshift`]
 //! - **Plan caching**: [`FftPlan`] for efficient repeated transforms
-//! - **Normalization**: [`FftNorm`] enum matching NumPy's `norm` parameter
+//! - **Normalization**: [`FftNorm`] enum matching `NumPy`'s `norm` parameter
 //!
 //! ## Precision
 //!
@@ -36,6 +36,30 @@
 //! Internally powered by [`rustfft`](https://crates.io/crates/rustfft)
 //! and [`realfft`](https://crates.io/crates/realfft) with automatic plan
 //! caching for repeated transforms of the same size.
+
+// FFT kernels divide by `usize`-typed lengths cast to the float precision
+// in use, and truncate `f64` shift offsets back into `usize` array indices.
+// Roundtrip and Hermitian-symmetry tests assert exact float equality
+// against analytic reference values. These are part of the algebra, not
+// precision bugs.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::needless_pass_by_value,
+    clippy::match_same_arms,
+    clippy::suboptimal_flops
+)]
 
 mod axes;
 pub mod complex;

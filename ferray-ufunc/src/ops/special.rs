@@ -2,6 +2,11 @@
 //
 // sinc, i0 (modified Bessel function of the first kind, order 0)
 
+// Bessel/erf polynomial coefficients are 17-digit scientific constants
+// taken verbatim from published reference tables (Abramowitz & Stegun,
+// Cephes); underscore separators would diverge from the canonical form.
+#![allow(clippy::unreadable_literal)]
+
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;
@@ -42,7 +47,7 @@ where
     unary_float_op(input, bessel_i0_scalar)
 }
 
-/// Scalar modified Bessel function I_0(x) using polynomial approximation.
+/// Scalar modified Bessel function `I_0(x)` using polynomial approximation.
 ///
 /// Uses the Abramowitz and Stegun approximation for |x| <= 3.75 and
 /// an asymptotic expansion for |x| > 3.75. Exposed so downstream

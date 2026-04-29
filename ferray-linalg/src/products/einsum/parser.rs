@@ -2,6 +2,14 @@
 //
 // Parses subscript strings like "ij,jk->ik", "ij,jk", "ii->i", "...ij,...jk->...ik"
 
+// `parse_subscripts` and `generic_contraction` are parser/dispatcher
+// functions that genuinely fan out across the einsum spec — splitting
+// them would just produce arbitrary helper boundaries. The wildcard
+// match arms over `Label` are deliberate fall-throughs (`Label::Char` is
+// the only "other" today; future variants should expand explicitly here
+// not silently slip through).
+#![allow(clippy::too_many_lines, clippy::match_wildcard_for_single_variants)]
+
 use ferray_core::error::{FerrayError, FerrayResult};
 use std::collections::HashMap;
 
@@ -45,7 +53,7 @@ pub fn parse_subscripts(subscripts: &str, operand_shapes: &[&[usize]]) -> Ferray
         let output = &subscripts[arrow_pos + 2..];
         (inputs.to_string(), Some(output.to_string()))
     } else {
-        (subscripts.clone(), None)
+        (subscripts, None)
     };
 
     let input_strs: Vec<&str> = inputs_str.split(',').collect();
@@ -59,7 +67,6 @@ pub fn parse_subscripts(subscripts: &str, operand_shapes: &[&[usize]]) -> Ferray
 
     // Parse each input
     let mut inputs: Vec<Vec<Label>> = Vec::with_capacity(input_strs.len());
-    let mut all_labels: Vec<char> = Vec::new();
     let mut label_counts: HashMap<char, usize> = HashMap::new();
 
     // Determine ellipsis dimensions
@@ -120,7 +127,6 @@ pub fn parse_subscripts(subscripts: &str, operand_shapes: &[&[usize]]) -> Ferray
 
         for l in &expanded {
             if let Label::Char(c) = l {
-                all_labels.push(*c);
                 *label_counts.entry(*c).or_insert(0) += 1;
             }
         }
@@ -152,7 +158,7 @@ pub fn parse_subscripts(subscripts: &str, operand_shapes: &[&[usize]]) -> Ferray
             .filter(|&(_, &count)| count == 1)
             .map(|(&c, _)| c)
             .collect();
-        output_chars.sort();
+        output_chars.sort_unstable();
 
         let mut out = Vec::new();
         // Add ellipsis dims first if present

@@ -39,7 +39,7 @@ pub trait LinalgFloat:
     /// Machine epsilon for this type.
     fn machine_epsilon() -> Self;
 
-    /// Convert from f64 (used for NormOrder::P parameter and literal constants).
+    /// Convert from f64 (used for `NormOrder::P` parameter and literal constants).
     fn from_f64_const(v: f64) -> Self;
 
     /// Convert to f64.
@@ -53,26 +53,26 @@ pub trait LinalgFloat:
 }
 
 impl LinalgFloat for f32 {
-    type Complex = Complex<f32>;
+    type Complex = Complex<Self>;
 
     #[inline]
     fn machine_epsilon() -> Self {
-        f32::EPSILON
+        Self::EPSILON
     }
 
     #[inline]
     fn from_f64_const(v: f64) -> Self {
-        v as f32
+        v as Self
     }
 
     #[inline]
     fn into_f64(self) -> f64 {
-        self as f64
+        f64::from(self)
     }
 
     #[inline]
     fn from_usize(v: usize) -> Self {
-        v as f32
+        v as Self
     }
 
     #[inline]
@@ -82,11 +82,11 @@ impl LinalgFloat for f32 {
 }
 
 impl LinalgFloat for f64 {
-    type Complex = Complex<f64>;
+    type Complex = Complex<Self>;
 
     #[inline]
     fn machine_epsilon() -> Self {
-        f64::EPSILON
+        Self::EPSILON
     }
 
     #[inline]
@@ -101,7 +101,7 @@ impl LinalgFloat for f64 {
 
     #[inline]
     fn from_usize(v: usize) -> Self {
-        v as f64
+        v as Self
     }
 
     #[inline]

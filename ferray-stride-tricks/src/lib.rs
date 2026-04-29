@@ -14,6 +14,28 @@
 // | `as_strided`           | safe   | no           |
 // | `as_strided_unchecked` | unsafe | no           |
 
+// Stride manipulation routinely converts between `isize` byte strides and
+// `usize` element offsets, and divides shape products that may exceed
+// `i64::MAX` only on bug paths already validated upstream. Property
+// tests assert exact float equality on view roundtrips.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::needless_pass_by_value,
+    clippy::match_same_arms
+)]
+
 pub mod as_strided;
 pub mod broadcast;
 pub mod overlap_check;
@@ -121,8 +143,8 @@ mod integration_tests {
     // Additional: sliding_window_view is truly zero-copy
     #[test]
     fn sliding_window_is_zero_copy() {
-        let a = Array::<f64, Ix1>::from_vec(Ix1::new([10]), (0..10).map(|i| i as f64).collect())
-            .unwrap();
+        let a =
+            Array::<f64, Ix1>::from_vec(Ix1::new([10]), (0..10).map(f64::from).collect()).unwrap();
         let v = sliding_window_view(&a, &[4]).unwrap();
         // Shape: (7, 4)
         assert_eq!(v.shape(), &[7, 4]);
@@ -198,8 +220,8 @@ mod integration_tests {
     #[test]
     fn overlap_check_large_stride_no_overlap() {
         // Large strides that skip elements: no overlap
-        let a = Array::<f64, Ix1>::from_vec(Ix1::new([20]), (0..20).map(|i| i as f64).collect())
-            .unwrap();
+        let a =
+            Array::<f64, Ix1>::from_vec(Ix1::new([20]), (0..20).map(f64::from).collect()).unwrap();
         let v = as_strided(&a, &[2, 3], &[10, 3]).unwrap();
         assert_eq!(v.shape(), &[2, 3]);
         let data: Vec<f64> = v.iter().copied().collect();

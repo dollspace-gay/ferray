@@ -41,7 +41,7 @@ macro_rules! impl_as_raw_buffer {
     ($ty:ty, $($lt:lifetime)?) => {
         impl<$($lt,)? T: Element, D: Dimension> AsRawBuffer for $ty {
             fn raw_ptr(&self) -> *const u8 {
-                self.as_ptr() as *const u8
+                self.as_ptr().cast::<u8>()
             }
 
             fn raw_shape(&self) -> &[usize] {

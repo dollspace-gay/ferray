@@ -2,6 +2,17 @@
 //
 // Tests mathematical invariants of random number generation using proptest.
 
+// Property tests sample integer sizes and assert exact float equality on
+// reproducibility / seeding invariants by design.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 use ferray_random::default_rng_seeded;
 
 use proptest::prelude::*;
@@ -217,7 +228,7 @@ proptest! {
         let slice = arr.as_slice().unwrap();
 
         let sample_mean: f64 = slice.iter().sum::<f64>() / n as f64;
-        let expected_mean = (low + high) / 2.0;
+        let expected_mean = f64::midpoint(low, high);
         let expected_var = (high - low).powi(2) / 12.0;
         let se = (expected_var / n as f64).sqrt();
 

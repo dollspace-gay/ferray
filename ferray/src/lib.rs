@@ -34,9 +34,9 @@
 //! | `window`          | `ferray-window` (Kaiser, Bartlett, …)      |
 //! | `strings`         | `ferray-strings` (vectorized string ops)   |
 //! | `ma`              | `ferray-ma` (masked arrays)                |
-//! | `stride-tricks`   | `ferray-stride-tricks` (as_strided, …)     |
+//! | `stride-tricks`   | `ferray-stride-tricks` (`as_strided`, …)     |
 //! | `autodiff`        | `ferray-autodiff` (forward-mode dual)      |
-//! | `numpy`           | `ferray-numpy-interop` (PyO3 bridge)       |
+//! | `numpy`           | `ferray-numpy-interop` (`PyO3` bridge)       |
 //! | `f16` / `bf16`    | half-precision element types               |
 //! | `serde`           | Array serde impls via `ferray-core/serde`  |
 //!
@@ -44,6 +44,9 @@
 //! thread-pool config layer, so it forbids unsafe code.
 
 #![forbid(unsafe_code)]
+// Umbrella crate: re-exports only. Workspace convention is to document
+// FerrayError variants on the type, not on every returning function.
+#![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
 
 pub mod config;
 pub mod prelude;
@@ -292,7 +295,7 @@ pub use ferray_stride_tricks as stride_tricks;
 #[cfg(feature = "autodiff")]
 pub use ferray_autodiff as autodiff;
 
-/// Python/NumPy interop via PyO3.
+/// Python/NumPy interop via `PyO3`.
 #[cfg(feature = "numpy")]
 pub use ferray_numpy_interop as numpy_interop;
 
@@ -315,6 +318,7 @@ pub mod threshold {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)] // Re-export sanity tests assert exact equality with std constants by design.
 mod tests {
     use super::*;
 
@@ -354,6 +358,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn threshold_constants_accessible() {
         assert!(threshold::PARALLEL_THRESHOLD_ELEMENTWISE > 0);
         assert!(threshold::PARALLEL_THRESHOLD_COMPUTE > 0);

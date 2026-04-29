@@ -22,7 +22,7 @@ static PRINT_EDGEITEMS: AtomicUsize = AtomicUsize::new(3);
 
 /// Configure how arrays are printed.
 ///
-/// Matches NumPy's `set_printoptions`:
+/// Matches `NumPy`'s `set_printoptions`:
 /// - `precision`: number of decimal places for floats (default 8)
 /// - `threshold`: total element count above which truncation kicks in (default 1000)
 /// - `linewidth`: max characters per line (default 75)
@@ -86,13 +86,12 @@ fn format_recursive<T: fmt::Display>(
 ) -> fmt::Result {
     let depth = indices.len();
     let ndim = shape.len();
+    let n = shape[depth];
+    let show_all = !truncate || n <= 2 * edgeitems;
 
+    write!(f, "[")?;
     if depth == ndim - 1 {
         // Innermost dimension: print elements
-        write!(f, "[")?;
-        let n = shape[depth];
-        let show_all = !truncate || n <= 2 * edgeitems;
-
         if show_all {
             for i in 0..n {
                 if i > 0 {
@@ -121,12 +120,8 @@ fn format_recursive<T: fmt::Display>(
                 write_element_at(data, &idx, precision, f)?;
             }
         }
-        write!(f, "]")?;
     } else {
         // Outer dimension: recurse
-        write!(f, "[")?;
-        let n = shape[depth];
-        let show_all = !truncate || n <= 2 * edgeitems;
         let indent = " ".repeat(depth + 7); // "array(" = 6 chars + 1 for [
 
         if show_all {
@@ -155,8 +150,8 @@ fn format_recursive<T: fmt::Display>(
                 format_recursive(data, shape, &idx, truncate, edgeitems, precision, f)?;
             }
         }
-        write!(f, "]")?;
     }
+    write!(f, "]")?;
     Ok(())
 }
 

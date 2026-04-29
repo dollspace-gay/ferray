@@ -14,6 +14,12 @@ use crate::scalar::LinalgFloat;
 ///
 /// This handles all patterns including trace, diagonal extraction,
 /// multi-operand contractions, etc.
+//
+// Generic contraction inlines its full spec dispatch — trace, diagonal
+// extraction, multi-operand contraction — because each branch shares
+// state with the others; splitting them produces helper-shaped code
+// that's harder to follow than the linear walk.
+#[allow(clippy::too_many_lines)]
 pub fn generic_contraction<T: LinalgFloat>(
     expr: &EinsumExpr,
     operands: &[&Array<T, IxDyn>],
@@ -27,8 +33,7 @@ pub fn generic_contraction<T: LinalgFloat>(
             if let Some(&existing) = label_sizes.get(&label) {
                 if existing != size {
                     return Err(FerrayError::shape_mismatch(format!(
-                        "einsum: label {:?} has inconsistent sizes {} and {}",
-                        label, existing, size
+                        "einsum: label {label:?} has inconsistent sizes {existing} and {size}"
                     )));
                 }
             } else {
@@ -44,8 +49,7 @@ pub fn generic_contraction<T: LinalgFloat>(
         .map(|l| {
             label_sizes.get(l).copied().ok_or_else(|| {
                 FerrayError::invalid_value(format!(
-                    "einsum: output label {:?} not found in any input",
-                    l
+                    "einsum: output label {l:?} not found in any input"
                 ))
             })
         })

@@ -15,11 +15,32 @@
 // - `mask_ops`: harden_mask, soften_mask, getmask, getdata, is_masked, count_masked
 // - `filled`: filled, compressed
 
+// Masked reductions divide running sums by valid-element counts and
+// truncate `f64` results to integer index types in argmin/argmax. Float
+// equality is also intrinsic to `masked_equal` and `getdata` semantics.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::needless_pass_by_value,
+    clippy::match_same_arms
+)]
+
 pub mod arithmetic;
 pub mod constructors;
 pub mod filled;
 pub mod interop;
-/// Binary I/O (save/load) for MaskedArray via ferray-io (#509).
+/// Binary I/O (save/load) for `MaskedArray` via ferray-io (#509).
 ///
 /// Gated behind the `io` cargo feature so callers who don't need
 /// disk I/O don't have to pull in the zip + binary reader dependency
@@ -409,7 +430,7 @@ mod tests {
                 .unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
         let indices = ma.argsort().unwrap();
-        let idx_vals: Vec<usize> = indices.to_vec();
+        let idx_vals: Vec<usize> = indices;
         // Unmasked: index 1 (1.0), 3 (2.0), 4 (4.0), 0 (5.0); masked: 2
         assert_eq!(idx_vals, vec![1, 3, 4, 0, 2]);
     }

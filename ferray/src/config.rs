@@ -9,7 +9,7 @@ use rayon::ThreadPool;
 static GLOBAL_POOL: OnceLock<ThreadPool> = OnceLock::new();
 
 /// Pool cache for `with_num_threads`. Keyed by thread count.
-/// Uses a simple mutex-protected HashMap since pool creation is rare.
+/// Uses a simple mutex-protected `HashMap` since pool creation is rare.
 static POOL_CACHE: std::sync::LazyLock<
     std::sync::Mutex<std::collections::HashMap<usize, std::sync::Arc<ThreadPool>>>,
 > = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
@@ -94,10 +94,13 @@ mod tests {
             let result = with_num_threads(2, || 42).unwrap();
             assert_eq!(result, 42);
         }
-        // Verify only one pool exists for n=2
-        let cache = POOL_CACHE.lock().unwrap();
-        assert_eq!(cache.len(), 1);
-        assert!(cache.contains_key(&2));
+        // Verify only one pool exists for n=2.
+        let (cache_len, has_2) = {
+            let cache = POOL_CACHE.lock().unwrap();
+            (cache.len(), cache.contains_key(&2))
+        };
+        assert_eq!(cache_len, 1);
+        assert!(has_2);
     }
 
     #[test]

@@ -21,12 +21,12 @@ pub enum CowArray<'a, T: Element, D: Dimension> {
 
 impl<'a, T: Element, D: Dimension> CowArray<'a, T, D> {
     /// Create a `CowArray` from a borrowed view.
-    pub fn from_view(view: ArrayView<'a, T, D>) -> Self {
+    pub const fn from_view(view: ArrayView<'a, T, D>) -> Self {
         Self::Borrowed(view)
     }
 
     /// Create a `CowArray` from an owned array.
-    pub fn from_owned(arr: Array<T, D>) -> Self {
+    pub const fn from_owned(arr: Array<T, D>) -> Self {
         Self::Owned(arr)
     }
 
@@ -72,12 +72,12 @@ impl<'a, T: Element, D: Dimension> CowArray<'a, T, D> {
     }
 
     /// Whether this is a borrowed (view) variant.
-    pub fn is_borrowed(&self) -> bool {
+    pub const fn is_borrowed(&self) -> bool {
         matches!(self, Self::Borrowed(_))
     }
 
     /// Whether this is an owned variant.
-    pub fn is_owned(&self) -> bool {
+    pub const fn is_owned(&self) -> bool {
         matches!(self, Self::Owned(_))
     }
 

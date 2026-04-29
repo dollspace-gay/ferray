@@ -2,6 +2,11 @@
 //
 // Implements find, count, startswith, endswith, replace — elementwise on StringArray.
 
+// `find` returns an `i64` array following NumPy's `numpy.strings.find`
+// contract (with `-1` for "not found"); converting the `usize` char count
+// to `i64` is the published return-type, not a precision bug.
+#![allow(clippy::cast_possible_wrap)]
+
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
 use ferray_core::error::FerrayResult;

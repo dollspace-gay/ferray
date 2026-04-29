@@ -11,12 +11,12 @@ use ferray_core::error::{FerrayError, FerrayResult};
 
 /// Normalize a (possibly negative) axis into the range `[0, ndim)`.
 ///
-/// Mirrors NumPy's behaviour where `axis=-1` selects the last axis,
+/// Mirrors `NumPy`'s behaviour where `axis=-1` selects the last axis,
 /// `axis=-2` the one before it, and so on. Returns
 /// `FerrayError::AxisOutOfBounds` if the value is out of range
 /// (after normalization). See issue #434.
 #[inline]
-pub(crate) fn normalize_axis(ndim: usize, axis: isize) -> FerrayResult<usize> {
+pub const fn normalize_axis(ndim: usize, axis: isize) -> FerrayResult<usize> {
     let n = ndim as isize;
     let normalized = if axis < 0 { axis + n } else { axis };
     if normalized < 0 || normalized >= n {
@@ -31,7 +31,7 @@ pub(crate) fn normalize_axis(ndim: usize, axis: isize) -> FerrayResult<usize> {
 ///
 /// Returns an error if `ndim == 0` or the given axis is out of bounds.
 #[inline]
-pub(crate) fn resolve_axis(ndim: usize, axis: Option<isize>) -> FerrayResult<usize> {
+pub fn resolve_axis(ndim: usize, axis: Option<isize>) -> FerrayResult<usize> {
     match axis {
         Some(ax) => normalize_axis(ndim, ax),
         None => {
@@ -52,7 +52,7 @@ pub(crate) fn resolve_axis(ndim: usize, axis: Option<isize>) -> FerrayResult<usi
 ///
 /// Returns an error if any axis is out of bounds.
 #[inline]
-pub(crate) fn resolve_axes(ndim: usize, axes: Option<&[isize]>) -> FerrayResult<Vec<usize>> {
+pub fn resolve_axes(ndim: usize, axes: Option<&[isize]>) -> FerrayResult<Vec<usize>> {
     match axes {
         Some(ax) => ax.iter().map(|&a| normalize_axis(ndim, a)).collect(),
         None => Ok((0..ndim).collect()),
@@ -65,7 +65,7 @@ pub(crate) fn resolve_axes(ndim: usize, axes: Option<&[isize]>) -> FerrayResult<
 /// here matches the form used by the lane machinery in `nd.rs`, which
 /// multiplies with other signed offsets.
 #[inline]
-pub(crate) fn compute_strides(shape: &[usize]) -> Vec<isize> {
+pub fn compute_strides(shape: &[usize]) -> Vec<isize> {
     let ndim = shape.len();
     let mut strides = vec![0isize; ndim];
     if ndim == 0 {

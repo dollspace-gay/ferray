@@ -76,7 +76,7 @@ pub fn gradient<T: Float>(f: impl Fn(&[DualNumber<T>]) -> DualNumber<T>, point: 
 ///
 /// Uses forward-mode AD: each evaluation with the j-th input seeded
 /// produces column j of the Jacobian (all m partial derivatives with
-/// respect to x_j).
+/// respect to `x_j`).
 ///
 /// # Examples
 ///

@@ -1,3 +1,10 @@
+// Cody-Waite splits and Cephes DP polynomial coefficients are 17-digit
+// scientific constants taken verbatim from the Cephes Mathematical Library
+// reference; underscore separators would not match the canonical form
+// engineers cross-check against. `#[inline(always)]` is required on the
+// hot kernels so that auto-vectorization can fuse them into caller loops.
+#![allow(clippy::unreadable_literal, clippy::inline_always)]
+
 //! Reference branchless sin/cos implementation for future per-lane
 //! SIMD work (#393).
 //!
@@ -75,6 +82,7 @@ const TWO_OVER_PI: f64 = 2.0 / std::f64::consts::PI;
 /// appropriate sign. Branchless in the hot path — the quadrant
 /// selection compiles to SIMD blends.
 #[inline(always)]
+#[must_use]
 pub fn sin_fast_f64(x: f64) -> f64 {
     // NaN/Inf passthrough: NaN stays NaN; ±inf → NaN (libm-compatible).
     if !x.is_finite() {
@@ -88,7 +96,7 @@ pub fn sin_fast_f64(x: f64) -> f64 {
 
     // Three-step Cody-Waite reduction: y = x - kf * (π/2) computed
     // in three sub-steps to preserve precision.
-    let y = ((x - kf * PI2_HI) - kf * PI2_MI) - kf * PI2_LO;
+    let y = kf.mul_add(-PI2_LO, kf.mul_add(-PI2_MI, kf.mul_add(-PI2_HI, x)));
 
     // Compute both polynomials; the unused one is dead and dropped.
     let y2 = y * y;
@@ -116,6 +124,7 @@ pub fn sin_fast_f64(x: f64) -> f64 {
 ///   k mod 4 == 2: -cos(y)
 ///   k mod 4 == 3:  sin(y)
 #[inline(always)]
+#[must_use]
 pub fn cos_fast_f64(x: f64) -> f64 {
     if !x.is_finite() {
         return f64::NAN * x.signum();
@@ -123,7 +132,7 @@ pub fn cos_fast_f64(x: f64) -> f64 {
 
     let kf = (x * TWO_OVER_PI).round();
     let k = kf as i64;
-    let y = ((x - kf * PI2_HI) - kf * PI2_MI) - kf * PI2_LO;
+    let y = kf.mul_add(-PI2_LO, kf.mul_add(-PI2_MI, kf.mul_add(-PI2_HI, x)));
 
     let y2 = y * y;
     let sin_y = sin_poly_cephes(y, y2);
@@ -171,20 +180,22 @@ fn cos_poly_cephes(y2: f64) -> f64 {
     let half_y2 = y2 * 0.5;
     let one_minus = 1.0 - half_y2;
     let y4 = y2 * y2;
-    one_minus + y4 * p
+    y4.mul_add(p, one_minus)
 }
 
 /// Fast `sin(x)` for `f32`: computed in `f64` (24 mantissa bits of f32
 /// input round cleanly to the correctly-rounded f32 answer).
 #[inline(always)]
+#[must_use]
 pub fn sin_fast_f32(x: f32) -> f32 {
-    sin_fast_f64(x as f64) as f32
+    sin_fast_f64(f64::from(x)) as f32
 }
 
 /// Fast `cos(x)` for `f32` via f64 promotion.
 #[inline(always)]
+#[must_use]
 pub fn cos_fast_f32(x: f32) -> f32 {
-    cos_fast_f64(x as f64) as f32
+    cos_fast_f64(f64::from(x)) as f32
 }
 
 /// Batch `sin_fast` over f64 slices — auto-vectorizing hot loop.
@@ -248,7 +259,7 @@ mod tests {
         // ~1 ULP almost everywhere but spike near zero crossings).
         let mut max_ulp = 0.0_f64;
         for i in -10_000..=10_000 {
-            let x = (i as f64) * 0.001; // [-10, 10]
+            let x = f64::from(i) * 0.001; // [-10, 10]
             let fast = sin_fast_f64(x);
             let libm = x.sin();
             if libm == 0.0 {
@@ -293,7 +304,7 @@ mod tests {
     fn cos_fast_within_bound_of_libm() {
         let mut max_ulp = 0.0_f64;
         for i in -10_000..=10_000 {
-            let x = (i as f64) * 0.001;
+            let x = f64::from(i) * 0.001;
             let fast = cos_fast_f64(x);
             let libm = x.cos();
             if libm == 0.0 {
@@ -320,7 +331,7 @@ mod tests {
     fn pythagorean_identity() {
         // sin² + cos² == 1 everywhere (to within a few ULPs).
         for i in -1_000..=1_000 {
-            let x = (i as f64) * 0.01;
+            let x = f64::from(i) * 0.01;
             let s = sin_fast_f64(x);
             let c = cos_fast_f64(x);
             let sum = s * s + c * c;
@@ -343,7 +354,7 @@ mod tests {
 
     #[test]
     fn sin_fast_batch_matches_scalar_f64() {
-        let input: Vec<f64> = (-100..=100).map(|i| i as f64 * 0.1).collect();
+        let input: Vec<f64> = (-100..=100).map(|i| f64::from(i) * 0.1).collect();
         let mut output = vec![0.0_f64; input.len()];
         sin_fast_batch_f64(&input, &mut output);
         for (i, &x) in input.iter().enumerate() {
@@ -353,7 +364,7 @@ mod tests {
 
     #[test]
     fn cos_fast_batch_matches_scalar_f64() {
-        let input: Vec<f64> = (-100..=100).map(|i| i as f64 * 0.1).collect();
+        let input: Vec<f64> = (-100..=100).map(|i| f64::from(i) * 0.1).collect();
         let mut output = vec![0.0_f64; input.len()];
         cos_fast_batch_f64(&input, &mut output);
         for (i, &x) in input.iter().enumerate() {

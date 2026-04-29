@@ -16,9 +16,9 @@ use super::view::ArrayView;
 /// When a mutation is requested and the reference count is greater than 1,
 /// the buffer is cloned first (copy-on-write). Views derived from an
 /// `ArcArray` observe the data at creation time; subsequent mutations to
-/// the source (which trigger a CoW clone) do not affect existing views.
+/// the source (which trigger a `CoW` clone) do not affect existing views.
 pub struct ArcArray<T: Element, D: Dimension> {
-    /// Shared data buffer. Using Arc<Vec<T>> + shape/strides for CoW support.
+    /// Shared data buffer. Using Arc<Vec<T>> + shape/strides for `CoW` support.
     data: Arc<Vec<T>>,
     /// Shape of this array.
     dim: D,
@@ -114,7 +114,7 @@ impl<T: Element, D: Dimension> ArcArray<T, D> {
 
     /// Return a reference to the dimension descriptor.
     #[inline]
-    pub fn dim(&self) -> &D {
+    pub const fn dim(&self) -> &D {
         &self.dim
     }
 
@@ -143,7 +143,7 @@ impl<T: Element, D: Dimension> ArcArray<T, D> {
     ///
     /// The view borrows from this `ArcArray` and will see the data as it
     /// exists at creation time. If the `ArcArray` is later mutated (triggering
-    /// a CoW clone), the view continues to see the old data.
+    /// a `CoW` clone), the view continues to see the old data.
     pub fn view(&self) -> ArrayView<'_, T, D> {
         let nd_dim = self.dim.to_ndarray_dim();
         let slice = self.as_slice();
@@ -152,7 +152,7 @@ impl<T: Element, D: Dimension> ArcArray<T, D> {
         ArrayView::from_ndarray(nd_view)
     }
 
-    /// Ensure exclusive ownership of the data buffer (CoW).
+    /// Ensure exclusive ownership of the data buffer (`CoW`).
     ///
     /// If the reference count is > 1, this clones the buffer so that
     /// mutations will not affect other holders.
@@ -164,7 +164,7 @@ impl<T: Element, D: Dimension> ArcArray<T, D> {
         }
     }
 
-    /// Get a mutable slice of the data, performing a CoW clone if necessary.
+    /// Get a mutable slice of the data, performing a `CoW` clone if necessary.
     pub fn as_slice_mut(&mut self) -> &mut [T] {
         self.make_unique();
         let size = self.size();
@@ -175,7 +175,7 @@ impl<T: Element, D: Dimension> ArcArray<T, D> {
             .expect("offset + size should be in bounds")
     }
 
-    /// Apply a function to each element, performing CoW if needed.
+    /// Apply a function to each element, performing `CoW` if needed.
     pub fn mapv_inplace(&mut self, f: impl Fn(T) -> T) {
         self.make_unique();
         let size = self.size();
@@ -200,6 +200,7 @@ impl<T: Element, D: Dimension> ArcArray<T, D> {
     }
 
     /// Deep copy — always creates a new independent buffer.
+    #[must_use]
     pub fn copy(&self) -> Self {
         let data = self.as_slice().to_vec();
         Self {

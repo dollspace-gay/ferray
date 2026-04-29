@@ -20,6 +20,12 @@ pub mod view;
 pub mod view_mut;
 
 /// Flags describing the memory properties of an array.
+///
+/// Mirrors `NumPy`'s `arr.flags` field: a flat collection of independent
+/// boolean memory-layout properties. The names map 1:1 to `NumPy` and are
+/// accessed individually by callers, so a bitfield-style enum would
+/// hurt ergonomics rather than help.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArrayFlags {
     /// Whether the data is C-contiguous (row-major).

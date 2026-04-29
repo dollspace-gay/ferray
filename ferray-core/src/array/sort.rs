@@ -14,25 +14,24 @@ use crate::dtype::Element;
 use super::owned::Array;
 
 /// Total order comparator that sends "unorderable" (NaN) values to the
-/// end, matching NumPy's `np.sort` convention. Uses self-comparison to
+/// end, matching `NumPy`'s `np.sort` convention. Uses self-comparison to
 /// detect NaN without needing a `Float` bound on `T`: for any sane
 /// `PartialOrd`, `x.partial_cmp(&x)` is `Some(Equal)`; only NaN-like
 /// values break that invariant and return `None`.
 fn nan_last_cmp<T: PartialOrd>(a: &T, b: &T) -> Ordering {
-    match a.partial_cmp(b) {
-        Some(ord) => ord,
-        None => {
-            let a_nan = a.partial_cmp(a).is_none();
-            let b_nan = b.partial_cmp(b).is_none();
-            match (a_nan, b_nan) {
-                (true, true) => Ordering::Equal,
-                (true, false) => Ordering::Greater,
-                (false, true) => Ordering::Less,
-                // Genuinely incomparable non-NaN values shouldn't exist
-                // for any numeric Element type, but keep sort_by total
-                // by treating them as equal.
-                (false, false) => Ordering::Equal,
-            }
+    if let Some(ord) = a.partial_cmp(b) {
+        ord
+    } else {
+        let a_nan = a.partial_cmp(a).is_none();
+        let b_nan = b.partial_cmp(b).is_none();
+        match (a_nan, b_nan) {
+            (true, true) => Ordering::Equal,
+            (true, false) => Ordering::Greater,
+            (false, true) => Ordering::Less,
+            // Genuinely incomparable non-NaN values shouldn't exist
+            // for any numeric Element type, but keep sort_by total
+            // by treating them as equal.
+            (false, false) => Ordering::Equal,
         }
     }
 }
@@ -45,7 +44,7 @@ where
     /// Return a sorted 1-D copy of the flattened array in ascending order.
     ///
     /// Equivalent to `np.sort(a.ravel())`. NaN values (for floating-point
-    /// element types) are ordered last, matching NumPy's convention.
+    /// element types) are ordered last, matching `NumPy`'s convention.
     ///
     /// For axis-aware sorting or algorithm selection (mergesort, heapsort),
     /// use `ferray_stats::sorting::sort`.
@@ -61,7 +60,7 @@ where
     /// order.
     ///
     /// Equivalent to `np.argsort(a.ravel())`. The returned indices are
-    /// `u64` to match NumPy's default index dtype. NaN values are sent
+    /// `u64` to match `NumPy`'s default index dtype. NaN values are sent
     /// to the tail of the sort order, matching [`Array::sorted`].
     ///
     /// For axis-aware argsort, use `ferray_stats::sorting::argsort`.

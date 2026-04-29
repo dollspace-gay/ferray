@@ -5,8 +5,31 @@
 //! along with functional programming utilities (`vectorize`, `piecewise`,
 //! `apply_along_axis`, `apply_over_axes`).
 //!
-//! All window functions return `Array1<f64>` and match NumPy's output to
+//! All window functions return `Array1<f64>` and match `NumPy`'s output to
 //! high precision.
+
+// Window functions evaluate analytic formulae over `usize`-indexed grids
+// and produce `f64` tap weights; the integer-to-float lift is intrinsic
+// to the math, and oracle tests compare endpoint values against analytic
+// closed forms via exact equality.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::needless_pass_by_value,
+    clippy::match_same_arms,
+    clippy::suboptimal_flops
+)]
 
 pub mod functional;
 pub mod windows;

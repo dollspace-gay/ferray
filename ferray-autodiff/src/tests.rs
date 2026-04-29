@@ -140,7 +140,7 @@ mod unit_tests {
         // The motivating use case for compound assign: sum loops.
         let mut sum = DualNumber::constant(0.0_f64);
         for i in 1..=5 {
-            sum += DualNumber::variable(i as f64);
+            sum += DualNumber::variable(f64::from(i));
         }
         assert_eq!(sum.real, 15.0);
         assert_eq!(sum.dual, 5.0); // each variable contributes dual=1
@@ -197,7 +197,7 @@ mod unit_tests {
     fn test_sin_derivative() {
         // d/dx sin(x) = cos(x)
         let x = 0.5_f64;
-        let d = derivative(|v| v.sin(), x);
+        let d = derivative(super::super::dual::DualNumber::sin, x);
         assert!(approx_eq(d, x.cos()));
     }
 
@@ -205,7 +205,7 @@ mod unit_tests {
     fn test_cos_derivative() {
         // d/dx cos(x) = -sin(x)
         let x = 0.5_f64;
-        let d = derivative(|v| v.cos(), x);
+        let d = derivative(super::super::dual::DualNumber::cos, x);
         assert!(approx_eq(d, -x.sin()));
     }
 
@@ -213,7 +213,7 @@ mod unit_tests {
     fn test_tan_derivative() {
         // d/dx tan(x) = 1/cos^2(x)
         let x = 0.5_f64;
-        let d = derivative(|v| v.tan(), x);
+        let d = derivative(super::super::dual::DualNumber::tan, x);
         let expected = 1.0 / (x.cos() * x.cos());
         assert!(approx_eq(d, expected));
     }
@@ -224,13 +224,13 @@ mod unit_tests {
     fn test_exp_derivative() {
         // d/dx exp(x) = exp(x)
         let x = 1.0_f64;
-        let d = derivative(|v| v.exp(), x);
+        let d = derivative(super::super::dual::DualNumber::exp, x);
         assert!(approx_eq(d, x.exp()));
     }
 
     #[test]
     fn test_exp_at_zero() {
-        let d = derivative(|v| v.exp(), 0.0_f64);
+        let d = derivative(super::super::dual::DualNumber::exp, 0.0_f64);
         assert!(approx_eq(d, 1.0));
     }
 
@@ -238,7 +238,7 @@ mod unit_tests {
     fn test_ln_derivative() {
         // d/dx ln(x) = 1/x
         let x = 2.0_f64;
-        let d = derivative(|v| v.ln(), x);
+        let d = derivative(super::super::dual::DualNumber::ln, x);
         assert!(approx_eq(d, 1.0 / x));
     }
 
@@ -246,7 +246,7 @@ mod unit_tests {
     fn test_log2_derivative() {
         // d/dx log2(x) = 1/(x * ln(2))
         let x = 3.0_f64;
-        let d = derivative(|v| v.log2(), x);
+        let d = derivative(super::super::dual::DualNumber::log2, x);
         assert!(approx_eq(d, 1.0 / (x * 2.0_f64.ln())));
     }
 
@@ -254,7 +254,7 @@ mod unit_tests {
     fn test_log10_derivative() {
         // d/dx log10(x) = 1/(x * ln(10))
         let x = 5.0_f64;
-        let d = derivative(|v| v.log10(), x);
+        let d = derivative(super::super::dual::DualNumber::log10, x);
         assert!(approx_eq(d, 1.0 / (x * 10.0_f64.ln())));
     }
 
@@ -264,7 +264,7 @@ mod unit_tests {
     fn test_sqrt_derivative() {
         // d/dx sqrt(x) = 1/(2*sqrt(x))
         let x = 4.0_f64;
-        let d = derivative(|v| v.sqrt(), x);
+        let d = derivative(super::super::dual::DualNumber::sqrt, x);
         assert!(approx_eq(d, 1.0 / (2.0 * x.sqrt())));
     }
 
@@ -298,7 +298,7 @@ mod unit_tests {
         // f(p) = 2^p at p=3: value = 8, derivative = 2^p * ln(2) = 8 * ln(2)
         let p = 3.0_f64;
         let d = derivative(|v| DualNumber::constant(2.0).powf(v), p);
-        let expected = 2.0_f64.powf(p) * 2.0_f64.ln();
+        let expected = p.exp2() * 2.0_f64.ln();
         assert!((d - expected).abs() < 1e-10);
     }
 
@@ -360,10 +360,10 @@ mod unit_tests {
     #[test]
     fn test_abs_derivative() {
         // d/dx |x| = signum(x)
-        let d = derivative(|v| v.abs(), 3.0_f64);
+        let d = derivative(super::super::dual::DualNumber::abs, 3.0_f64);
         assert!(approx_eq(d, 1.0));
 
-        let d = derivative(|v| v.abs(), -3.0_f64);
+        let d = derivative(super::super::dual::DualNumber::abs, -3.0_f64);
         assert!(approx_eq(d, -1.0));
     }
 
@@ -375,42 +375,42 @@ mod unit_tests {
     #[test]
     fn test_sqrt_at_zero_singular() {
         // d/dx sqrt(x) = 1/(2*sqrt(x)), which is +inf at x=0
-        let d = derivative(|v| v.sqrt(), 0.0_f64);
+        let d = derivative(super::super::dual::DualNumber::sqrt, 0.0_f64);
         assert!(d.is_infinite() && d.is_sign_positive());
     }
 
     #[test]
     fn test_ln_at_zero_singular() {
         // d/dx ln(x) = 1/x, which is +inf at x=0+
-        let d = derivative(|v| v.ln(), 0.0_f64);
+        let d = derivative(super::super::dual::DualNumber::ln, 0.0_f64);
         assert!(d.is_infinite());
     }
 
     #[test]
     fn test_recip_at_zero_singular() {
         // d/dx 1/x = -1/x^2, which is -inf at x=0
-        let d = derivative(|v| v.recip(), 0.0_f64);
+        let d = derivative(super::super::dual::DualNumber::recip, 0.0_f64);
         assert!(d.is_infinite() || d.is_nan());
     }
 
     #[test]
     fn test_asin_at_boundary() {
         // d/dx asin(x) = 1/sqrt(1-x^2), which is +inf at x=1
-        let d = derivative(|v| v.asin(), 1.0_f64);
+        let d = derivative(super::super::dual::DualNumber::asin, 1.0_f64);
         assert!(d.is_infinite() || d.is_nan());
     }
 
     #[test]
     fn test_acosh_at_boundary() {
         // d/dx acosh(x) = 1/sqrt(x^2-1), which is +inf at x=1
-        let d = derivative(|v| v.acosh(), 1.0_f64);
+        let d = derivative(super::super::dual::DualNumber::acosh, 1.0_f64);
         assert!(d.is_infinite() || d.is_nan());
     }
 
     #[test]
     fn test_atanh_at_boundary() {
         // d/dx atanh(x) = 1/(1-x^2), which is +inf at x=1
-        let d = derivative(|v| v.atanh(), 1.0_f64);
+        let d = derivative(super::super::dual::DualNumber::atanh, 1.0_f64);
         assert!(d.is_infinite());
     }
 
@@ -420,7 +420,7 @@ mod unit_tests {
     fn test_sinh_derivative() {
         // d/dx sinh(x) = cosh(x)
         let x = 1.0_f64;
-        let d = derivative(|v| v.sinh(), x);
+        let d = derivative(super::super::dual::DualNumber::sinh, x);
         assert!(approx_eq(d, x.cosh()));
     }
 
@@ -428,7 +428,7 @@ mod unit_tests {
     fn test_cosh_derivative() {
         // d/dx cosh(x) = sinh(x)
         let x = 1.0_f64;
-        let d = derivative(|v| v.cosh(), x);
+        let d = derivative(super::super::dual::DualNumber::cosh, x);
         assert!(approx_eq(d, x.sinh()));
     }
 
@@ -436,9 +436,9 @@ mod unit_tests {
     fn test_tanh_derivative() {
         // d/dx tanh(x) = 1 - tanh^2(x)
         let x = 0.5_f64;
-        let d = derivative(|v| v.tanh(), x);
+        let d = derivative(super::super::dual::DualNumber::tanh, x);
         let t = x.tanh();
-        assert!(approx_eq(d, 1.0 - t * t));
+        assert!(approx_eq(d, t.mul_add(-t, 1.0)));
     }
 
     // --- Inverse trig derivatives ---
@@ -447,24 +447,24 @@ mod unit_tests {
     fn test_asin_derivative() {
         // d/dx asin(x) = 1/sqrt(1 - x^2)
         let x = 0.5_f64;
-        let d = derivative(|v| v.asin(), x);
-        assert!(approx_eq(d, 1.0 / (1.0 - x * x).sqrt()));
+        let d = derivative(super::super::dual::DualNumber::asin, x);
+        assert!(approx_eq(d, 1.0 / x.mul_add(-x, 1.0).sqrt()));
     }
 
     #[test]
     fn test_acos_derivative() {
         // d/dx acos(x) = -1/sqrt(1 - x^2)
         let x = 0.5_f64;
-        let d = derivative(|v| v.acos(), x);
-        assert!(approx_eq(d, -1.0 / (1.0 - x * x).sqrt()));
+        let d = derivative(super::super::dual::DualNumber::acos, x);
+        assert!(approx_eq(d, -1.0 / x.mul_add(-x, 1.0).sqrt()));
     }
 
     #[test]
     fn test_atan_derivative() {
         // d/dx atan(x) = 1/(1 + x^2)
         let x = 1.0_f64;
-        let d = derivative(|v| v.atan(), x);
-        assert!(approx_eq(d, 1.0 / (1.0 + x * x)));
+        let d = derivative(super::super::dual::DualNumber::atan, x);
+        assert!(approx_eq(d, 1.0 / x.mul_add(x, 1.0)));
     }
 
     #[test]
@@ -472,7 +472,7 @@ mod unit_tests {
         // atan2(y, x): d/dy = x / (x^2 + y^2)
         let y = 3.0_f64;
         let x_val = 4.0_f64;
-        let denom = x_val * x_val + y * y;
+        let denom = x_val.mul_add(x_val, y * y);
 
         // partial derivative w.r.t. y
         let dy = DualNumber::variable(y);
@@ -511,13 +511,13 @@ mod unit_tests {
 
     #[test]
     fn test_derivative_sin_at_zero() {
-        let d = derivative(|x| x.sin(), 0.0_f64);
+        let d = derivative(super::super::dual::DualNumber::sin, 0.0_f64);
         assert!(approx_eq(d, 1.0));
     }
 
     #[test]
     fn test_derivative_exp_at_zero() {
-        let d = derivative(|x| x.exp(), 0.0_f64);
+        let d = derivative(super::super::dual::DualNumber::exp, 0.0_f64);
         assert!(approx_eq(d, 1.0));
     }
 
@@ -697,7 +697,7 @@ mod unit_tests {
     fn test_recip_derivative() {
         // d/dx 1/x = -1/x^2
         let x = 2.0_f64;
-        let d = derivative(|v| v.recip(), x);
+        let d = derivative(super::super::dual::DualNumber::recip, x);
         assert!(approx_eq(d, -1.0 / (x * x)));
     }
 
@@ -705,7 +705,7 @@ mod unit_tests {
     fn test_cbrt_derivative() {
         // d/dx cbrt(x) = 1/(3 * x^(2/3))
         let x = 8.0_f64;
-        let d = derivative(|v| v.cbrt(), x);
+        let d = derivative(super::super::dual::DualNumber::cbrt, x);
         let expected = 1.0 / (3.0 * x.cbrt() * x.cbrt());
         assert!(approx_eq(d, expected));
     }
@@ -726,7 +726,7 @@ mod unit_tests {
     fn test_exp2_derivative() {
         // d/dx 2^x = 2^x * ln(2)
         let x = 3.0_f64;
-        let d = derivative(|v| v.exp2(), x);
+        let d = derivative(super::super::dual::DualNumber::exp2, x);
         let expected = x.exp2() * 2.0_f64.ln();
         assert!(approx_eq(d, expected));
     }
@@ -735,7 +735,7 @@ mod unit_tests {
     fn test_exp_m1_derivative() {
         // d/dx (exp(x) - 1) = exp(x)
         let x = 0.5_f64;
-        let d = derivative(|v| v.exp_m1(), x);
+        let d = derivative(super::super::dual::DualNumber::exp_m1, x);
         assert!(approx_eq(d, x.exp()));
     }
 
@@ -743,7 +743,7 @@ mod unit_tests {
     fn test_ln_1p_derivative() {
         // d/dx ln(1+x) = 1/(1+x)
         let x = 0.5_f64;
-        let d = derivative(|v| v.ln_1p(), x);
+        let d = derivative(super::super::dual::DualNumber::ln_1p, x);
         assert!(approx_eq(d, 1.0 / (1.0 + x)));
     }
 
@@ -751,24 +751,24 @@ mod unit_tests {
     fn test_asinh_derivative() {
         // d/dx asinh(x) = 1/sqrt(x^2 + 1)
         let x = 1.0_f64;
-        let d = derivative(|v| v.asinh(), x);
-        assert!(approx_eq(d, 1.0 / (x * x + 1.0).sqrt()));
+        let d = derivative(super::super::dual::DualNumber::asinh, x);
+        assert!(approx_eq(d, 1.0 / x.mul_add(x, 1.0).sqrt()));
     }
 
     #[test]
     fn test_acosh_derivative() {
         // d/dx acosh(x) = 1/sqrt(x^2 - 1), x > 1
         let x = 2.0_f64;
-        let d = derivative(|v| v.acosh(), x);
-        assert!(approx_eq(d, 1.0 / (x * x - 1.0).sqrt()));
+        let d = derivative(super::super::dual::DualNumber::acosh, x);
+        assert!(approx_eq(d, 1.0 / x.mul_add(x, -1.0).sqrt()));
     }
 
     #[test]
     fn test_atanh_derivative() {
         // d/dx atanh(x) = 1/(1 - x^2), |x| < 1
         let x = 0.5_f64;
-        let d = derivative(|v| v.atanh(), x);
-        assert!(approx_eq(d, 1.0 / (1.0 - x * x)));
+        let d = derivative(super::super::dual::DualNumber::atanh, x);
+        assert!(approx_eq(d, 1.0 / x.mul_add(-x, 1.0)));
     }
 
     #[test]
@@ -797,7 +797,7 @@ mod unit_tests {
         // = 2x*sin(x) + x^2*cos(x) + exp(x)
         let x = 1.0_f64;
         let d = derivative(|v| v * v * v.sin() + v.exp(), x);
-        let expected = 2.0 * x * x.sin() + x * x * x.cos() + x.exp();
+        let expected = (2.0 * x).mul_add(x.sin(), x * x * x.cos()) + x.exp();
         assert!(approx_eq(d, expected));
     }
 
@@ -881,44 +881,44 @@ mod finite_difference_tests {
 
     #[test]
     fn fd_sin() {
-        check_ad_vs_fd(|x| x.sin(), f64::sin, 1.0, 1e-8);
+        check_ad_vs_fd(super::super::dual::DualNumber::sin, f64::sin, 1.0, 1e-8);
     }
 
     #[test]
     fn fd_cos() {
-        check_ad_vs_fd(|x| x.cos(), f64::cos, 1.0, 1e-8);
+        check_ad_vs_fd(super::super::dual::DualNumber::cos, f64::cos, 1.0, 1e-8);
     }
 
     #[test]
     fn fd_exp() {
-        check_ad_vs_fd(|x| x.exp(), f64::exp, 1.0, 1e-8);
+        check_ad_vs_fd(super::super::dual::DualNumber::exp, f64::exp, 1.0, 1e-8);
     }
 
     #[test]
     fn fd_ln() {
-        check_ad_vs_fd(|x| x.ln(), f64::ln, 2.0, 1e-8);
+        check_ad_vs_fd(super::super::dual::DualNumber::ln, f64::ln, 2.0, 1e-8);
     }
 
     #[test]
     fn fd_sqrt() {
-        check_ad_vs_fd(|x| x.sqrt(), f64::sqrt, 4.0, 1e-8);
+        check_ad_vs_fd(super::super::dual::DualNumber::sqrt, f64::sqrt, 4.0, 1e-8);
     }
 
     #[test]
     fn fd_tanh() {
-        check_ad_vs_fd(|x| x.tanh(), f64::tanh, 0.5, 1e-8);
+        check_ad_vs_fd(super::super::dual::DualNumber::tanh, f64::tanh, 0.5, 1e-8);
     }
 
     #[test]
     fn fd_asin() {
-        check_ad_vs_fd(|x| x.asin(), f64::asin, 0.5, 1e-8);
+        check_ad_vs_fd(super::super::dual::DualNumber::asin, f64::asin, 0.5, 1e-8);
     }
 
     #[test]
     fn fd_complex_expression() {
         // f(x) = x^2 * sin(x) + exp(-x)
         let ad_fn = |x: DualNumber<f64>| x * x * x.sin() + (-x).exp();
-        let scalar_fn = |x: f64| x * x * x.sin() + (-x).exp();
+        let scalar_fn = |x: f64| (x * x).mul_add(x.sin(), (-x).exp());
         check_ad_vs_fd(ad_fn, scalar_fn, 1.5, 1e-7);
     }
 
@@ -931,7 +931,7 @@ mod finite_difference_tests {
         );
 
         let h = 1e-7;
-        let f = |x: f64, y: f64| x * x * y + (x * y).sin();
+        let f = |x: f64, y: f64| (x * x).mul_add(y, (x * y).sin());
 
         let fd_dx = (f(1.0 + h, 2.0) - f(1.0 - h, 2.0)) / (2.0 * h);
         let fd_dy = (f(1.0, 2.0 + h) - f(1.0, 2.0 - h)) / (2.0 * h);

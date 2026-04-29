@@ -14,7 +14,7 @@ use num_traits::Zero;
 /// Returns a closure that accepts `&Array<T, D>` and returns
 /// `FerrayResult<Array<U, D>>`, applying `f` to every element.
 ///
-/// This is NumPy's `np.vectorize` — in Rust it is essentially `.mapv()`
+/// This is `NumPy`'s `np.vectorize` — in Rust it is essentially `.mapv()`
 /// wrapped as a reusable callable.
 ///
 /// Works with any dimension type: `Ix1`, `Ix2`, `IxDyn`, etc.

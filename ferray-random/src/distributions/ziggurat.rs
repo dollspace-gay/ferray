@@ -7,6 +7,11 @@
 // point lies in a strictly-under-the-curve "fast region" and is accepted
 // without any transcendental call. The sign bit of the same random word turns
 // this into a full standard normal sample.
+
+// `pdf` is the per-sample acceptance kernel — it must inline into the
+// hot loop or the entire Ziggurat speed advantage evaporates. Layer-edge
+// constants are 17-digit values from the Marsaglia & Tsang reference.
+#![allow(clippy::inline_always, clippy::unreadable_literal)]
 //
 // With `N = 256` and `R ≈ 3.6541528853610088` (the tail boundary), the fast
 // path is taken ~98% of the time, making Ziggurat roughly 3x faster than the
@@ -112,7 +117,7 @@ static TABLES: LazyLock<ZigguratTables> = LazyLock::new(build_tables);
 /// comparison and no transcendental functions. The slow path falls through
 /// to a wedge rejection test (for ordinary layers) or to truncated
 /// exponential tail sampling (for layer 0, roughly 0.3% of calls).
-pub(crate) fn standard_normal_ziggurat<B: BitGenerator>(bg: &mut B) -> f64 {
+pub fn standard_normal_ziggurat<B: BitGenerator>(bg: &mut B) -> f64 {
     let tab = &*TABLES;
     loop {
         let bits = bg.next_u64();
@@ -150,7 +155,7 @@ pub(crate) fn standard_normal_ziggurat<B: BitGenerator>(bg: &mut B) -> f64 {
 
         // Wedge rejection: pick a random y between the two box f-values
         // and accept iff it lies under the true PDF at `x`.
-        let y = tab.f[i - 1] + (tab.f[i] - tab.f[i - 1]) * bg.next_f64();
+        let y = (tab.f[i] - tab.f[i - 1]).mul_add(bg.next_f64(), tab.f[i - 1]);
         if y < pdf(x) {
             return x;
         }
@@ -159,10 +164,10 @@ pub(crate) fn standard_normal_ziggurat<B: BitGenerator>(bg: &mut B) -> f64 {
 }
 
 /// f32 variant. The tables and sampling arithmetic stay in f64 — the cost is
-/// negligible on x86_64 and we preserve the full tail accuracy of the f64
+/// negligible on `x86_64` and we preserve the full tail accuracy of the f64
 /// path before casting.
 #[inline]
-pub(crate) fn standard_normal_ziggurat_f32<B: BitGenerator>(bg: &mut B) -> f32 {
+pub fn standard_normal_ziggurat_f32<B: BitGenerator>(bg: &mut B) -> f32 {
     standard_normal_ziggurat(bg) as f32
 }
 
@@ -221,7 +226,7 @@ mod tests {
             sum_sq += x * x;
         }
         let mean = sum / n as f64;
-        let var = sum_sq / n as f64 - mean * mean;
+        let var = mean.mul_add(-mean, sum_sq / n as f64);
         // Standard error of the mean is 1/sqrt(n) ~ 0.0022, so allow ~5 sigma.
         assert!(mean.abs() < 0.015, "mean {mean} too far from 0");
         assert!((var - 1.0).abs() < 0.02, "var {var} too far from 1");

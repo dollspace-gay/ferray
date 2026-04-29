@@ -13,7 +13,7 @@ use crate::scalar::LinalgFloat;
 /// Compute the Cholesky decomposition of a symmetric positive-definite matrix.
 ///
 /// Returns the lower triangular matrix `L` such that `A = L * L^T`.
-/// See [`cholesky_upper`] for the NumPy `upper=True` variant that returns
+/// See [`cholesky_upper`] for the `NumPy` `upper=True` variant that returns
 /// the upper triangular factor `U` such that `A = U^T * U`.
 ///
 /// # Errors
@@ -70,7 +70,7 @@ pub fn cholesky_upper<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T
 ///
 /// Applies Cholesky along the last two dimensions, parallelized via Rayon.
 /// Returns lower-triangular factors — see [`cholesky_upper_batched`] for
-/// the NumPy `upper=True` variant (#564).
+/// the `NumPy` `upper=True` variant (#564).
 pub fn cholesky_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Array<T, IxDyn>> {
     let shape = a.shape();
     if shape.len() == 2 {
@@ -83,8 +83,7 @@ pub fn cholesky_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Arr
     let results = batch::apply_batched_2d(a, |m, n, data| {
         if m != n {
             return Err(FerrayError::shape_mismatch(format!(
-                "cholesky requires square matrices, got {}x{}",
-                m, n
+                "cholesky requires square matrices, got {m}x{n}"
             )));
         }
         let mat = slice_to_faer(m, n, data);
@@ -166,11 +165,7 @@ mod tests {
                 let expected = a.as_slice().unwrap()[i * n + j];
                 assert!(
                     (sum - expected).abs() < 1e-10,
-                    "L*L^T[{},{}] = {} != {}",
-                    i,
-                    j,
-                    sum,
-                    expected
+                    "L*L^T[{i},{j}] = {sum} != {expected}"
                 );
             }
         }
@@ -191,11 +186,7 @@ mod tests {
                 let expected = a.as_slice().unwrap()[i * n + j];
                 assert!(
                     (sum - expected).abs() < 1e-5,
-                    "L*L^T[{},{}] = {} != {}",
-                    i,
-                    j,
-                    sum,
-                    expected
+                    "L*L^T[{i},{j}] = {sum} != {expected}"
                 );
             }
         }
@@ -257,12 +248,7 @@ mod tests {
                     let expected = a_data[off + i * 2 + j];
                     assert!(
                         (sum - expected).abs() < 1e-10,
-                        "batch {} L*L^T[{},{}] = {} != {}",
-                        batch,
-                        i,
-                        j,
-                        sum,
-                        expected
+                        "batch {batch} L*L^T[{i},{j}] = {sum} != {expected}"
                     );
                 }
             }

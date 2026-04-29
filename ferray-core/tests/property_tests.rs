@@ -2,6 +2,17 @@
 //
 // Tests mathematical invariants of core array operations using proptest.
 
+// Property tests sample integer sizes and assert exact float equality on
+// roundtrip / shape invariants by design.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 use ferray_core::Array;
 use ferray_core::creation::{array, linspace, ones, zeros};
 use ferray_core::dimension::broadcast::broadcast_shapes;

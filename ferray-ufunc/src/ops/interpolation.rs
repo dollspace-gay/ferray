@@ -63,7 +63,7 @@ fn interp_scalar<T: Float>(xi: T, xp: &[T], fp: &[T]) -> T {
     let mut lo = 0;
     let mut hi = n - 1;
     while hi - lo > 1 {
-        let mid = (lo + hi) / 2;
+        let mid = usize::midpoint(lo, hi);
         if xp[mid] <= xi {
             lo = mid;
         } else {

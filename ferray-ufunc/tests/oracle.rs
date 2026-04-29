@@ -1,8 +1,8 @@
-//! Oracle tests: validate ferray-ufunc against NumPy fixture outputs.
+//! Oracle tests: validate ferray-ufunc against `NumPy` fixture outputs.
 //!
 //! Each test loads a JSON fixture from `fixtures/ufunc/`, constructs input
 //! arrays, calls the corresponding ferray function, and compares the output
-//! to NumPy's result within the fixture's ULP tolerance.
+//! to `NumPy`'s result within the fixture's ULP tolerance.
 //!
 //! The macros below take a bare function `path` and pin its concrete type
 //! via an internal `let` binding to a `fn` pointer. This monomorphizes
@@ -161,7 +161,7 @@ fn oracle_round() {
         let decimals = case
             .inputs
             .get("decimals")
-            .and_then(|v| v.as_i64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_i64)
             .unwrap_or(0);
         if decimals != 0 {
             continue;
@@ -222,17 +222,17 @@ fn oracle_nan_to_num() {
         let nan = case
             .inputs
             .get("nan")
-            .and_then(|v| v.as_f64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_f64)
             .unwrap_or(0.0);
         let posinf = case
             .inputs
             .get("posinf")
-            .and_then(|v| v.as_f64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_f64)
             .unwrap_or(f64::MAX);
         let neginf = case
             .inputs
             .get("neginf")
-            .and_then(|v| v.as_f64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_f64)
             .unwrap_or(f64::MIN);
         let result = ferray_ufunc::nan_to_num(&arr, Some(nan), Some(posinf), Some(neginf)).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);

@@ -38,6 +38,7 @@ pub unsafe trait FerrayRecord: Clone + Send + Sync + 'static {
     fn record_size() -> usize;
 
     /// Return the field descriptor for a named field, if it exists.
+    #[must_use]
     fn field_by_name(name: &str) -> Option<&'static FieldDescriptor> {
         Self::field_descriptors().iter().find(|fd| fd.name == name)
     }

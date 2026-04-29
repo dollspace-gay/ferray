@@ -46,10 +46,10 @@ fn standard_gamma_ge1<B: BitGenerator>(bg: &mut B, alpha: f64) -> f64 {
         let v = v_base * v_base * v_base;
         let u = bg.next_f64();
         // Squeeze test
-        if u < 1.0 - 0.0331 * (x * x) * (x * x) {
+        if u < (0.0331 * (x * x)).mul_add(-(x * x), 1.0) {
             return d * v;
         }
-        if u.ln() < 0.5 * x * x + d * (1.0 - v + v.ln()) {
+        if u.ln() < (0.5 * x).mul_add(x, d * (1.0 - v + v.ln())) {
             return d * v;
         }
     }

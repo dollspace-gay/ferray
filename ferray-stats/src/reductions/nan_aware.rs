@@ -12,7 +12,7 @@ use super::{borrow_data, make_result, output_shape, reduce_axis_general, validat
 // ---------------------------------------------------------------------------
 
 /// Iterate over the non-NaN elements of a lane without allocating a
-/// filtered buffer. Every lane_nan* helper used to open-code this
+/// filtered buffer. Every `lane_nan`* helper used to open-code this
 /// filter; consolidating it keeps the "skip NaN" policy in one place
 /// (#164).
 #[inline]

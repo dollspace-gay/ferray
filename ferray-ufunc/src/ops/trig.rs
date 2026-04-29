@@ -461,6 +461,7 @@ mod tests {
     #[cfg(feature = "f16")]
     mod f16_tests {
         use super::*;
+        use ferray_core::dimension::Ix1;
 
         fn arr1_f16(data: &[f32]) -> Array<half::f16, Ix1> {
             let n = data.len();

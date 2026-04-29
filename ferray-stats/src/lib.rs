@@ -15,6 +15,28 @@
 // - `set_ops`: union1d, intersect1d, setdiff1d, setxor1d, in1d, isin.
 // - `parallel`: Rayon threshold dispatch for large array operations.
 
+// Statistical kernels divide running sums by sample counts (`n as f64`),
+// truncate `f64` results to histogram bins, and rely on exact float
+// equality for argmin/argmax tie-breaking and unique/set ops on bit
+// patterns. All of these are part of the spec, not bugs.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::needless_pass_by_value,
+    clippy::match_same_arms
+)]
+
 pub mod correlation;
 pub mod histogram;
 pub mod parallel;

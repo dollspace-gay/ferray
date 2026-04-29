@@ -99,10 +99,15 @@ pub fn solve<T: LinalgFloat>(
 /// - x: solution of shape (n,) or (n, k)
 /// - residuals: sum of squared residuals (empty if rank < m or m < n)
 /// - rank: effective rank of A
-/// - singular_values: singular values of A
+/// - `singular_values`: singular values of A
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if dimensions are incompatible.
+//
+// `lstsq` performs the full SVD-driven least-squares pipeline (rank
+// truncation, residual computation, batched-vs-matrix dispatch) inline;
+// splitting these into helpers fragments tightly-shared dimension state.
+#[allow(clippy::too_many_lines)]
 pub fn lstsq<T: LinalgFloat>(
     a: &Array<T, Ix2>,
     b: &Array<T, IxDyn>,
@@ -469,8 +474,7 @@ pub fn solve_batched<T: LinalgFloat>(
 
     if b_batch != a_batch {
         return Err(FerrayError::shape_mismatch(format!(
-            "solve_batched: batch dimensions must match: {:?} vs {:?}",
-            a_batch, b_batch
+            "solve_batched: batch dimensions must match: {a_batch:?} vs {b_batch:?}"
         )));
     }
     let b_m = if b_is_vec {
@@ -480,8 +484,7 @@ pub fn solve_batched<T: LinalgFloat>(
     };
     if b_m != n {
         return Err(FerrayError::shape_mismatch(format!(
-            "solve_batched: A is {}x{} but b has leading dim {}",
-            n, n, b_m
+            "solve_batched: A is {n}x{n} but b has leading dim {b_m}"
         )));
     }
 
@@ -544,8 +547,7 @@ pub fn inv_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Array<T,
     let results = batch::apply_batched_2d(a, |m, n, data| {
         if m != n {
             return Err(FerrayError::shape_mismatch(format!(
-                "inv requires square matrices, got {}x{}",
-                m, n
+                "inv requires square matrices, got {m}x{n}"
             )));
         }
         if n == 0 {
@@ -631,8 +633,7 @@ pub fn matrix_power_batched<T: LinalgFloat>(
     let results = batch::apply_batched_2d(a, |m, n, data| {
         if m != n {
             return Err(FerrayError::shape_mismatch(format!(
-                "matrix_power requires square matrices, got {}x{}",
-                m, n
+                "matrix_power requires square matrices, got {m}x{n}"
             )));
         }
         let mat = Array::<T, Ix2>::from_vec(Ix2::new([m, n]), data.to_vec())?;
@@ -753,8 +754,7 @@ pub fn tensorinv<T: LinalgFloat>(a: &Array<T, IxDyn>, ind: usize) -> FerrayResul
 
     if m != n {
         return Err(FerrayError::shape_mismatch(format!(
-            "tensorinv: product of first {} dims ({}) != product of remaining dims ({})",
-            ind, m, n
+            "tensorinv: product of first {ind} dims ({m}) != product of remaining dims ({n})"
         )));
     }
 
@@ -818,11 +818,7 @@ mod tests {
             let b_i = [1.0, 4.0, 9.0][i];
             assert!(
                 (ax_i - b_i).abs() < 1e-10,
-                "Ax[{}] = {} != b[{}] = {}",
-                i,
-                ax_i,
-                i,
-                b_i
+                "Ax[{i}] = {ax_i} != b[{i}] = {b_i}"
             );
         }
     }
@@ -1105,8 +1101,8 @@ mod tests {
         let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![12.0, 11.0]).unwrap();
         let x = tensorsolve(&a_mem, &b, Some(&[0])).unwrap();
         let data: Vec<f64> = x.iter().copied().collect();
-        assert!((data[0] - 3.0).abs() < 1e-10, "got {:?}", data);
-        assert!((data[1] - 2.0).abs() < 1e-10, "got {:?}", data);
+        assert!((data[0] - 3.0).abs() < 1e-10, "got {data:?}");
+        assert!((data[1] - 2.0).abs() < 1e-10, "got {data:?}");
     }
 
     #[test]

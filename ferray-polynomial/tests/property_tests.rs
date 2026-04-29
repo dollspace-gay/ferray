@@ -86,7 +86,7 @@ proptest! {
 
         // Compare evaluations at several points
         for i in 0..10 {
-            let x = (i as f64) * 0.5 - 2.0;
+            let x = f64::from(i).mul_add(0.5, -2.0);
             let p_val = p.eval(x).unwrap();
             let r_val = result.eval(x).unwrap();
             prop_assert!(
@@ -111,7 +111,7 @@ proptest! {
         let ba = b.add(&a).unwrap();
 
         for i in 0..10 {
-            let x = (i as f64) * 0.7 - 3.0;
+            let x = f64::from(i).mul_add(0.7, -3.0);
             let ab_val = ab.eval(x).unwrap();
             let ba_val = ba.eval(x).unwrap();
             prop_assert!(
@@ -133,7 +133,7 @@ proptest! {
         let zero = p.sub(&p).unwrap();
 
         for i in 0..10 {
-            let x = (i as f64) * 0.3 - 1.5;
+            let x = f64::from(i).mul_add(0.3, -1.5);
             let val = zero.eval(x).unwrap();
             prop_assert!(
                 val.abs() < 1e-10,
@@ -155,7 +155,7 @@ proptest! {
         let derived = integrated.deriv(1).unwrap();
 
         for i in 0..10 {
-            let x = (i as f64) * 0.5 - 2.0;
+            let x = f64::from(i).mul_add(0.5, -2.0);
             let p_val = p.eval(x).unwrap();
             let d_val = derived.eval(x).unwrap();
             prop_assert!(
@@ -177,7 +177,7 @@ proptest! {
         let result = p.pow(0).unwrap();
 
         for i in 0..10 {
-            let x = (i as f64) * 0.5 - 2.0;
+            let x = f64::from(i).mul_add(0.5, -2.0);
             let val = result.eval(x).unwrap();
             prop_assert!(
                 (val - 1.0).abs() < 1e-10,
@@ -198,7 +198,7 @@ proptest! {
         let result = p.pow(1).unwrap();
 
         for i in 0..10 {
-            let x = (i as f64) * 0.5 - 2.0;
+            let x = f64::from(i).mul_add(0.5, -2.0);
             let p_val = p.eval(x).unwrap();
             let r_val = result.eval(x).unwrap();
             prop_assert!(
@@ -229,7 +229,7 @@ proptest! {
 
         // Verify: q * b + r == a at several points
         for i in 0..10 {
-            let x = (i as f64) * 0.5 - 2.0;
+            let x = f64::from(i).mul_add(0.5, -2.0);
             let a_val = a.eval(x).unwrap();
             let qb = q.mul(&b).unwrap();
             let qb_val = qb.eval(x).unwrap();
@@ -256,7 +256,7 @@ proptest! {
         let trimmed = p.trim(1e-12).unwrap();
 
         for i in 0..10 {
-            let x = (i as f64) * 0.5 - 2.0;
+            let x = f64::from(i).mul_add(0.5, -2.0);
             let p_val = p.eval(x).unwrap();
             let t_val = trimmed.eval(x).unwrap();
             prop_assert!(
@@ -281,7 +281,7 @@ proptest! {
         let ba = b.mul(&a).unwrap();
 
         for i in 0..10 {
-            let x = (i as f64) * 0.5 - 2.0;
+            let x = f64::from(i).mul_add(0.5, -2.0);
             let ab_val = ab.eval(x).unwrap();
             let ba_val = ba.eval(x).unwrap();
             prop_assert!(

@@ -14,13 +14,13 @@ use crate::traits::{FromPowerBasis, Poly, ToPowerBasis};
 
 /// Default domain and window for the Laguerre basis.
 ///
-/// NumPy uses `[0, 1]` for both, giving an identity mapping by default.
+/// `NumPy` uses `[0, 1]` for both, giving an identity mapping by default.
 const LAGUERRE_DEFAULT_DOMAIN: [f64; 2] = [0.0, 1.0];
 const LAGUERRE_DEFAULT_WINDOW: [f64; 2] = [0.0, 1.0];
 
 /// A polynomial in the Laguerre basis.
 ///
-/// Represents p(x) = c[0]*L_0(u) + c[1]*L_1(u) + ... + c[n]*L_n(u) where
+/// Represents p(x) = c[0]*`L_0(u)` + c[1]*`L_1(u)` + ... + c[n]*`L_n(u)` where
 /// `u = offset + scale * x` is the affine map from `domain` to `window`.
 /// By default the mapping is identity.
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +36,7 @@ pub struct Laguerre {
 impl Laguerre {
     /// Create a new Laguerre polynomial from coefficients. Defaults to
     /// identity mapping (`domain = window = [0, 1]`).
+    #[must_use]
     pub fn new(coeffs: &[f64]) -> Self {
         let coeffs = if coeffs.is_empty() {
             vec![0.0]
@@ -89,7 +90,7 @@ impl Laguerre {
 
     /// Internal: build a new Laguerre with the same mapping as self.
     #[inline]
-    fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
+    const fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
         Self {
             coeffs,
             domain: self.domain,
@@ -120,7 +121,7 @@ fn clenshaw_laguerre(coeffs: &[f64], x: f64) -> f64 {
         return coeffs[0];
     }
     if n == 2 {
-        return coeffs[0] + coeffs[1] * (1.0 - x);
+        return coeffs[1].mul_add(1.0 - x, coeffs[0]);
     }
 
     let mut b_k1 = 0.0;
@@ -128,14 +129,14 @@ fn clenshaw_laguerre(coeffs: &[f64], x: f64) -> f64 {
 
     for k in (1..n).rev() {
         let kf = k as f64;
-        let alpha = (2.0 * kf + 1.0 - x) / (kf + 1.0);
+        let alpha = (2.0f64.mul_add(kf, 1.0) - x) / (kf + 1.0);
         let beta = -(kf + 1.0) / (kf + 2.0);
         let b_k = coeffs[k] + alpha * b_k1 + beta * b_k2;
         b_k2 = b_k1;
         b_k1 = b_k;
     }
 
-    coeffs[0] + (1.0 - x) * b_k1 - b_k2 / 2.0
+    (1.0 - x).mul_add(b_k1, coeffs[0]) - b_k2 / 2.0
 }
 
 /// Convert Laguerre coefficients to power basis coefficients.
@@ -168,7 +169,7 @@ fn laguerre_to_power(lag_coeffs: &[f64]) -> Vec<f64> {
         let mut l_next = vec![0.0; n];
         // L_k = ((2k-1-x)*L_{k-1} - (k-1)*L_{k-2}) / k
         for i in 0..n {
-            l_next[i] += (2.0 * kf - 1.0) * l_curr[i] / kf;
+            l_next[i] += 2.0f64.mul_add(kf, -1.0) * l_curr[i] / kf;
         }
         for i in 0..(n - 1) {
             l_next[i + 1] -= l_curr[i] / kf;
@@ -234,7 +235,7 @@ fn power_to_laguerre(power_coeffs: &[f64]) -> Vec<f64> {
             if j + 1 < n {
                 x_pow_next[j + 1] += x_pow[j] * (-(jf + 1.0));
             }
-            x_pow_next[j] += x_pow[j] * (2.0 * jf + 1.0);
+            x_pow_next[j] += x_pow[j] * 2.0f64.mul_add(jf, 1.0);
             if j >= 1 {
                 x_pow_next[j - 1] += x_pow[j] * (-jf);
             }
@@ -463,7 +464,7 @@ impl From<crate::power::Polynomial> for Laguerre {
 
 impl From<Laguerre> for crate::power::Polynomial {
     fn from(l: Laguerre) -> Self {
-        crate::power::Polynomial::new(&laguerre_to_power(&l.coeffs))
+        Self::new(&laguerre_to_power(&l.coeffs))
     }
 }
 
@@ -488,7 +489,7 @@ mod tests {
         // L_2(x) = (x^2 - 4x + 2)/2
         let p = Laguerre::new(&[0.0, 0.0, 1.0]);
         let x = 0.5;
-        let expected = (x * x - 4.0 * x + 2.0) / 2.0;
+        let expected = f64::midpoint(x * x - 4.0 * x, 2.0);
         assert!(
             (p.eval(x).unwrap() - expected).abs() < 1e-12,
             "expected {}, got {}",
@@ -504,13 +505,7 @@ mod tests {
         let recovered = power_to_laguerre(&power);
 
         for (i, (&orig, &rec)) in original.iter().zip(recovered.iter()).enumerate() {
-            assert!(
-                (orig - rec).abs() < 1e-10,
-                "index {}: {} != {}",
-                i,
-                orig,
-                rec
-            );
+            assert!((orig - rec).abs() < 1e-10, "index {i}: {orig} != {rec}");
         }
     }
 
@@ -526,10 +521,7 @@ mod tests {
             let got = recovered.eval(x).unwrap();
             assert!(
                 (expected - got).abs() < 1e-8,
-                "at x={}: expected {}, got {}",
-                x,
-                expected,
-                got
+                "at x={x}: expected {expected}, got {got}"
             );
         }
     }

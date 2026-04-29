@@ -2,6 +2,17 @@
 //
 // Tests invariants of masked array operations using proptest.
 
+// Property tests sample integer sizes and assert exact float equality on
+// roundtrip / mask invariants by design.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 use ferray_core::Array;
 use ferray_core::dimension::Ix1;
 
@@ -51,7 +62,7 @@ proptest! {
         let n = data.len();
         let mask_a: Vec<bool> = data.iter().map(|x| *x > 30.0).collect();
         let mask_b: Vec<bool> = data.iter().map(|x| *x < -30.0).collect();
-        let a = MaskedArray::new(arr1(data.clone()), mask1(mask_a.clone())).unwrap();
+        let a = MaskedArray::new(arr1(data), mask1(mask_a.clone())).unwrap();
         let b = MaskedArray::new(arr1(vec![1.0; n]), mask1(mask_b.clone())).unwrap();
         let result = masked_add(&a, &b).unwrap();
         let result_mask: Vec<bool> = result.mask().iter().copied().collect();
@@ -67,7 +78,7 @@ proptest! {
         let n = data.len();
         let mask_a: Vec<bool> = data.iter().map(|x| *x > 30.0).collect();
         let mask_b: Vec<bool> = data.iter().map(|x| *x < -30.0).collect();
-        let a = MaskedArray::new(arr1(data.clone()), mask1(mask_a.clone())).unwrap();
+        let a = MaskedArray::new(arr1(data), mask1(mask_a.clone())).unwrap();
         let b = MaskedArray::new(arr1(vec![1.0; n]), mask1(mask_b.clone())).unwrap();
         let result = masked_sub(&a, &b).unwrap();
         let result_mask: Vec<bool> = result.mask().iter().copied().collect();
@@ -83,7 +94,7 @@ proptest! {
         let n = data.len();
         let mask_a: Vec<bool> = data.iter().map(|x| *x > 30.0).collect();
         let mask_b: Vec<bool> = data.iter().map(|x| *x < -30.0).collect();
-        let a = MaskedArray::new(arr1(data.clone()), mask1(mask_a.clone())).unwrap();
+        let a = MaskedArray::new(arr1(data), mask1(mask_a.clone())).unwrap();
         let b = MaskedArray::new(arr1(vec![1.0; n]), mask1(mask_b.clone())).unwrap();
         let result = masked_mul(&a, &b).unwrap();
         let result_mask: Vec<bool> = result.mask().iter().copied().collect();

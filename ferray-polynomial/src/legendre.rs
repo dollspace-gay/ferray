@@ -12,13 +12,13 @@ use crate::mapping::{auto_domain, map_x, mapparms, validate_domain_window};
 use crate::roots::find_roots_from_power_coeffs;
 use crate::traits::{FromPowerBasis, Poly, ToPowerBasis};
 
-/// Default domain and window for the Legendre basis. NumPy uses `[-1, 1]`.
+/// Default domain and window for the Legendre basis. `NumPy` uses `[-1, 1]`.
 const LEGENDRE_DEFAULT_DOMAIN: [f64; 2] = [-1.0, 1.0];
 const LEGENDRE_DEFAULT_WINDOW: [f64; 2] = [-1.0, 1.0];
 
 /// A polynomial in the Legendre basis.
 ///
-/// Represents p(x) = c[0]*P_0(u) + c[1]*P_1(u) + ... + c[n]*P_n(u) where
+/// Represents p(x) = c[0]*`P_0(u)` + c[1]*`P_1(u)` + ... + c[n]*`P_n(u)` where
 /// `u = offset + scale * x` is the affine map from `domain` to `window`.
 /// By default the mapping is identity.
 #[derive(Debug, Clone, PartialEq)]
@@ -34,6 +34,7 @@ pub struct Legendre {
 impl Legendre {
     /// Create a new Legendre polynomial from coefficients. Defaults to
     /// identity mapping (`domain = window = [-1, 1]`).
+    #[must_use]
     pub fn new(coeffs: &[f64]) -> Self {
         let coeffs = if coeffs.is_empty() {
             vec![0.0]
@@ -87,7 +88,7 @@ impl Legendre {
 
     /// Internal: build a new Legendre with the same mapping as self.
     #[inline]
-    fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
+    const fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
         Self {
             coeffs,
             domain: self.domain,
@@ -118,7 +119,7 @@ fn clenshaw_legendre(coeffs: &[f64], x: f64) -> f64 {
         return coeffs[0];
     }
     if n == 2 {
-        return coeffs[0] + coeffs[1] * x;
+        return coeffs[1].mul_add(x, coeffs[0]);
     }
 
     let mut b_k1 = 0.0;
@@ -126,14 +127,14 @@ fn clenshaw_legendre(coeffs: &[f64], x: f64) -> f64 {
 
     for k in (1..n).rev() {
         let kf = k as f64;
-        let alpha = (2.0 * kf + 1.0) / (kf + 1.0) * x;
+        let alpha = 2.0f64.mul_add(kf, 1.0) / (kf + 1.0) * x;
         let beta = -(kf + 1.0) / (kf + 2.0);
         let b_k = coeffs[k] + alpha * b_k1 + beta * b_k2;
         b_k2 = b_k1;
         b_k1 = b_k;
     }
 
-    coeffs[0] + x * b_k1 - b_k2 / 2.0
+    x.mul_add(b_k1, coeffs[0]) - b_k2 / 2.0
 }
 
 /// Convert Legendre coefficients to power basis coefficients.
@@ -167,7 +168,7 @@ fn legendre_to_power(leg_coeffs: &[f64]) -> Vec<f64> {
         let mut p_next = vec![0.0; n];
         // P_k = ((2k-1)*x*P_{k-1} - (k-1)*P_{k-2}) / k
         for i in 0..(n - 1) {
-            p_next[i + 1] += (2.0 * kf - 1.0) * p_curr[i] / kf;
+            p_next[i + 1] += 2.0f64.mul_add(kf, -1.0) * p_curr[i] / kf;
         }
         for i in 0..n {
             p_next[i] -= (kf - 1.0) * p_prev[i] / kf;
@@ -226,9 +227,9 @@ fn power_to_legendre(power_coeffs: &[f64]) -> Vec<f64> {
             } else {
                 // x * P_j = ((j+1)*P_{j+1} + j*P_{j-1}) / (2j+1)
                 if j + 1 < n {
-                    x_pow_next[j + 1] += x_pow[j] * (jf + 1.0) / (2.0 * jf + 1.0);
+                    x_pow_next[j + 1] += x_pow[j] * (jf + 1.0) / 2.0f64.mul_add(jf, 1.0);
                 }
-                x_pow_next[j - 1] += x_pow[j] * jf / (2.0 * jf + 1.0);
+                x_pow_next[j - 1] += x_pow[j] * jf / 2.0f64.mul_add(jf, 1.0);
             }
         }
 
@@ -463,7 +464,7 @@ impl From<crate::power::Polynomial> for Legendre {
 
 impl From<Legendre> for crate::power::Polynomial {
     fn from(l: Legendre) -> Self {
-        crate::power::Polynomial::new(&legendre_to_power(&l.coeffs))
+        Self::new(&legendre_to_power(&l.coeffs))
     }
 }
 
@@ -499,13 +500,7 @@ mod tests {
         let recovered = power_to_legendre(&power);
 
         for (i, (&orig, &rec)) in original.iter().zip(recovered.iter()).enumerate() {
-            assert!(
-                (orig - rec).abs() < 1e-12,
-                "index {}: {} != {}",
-                i,
-                orig,
-                rec
-            );
+            assert!((orig - rec).abs() < 1e-12, "index {i}: {orig} != {rec}");
         }
     }
 
@@ -519,10 +514,7 @@ mod tests {
             let eval = leg.eval(xi).unwrap();
             assert!(
                 (eval - yi).abs() < 1e-8,
-                "at x={}: expected {}, got {}",
-                xi,
-                yi,
-                eval
+                "at x={xi}: expected {yi}, got {eval}"
             );
         }
     }
@@ -542,10 +534,7 @@ mod tests {
             };
             assert!(
                 (expected - got).abs() < 1e-10,
-                "index {}: expected {}, got {}",
-                i,
-                expected,
-                got
+                "index {i}: expected {expected}, got {got}"
             );
         }
     }

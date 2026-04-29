@@ -1,4 +1,17 @@
-/// Oracle tests: validate ferray-fft against NumPy fixture outputs.
+//! Oracle tests: validate ferray-fft against `NumPy` fixture outputs.
+
+// Oracle tests cross fixture data through `f64` JSON values, recover bit
+// patterns, and ULP-compare against NumPy reference outputs — both the
+// casts and the float comparisons are part of the contract.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 use ferray_core::Array;
 use ferray_core::dimension::IxDyn;
 use ferray_fft::FftNorm;
@@ -85,7 +98,7 @@ fn oracle_irfft() {
         let n = case
             .inputs
             .get("n")
-            .and_then(|v| v.as_u64())
+            .and_then(ferray_test_oracle::serde_json::Value::as_u64)
             .map(|v| v as usize);
         let result = ferray_fft::irfft(&arr, n, None, FftNorm::Backward).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
@@ -113,7 +126,11 @@ fn oracle_fftfreq() {
     let suite = load_fixture(&fft_path("fftfreq.json"));
     for case in &suite.test_cases {
         let n = case.inputs["n"].as_u64().unwrap() as usize;
-        let d = case.inputs.get("d").and_then(|v| v.as_f64()).unwrap_or(1.0);
+        let d = case
+            .inputs
+            .get("d")
+            .and_then(ferray_test_oracle::serde_json::Value::as_f64)
+            .unwrap_or(1.0);
         let result = ferray_fft::fftfreq(n, d).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
         assert_f64_slice_ulp(
@@ -131,7 +148,11 @@ fn oracle_rfftfreq() {
     let suite = load_fixture(&fft_path("rfftfreq.json"));
     for case in &suite.test_cases {
         let n = case.inputs["n"].as_u64().unwrap() as usize;
-        let d = case.inputs.get("d").and_then(|v| v.as_f64()).unwrap_or(1.0);
+        let d = case
+            .inputs
+            .get("d")
+            .and_then(ferray_test_oracle::serde_json::Value::as_f64)
+            .unwrap_or(1.0);
         let result = ferray_fft::rfftfreq(n, d).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
         assert_f64_slice_ulp(

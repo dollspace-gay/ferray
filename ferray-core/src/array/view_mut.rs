@@ -86,7 +86,7 @@ impl<'a, T: Element, D: Dimension> ArrayViewMut<'a, T, D> {
 
     /// Return a reference to the internal dimension descriptor.
     #[inline]
-    pub fn dim(&self) -> &D {
+    pub const fn dim(&self) -> &D {
         &self.dim
     }
 

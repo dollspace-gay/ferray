@@ -83,7 +83,7 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
 
     /// Return a transposed `MaskedArray` with reversed axis order.
     ///
-    /// Shorthand for `self.transpose(None)`, equivalent to NumPy's
+    /// Shorthand for `self.transpose(None)`, equivalent to `NumPy`'s
     /// `.T` property.
     pub fn t(&self) -> FerrayResult<MaskedArray<T, IxDyn>> {
         self.transpose(None)
@@ -146,7 +146,7 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
 
     /// Select elements where `bool_mask` is `true`.
     ///
-    /// Equivalent to `a[bool_mask]` in NumPy boolean indexing. Returns
+    /// Equivalent to `a[bool_mask]` in `NumPy` boolean indexing. Returns
     /// a 1-D `MaskedArray` containing only positions where the
     /// supplied `bool_mask` is `true`; each selected position carries
     /// through both its value and its original mask bit. The
@@ -186,7 +186,7 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
 
     /// Fancy index selection from a 1-D `MaskedArray`.
     ///
-    /// Equivalent to `a[indices]` in NumPy fancy indexing (restricted
+    /// Equivalent to `a[indices]` in `NumPy` fancy indexing (restricted
     /// to 1-D because higher-rank fancy indexing has NumPy-specific
     /// broadcasting semantics that would be easy to get subtly wrong).
     /// Returns a new 1-D `MaskedArray` whose elements are picked from
@@ -381,7 +381,7 @@ mod tests {
     #[test]
     fn transpose_with_explicit_permutation() {
         // 3-D with explicit permutation [2, 0, 1] — 2x3x4 → 4x2x3
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let mask = vec![false; 24];
         let d = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
         let m = Array::<bool, Ix3>::from_vec(Ix3::new([2, 3, 4]), mask).unwrap();

@@ -17,6 +17,37 @@
 // - Rayon parallelism for large arrays (REQ-21)
 // - Operator overloads (+, -, *, /, %, &, |, ^, !, <<, >>)
 
+// Ufunc kernels do bit-level float manipulation (`fast_exp`, `fast_trig`,
+// `frexp`, `nextafter`, `spacing`), evaluate libm/CORE-MATH-style range
+// reductions that necessarily mix integer and float types, and surface
+// rounding intrinsics (`floor`, `ceil`, `trunc`, `rint`, `fix`) whose
+// contract is a lossy `f64 -> i64` cast. These casts and float
+// comparisons are part of the function contracts.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    // Numerical kernels use i, j, k, n, m as canonical loop / shape names.
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::needless_pass_by_value,
+    clippy::match_same_arms,
+    // `mul_add` is an accuracy/throughput tradeoff that the project
+    // chooses on a per-kernel basis; clippy can't tell which is right.
+    clippy::suboptimal_flops,
+    // Iterative solvers genuinely need to compare floats in their loop
+    // condition (Newton's method, fixed-point iteration).
+    clippy::while_float
+)]
+
 pub mod cr_math;
 pub mod dispatch;
 pub mod fast_exp;

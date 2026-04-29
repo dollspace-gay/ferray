@@ -42,7 +42,7 @@ impl<B: BitGenerator> Generator<B> {
             while u.abs() >= 0.5 {
                 u = bg.next_f64() - 0.5;
             }
-            loc - scale * u.signum() * (1.0 - 2.0 * u.abs()).ln()
+            (scale * u.signum()).mul_add(-2.0f64.mul_add(-u.abs(), 1.0).ln(), loc)
         });
         vec_to_array_f64(data, &shape_vec)
     }
@@ -75,7 +75,7 @@ impl<B: BitGenerator> Generator<B> {
             loop {
                 let u = bg.next_f64();
                 if u > f64::EPSILON && u < 1.0 - f64::EPSILON {
-                    return loc + scale * (u / (1.0 - u)).ln();
+                    return scale.mul_add((u / (1.0 - u)).ln(), loc);
                 }
             }
         });
@@ -138,8 +138,8 @@ impl<B: BitGenerator> Generator<B> {
 
     /// Generate an array of Pareto (type II / Lomax) distributed variates.
     ///
-    /// Uses inverse CDF: (1-u)^(-1/a) - 1 (then shifted by 1 to match NumPy).
-    /// NumPy's Pareto: samples from Pareto(a) with x_m=1, so PDF = a / x^(a+1) for x >= 1.
+    /// Uses inverse CDF: (1-u)^(-1/a) - 1 (then shifted by 1 to match `NumPy`).
+    /// `NumPy`'s Pareto: samples from Pareto(a) with `x_m=1`, so PDF = a / x^(a+1) for x >= 1.
     ///
     /// # Arguments
     /// * `a` - Shape parameter, must be positive.
@@ -161,7 +161,7 @@ impl<B: BitGenerator> Generator<B> {
         let n = shape_size(&shape_vec);
         let data = generate_vec(self, n, |bg| {
             let e = standard_exponential_single(bg);
-            (e / a).exp() - 1.0
+            (e / a).exp_m1()
         });
         vec_to_array_f64(data, &shape_vec)
     }
@@ -194,7 +194,7 @@ impl<B: BitGenerator> Generator<B> {
             loop {
                 let u = bg.next_f64();
                 if u > f64::EPSILON && u < 1.0 - f64::EPSILON {
-                    return loc - scale * (-u.ln()).ln();
+                    return scale.mul_add(-(-u.ln()).ln(), loc);
                 }
             }
         });
@@ -304,20 +304,24 @@ impl<B: BitGenerator> Generator<B> {
         if kappa < 1e-6 {
             // For very small kappa, the distribution is nearly uniform on [-pi, pi)
             let data = generate_vec(self, n, |bg| {
-                mu + (bg.next_f64() * std::f64::consts::TAU - std::f64::consts::PI)
+                mu + bg
+                    .next_f64()
+                    .mul_add(std::f64::consts::TAU, -std::f64::consts::PI)
             });
             return vec_to_array_f64(data, &shape_vec);
         }
 
         // Best & Fisher algorithm
-        let tau = 1.0 + (1.0 + 4.0 * kappa * kappa).sqrt();
+        let tau = 1.0 + (4.0 * kappa).mul_add(kappa, 1.0).sqrt();
         let rho = (tau - (2.0 * tau).sqrt()) / (2.0 * kappa);
         let r = (1.0 + rho * rho) / (2.0 * rho);
 
         let data = generate_vec(self, n, |bg| {
             loop {
                 let u1 = bg.next_f64();
-                let z = (std::f64::consts::TAU * u1 - std::f64::consts::PI).cos();
+                let z = std::f64::consts::TAU
+                    .mul_add(u1, -std::f64::consts::PI)
+                    .cos();
                 let f_val = (1.0 + r * z) / (r + z);
                 let c = kappa * (r - f_val);
                 let u2 = bg.next_f64();
@@ -368,8 +372,10 @@ impl<B: BitGenerator> Generator<B> {
             let v = z * z;
             let mu = mean;
             let lam = scale;
-            let x = mu + (mu * mu * v) / (2.0 * lam)
-                - (mu / (2.0 * lam)) * (4.0 * mu * lam * v + mu * mu * v * v).sqrt();
+            let x = (mu / (2.0 * lam)).mul_add(
+                -(4.0 * mu * lam).mul_add(v, mu * mu * v * v).sqrt(),
+                mu + (mu * mu * v) / (2.0 * lam),
+            );
             let u = bg.next_f64();
             if u <= mu / (mu + x) { x } else { mu * mu / x }
         });
@@ -405,6 +411,7 @@ impl<B: BitGenerator> Generator<B> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unreadable_literal)] // Statistical reference constants are quoted to canonical 16-digit precision.
 mod tests {
     use crate::default_rng_seeded;
 

@@ -19,7 +19,7 @@ use crate::string_array::StringArray;
 /// assert_eq!(b.as_slice(), &["HELLO", "WORLD"]);
 /// ```
 pub fn upper<D: Dimension>(a: &StringArray<D>) -> FerrayResult<StringArray<D>> {
-    a.map(|s| s.to_uppercase())
+    a.map(str::to_uppercase)
 }
 
 /// Convert each string element to lowercase.
@@ -27,7 +27,7 @@ pub fn upper<D: Dimension>(a: &StringArray<D>) -> FerrayResult<StringArray<D>> {
 /// # Errors
 /// Returns an error if the internal array construction fails.
 pub fn lower<D: Dimension>(a: &StringArray<D>) -> FerrayResult<StringArray<D>> {
-    a.map(|s| s.to_lowercase())
+    a.map(str::to_lowercase)
 }
 
 /// Capitalize each string element (first character uppercase, rest lowercase).

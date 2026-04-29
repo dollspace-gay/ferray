@@ -14,6 +14,7 @@ use ferray_core::error::FerrayError;
 /// n x (deg+1) matrix where row i is `[1, x_i, x_i^2, ..., x_i^deg]`.
 ///
 /// Returned in row-major order.
+#[must_use]
 pub fn power_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
     let n = x.len();
     let ncols = deg + 1;
@@ -29,8 +30,9 @@ pub fn power_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
 
 /// Build a Vandermonde-like matrix for Chebyshev basis fitting.
 ///
-/// Row i is `[T_0(x_i), T_1(x_i), ..., T_deg(x_i)]` where T_j is the
+/// Row i is `[T_0(x_i), T_1(x_i), ..., T_deg(x_i)]` where `T_j` is the
 /// j-th Chebyshev polynomial of the first kind.
+#[must_use]
 pub fn chebyshev_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
     let n = x.len();
     let ncols = deg + 1;
@@ -44,13 +46,15 @@ pub fn chebyshev_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
         }
         for j in 2..ncols {
             // T_n(x) = 2x T_{n-1}(x) - T_{n-2}(x)
-            v[i * ncols + j] = 2.0 * x[i] * v[i * ncols + (j - 1)] - v[i * ncols + (j - 2)];
+            v[i * ncols + j] =
+                (2.0 * x[i]).mul_add(v[i * ncols + (j - 1)], -v[i * ncols + (j - 2)]);
         }
     }
     v
 }
 
 /// Build a Vandermonde-like matrix for Legendre basis fitting.
+#[must_use]
 pub fn legendre_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
     let n = x.len();
     let ncols = deg + 1;
@@ -65,15 +69,17 @@ pub fn legendre_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
         for j in 2..ncols {
             // P_n(x) = ((2n-1)*x*P_{n-1}(x) - (n-1)*P_{n-2}(x)) / n
             let jf = j as f64;
-            v[i * ncols + j] = ((2.0 * jf - 1.0) * x[i] * v[i * ncols + (j - 1)]
-                - (jf - 1.0) * v[i * ncols + (j - 2)])
-                / jf;
+            v[i * ncols + j] = (2.0f64.mul_add(jf, -1.0) * x[i]).mul_add(
+                v[i * ncols + (j - 1)],
+                -((jf - 1.0) * v[i * ncols + (j - 2)]),
+            ) / jf;
         }
     }
     v
 }
 
 /// Build a Vandermonde-like matrix for Laguerre basis fitting.
+#[must_use]
 pub fn laguerre_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
     let n = x.len();
     let ncols = deg + 1;
@@ -88,15 +94,17 @@ pub fn laguerre_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
         for j in 2..ncols {
             // L_n(x) = ((2n-1-x)*L_{n-1}(x) - (n-1)*L_{n-2}(x)) / n
             let jf = j as f64;
-            v[i * ncols + j] = ((2.0 * jf - 1.0 - x[i]) * v[i * ncols + (j - 1)]
-                - (jf - 1.0) * v[i * ncols + (j - 2)])
-                / jf;
+            v[i * ncols + j] = (2.0f64.mul_add(jf, -1.0) - x[i]).mul_add(
+                v[i * ncols + (j - 1)],
+                -((jf - 1.0) * v[i * ncols + (j - 2)]),
+            ) / jf;
         }
     }
     v
 }
 
 /// Build a Vandermonde-like matrix for physicist's Hermite basis fitting.
+#[must_use]
 pub fn hermite_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
     let n = x.len();
     let ncols = deg + 1;
@@ -111,14 +119,17 @@ pub fn hermite_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
         for j in 2..ncols {
             // H_n(x) = 2x*H_{n-1}(x) - 2(n-1)*H_{n-2}(x)
             let jf = j as f64;
-            v[i * ncols + j] =
-                2.0 * x[i] * v[i * ncols + (j - 1)] - 2.0 * (jf - 1.0) * v[i * ncols + (j - 2)];
+            v[i * ncols + j] = (2.0 * x[i]).mul_add(
+                v[i * ncols + (j - 1)],
+                -(2.0 * (jf - 1.0) * v[i * ncols + (j - 2)]),
+            );
         }
     }
     v
 }
 
 /// Build a Vandermonde-like matrix for probabilist's Hermite basis fitting.
+#[must_use]
 pub fn hermite_e_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
     let n = x.len();
     let ncols = deg + 1;
@@ -133,7 +144,10 @@ pub fn hermite_e_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
         for j in 2..ncols {
             // He_n(x) = x*He_{n-1}(x) - (n-1)*He_{n-2}(x)
             let jf = j as f64;
-            v[i * ncols + j] = x[i] * v[i * ncols + (j - 1)] - (jf - 1.0) * v[i * ncols + (j - 2)];
+            v[i * ncols + j] = x[i].mul_add(
+                v[i * ncols + (j - 1)],
+                -((jf - 1.0) * v[i * ncols + (j - 2)]),
+            );
         }
     }
     v
@@ -146,7 +160,7 @@ pub fn hermite_e_vandermonde(x: &[f64], deg: usize) -> Vec<f64> {
 ///
 /// Uses thin QR decomposition on the (optionally weighted) system, which
 /// avoids forming the normal equations V^T V (whose condition number is
-/// the square of V's). This matches NumPy's approach of using an
+/// the square of V's). This matches `NumPy`'s approach of using an
 /// SVD/QR-based lstsq rather than the normal equations.
 ///
 /// # Errors

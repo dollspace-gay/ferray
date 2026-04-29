@@ -5,6 +5,16 @@
 // - s![] — NumPy-style slice indexing macro
 // - promoted_type!() — compile-time type promotion macro
 
+// Macro implementations branch on parsed AST shapes; identical match arms
+// reflect "different syntactic forms produce the same expansion" and are
+// kept distinct on purpose for future divergence. `needless_pass_by_value`
+// is a syn-API ergonomics tradeoff (the parser owns each TokenStream once).
+#![allow(
+    clippy::match_same_arms,
+    clippy::needless_pass_by_value,
+    clippy::option_if_let_else
+)]
+
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
@@ -81,7 +91,7 @@ fn impl_ferray_record(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
     let field_count = fields.len();
     let mut field_descriptors = Vec::with_capacity(field_count);
 
-    for field in fields.iter() {
+    for field in fields {
         let field_name = field.ident.as_ref().unwrap();
         let field_name_str = field_name.to_string();
         let field_ty = &field.ty;
@@ -360,7 +370,7 @@ fn parse_slice_component(s: &str) -> syn::Result<proc_macro2::TokenStream> {
 /// Compile-time type promotion macro.
 ///
 /// Given two numeric types, resolves to the smallest type that can represent
-/// both without precision loss, following NumPy's promotion rules.
+/// both without precision loss, following `NumPy`'s promotion rules.
 ///
 /// # Examples
 /// ```ignore
@@ -379,7 +389,7 @@ pub fn promoted_type(input: TokenStream) -> TokenStream {
 
 fn impl_promoted_type(input: proc_macro2::TokenStream) -> syn::Result<proc_macro2::TokenStream> {
     let input_str = input.to_string();
-    let parts: Vec<&str> = input_str.split(',').map(|s| s.trim()).collect();
+    let parts: Vec<&str> = input_str.split(',').map(str::trim).collect();
 
     if parts.len() != 2 {
         return Err(syn::Error::new(
@@ -413,7 +423,7 @@ fn normalize_type(s: &str) -> String {
     s.trim().replace(' ', "")
 }
 
-/// Static type promotion following NumPy rules.
+/// Static type promotion following `NumPy` rules.
 ///
 /// Returns the promoted type as a string, or None if unknown.
 fn promote_types_static(a: &str, b: &str) -> Option<&'static str> {
@@ -534,7 +544,7 @@ fn type_rank(s: &str) -> Option<TypeRank> {
 }
 
 fn promote_ranks(a: TypeRank, b: TypeRank) -> &'static str {
-    use TypeKind::*;
+    use TypeKind::{Bool, Complex, Float, Signed, Unsigned};
 
     // Same type
     if a.kind == b.kind && a.bits == b.bits {
@@ -607,7 +617,7 @@ fn promote_ranks(a: TypeRank, b: TypeRank) -> &'static str {
 }
 
 /// Convert any type rank to the float bit width it requires.
-fn to_float_bits(r: TypeRank) -> u32 {
+const fn to_float_bits(r: TypeRank) -> u32 {
     match r.kind {
         TypeKind::Bool => 32,
         TypeKind::Unsigned | TypeKind::Signed => {
@@ -620,7 +630,7 @@ fn to_float_bits(r: TypeRank) -> u32 {
     }
 }
 
-fn uint_type(bits: u32) -> &'static str {
+const fn uint_type(bits: u32) -> &'static str {
     match bits {
         8 => "u8",
         16 => "u16",
@@ -631,7 +641,7 @@ fn uint_type(bits: u32) -> &'static str {
     }
 }
 
-fn int_type(bits: u32) -> &'static str {
+const fn int_type(bits: u32) -> &'static str {
     match bits {
         8 => "i8",
         16 => "i16",
@@ -642,7 +652,7 @@ fn int_type(bits: u32) -> &'static str {
     }
 }
 
-fn rank_to_type(r: TypeRank) -> &'static str {
+const fn rank_to_type(r: TypeRank) -> &'static str {
     match r.kind {
         TypeKind::Bool => "bool",
         TypeKind::Unsigned => uint_type(r.bits),

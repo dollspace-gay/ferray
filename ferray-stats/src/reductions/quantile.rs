@@ -14,7 +14,7 @@ use super::{collect_data, make_result, output_shape, reduce_axis_general, valida
 /// Interpolation method for [`quantile_with_method`] and its `percentile`
 /// / `median` friends.
 ///
-/// Matches all 13 NumPy quantile methods (#462, #566). The continuous
+/// Matches all 13 `NumPy` quantile methods (#462, #566). The continuous
 /// methods use the Hyndman-Fan 1996 `(alpha, beta)` parameterization:
 /// `virtual_index = n*q + alpha + q*(1 - alpha - beta) - 1` with
 /// linear interpolation between the two bracketing sorted elements.
@@ -22,7 +22,7 @@ use super::{collect_data, make_result, output_shape, reduce_axis_general, valida
 /// rules and return the exact sorted element (no interpolation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuantileMethod {
-    /// NumPy default. Continuous with `alpha = beta = 1`. Returns
+    /// `NumPy` default. Continuous with `alpha = beta = 1`. Returns
     /// `lo_val * (1 - frac) + hi_val * frac`.
     Linear,
     /// Pick the element at `floor(q * (n - 1))` — the lower of the two
@@ -32,38 +32,38 @@ pub enum QuantileMethod {
     /// bracketing sorted elements.
     Higher,
     /// Pick the sorted element nearest to `q * (n - 1)`, with ties
-    /// (frac = 0.5) broken to the even index (matches NumPy's
+    /// (frac = 0.5) broken to the even index (matches `NumPy`'s
     /// round-half-to-even convention).
     Nearest,
     /// Average of the two bracketing sorted elements: `(lo + hi) / 2`.
     Midpoint,
     /// Discrete method, Hyndman definition 1. Returns
     /// `sorted[ceil(n * q) - 1]` — a step function with jumps at
-    /// `k / n`. NumPy's `'inverted_cdf'`.
+    /// `k / n`. `NumPy`'s `'inverted_cdf'`.
     InvertedCdf,
     /// Discrete method, Hyndman definition 2. Same as `InvertedCdf`
     /// except that when `n * q` is an integer the result is the
-    /// average of the two bracketing sorted elements. NumPy's
+    /// average of the two bracketing sorted elements. `NumPy`'s
     /// `'averaged_inverted_cdf'`.
     AveragedInvertedCdf,
     /// Discrete method, Hyndman definition 3. `sorted[k]` where
-    /// `k = round_half_to_even(n*q - 0.5)`. NumPy's
+    /// `k = round_half_to_even(n*q - 0.5)`. `NumPy`'s
     /// `'closest_observation'`.
     ClosestObservation,
     /// Continuous method, Hyndman definition 4. `alpha = 0`, `beta = 1`.
-    /// NumPy's `'interpolated_inverted_cdf'`.
+    /// `NumPy`'s `'interpolated_inverted_cdf'`.
     InterpolatedInvertedCdf,
     /// Continuous method, Hyndman definition 5. `alpha = beta = 0.5`.
-    /// NumPy's `'hazen'`.
+    /// `NumPy`'s `'hazen'`.
     Hazen,
     /// Continuous method, Hyndman definition 6. `alpha = beta = 0`.
-    /// NumPy's `'weibull'`.
+    /// `NumPy`'s `'weibull'`.
     Weibull,
     /// Continuous method, Hyndman definition 8. `alpha = beta = 1/3`.
-    /// NumPy's `'median_unbiased'`.
+    /// `NumPy`'s `'median_unbiased'`.
     MedianUnbiased,
     /// Continuous method, Hyndman definition 9. `alpha = beta = 3/8`.
-    /// NumPy's `'normal_unbiased'`.
+    /// `NumPy`'s `'normal_unbiased'`.
     NormalUnbiased,
 }
 
@@ -122,6 +122,11 @@ fn round_half_to_even<T: Float>(x: T) -> T {
 /// sorted[lo_i + 1]`. For all discrete methods and for integer virtual
 /// indices `gamma = 0`, which short-circuits to `sorted[lo_i]` and
 /// avoids the second-pass scan for `hi_val`.
+//
+// Each `QuantileMethod` arm reproduces the corresponding NumPy formula
+// verbatim; splitting the dispatch into helpers would scatter the spec
+// across the file and make maintenance harder than the line count.
+#[allow(clippy::too_many_lines)]
 fn method_index_and_gamma<T: Float>(n: usize, q: T, method: QuantileMethod) -> (usize, T) {
     let zero = T::zero();
     let one = T::one();
@@ -262,7 +267,7 @@ fn method_index_and_gamma<T: Float>(n: usize, q: T, method: QuantileMethod) -> (
 ///
 /// The selection algorithm gives an O(n) average-time path (quickselect)
 /// instead of the O(n log n) full sort the previous implementation used
-/// (#175). All 13 NumPy quantile methods are supported: every method
+/// (#175). All 13 `NumPy` quantile methods are supported: every method
 /// produces a `(lo_i, gamma)` pair via [`method_index_and_gamma`] and
 /// the kernel applies a single uniform interpolation formula.
 ///
@@ -326,7 +331,7 @@ fn lane_nanquantile<T: Float>(lane: &[T], q: T) -> T {
 
 /// Compute the q-th quantile of array data along a given axis.
 ///
-/// `q` must be in \[0, 1\]. Uses linear interpolation (NumPy default method).
+/// `q` must be in \[0, 1\]. Uses linear interpolation (`NumPy` default method).
 /// Equivalent to `numpy.quantile`. See [`quantile_with_method`] for the
 /// variant that accepts a [`QuantileMethod`] selector (#462).
 pub fn quantile<T, D>(a: &Array<T, D>, q: T, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>

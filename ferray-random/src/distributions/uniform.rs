@@ -12,7 +12,7 @@ use crate::shape::IntoShape;
 impl<B: BitGenerator> Generator<B> {
     /// Generate an array of uniformly distributed `f64` values in [0, 1).
     ///
-    /// Equivalent to NumPy's `Generator.random(size)`. `shape` may be a
+    /// Equivalent to `NumPy`'s `Generator.random(size)`. `shape` may be a
     /// `usize` for a 1-D result, or any `[usize; N]` / `&[usize]` / `Vec<usize>`
     /// for N-dimensional output (via [`IntoShape`]).
     ///
@@ -30,13 +30,13 @@ impl<B: BitGenerator> Generator<B> {
     pub fn random(&mut self, size: impl IntoShape) -> Result<Array<f64, IxDyn>, FerrayError> {
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
-        let data = generate_vec(self, n, |bg| bg.next_f64());
+        let data = generate_vec(self, n, super::super::bitgen::BitGenerator::next_f64);
         vec_to_array_f64(data, &shape)
     }
 
     /// Generate an array of uniformly distributed `f64` values in [low, high).
     ///
-    /// Equivalent to NumPy's `Generator.uniform(low, high, size)`.
+    /// Equivalent to `NumPy`'s `Generator.uniform(low, high, size)`.
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `low >= high` or `shape` is invalid.
@@ -54,14 +54,14 @@ impl<B: BitGenerator> Generator<B> {
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
         let range = high - low;
-        let data = generate_vec(self, n, |bg| low + bg.next_f64() * range);
+        let data = generate_vec(self, n, |bg| bg.next_f64().mul_add(range, low));
         vec_to_array_f64(data, &shape)
     }
 
     /// Generate an array of uniformly distributed `f32` values in [0, 1).
     ///
     /// The f32 analogue of [`random`](Self::random). Equivalent to
-    /// NumPy's `Generator.random(size, dtype=np.float32)`.
+    /// `NumPy`'s `Generator.random(size, dtype=np.float32)`.
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `shape` contains a zero-sized axis.
@@ -78,7 +78,7 @@ impl<B: BitGenerator> Generator<B> {
     pub fn random_f32(&mut self, size: impl IntoShape) -> Result<Array<f32, IxDyn>, FerrayError> {
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
-        let data = generate_vec_f32(self, n, |bg| bg.next_f32());
+        let data = generate_vec_f32(self, n, super::super::bitgen::BitGenerator::next_f32);
         vec_to_array_f32(data, &shape)
     }
 
@@ -102,13 +102,13 @@ impl<B: BitGenerator> Generator<B> {
         let shape = size.into_shape()?;
         let n = shape_size(&shape);
         let range = high - low;
-        let data = generate_vec_f32(self, n, |bg| low + bg.next_f32() * range);
+        let data = generate_vec_f32(self, n, |bg| bg.next_f32().mul_add(range, low));
         vec_to_array_f32(data, &shape)
     }
 
     /// Generate an array of uniformly distributed random integers in [low, high).
     ///
-    /// Equivalent to NumPy's `Generator.integers(low, high, size)`.
+    /// Equivalent to `NumPy`'s `Generator.integers(low, high, size)`.
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `low >= high` or `shape` is invalid.

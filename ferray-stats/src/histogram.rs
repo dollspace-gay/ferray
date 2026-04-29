@@ -42,31 +42,31 @@ where
     let data: Vec<T> = a.iter().copied().collect();
 
     // Determine range
-    let (lo, hi) = match range {
-        Some((l, h)) => {
-            if l >= h {
-                return Err(FerrayError::invalid_value(
-                    "range lower bound must be less than upper",
-                ));
-            }
-            (l, h)
+    let (lo, hi) = if let Some((l, h)) = range {
+        if l >= h {
+            return Err(FerrayError::invalid_value(
+                "range lower bound must be less than upper",
+            ));
         }
-        None => {
-            if data.is_empty() {
-                return Err(FerrayError::invalid_value(
-                    "cannot compute histogram of empty array without range",
-                ));
-            }
-            let lo = data.iter().copied().fold(T::infinity(), |a, b| a.min(b));
-            let hi = data
-                .iter()
-                .copied()
-                .fold(T::neg_infinity(), |a, b| a.max(b));
-            if lo == hi {
-                (lo - <T as Element>::one(), hi + <T as Element>::one())
-            } else {
-                (lo, hi)
-            }
+        (l, h)
+    } else {
+        if data.is_empty() {
+            return Err(FerrayError::invalid_value(
+                "cannot compute histogram of empty array without range",
+            ));
+        }
+        let lo = data
+            .iter()
+            .copied()
+            .fold(T::infinity(), num_traits::Float::min);
+        let hi = data
+            .iter()
+            .copied()
+            .fold(T::neg_infinity(), num_traits::Float::max);
+        if lo == hi {
+            (lo - <T as Element>::one(), hi + <T as Element>::one())
+        } else {
+            (lo, hi)
         }
     };
 
@@ -181,16 +181,22 @@ where
         return Err(FerrayError::invalid_value("number of bins must be > 0"));
     }
 
-    let x_min = xdata.iter().copied().fold(T::infinity(), |a, b| a.min(b));
+    let x_min = xdata
+        .iter()
+        .copied()
+        .fold(T::infinity(), num_traits::Float::min);
     let x_max = xdata
         .iter()
         .copied()
-        .fold(T::neg_infinity(), |a, b| a.max(b));
-    let y_min = ydata.iter().copied().fold(T::infinity(), |a, b| a.min(b));
+        .fold(T::neg_infinity(), num_traits::Float::max);
+    let y_min = ydata
+        .iter()
+        .copied()
+        .fold(T::infinity(), num_traits::Float::min);
     let y_max = ydata
         .iter()
         .copied()
-        .fold(T::neg_infinity(), |a, b| a.max(b));
+        .fold(T::neg_infinity(), num_traits::Float::max);
 
     let (x_lo, x_hi) = if x_min == x_max {
         (x_min - <T as Element>::one(), x_max + <T as Element>::one())
@@ -342,12 +348,11 @@ where
                 valid = false;
                 break;
             }
-            match bin_index(v, lo[j], steps[j], bins[j]) {
-                Some(bi) => flat_idx += bi * out_strides[j],
-                None => {
-                    valid = false;
-                    break;
-                }
+            if let Some(bi) = bin_index(v, lo[j], steps[j], bins[j]) {
+                flat_idx += bi * out_strides[j];
+            } else {
+                valid = false;
+                break;
             }
         }
         if valid {
@@ -374,7 +379,7 @@ where
 /// Count occurrences of each value in a non-negative integer array,
 /// returning **integer** counts.
 ///
-/// Matches NumPy's `numpy.bincount(x)` (no-weights form): the result
+/// Matches `NumPy`'s `numpy.bincount(x)` (no-weights form): the result
 /// dtype is `uint64`, not `float64`. Callers that need weighted sums
 /// (float output) should call [`bincount_weighted`] explicitly
 /// (see issue #168 — the original `bincount` hard-coded `f64` counts
@@ -393,7 +398,7 @@ pub fn bincount_u64(x: &Array<u64, Ix1>, minlength: usize) -> FerrayResult<Array
 /// Weighted bincount: accumulates `weights[i]` into bucket `x[i]`,
 /// returning `Array<f64, Ix1>`.
 ///
-/// This is NumPy's `numpy.bincount(x, weights=w)` form; the output
+/// This is `NumPy`'s `numpy.bincount(x, weights=w)` form; the output
 /// dtype is `float64` because weights are floating point.
 pub fn bincount_weighted(
     x: &Array<u64, Ix1>,
@@ -431,13 +436,12 @@ pub fn bincount(
     weights: Option<&Array<f64, Ix1>>,
     minlength: usize,
 ) -> FerrayResult<Array<f64, Ix1>> {
-    match weights {
-        Some(w) => bincount_weighted(x, w, minlength),
-        None => {
-            let counts = bincount_u64(x, minlength)?;
-            let data: Vec<f64> = counts.iter().map(|&c| c as f64).collect();
-            Array::from_vec(Ix1::new([counts.size()]), data)
-        }
+    if let Some(w) = weights {
+        bincount_weighted(x, w, minlength)
+    } else {
+        let counts = bincount_u64(x, minlength)?;
+        let data: Vec<f64> = counts.iter().map(|&c| c as f64).collect();
+        Array::from_vec(Ix1::new([counts.size()]), data)
     }
 }
 
@@ -559,7 +563,7 @@ mod tests {
         // Each bin has count=1, total=5, bin_width=1.0
         // density[i] = 1 / (5 * 1.0) = 0.2
         for &v in &d {
-            assert!((v - 0.2).abs() < 1e-12, "expected 0.2, got {}", v);
+            assert!((v - 0.2).abs() < 1e-12, "expected 0.2, got {v}");
         }
         // Integral over all bins should equal 1: sum(density[i] * width[i]) = 1
         let integral: f64 = d
@@ -569,8 +573,7 @@ mod tests {
             .sum();
         assert!(
             (integral - 1.0).abs() < 1e-12,
-            "density integral should be 1.0, got {}",
-            integral
+            "density integral should be 1.0, got {integral}"
         );
     }
 
@@ -597,8 +600,7 @@ mod tests {
             .sum();
         assert!(
             (integral - 1.0).abs() < 1e-12,
-            "density integral should be 1.0, got {}",
-            integral
+            "density integral should be 1.0, got {integral}"
         );
     }
 

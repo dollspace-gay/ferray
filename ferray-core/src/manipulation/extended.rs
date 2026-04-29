@@ -108,7 +108,7 @@ pub fn pad_1d<T: Element>(
 
 /// Reflect index: maps indices outside [0, n) by reflecting at boundaries 1 and n-2.
 /// This means the edge values are not repeated.
-fn reflect_index(idx: isize, n: usize) -> usize {
+const fn reflect_index(idx: isize, n: usize) -> usize {
     if n <= 1 {
         return 0;
     }
@@ -661,8 +661,7 @@ pub fn trim_zeros<T: Element + PartialEq>(
     let end = if trim_back {
         data.iter()
             .rposition(|v| *v != zero)
-            .map(|i| i + 1)
-            .unwrap_or(start)
+            .map_or(start, |i| i + 1)
     } else {
         data.len()
     };

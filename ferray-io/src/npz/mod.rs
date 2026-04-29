@@ -60,7 +60,10 @@ fn savez_impl<P: AsRef<Path>>(
     let mut zip_writer = zip::ZipWriter::new(file);
 
     for (name, array) in arrays {
-        let entry_name = if name.ends_with(".npy") {
+        let entry_name = if std::path::Path::new(name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("npy"))
+        {
             name.to_string()
         } else {
             format!("{name}.npy")
@@ -174,11 +177,13 @@ impl NpzFile {
     }
 
     /// Number of arrays in the archive.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.names.len()
     }
 
     /// Whether the archive is empty.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.names.is_empty()
     }
@@ -223,7 +228,7 @@ mod tests {
         assert_eq!(npz.len(), 2);
 
         let mut names = npz.names();
-        names.sort();
+        names.sort_unstable();
         assert_eq!(names, vec!["a", "b"]);
 
         let loaded_a = npz.get("a").unwrap();

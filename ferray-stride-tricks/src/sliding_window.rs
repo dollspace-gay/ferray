@@ -63,14 +63,12 @@ pub fn sliding_window_view<'a, T: Element, D: Dimension>(
     for (i, (&w, &n)) in window_shape.iter().zip(src_shape.iter()).enumerate() {
         if w == 0 {
             return Err(FerrayError::invalid_value(format!(
-                "window_shape[{}] must be >= 1, got 0",
-                i,
+                "window_shape[{i}] must be >= 1, got 0",
             )));
         }
         if w > n {
             return Err(FerrayError::invalid_value(format!(
-                "window_shape[{}] ({}) exceeds array dimension {} ({})",
-                i, w, i, n,
+                "window_shape[{i}] ({w}) exceeds array dimension {i} ({n})",
             )));
         }
     }

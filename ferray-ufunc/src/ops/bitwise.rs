@@ -86,7 +86,7 @@ where
     bitwise_not(input)
 }
 
-/// Elementwise left shift with NumPy broadcasting.
+/// Elementwise left shift with `NumPy` broadcasting.
 ///
 /// Each element of `a` is shifted left by the corresponding element of `b`.
 pub fn left_shift<T, D>(a: &Array<T, D>, b: &Array<u32, D>) -> FerrayResult<Array<T, D>>
@@ -97,7 +97,7 @@ where
     binary_mixed_op(a, b, |x, s| x << s)
 }
 
-/// Elementwise right shift with NumPy broadcasting.
+/// Elementwise right shift with `NumPy` broadcasting.
 ///
 /// Each element of `a` is shifted right by the corresponding element of `b`.
 pub fn right_shift<T, D>(a: &Array<T, D>, b: &Array<u32, D>) -> FerrayResult<Array<T, D>>
@@ -112,7 +112,7 @@ where
 ///
 /// Implemented for every signed and unsigned integer width that
 /// `BitwiseOps` already covers, with `bool` mapping `true` -> 1 and
-/// `false` -> 0 to match NumPy's `np.bitwise_count(np.bool_(...))`
+/// `false` -> 0 to match `NumPy`'s `np.bitwise_count(np.bool_(...))`
 /// behaviour. The output type is always `u32` since the largest
 /// possible popcount over a 128-bit input is 128.
 pub trait BitwiseCount {
@@ -144,7 +144,7 @@ impl BitwiseCount for bool {
 
 /// Elementwise population count: number of set bits in each element.
 ///
-/// Mirrors NumPy 2.0's `numpy.bitwise_count` (issue #396). Routes to
+/// Mirrors `NumPy` 2.0's `numpy.bitwise_count` (issue #396). Routes to
 /// the underlying integer's `count_ones` intrinsic, which compiles to
 /// `POPCNT` on x86 and the equivalent instruction on ARM/RISC-V where
 /// available.
@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_bitwise_count_u32() {
-        let a = arr1_u32(vec![0u32, 1, 0xFFFF_FFFF, 0xFF_00FF_00]);
+        let a = arr1_u32(vec![0u32, 1, 0xFFFF_FFFF, 0xFF00_FF00]);
         let r = bitwise_count(&a).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[0u32, 1, 32, 16]);
     }

@@ -302,7 +302,7 @@ where
     let src_t = contig_input(input);
     // SAFETY: T is f64, verified by TypeId check above. f64 and T have
     // identical size, alignment, and bit representation.
-    let src_f64: &[f64] = unsafe { std::slice::from_raw_parts(src_t.as_ptr() as *const f64, n) };
+    let src_f64: &[f64] = unsafe { std::slice::from_raw_parts(src_t.as_ptr().cast::<f64>(), n) };
 
     let mut output = Vec::with_capacity(n);
     #[allow(clippy::uninit_vec)]
@@ -311,10 +311,11 @@ where
     }
     run_slice_kernel_f64(src_f64, &mut output, kernel);
 
+    let cap = output.capacity();
     // SAFETY: T is f64. Reinterpret Vec<f64> as Vec<T> without copying.
     let t_vec: Vec<T> = unsafe {
         let mut md = std::mem::ManuallyDrop::new(output);
-        Vec::from_raw_parts(md.as_mut_ptr() as *mut T, n, n)
+        Vec::from_raw_parts(md.as_mut_ptr().cast::<T>(), n, cap)
     };
     Some(Array::from_vec(input.dim().clone(), t_vec))
 }
@@ -335,7 +336,7 @@ where
     Array::from_vec(input.dim().clone(), data)
 }
 
-/// Apply a binary function elementwise with NumPy broadcasting.
+/// Apply a binary function elementwise with `NumPy` broadcasting.
 ///
 /// When `a` and `b` have identical shapes, takes the fast path (zip iter).
 /// Otherwise, broadcasts both inputs to the common shape and reconstructs
@@ -391,14 +392,13 @@ where
         .collect();
     let result_dim = D::from_dim_slice(&target_shape).ok_or_else(|| {
         FerrayError::shape_mismatch(format!(
-            "binary op: cannot represent broadcast result shape {:?} as the input dimension type",
-            target_shape
+            "binary op: cannot represent broadcast result shape {target_shape:?} as the input dimension type"
         ))
     })?;
     Array::from_vec(result_dim, data)
 }
 
-/// Apply a binary function that maps `(T, T) -> U` with NumPy broadcasting.
+/// Apply a binary function that maps `(T, T) -> U` with `NumPy` broadcasting.
 ///
 /// Same shape semantics as [`binary_elementwise_op`] but allows the output element
 /// type to differ from the inputs. Used by comparison ops (`(T, T) -> bool`),
@@ -446,8 +446,7 @@ where
         .collect();
     let result_dim = D::from_dim_slice(&target_shape).ok_or_else(|| {
         FerrayError::shape_mismatch(format!(
-            "binary op: cannot represent broadcast result shape {:?} as the input dimension type",
-            target_shape
+            "binary op: cannot represent broadcast result shape {target_shape:?} as the input dimension type"
         ))
     })?;
     Array::from_vec(result_dim, data)
@@ -498,15 +497,14 @@ where
         .collect();
     let result_dim = D::from_dim_slice(&target_shape).ok_or_else(|| {
         FerrayError::shape_mismatch(format!(
-            "binary mixed op: cannot represent broadcast result shape {:?} as the input dimension type",
-            target_shape
+            "binary mixed op: cannot represent broadcast result shape {target_shape:?} as the input dimension type"
         ))
     })?;
     Array::from_vec(result_dim, data)
 }
 
 /// Apply a binary function with broadcasting support.
-/// Returns an IxDyn array with the broadcast shape.
+/// Returns an `IxDyn` array with the broadcast shape.
 pub fn binary_broadcast_op<T, D1, D2>(
     a: &Array<T, D1>,
     b: &Array<T, D2>,
@@ -869,7 +867,7 @@ mod tests {
     fn binary_mixed_op_broadcasts() {
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 1]), vec![1.0, 4.0]).unwrap();
         let b = Array::<i32, Ix2>::from_vec(Ix2::new([1, 3]), vec![1, 2, 3]).unwrap();
-        let r = binary_mixed_op(&a, &b, |x, n| x * (1 << n) as f64).unwrap();
+        let r = binary_mixed_op(&a, &b, |x, n| x * f64::from(1 << n)).unwrap();
         assert_eq!(r.shape(), &[2, 3]);
         assert_eq!(
             r.iter().copied().collect::<Vec<_>>(),

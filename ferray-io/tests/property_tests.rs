@@ -2,6 +2,17 @@
 //
 // Tests roundtrip invariants of npy binary I/O and text I/O using proptest.
 
+// Property tests sample integer sizes and lift them into f64 / array
+// shape values; roundtrip invariants assert exact float equality.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 use ferray_core::Array;
 use ferray_core::dimension::{Ix1, Ix2};
 
@@ -175,7 +186,7 @@ proptest! {
         vals in proptest::collection::vec(-1000i32..1000, 64..=64),
     ) {
         let n = rows * cols;
-        let data: Vec<f64> = vals.into_iter().cycle().take(n).map(|v| v as f64).collect();
+        let data: Vec<f64> = vals.into_iter().cycle().take(n).map(f64::from).collect();
         let arr = Array::<f64, Ix2>::from_vec(Ix2::new([rows, cols]), data.clone()).unwrap();
         let opts = SaveTxtOptions {
             delimiter: ',',
@@ -199,7 +210,7 @@ proptest! {
         vals in proptest::collection::vec(-500i32..500, 36..=36),
     ) {
         let n = rows * cols;
-        let data: Vec<f64> = vals.into_iter().cycle().take(n).map(|v| v as f64).collect();
+        let data: Vec<f64> = vals.into_iter().cycle().take(n).map(f64::from).collect();
         let arr = Array::<f64, Ix2>::from_vec(Ix2::new([rows, cols]), data).unwrap();
 
         // Save with comma, load with comma
@@ -238,7 +249,7 @@ proptest! {
     ) {
         // Build a 2-row CSV where the second row has some "NA" entries
         let ncols = good_vals.len();
-        let row1: Vec<String> = good_vals.iter().map(|v| v.to_string()).collect();
+        let row1: Vec<String> = good_vals.iter().map(std::string::ToString::to_string).collect();
         let mut row2: Vec<String> = good_vals.iter().map(|v| (v + 1).to_string()).collect();
         // Replace the first column with NA
         row2[0] = "NA".to_string();
@@ -250,7 +261,7 @@ proptest! {
         // First row: all good values
         for (i, &v) in good_vals.iter().enumerate() {
             prop_assert!(
-                (slice[i] - v as f64).abs() < 1e-10,
+                (slice[i] - f64::from(v)).abs() < 1e-10,
                 "row 0 col {}: expected {}, got {}",
                 i, v, slice[i]
             );

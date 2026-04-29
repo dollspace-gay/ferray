@@ -96,11 +96,12 @@ ferray uses [CORE-MATH](https://core-math.gitlabpages.inria.fr/) — the only co
 
 ## Crate Structure
 
-ferray is a workspace of 15 focused crates:
+ferray is a workspace of 17 focused crates:
 
 | Crate | Description |
 |-------|-------------|
 | `ferray-core` | `NdArray<T, D>`, broadcasting, indexing, shape manipulation |
+| `ferray-core-macros` | proc-macro support (`#[derive(FerrayRecord)]`, `promoted_type!`) |
 | `ferray-ufunc` | SIMD-accelerated universal functions (sin, cos, exp, sqrt, ...) |
 | `ferray-stats` | Reductions, sorting, histograms, set operations |
 | `ferray-linalg` | Matrix products, decompositions, solvers, einsum |
@@ -114,6 +115,7 @@ ferray is a workspace of 15 focused crates:
 | `ferray-stride-tricks` | sliding_window_view, as_strided |
 | `ferray-numpy-interop` | PyO3 zero-copy, Arrow/Polars conversion |
 | `ferray-autodiff` | Forward-mode automatic differentiation |
+| `ferray-test-oracle` | Test oracle harness for cross-validating against NumPy fixtures |
 | `ferray` | Re-export crate with prelude |
 
 ## Key Design Decisions
@@ -148,7 +150,7 @@ Phase 6 design complete (`.design/ferray-gpu.md`). Architecture:
 
 ```bash
 cargo build --release
-cargo test --workspace          # 1479 tests
+cargo test --workspace          # 2716 tests
 cargo clippy --workspace -- -D warnings
 ```
 

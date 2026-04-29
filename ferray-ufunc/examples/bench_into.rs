@@ -3,6 +3,16 @@
 //!
 //! Run with: `cargo run -p ferray-ufunc --release --example bench_into`
 
+// Benchmarks lift integer sizes into f64 throughput numbers as part of
+// reporting; the casts are part of the bench output, not bugs.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless
+)]
+
 use ferray_core::{Array, IxDyn};
 use ferray_ufunc::{add, add_into, exp, exp_into};
 use std::time::Instant;

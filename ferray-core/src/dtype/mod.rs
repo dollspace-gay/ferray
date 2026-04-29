@@ -87,7 +87,8 @@ pub enum DType {
 impl DType {
     /// Size in bytes of one element of this dtype.
     #[inline]
-    pub fn size_of(self) -> usize {
+    #[must_use]
+    pub const fn size_of(self) -> usize {
         match self {
             Self::Bool => core::mem::size_of::<bool>(),
             Self::U8 => 1,
@@ -114,7 +115,8 @@ impl DType {
 
     /// Required alignment in bytes for this dtype.
     #[inline]
-    pub fn alignment(self) -> usize {
+    #[must_use]
+    pub const fn alignment(self) -> usize {
         match self {
             Self::Bool => core::mem::align_of::<bool>(),
             Self::U8 => 1,
@@ -142,7 +144,8 @@ impl DType {
 
     /// `true` if the dtype is a floating-point type (f16, bf16, f32, f64).
     #[inline]
-    pub fn is_float(self) -> bool {
+    #[must_use]
+    pub const fn is_float(self) -> bool {
         #[cfg(feature = "f16")]
         if matches!(self, Self::F16) {
             return true;
@@ -156,7 +159,8 @@ impl DType {
 
     /// `true` if the dtype is an integer type (signed or unsigned, including bool).
     #[inline]
-    pub fn is_integer(self) -> bool {
+    #[must_use]
+    pub const fn is_integer(self) -> bool {
         matches!(
             self,
             Self::Bool
@@ -176,13 +180,15 @@ impl DType {
 
     /// `true` if the dtype is a complex type.
     #[inline]
-    pub fn is_complex(self) -> bool {
+    #[must_use]
+    pub const fn is_complex(self) -> bool {
         matches!(self, Self::Complex32 | Self::Complex64)
     }
 
     /// `true` if the dtype is a signed numeric type.
     #[inline]
-    pub fn is_signed(self) -> bool {
+    #[must_use]
+    pub const fn is_signed(self) -> bool {
         matches!(
             self,
             Self::I8
@@ -358,12 +364,12 @@ impl Element for I256 {
 
     #[inline]
     fn zero() -> Self {
-        I256::ZERO
+        Self::ZERO
     }
 
     #[inline]
     fn one() -> Self {
-        I256::ONE
+        Self::ONE
     }
 }
 
@@ -382,12 +388,12 @@ impl Element for Complex<f32> {
 
     #[inline]
     fn zero() -> Self {
-        Complex::new(0.0, 0.0)
+        Self::new(0.0, 0.0)
     }
 
     #[inline]
     fn one() -> Self {
-        Complex::new(1.0, 0.0)
+        Self::new(1.0, 0.0)
     }
 }
 
@@ -401,12 +407,12 @@ impl Element for Complex<f64> {
 
     #[inline]
     fn zero() -> Self {
-        Complex::new(0.0, 0.0)
+        Self::new(0.0, 0.0)
     }
 
     #[inline]
     fn one() -> Self {
-        Complex::new(1.0, 0.0)
+        Self::new(1.0, 0.0)
     }
 }
 
@@ -423,12 +429,12 @@ impl Element for half::f16 {
 
     #[inline]
     fn zero() -> Self {
-        half::f16::ZERO
+        Self::ZERO
     }
 
     #[inline]
     fn one() -> Self {
-        half::f16::ONE
+        Self::ONE
     }
 }
 
@@ -445,12 +451,12 @@ impl Element for half::bf16 {
 
     #[inline]
     fn zero() -> Self {
-        half::bf16::ZERO
+        Self::ZERO
     }
 
     #[inline]
     fn one() -> Self {
-        half::bf16::ONE
+        Self::ONE
     }
 }
 

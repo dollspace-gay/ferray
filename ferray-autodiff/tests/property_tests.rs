@@ -1,3 +1,14 @@
+// Property tests sample integer-valued seeds and assert exact float
+// equality on derivative identities (e.g. `d/dx x = 1`, `d/dx c = 0`).
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 use ferray_autodiff::{DualNumber, derivative, gradient};
 use proptest::prelude::*;
 
@@ -13,7 +24,7 @@ proptest! {
     // 1. d/dx sin(x) = cos(x)
     #[test]
     fn prop_derivative_sin_is_cos(x in -10.0..10.0_f64) {
-        let d = derivative(|x| x.sin(), x);
+        let d = derivative(ferray_autodiff::DualNumber::sin, x);
         let expected = x.cos();
         prop_assert!(
             approx_eq(d, expected),
@@ -25,7 +36,7 @@ proptest! {
     // 2. d/dx cos(x) = -sin(x)
     #[test]
     fn prop_derivative_cos_is_neg_sin(x in -10.0..10.0_f64) {
-        let d = derivative(|x| x.cos(), x);
+        let d = derivative(ferray_autodiff::DualNumber::cos, x);
         let expected = -x.sin();
         prop_assert!(
             approx_eq(d, expected),
@@ -37,7 +48,7 @@ proptest! {
     // 3. d/dx exp(x) = exp(x)
     #[test]
     fn prop_derivative_exp_is_exp(x in -5.0..5.0_f64) {
-        let d = derivative(|x| x.exp(), x);
+        let d = derivative(ferray_autodiff::DualNumber::exp, x);
         let expected = x.exp();
         prop_assert!(
             approx_eq(d, expected),
@@ -49,7 +60,7 @@ proptest! {
     // 4. d/dx ln(x) = 1/x
     #[test]
     fn prop_derivative_ln_is_recip(x in 0.1..100.0_f64) {
-        let d = derivative(|x| x.ln(), x);
+        let d = derivative(ferray_autodiff::DualNumber::ln, x);
         let expected = 1.0 / x;
         prop_assert!(
             approx_eq(d, expected),
@@ -61,7 +72,7 @@ proptest! {
     // 5. d/dx sqrt(x) = 1/(2*sqrt(x))
     #[test]
     fn prop_derivative_sqrt_formula(x in 0.1..100.0_f64) {
-        let d = derivative(|x| x.sqrt(), x);
+        let d = derivative(ferray_autodiff::DualNumber::sqrt, x);
         let expected = 1.0 / (2.0 * x.sqrt());
         prop_assert!(
             approx_eq(d, expected),
@@ -120,7 +131,7 @@ proptest! {
     // 10. Quotient rule: d/dx (1/x) = -1/x^2
     #[test]
     fn prop_quotient_rule(x in 0.1..100.0_f64) {
-        let d = derivative(|x| x.recip(), x);
+        let d = derivative(ferray_autodiff::DualNumber::recip, x);
         let expected = -1.0 / (x * x);
         prop_assert!(
             approx_eq(d, expected),

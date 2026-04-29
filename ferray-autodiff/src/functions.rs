@@ -6,6 +6,11 @@
 //! without having to remember whether a given op is a method or a
 //! function.
 
+// All `DualNumber<T>` methods are pure — they return a new `DualNumber`
+// rather than mutating self. The implicit `#[must_use]` would be required
+// on every method below; the contract is uniform and clearer at file scope.
+#![allow(clippy::return_self_not_must_use)]
+
 use num_traits::Float;
 
 use crate::dual::DualNumber;
@@ -84,8 +89,8 @@ impl<T: Float> DualNumber<T> {
     }
 
     /// Logarithm with arbitrary base. Derivatives:
-    /// - d/dx log_b(x) = 1/(x ln b)
-    /// - d/db log_b(x) = -ln(x) / (b ln(b)^2)
+    /// - d/dx `log_b(x)` = 1/(x ln b)
+    /// - d/db `log_b(x)` = -ln(x) / (b ln(b)^2)
     #[inline]
     pub fn log(self, base: Self) -> Self {
         let ln_self = self.real.ln();
@@ -154,7 +159,7 @@ impl<T: Float> DualNumber<T> {
     ///
     /// `|x|` is not differentiable at `x = 0`. This implementation
     /// uses `signum(0) = 0` as the subgradient convention, matching
-    /// PyTorch's `torch.abs` and JAX's `jnp.abs` behaviour (both
+    /// `PyTorch`'s `torch.abs` and JAX's `jnp.abs` behaviour (both
     /// produce a zero gradient at 0). TensorFlow uses the same
     /// convention. The alternative — returning NaN at 0 — would
     /// silently poison downstream computations (#545).
@@ -185,7 +190,7 @@ impl<T: Float> DualNumber<T> {
         }
     }
 
-    /// Floating-point power where the exponent is a DualNumber.
+    /// Floating-point power where the exponent is a `DualNumber`.
     /// `x^p` where both x and p may carry derivatives.
     ///
     /// Derivative components:

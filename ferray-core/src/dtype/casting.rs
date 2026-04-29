@@ -26,7 +26,7 @@ use super::promotion::PromoteTo;
 
 /// Describes the safety level of a type cast.
 ///
-/// Mirrors NumPy's `casting` parameter for `np.can_cast`, `np.result_type`, etc.
+/// Mirrors `NumPy`'s `casting` parameter for `np.can_cast`, `np.result_type`, etc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CastKind {
     /// No casting allowed — types must be identical.
@@ -81,7 +81,7 @@ fn is_same_kind(from: DType, to: DType) -> bool {
     dtype_kind(from) == dtype_kind(to)
 }
 
-/// Return a "kind" category for a DType.
+/// Return a "kind" category for a `DType`.
 fn dtype_kind(dt: DType) -> u8 {
     if dt == DType::Bool {
         0 // bool is its own kind but also considered integer-compatible
@@ -130,13 +130,21 @@ pub fn common_type(a: DType, b: DType) -> FerrayResult<DType> {
 
 /// Return the smallest scalar type that can hold the full range of `dt`.
 ///
-/// This is analogous to NumPy's `np.min_scalar_type`. For example:
+/// This is analogous to `NumPy`'s `np.min_scalar_type`. For example:
 /// - `min_scalar_type(DType::I64)` returns `DType::I8` (the smallest signed int)
 /// - `min_scalar_type(DType::F64)` returns `DType::F32` (smallest float that is lossless for the kind)
 ///
 /// Note: without a concrete value, we return the smallest type of the same kind.
-pub fn min_scalar_type(dt: DType) -> DType {
-    use DType::*;
+#[must_use]
+pub const fn min_scalar_type(dt: DType) -> DType {
+    #[cfg(feature = "bf16")]
+    use DType::BF16;
+    #[cfg(feature = "f16")]
+    use DType::F16;
+    use DType::{
+        Bool, Complex32, Complex64, F32, F64, I8, I16, I32, I64, I128, I256, U8, U16, U32, U64,
+        U128,
+    };
     match dt {
         Bool => Bool,
         U8 | U16 | U32 | U64 | U128 => U8,
@@ -154,7 +162,7 @@ pub fn min_scalar_type(dt: DType) -> DType {
 // issubdtype — type hierarchy check (REQ-26)
 // ---------------------------------------------------------------------------
 
-/// Category for dtype hierarchy checks, matching NumPy's abstract type categories.
+/// Category for dtype hierarchy checks, matching `NumPy`'s abstract type categories.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DTypeCategory {
     /// Any numeric type (integer, float, or complex).
@@ -173,7 +181,7 @@ pub enum DTypeCategory {
 
 /// Check if a dtype is a sub-type of a given category.
 ///
-/// Analogous to NumPy's `np.issubdtype(dtype, category)`.
+/// Analogous to `NumPy`'s `np.issubdtype(dtype, category)`.
 ///
 /// # Examples
 /// ```
@@ -185,7 +193,8 @@ pub enum DTypeCategory {
 /// assert!(issubdtype(DType::I32, DTypeCategory::Number));
 /// assert!(!issubdtype(DType::I32, DTypeCategory::Floating));
 /// ```
-pub fn issubdtype(dt: DType, category: DTypeCategory) -> bool {
+#[must_use]
+pub const fn issubdtype(dt: DType, category: DTypeCategory) -> bool {
     match category {
         DTypeCategory::Number => true, // all our dtypes are numeric
         DTypeCategory::Integer => dt.is_integer(),
@@ -202,14 +211,16 @@ pub fn issubdtype(dt: DType, category: DTypeCategory) -> bool {
 
 /// Check if an array's element type is a real (non-complex) type.
 ///
-/// Analogous to NumPy's `np.isrealobj`.
+/// Analogous to `NumPy`'s `np.isrealobj`.
+#[must_use]
 pub fn isrealobj<T: Element>() -> bool {
     !T::dtype().is_complex()
 }
 
 /// Check if an array's element type is a complex type.
 ///
-/// Analogous to NumPy's `np.iscomplexobj`.
+/// Analogous to `NumPy`'s `np.iscomplexobj`.
+#[must_use]
 pub fn iscomplexobj<T: Element>() -> bool {
     T::dtype().is_complex()
 }
@@ -256,7 +267,7 @@ impl<T: Element, D: Dimension> AsType<D> for crate::array::owned::Array<T, D> {
     }
 }
 
-/// Blanket implementation: any T that can PromoteTo<U> can astype.
+/// Blanket implementation: any T that can `PromoteTo`<U> can astype.
 #[cfg(feature = "std")]
 impl<T, U, D> AsTypeInner<U, D> for crate::array::owned::Array<T, D>
 where
@@ -265,7 +276,7 @@ where
     D: Dimension,
 {
     fn astype_inner(&self) -> FerrayResult<crate::array::owned::Array<U, D>> {
-        let mapped = self.inner.mapv(|x| x.promote());
+        let mapped = self.inner.mapv(super::promotion::PromoteTo::promote);
         Ok(crate::array::owned::Array::from_ndarray(mapped))
     }
 }
@@ -288,7 +299,7 @@ where
 {
     /// Cast this array to element type `U` with the given safety check.
     ///
-    /// This is the general-purpose casting method matching NumPy's
+    /// This is the general-purpose casting method matching `NumPy`'s
     /// `arr.astype(dtype, casting=...)`. Unlike [`AsType::astype`] (which is
     /// restricted to safe widening), this method permits any cast as long
     /// as `can_cast(T::dtype(), U::dtype(), casting)` returns `true`.
@@ -298,7 +309,7 @@ where
     ///   - [`CastKind::No`] / [`CastKind::Equiv`]: only `T == U` allowed
     ///   - [`CastKind::Safe`]: information-preserving widening only
     ///   - [`CastKind::SameKind`]: int↔int, float↔float, etc. (may narrow)
-    ///   - [`CastKind::Unsafe`]: any cast (the NumPy default)
+    ///   - [`CastKind::Unsafe`]: any cast (the `NumPy` default)
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidDtype` if the requested cast is not
@@ -342,7 +353,7 @@ where
 
 /// Reinterpret the raw bytes of an array as a different element type.
 ///
-/// This is analogous to NumPy's `.view(dtype)`. It requires that the element
+/// This is analogous to `NumPy`'s `.view(dtype)`. It requires that the element
 /// sizes match (or the last dimension is adjusted accordingly).
 ///
 /// # Safety
@@ -383,12 +394,13 @@ pub fn view_cast<T: Element, U: Element, D: Dimension>(
     // Both types have the same size and compatible alignment
     let data: Vec<T> = arr.inner.iter().cloned().collect();
     let len = data.len();
+    let cap = data.capacity();
 
     // SAFETY: T and U have the same size and U's alignment <= T's alignment.
     // The Vec<T> allocation satisfies U's alignment requirement.
     let reinterpreted: Vec<U> = unsafe {
         let mut data = core::mem::ManuallyDrop::new(data);
-        Vec::from_raw_parts(data.as_mut_ptr() as *mut U, len, len)
+        Vec::from_raw_parts(data.as_mut_ptr().cast::<U>(), len, cap)
     };
 
     crate::array::owned::Array::from_vec(arr.dim().clone(), reinterpreted)
@@ -409,17 +421,17 @@ impl<T: Element, D: Dimension> crate::array::owned::Array<T, D> {
         other: &crate::array::owned::Array<U, D>,
     ) -> FerrayResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
     where
-        U: Element,
+        U: Element + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
         T: super::promotion::Promoted<U> + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
-        U: PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
         <T as super::promotion::Promoted<U>>::Output:
             Element + core::ops::Add<Output = <T as super::promotion::Promoted<U>>::Output>,
     {
         type Out<A, B> = <A as super::promotion::Promoted<B>>::Output;
 
-        let a_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> = self.inner.mapv(|x| x.promote());
+        let a_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> =
+            self.inner.mapv(super::promotion::PromoteTo::promote);
         let b_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> =
-            other.inner.mapv(|x| x.promote());
+            other.inner.mapv(super::promotion::PromoteTo::promote);
 
         let result = a_promoted + b_promoted;
         Ok(crate::array::owned::Array::from_ndarray(result))
@@ -431,17 +443,17 @@ impl<T: Element, D: Dimension> crate::array::owned::Array<T, D> {
         other: &crate::array::owned::Array<U, D>,
     ) -> FerrayResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
     where
-        U: Element,
+        U: Element + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
         T: super::promotion::Promoted<U> + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
-        U: PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
         <T as super::promotion::Promoted<U>>::Output:
             Element + core::ops::Sub<Output = <T as super::promotion::Promoted<U>>::Output>,
     {
         type Out<A, B> = <A as super::promotion::Promoted<B>>::Output;
 
-        let a_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> = self.inner.mapv(|x| x.promote());
+        let a_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> =
+            self.inner.mapv(super::promotion::PromoteTo::promote);
         let b_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> =
-            other.inner.mapv(|x| x.promote());
+            other.inner.mapv(super::promotion::PromoteTo::promote);
 
         let result = a_promoted - b_promoted;
         Ok(crate::array::owned::Array::from_ndarray(result))
@@ -453,17 +465,17 @@ impl<T: Element, D: Dimension> crate::array::owned::Array<T, D> {
         other: &crate::array::owned::Array<U, D>,
     ) -> FerrayResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
     where
-        U: Element,
+        U: Element + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
         T: super::promotion::Promoted<U> + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
-        U: PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
         <T as super::promotion::Promoted<U>>::Output:
             Element + core::ops::Mul<Output = <T as super::promotion::Promoted<U>>::Output>,
     {
         type Out<A, B> = <A as super::promotion::Promoted<B>>::Output;
 
-        let a_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> = self.inner.mapv(|x| x.promote());
+        let a_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> =
+            self.inner.mapv(super::promotion::PromoteTo::promote);
         let b_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> =
-            other.inner.mapv(|x| x.promote());
+            other.inner.mapv(super::promotion::PromoteTo::promote);
 
         let result = a_promoted * b_promoted;
         Ok(crate::array::owned::Array::from_ndarray(result))
@@ -475,17 +487,17 @@ impl<T: Element, D: Dimension> crate::array::owned::Array<T, D> {
         other: &crate::array::owned::Array<U, D>,
     ) -> FerrayResult<crate::array::owned::Array<<T as super::promotion::Promoted<U>>::Output, D>>
     where
-        U: Element,
+        U: Element + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
         T: super::promotion::Promoted<U> + PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
-        U: PromoteTo<<T as super::promotion::Promoted<U>>::Output>,
         <T as super::promotion::Promoted<U>>::Output:
             Element + core::ops::Div<Output = <T as super::promotion::Promoted<U>>::Output>,
     {
         type Out<A, B> = <A as super::promotion::Promoted<B>>::Output;
 
-        let a_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> = self.inner.mapv(|x| x.promote());
+        let a_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> =
+            self.inner.mapv(super::promotion::PromoteTo::promote);
         let b_promoted: ndarray::Array<Out<T, U>, D::NdarrayDim> =
-            other.inner.mapv(|x| x.promote());
+            other.inner.mapv(super::promotion::PromoteTo::promote);
 
         let result = a_promoted / b_promoted;
         Ok(crate::array::owned::Array::from_ndarray(result))

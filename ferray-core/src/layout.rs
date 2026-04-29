@@ -14,18 +14,21 @@ pub enum MemoryLayout {
 impl MemoryLayout {
     /// Returns `true` if the layout is C-contiguous (row-major).
     #[inline]
+    #[must_use]
     pub fn is_c_contiguous(self) -> bool {
         self == Self::C
     }
 
     /// Returns `true` if the layout is Fortran-contiguous (column-major).
     #[inline]
+    #[must_use]
     pub fn is_f_contiguous(self) -> bool {
         self == Self::Fortran
     }
 
     /// Returns `true` if the layout is neither C nor Fortran contiguous.
     #[inline]
+    #[must_use]
     pub fn is_custom(self) -> bool {
         self == Self::Custom
     }

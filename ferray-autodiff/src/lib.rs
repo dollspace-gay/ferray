@@ -31,6 +31,29 @@
 //!
 //! The public API is re-exported at the crate root for ergonomic use.
 
+// Forward-mode autodiff threads `f32`/`f64` derivatives through every
+// arithmetic op; the test suite exercises edge cases that compare against
+// closed-form analytic answers (`f.cos() == cos(x)` exactly), and `f32`
+// helpers cast index/length values for finite-difference comparisons.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::too_long_first_doc_paragraph,
+    clippy::needless_pass_by_value,
+    clippy::match_same_arms,
+    clippy::suboptimal_flops
+)]
+
 pub mod api;
 pub mod array_ops;
 pub mod dual;

@@ -9,13 +9,14 @@ use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::scalar::LinalgFloat;
 
-/// Convert a 2D ferray Array<T, Ix2> to a faer::Mat<T>.
+/// Convert a 2D ferray Array<T, Ix2> to a `faer::Mat`<T>.
 ///
 /// Convert a 2D ferray Array to faer's column-major Mat.
 ///
 /// Uses `as_slice()` for C-contiguous arrays to avoid an intermediate
 /// allocation — the data is indexed directly from the contiguous buffer.
 /// Non-contiguous arrays fall back to iterator-based collection.
+#[must_use]
 pub fn array2_to_faer<T: LinalgFloat>(a: &Array<T, Ix2>) -> faer::Mat<T> {
     let shape = a.shape();
     let (m, n) = (shape[0], shape[1]);
@@ -29,7 +30,7 @@ pub fn array2_to_faer<T: LinalgFloat>(a: &Array<T, Ix2>) -> faer::Mat<T> {
     }
 }
 
-/// Convert a 2D ferray Array<T, D> to a faer::Mat<T> using iter-based
+/// Convert a 2D ferray Array<T, D> to a `faer::Mat`<T> using iter-based
 /// indexing for any layout.
 pub fn array2_to_faer_general<T: LinalgFloat, D: Dimension>(
     a: &Array<T, D>,
@@ -50,7 +51,7 @@ pub fn array2_to_faer_general<T: LinalgFloat, D: Dimension>(
     }
 }
 
-/// Convert a faer::Mat<T> back to a ferray Array<T, Ix2>.
+/// Convert a `faer::Mat`<T> back to a ferray Array<T, Ix2>.
 ///
 /// faer stores matrices in column-major layout while ferray is
 /// row-major, so the inner loop runs over columns for each row to
@@ -64,7 +65,7 @@ pub fn faer_to_array2<T: LinalgFloat>(mat: &faer::Mat<T>) -> FerrayResult<Array<
     Array::from_vec(Ix2::new([m, n]), data)
 }
 
-/// Convert a faer::Mat<T> to a ferray Array<T, IxDyn>.
+/// Convert a `faer::Mat`<T> to a ferray Array<T, `IxDyn`>.
 pub fn faer_to_arrayd<T: LinalgFloat>(mat: &faer::Mat<T>) -> FerrayResult<Array<T, IxDyn>> {
     let (m, n) = mat.shape();
     let data = faer_mat_to_row_major_vec(mat, m, n);
@@ -88,6 +89,7 @@ fn faer_mat_to_row_major_vec<T: LinalgFloat>(mat: &faer::Mat<T>, m: usize, n: us
 }
 
 /// Convert a 1D ferray array to a faer column vector (Mat with 1 column).
+#[must_use]
 pub fn array1_to_faer_col<T: LinalgFloat>(a: &Array<T, Ix1>) -> faer::Mat<T> {
     let n = a.shape()[0];
     let data: Vec<T> = a.iter().copied().collect();

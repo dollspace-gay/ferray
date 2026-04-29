@@ -246,7 +246,7 @@ mod tests {
         let mut arr = Array::<i64, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
         rng.shuffle(&mut arr).unwrap();
         let mut sorted: Vec<i64> = arr.as_slice().unwrap().to_vec();
-        sorted.sort();
+        sorted.sort_unstable();
         assert_eq!(sorted, vec![1, 2, 3, 4, 5]);
     }
 
@@ -256,7 +256,7 @@ mod tests {
         let arr = Array::<i64, Ix1>::from_vec(Ix1::new([5]), vec![10, 20, 30, 40, 50]).unwrap();
         let perm = rng.permutation(&arr).unwrap();
         let mut sorted: Vec<i64> = perm.as_slice().unwrap().to_vec();
-        sorted.sort();
+        sorted.sort_unstable();
         assert_eq!(sorted, vec![10, 20, 30, 40, 50]);
     }
 
@@ -265,7 +265,7 @@ mod tests {
         let mut rng = default_rng_seeded(42);
         let perm = rng.permutation_range(10).unwrap();
         let mut sorted: Vec<i64> = perm.as_slice().unwrap().to_vec();
-        sorted.sort();
+        sorted.sort_unstable();
         let expected: Vec<i64> = (0..10).collect();
         assert_eq!(sorted, expected);
     }
@@ -279,8 +279,8 @@ mod tests {
         // Very unlikely (10! - 1 chance) that shuffle produces identity
         let shuffled = arr.as_slice().unwrap().to_vec();
         // Just verify it's a valid permutation
-        let mut sorted = shuffled.clone();
-        sorted.sort();
+        let mut sorted = shuffled;
+        sorted.sort_unstable();
         assert_eq!(sorted, original);
     }
 
@@ -363,7 +363,7 @@ mod tests {
         let arr = Array::<i64, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
         let result = rng.permuted(&arr, 0).unwrap();
         let mut sorted: Vec<i64> = result.as_slice().unwrap().to_vec();
-        sorted.sort();
+        sorted.sort_unstable();
         assert_eq!(sorted, vec![1, 2, 3, 4, 5]);
     }
 }

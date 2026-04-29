@@ -1,4 +1,17 @@
-/// Oracle tests: validate ferray-polynomial against NumPy fixture outputs.
+//! Oracle tests: validate ferray-polynomial against `NumPy` fixture outputs.
+
+// Oracle tests cross JSON fixture indices through `usize` and ULP-compare
+// against NumPy reference outputs — the same dtype roundtrip contract as
+// the other oracle suites.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 use ferray_polynomial::{Poly, Polynomial};
 use ferray_test_oracle::*;
 

@@ -31,7 +31,7 @@ where
     /// Return a regular array with masked positions replaced by the array's
     /// stored [`MaskedArray::fill_value`].
     ///
-    /// Equivalent to NumPy's `arr.filled()` with no argument. Use [`MaskedArray::filled`]
+    /// Equivalent to `NumPy`'s `arr.filled()` with no argument. Use [`MaskedArray::filled`]
     /// to override the fill value for a single call.
     ///
     /// # Errors

@@ -51,7 +51,7 @@ pub fn find_roots_from_power_coeffs(coeffs: &[f64]) -> Result<Vec<Complex<f64>>,
             let a = coeffs[2];
             let b = coeffs[1];
             let c = coeffs[0];
-            let disc = b * b - 4.0 * a * c;
+            let disc = b.mul_add(b, -(4.0 * a * c));
             if disc >= 0.0 {
                 let sqrt_disc = disc.sqrt();
                 let sign_b = if b >= 0.0 { 1.0 } else { -1.0 };
@@ -110,7 +110,7 @@ fn newton_polish(coeffs: &[f64], z: &mut Complex<f64>) {
             let mut dp = 0.0;
             for i in (0..n - 1).rev() {
                 dp = dp * x + p;
-                p = p * x + coeffs[i];
+                p = p.mul_add(x, coeffs[i]);
             }
             if dp.abs() < f64::EPSILON * 1e-100 {
                 break;
@@ -285,11 +285,11 @@ fn qr_eigenvalues(mat: &[f64], n: usize) -> Result<Vec<Complex<f64>>, FerrayErro
         let a21 = h[(p - 1) * n + (p - 2)];
         let a22 = h[(p - 1) * n + (p - 1)];
         let trace = a11 + a22;
-        let det = a11 * a22 - a12 * a21;
-        let disc = trace * trace - 4.0 * det;
+        let det = a11.mul_add(a22, -(a12 * a21));
+        let disc = trace.mul_add(trace, -(4.0 * det));
 
         let shift = if disc >= 0.0 {
-            let s1 = (trace + disc.sqrt()) / 2.0;
+            let s1 = f64::midpoint(trace, disc.sqrt());
             let s2 = (trace - disc.sqrt()) / 2.0;
             // Pick the shift closest to a22
             if (s1 - a22).abs() < (s2 - a22).abs() {
@@ -381,7 +381,7 @@ fn qr_step_hessenberg(h: &mut [f64], n: usize, p: usize, shift: f64) {
 
     for k in 0..(p - 1) {
         // Givens rotation to zero out z
-        let r = (x * x + z * z).sqrt();
+        let r = x.hypot(z);
         if r < f64::EPSILON * 1e-100 {
             x = h[(k + 1) * n + k];
             if k + 2 < p {
@@ -396,8 +396,8 @@ fn qr_step_hessenberg(h: &mut [f64], n: usize, p: usize, shift: f64) {
         for j in (if k > 0 { k - 1 } else { 0 })..p {
             let h1 = h[k * n + j];
             let h2 = h[(k + 1) * n + j];
-            h[k * n + j] = c * h1 + s * h2;
-            h[(k + 1) * n + j] = -s * h1 + c * h2;
+            h[k * n + j] = c.mul_add(h1, s * h2);
+            h[(k + 1) * n + j] = (-s).mul_add(h1, c * h2);
         }
 
         // Apply rotation from right: columns k and k+1
@@ -405,8 +405,8 @@ fn qr_step_hessenberg(h: &mut [f64], n: usize, p: usize, shift: f64) {
         for i in 0..row_limit {
             let h1 = h[i * n + k];
             let h2 = h[i * n + (k + 1)];
-            h[i * n + k] = c * h1 + s * h2;
-            h[i * n + (k + 1)] = -s * h1 + c * h2;
+            h[i * n + k] = c.mul_add(h1, s * h2);
+            h[i * n + (k + 1)] = (-s).mul_add(h1, c * h2);
         }
 
         if k + 2 < p {
@@ -419,13 +419,13 @@ fn qr_step_hessenberg(h: &mut [f64], n: usize, p: usize, shift: f64) {
 /// Compute eigenvalues of a 2x2 matrix.
 fn eigenvalues_2x2(a: f64, b: f64, c: f64, d: f64) -> (Complex<f64>, Complex<f64>) {
     let trace = a + d;
-    let det = a * d - b * c;
-    let disc = trace * trace - 4.0 * det;
+    let det = a.mul_add(d, -(b * c));
+    let disc = trace.mul_add(trace, -(4.0 * det));
 
     if disc >= 0.0 {
         let sqrt_disc = disc.sqrt();
         (
-            Complex::new((trace + sqrt_disc) / 2.0, 0.0),
+            Complex::new(f64::midpoint(trace, sqrt_disc), 0.0),
             Complex::new((trace - sqrt_disc) / 2.0, 0.0),
         )
     } else {

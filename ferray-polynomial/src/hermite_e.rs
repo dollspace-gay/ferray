@@ -12,13 +12,13 @@ use crate::mapping::{auto_domain, map_x, mapparms, validate_domain_window};
 use crate::roots::find_roots_from_power_coeffs;
 use crate::traits::{FromPowerBasis, Poly, ToPowerBasis};
 
-/// Default domain and window for the HermiteE basis. NumPy uses `[-1, 1]`.
+/// Default domain and window for the `HermiteE` basis. `NumPy` uses `[-1, 1]`.
 const HERMITE_E_DEFAULT_DOMAIN: [f64; 2] = [-1.0, 1.0];
 const HERMITE_E_DEFAULT_WINDOW: [f64; 2] = [-1.0, 1.0];
 
 /// A polynomial in the probabilist's Hermite basis.
 ///
-/// Represents p(x) = c[0]*He_0(u) + c[1]*He_1(u) + ... + c[n]*He_n(u)
+/// Represents p(x) = c[0]*`He_0(u)` + c[1]*`He_1(u)` + ... + c[n]*`He_n(u)`
 /// where `u = offset + scale * x` is the affine map from `domain` to `window`.
 /// By default the mapping is identity.
 #[derive(Debug, Clone, PartialEq)]
@@ -32,8 +32,9 @@ pub struct HermiteE {
 }
 
 impl HermiteE {
-    /// Create a new HermiteE polynomial from coefficients. Defaults to
+    /// Create a new `HermiteE` polynomial from coefficients. Defaults to
     /// identity mapping (`domain = window = [-1, 1]`).
+    #[must_use]
     pub fn new(coeffs: &[f64]) -> Self {
         let coeffs = if coeffs.is_empty() {
             vec![0.0]
@@ -85,9 +86,9 @@ impl HermiteE {
         })
     }
 
-    /// Internal: build a new HermiteE with the same mapping as self.
+    /// Internal: build a new `HermiteE` with the same mapping as self.
     #[inline]
-    fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
+    const fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
         Self {
             coeffs,
             domain: self.domain,
@@ -95,7 +96,7 @@ impl HermiteE {
         }
     }
 
-    /// Internal: verify two HermiteE polynomials share the same mapping.
+    /// Internal: verify two `HermiteE` polynomials share the same mapping.
     fn check_same_mapping(&self, other: &Self) -> Result<(), FerrayError> {
         if self.domain != other.domain || self.window != other.window {
             return Err(FerrayError::invalid_value(format!(
@@ -122,15 +123,15 @@ fn clenshaw_hermite_e(coeffs: &[f64], x: f64) -> f64 {
     let mut b_k2 = 0.0;
 
     for k in (1..n).rev() {
-        let b_k = coeffs[k] + x * b_k1 - (k as f64) * b_k2;
+        let b_k = (k as f64).mul_add(-b_k2, x.mul_add(b_k1, coeffs[k]));
         b_k2 = b_k1;
         b_k1 = b_k;
     }
 
-    coeffs[0] + x * b_k1 - b_k2
+    x.mul_add(b_k1, coeffs[0]) - b_k2
 }
 
-/// Convert HermiteE coefficients to power basis coefficients.
+/// Convert `HermiteE` coefficients to power basis coefficients.
 fn hermite_e_to_power(he_coeffs: &[f64]) -> Vec<f64> {
     let n = he_coeffs.len();
     if n == 0 {
@@ -175,7 +176,7 @@ fn hermite_e_to_power(he_coeffs: &[f64]) -> Vec<f64> {
     power
 }
 
-/// Convert power basis coefficients to HermiteE coefficients.
+/// Convert power basis coefficients to `HermiteE` coefficients.
 fn power_to_hermite_e(power_coeffs: &[f64]) -> Vec<f64> {
     let n = power_coeffs.len();
     if n == 0 {
@@ -440,7 +441,7 @@ impl From<crate::power::Polynomial> for HermiteE {
 
 impl From<HermiteE> for crate::power::Polynomial {
     fn from(h: HermiteE) -> Self {
-        crate::power::Polynomial::new(&hermite_e_to_power(&h.coeffs))
+        Self::new(&hermite_e_to_power(&h.coeffs))
     }
 }
 
@@ -477,13 +478,7 @@ mod tests {
         let recovered = power_to_hermite_e(&power);
 
         for (i, (&orig, &rec)) in original.iter().zip(recovered.iter()).enumerate() {
-            assert!(
-                (orig - rec).abs() < 1e-10,
-                "index {}: {} != {}",
-                i,
-                orig,
-                rec
-            );
+            assert!((orig - rec).abs() < 1e-10, "index {i}: {orig} != {rec}");
         }
     }
 
@@ -498,10 +493,7 @@ mod tests {
             let got = recovered.eval(x).unwrap();
             assert!(
                 (expected - got).abs() < 1e-6,
-                "at x={}: expected {}, got {}",
-                x,
-                expected,
-                got
+                "at x={x}: expected {expected}, got {got}"
             );
         }
     }

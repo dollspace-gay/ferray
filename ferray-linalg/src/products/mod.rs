@@ -159,8 +159,7 @@ pub fn cross<T: LinalgFloat>(
     let b_shape = b.shape();
     if a_shape != [3] || b_shape != [3] {
         return Err(FerrayError::shape_mismatch(format!(
-            "cross: both arrays must be 1-D with 3 elements, got shapes {:?} and {:?}",
-            a_shape, b_shape
+            "cross: both arrays must be 1-D with 3 elements, got shapes {a_shape:?} and {b_shape:?}"
         )));
     }
     let ad = borrow_data(a);
@@ -196,8 +195,7 @@ pub fn inner<T: LinalgFloat>(
     let last_b = b_shape.last().copied().unwrap_or(1);
     if last_a != last_b {
         return Err(FerrayError::shape_mismatch(format!(
-            "inner: last dimensions must match ({} != {})",
-            last_a, last_b
+            "inner: last dimensions must match ({last_a} != {last_b})"
         )));
     }
 
@@ -209,7 +207,7 @@ pub fn inner<T: LinalgFloat>(
 /// Outer product of two arrays.
 ///
 /// Analogous to `numpy.outer`. Both inputs are flattened to 1-D and the
-/// result has shape `(a.size(), b.size())`. Mirrors NumPy's documented
+/// result has shape `(a.size(), b.size())`. Mirrors `NumPy`'s documented
 /// "if a and b are any larger than 1D, they are flattened" behaviour;
 /// #203 made this contract explicit so callers no longer see a silent
 /// reshape as a bug.
@@ -392,8 +390,7 @@ fn matmul_2d<T: LinalgFloat>(
     let (k2, n) = (b_shape[0], b_shape[1]);
     if k1 != k2 {
         return Err(FerrayError::shape_mismatch(format!(
-            "matmul: inner dimensions don't match ({}x{} @ {}x{})",
-            m, k1, k2, n
+            "matmul: inner dimensions don't match ({m}x{k1} @ {k2}x{n})"
         )));
     }
 
@@ -425,8 +422,7 @@ fn matmul_batched<T: LinalgFloat>(
 
     if a_k != b_k {
         return Err(FerrayError::shape_mismatch(format!(
-            "matmul: inner dimensions don't match ({} != {})",
-            a_k, b_k
+            "matmul: inner dimensions don't match ({a_k} != {b_k})"
         )));
     }
 
@@ -692,8 +688,8 @@ pub fn multi_dot<T: LinalgFloat>(arrays: &[&Array<T, IxDyn>]) -> FerrayResult<Ar
         Borrowed(&'a Array<T, IxDyn>),
         Owned(Array<T, IxDyn>),
     }
-    impl<'a, T: LinalgFloat> ChainLeaf<'a, T> {
-        fn as_ref(&self) -> &Array<T, IxDyn> {
+    impl<T: LinalgFloat> ChainLeaf<'_, T> {
+        const fn as_ref(&self) -> &Array<T, IxDyn> {
             match self {
                 ChainLeaf::Borrowed(a) => a,
                 ChainLeaf::Owned(a) => a,
@@ -733,7 +729,7 @@ pub fn multi_dot<T: LinalgFloat>(arrays: &[&Array<T, IxDyn>]) -> FerrayResult<Ar
 /// Vector dot product along a specified axis.
 ///
 /// Computes the dot product of corresponding vectors along `axis`.
-/// This is equivalent to `numpy.vecdot` (new in NumPy 2.0).
+/// This is equivalent to `numpy.vecdot` (new in `NumPy` 2.0).
 ///
 /// # Errors
 /// - `FerrayError::ShapeMismatch` if arrays have incompatible shapes.
@@ -749,8 +745,7 @@ pub fn vecdot<T: LinalgFloat>(
 
     if a_shape != b_shape {
         return Err(FerrayError::shape_mismatch(format!(
-            "vecdot: shapes {:?} and {:?} must match",
-            a_shape, b_shape
+            "vecdot: shapes {a_shape:?} and {b_shape:?} must match"
         )));
     }
 
@@ -985,8 +980,8 @@ mod tests {
         // v @ m = [1*1+2*0+3*1, 1*0+2*1+3*1] = [4, 5]
         // [4, 5] @ n = [4*1+5*3, 4*2+5*4] = [19, 28]
         let r: Vec<f64> = result.iter().copied().collect();
-        assert!((r[0] - 19.0).abs() < 1e-10, "got {:?}", r);
-        assert!((r[1] - 28.0).abs() < 1e-10, "got {:?}", r);
+        assert!((r[0] - 19.0).abs() < 1e-10, "got {r:?}");
+        assert!((r[1] - 28.0).abs() < 1e-10, "got {r:?}");
     }
 
     #[test]
@@ -1006,8 +1001,8 @@ mod tests {
         let result = multi_dot(&[&m, &n, &v]).unwrap();
         // n is identity, so it's m @ v = [1+0+3, 0+2+3] = [4, 5]
         let r: Vec<f64> = result.iter().copied().collect();
-        assert!((r[0] - 4.0).abs() < 1e-10, "got {:?}", r);
-        assert!((r[1] - 5.0).abs() < 1e-10, "got {:?}", r);
+        assert!((r[0] - 4.0).abs() < 1e-10, "got {r:?}");
+        assert!((r[1] - 5.0).abs() < 1e-10, "got {r:?}");
     }
 
     #[test]
@@ -1049,11 +1044,7 @@ mod tests {
                 let ulps = diff / (expected.abs() * f64::EPSILON).max(f64::MIN_POSITIVE);
                 assert!(
                     ulps < 4.0 || diff < 1e-10,
-                    "matmul[{},{}]: diff={}, ulps={}",
-                    check_i,
-                    check_j,
-                    diff,
-                    ulps
+                    "matmul[{check_i},{check_j}]: diff={diff}, ulps={ulps}"
                 );
             }
         }

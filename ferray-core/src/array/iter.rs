@@ -154,7 +154,7 @@ impl<'a, T: Element, D: Dimension> IntoIterator for &'a mut Array<T, D> {
 // ArrayView iteration
 // ---------------------------------------------------------------------------
 
-impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
+impl<T: Element, D: Dimension> ArrayView<'_, T, D> {
     /// Iterate over all elements in logical order.
     pub fn iter(&self) -> impl Iterator<Item = &T> + '_ {
         self.inner.iter()

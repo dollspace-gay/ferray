@@ -4,11 +4,11 @@ mod pcg64;
 mod philox;
 mod xoshiro256;
 
-/// SplitMix64: a fast 64-bit hash-based PRNG used exclusively for
+/// `SplitMix64`: a fast 64-bit hash-based PRNG used exclusively for
 /// seeding other generators (Xoshiro256**, PCG64) from a single u64
 /// seed. The function was previously copy-pasted into both
 /// `pcg64.rs` and `xoshiro256.rs` (#259).
-pub(crate) fn splitmix64(state: &mut u64) -> u64 {
+pub(crate) const fn splitmix64(state: &mut u64) -> u64 {
     *state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
     let mut z = *state;
     z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
@@ -22,7 +22,7 @@ pub use xoshiro256::Xoshiro256StarStar;
 
 /// Trait for pluggable pseudo-random number generators.
 ///
-/// All BitGenerators are `Send` (can be transferred between threads) but NOT `Sync`
+/// All `BitGenerators` are `Send` (can be transferred between threads) but NOT `Sync`
 /// (they are stateful and require `&mut self`).
 ///
 /// Concrete implementations: [`Pcg64`], [`Philox`], [`Xoshiro256StarStar`].

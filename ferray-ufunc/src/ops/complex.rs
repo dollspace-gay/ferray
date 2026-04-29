@@ -40,7 +40,7 @@ where
     Complex<T>: Element,
     D: Dimension,
 {
-    let data: Vec<Complex<T>> = input.iter().map(|c| c.conj()).collect();
+    let data: Vec<Complex<T>> = input.iter().map(num_complex::Complex::conj).collect();
     Array::from_vec(input.dim().clone(), data)
 }
 

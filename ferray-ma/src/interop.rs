@@ -97,7 +97,7 @@ where
     /// The function `f` is called on the **entire** data array — masked
     /// positions are processed alongside unmasked ones, but their values
     /// in the result are immediately overwritten with the masked array's
-    /// `fill_value`. This matches NumPy's `__array_ufunc__` semantics where
+    /// `fill_value`. This matches `NumPy`'s `__array_ufunc__` semantics where
     /// ufuncs run over the raw data and the mask is propagated separately.
     ///
     /// # Example
@@ -108,7 +108,7 @@ where
     ///
     /// # Errors
     /// Forwards any error from `f`.
-    pub fn apply_unary<F>(&self, f: F) -> FerrayResult<MaskedArray<T, D>>
+    pub fn apply_unary<F>(&self, f: F) -> FerrayResult<Self>
     where
         F: FnOnce(&Array<T, D>) -> FerrayResult<Array<T, D>>,
     {
@@ -129,7 +129,7 @@ where
             .map(|(v, m)| if *m { fill } else { *v })
             .collect();
         let final_data = Array::from_vec(self.dim().clone(), masked_data)?;
-        let mut result = MaskedArray::new(final_data, self.mask().clone())?;
+        let mut result = Self::new(final_data, self.mask().clone())?;
         result.set_fill_value(fill);
         Ok(result)
     }
@@ -188,11 +188,7 @@ where
     /// # Errors
     /// Returns `FerrayError::ShapeMismatch` if shapes differ. Forwards any
     /// error from `f`.
-    pub fn apply_binary<F>(
-        &self,
-        other: &MaskedArray<T, D>,
-        f: F,
-    ) -> FerrayResult<MaskedArray<T, D>>
+    pub fn apply_binary<F>(&self, other: &Self, f: F) -> FerrayResult<Self>
     where
         F: FnOnce(&Array<T, D>, &Array<T, D>) -> FerrayResult<Array<T, D>>,
     {
@@ -228,7 +224,7 @@ where
             .map(|(v, m)| if *m { fill } else { *v })
             .collect();
         let final_data = Array::from_vec(self.dim().clone(), masked_data)?;
-        let mut result = MaskedArray::new(final_data, union_mask)?;
+        let mut result = Self::new(final_data, union_mask)?;
         result.set_fill_value(fill);
         Ok(result)
     }
@@ -358,7 +354,7 @@ mod tests {
 
     /// Demonstrates the canonical interop pattern with a real ferray-stats
     /// call: pass `&MaskedArray` through `as_ref()` to a function that
-    /// expects `&Array`. This loses the mask (per the AsRef contract) but
+    /// expects `&Array`. This loses the mask (per the `AsRef` contract) but
     /// is the cheapest way to bridge.
     #[test]
     fn as_ref_works_with_array_consuming_function() {
@@ -435,7 +431,7 @@ pub trait MaskAware<T: Element, D: Dimension> {
 
 impl<T: Element, D: Dimension> MaskAware<T, D> for Array<T, D> {
     #[inline]
-    fn data(&self) -> &Array<T, D> {
+    fn data(&self) -> &Self {
         self
     }
 
@@ -458,12 +454,12 @@ impl<T: Element, D: Dimension> MaskAware<T, D> for Array<T, D> {
 impl<T: Element, D: Dimension> MaskAware<T, D> for MaskedArray<T, D> {
     #[inline]
     fn data(&self) -> &Array<T, D> {
-        MaskedArray::data(self)
+        Self::data(self)
     }
 
     #[inline]
     fn mask_opt(&self) -> Option<&Array<bool, D>> {
-        MaskedArray::mask_opt(self)
+        Self::mask_opt(self)
     }
 
     #[inline]
@@ -471,7 +467,7 @@ impl<T: Element, D: Dimension> MaskAware<T, D> for MaskedArray<T, D> {
     where
         T: Copy,
     {
-        MaskedArray::fill_value(self)
+        Self::fill_value(self)
     }
 }
 
@@ -593,7 +589,7 @@ mod mask_aware_tests {
         let a = arr_f64(vec![1.0, 2.0, 3.0]);
         let result = ma_apply_unary(&a, |x| {
             let data: Vec<f64> = x.iter().map(|v| v * 2.0).collect();
-            Ok(Array::from_vec(x.dim().clone(), data)?)
+            Array::from_vec(x.dim().clone(), data)
         })
         .unwrap();
         assert_eq!(
@@ -609,7 +605,7 @@ mod mask_aware_tests {
         let ma = ma_f64(vec![1.0, 2.0, 3.0], vec![false, true, false]);
         let result = ma_apply_unary(&ma, |x| {
             let data: Vec<f64> = x.iter().map(|v| v * 2.0).collect();
-            Ok(Array::from_vec(x.dim().clone(), data)?)
+            Array::from_vec(x.dim().clone(), data)
         })
         .unwrap();
         // Mask survives the operation.
@@ -628,16 +624,16 @@ mod mask_aware_tests {
     #[test]
     fn ma_apply_unary_generic_over_both_types() {
         // Write a helper that works on both Array and MaskedArray.
-        fn double_it<T: Element, D: Dimension, X: MaskAware<T, D>>(
-            x: &X,
-        ) -> FerrayResult<MaskedArray<T, D>>
+        fn double_it<T, D, X>(x: &X) -> FerrayResult<MaskedArray<T, D>>
         where
-            T: Copy + std::ops::Mul<Output = T> + num_traits::FromPrimitive,
+            T: Element + Copy + std::ops::Mul<Output = T> + num_traits::FromPrimitive,
+            D: Dimension,
+            X: MaskAware<T, D>,
         {
             let two = T::from_f64(2.0).unwrap();
             ma_apply_unary(x, move |a| {
                 let data: Vec<T> = a.iter().map(|v| *v * two).collect();
-                Ok(Array::from_vec(a.dim().clone(), data)?)
+                Array::from_vec(a.dim().clone(), data)
             })
         }
 

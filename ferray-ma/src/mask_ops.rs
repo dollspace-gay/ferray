@@ -18,7 +18,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// # Errors
     /// This function does not currently error but returns `Result` for API
     /// consistency.
-    pub fn harden_mask(&mut self) -> FerrayResult<()> {
+    pub const fn harden_mask(&mut self) -> FerrayResult<()> {
         self.hard_mask = true;
         Ok(())
     }
@@ -28,7 +28,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// # Errors
     /// This function does not currently error but returns `Result` for API
     /// consistency.
-    pub fn soften_mask(&mut self) -> FerrayResult<()> {
+    pub const fn soften_mask(&mut self) -> FerrayResult<()> {
         self.hard_mask = false;
         Ok(())
     }
@@ -37,7 +37,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
 /// Return the mask array of a masked array.
 ///
 /// This is equivalent to `ma.mask()` but provided as a free function
-/// for API parity with NumPy's `np.ma.getmask`.
+/// for API parity with `NumPy`'s `np.ma.getmask`.
 ///
 /// # Errors
 /// This function does not currently error but returns `Result` for API
@@ -49,7 +49,7 @@ pub fn getmask<T: Element, D: Dimension>(ma: &MaskedArray<T, D>) -> FerrayResult
 /// Return the underlying data array of a masked array.
 ///
 /// This is equivalent to `ma.data()` but provided as a free function
-/// for API parity with NumPy's `np.ma.getdata`.
+/// for API parity with `NumPy`'s `np.ma.getdata`.
 ///
 /// # Errors
 /// This function does not currently error but returns `Result` for API

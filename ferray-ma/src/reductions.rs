@@ -114,15 +114,12 @@ where
             lane.push((src_data[flat], src_mask[flat]));
         }
 
-        match kernel(&lane) {
-            Some(value) => {
-                out_data.push(value);
-                out_mask.push(false);
-            }
-            None => {
-                out_data.push(fill_value);
-                out_mask.push(true);
-            }
+        if let Some(value) = kernel(&lane) {
+            out_data.push(value);
+            out_mask.push(false);
+        } else {
+            out_data.push(fill_value);
+            out_mask.push(true);
         }
 
         if !out_shape.is_empty() {
@@ -277,7 +274,7 @@ where
 
     /// Compute the minimum of unmasked elements.
     ///
-    /// NaN values in unmasked elements are propagated (returns NaN), matching NumPy.
+    /// NaN values in unmasked elements are propagated (returns NaN), matching `NumPy`.
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if no elements are unmasked.
@@ -307,7 +304,7 @@ where
 
     /// Compute the maximum of unmasked elements.
     ///
-    /// NaN values in unmasked elements are propagated (returns NaN), matching NumPy.
+    /// NaN values in unmasked elements are propagated (returns NaN), matching `NumPy`.
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if no elements are unmasked.
@@ -420,7 +417,7 @@ where
         })
     }
 
-    /// Min of unmasked elements along `axis`. NaN-propagating per NumPy.
+    /// Min of unmasked elements along `axis`. NaN-propagating per `NumPy`.
     pub fn min_axis(&self, axis: usize) -> FerrayResult<MaskedArray<T, IxDyn>> {
         let fill = self.fill_value();
         reduce_axis(self, axis, fill, |lane| {
@@ -446,7 +443,7 @@ where
         })
     }
 
-    /// Max of unmasked elements along `axis`. NaN-propagating per NumPy.
+    /// Max of unmasked elements along `axis`. NaN-propagating per `NumPy`.
     pub fn max_axis(&self, axis: usize) -> FerrayResult<MaskedArray<T, IxDyn>> {
         let fill = self.fill_value();
         reduce_axis(self, axis, fill, |lane| {

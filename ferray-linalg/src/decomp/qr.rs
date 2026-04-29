@@ -212,11 +212,7 @@ mod tests {
                 let expected = if i == j { 1.0 } else { 0.0 };
                 assert!(
                     (dot - expected).abs() < 1e-10,
-                    "Q^T*Q[{},{}] = {} != {}",
-                    i,
-                    j,
-                    dot,
-                    expected
+                    "Q^T*Q[{i},{j}] = {dot} != {expected}"
                 );
             }
         }

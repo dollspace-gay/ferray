@@ -22,7 +22,7 @@ use crate::dimension::broadcast::{broadcast_shapes, broadcast_to};
 use crate::dtype::Element;
 use crate::error::{FerrayError, FerrayResult};
 
-/// Elementwise binary operation on two same-D arrays, with NumPy broadcasting.
+/// Elementwise binary operation on two same-D arrays, with `NumPy` broadcasting.
 ///
 /// - If shapes match exactly, takes the fast path (zip iter, no broadcast).
 /// - Otherwise, broadcasts both inputs to the common shape and applies `op`.
@@ -71,8 +71,7 @@ where
 
     let result_dim = D::from_dim_slice(&target_shape).ok_or_else(|| {
         FerrayError::shape_mismatch(format!(
-            "operator {}: cannot represent broadcast result shape {:?} as the input dimension type",
-            op_name, target_shape
+            "operator {op_name}: cannot represent broadcast result shape {target_shape:?} as the input dimension type"
         ))
     })?;
 
@@ -248,7 +247,7 @@ where
     T: Element + Copy + std::ops::Neg<Output = T>,
     D: Dimension,
 {
-    type Output = FerrayResult<Array<T, D>>;
+    type Output = FerrayResult<Self>;
 
     fn neg(self) -> Self::Output {
         -&self
@@ -270,7 +269,7 @@ where
     T: Element + Copy,
     D: Dimension,
 {
-    /// Elementwise add with NumPy broadcasting across arbitrary ranks.
+    /// Elementwise add with `NumPy` broadcasting across arbitrary ranks.
     ///
     /// Returns a dynamic-rank `Array<T, IxDyn>` so that mixed-rank inputs
     /// (e.g. 1D + 2D) can produce a result whose rank is determined at
@@ -288,7 +287,7 @@ where
         elementwise_binary_dyn(self, other, |x, y| x + y, "add_broadcast")
     }
 
-    /// Elementwise subtract with NumPy broadcasting across arbitrary ranks.
+    /// Elementwise subtract with `NumPy` broadcasting across arbitrary ranks.
     ///
     /// See [`Array::add_broadcast`] for details.
     pub fn sub_broadcast<D2: Dimension>(
@@ -301,7 +300,7 @@ where
         elementwise_binary_dyn(self, other, |x, y| x - y, "sub_broadcast")
     }
 
-    /// Elementwise multiply with NumPy broadcasting across arbitrary ranks.
+    /// Elementwise multiply with `NumPy` broadcasting across arbitrary ranks.
     ///
     /// See [`Array::add_broadcast`] for details.
     pub fn mul_broadcast<D2: Dimension>(
@@ -314,7 +313,7 @@ where
         elementwise_binary_dyn(self, other, |x, y| x * y, "mul_broadcast")
     }
 
-    /// Elementwise divide with NumPy broadcasting across arbitrary ranks.
+    /// Elementwise divide with `NumPy` broadcasting across arbitrary ranks.
     ///
     /// See [`Array::add_broadcast`] for details.
     pub fn div_broadcast<D2: Dimension>(
@@ -327,7 +326,7 @@ where
         elementwise_binary_dyn(self, other, |x, y| x / y, "div_broadcast")
     }
 
-    /// Elementwise remainder with NumPy broadcasting across arbitrary ranks.
+    /// Elementwise remainder with `NumPy` broadcasting across arbitrary ranks.
     ///
     /// See [`Array::add_broadcast`] for details.
     pub fn rem_broadcast<D2: Dimension>(
@@ -440,7 +439,7 @@ where
     /// # Errors
     /// Returns `FerrayError::ShapeMismatch` if `other.shape()` cannot be
     /// broadcast into `self.shape()`.
-    pub fn add_inplace(&mut self, other: &Array<T, D>) -> FerrayResult<()>
+    pub fn add_inplace(&mut self, other: &Self) -> FerrayResult<()>
     where
         T: std::ops::Add<Output = T>,
     {
@@ -448,7 +447,7 @@ where
     }
 
     /// In-place elementwise subtract. See [`Array::add_inplace`].
-    pub fn sub_inplace(&mut self, other: &Array<T, D>) -> FerrayResult<()>
+    pub fn sub_inplace(&mut self, other: &Self) -> FerrayResult<()>
     where
         T: std::ops::Sub<Output = T>,
     {
@@ -456,7 +455,7 @@ where
     }
 
     /// In-place elementwise multiply. See [`Array::add_inplace`].
-    pub fn mul_inplace(&mut self, other: &Array<T, D>) -> FerrayResult<()>
+    pub fn mul_inplace(&mut self, other: &Self) -> FerrayResult<()>
     where
         T: std::ops::Mul<Output = T>,
     {
@@ -464,7 +463,7 @@ where
     }
 
     /// In-place elementwise divide. See [`Array::add_inplace`].
-    pub fn div_inplace(&mut self, other: &Array<T, D>) -> FerrayResult<()>
+    pub fn div_inplace(&mut self, other: &Self) -> FerrayResult<()>
     where
         T: std::ops::Div<Output = T>,
     {
@@ -472,7 +471,7 @@ where
     }
 
     /// In-place elementwise remainder. See [`Array::add_inplace`].
-    pub fn rem_inplace(&mut self, other: &Array<T, D>) -> FerrayResult<()>
+    pub fn rem_inplace(&mut self, other: &Self) -> FerrayResult<()>
     where
         T: std::ops::Rem<Output = T>,
     {
@@ -540,7 +539,7 @@ where
 /// both `src` and `mask` to `dst.shape()`.
 ///
 /// Equivalent to `np.copyto(dst, src, where=mask)`. This is the generalized
-/// form of NumPy's `where=` ufunc parameter (#353): positions where the mask
+/// form of `NumPy`'s `where=` ufunc parameter (#353): positions where the mask
 /// is `false` are left untouched in `dst`. All three shapes must be
 /// broadcast-compatible with `dst.shape()`; the destination shape is fixed,
 /// so neither `src` nor `mask` can grow `dst`.

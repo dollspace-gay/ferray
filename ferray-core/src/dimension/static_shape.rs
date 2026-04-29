@@ -51,6 +51,7 @@ pub struct Shape1<const N: usize> {
 impl<const N: usize> Shape1<N> {
     /// Create a new `Shape1` from its const generic parameter.
     #[inline]
+    #[must_use]
     pub const fn new() -> Self {
         Self { shape: [N] }
     }
@@ -64,7 +65,7 @@ impl<const N: usize> Default for Shape1<N> {
 
 impl<const N: usize> fmt::Debug for Shape1<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Shape1<{}>", N)
+        write!(f, "Shape1<{N}>")
     }
 }
 
@@ -129,6 +130,7 @@ pub struct Shape2<const M: usize, const N: usize> {
 impl<const M: usize, const N: usize> Shape2<M, N> {
     /// Create a new `Shape2` from its const generic parameters.
     #[inline]
+    #[must_use]
     pub const fn new() -> Self {
         Self { shape: [M, N] }
     }
@@ -142,7 +144,7 @@ impl<const M: usize, const N: usize> Default for Shape2<M, N> {
 
 impl<const M: usize, const N: usize> fmt::Debug for Shape2<M, N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Shape2<{}, {}>", M, N)
+        write!(f, "Shape2<{M}, {N}>")
     }
 }
 
@@ -207,6 +209,7 @@ pub struct Shape3<const A: usize, const B: usize, const C: usize> {
 impl<const A: usize, const B: usize, const C: usize> Shape3<A, B, C> {
     /// Create a new `Shape3` from its const generic parameters.
     #[inline]
+    #[must_use]
     pub const fn new() -> Self {
         Self { shape: [A, B, C] }
     }
@@ -220,7 +223,7 @@ impl<const A: usize, const B: usize, const C: usize> Default for Shape3<A, B, C>
 
 impl<const A: usize, const B: usize, const C: usize> fmt::Debug for Shape3<A, B, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Shape3<{}, {}, {}>", A, B, C)
+        write!(f, "Shape3<{A}, {B}, {C}>")
     }
 }
 
@@ -276,6 +279,7 @@ pub struct Shape4<const A: usize, const B: usize, const C: usize, const D: usize
 impl<const A: usize, const B: usize, const C: usize, const D: usize> Shape4<A, B, C, D> {
     /// Create a new `Shape4` from its const generic parameters.
     #[inline]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             shape: [A, B, C, D],
@@ -295,7 +299,7 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize> fmt::Debug
     for Shape4<A, B, C, D>
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Shape4<{}, {}, {}, {}>", A, B, C, D)
+        write!(f, "Shape4<{A}, {B}, {C}, {D}>")
     }
 }
 
@@ -357,6 +361,7 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
 {
     /// Create a new `Shape5` from its const generic parameters.
     #[inline]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             shape: [A, B, C, D, E],
@@ -376,7 +381,7 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
     for Shape5<A, B, C, D, E>
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Shape5<{}, {}, {}, {}, {}>", A, B, C, D, E)
+        write!(f, "Shape5<{A}, {B}, {C}, {D}, {E}>")
     }
 }
 
@@ -445,6 +450,7 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
 {
     /// Create a new `Shape6` from its const generic parameters.
     #[inline]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             shape: [A, B, C, D, E, F],
@@ -464,7 +470,7 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
     fmt::Debug for Shape6<A, B, C, D, E, F>
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Shape6<{}, {}, {}, {}, {}, {}>", A, B, C, D, E, F)
+        write!(f, "Shape6<{A}, {B}, {C}, {D}, {E}, {F}>")
     }
 }
 
@@ -515,21 +521,21 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
 impl<const N: usize> From<Shape1<N>> for Ix1 {
     /// Convert a static `Shape1<N>` to a dynamic `Ix1`.
     fn from(_s: Shape1<N>) -> Self {
-        Ix1::new([N])
+        Self::new([N])
     }
 }
 
 impl<const M: usize, const N: usize> From<Shape2<M, N>> for Ix2 {
     /// Convert a static `Shape2<M, N>` to a dynamic `Ix2`.
     fn from(_s: Shape2<M, N>) -> Self {
-        Ix2::new([M, N])
+        Self::new([M, N])
     }
 }
 
 impl<const A: usize, const B: usize, const C: usize> From<Shape3<A, B, C>> for Ix3 {
     /// Convert a static `Shape3<A, B, C>` to a dynamic `Ix3`.
     fn from(_s: Shape3<A, B, C>) -> Self {
-        Ix3::new([A, B, C])
+        Self::new([A, B, C])
     }
 }
 
@@ -538,7 +544,7 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize> From<Shape4
 {
     /// Convert a static `Shape4` to a dynamic `Ix4`.
     fn from(_s: Shape4<A, B, C, D>) -> Self {
-        Ix4::new([A, B, C, D])
+        Self::new([A, B, C, D])
     }
 }
 
@@ -547,7 +553,7 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
 {
     /// Convert a static `Shape5` to a dynamic `Ix5`.
     fn from(_s: Shape5<A, B, C, D, E>) -> Self {
-        Ix5::new([A, B, C, D, E])
+        Self::new([A, B, C, D, E])
     }
 }
 
@@ -556,7 +562,7 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
 {
     /// Convert a static `Shape6` to a dynamic `Ix6`.
     fn from(_s: Shape6<A, B, C, D, E, F>) -> Self {
-        Ix6::new([A, B, C, D, E, F])
+        Self::new([A, B, C, D, E, F])
     }
 }
 
@@ -565,21 +571,21 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
 impl<const N: usize> From<Shape1<N>> for IxDyn {
     /// Convert a static `Shape1<N>` to a dynamic `IxDyn`.
     fn from(_s: Shape1<N>) -> Self {
-        IxDyn::new(&[N])
+        Self::new(&[N])
     }
 }
 
 impl<const M: usize, const N: usize> From<Shape2<M, N>> for IxDyn {
     /// Convert a static `Shape2<M, N>` to a dynamic `IxDyn`.
     fn from(_s: Shape2<M, N>) -> Self {
-        IxDyn::new(&[M, N])
+        Self::new(&[M, N])
     }
 }
 
 impl<const A: usize, const B: usize, const C: usize> From<Shape3<A, B, C>> for IxDyn {
     /// Convert a static `Shape3<A, B, C>` to a dynamic `IxDyn`.
     fn from(_s: Shape3<A, B, C>) -> Self {
-        IxDyn::new(&[A, B, C])
+        Self::new(&[A, B, C])
     }
 }
 
@@ -588,7 +594,7 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize> From<Shape4
 {
     /// Convert a static `Shape4` to a dynamic `IxDyn`.
     fn from(_s: Shape4<A, B, C, D>) -> Self {
-        IxDyn::new(&[A, B, C, D])
+        Self::new(&[A, B, C, D])
     }
 }
 
@@ -597,7 +603,7 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
 {
     /// Convert a static `Shape5` to a dynamic `IxDyn`.
     fn from(_s: Shape5<A, B, C, D, E>) -> Self {
-        IxDyn::new(&[A, B, C, D, E])
+        Self::new(&[A, B, C, D, E])
     }
 }
 
@@ -606,7 +612,7 @@ impl<const A: usize, const B: usize, const C: usize, const D: usize, const E: us
 {
     /// Convert a static `Shape6` to a dynamic `IxDyn`.
     fn from(_s: Shape6<A, B, C, D, E, F>) -> Self {
-        IxDyn::new(&[A, B, C, D, E, F])
+        Self::new(&[A, B, C, D, E, F])
     }
 }
 
@@ -624,6 +630,7 @@ impl<T: Element, const N: usize> Array<T, Shape1<N>> {
     /// Convert this statically-shaped array into a dynamically-shaped `Array<T, Ix1>`.
     ///
     /// This is a zero-cost operation that reinterprets the dimension type.
+    #[must_use]
     pub fn into_dynamic_ix(self) -> Array<T, Ix1> {
         Array::from_ndarray(self.inner)
     }
@@ -633,6 +640,7 @@ impl<T: Element, const M: usize, const N: usize> Array<T, Shape2<M, N>> {
     /// Convert this statically-shaped array into a dynamically-shaped `Array<T, Ix2>`.
     ///
     /// This is a zero-cost operation that reinterprets the dimension type.
+    #[must_use]
     pub fn into_dynamic_ix(self) -> Array<T, Ix2> {
         Array::from_ndarray(self.inner)
     }
@@ -640,6 +648,7 @@ impl<T: Element, const M: usize, const N: usize> Array<T, Shape2<M, N>> {
 
 impl<T: Element, const A: usize, const B: usize, const C: usize> Array<T, Shape3<A, B, C>> {
     /// Convert this statically-shaped array into a dynamically-shaped `Array<T, Ix3>`.
+    #[must_use]
     pub fn into_dynamic_ix(self) -> Array<T, Ix3> {
         Array::from_ndarray(self.inner)
     }
@@ -744,20 +753,18 @@ pub trait StaticBroadcast<Rhs> {
 // ---------------------------------------------------------------------------
 
 // Shape1<N> + Shape1<N> -> Shape1<N>
-impl<const N: usize> StaticBroadcast<Shape1<N>> for Shape1<N> {
-    type Output = Shape1<N>;
+impl<const N: usize> StaticBroadcast<Self> for Shape1<N> {
+    type Output = Self;
 }
 
 // Shape2<M, N> + Shape2<M, N> -> Shape2<M, N>
-impl<const M: usize, const N: usize> StaticBroadcast<Shape2<M, N>> for Shape2<M, N> {
-    type Output = Shape2<M, N>;
+impl<const M: usize, const N: usize> StaticBroadcast<Self> for Shape2<M, N> {
+    type Output = Self;
 }
 
 // Shape3<A, B, C> + Shape3<A, B, C> -> Shape3<A, B, C>
-impl<const A: usize, const B: usize, const C: usize> StaticBroadcast<Shape3<A, B, C>>
-    for Shape3<A, B, C>
-{
-    type Output = Shape3<A, B, C>;
+impl<const A: usize, const B: usize, const C: usize> StaticBroadcast<Self> for Shape3<A, B, C> {
+    type Output = Self;
 }
 
 // ---------------------------------------------------------------------------
@@ -772,7 +779,7 @@ impl<const M: usize, const N: usize> StaticBroadcast<Shape2<M, N>> for Shape1<N>
 
 // Shape2<M, N> + Shape1<N> -> Shape2<M, N>
 impl<const M: usize, const N: usize> StaticBroadcast<Shape1<N>> for Shape2<M, N> {
-    type Output = Shape2<M, N>;
+    type Output = Self;
 }
 
 // ---------------------------------------------------------------------------
@@ -1296,8 +1303,8 @@ mod tests {
         assert_eq!(b.size(), 12);
         // Data should be preserved in row-major order
         let data = b.as_slice().unwrap();
-        for i in 0..12 {
-            assert_eq!(data[i], i as f64);
+        for (i, &v) in data.iter().enumerate().take(12) {
+            assert_eq!(v, i as f64);
         }
     }
 
@@ -1359,7 +1366,7 @@ mod tests {
     #[test]
     fn shape_debug_format() {
         let s = Shape2::<3, 4>::new();
-        let dbg = format!("{:?}", s);
+        let dbg = format!("{s:?}");
         assert_eq!(dbg, "Shape2<3, 4>");
     }
 

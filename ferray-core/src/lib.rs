@@ -12,6 +12,41 @@
 // layout enums. The full Array type and related features require `std`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+// Core numerical kernels lift integer shape/index data into floating-point
+// (`linspace`, `arange`, `geomspace`), narrow `f64` boundaries back to
+// `usize` indices (`pad`, `tile`, broadcasting), and expose `finfo`/`iinfo`
+// limit constants that necessarily round-trip through cast-equivalent
+// types. Constants comparison and oracle tests assert exact float equality
+// against canonical values. These are part of the NumPy-compatible contract.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    // Every public function in the workspace returns FerrayResult<T>. The
+    // FerrayError variants are documented once on the type, not on every
+    // returning function — that is a workspace-wide doc convention.
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    // Numerical / array code uses i, j, k, n, m as canonical loop and
+    // shape names — same as NumPy's reference docs and any linear algebra
+    // text. Renaming for clippy's taste hurts readability.
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    // Items-after-statements covers local helper fns inside functions —
+    // a deliberate ferray pattern for keeping helper closures named.
+    clippy::items_after_statements,
+    // The `if let Some(x) = .. else ..` pattern is more readable than
+    // `Option::map_or_else` for non-trivial blocks; this is a
+    // nursery-level stylistic preference.
+    clippy::option_if_let_else,
+    // Pedantic readability preferences that don't apply to this codebase.
+    clippy::too_long_first_doc_paragraph,
+    clippy::needless_pass_by_value,
+    clippy::match_same_arms
+)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;

@@ -20,7 +20,7 @@ pub enum ConvolveMode {
 
 /// Discrete, linear convolution of two 1-D arrays.
 ///
-/// Computes `convolve(a, v, mode)` following NumPy semantics.
+/// Computes `convolve(a, v, mode)` following `NumPy` semantics.
 pub fn convolve<T>(
     a: &Array<T, Ix1>,
     v: &Array<T, Ix1>,

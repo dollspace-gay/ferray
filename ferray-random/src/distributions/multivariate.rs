@@ -146,7 +146,7 @@ impl<B: BitGenerator> Generator<B> {
     /// * `size` - Number of samples (rows in output).
     ///
     /// # Returns
-    /// An `Array<f64, Ix2>` with shape `[size, k]` where k = alpha.len().
+    /// An `Array<f64, Ix2>` with shape `[size, k]` where k = `alpha.len()`.
     ///
     /// # Errors
     /// Returns `FerrayError::InvalidValue` for invalid parameters.
@@ -237,7 +237,7 @@ fn binomial_for_multinomial<B: BitGenerator>(bg: &mut B, n: u64, p: f64) -> u64 
         loop {
             let z = standard_normal_single(bg);
             let sigma = ((n as f64) * pp * (1.0 - pp)).sqrt();
-            let x = ((n as f64) * pp + sigma * z + 0.5).floor() as i64;
+            let x = ((n as f64).mul_add(pp, sigma * z) + 0.5).floor() as i64;
             if x >= 0 && x <= n as i64 {
                 break x as u64;
             }

@@ -90,7 +90,7 @@ pub fn frombuffer<T: Element, D: Dimension>(dim: D, buf: &[u8]) -> FerrayResult<
         // For numeric types, all bit patterns are valid.
         let val = unsafe {
             let mut val = MaybeUninit::<T>::uninit();
-            std::ptr::copy_nonoverlapping(slice.as_ptr(), val.as_mut_ptr() as *mut u8, elem_size);
+            std::ptr::copy_nonoverlapping(slice.as_ptr(), val.as_mut_ptr().cast::<u8>(), elem_size);
             val.assume_init()
         };
         data.push(val);
@@ -102,7 +102,7 @@ pub fn frombuffer<T: Element, D: Dimension>(dim: D, buf: &[u8]) -> FerrayResult<
 ///
 /// Unlike [`frombuffer`], which copies bytes into a freshly allocated
 /// `Array`, this function returns a view whose lifetime is tied to the
-/// input slice. This is the equivalent of NumPy's `np.frombuffer()` with
+/// input slice. This is the equivalent of `NumPy`'s `np.frombuffer()` with
 /// a memoryview source — the primary building block for zero-copy
 /// interop with mmap, shared memory, network buffers, and FFI.
 ///
@@ -114,10 +114,10 @@ pub fn frombuffer<T: Element, D: Dimension>(dim: D, buf: &[u8]) -> FerrayResult<
 ///   (views require proper alignment — use the copying [`frombuffer`]
 ///   instead if alignment cannot be guaranteed).
 /// - `InvalidValue` if `T` is `bool` and any byte is outside `{0x00, 0x01}`.
-pub fn frombuffer_view<'a, T: Element, D: Dimension>(
+pub fn frombuffer_view<T: Element, D: Dimension>(
     dim: D,
-    buf: &'a [u8],
-) -> FerrayResult<ArrayView<'a, T, D>> {
+    buf: &[u8],
+) -> FerrayResult<ArrayView<'_, T, D>> {
     let elem_size = std::mem::size_of::<T>();
     if elem_size == 0 {
         return Err(FerrayError::invalid_value("zero-sized type"));
@@ -173,7 +173,7 @@ pub fn frombuffer_view<'a, T: Element, D: Dimension>(
     // - The returned view's lifetime is bound to `'a = &'a [u8]`, which
     //   tracks the borrow back to `buf`, so the memory cannot be freed
     //   or mutated while the view lives.
-    let ptr = buf.as_ptr() as *const T;
+    let ptr = buf.as_ptr().cast::<T>();
     let nd_dim = dim.to_ndarray_dim();
     let nd_view = unsafe { ndarray::ArrayView::from_shape_ptr(nd_dim, ptr) };
     Ok(ArrayView::from_ndarray(nd_view))
@@ -306,8 +306,9 @@ impl<T: Element, D: Dimension> UninitArray<T, D> {
         // SAFETY: MaybeUninit<T> has the same layout as T, and the caller
         // guarantees all elements are initialized.
         let mut raw_vec = std::mem::ManuallyDrop::new(self.data);
-        let data: Vec<T> =
-            unsafe { Vec::from_raw_parts(raw_vec.as_mut_ptr() as *mut T, len, raw_vec.capacity()) };
+        let data: Vec<T> = unsafe {
+            Vec::from_raw_parts(raw_vec.as_mut_ptr().cast::<T>(), len, raw_vec.capacity())
+        };
 
         let inner = ndarray::Array::from_shape_vec(nd_dim, data)
             .expect("UninitArray assume_init: shape/data mismatch (this is a bug)");
@@ -321,7 +322,7 @@ impl<T: Element, D: Dimension> UninitArray<T, D> {
 /// be explicitly initialized via [`UninitArray::assume_init`].
 ///
 /// This prevents accidentally reading uninitialized memory — a key safety
-/// improvement over NumPy's `empty()`.
+/// improvement over `NumPy`'s `empty()`.
 pub fn empty<T: Element, D: Dimension>(dim: D) -> UninitArray<T, D> {
     let size = dim.size();
     let mut data = Vec::with_capacity(size);
@@ -405,7 +406,7 @@ pub fn arange<T: ArangeNum>(start: T, stop: T, step: T) -> FerrayResult<Array<T,
 
     let mut data = Vec::with_capacity(n);
     for i in 0..n {
-        data.push(T::from_f64(start_f + (i as f64) * step_f));
+        data.push(T::from_f64((i as f64).mul_add(step_f, start_f)));
     }
     let dim = Ix1::new([data.len()]);
     Array::from_vec(dim, data)
@@ -422,7 +423,7 @@ pub trait LinspaceNum: Element + PartialOrd {
 impl LinspaceNum for f32 {
     #[inline]
     fn from_f64(v: f64) -> Self {
-        v as f32
+        v as Self
     }
     #[inline]
     fn to_f64(self) -> f64 {
@@ -443,7 +444,7 @@ impl LinspaceNum for f64 {
 
 /// Create a 1-D array with `num` evenly spaced values between `start` and `stop`.
 ///
-/// If `endpoint` is true (the default in NumPy), `stop` is the last sample.
+/// If `endpoint` is true (the default in `NumPy`), `stop` is the last sample.
 /// Otherwise, it is not included.
 ///
 /// Analogous to `numpy.linspace()`.
@@ -473,7 +474,7 @@ pub fn linspace<T: LinspaceNum>(
     let step = (stop_f - start_f) / divisor;
     let mut data = Vec::with_capacity(num);
     for i in 0..num {
-        data.push(T::from_f64(start_f + (i as f64) * step));
+        data.push(T::from_f64((i as f64).mul_add(step, start_f)));
     }
     Array::from_vec(Ix1::new([num]), data)
 }
@@ -517,7 +518,7 @@ pub fn geomspace<T: LinspaceNum>(
     endpoint: bool,
 ) -> FerrayResult<Array<T, Ix1>> {
     let start_f = start.clone().to_f64();
-    let stop_f = stop.clone().to_f64();
+    let stop_f = stop.to_f64();
     if start_f == 0.0 || stop_f == 0.0 {
         return Err(FerrayError::invalid_value(
             "geomspace: start and stop must be non-zero",
@@ -545,7 +546,7 @@ pub fn geomspace<T: LinspaceNum>(
     let step = (log_stop - log_start) / divisor;
     let mut data = Vec::with_capacity(num);
     for i in 0..num {
-        let log_val = log_start + (i as f64) * step;
+        let log_val = (i as f64).mul_add(step, log_start);
         data.push(T::from_f64(sign * log_val.exp()));
     }
     Array::from_vec(Ix1::new([num]), data)
@@ -880,7 +881,7 @@ mod tests {
         let mut out = vec![0u8; n];
         // SAFETY: src is &[T], out is a byte buffer of exactly n bytes.
         unsafe {
-            std::ptr::copy_nonoverlapping(src.as_ptr() as *const u8, out.as_mut_ptr(), n);
+            std::ptr::copy_nonoverlapping(src.as_ptr().cast::<u8>(), out.as_mut_ptr(), n);
         }
         out
     }
@@ -896,7 +897,7 @@ mod tests {
         assert_eq!(values, vec![10, 20, 30]);
         // Pointer must alias the source buffer — that's the zero-copy
         // contract distinguishing this from the copying frombuffer.
-        assert_eq!(view.as_ptr() as *const u8, bytes.as_ptr());
+        assert_eq!(view.as_ptr().cast::<u8>(), bytes.as_ptr());
     }
 
     #[test]

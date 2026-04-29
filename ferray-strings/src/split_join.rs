@@ -10,7 +10,7 @@ use crate::string_array::{StringArray, StringArray1};
 /// Split each string element by the given separator.
 ///
 /// Returns a 1-D array where each element is a `Vec<String>` containing
-/// the split parts. This matches NumPy's behavior where splitting produces
+/// the split parts. This matches `NumPy`'s behavior where splitting produces
 /// a ragged result.
 ///
 /// # Errors
@@ -46,7 +46,7 @@ pub fn join(sep: &str, items: &[Vec<String>]) -> FerrayResult<StringArray1> {
 pub fn join_array<D: Dimension>(sep: &str, a: &StringArray<D>) -> FerrayResult<StringArray1> {
     let joined: String = a
         .iter()
-        .map(|s| s.as_str())
+        .map(std::string::String::as_str)
         .collect::<Vec<&str>>()
         .join(sep);
     let dim = Ix1::new([1]);

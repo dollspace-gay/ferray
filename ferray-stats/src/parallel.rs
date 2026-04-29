@@ -1,5 +1,11 @@
 // ferray-stats: Rayon threshold dispatch for reductions and sorting (REQ-19, REQ-20)
 
+// `with_simd`, `simd_pairwise_f64`, `simd_base_sum_f64`, and `base_sum`
+// are pulp dispatch entry points where `#[inline(always)]` is required —
+// without it the SIMD instruction set selected at the call site fails to
+// inline into the kernel and dispatch becomes a no-op.
+#![allow(clippy::inline_always)]
+
 use pulp::Arch;
 use rayon::prelude::*;
 
@@ -54,7 +60,7 @@ fn base_sum<T: Copy + std::ops::Add<Output = T>>(data: &[T], identity: T) -> T {
 /// Pairwise summation of a slice.
 ///
 /// Uses an iterative carry-merge algorithm with O(ε log N) error bound,
-/// matching NumPy's summation accuracy. Data is processed in 128-element
+/// matching `NumPy`'s summation accuracy. Data is processed in 128-element
 /// base chunks, then merged pairwise using a small stack (like binary
 /// carry addition). Zero recursion overhead — stack depth is at most
 /// ceil(log2(N/128)) + 1 ≈ 20 entries.
@@ -113,6 +119,7 @@ where
 /// Uses pulp for hardware SIMD dispatch (AVX2/SSE2/NEON) in the 128-element
 /// base case, with the same iterative carry-merge structure for O(ε log N)
 /// accuracy.
+#[must_use]
 pub fn pairwise_sum_f64(data: &[f64]) -> f64 {
     Arch::new().dispatch(PairwiseSumF64Op { data })
 }
@@ -226,6 +233,7 @@ fn simd_pairwise_f64<S: pulp::Simd>(simd: S, data: &[f64]) -> f64 {
 ///
 /// Computes the sum of squared differences from the mean in a single pass
 /// without allocating an intermediate Vec. Uses 4 SIMD accumulators for ILP.
+#[must_use]
 pub fn simd_sum_sq_diff_f64(data: &[f64], mean: f64) -> f64 {
     Arch::new().dispatch(SumSqDiffF64Op { data, mean })
 }

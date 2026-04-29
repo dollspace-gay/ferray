@@ -151,7 +151,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// Hot-path iteration code should branch on this flag to skip
     /// mask scanning entirely when it returns `false` (#506).
     #[inline]
-    pub fn has_real_mask(&self) -> bool {
+    pub const fn has_real_mask(&self) -> bool {
         self.real_mask
     }
 
@@ -159,7 +159,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     ///
     /// See [`MaskedArray::with_fill_value`] for setting it.
     #[inline]
-    pub fn fill_value(&self) -> T
+    pub const fn fill_value(&self) -> T
     where
         T: Copy,
     {
@@ -171,6 +171,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// The fill value is used by [`MaskedArray::filled`] (when called
     /// without an explicit override) and by arithmetic operations as the
     /// replacement for masked positions in the result data.
+    #[must_use]
     pub fn with_fill_value(mut self, fill_value: T) -> Self {
         self.fill_value = fill_value;
         self
@@ -183,7 +184,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
 
     /// Return a reference to the underlying data array.
     #[inline]
-    pub fn data(&self) -> &Array<T, D> {
+    pub const fn data(&self) -> &Array<T, D> {
         &self.data
     }
 
@@ -222,7 +223,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
 
     /// Return a mutable reference to the underlying data array.
     #[inline]
-    pub fn data_mut(&mut self) -> &mut Array<T, D> {
+    pub const fn data_mut(&mut self) -> &mut Array<T, D> {
         &mut self.data
     }
 
@@ -246,13 +247,13 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
 
     /// Return the dimension descriptor.
     #[inline]
-    pub fn dim(&self) -> &D {
+    pub const fn dim(&self) -> &D {
         self.data.dim()
     }
 
     /// Return whether the mask is hardened.
     #[inline]
-    pub fn is_hard_mask(&self) -> bool {
+    pub const fn is_hard_mask(&self) -> bool {
         self.hard_mask
     }
 
@@ -391,7 +392,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// mask via `Arc` until one of them mutates it (copy-on-write, #512).
     /// Hot-path code can use this to reason about memory sharing —
     /// `shares_mask() == false` means the mask is uniquely owned and
-    /// can be mutated without affecting any other MaskedArray.
+    /// can be mutated without affecting any other `MaskedArray`.
     #[inline]
     pub fn shares_mask(&self) -> bool {
         Arc::strong_count(&self.mask) > 1
@@ -448,7 +449,7 @@ mod tests {
         );
         // Subsequent calls return the same cached array (no re-alloc).
         let m2 = ma.mask();
-        assert_eq!(m as *const _, m2 as *const _);
+        assert_eq!(std::ptr::from_ref(m), std::ptr::from_ref(m2));
         // BUT `has_real_mask` still reports `false` — the lazy
         // materialization doesn't promote the sentinel to a "real" mask
         // because the contents are still logically all-false. Hot-path
@@ -498,7 +499,7 @@ mod tests {
     #[test]
     fn clone_preserves_nomask_sentinel_state() {
         let ma = MaskedArray::from_data(arr_f64(vec![1.0, 2.0, 3.0])).unwrap();
-        let cloned = ma.clone();
+        let cloned = ma;
         assert!(!cloned.has_real_mask());
         assert!(cloned.mask_opt().is_none());
     }
@@ -508,7 +509,7 @@ mod tests {
         let ma = MaskedArray::from_data(arr_f64(vec![1.0, 2.0, 3.0])).unwrap();
         // Force materialization.
         let _ = ma.mask();
-        let cloned = ma.clone();
+        let cloned = ma;
         // The clone has the same mask contents (all-false).
         assert_eq!(
             cloned.mask().iter().copied().collect::<Vec<_>>(),
@@ -523,7 +524,7 @@ mod tests {
             arr_bool(vec![false, true, false]),
         )
         .unwrap();
-        let cloned = ma.clone();
+        let cloned = ma;
         assert!(cloned.has_real_mask());
         assert_eq!(
             cloned.mask().iter().copied().collect::<Vec<_>>(),

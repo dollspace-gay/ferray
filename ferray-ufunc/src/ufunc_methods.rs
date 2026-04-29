@@ -102,7 +102,7 @@ where
 /// Generic reduction along an axis with an optional `keepdims` flag.
 ///
 /// Equivalent to calling [`reduce_axis`] followed by inserting a size-1 axis
-/// at the reduced position when `keepdims` is `true`. Matches NumPy's
+/// at the reduced position when `keepdims` is `true`. Matches `NumPy`'s
 /// `np.<ufunc>.reduce(input, axis=axis, keepdims=keepdims)`.
 ///
 /// `keepdims=false` is identical to [`reduce_axis`] — the reduced axis is
@@ -156,7 +156,7 @@ where
 /// pitfall the issue calls out (#395).
 ///
 /// `axes` may be empty: in that case the input is copied through unchanged
-/// (matching NumPy's `axis=()` semantics — no axes are reduced). When
+/// (matching `NumPy`'s `axis=()` semantics — no axes are reduced). When
 /// `axes` covers every axis the result collapses to a single scalar; with
 /// `keepdims=false` it is wrapped in a length-1 1-D array (the same
 /// convention used by [`reduce_axis`]), and with `keepdims=true` it has
@@ -341,7 +341,7 @@ where
     let (outer_size, axis_len, inner_size) = axis_layout(&shape, axis);
 
     let data = contiguous_data(input);
-    let mut result = data.clone();
+    let mut result = data;
 
     // Walk along the axis, updating in place so we don't need to allocate
     // a running accumulator per lane.
@@ -405,7 +405,7 @@ where
 ///
 /// Equivalent to `np.<ufunc>.at(arr, indices, values)` for 1-D `arr`.
 /// Duplicate indices are applied in the order they appear (matching
-/// NumPy's "unbuffered" semantics — unlike `arr[indices] = values` which
+/// `NumPy`'s "unbuffered" semantics — unlike `arr[indices] = values` which
 /// would only keep the last write at each index).
 ///
 /// # Errors
@@ -457,7 +457,7 @@ mod tests {
 
     #[test]
     fn reduce_axis_add_1d() {
-        let a = arr1(&[1.0, 2.0, 3.0, 4.0]);
+        let a = arr1([1.0, 2.0, 3.0, 4.0]);
         let r = reduce_axis(&a, 0, 0.0, |acc, x| acc + x).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[10.0]);
     }
@@ -483,21 +483,21 @@ mod tests {
     #[test]
     fn reduce_axis_multiply_product() {
         // reducing 1*2*3*4 = 24
-        let a = arr1(&[1.0, 2.0, 3.0, 4.0]);
+        let a = arr1([1.0, 2.0, 3.0, 4.0]);
         let r = reduce_axis(&a, 0, 1.0, |acc, x| acc * x).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[24.0]);
     }
 
     #[test]
     fn reduce_axis_max() {
-        let a = arr1(&[3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0, 6.0]);
+        let a = arr1([3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0, 6.0]);
         let r = reduce_axis(&a, 0, f64::NEG_INFINITY, f64::max).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[9.0]);
     }
 
     #[test]
     fn reduce_axis_out_of_bounds() {
-        let a = arr1(&[1.0, 2.0, 3.0]);
+        let a = arr1([1.0, 2.0, 3.0]);
         assert!(reduce_axis(&a, 1, 0.0, |x, y| x + y).is_err());
     }
 
@@ -535,7 +535,7 @@ mod tests {
     fn reduce_axis_keepdims_3d_middle_axis() {
         // Shape (2, 3, 4); reducing axis 1 with keepdims=true -> (2, 1, 4).
         use ferray_core::dimension::Ix3;
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
         let r = reduce_axis_keepdims(&a, 1, 0.0, true, |acc, x| acc + x).unwrap();
         assert_eq!(r.shape(), &[2, 1, 4]);
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn reduce_axis_keepdims_out_of_bounds_errors() {
-        let a = arr1(&[1.0, 2.0, 3.0]);
+        let a = arr1([1.0, 2.0, 3.0]);
         assert!(reduce_axis_keepdims(&a, 5, 0.0, true, |x, y| x + y).is_err());
         assert!(reduce_axis_keepdims(&a, 5, 0.0, false, |x, y| x + y).is_err());
     }
@@ -577,7 +577,7 @@ mod tests {
         // Shape (2, 3, 4); reduce axes (0, 2) → length-3 result with the
         // axis-1 sums of the corresponding 8-element strips.
         use ferray_core::dimension::Ix3;
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
         let r = reduce_axes(&a, &[0, 2], 0.0, false, |acc, x| acc + x).unwrap();
         assert_eq!(r.shape(), &[3]);
@@ -589,7 +589,7 @@ mod tests {
                 let mut s = 0.0;
                 for i in 0..2 {
                     for k in 0..4 {
-                        s += (i * 12 + j * 4 + k) as f64;
+                        s += f64::from(i * 12 + j * 4 + k);
                     }
                 }
                 s
@@ -603,7 +603,7 @@ mod tests {
         // Pass axes in reverse — the implementation should sort them
         // internally and produce the same result.
         use ferray_core::dimension::Ix3;
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
         let r1 = reduce_axes(&a, &[0, 2], 0.0, false, |acc, x| acc + x).unwrap();
         let r2 = reduce_axes(&a, &[2, 0], 0.0, false, |acc, x| acc + x).unwrap();
@@ -615,7 +615,7 @@ mod tests {
     fn reduce_axes_keepdims_preserves_reduced_axes_as_size_1() {
         // (2, 3, 4) reducing axes (0, 2) with keepdims=true → (1, 3, 1).
         use ferray_core::dimension::Ix3;
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
         let r = reduce_axes(&a, &[0, 2], 0.0, true, |acc, x| acc + x).unwrap();
         assert_eq!(r.shape(), &[1, 3, 1]);
@@ -666,7 +666,7 @@ mod tests {
         // (descending so axes don't shift) must produce the same numbers as
         // the single-pass reduce_axes implementation.
         use ferray_core::dimension::Ix3;
-        let data: Vec<f64> = (0..60).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..60).map(f64::from).collect();
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([3, 4, 5]), data).unwrap();
 
         let single_pass = reduce_axes(&a, &[0, 2], 0.0, false, |acc, x| acc + x).unwrap();
@@ -711,14 +711,14 @@ mod tests {
 
     #[test]
     fn accumulate_axis_add_1d() {
-        let a = arr1(&[1.0, 2.0, 3.0, 4.0]);
+        let a = arr1([1.0, 2.0, 3.0, 4.0]);
         let r = accumulate_axis(&a, 0, |acc, x| acc + x).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[1.0, 3.0, 6.0, 10.0]);
     }
 
     #[test]
     fn accumulate_axis_multiply_1d() {
-        let a = arr1(&[1.0, 2.0, 3.0, 4.0]);
+        let a = arr1([1.0, 2.0, 3.0, 4.0]);
         let r = accumulate_axis(&a, 0, |acc, x| acc * x).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[1.0, 2.0, 6.0, 24.0]);
     }
@@ -727,7 +727,7 @@ mod tests {
     fn accumulate_axis_subtract_running_diff() {
         // subtract.accumulate([10, 3, 2, 1]) = [10, 10-3, (10-3)-2, ((10-3)-2)-1]
         //                                    = [10, 7, 5, 4]
-        let a = arr1(&[10.0, 3.0, 2.0, 1.0]);
+        let a = arr1([10.0, 3.0, 2.0, 1.0]);
         let r = accumulate_axis(&a, 0, |acc, x| acc - x).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[10.0, 7.0, 5.0, 4.0]);
     }
@@ -742,14 +742,14 @@ mod tests {
 
     #[test]
     fn accumulate_axis_out_of_bounds() {
-        let a = arr1(&[1.0, 2.0, 3.0]);
+        let a = arr1([1.0, 2.0, 3.0]);
         assert!(accumulate_axis(&a, 1, |x, y| x + y).is_err());
     }
 
     #[test]
     fn outer_multiply() {
-        let a = arr1(&[1.0, 2.0, 3.0]);
-        let b = arr1(&[10.0, 20.0]);
+        let a = arr1([1.0, 2.0, 3.0]);
+        let b = arr1([10.0, 20.0]);
         let r = outer(&a, &b, |x, y| x * y).unwrap();
         assert_eq!(r.shape(), &[3, 2]);
         assert_eq!(r.as_slice().unwrap(), &[10.0, 20.0, 20.0, 40.0, 30.0, 60.0]);
@@ -757,8 +757,8 @@ mod tests {
 
     #[test]
     fn outer_add() {
-        let a = arr1(&[1.0, 2.0]);
-        let b = arr1(&[10.0, 20.0, 30.0]);
+        let a = arr1([1.0, 2.0]);
+        let b = arr1([10.0, 20.0, 30.0]);
         let r = outer(&a, &b, |x, y| x + y).unwrap();
         assert_eq!(r.shape(), &[2, 3]);
         assert_eq!(r.as_slice().unwrap(), &[11.0, 21.0, 31.0, 12.0, 22.0, 32.0]);
@@ -766,9 +766,9 @@ mod tests {
 
     #[test]
     fn outer_power() {
-        let a = arr1(&[2.0, 3.0]);
-        let b = arr1(&[2.0, 3.0]);
-        let r = outer(&a, &b, |x, y| x.powf(y)).unwrap();
+        let a = arr1([2.0, 3.0]);
+        let b = arr1([2.0, 3.0]);
+        let r = outer(&a, &b, f64::powf).unwrap();
         assert_eq!(r.shape(), &[2, 2]);
         // 2^2=4, 2^3=8, 3^2=9, 3^3=27
         assert_eq!(r.as_slice().unwrap(), &[4.0, 8.0, 9.0, 27.0]);
@@ -778,7 +778,7 @@ mod tests {
     fn at_add_unbuffered_duplicates() {
         // Duplicate index 0 -> both writes apply (adding twice), unlike
         // simple indexed assignment which would only keep the last.
-        let mut a = arr1(&[0.0, 0.0, 0.0]);
+        let mut a = arr1([0.0, 0.0, 0.0]);
         at(&mut a, &[0, 0, 1, 2], &[1.0, 2.0, 5.0, 10.0], |acc, x| {
             acc + x
         })
@@ -788,20 +788,20 @@ mod tests {
 
     #[test]
     fn at_multiply() {
-        let mut a = arr1(&[1.0, 1.0, 1.0, 1.0]);
+        let mut a = arr1([1.0, 1.0, 1.0, 1.0]);
         at(&mut a, &[1, 2, 2], &[5.0, 3.0, 4.0], |acc, x| acc * x).unwrap();
         assert_eq!(a.as_slice().unwrap(), &[1.0, 5.0, 12.0, 1.0]);
     }
 
     #[test]
     fn at_length_mismatch_errors() {
-        let mut a = arr1(&[0.0; 4]);
+        let mut a = arr1([0.0; 4]);
         assert!(at(&mut a, &[0, 1], &[1.0], |x, y| x + y).is_err());
     }
 
     #[test]
     fn at_index_out_of_bounds_errors() {
-        let mut a = arr1(&[0.0; 3]);
+        let mut a = arr1([0.0; 3]);
         assert!(at(&mut a, &[5], &[1.0], |x, y| x + y).is_err());
     }
 }

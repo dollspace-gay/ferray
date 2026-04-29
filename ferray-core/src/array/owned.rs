@@ -28,18 +28,18 @@ pub struct Array<T: Element, D: Dimension> {
 impl<T: Element, D: Dimension> Array<T, D> {
     // -- Construction helpers (crate-internal) --
 
-    /// Wrap an existing ndarray::Array. Crate-internal.
+    /// Wrap an existing `ndarray::Array`. Crate-internal.
     pub(crate) fn from_ndarray(inner: ndarray::Array<T, D::NdarrayDim>) -> Self {
         let dim = D::from_ndarray_dim(&inner.raw_dim());
         Self { inner, dim }
     }
 
-    /// Unwrap to the internal ndarray::Array. Crate-internal.
+    /// Unwrap to the internal `ndarray::Array`. Crate-internal.
     /// Consume this ferray array and return the underlying
     /// [`ndarray::Array`], preserving shape and layout.
     ///
     /// This is the escape hatch for interop with crates that already
-    /// work with ndarray (notably `numpy`/PyO3's
+    /// work with ndarray (notably `numpy`/`PyO3`'s
     /// [`PyArray::from_owned_array`], which avoids a reshape round-trip).
     /// Calls through to a move — no allocation or copy.
     pub fn into_ndarray(self) -> ndarray::Array<T, D::NdarrayDim> {
@@ -187,7 +187,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
     /// Return a reference to the internal dimension descriptor.
     #[inline]
-    pub fn dim(&self) -> &D {
+    pub const fn dim(&self) -> &D {
         &self.dim
     }
 }

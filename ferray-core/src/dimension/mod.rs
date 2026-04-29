@@ -85,7 +85,7 @@ macro_rules! impl_fixed_dimension {
         impl $name {
             /// Create a new dimension from a fixed-size array.
             #[inline]
-            pub fn new(shape: [usize; $n]) -> Self {
+            pub const fn new(shape: [usize; $n]) -> Self {
                 Self { shape }
             }
         }
@@ -190,11 +190,11 @@ impl Dimension for Ix0 {
 
     #[cfg(feature = "std")]
     fn from_ndarray_dim(_dim: &Self::NdarrayDim) -> Self {
-        Ix0
+        Self
     }
 
     fn from_dim_slice(shape: &[usize]) -> Option<Self> {
-        if shape.is_empty() { Some(Ix0) } else { None }
+        if shape.is_empty() { Some(Self) } else { None }
     }
 }
 
@@ -210,6 +210,7 @@ pub struct IxDyn {
 
 impl IxDyn {
     /// Create a new dynamic dimension from a slice.
+    #[must_use]
     pub fn new(shape: &[usize]) -> Self {
         Self {
             shape: shape.to_vec(),
@@ -277,7 +278,8 @@ pub struct Axis(pub usize);
 impl Axis {
     /// Return the axis index.
     #[inline]
-    pub fn index(self) -> usize {
+    #[must_use]
+    pub const fn index(self) -> usize {
         self.0
     }
 }

@@ -6,7 +6,7 @@
 use ferray_core::dtype::DType;
 use ferray_core::error::{FerrayError, FerrayResult};
 
-/// Byte order / endianness extracted from a NumPy dtype string.
+/// Byte order / endianness extracted from a `NumPy` dtype string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Endianness {
     /// Little-endian (`<` prefix).
@@ -20,7 +20,8 @@ pub enum Endianness {
 impl Endianness {
     /// Whether byte-swapping is needed on the current platform.
     #[inline]
-    pub fn needs_swap(self) -> bool {
+    #[must_use]
+    pub const fn needs_swap(self) -> bool {
         match self {
             Self::Little => cfg!(target_endian = "big"),
             Self::Big => cfg!(target_endian = "little"),
@@ -29,7 +30,7 @@ impl Endianness {
     }
 }
 
-/// Parse a NumPy dtype descriptor string into a `(DType, Endianness)` pair.
+/// Parse a `NumPy` dtype descriptor string into a `(DType, Endianness)` pair.
 ///
 /// Examples:
 /// - `"<f8"` -> `(DType::F64, Endianness::Little)`
@@ -85,7 +86,7 @@ pub fn parse_dtype_str(s: &str) -> FerrayResult<(DType, Endianness)> {
     Ok((dtype, endian))
 }
 
-/// Convert a `DType` to its NumPy dtype descriptor string with the given endianness.
+/// Convert a `DType` to its `NumPy` dtype descriptor string with the given endianness.
 ///
 /// # Errors
 /// Returns `FerrayError::InvalidDtype` for unsupported dtype variants.
@@ -132,7 +133,7 @@ pub fn dtype_to_descr(dtype: DType, endian: Endianness) -> FerrayResult<String> 
     Ok(format!("{actual_prefix}{type_str}"))
 }
 
-/// Return the native-endian dtype descriptor for a given DType.
+/// Return the native-endian dtype descriptor for a given `DType`.
 ///
 /// # Errors
 /// Returns `FerrayError::InvalidDtype` for unsupported dtype variants.

@@ -3,6 +3,18 @@
 //!
 //! Run with: `cargo run -p ferray-linalg --release --example bench_matmul`
 
+// Benchmarks lift integer sizes into f64 throughput numbers as part of
+// reporting; the casts and large iteration counts are part of the bench
+// output, not bugs.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::unreadable_literal
+)]
+
 use ferray_core::{Array, IxDyn};
 use std::time::Instant;
 

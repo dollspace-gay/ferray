@@ -13,7 +13,7 @@ use crate::traits::{FromPowerBasis, Poly, ToPowerBasis};
 
 /// Default domain and window for the Chebyshev basis.
 ///
-/// The Chebyshev polynomials are well-conditioned on `[-1, 1]`. NumPy uses
+/// The Chebyshev polynomials are well-conditioned on `[-1, 1]`. `NumPy` uses
 /// this same window by default; the domain defaults to `[-1, 1]` so that
 /// no mapping is applied unless the user opts in.
 const CHEBYSHEV_DEFAULT_DOMAIN: [f64; 2] = [-1.0, 1.0];
@@ -21,7 +21,7 @@ const CHEBYSHEV_DEFAULT_WINDOW: [f64; 2] = [-1.0, 1.0];
 
 /// A polynomial in the Chebyshev basis (first kind).
 ///
-/// Represents p(x) = c[0]*T_0(u) + c[1]*T_1(u) + ... + c[n]*T_n(u) where
+/// Represents p(x) = c[0]*`T_0(u)` + c[1]*`T_1(u)` + ... + c[n]*`T_n(u)` where
 /// `u = offset + scale * x` is the affine map from `domain` to `window`.
 /// By default the mapping is identity.
 #[derive(Debug, Clone, PartialEq)]
@@ -37,8 +37,9 @@ pub struct Chebyshev {
 impl Chebyshev {
     /// Create a new Chebyshev polynomial from coefficients.
     ///
-    /// `coeffs[i]` is the coefficient of T_i(x). The domain and window
+    /// `coeffs[i]` is the coefficient of `T_i(x)`. The domain and window
     /// default to `[-1, 1]` (identity mapping).
+    #[must_use]
     pub fn new(coeffs: &[f64]) -> Self {
         let coeffs = if coeffs.is_empty() {
             vec![0.0]
@@ -100,7 +101,7 @@ impl Chebyshev {
 
     /// Internal: build a new Chebyshev with the same domain/window as self.
     #[inline]
-    fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
+    const fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
         Self {
             coeffs,
             domain: self.domain,
@@ -135,17 +136,17 @@ fn clenshaw_chebyshev(coeffs: &[f64], x: f64) -> f64 {
     let mut b_k2 = 0.0; // b_{k+2}
 
     for k in (1..n).rev() {
-        let b_k = coeffs[k] + 2.0 * x * b_k1 - b_k2;
+        let b_k = (2.0 * x).mul_add(b_k1, coeffs[k]) - b_k2;
         b_k2 = b_k1;
         b_k1 = b_k;
     }
 
-    coeffs[0] + x * b_k1 - b_k2
+    x.mul_add(b_k1, coeffs[0]) - b_k2
 }
 
 /// Multiply two Chebyshev series.
 ///
-/// Uses the identity: T_m(x) * T_n(x) = (T_{m+n}(x) + T_{|m-n|}(x)) / 2
+/// Uses the identity: `T_m(x)` * `T_n(x)` = (T_{m+n}(x) + T_{|m-n|}(x)) / 2
 fn mul_chebyshev(a: &[f64], b: &[f64]) -> Vec<f64> {
     if a.is_empty() || b.is_empty() {
         return vec![0.0];
@@ -329,7 +330,7 @@ impl Poly for Chebyshev {
             }
             for k in (1..nd.saturating_sub(1)).rev() {
                 let c_k2 = if k + 2 < nd { new_coeffs[k + 2] } else { 0.0 };
-                new_coeffs[k] = c_k2 + 2.0 * (k as f64 + 1.0) * coeffs[k + 1];
+                new_coeffs[k] = (2.0 * (k as f64 + 1.0)).mul_add(coeffs[k + 1], c_k2);
             }
             if nd >= 2 {
                 let c2_val = if nd > 2 { new_coeffs[2] } else { 0.0 };
@@ -560,7 +561,7 @@ impl From<crate::power::Polynomial> for Chebyshev {
 
 impl From<Chebyshev> for crate::power::Polynomial {
     fn from(c: Chebyshev) -> Self {
-        crate::power::Polynomial::new(&chebyshev_to_power(&c.coeffs))
+        Self::new(&chebyshev_to_power(&c.coeffs))
     }
 }
 
@@ -600,10 +601,7 @@ mod tests {
         for (i, (&orig, &rec)) in original_coeffs.iter().zip(recovered.iter()).enumerate() {
             assert!(
                 (orig - rec).abs() < 1e-12,
-                "index {}: expected {}, got {}",
-                i,
-                orig,
-                rec
+                "index {i}: expected {orig}, got {rec}",
             );
         }
     }
@@ -619,10 +617,7 @@ mod tests {
             let eval = cheb.eval(xi).unwrap();
             assert!(
                 (eval - yi).abs() < 1e-10,
-                "at x={}: expected {}, got {}",
-                xi,
-                yi,
-                eval
+                "at x={xi}: expected {yi}, got {eval}",
             );
         }
     }
@@ -677,10 +672,7 @@ mod tests {
             };
             assert!(
                 (expected - got).abs() < 1e-10,
-                "index {}: expected {}, got {}",
-                i,
-                expected,
-                got
+                "index {i}: expected {expected}, got {got}"
             );
         }
     }
@@ -701,10 +693,7 @@ mod tests {
         {
             assert!(
                 (orig - rec).abs() < 1e-10,
-                "index {}: expected {}, got {}",
-                i,
-                orig,
-                rec
+                "index {i}: expected {orig}, got {rec}"
             );
         }
     }

@@ -22,7 +22,7 @@ fn try_simd_sum_sq_diff<T: Element + Copy + 'static>(data: &[T], mean: T) -> Opt
     if TypeId::of::<T>() == TypeId::of::<f64>() {
         // SAFETY: TypeId check guarantees T is f64. size_of::<T>() == size_of::<f64>().
         let f64_slice =
-            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f64, data.len()) };
+            unsafe { std::slice::from_raw_parts(data.as_ptr().cast::<f64>(), data.len()) };
         let mean_f64: f64 = unsafe { std::mem::transmute_copy(&mean) };
         let result = parallel::simd_sum_sq_diff_f64(f64_slice, mean_f64);
         Some(unsafe { std::mem::transmute_copy(&result) })
@@ -38,7 +38,7 @@ fn try_simd_pairwise_sum<T: Element + Copy + 'static>(data: &[T]) -> Option<T> {
     if TypeId::of::<T>() == TypeId::of::<f64>() {
         // SAFETY: TypeId check guarantees T is f64. size_of::<T>() == size_of::<f64>().
         let f64_slice =
-            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f64, data.len()) };
+            unsafe { std::slice::from_raw_parts(data.as_ptr().cast::<f64>(), data.len()) };
         let result = parallel::pairwise_sum_f64(f64_slice);
         Some(unsafe { std::mem::transmute_copy(&result) })
     } else {
@@ -247,7 +247,7 @@ pub(crate) fn reduce_axis_general_into<T, F>(
 }
 
 /// Validate axis parameter and return an error if out of bounds.
-pub(crate) fn validate_axis(axis: usize, ndim: usize) -> FerrayResult<()> {
+pub(crate) const fn validate_axis(axis: usize, ndim: usize) -> FerrayResult<()> {
     if axis >= ndim {
         Err(FerrayError::axis_out_of_bounds(axis, ndim))
     } else {
@@ -277,9 +277,7 @@ impl<T> std::ops::Deref for DataRef<'_, T> {
 }
 
 /// Get a reference to contiguous data, or copy if strided.
-pub(crate) fn borrow_data<'a, T: Element + Copy, D: Dimension>(
-    a: &'a Array<T, D>,
-) -> DataRef<'a, T> {
+pub(crate) fn borrow_data<T: Element + Copy, D: Dimension>(a: &Array<T, D>) -> DataRef<'_, T> {
     if let Some(slice) = a.as_slice() {
         DataRef::Borrowed(slice)
     } else {
@@ -287,7 +285,7 @@ pub(crate) fn borrow_data<'a, T: Element + Copy, D: Dimension>(
     }
 }
 
-/// Build an IxDyn result array from output shape and data.
+/// Build an `IxDyn` result array from output shape and data.
 pub(crate) fn make_result<T: Element>(
     out_shape: &[usize],
     data: Vec<T>,
@@ -337,7 +335,7 @@ pub(crate) fn output_shape(shape: &[usize], axis: usize) -> Vec<usize> {
 /// Normalize the `axes: Option<&[usize]>` argument of a multi-axis reduction:
 ///
 /// - `None` or `Some(&[])` expands to all axes `[0..ndim]` (reduce everything)
-/// - Duplicate axes are an error (matches NumPy's `np.sum(a, axis=(0, 0))`)
+/// - Duplicate axes are an error (matches `NumPy`'s `np.sum(a, axis=(0, 0))`)
 /// - Any out-of-bounds axis is an error
 ///
 /// Returns the sorted, unique axis list.
@@ -351,7 +349,7 @@ pub(crate) fn normalize_axes(axes: Option<&[usize]>, ndim: usize) -> FerrayResul
             return Err(FerrayError::axis_out_of_bounds(a, ndim));
         }
     }
-    let mut sorted = ax.clone();
+    let mut sorted = ax;
     sorted.sort_unstable();
     for w in sorted.windows(2) {
         if w[0] == w[1] {
@@ -437,7 +435,7 @@ pub(crate) fn reduce_axes_general<T: Copy, F: Fn(&[T]) -> T>(
 
         // Gather values along all reduced axes.
         lane.clear();
-        reduce_multi.iter_mut().for_each(|v| *v = 0);
+        reduce_multi.fill(0);
         for _ in 0..lane_size {
             for (i, &ax) in reduce_axes.iter().enumerate() {
                 full_multi[ax] = reduce_multi[i];
@@ -466,7 +464,7 @@ pub(crate) fn reduce_axes_general<T: Copy, F: Fn(&[T]) -> T>(
 ///
 /// Equivalent to `numpy.sum`.
 ///
-/// **Note:** Unlike NumPy, which auto-promotes `int32` sums to `int64`,
+/// **Note:** Unlike `NumPy`, which auto-promotes `int32` sums to `int64`,
 /// ferray returns the same type as the input. For large integer arrays
 /// this may overflow. Use [`sum_as_f64`] for overflow-safe integer summation.
 ///
@@ -504,7 +502,7 @@ where
 /// Sum of array elements, returning `f64` regardless of input type.
 ///
 /// This works on integer arrays (i32, u64, etc.) without overflow risk.
-/// The result is always `Array<f64, IxDyn>`, matching NumPy's behavior
+/// The result is always `Array<f64, IxDyn>`, matching `NumPy`'s behavior
 /// of promoting integer sums to a wider type.
 pub fn sum_as_f64<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<f64, IxDyn>>
 where
@@ -533,7 +531,7 @@ where
 
 /// Product of array elements over a given axis.
 ///
-/// **Note:** Unlike NumPy, which auto-promotes integer products,
+/// **Note:** Unlike `NumPy`, which auto-promotes integer products,
 /// ferray returns the same type as the input. For large integer arrays
 /// this may overflow.
 /// Equivalent to `numpy.prod`.
@@ -798,7 +796,7 @@ where
 ///
 /// This works on integer arrays (i32, u64, etc.) where [`mean`] would
 /// fail because integers don't implement `Float`. The result is always
-/// `Array<f64, IxDyn>`, matching NumPy's behavior of promoting integer
+/// `Array<f64, IxDyn>`, matching `NumPy`'s behavior of promoting integer
 /// means to float64.
 ///
 /// Equivalent to `numpy.mean` for integer inputs.
@@ -1921,10 +1919,10 @@ where
 /// Equivalent to `np.mean(a, axis=axis, where=where_mask)`. The divisor
 /// is the count of `true` positions in the (broadcast) mask, NOT the
 /// lane length — fully-masked-out lanes return `T::nan()` (matching
-/// NumPy's "RuntimeWarning: Mean of empty slice" behavior, but without
+/// `NumPy`'s "`RuntimeWarning`: Mean of empty slice" behavior, but without
 /// the warning machinery). `initial` is intentionally not modeled
 /// because the divisor for an "initial-bumped" mean is ambiguous in
-/// NumPy too. `where_mask` is broadcast-compatible with `a.shape()`
+/// `NumPy` too. `where_mask` is broadcast-compatible with `a.shape()`
 /// (#565).
 pub fn mean_where<T, D>(
     a: &Array<T, D>,
@@ -2014,7 +2012,7 @@ where
 
 /// Single-axis argmin with optional `keepdims`.
 ///
-/// NumPy's `argmin` only accepts a single axis (or `None`); this mirrors
+/// `NumPy`'s `argmin` only accepts a single axis (or `None`); this mirrors
 /// that constraint. `keepdims` preserves the reduced axis as size 1.
 pub fn argmin_keepdims<T, D>(
     a: &Array<T, D>,
@@ -2132,7 +2130,7 @@ pub(crate) fn reduce_axes_general_u64<T: Copy, F: Fn(&[T]) -> u64>(
         }
 
         lane.clear();
-        reduce_multi.iter_mut().for_each(|v| *v = 0);
+        reduce_multi.fill(0);
         for _ in 0..lane_size {
             for (i, &ax) in reduce_axes.iter().enumerate() {
                 full_multi[ax] = reduce_multi[i];
@@ -2359,7 +2357,7 @@ mod tests {
         let a =
             Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![i32::MAX, i32::MAX, i32::MAX]).unwrap();
         let s = sum_as_f64(&a, None).unwrap();
-        let expected = 3.0 * (i32::MAX as f64);
+        let expected = 3.0 * f64::from(i32::MAX);
         assert!((s.iter().next().unwrap() - expected).abs() < 1.0);
     }
 
@@ -2446,7 +2444,7 @@ mod tests {
     #[test]
     fn test_sum_axes_multi_axis_3d() {
         // shape (2, 3, 4), sum over axes (0, 2) -> shape (3,)
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let a = arr3d(2, 3, 4, data);
         let s = sum_axes(&a, Some(&[0, 2]), false).unwrap();
         assert_eq!(s.shape(), &[3]);
@@ -2464,7 +2462,7 @@ mod tests {
     #[test]
     fn test_sum_axes_multi_axis_keepdims_3d() {
         // Same as above but keepdims -> shape (1, 3, 1)
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let a = arr3d(2, 3, 4, data);
         let s = sum_axes(&a, Some(&[0, 2]), true).unwrap();
         assert_eq!(s.shape(), &[1, 3, 1]);
@@ -2499,7 +2497,7 @@ mod tests {
 
     #[test]
     fn test_min_max_axes_multi_axis() {
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let a = arr3d(2, 3, 4, data);
         let mn = min_axes(&a, Some(&[0, 2]), false).unwrap();
         let mx = max_axes(&a, Some(&[0, 2]), false).unwrap();
@@ -2514,7 +2512,7 @@ mod tests {
 
     #[test]
     fn test_mean_axes_multi_axis() {
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let a = arr3d(2, 3, 4, data);
         let m = mean_axes(&a, Some(&[0, 2]), false).unwrap();
         assert_eq!(m.shape(), &[3]);
@@ -2736,7 +2734,7 @@ mod tests {
         // across many reductions on same-shaped data.
         let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0; 2]).unwrap();
         for k in 0..3 {
-            let base = k as f64;
+            let base = f64::from(k);
             let a = Array::<f64, Ix2>::from_vec(
                 Ix2::new([2, 3]),
                 vec![
@@ -2752,7 +2750,7 @@ mod tests {
             sum_into(&a, Some(1), &mut out).unwrap();
             assert_eq!(
                 out.as_slice().unwrap(),
-                &[3.0 * base + 6.0, 3.0 * base + 15.0]
+                &[3.0f64.mul_add(base, 6.0), 3.0f64.mul_add(base, 15.0)]
             );
         }
     }
@@ -2776,7 +2774,7 @@ mod tests {
         // The in-place kernel must produce identical output to the
         // allocating kernel for any (shape, axis, fn).
         use super::{reduce_axis_typed, reduce_axis_typed_into};
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         for shape in [vec![24usize], vec![4, 6], vec![2, 3, 4], vec![2, 2, 2, 3]] {
             for ax in 0..shape.len() {
                 let allocated: Vec<f64> =
@@ -2792,14 +2790,14 @@ mod tests {
     fn sum_into_3d_axis_correct() {
         use ferray_core::Ix3;
         // (2, 3, 4) reducing axis 1 → shape (2, 4)
-        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let data: Vec<f64> = (0..24).map(f64::from).collect();
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
         let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 4]), vec![0.0; 8]).unwrap();
         sum_into(&a, Some(1), &mut out).unwrap();
         // Hand check: out[i, k] = sum_{j} a[i, j, k] = sum_{j} (i*12 + j*4 + k)
         let expected: Vec<f64> = (0..2)
             .flat_map(|i| {
-                (0..4).map(move |k| (0..3).map(|j| (i * 12 + j * 4 + k) as f64).sum::<f64>())
+                (0..4).map(move |k| (0..3).map(|j| f64::from(i * 12 + j * 4 + k)).sum::<f64>())
             })
             .collect();
         assert_eq!(out.as_slice().unwrap(), expected.as_slice());
@@ -3187,7 +3185,7 @@ mod tests {
         // 3-D input, axis = last dim — guards against an off-by-one in
         // the in-place index walker.
         use ferray_core::Ix3;
-        let data: Vec<f64> = (0..24).map(|i| i as f64 + 0.5).collect();
+        let data: Vec<f64> = (0..24).map(|i| f64::from(i) + 0.5).collect();
         let a = Array::<f64, Ix3>::from_vec(Ix3::new([2, 3, 4]), data).unwrap();
 
         let s_alloc = sum(&a, Some(2)).unwrap();

@@ -15,7 +15,7 @@ use ferray_core::dimension::Ix1;
 ///
 /// Accepts anything that can be copied into a `Vec<f64>`, so callers
 /// can use either `arr1(&[1.0, 2.0])` or `arr1(vec![1.0, 2.0])`.
-pub(crate) fn arr1<I: Into<Vec<f64>>>(data: I) -> Array<f64, Ix1> {
+pub fn arr1<I: Into<Vec<f64>>>(data: I) -> Array<f64, Ix1> {
     let data = data.into();
     let n = data.len();
     Array::from_vec(Ix1::new([n]), data).unwrap()

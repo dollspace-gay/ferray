@@ -66,7 +66,7 @@ where
     }
 
     // Conjugate the input (hfft = ifft(conj(a)) * n effectively)
-    let conj_data: Vec<Complex<T>> = a.iter().map(|c| c.conj()).collect();
+    let conj_data: Vec<Complex<T>> = a.iter().map(num_complex::Complex::conj).collect();
     let conj_arr = Array::<Complex<T>, IxDyn>::from_vec(IxDyn::new(&shape), conj_data)?;
 
     // Use irfft on the conjugated data
@@ -125,7 +125,7 @@ where
     let result = crate::real::rfft::<T, D>(a, n, Some(ax as isize), ihfft_norm)?;
 
     // Conjugate the output
-    let conj_data: Vec<Complex<T>> = result.iter().map(|c| c.conj()).collect();
+    let conj_data: Vec<Complex<T>> = result.iter().map(num_complex::Complex::conj).collect();
     let out_shape = result.shape().to_vec();
     Array::from_vec(IxDyn::new(&out_shape), conj_data)
 }
@@ -154,7 +154,7 @@ mod tests {
 
         let rec_data: Vec<f64> = recovered.iter().copied().collect();
         for (o, r) in original.iter().zip(rec_data.iter()) {
-            assert!((o - r).abs() < 1e-10, "mismatch: expected {}, got {}", o, r);
+            assert!((o - r).abs() < 1e-10, "mismatch: expected {o}, got {r}");
         }
     }
 

@@ -2,6 +2,11 @@
 //
 // Mirrors numpy.finfo and numpy.iinfo for compile-time type metadata.
 
+// The smallest-subnormal computations halve `v` until it underflows to
+// zero — comparing `v / 2.0 > 0.0` is the entire termination condition,
+// not a precision bug.
+#![allow(clippy::while_float)]
+
 use core::fmt;
 
 // ---------------------------------------------------------------------------
@@ -10,7 +15,7 @@ use core::fmt;
 
 /// Compile-time metadata about a floating-point type.
 ///
-/// Mirrors `numpy.finfo`. All fields match their NumPy equivalents.
+/// Mirrors `numpy.finfo`. All fields match their `NumPy` equivalents.
 #[derive(Clone, Copy, PartialEq)]
 pub struct FloatInfo {
     /// Machine epsilon: smallest representable positive number such that
@@ -74,7 +79,7 @@ impl fmt::Display for FloatInfo {
 pub struct IntInfo {
     /// The smallest representable value.
     pub min: i128,
-    /// The largest representable value (u128 to accommodate u128::MAX).
+    /// The largest representable value (u128 to accommodate `u128::MAX`).
     pub max: u128,
     /// Number of bits in the type.
     pub bits: u32,
@@ -123,23 +128,23 @@ impl sealed::SealedFloat for f32 {}
 impl FloatType for f32 {
     fn float_info() -> FloatInfo {
         FloatInfo {
-            eps: f32::EPSILON as f64,
-            smallest_normal: f32::MIN_POSITIVE as f64,
+            eps: Self::EPSILON as f64,
+            smallest_normal: Self::MIN_POSITIVE as f64,
             smallest_subnormal: {
                 // f32 smallest subnormal = 2^(-149)
-                let mut v: f32 = f32::MIN_POSITIVE;
+                let mut v: Self = Self::MIN_POSITIVE;
                 while v / 2.0 > 0.0 {
                     v /= 2.0;
                 }
                 v as f64
             },
-            max: f32::MAX as f64,
-            min: f32::MIN as f64,
+            max: Self::MAX as f64,
+            min: Self::MIN as f64,
             bits: 32,
-            nmant: f32::MANTISSA_DIGITS - 1, // 23
+            nmant: Self::MANTISSA_DIGITS - 1, // 23
             nexp: 8,
-            maxexp: f32::MAX_EXP, // 128
-            minexp: f32::MIN_EXP, // -125
+            maxexp: Self::MAX_EXP, // 128
+            minexp: Self::MIN_EXP, // -125
         }
     }
 }
@@ -148,23 +153,23 @@ impl sealed::SealedFloat for f64 {}
 impl FloatType for f64 {
     fn float_info() -> FloatInfo {
         FloatInfo {
-            eps: f64::EPSILON,
-            smallest_normal: f64::MIN_POSITIVE,
+            eps: Self::EPSILON,
+            smallest_normal: Self::MIN_POSITIVE,
             smallest_subnormal: {
                 // f64 smallest subnormal = 2^(-1074)
-                let mut v: f64 = f64::MIN_POSITIVE;
+                let mut v: Self = Self::MIN_POSITIVE;
                 while v / 2.0 > 0.0 {
                     v /= 2.0;
                 }
                 v
             },
-            max: f64::MAX,
-            min: f64::MIN,
+            max: Self::MAX,
+            min: Self::MIN,
             bits: 64,
-            nmant: f64::MANTISSA_DIGITS - 1, // 52
+            nmant: Self::MANTISSA_DIGITS - 1, // 52
             nexp: 11,
-            maxexp: f64::MAX_EXP, // 1024
-            minexp: f64::MIN_EXP, // -1021
+            maxexp: Self::MAX_EXP, // 1024
+            minexp: Self::MIN_EXP, // -1021
         }
     }
 }
@@ -226,6 +231,7 @@ impl IntType for bool {
 /// assert_eq!(info.eps, f64::EPSILON);
 /// assert_eq!(info.bits, 64);
 /// ```
+#[must_use]
 pub fn finfo<T: FloatType>() -> FloatInfo {
     T::float_info()
 }
@@ -241,6 +247,7 @@ pub fn finfo<T: FloatType>() -> FloatInfo {
 /// assert_eq!(info.min, i32::MIN as i128);
 /// assert_eq!(info.max, i32::MAX as u128);
 /// ```
+#[must_use]
 pub fn iinfo<T: IntType>() -> IntInfo {
     T::int_info()
 }

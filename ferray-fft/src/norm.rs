@@ -1,6 +1,6 @@
 // ferray-fft: FftNorm enum and scaling logic (REQ-14)
 
-/// Normalization mode for FFT operations, matching NumPy's `norm` parameter.
+/// Normalization mode for FFT operations, matching `NumPy`'s `norm` parameter.
 ///
 /// - [`Backward`](FftNorm::Backward): No normalization on forward, `1/n` on inverse (default).
 /// - [`Forward`](FftNorm::Forward): `1/n` on forward, no normalization on inverse.
@@ -8,7 +8,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum FftNorm {
     /// No normalization on forward FFT, divide by `n` on inverse.
-    /// This is the default, matching NumPy.
+    /// This is the default, matching `NumPy`.
     #[default]
     Backward,
     /// Divide by `n` on forward FFT, no normalization on inverse.
@@ -33,17 +33,18 @@ impl FftNorm {
     /// Returns `1.0` when no normalization is needed. The generic FFT
     /// code path uses [`crate::float::FftFloat::scale_factor`] which
     /// wraps this and casts to the correct precision.
+    #[must_use]
     pub fn scale_factor_f64(self, n: usize, direction: FftDirection) -> f64 {
         let nf = n as f64;
         match (self, direction) {
             // Backward: no scaling on forward, 1/n on inverse
-            (FftNorm::Backward, FftDirection::Forward) => 1.0,
-            (FftNorm::Backward, FftDirection::Inverse) => 1.0 / nf,
+            (Self::Backward, FftDirection::Forward) => 1.0,
+            (Self::Backward, FftDirection::Inverse) => 1.0 / nf,
             // Forward: 1/n on forward, no scaling on inverse
-            (FftNorm::Forward, FftDirection::Forward) => 1.0 / nf,
-            (FftNorm::Forward, FftDirection::Inverse) => 1.0,
+            (Self::Forward, FftDirection::Forward) => 1.0 / nf,
+            (Self::Forward, FftDirection::Inverse) => 1.0,
             // Ortho: 1/sqrt(n) in both directions
-            (FftNorm::Ortho, _) => 1.0 / nf.sqrt(),
+            (Self::Ortho, _) => 1.0 / nf.sqrt(),
         }
     }
 

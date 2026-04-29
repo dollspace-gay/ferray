@@ -278,7 +278,7 @@ mod tests {
         use std::f64::consts::PI;
         let x = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![0.0, PI / 2.0, PI]).unwrap();
         // d/dx sin(x) = cos(x)  →  [1, 0, -1]
-        let dx = derivative_elementwise(|v| v.sin(), &x).unwrap();
+        let dx = derivative_elementwise(super::super::dual::DualNumber::sin, &x).unwrap();
         let slice = dx.as_slice().unwrap();
         assert!((slice[0] - 1.0).abs() < 1e-10);
         assert!(slice[1].abs() < 1e-10);
@@ -379,7 +379,7 @@ mod tests {
         let ct = theta.cos();
         let st = theta.sin();
         assert!((j_slice[0] - ct).abs() < 1e-10); // ∂(r cos θ)/∂r = cos θ
-        assert!((j_slice[1] - (-r * st)).abs() < 1e-10); // ∂(r cos θ)/∂θ = -r sin θ
+        assert!((-r).mul_add(-st, j_slice[1]).abs() < 1e-10); // ∂(r cos θ)/∂θ = -r sin θ
         assert!((j_slice[2] - st).abs() < 1e-10); // ∂(r sin θ)/∂r = sin θ
         assert!((j_slice[3] - (r * ct)).abs() < 1e-10); // ∂(r sin θ)/∂θ = r cos θ
     }

@@ -2,6 +2,18 @@
 //
 // Tests mathematical invariants of FFT operations using proptest.
 
+// Property tests sample integer sizes and lift them into f64 frequency
+// indices; FFT roundtrip identities assert exact float equality on
+// known-zero imaginary parts.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp
+)]
+
 use ferray_core::Array;
 use ferray_core::dimension::Ix1;
 use num_complex::Complex;
@@ -108,8 +120,8 @@ proptest! {
 
         let transformed = fft(&input, None, None, FftNorm::Backward).unwrap();
 
-        let energy_time: f64 = complex_data.iter().map(|c| c.norm_sqr()).sum();
-        let energy_freq: f64 = transformed.iter().map(|c| c.norm_sqr()).sum();
+        let energy_time: f64 = complex_data.iter().map(num_complex::Complex::norm_sqr).sum();
+        let energy_freq: f64 = transformed.iter().map(num_complex::Complex::norm_sqr).sum();
 
         let ratio = energy_freq / n as f64;
         let diff = (energy_time - ratio).abs();
@@ -266,8 +278,8 @@ proptest! {
 
         let transformed = fft(&input, None, None, FftNorm::Ortho).unwrap();
 
-        let energy_time: f64 = complex_data.iter().map(|c| c.norm_sqr()).sum();
-        let energy_freq: f64 = transformed.iter().map(|c| c.norm_sqr()).sum();
+        let energy_time: f64 = complex_data.iter().map(num_complex::Complex::norm_sqr).sum();
+        let energy_freq: f64 = transformed.iter().map(num_complex::Complex::norm_sqr).sum();
 
         let diff = (energy_time - energy_freq).abs();
         let scale = energy_time.abs().max(1.0);

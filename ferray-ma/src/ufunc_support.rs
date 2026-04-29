@@ -286,7 +286,7 @@ where
 /// `(T, T) -> T` closure. The result's mask is the elementwise OR of
 /// the two inputs' masks; masked positions in the result data carry
 /// the receiver's `fill_value`. Both inputs are broadcast to a common
-/// shape via NumPy rules on the slow path — the same broadcast
+/// shape via `NumPy` rules on the slow path — the same broadcast
 /// machinery the named `add`/`multiply`/etc. wrappers use.
 ///
 /// # Errors
@@ -631,7 +631,7 @@ where
 
 /// Elementwise `sign` (-1, 0, or 1 per element) on a masked array.
 ///
-/// Matches NumPy's `np.sign` rather than Rust's `f64::signum`: exact
+/// Matches `NumPy`'s `np.sign` rather than Rust's `f64::signum`: exact
 /// zero (both +0.0 and -0.0) returns 0.0, not +1.0. NaN propagates
 /// to NaN. For any other finite or infinite value the result is
 /// `-1.0` if negative and `+1.0` if positive.
@@ -744,7 +744,7 @@ mod tests {
     fn masked_unary_applies_closure_to_unmasked_only() {
         // Closure that's not exposed as a named wrapper: `x * 10 + 1`.
         let ma = make_ma(vec![1.0, 2.0, 3.0, 4.0], vec![false, true, false, false]);
-        let r = masked_unary(&ma, |x| x * 10.0 + 1.0).unwrap();
+        let r = masked_unary(&ma, |x| x.mul_add(10.0, 1.0)).unwrap();
         let d: Vec<f64> = r.data().iter().copied().collect();
         // Position 1 is masked → retains the fill_value (default: 0.0).
         assert_eq!(d, vec![11.0, 0.0, 31.0, 41.0]);
@@ -771,7 +771,7 @@ mod tests {
             vec![10.0, 20.0, 30.0, 40.0],
             vec![false, false, true, false],
         );
-        let r = masked_binary(&a, &b, |x, y| x * 2.0 + y, "test_op").unwrap();
+        let r = masked_binary(&a, &b, |x, y| x.mul_add(2.0, y), "test_op").unwrap();
         let d: Vec<f64> = r.data().iter().copied().collect();
         // Position 0: 2*1 + 10 = 12; position 1: masked; position 2: masked;
         // position 3: 2*4 + 40 = 48.

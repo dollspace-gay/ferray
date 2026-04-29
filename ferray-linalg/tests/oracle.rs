@@ -1,4 +1,18 @@
-/// Oracle tests: validate ferray-linalg against NumPy fixture outputs.
+//! Oracle tests: validate ferray-linalg against `NumPy` fixture outputs.
+
+// Oracle tests cross fixture data through `f64` JSON values, recover bit
+// patterns, and ULP-compare against NumPy reference outputs — both the
+// casts and the float comparisons are part of the contract.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::float_cmp,
+    clippy::option_if_let_else
+)]
+
 use ferray_core::Array;
 use ferray_core::dimension::{Ix2, IxDyn};
 use ferray_test_oracle::*;

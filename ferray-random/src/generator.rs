@@ -30,18 +30,18 @@ pub struct Generator<B: BitGenerator = Xoshiro256StarStar> {
 
 impl<B: BitGenerator> Generator<B> {
     /// Create a new `Generator` wrapping the given `BitGenerator`.
-    pub fn new(bg: B) -> Self {
+    pub const fn new(bg: B) -> Self {
         Self { bg, seed: 0 }
     }
 
     /// Create a new `Generator` with a known seed (stored for spawn).
-    pub(crate) fn new_with_seed(bg: B, seed: u64) -> Self {
+    pub(crate) const fn new_with_seed(bg: B, seed: u64) -> Self {
         Self { bg, seed }
     }
 
-    /// Access the underlying BitGenerator mutably.
+    /// Access the underlying `BitGenerator` mutably.
     #[inline]
-    pub fn bit_generator(&mut self) -> &mut B {
+    pub const fn bit_generator(&mut self) -> &mut B {
         &mut self.bg
     }
 
@@ -90,7 +90,7 @@ impl<B: BitGenerator> Generator<B> {
     }
 }
 
-/// Create a `Generator` with the default BitGenerator (Xoshiro256**)
+/// Create a `Generator` with the default `BitGenerator` (Xoshiro256**)
 /// seeded from a non-deterministic source (using the system time as a
 /// simple entropy source).
 ///
@@ -100,12 +100,13 @@ impl<B: BitGenerator> Generator<B> {
 /// let val = rng.next_f64();
 /// assert!((0.0..1.0).contains(&val));
 /// ```
+#[must_use]
 pub fn default_rng() -> Generator<Xoshiro256StarStar> {
     // Use OS entropy via getrandom for proper seeding.
     // Falls back to time-based entropy if getrandom fails.
     let seed = {
         let mut buf = [0u8; 8];
-        if getrandom::getrandom(&mut buf).is_ok() {
+        if getrandom::fill(&mut buf).is_ok() {
             u64::from_ne_bytes(buf)
         } else {
             // Fallback: time + stack address
@@ -117,14 +118,14 @@ pub fn default_rng() -> Generator<Xoshiro256StarStar> {
             let mut s = nanos as u64;
             s ^= (nanos >> 64) as u64;
             let stack_var: u8 = 0;
-            s ^= &stack_var as *const u8 as u64;
+            s ^= &raw const stack_var as u64;
             s
         }
     };
     default_rng_seeded(seed)
 }
 
-/// Create a `Generator` with the default BitGenerator (Xoshiro256**)
+/// Create a `Generator` with the default `BitGenerator` (Xoshiro256**)
 /// from a specific seed, ensuring deterministic output.
 ///
 /// # Example
@@ -133,6 +134,7 @@ pub fn default_rng() -> Generator<Xoshiro256StarStar> {
 /// let mut rng2 = ferray_random::default_rng_seeded(42);
 /// assert_eq!(rng1.next_u64(), rng2.next_u64());
 /// ```
+#[must_use]
 pub fn default_rng_seeded(seed: u64) -> Generator<Xoshiro256StarStar> {
     let bg = Xoshiro256StarStar::seed_from_u64(seed);
     Generator::new_with_seed(bg, seed)

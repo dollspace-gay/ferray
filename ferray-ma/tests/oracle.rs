@@ -1,4 +1,4 @@
-//! Oracle tests: validate ferray-ma (masked arrays) against NumPy fixture outputs.
+//! Oracle tests: validate ferray-ma (masked arrays) against `NumPy` fixture outputs.
 
 use ferray_core::dimension::IxDyn;
 use ferray_ma::MaskedArray;
@@ -8,7 +8,7 @@ fn ma_path(name: &str) -> std::path::PathBuf {
     fixtures_dir().join("ma").join(name)
 }
 
-/// Build a MaskedArray from fixture inputs that have "data" and "mask" fields.
+/// Build a `MaskedArray` from fixture inputs that have "data" and "mask" fields.
 fn make_masked_array(inputs: &ferray_test_oracle::serde_json::Value) -> MaskedArray<f64, IxDyn> {
     let data_arr = make_f64_array(&inputs["data"]);
     let mask_arr = make_bool_array(&inputs["mask"]);

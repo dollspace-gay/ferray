@@ -1,6 +1,6 @@
 //! Mixed-type (promoted) variants of arithmetic ufuncs.
 //!
-//! NumPy's ufunc type resolver automatically promotes operands to a
+//! `NumPy`'s ufunc type resolver automatically promotes operands to a
 //! common result type — `np.add(int32_arr, float64_arr)` just works.
 //! ferray-core already carries the compile-time promotion machinery
 //! (`Promoted` for result-type resolution, `PromoteTo` for element
@@ -9,7 +9,7 @@
 //!
 //! Scope: the four basic arithmetic ops (add / subtract / multiply /
 //! divide) and elementwise max/min. These cover the vast majority of
-//! NumPy calls with mixed dtypes. Unary ufuncs don't need promotion
+//! `NumPy` calls with mixed dtypes. Unary ufuncs don't need promotion
 //! because there's only one operand, and the float-only transcendentals
 //! (sin, exp, log, …) can't meaningfully accept integer inputs without
 //! first promoting them — callers that need that can `.cast::<f64>()`
