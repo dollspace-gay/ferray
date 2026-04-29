@@ -2,11 +2,12 @@
   "uuid": "da21d7ce-14e4-45aa-8018-3f18c68d1e29",
   "display_id": 570,
   "title": "ferray-ufunc: clippy errors (needless_borrows_for_generic_args, inconsistent_digit_grouping) on Rust 1.95",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-04-29T02:42:30.280959547Z",
-  "updated_at": "2026-04-29T02:42:31.596537805Z",
+  "updated_at": "2026-04-29T02:49:47.630647005Z",
+  "closed_at": "2026-04-29T02:49:47.630647005Z",
   "labels": [
     "maintenance"
   ]
