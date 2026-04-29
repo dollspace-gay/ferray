@@ -4,3 +4,5 @@
 phase-4-coordinator@crosslink ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDYdJDBGPI/5K4ZgiW3Hl42u4RTIoo5LB9EaYdANCbKE crosslink-agent:phase-4-coordinator@dollspace
 # approved by human backfill at 2026-04-02
 backfill@crosslink ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBHtCmOJf2exv735MdNJBcGbWNxYw/JXXulXDzUjU9OpMi+WVJ80BmyVDMznZRXeubP0Qs2YVSUFaJy0N8is4qRg= texas@dollspace
+# approved by doll at 2026-04-29 02:38:36 UTC
+doll-agent@crosslink ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOc5nNT6dD9NY4o+fe1u58exfbF1fAIkl8HUao6a20La crosslink-agent:doll-agent@dollspace
