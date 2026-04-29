@@ -2,11 +2,12 @@
   "uuid": "d30a4dae-1d03-4aac-b663-63ab3bc92098",
   "display_id": 573,
   "title": "deps: transitive RustSec advisories — paste 1.0.15 (RUSTSEC-2024-0436 unmaintained, via pulp/faer/gemm), rand 0.9.2 (RUSTSEC-2026-0097 unsound, via rand_distr/proptest)",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-04-29T02:44:19.703272056Z",
-  "updated_at": "2026-04-29T02:44:20.974348874Z",
+  "updated_at": "2026-04-29T02:56:04.258133269Z",
+  "closed_at": "2026-04-29T02:56:04.258133269Z",
   "labels": [
     "security"
   ]
