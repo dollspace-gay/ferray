@@ -1,0 +1,10 @@
+{
+  "uuid": "d7336f4a-9c3a-4b38-8abb-a04878a8ecf7",
+  "issue_uuid": "0701f1c0-36a1-4cf2-bfa3-006dafe29bc5",
+  "author": "doll-agent",
+  "content": "Single commit covering everything from this session: workspace bump 0.2.10 -> 0.2.11, major dep upgrades (pyo3 0.28, arrow 58, polars 0.53, zip 8, getrandom 0.4, rand_core 0.10, etc.), API migrations (PyO3 attach API, getrandom::fill), workspace clippy clean at -D warnings -W pedantic -W nursery, README + CHANGELOG updates. 2716 tests pass.",
+  "created_at": "2026-04-29T04:06:22.987415362Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA20YEy1mGRFoj5wMtpsxaoWXEx5IRzDVzpjabKCDhcrQJ0pxmlLAXn+TRUMFQt176hqx9ZL9v5dpK6oSdgt3CDg=="
+}
