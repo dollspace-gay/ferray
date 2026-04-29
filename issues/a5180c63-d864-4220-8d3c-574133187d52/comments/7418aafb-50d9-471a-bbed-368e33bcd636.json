@@ -1,0 +1,10 @@
+{
+  "uuid": "7418aafb-50d9-471a-bbed-368e33bcd636",
+  "issue_uuid": "a5180c63-d864-4220-8d3c-574133187d52",
+  "author": "doll-agent",
+  "content": "Restructured CHANGELOG.md: added [Unreleased] and curated [0.2.10] - 2026-04-28 sections at top; renamed rolling auto-gen block to [0.1.0 .. 0.2.10] with a note.",
+  "created_at": "2026-04-29T02:51:15.238814777Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA0nRGLESXJr76Ij5FK63t5W4LHRFlJfBqQd8tyri6/FiHrM/bVBPdWIukapD8lKLrbX/nISVYxUaI+fdPtAtMBA=="
+}
