@@ -1,0 +1,10 @@
+{
+  "uuid": "606cb594-26a8-42d1-9259-bd911ae7d620",
+  "issue_uuid": "96758453-54a3-4490-a399-66e538188cd4",
+  "author": "doll-agent",
+  "content": "Implemented dataframe_from_columns(columns: &[(name, &DynArray)]) -> DataFrame in extras.rs. Each ferray DynArray becomes a Polars Series of the matching dtype (Bool/I32/I64/F32/F64). Validates that all columns share the same length. Higher-level integration (Polars LazyFrame, schema-driven materialization) and the I8/I16/U*/F16 widths follow the same DynArray-widening dependency as #644. Tracks #558.",
+  "created_at": "2026-04-30T12:26:30.377097101Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAQnephYLPjM5VUREvmHM6tkOfc5jwh88FyBIKm+vUVh8FN7nW6tzUqUZLGuf1DHY7HyAgnRy1bxgM33X7WVQvAw=="
+}
