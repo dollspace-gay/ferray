@@ -1,0 +1,10 @@
+{
+  "uuid": "6ac1f174-616f-4f53-97e9-19bedb1ba4a6",
+  "issue_uuid": "1aab3414-aab7-4a16-92c9-a6b896eabf4a",
+  "author": "doll-agent",
+  "content": "Implemented isdecimal in ferray-strings::classify. Stricter than isdigit: rejects superscripts/subscripts. Implementation uses ASCII-digit subset (consistent with the rest of the classify family); full Unicode Decimal_Number category check would require an external crate (unicode_categories) and isn't justified by usage.",
+  "created_at": "2026-04-30T12:06:24.795656208Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAYD2xOi7oCCXbpIEyuFApfPyh7VKapPRHTXD9HbEbEAotbu8eo/wJSo2ug0GXukv8NJXsEdl8GXSMYVIyOK9YDg=="
+}
