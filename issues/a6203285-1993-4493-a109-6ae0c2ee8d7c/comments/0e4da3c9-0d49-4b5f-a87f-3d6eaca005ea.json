@@ -1,0 +1,10 @@
+{
+  "uuid": "0e4da3c9-0d49-4b5f-a87f-3d6eaca005ea",
+  "issue_uuid": "a6203285-1993-4493-a109-6ae0c2ee8d7c",
+  "author": "doll-agent",
+  "content": "isnat() requires a datetime64/timedelta64 dtype to check 'Not a Time' values. ferray does not currently have a datetime/timedelta dtype — that gap is tracked under issue #343 (ferray-core: no datetime/timedelta dtype). Closing this audit-parity issue as blocked on the datetime dtype work, since isnat is a no-op for any dtype that lacks the NaT sentinel value. Will be reopened or reimplemented when #343 lands.",
+  "created_at": "2026-04-30T03:19:15.967089367Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABArkg9Dya74LXc5ygdV8UZBQROz3ieGU55mA65BlEsB2VlbF9T3kUDEokF6kae0AfSgsM0iVDJePQSVMQr4yZnBA=="
+}
