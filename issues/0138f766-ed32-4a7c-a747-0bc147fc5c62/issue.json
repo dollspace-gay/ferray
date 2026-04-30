@@ -2,11 +2,12 @@
   "uuid": "0138f766-ed32-4a7c-a747-0bc147fc5c62",
   "display_id": 595,
   "title": "ferray-stats: add nanargmin/nanargmax",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:00.561088597Z",
-  "updated_at": "2026-04-30T02:58:00.639925760Z",
+  "updated_at": "2026-04-30T03:29:00.283908311Z",
+  "closed_at": "2026-04-30T03:29:00.283908311Z",
   "labels": [
     "audit-parity",
     "ferray-stats"
