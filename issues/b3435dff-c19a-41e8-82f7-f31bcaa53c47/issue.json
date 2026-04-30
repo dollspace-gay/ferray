@@ -1,0 +1,10 @@
+{
+  "uuid": "b3435dff-c19a-41e8-82f7-f31bcaa53c47",
+  "display_id": null,
+  "title": "ferray-core: add fromfile/fromfunction/fromstring",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:57:49.069209724Z",
+  "updated_at": "2026-04-30T02:57:49.069209724Z"
+}
