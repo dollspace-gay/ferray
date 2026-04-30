@@ -1,0 +1,10 @@
+{
+  "uuid": "d759bfc5-3db7-4dc2-83ca-1017cced3d43",
+  "issue_uuid": "0dfd7f26-94b5-42bb-bc6e-dbb79f6cb596",
+  "author": "doll-agent",
+  "content": "Closed: AVX-512 4x16 i16 kernel (32 i16 per VPMADDWD, 2x AVX2 throughput) shipped behind the existing avx512 feature flag. 3 new kernel tests, 249 total unit tests pass with --features avx512. Default-MSRV (1.85) clippy clean. stat-equiv 47/47 PASS.",
+  "created_at": "2026-04-30T19:21:49.617619895Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAqvVouzyd+5xaM4z4Nx6O5bIfSd3B9aJFNqmqjsWcVqXa8L2k1qg2aVyC38Kr+ySFpTtvsHBgHGsVqAqqPbuWCg=="
+}
