@@ -1,0 +1,10 @@
+{
+  "uuid": "27657083-f81c-438d-aeb3-7fd68f77af69",
+  "issue_uuid": "897475fe-1196-43a1-91a8-16ab498751a0",
+  "author": "doll-agent",
+  "content": "Implemented dynarray_to_arrow(arr: &DynArray) and record_batch_to_columns(batch) -> Vec<(name, DynArray)> in extras.rs. Dispatches on DType for the accessors DynArray currently exposes (Bool/I32/I64/F32/F64). The remaining integer widths (I8/I16/U8/U16/U32/U64) and F16/BF16/Complex* would need DynArray::try_into_{i8,i16,u8,u16,u32,u64,…} accessors in ferray-core — that widening is the structural follow-up which keeps the issue useful. dynarray_to_arrow yields a clear InvalidDtype with the issue reference for unsupported dtypes. Tracks #554.",
+  "created_at": "2026-04-30T12:26:04.552873550Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA4CQncwqrjiXv31TNxfKNcjE10hdihqI73gIcUjiiYo9QXHm5UzDxcbbDgE2YthbMVVn6VoAie9ZsAq8BDTtNBg=="
+}
