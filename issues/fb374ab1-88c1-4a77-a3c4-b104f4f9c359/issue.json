@@ -2,11 +2,12 @@
   "uuid": "fb374ab1-88c1-4a77-a3c4-b104f4f9c359",
   "display_id": 677,
   "title": "ferray-linalg: matmul mid-N (32-128) regression vs MKL — dispatch tuning + small-N path",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T20:03:01.507090405Z",
-  "updated_at": "2026-04-30T20:03:02.848154208Z",
+  "updated_at": "2026-04-30T20:08:57.320188926Z",
+  "closed_at": "2026-04-30T20:08:57.320188926Z",
   "labels": [
     "ferray-linalg"
   ]
