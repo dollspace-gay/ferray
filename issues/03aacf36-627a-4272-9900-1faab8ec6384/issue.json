@@ -1,0 +1,10 @@
+{
+  "uuid": "03aacf36-627a-4272-9900-1faab8ec6384",
+  "display_id": null,
+  "title": "ferray-ma: mask manipulation (harden/soften, mask_or, make_mask*, compress_rows/cols/rowcols/nd, mask_rows/cols/rowcols, clump_*masked, *notmasked_contiguous/edges, flatten_mask, flatten_structured_array)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:58:38.464622656Z",
+  "updated_at": "2026-04-30T02:58:38.464622656Z"
+}
