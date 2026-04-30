@@ -1,0 +1,10 @@
+{
+  "uuid": "9d6ebd37-959f-4cc0-898a-d26fde2512f5",
+  "display_id": 649,
+  "title": "Fix crosslink hub sync divergence (225 commits ahead of remote)",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T03:03:52.444280092Z",
+  "updated_at": "2026-04-30T03:03:52.444280092Z"
+}
