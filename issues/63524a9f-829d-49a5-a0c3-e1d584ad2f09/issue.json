@@ -2,11 +2,12 @@
   "uuid": "63524a9f-829d-49a5-a0c3-e1d584ad2f09",
   "display_id": 643,
   "title": "ferray-numpy-interop: bool support (links #553/#557)",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:39.894528995Z",
-  "updated_at": "2026-04-30T02:58:39.976400467Z",
+  "updated_at": "2026-04-30T12:25:58.240552454Z",
+  "closed_at": "2026-04-30T12:25:58.240552454Z",
   "labels": [
     "audit-parity",
     "ferray-numpy-interop"
