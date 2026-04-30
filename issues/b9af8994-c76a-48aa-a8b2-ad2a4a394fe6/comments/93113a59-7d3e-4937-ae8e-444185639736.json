@@ -1,0 +1,10 @@
+{
+  "uuid": "93113a59-7d3e-4937-ae8e-444185639736",
+  "issue_uuid": "b9af8994-c76a-48aa-a8b2-ad2a4a394fe6",
+  "author": "doll-agent",
+  "content": "Committed as 98035ef8: 101 files changed, 25831 insertions, 731 deletions. New: 28 GEMM kernel files + trsm.rs + openblas_backend.rs + 7 bench examples + complex transcendentals. Modified: workspace Cargo.toml + ferray-core-macros dev-dep pin (0.3.0), BENCHMARKS.md (full refresh), CHANGELOG.md ([0.3.0] section), trig.rs (libm), parallel.rs (PAIRWISE_BASE 4096), products/mod.rs (Vec round-trip elimination). All workspace tests pass, clippy clean across default + bf16 + f16 + openblas feature combos, stat-equiv 47/47 PASS.",
+  "created_at": "2026-04-30T20:46:53.215172344Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA0TaOvBCZs+/E9JSlwpIa3doeri6hFzktPBx5q5p6TtD6ADgiCxFY0WqUQBgoUn9QqAmdFLiCJ0qtG/tCbr6jBQ=="
+}
