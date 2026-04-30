@@ -1,0 +1,10 @@
+{
+  "uuid": "ba3f8c07-1b44-4e5c-b8d1-70fa977ebc86",
+  "display_id": null,
+  "title": "ferray-core: add ascontiguousarray/asfortranarray/asanyarray/asarray_chkfinite/require",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:57:47.992762288Z",
+  "updated_at": "2026-04-30T02:57:47.992762288Z"
+}
