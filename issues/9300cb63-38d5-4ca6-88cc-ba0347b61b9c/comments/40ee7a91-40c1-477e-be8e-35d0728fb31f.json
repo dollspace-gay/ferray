@@ -1,0 +1,10 @@
+{
+  "uuid": "40ee7a91-40c1-477e-be8e-35d0728fb31f",
+  "issue_uuid": "9300cb63-38d5-4ca6-88cc-ba0347b61b9c",
+  "author": "doll-agent",
+  "content": "Added explicit basis-conversion free functions on coefficient slices: poly2cheb / cheb2poly, poly2leg / leg2poly, poly2lag / lag2poly, poly2herm / herm2poly, poly2herme / herme2poly. Each pivots through the existing FromPowerBasis / ToPowerBasis traits. Round-trip tests verify poly→cheb→poly and poly→leg→poly preserve coefficients within 1e-10. The instance-level ConvertBasis::convert<T>() trait method on Poly objects remains unchanged.",
+  "created_at": "2026-04-30T11:44:03.402906258Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAnCGc+fJ22ty1dCDeIzBRfSUxo2YvND7+8QlxkfEjcs25QuR3NdrzArE83568504ux8YBB+8TIdDKCrg/TWxfDA=="
+}
