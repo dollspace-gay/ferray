@@ -1,0 +1,10 @@
+{
+  "uuid": "88464b1e-1a29-40ec-a68d-eba0701b8cc6",
+  "display_id": 671,
+  "title": "ferray-gemm: dedicated AVX2 i8 signed-signed kernel (vpmovsxbw inline, no widen-pass)",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T19:06:08.608166733Z",
+  "updated_at": "2026-04-30T19:06:08.608166733Z"
+}
