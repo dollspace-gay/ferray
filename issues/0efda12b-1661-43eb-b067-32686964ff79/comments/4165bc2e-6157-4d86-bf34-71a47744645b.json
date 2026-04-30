@@ -1,0 +1,10 @@
+{
+  "uuid": "4165bc2e-6157-4d86-bf34-71a47744645b",
+  "issue_uuid": "0efda12b-1661-43eb-b067-32686964ff79",
+  "author": "doll-agent",
+  "content": "Implemented index(arr, sub) and rindex(arr, sub) in ferray-strings::search. Both return Array<i64, D> of character indices. Unlike find/rfind (which return -1 on miss), index/rindex raise FerrayError::InvalidValue on the first miss — matching NumPy's str.index / str.rindex semantics. The miss error message includes the substring and the offending element.",
+  "created_at": "2026-04-30T12:06:16.880427475Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAEs6/2bx9STfPTVUkZ7nR7lkit4zygIpeEt+0MikoW196opovqngUBLp95AdKOW4WGu1uFJKAtqGVFL4kWbomBg=="
+}
