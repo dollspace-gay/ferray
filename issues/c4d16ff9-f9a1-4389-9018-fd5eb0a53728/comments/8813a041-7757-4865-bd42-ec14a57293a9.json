@@ -1,0 +1,10 @@
+{
+  "uuid": "8813a041-7757-4865-bd42-ec14a57293a9",
+  "issue_uuid": "c4d16ff9-f9a1-4389-9018-fd5eb0a53728",
+  "author": "doll-agent",
+  "content": "Top-level broadcast_arrays / broadcast_shapes re-exported in the umbrella ferray crate (gated on stride-tricks feature) — they were already implemented in ferray-stride-tricks. broadcast_to is already top-level via ferray-core::manipulation. NumPy's 'broadcast' iterator class isn't a Rust idiom; users iterate the output of broadcast_arrays directly.",
+  "created_at": "2026-04-30T03:08:41.929239089Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABArkgv9YjxHxXtiSZjRPoAyIDt1kAnxmPbkB43RTIjrYiwTUmg+bp2zavOaVgZND94ibCx2BNBwTW4pllOIw7eAg=="
+}
