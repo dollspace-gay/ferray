@@ -2,11 +2,12 @@
   "uuid": "eddbbc54-ad58-4ff7-8d46-512d7ee671f1",
   "display_id": 604,
   "title": "ferray-random: add noncentral_chisquare distribution",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:13.235780413Z",
-  "updated_at": "2026-04-30T02:58:13.311042185Z",
+  "updated_at": "2026-04-30T03:49:22.215931159Z",
+  "closed_at": "2026-04-30T03:49:22.215931159Z",
   "labels": [
     "audit-parity",
     "ferray-random"
