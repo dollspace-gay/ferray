@@ -2,11 +2,12 @@
   "uuid": "45be837e-26aa-4a76-8222-94e3c775644c",
   "display_id": 637,
   "title": "ferray-ma: apply_along_axis/apply_over_axes/vander",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:38.819701521Z",
-  "updated_at": "2026-04-30T02:58:38.898626136Z",
+  "updated_at": "2026-04-30T12:17:07.397542421Z",
+  "closed_at": "2026-04-30T12:17:07.397542421Z",
   "labels": [
     "audit-parity",
     "ferray-ma"
