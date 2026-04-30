@@ -1,0 +1,10 @@
+{
+  "uuid": "cd620989-fa1e-4caf-bee9-06587ada22d5",
+  "issue_uuid": "92a1c4bd-f2ab-46df-865c-460ebc07c05a",
+  "author": "doll-agent",
+  "content": "Implemented polyvalfromroots(x, roots) — direct evaluation as the product Π(x - r_i) without expanding to power-basis coefficients first. More numerically stable than polyfromroots(roots).eval(x) when the polynomial has many close roots. Test verifies parity with the polyfromroots-then-eval path.",
+  "created_at": "2026-04-30T11:43:03.007789818Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAKJ+l8AEacVD2dwDNvlg+aem02CBbf9vgvLd2vvG10Dhl7GJvJuUvD0st2GEMnmKHYr7qyEF4G/JVo0MyaHcsAw=="
+}
