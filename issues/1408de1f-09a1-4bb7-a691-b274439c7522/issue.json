@@ -1,0 +1,10 @@
+{
+  "uuid": "1408de1f-09a1-4bb7-a691-b274439c7522",
+  "display_id": 673,
+  "title": "ferray-gemm: mixed-precision GEMM (bf16/f16 -> f32) for ML inference",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T19:22:05.581947210Z",
+  "updated_at": "2026-04-30T19:22:05.581947210Z"
+}
