@@ -1,0 +1,10 @@
+{
+  "uuid": "a336ce4c-40b2-46b8-bc2c-b4a647b772ab",
+  "issue_uuid": "1408de1f-09a1-4bb7-a691-b274439c7522",
+  "author": "doll-agent",
+  "content": "Closed: gemm_bf16_f32 + gemm_f16_f32 entry points shipped behind bf16/f16 cargo features. Widen-then-SGEMM strategy reuses the entire SGEMM scaffolding (parallel + AVX-512 dispatch). 5 new mixed-precision tests pass; full test suite + clippy + stat-equiv 47/47 clean. AVX-512 BF16 native kernel via vdpbf16ps captured as future work.",
+  "created_at": "2026-04-30T19:26:44.132933722Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA0UOXO1MSvozSGWHmYU0vS5bHOKSj+oPQFwvhkIDfLnAIFRWHchu7gVibIFUrAGnbq9EvRyU/z9ucOydRY08DDg=="
+}
