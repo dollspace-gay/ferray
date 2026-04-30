@@ -1,0 +1,10 @@
+{
+  "uuid": "09ce50c0-cbca-42fe-8c62-1e67e4acb121",
+  "issue_uuid": "76cfd89e-ce24-4f45-99c9-7d07f4a17a13",
+  "author": "doll-agent",
+  "content": "Implemented in ferray-ufunc/src/dispatch.rs. 4 new pulp::WithSimd impls (AbsF32Op/NegF32Op/SquareF32Op/ReciprocalF32Op) + matching simd_*_f32 dispatch entries + try_simd_f32_unary helper + wire-up in ops/arithmetic.rs (absolute/negative/reciprocal/square). Existing 513 ferray-ufunc tests cover correctness; 244 unit + 21 oracle + 12 property linalg tests pass; clippy -D warnings clean; statistical_equivalence.py 47/47 PASS. Lane width on AVX2: 8 f32 lanes per ymm vs 4 f64.",
+  "created_at": "2026-04-30T19:52:34.144295452Z",
+  "kind": "resolution",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA3r5+B1OOBPNcl7HaVX0OZmdCPY8hxMzwdH8GL5SMqS3i2DIRFjoeweA4A47QOPt0SDodcN7kB02g5m2aIjnPAg=="
+}
