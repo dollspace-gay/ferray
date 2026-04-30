@@ -2,11 +2,12 @@
   "uuid": "1aab3414-aab7-4a16-92c9-a6b896eabf4a",
   "display_id": 626,
   "title": "ferray-strings: add isdecimal",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:36.819639793Z",
-  "updated_at": "2026-04-30T02:58:36.911088566Z",
+  "updated_at": "2026-04-30T12:06:26.359148806Z",
+  "closed_at": "2026-04-30T12:06:26.359148806Z",
   "labels": [
     "audit-parity",
     "ferray-strings"
