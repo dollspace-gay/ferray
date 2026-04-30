@@ -2,11 +2,12 @@
   "uuid": "5b229101-f03e-4adb-88d9-651dd50d6dae",
   "display_id": 669,
   "title": "ferray-gemm: i8 x i8 signed-signed GEMM via vpmovsxbw + vpmaddwd",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T18:45:03.876009703Z",
-  "updated_at": "2026-04-30T18:45:05.246306050Z",
+  "updated_at": "2026-04-30T18:57:50.973921724Z",
+  "closed_at": "2026-04-30T18:57:50.973921724Z",
   "labels": [
     "ferray-linalg"
   ]
