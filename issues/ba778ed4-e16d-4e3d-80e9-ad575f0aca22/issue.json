@@ -6,5 +6,8 @@
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T17:44:49.530725525Z",
-  "updated_at": "2026-04-30T17:44:49.530725525Z"
+  "updated_at": "2026-04-30T17:44:50.877703356Z",
+  "labels": [
+    "ferray-linalg"
+  ]
 }
