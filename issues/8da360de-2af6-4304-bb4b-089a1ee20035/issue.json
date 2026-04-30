@@ -1,0 +1,10 @@
+{
+  "uuid": "8da360de-2af6-4304-bb4b-089a1ee20035",
+  "display_id": 652,
+  "title": "ferray-bench: add single mode that returns result arrays for accuracy testing",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T14:27:06.408044289Z",
+  "updated_at": "2026-04-30T14:27:06.408044289Z"
+}
