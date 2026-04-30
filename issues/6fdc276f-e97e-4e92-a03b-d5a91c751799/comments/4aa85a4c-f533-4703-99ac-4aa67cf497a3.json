@@ -1,0 +1,10 @@
+{
+  "uuid": "4aa85a4c-f533-4703-99ac-4aa67cf497a3",
+  "issue_uuid": "6fdc276f-e97e-4e92-a03b-d5a91c751799",
+  "author": "doll-agent",
+  "content": "Partial progress: added PolynomialF32 (proof-of-concept generic-Float lift, power basis only) in a new ferray-polynomial::power_f32 module. Mirrors the f64 Polynomial API: new, coeffs, degree, with_domain, with_window, eval (Horner with domain→window mapping), deriv, integ, add/sub/mul, trim, truncate, fit (internally promotes to f64 for the Vandermonde solve, demotes the result), roots (same upcast pattern), to_f64 / from_f64 bridges. 11 unit tests cover constant/quadratic eval, deriv-then-integ roundtrip, arithmetic, trim/truncate, linear fit, real-roots quadratic, and the f64 bridges. Stays open: the same structural pattern still needs to be applied to the other 5 bases (Chebyshev, Hermite, HermiteE, Laguerre, Legendre) and to Complex<T> coefficients. Each is a mechanical replication of the power_f32 module — ~400 lines per basis. The Poly trait redesign to take T: Element + Float as a generic parameter remains the bigger architectural call (it would unify the 12 forthcoming PolyF32/PolyComplex types under one trait); deferring that until concrete user demand surfaces.",
+  "created_at": "2026-04-30T13:14:16.136199945Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA9wCesUwVm0IPZT0W+UDvJtxYK1z2PK+wOg3QCkEFGxjDao286qJMUs3EHcQnHEom7EhW8L1ULimQsd1l50whCw=="
+}
