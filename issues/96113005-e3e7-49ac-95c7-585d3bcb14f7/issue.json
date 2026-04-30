@@ -2,11 +2,12 @@
   "uuid": "96113005-e3e7-49ac-95c7-585d3bcb14f7",
   "display_id": 588,
   "title": "ferray-core: add c_/r_/index_exp slice builders",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:57:49.296235187Z",
-  "updated_at": "2026-04-30T02:57:49.396198802Z",
+  "updated_at": "2026-04-30T03:09:31.197904750Z",
+  "closed_at": "2026-04-30T03:09:31.197904750Z",
   "labels": [
     "audit-parity",
     "ferray-core"
