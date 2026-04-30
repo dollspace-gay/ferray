@@ -1,0 +1,10 @@
+{
+  "uuid": "a46b60cc-3e8f-44ae-9cab-0410472141b4",
+  "issue_uuid": "a4d4f1c2-b2a2-47a8-9a53-29d9668e4d96",
+  "author": "doll-agent",
+  "content": "Diagnosis via bench_sin: core_math::sin 9.56 ns/elem; libm f64::sin 4.02 ns/elem (2.4x faster); fast_trig batch 24.86 ns/elem (match-quadrant defeats auto-vec). NumPy uses libm too. Fix: swap sin/cos/tan in trig.rs from T::cr_sin/cr_cos/cr_tan -> T::sin/cos/tan. Speed: sin 100K 1.2x slower -> 1.2x FASTER; sin 1M 3.6x -> 4.2x faster; tan 1K 3.4x slower -> 1.2x FASTER (biggest win); ferray now wins or ties at all sizes. 513 tests pass, clippy clean, stat-equiv 47/47 PASS.",
+  "created_at": "2026-04-30T20:17:38.242517561Z",
+  "kind": "resolution",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAyDJZTgZ/fLEl1nis+JJL7Awom/nJiyirO4sfXp4XMQrj/x17SfnGdOUs7pRyz+RB541zfCfFfnnP5Q2YwwtwCg=="
+}
