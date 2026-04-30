@@ -1,0 +1,10 @@
+{
+  "uuid": "414043f4-7bae-4948-8adc-f53ef252cbfd",
+  "issue_uuid": "325d9350-0dc4-401a-9e36-c22846bd8ab3",
+  "author": "doll-agent",
+  "content": "Implemented slice(arr, start, stop) in ferray-strings::extras with character-aware indexing (correctly handles multi-byte UTF-8 like 'café'). Negative indices count from the end (Python-style). step parameter is intentionally not supported — character-level reverse iteration is non-trivial under multi-byte UTF-8; chain two slice calls if needed. 4 unit tests cover basic, negative indices, Unicode multi-byte, and stop <= start (empty result).",
+  "created_at": "2026-04-30T12:07:03.761174078Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAkwxlebA/vmDHvMZLi4qyGbZygalAbLdfmf39vjvBDvuDsWb5cbKmTtv5HEwG0K87XdHe7aq34a2nhq6brjQPBg=="
+}
