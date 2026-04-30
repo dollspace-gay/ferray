@@ -1,0 +1,10 @@
+{
+  "uuid": "035134dc-3bb5-4426-b211-9762f2c5ef16",
+  "display_id": null,
+  "title": "ferray-ufunc: add cumulative_sum/cumulative_prod aliases (Array API names)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:58:00.142885803Z",
+  "updated_at": "2026-04-30T02:58:00.142885803Z"
+}
