@@ -1,0 +1,10 @@
+{
+  "uuid": "23dfe899-5166-4d3e-ae6f-615524c3b0cc",
+  "issue_uuid": "b9af8994-c76a-48aa-a8b2-ad2a4a394fe6",
+  "author": "doll-agent",
+  "content": "README updates accompanying the 0.3.0 release: refreshed all 0.2.x perf claims (23/55) to the current 40/55 scorecard, added GEMM kernel section to ferray-linalg, complex transcendentals + libm trig path to ferray-ufunc, pairwise-base-4096 perf table to ferray-stats, full crate surface listings for ferray-ma (reductions/manipulation/mask-ops/linalg-set-corr/fill-value/class-helpers), ferray-numpy-interop (f16/bf16/complex/null/RecordBatch/DynArray), ferray-random (MT19937/PCG64DXSM/SFC64/SeedSequence/zipf/noncentral_*), ferray-polynomial (multivariate, Gauss quadrature, polyfromroots, mulx, basis-conversion), ferray-io (DataSource, format helpers, fromregex), ferray-strings (classification, codecs, formatting). Cargo features section added to main README listing avx512 / avxvnni / bf16 / f16 / openblas with their MSRV implications.",
+  "created_at": "2026-04-30T20:53:27.473389204Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAwWONWeHWvgmCbb9LYVvtJGrscnk/SvwmNk2/andfqyKD2lWwQR8K5e4zYcY4r7ptNB/Abd0XzfD7Pv5cScR2Bw=="
+}
