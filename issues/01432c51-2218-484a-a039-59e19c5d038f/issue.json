@@ -1,0 +1,10 @@
+{
+  "uuid": "01432c51-2218-484a-a039-59e19c5d038f",
+  "display_id": 654,
+  "title": "ferray-gemm: hand-tuned Rust BLAS micro-kernels (port OpenBLAS-style asm to std::arch intrinsics)",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T14:47:28.175098141Z",
+  "updated_at": "2026-04-30T14:47:28.175098141Z"
+}
