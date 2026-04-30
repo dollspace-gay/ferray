@@ -2,11 +2,12 @@
   "uuid": "49025ce1-bfde-4140-b8d1-5c94058bdff8",
   "display_id": 655,
   "title": "tune translated 4x8 kernel: M1/M2 pipelining + better threading at mid-N",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T15:17:19.934887920Z",
-  "updated_at": "2026-04-30T15:17:21.446658190Z",
+  "updated_at": "2026-04-30T19:04:30.348375056Z",
+  "closed_at": "2026-04-30T19:04:30.348375056Z",
   "labels": [
     "ferray-linalg"
   ]
