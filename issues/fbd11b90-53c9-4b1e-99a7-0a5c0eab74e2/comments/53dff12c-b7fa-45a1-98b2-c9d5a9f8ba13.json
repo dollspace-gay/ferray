@@ -1,0 +1,10 @@
+{
+  "uuid": "53dff12c-b7fa-45a1-98b2-c9d5a9f8ba13",
+  "issue_uuid": "fbd11b90-53c9-4b1e-99a7-0a5c0eab74e2",
+  "author": "doll-agent",
+  "content": "Plan (Option A — parameterized DType variants):\n\n1. New ferray-core/src/dtype/datetime.rs:\n   - TimeUnit enum (Ns, Us, Ms, S, M, H, D) — Copy/Eq/Hash\n   - DateTime64(pub i64) newtype + Timedelta64(pub i64) newtype, both Element-sealed\n   - NAT: i64 = i64::MIN sentinel\n   - PartialEq for DateTime64/Timedelta64 follows NaT-as-NaN semantics (NaT != NaT)\n   - Display/Debug with unit suffix\n\n2. dtype/mod.rs:\n   - Add DType::DateTime64(TimeUnit) and DType::Timedelta64(TimeUnit) variants\n   - Extend size_of (always 8), alignment (8), name (e.g. \"datetime64[ns]\"), is_signed (true), is_complex (false)\n   - Verify Copy/Eq/Hash still derive cleanly (TimeUnit is Copy/Eq/Hash so they should)\n\n3. ferray-io/src/npy/dtype_parse.rs:\n   - parse \"<M8[ns]\" / \"<m8[ns]\" / etc. descriptors\n   - Emit the same in dtype_to_descr\n\n4. ferray-ufunc/src/ops/datetime.rs (new):\n   - pub fn isnat<D>(arr: &Array<DateTime64, D>) -> Array<bool, D>\n   - Same for Timedelta64\n\n5. Audit and update every match-on-DType site:\n   - dtype_to_arrow / arrow_to_dtype in ferray-numpy-interop\n   - DynArray dispatch sites\n   - DType-aware methods in ferray-ma, ferray-stats, ferray-stride-tricks\n   - The internal cast_kind / promote_types logic\n\n6. Tests:\n   - DType::DateTime64(Ns) round-trip via NPY\n   - isnat correctly identifies NaT sentinel\n   - Arithmetic isn't required for the unblock — that's a follow-up\n\nAcceptance: cargo test -p ferray-core -p ferray-io -p ferray-ufunc -p ferray-numpy-interop --features arrow passes; isnat works on DateTime64 / Timedelta64 arrays.",
+  "created_at": "2026-04-30T13:21:09.983018543Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA2/M0SHYzQaOFVEQ0UQNSAv2r5WO4nbp5lQSE8kU+SIs7Pf/e5nIbcnphlsSYYXnRZ74/YspbRz0Drwj0Fv5DDQ=="
+}
