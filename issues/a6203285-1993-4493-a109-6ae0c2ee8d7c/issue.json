@@ -6,9 +6,12 @@
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:00.423336082Z",
-  "updated_at": "2026-04-30T12:02:12.329391436Z",
+  "updated_at": "2026-04-30T13:10:49.962074514Z",
   "labels": [
     "audit-parity",
     "ferray-ufunc"
+  ],
+  "blockers": [
+    "fbd11b90-53c9-4b1e-99a7-0a5c0eab74e2"
   ]
 }
