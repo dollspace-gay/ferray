@@ -1,0 +1,10 @@
+{
+  "uuid": "a9b7f623-960d-4d40-9a54-6049e4fff842",
+  "issue_uuid": "98a1c118-b571-4293-a3f4-4fda6ff6b1c8",
+  "author": "doll-agent",
+  "content": "Implemented in ferray-linalg/src/gemm/.\n\n**Kernel** (kernel_avx2_i16.rs): 4×8 register tile, KB=2, vpmaddwd-based.\n- Per K-block: 1× zmm B-load + 4× broadcast of A's 4-byte K-pair + 4× vpmaddwd + 4× vpaddd.\n- Edge tiles via kernel_edge_i16 with row/column masking.\n\n**Pack** (pack.rs): pack_a_i16, pack_b_i16 emit 2-K-block layout; pack_kc_i16 rounds k up to KB_I16=2.\n\n**Driver** (outer.rs): A_PACK_TLS_I16/B_PACK_TLS_I16 thread-locals, gemm_avx2_i16 (parallel M-slab + 2D grid fallback), gemm_seq_avx2_i16 sequential 5-loop.\n\n**Entry** (mod.rs):\n```rust\nunsafe fn gemm_i16(m, n, k, a: *const i16, b: *const i16, c: *mut i32, accumulate: bool) -> bool\n```\n\n**Tests** (integer_tests.rs): 3 passing — kernel-size match, odd-dim/edge + K-tail handling, accumulate=true preserves existing C.\n\nVerified: cargo test -p ferray-linalg --release (230 unit + 21 oracle + 12 property), cargo clippy -D warnings, statistical_equivalence.py 47/47 PASS.",
+  "created_at": "2026-04-30T18:56:56.651997961Z",
+  "kind": "resolution",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAETuAsyp47VsGUZIk2UtNyLC2pxkA1KxFZj4zFu4SwjJo26JtxNcC8mXIGPvNb0Jo+rCsszrI/ONClfzA3fLIDA=="
+}
