@@ -2,11 +2,12 @@
   "uuid": "68cccb68-0ac8-4090-8356-4b9590a5a1ce",
   "display_id": 617,
   "title": "ferray-polynomial: add multivariate grid (grid2d/grid3d) for all 6 bases",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:15.236051839Z",
-  "updated_at": "2026-04-30T02:58:15.314491272Z",
+  "updated_at": "2026-04-30T11:43:20.350976958Z",
+  "closed_at": "2026-04-30T11:43:20.350976958Z",
   "labels": [
     "audit-parity",
     "ferray-polynomial"
