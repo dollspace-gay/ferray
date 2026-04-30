@@ -2,11 +2,12 @@
   "uuid": "06a207c1-d061-47f2-a79b-d0157338fda8",
   "display_id": 667,
   "title": "ferray-gemm: AVX-512 VNNI i8 GEMM kernel",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T18:36:58.591810930Z",
-  "updated_at": "2026-04-30T18:36:59.869473336Z",
+  "updated_at": "2026-04-30T19:05:16.688085673Z",
+  "closed_at": "2026-04-30T19:05:16.688085673Z",
   "labels": [
     "ferray-linalg"
   ]
