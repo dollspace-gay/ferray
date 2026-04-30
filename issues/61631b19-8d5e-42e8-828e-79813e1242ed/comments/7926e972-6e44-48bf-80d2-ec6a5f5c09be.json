@@ -1,0 +1,10 @@
+{
+  "uuid": "7926e972-6e44-48bf-80d2-ec6a5f5c09be",
+  "issue_uuid": "61631b19-8d5e-42e8-828e-79813e1242ed",
+  "author": "doll-agent",
+  "content": "Implemented fill-value protocol: per-type defaults (default_fill_value_f64=1e20, default_fill_value_f32=1e20, default_fill_value_bool=false, default_fill_value_i64=999_999), maximum_fill_value::<T: Float>() returning Float::infinity (used when filling masked positions for max-reductions so they don't influence the result), minimum_fill_value::<T>() returning Float::neg_infinity, and common_fill_value(a, b) which returns a's fill_value when both share it else T::zero (numpy fallback). MaskedArray::set_fill_value already exists as an inherent method. The 'object dtype' default value (None) isn't representable in our generic type system.",
+  "created_at": "2026-04-30T12:17:13.535535558Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAX9Wbgp1YDyjYV/Ak/ovFKwg2IisiDJpudxp+K2/OWPDSd7leJdMAXc/4RnZ/adKFxgkqHTHYedOC5VsCKvJ4BA=="
+}
