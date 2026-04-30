@@ -2,11 +2,12 @@
   "uuid": "76cfd89e-ce24-4f45-99c9-7d07f4a17a13",
   "display_id": 676,
   "title": "ferray-ufunc: f32 SIMD kernels for abs/neg/square/reciprocal (parity with f64)",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T19:49:47.943275499Z",
-  "updated_at": "2026-04-30T19:49:49.204395783Z",
+  "updated_at": "2026-04-30T19:52:44.318898061Z",
+  "closed_at": "2026-04-30T19:52:44.318898061Z",
   "labels": [
     "ferray-ufunc"
   ]
