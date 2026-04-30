@@ -1,0 +1,10 @@
+{
+  "uuid": "19bdfd4a-c413-41f6-9e99-f259248623bd",
+  "issue_uuid": "6c0a0bc2-594d-4f46-a7c5-92c845c300e6",
+  "author": "doll-agent",
+  "content": "Implemented histogram_bin_edges(a, bins, range) in ferray-stats::histogram. Returns just the bin-edge array without counting. For Bins::Edges, passes the explicit edges through (works on empty arrays); for Bins::Count, computes range from data unless explicitly supplied. Re-exported via ferray-stats lib.rs and umbrella ferray crate. 3 unit tests.",
+  "created_at": "2026-04-30T03:29:25.383348383Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAcbCDySKJtqlGjbcy9lA0cT4A6+GNRp+/CNtL8RHvUOxa/aaxvlZ5u38OmrQKAR7JlS6/eKF6BtzlVMAXAI+5BQ=="
+}
