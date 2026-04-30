@@ -6,5 +6,8 @@
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:40.482065242Z",
-  "updated_at": "2026-04-30T02:58:40.482065242Z"
+  "updated_at": "2026-04-30T02:58:40.532795909Z",
+  "labels": [
+    "audit-parity"
+  ]
 }
