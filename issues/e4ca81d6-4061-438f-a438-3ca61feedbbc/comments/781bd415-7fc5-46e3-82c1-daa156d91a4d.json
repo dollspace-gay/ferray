@@ -1,0 +1,10 @@
+{
+  "uuid": "781bd415-7fc5-46e3-82c1-daa156d91a4d",
+  "issue_uuid": "e4ca81d6-4061-438f-a438-3ca61feedbbc",
+  "author": "doll-agent",
+  "content": "Implemented prod, cumsum_flat, cumprod_flat, argmin, argmax, median, ptp, average (with optional weights), and anom on MaskedArray<T, D> in a new ferray-ma::extras module. cumsum/cumprod operate on the flat view (1-D output); axis variants follow the existing sum_axis/mean_axis pattern and can be added when needed. argmin/argmax return flat usize indices; raise InvalidValue when all elements are masked. average delegates to mean() when weights is None. Re-exported via ferray-ma lib.rs. ~10 unit tests cover skip-masked, mask propagation, all-masked error paths.",
+  "created_at": "2026-04-30T12:16:16.424401491Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAJXI0wAVzsS8U16QuZUBPnMlvc9zAnOZtfMAusG6U8wGBVwhjYINGGc7dhm8Gw2/J/8Tf0qpMLHJTUewkbbulCg=="
+}
