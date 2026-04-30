@@ -6,8 +6,9 @@
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:37.731586917Z",
-  "updated_at": "2026-04-30T02:58:37.782027822Z",
+  "updated_at": "2026-04-30T02:58:37.814140949Z",
   "labels": [
-    "audit-parity"
+    "audit-parity",
+    "ferray-strings"
   ]
 }
