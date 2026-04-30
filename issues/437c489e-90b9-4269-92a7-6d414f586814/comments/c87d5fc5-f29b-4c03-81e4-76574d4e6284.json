@@ -1,0 +1,10 @@
+{
+  "uuid": "c87d5fc5-f29b-4c03-81e4-76574d4e6284",
+  "issue_uuid": "437c489e-90b9-4269-92a7-6d414f586814",
+  "author": "doll-agent",
+  "content": "Implemented partition(arr, sep) and rpartition(arr, sep) in ferray-strings::extras. Each returns Vec<(before, sep, after)> per element. partition uses the FIRST occurrence (find); rpartition uses the LAST (rfind). Sep-not-found behavior matches Python: partition returns (element, '', '') while rpartition returns ('', '', element). Empty separator errors. 4 unit tests.",
+  "created_at": "2026-04-30T12:06:47.552949379Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAuL/KB8qkfPHgcbEXXkVAJLrGyyw00W+kRz8MlUgWKHC1voUrk+KMRJ9LI4F+MywP8pw8+WiDoQR9i5M0R/J0BA=="
+}
