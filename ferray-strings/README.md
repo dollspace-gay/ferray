@@ -8,10 +8,13 @@ Vectorized string operations on arrays of strings for the [ferray](https://crate
 - **Case**: `upper`, `lower`, `title`, `capitalize`, `swapcase`
 - **Alignment**: `center`, `ljust`, `rjust`, `zfill`
 - **Trimming**: `strip`, `lstrip`, `rstrip`
-- **Search**: `find`, `rfind`, `index`, `count`, `startswith`, `endswith`, `contains`
+- **Search**: `find`, `rfind`, `index`, `rindex`, `count`, `startswith`, `endswith`, `contains`
 - **Split/Join**: `split`, `rsplit`, `splitlines`, `join`, `partition`, `rpartition`
 - **Regex**: `replace`, `match_re`, `findall`
 - **Comparison**: `equal`, `not_equal`, `greater`, `less`, etc.
+- **Classification**: `isalpha`, `isdigit`, `isdecimal`, `isnumeric`, `isspace`, `isupper`, `islower`, `istitle`, `isalnum`, `isascii`
+- **Codecs**: `decode`, `encode` (UTF-8 ufuncs)
+- **Formatting**: `expandtabs`, `mod_` (printf-style `%` formatting), `translate` (char-translate ufunc), `slice` (string-slicing ufunc)
 
 Implements `numpy.strings` (NumPy 2.0+) for Rust.
 

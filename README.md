@@ -1,20 +1,21 @@
 # ferray
 
-A NumPy-equivalent scientific computing library for Rust. Correctly-rounded math, SIMD-accelerated operations, and zero panics.
+A NumPy-equivalent scientific computing library for Rust. Hand-tuned GEMM kernels, SIMD-accelerated everything, zero panics.
 
 ## Why ferray?
 
-- **More accurate than NumPy** on every transcendental function (CORE-MATH, < 0.5 ULP)
-- **Faster than NumPy** on 23 of 55 benchmarks — all FFT sizes, all variance/std, small reductions
+- **Faster than NumPy** on 40 of 55 benchmarks (73 %) — all FFT sizes, all variance/std sizes, all sin/cos/tan large sizes, all sum/mean medium sizes, plus matmul 50×50
+- **Hand-tuned BLAS suite** — DGEMM/SGEMM/ZGEMM/CGEMM ports of OpenBLAS Haswell + Skylake-X kernels, plus i8/i16 quantized GEMM with AVX-VNNI / AVX-512 VNNI fast paths (1.5 TOPS at N=1024)
 - **Memory safe** without garbage collection (17 Kani formal verification proof harnesses)
 - **Zero panics** in library code — all public functions return `Result<T, FerrayError>`
-- **Full NumPy API surface** — linalg, fft, random, polynomial, masked arrays, string arrays
+- **Full NumPy API surface** — linalg, fft, random, polynomial, masked arrays, string arrays, complex transcendentals
+- **More accurate than NumPy** for arctan/asin/sinh/cosh and family (CORE-MATH, < 0.5 ULP); sin/cos/tan match NumPy via libm at performance parity
 
 ## Quick Start
 
 ```toml
 [dependencies]
-ferray = "0.2"
+ferray = "0.3"
 ```
 
 ```rust
@@ -24,11 +25,11 @@ use ferray::prelude::*;
 let a = ferray::linspace::<f64>(0.0, 1.0, 100, /* include_endpoint= */ true)?;
 let b = ferray::sin(&a)?;
 
-// Linear algebra
+// Linear algebra (matmul now beats NumPy at 50x50!)
 let m = ferray::eye::<f64>(3, 3, /* k (diagonal offset)= */ 0)?;
 let det = ferray::linalg::det(&m)?;
 
-// FFT
+// FFT (17.2x faster than NumPy at size 64)
 let spectrum = ferray::fft::rfft(
     &b,
     /* n= */ None,
@@ -36,102 +37,136 @@ let spectrum = ferray::fft::rfft(
     /* norm= */ ferray::fft::FftNorm::Backward,
 )?;
 
-// Statistics
+// Statistics (28.8x faster than NumPy on var at N=1K)
 let mean = ferray::mean(&a, /* axis= */ None)?;
 let std = ferray::std_(&a, /* axis= */ None, /* ddof= */ 0)?;
 ```
 
 ## Performance
 
-Benchmarked against NumPy 2.3.5 on Linux (Rust 1.85, LTO, target-cpu=native).
+Benchmarked against NumPy 2.4.4 on Linux (Rust 1.95, LTO, target-cpu=native, Raptor Lake 14700K with 8-thread P-core pool). Full report in [BENCHMARKS.md](BENCHMARKS.md).
 
 ### Where ferray dominates
 
 | Operation | Speedup vs NumPy |
-|-----------|-----------------|
-| fft/64 | **17.0x faster** |
-| var/1K | **20.8x faster** |
-| std/1K | **15.8x faster** |
-| mean/1K | **8.7x faster** |
-| fft/1024 | **2.9x faster** |
-| var/1M | **2.5x faster** |
-| sum/1K | **1.9x faster** |
-| fft/16384 | **1.8x faster** |
-| fft/65536 | **1.6x faster** |
-| arctan/100K | **1.5x faster** |
+|-----------|-----------------:|
+| var/1K | **28.8× faster** |
+| std/1K | **17.8× faster** |
+| fft/64 | **17.2× faster** |
+| mean/1K | **13.4× faster** |
+| matmul/10×10 | **4.9× faster** |
+| tan/1M | **4.8× faster** |
+| arctan/1M | **4.3× faster** |
+| fft/1024 | **4.3× faster** |
+| sin/1M | **4.2× faster** |
+| cos/1M | **4.2× faster** |
+| std/1M | **3.1× faster** |
+| var/1M | **3.4× faster** |
+| tanh/1M | **2.8× faster** |
+| fft/65536 | **2.2× faster** |
+| sum/1K | **1.9× faster** |
+| sum/1M | **1.1× faster** (DRAM-bandwidth ceiling) |
+| matmul/50×50 | **1.05× faster** (was 1.33× slower in 0.2.x!) |
 
-### Where NumPy wins
+### Where NumPy still wins
 
 | Operation | Ratio | Reason |
-|-----------|-------|--------|
-| sin/cos/exp/log at scale | 1.4-2.1x | CORE-MATH correctly-rounded algorithms (deliberate accuracy tradeoff) |
-| matmul 50x50-100x100 | 4.0-4.6x | OpenBLAS/MKL hand-tuned assembly vs faer pure Rust |
-| sqrt 1M | 3.7x | Memory bandwidth bound at 8MB |
+|-----------|------:|--------|
+| sqrt 10K-1M | 1.2-1.9× | NumPy uses streaming-store hints |
+| matmul 100×100 | 1.2× | faer-vs-MKL at the small-N parallel band |
+| exp/log 1K-100K | 1.0-1.3× | Near parity; ferray pulls ahead at 1M (1.7-1.8× faster) |
+| mean 1M | 1.3× | DRAM-bandwidth ceiling; sum at 1M is now 1.1× faster |
 
-**Scorecard: ferray 23, NumPy 32.** All NumPy wins are transcendentals (accuracy tradeoff) or matmul (BLAS gap). GPU acceleration via CUDA is planned for Phase 6.
+**Scorecard: ferray 40, NumPy 15** (was 23/32 in 0.2.x). All NumPy wins now sit within 1.0-1.9× — no major structural regressions remain.
+
+### Hand-tuned GEMM throughput peaks (this host)
+
+| Kernel | Peak GFLOPS | At N |
+|---|---:|---:|
+| DGEMM (f64) | 260 | 1024 |
+| SGEMM (f32) | 987 | 1536 |
+| ZGEMM (c64) | 456 | 1024 |
+| CGEMM (c32) | 852 | 1024 |
+| i8 quantized | 1488 GOPS | 1024 (AVX-VNNI) |
 
 ### Fast mode: `exp_fast`
 
 For throughput-sensitive workloads, ferray offers `exp_fast()` — an Even/Odd Remez decomposition that is **~30% faster than CORE-MATH** while maintaining ≤1 ULP accuracy (faithfully rounded). It auto-vectorizes for SSE/AVX2/AVX-512/NEON with no lookup tables.
 
 ```rust
-// Default: correctly rounded (≤0.5 ULP, CORE-MATH)
+// Default: libm-equivalent (matches NumPy, ~1-2 ULP)
 let result = ferray::exp(&array)?;
 
 // Fast mode: faithfully rounded (≤1 ULP, ~30% faster)
 let result = ferray::exp_fast(&array)?;
 ```
 
-Both are more accurate than NumPy's libm-based `exp()` (which can be up to 8 ULP).
-
 ### Accuracy
 
-ferray uses [CORE-MATH](https://core-math.gitlabpages.inria.fr/) — the only correctly-rounded math library in production. Every transcendental returns the closest representable floating-point value to the mathematical truth.
+ferray uses [CORE-MATH](https://core-math.gitlabpages.inria.fr/) for the family of transcendentals where it offers a clear speed-and-accuracy win (arctan, asin, sinh, cosh, asinh, atanh, expm1, log1p, …) — every result is the closest representable floating-point value to mathematical truth.
+
+For sin/cos/tan, ferray routes through libm (Float::sin) for performance parity with NumPy; the correctly-rounded variants stay reachable via `cr_math::CrMath::cr_sin`/`cr_cos`/`cr_tan` for callers that prefer accuracy over speed.
 
 | | ferray | NumPy (glibc) |
 |---|---|---|
-| sin accuracy | < 0.5 ULP | up to 8,192 ULP at edge cases |
-| exp accuracy | < 0.5 ULP | up to 8 ULP |
-| Summation | Pairwise (O(epsilon log N)) | Pairwise |
+| arctan / asin / sinh accuracy | < 0.5 ULP (CORE-MATH) | up to thousands of ULP at edge cases |
+| sin / cos / tan accuracy | ~1-2 ULP (libm, matches NumPy) | ~1-2 ULP (libm) |
+| Summation | Pairwise (O(ε log N), base 4096) | Pairwise |
 
 ## Crate Structure
 
-ferray is a workspace of 17 focused crates:
+ferray is a workspace of 18 focused crates:
 
 | Crate | Description |
 |-------|-------------|
 | `ferray-core` | `NdArray<T, D>`, broadcasting, indexing, shape manipulation |
 | `ferray-core-macros` | proc-macro support (`#[derive(FerrayRecord)]`, `promoted_type!`) |
-| `ferray-ufunc` | SIMD-accelerated universal functions (sin, cos, exp, sqrt, ...) |
-| `ferray-stats` | Reductions, sorting, histograms, set operations |
-| `ferray-linalg` | Matrix products, decompositions, solvers, einsum |
+| `ferray-ufunc` | SIMD-accelerated universal functions (sin, cos, exp, sqrt, …) plus 20 complex transcendentals |
+| `ferray-stats` | Reductions (pairwise SIMD sum at base 4096), sorting, histograms, set operations |
+| `ferray-linalg` | Hand-tuned GEMM (DGEMM/SGEMM/ZGEMM/CGEMM/i8/i16/bf16/f16), TRSM, decompositions, solvers, einsum |
 | `ferray-fft` | FFT/IFFT with plan caching, real FFTs |
-| `ferray-random` | Generator API, 30+ distributions, permutations |
-| `ferray-io` | NumPy .npy/.npz file I/O with memory mapping |
-| `ferray-polynomial` | 6 basis classes, fitting, root-finding |
+| `ferray-random` | Generator API (PCG64DXSM/MT19937/SFC64), 30+ distributions, permutations |
+| `ferray-io` | NumPy `.npy`/`.npz` file I/O with memory mapping, DataSource for URL/compressed inputs |
+| `ferray-polynomial` | 6 basis classes, fitting, root-finding, Gauss quadrature |
 | `ferray-window` | Window functions, vectorize, piecewise |
 | `ferray-strings` | StringArray with vectorized operations |
-| `ferray-ma` | MaskedArray with mask propagation |
+| `ferray-ma` | MaskedArray with mask propagation, harden/soften, full reductions |
 | `ferray-stride-tricks` | sliding_window_view, as_strided |
-| `ferray-numpy-interop` | PyO3 zero-copy, Arrow/Polars conversion |
+| `ferray-numpy-interop` | PyO3 zero-copy, Arrow/Polars conversion, complex/null/f16/bf16 support |
 | `ferray-autodiff` | Forward-mode automatic differentiation |
 | `ferray-test-oracle` | Test oracle harness for cross-validating against NumPy fixtures |
 | `ferray` | Re-export crate with prelude |
+
+## Cargo Features
+
+| Feature | Crate | Description |
+|---------|-------|-------------|
+| `avx512` | ferray-linalg | AVX-512 GEMM kernels (DGEMM/SGEMM/ZGEMM/CGEMM/i16/VNNI). Bumps MSRV to 1.89. |
+| `avxvnni` | ferray-linalg | AVX-VNNI i8 GEMM via `vpdpbusd`. Bumps MSRV to 1.87. |
+| `bf16` | ferray-linalg | bf16 inputs → f32 accumulator GEMM (gemm_bf16_f32). |
+| `f16` | ferray-linalg, ferray | f16 (IEEE binary16) inputs → f32 accumulator GEMM (gemm_f16_f32). |
+| `openblas` | ferray-linalg | Optional system-OpenBLAS backend for f32/f64/c32/c64 GEMM. Provides a perf-floor guarantee. |
+
+Default builds stay on workspace MSRV 1.85 with no extra runtime deps.
 
 ## Key Design Decisions
 
 - **ndarray 0.17** for internal storage — NOT exposed in public API
 - **pulp 0.22** for portable SIMD (SSE2/AVX2/AVX-512/NEON) on stable Rust
-- **faer 0.24** for linear algebra, **rustfft 6.4** for FFT
-- **CORE-MATH 1.0** for correctly-rounded transcendentals
-- **Edition 2024**, MSRV 1.85
+- **faer 0.24** for medium-N matmul (N < 256) and decompositions, hand-tuned kernels for N ≥ 256
+- **rustfft 6.4** for FFT
+- **CORE-MATH 1.0** for correctly-rounded arctan/asin/sinh family
+- **Edition 2024**, MSRV 1.85 (default features)
 - All contiguous inner loops have SIMD paths for f32, f64, i32, i64
 
 ## Beyond NumPy
 
 Features that go beyond NumPy's capabilities:
 
-- **f16 support** — half-precision floats as first-class citizens across all crates
+- **f16 / bf16 support** — half-precision floats as first-class citizens; mixed-precision GEMM
+- **Hand-tuned i8 / i16 quantized GEMM** — ONNX `QLinearMatMul` formula end-to-end
+- **Complex transcendentals** — `np.sin(complex_array)` style ufuncs (sin_complex, cos_complex, …, expm1_complex, log1p_complex with cancellation-avoiding paths near z=0)
+- **Native TRSM** — block-recursive triangular solve for f32/f64 × lower/upper × non-unit/unit-diag
 - **no_std core** — `ferray-core` and `ferray-ufunc` compile without `std` (requires `alloc`)
 - **Const generic shapes** — `Shape1<N>` through `Shape6` for compile-time dimension checking
 - **Automatic differentiation** — forward-mode autodiff via `DualNumber<T>`
@@ -150,8 +185,13 @@ Phase 6 design complete (`.design/ferray-gpu.md`). Architecture:
 
 ```bash
 cargo build --release
-cargo test --workspace          # 2716 tests
+cargo test --workspace          # 1500+ tests
 cargo clippy --workspace -- -D warnings
+
+# Optional features:
+cargo build --release --features ferray-linalg/avx512    # AVX-512 GEMM (Rust 1.89+)
+cargo build --release --features ferray-linalg/openblas  # System OpenBLAS backend
+cargo build --release --features ferray-linalg/bf16,ferray-linalg/f16  # Mixed-precision GEMM
 ```
 
 ## License

@@ -5,8 +5,9 @@ Random number generation and distributions for the [ferray](https://crates.io/cr
 ## What's in this crate
 
 - **Generator API**: `Generator` type with pluggable `BitGenerator` backends
-- **BitGenerators**: Xoshiro256** (default), PCG64, Philox
-- **30+ distributions**: Normal, Uniform, Exponential, Poisson, Binomial, Gamma, Beta, Chi-squared, Student-t, Laplace, Weibull, and more
+- **BitGenerators**: Xoshiro256**, PCG64, Philox, MT19937, PCG64DXSM, SFC64
+- **`SeedSequence`**: explicit NumPy-equivalent type for reproducible parallel seeding
+- **30+ distributions**: Normal, Uniform, Exponential, Poisson, Binomial, Gamma, Beta, Chi-squared, Student-t (`student_t` / `standard_t`), Laplace, Weibull, Zipf, noncentral_chisquare, noncentral_f, and more
 - **Permutations**: `shuffle`, `permutation`, `choice` (with/without replacement, weighted)
 - **Parallel generation**: `standard_normal_parallel` with Rayon + jump-ahead
 - **Deterministic**: All output is reproducible given the same seed

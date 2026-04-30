@@ -5,10 +5,11 @@ Zero-copy conversions between ferray arrays and Python/Arrow/Polars for the [fer
 ## What's in this crate
 
 - **NumPy** (feature `python`): `AsFerray` and `IntoNumPy` traits via PyO3
-- **Apache Arrow** (feature `arrow`): `FromArrow`, `ToArrow` conversion traits
-- **Polars** (feature `polars`): `FromPolars`, `ToPolars` conversion traits
+- **Apache Arrow** (feature `arrow`): `FromArrow`/`ToArrow` traits + `RecordBatch` round-trip + null/missing handling
+- **Polars** (feature `polars`): `FromPolars`/`ToPolars` DataFrame round-trip
+- **Dtype coverage**: f32/f64, i8-i128, u8-u128, bool, **f16**, **bf16**, **complex<f32>**, **complex<f64>** — all with dtype validation on conversion
+- **`DynArray` integration**: convert `Array<T, IxDyn>` to/from PyArrayDyn / Arrow dynamic-typed columns
 - Zero-copy when arrays are C-contiguous, safe copy otherwise
-- Dtype validation on all conversions
 
 All backends are feature-gated and disabled by default.
 

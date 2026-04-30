@@ -7,7 +7,9 @@ NumPy-compatible file I/O for the [ferray](https://crates.io/crates/ferray) scie
 - **`.npy`** read/write — single array serialization (all dtypes, C/Fortran order)
 - **`.npz`** read/write — compressed archives of named arrays
 - **Memory mapping** — `mmap_npy` for zero-copy access to large files
-- **Text I/O** — `loadtxt`, `savetxt`, `genfromtxt` with delimiter/comment/skip support
+- **Text I/O** — `loadtxt`, `savetxt`, `genfromtxt`, `fromregex` with delimiter/comment/skip support
+- **Format helpers** (`lib.format`): `descr_to_dtype`, `header_data_from_array_1_0`, `read_array`, `write_array` for low-level header / dtype manipulation
+- **`DataSource`** — URL / compressed-file abstraction (handles `.gz`, `.bz2`, HTTP-fetched inputs transparently)
 - Structured dtype support for compound types
 
 ## Usage
