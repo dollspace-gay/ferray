@@ -1,0 +1,10 @@
+{
+  "uuid": "4b489476-d6d3-47a6-855a-ab3d87cd99f7",
+  "issue_uuid": "f299ca1e-895b-45ff-949d-abbb1b0ac6ca",
+  "author": "doll-agent",
+  "content": "Added matvec() and vecmat() to ferray-linalg::products (NumPy 2.0 names for matrix*vector and vector*matrix products), and re-exported matmul, vecdot, matvec, vecmat at the top of the umbrella ferray crate (gated on the linalg feature) — matching numpy.matmul / numpy.vecdot / numpy.matvec / numpy.vecmat top-level placement. matvec(M, v) requires M 2-D and v 1-D; vecmat(v, M) the reverse. 4 unit tests cover both basic and shape-mismatch error paths. cargo test passes (185 ferray-linalg, 357 ferray-ufunc); cargo clippy --features linalg --features stride-tricks clean.",
+  "created_at": "2026-04-30T03:19:03.079004100Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAwpCoZab1ojLGtT036Z5T8PRSk9oPrKEOW+4Fj81QPQe/pIuSV7sS7wikp4l759N2XJ1l+vkbi5mTcx4TvCn3DQ=="
+}
