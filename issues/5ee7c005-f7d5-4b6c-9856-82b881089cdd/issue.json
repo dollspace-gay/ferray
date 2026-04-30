@@ -2,11 +2,12 @@
   "uuid": "5ee7c005-f7d5-4b6c-9856-82b881089cdd",
   "display_id": 641,
   "title": "ferray-numpy-interop: f16/bf16 support (links #551)",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:39.536662184Z",
-  "updated_at": "2026-04-30T02:58:39.619407044Z",
+  "updated_at": "2026-04-30T12:25:43.066567846Z",
+  "closed_at": "2026-04-30T12:25:43.066567846Z",
   "labels": [
     "audit-parity",
     "ferray-numpy-interop"
