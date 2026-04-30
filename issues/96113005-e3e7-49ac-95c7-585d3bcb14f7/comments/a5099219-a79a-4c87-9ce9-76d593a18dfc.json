@@ -1,0 +1,10 @@
+{
+  "uuid": "a5099219-a79a-4c87-9ce9-76d593a18dfc",
+  "issue_uuid": "96113005-e3e7-49ac-95c7-585d3bcb14f7",
+  "author": "doll-agent",
+  "content": "Added function-form r_() / c_() to ferray-core::manipulation. r_(arrays) concatenates 1-D arrays into 1-D; c_(arrays) stacks 1-D arrays as columns of a 2-D array. NumPy's r_/c_ rely on Python's __getitem__ slice-tuple protocol which Rust syntax cannot replicate; the ferray-core-macros crate already provides the s! slice-builder macro for the index_exp use case. Re-exported at top level via ferray crate. 4 unit tests.",
+  "created_at": "2026-04-30T03:09:29.896288457Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA9kvUwVcr0Mk20mErLlTE4OuxRiBNWy0Pf/ccO5l2EzfhT7FqUk6+p5w8h8qlh5181EFoqhPXrI3GPWaP3TSaBw=="
+}
