@@ -1,0 +1,10 @@
+{
+  "uuid": "1caf9831-e315-4af8-8617-fbdc81dc51af",
+  "display_id": 657,
+  "title": "ferray-gemm: per-thread B-prepack + larger KC to push N=512 past 200 GFLOPs",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T15:49:23.603348710Z",
+  "updated_at": "2026-04-30T15:49:23.603348710Z"
+}
