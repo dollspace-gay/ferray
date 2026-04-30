@@ -1,0 +1,10 @@
+{
+  "uuid": "5dcbd75d-6fe9-4455-86d5-745d0846ee21",
+  "display_id": 660,
+  "title": "ferray-gemm: SGEMM Haswell kernel port from OpenBLAS",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T17:13:37.369524827Z",
+  "updated_at": "2026-04-30T17:13:37.369524827Z"
+}
