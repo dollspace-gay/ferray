@@ -1,0 +1,10 @@
+{
+  "uuid": "4e22a198-7d94-4d45-be33-006e8372a9d0",
+  "issue_uuid": "fa174a65-7ada-4583-b227-147d94c70b51",
+  "author": "doll-agent",
+  "content": "Implemented ptp(a, axis) in ferray-stats::reductions as max(a, axis) - min(a, axis). Bound: T: Element + PartialOrd + Copy + Sub<Output=T>. Re-exported via ferray-stats lib.rs and umbrella ferray crate. 3 unit tests (1-D, 2-D axis, empty error).",
+  "created_at": "2026-04-30T03:29:18.431235623Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAv8BT8G8oxF7cbKzWr+nNz0ajQSR4ryq/7NJmGzoZhmX19P2nbOvz2WtBNSn3CLg6nLiyE4Oy6UmM9aPpDgjFCw=="
+}
