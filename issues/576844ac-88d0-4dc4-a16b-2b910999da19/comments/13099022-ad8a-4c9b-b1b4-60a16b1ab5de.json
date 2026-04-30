@@ -1,0 +1,10 @@
+{
+  "uuid": "13099022-ad8a-4c9b-b1b4-60a16b1ab5de",
+  "issue_uuid": "576844ac-88d0-4dc4-a16b-2b910999da19",
+  "author": "doll-agent",
+  "content": "Implemented polyfromroots(roots) -> Polynomial, plus chebfromroots / legfromroots / lagfromroots / hermfromroots / hermefromroots returning the basis-specific types (each pivots through the power-basis form). Re-exported at crate root via ferray-polynomial lib.rs. Tests verify (x-1)(x-2) = x^2 - 3x + 2 and the empty-roots case yields constant 1.",
+  "created_at": "2026-04-30T11:42:42.567563068Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAF9OViaVKwXsa1549CY4kZVr9aNlvnaB5IgDf7vH+u3sHtbvha1ojApauDszTY7OsGOtAMy6OTQhSIjM68W1LDA=="
+}
