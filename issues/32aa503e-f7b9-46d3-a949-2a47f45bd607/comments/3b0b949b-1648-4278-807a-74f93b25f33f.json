@@ -1,0 +1,10 @@
+{
+  "uuid": "3b0b949b-1648-4278-807a-74f93b25f33f",
+  "issue_uuid": "32aa503e-f7b9-46d3-a949-2a47f45bd607",
+  "author": "doll-agent",
+  "content": "Implemented manipulation extras: ma_concatenate(a, b, axis) (mask is concatenated alongside data), MaskedArray::clip(a_min, a_max) (masked elements pass through unchanged), MaskedArray::repeat(repeats) (mask propagates through repeats), atleast_1d/atleast_2d/atleast_3d (each promotes 0-D/1-D/2-D inputs to the requested rank with mask preserved), expand_dims(axis), and MaskedArray::diagonal(k) for 2-D arrays (returns 1-D MaskedArray of diagonal elements). reshape/ravel/flatten/transpose/squeeze/take are already on MaskedArray from manipulation.rs. concatenate/stack family axis variants beyond two-arg are deferred (numpy variadic concatenate maps awkwardly; users iterate).",
+  "created_at": "2026-04-30T12:16:31.734699429Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAHZHSvzuipHmTYK3JHa1KenDxWDEtZfq3nvu9QLhcTPJnlrfwSJEn7KqYxjoVDskLsadv5wx3zNuh7nss93QOCw=="
+}
