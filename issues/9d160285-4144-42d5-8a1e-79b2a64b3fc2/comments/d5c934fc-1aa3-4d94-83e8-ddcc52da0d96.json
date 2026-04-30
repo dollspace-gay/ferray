@@ -1,0 +1,10 @@
+{
+  "uuid": "d5c934fc-1aa3-4d94-83e8-ddcc52da0d96",
+  "issue_uuid": "9d160285-4144-42d5-8a1e-79b2a64b3fc2",
+  "author": "doll-agent",
+  "content": "Implemented polyvander2d(xs, ys, degx, degy) and polyvander3d(xs, ys, zs, degx, degy, degz). Returns row-major Vandermonde matrix shape (npoints, prod(deg+1)). Column index for (i, j[, k]) is i*(degy+1)*[(degz+1)] + j*[(degz+1)] + [k]. Re-exported at crate root.",
+  "created_at": "2026-04-30T11:43:31.633435766Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAaIpOGMA4VvoGwyQ8V1wNL/Js87KYohYnf/T1XeAbz8SlNjVbZ57mS94NFHR0logOXxCwnRQHmgRlarN/qOSTDw=="
+}
