@@ -1,6 +1,6 @@
 {
   "agent_id": "doll-agent",
-  "last_heartbeat": "2026-04-30T12:01:22.145960424Z",
-  "active_issue_id": null,
+  "last_heartbeat": "2026-04-30T12:03:28.812649960Z",
+  "active_issue_id": 623,
   "machine_id": "dollspace"
 }
