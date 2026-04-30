@@ -1,0 +1,10 @@
+{
+  "uuid": "843a31f4-cec8-43c1-b88e-f404b8194606",
+  "issue_uuid": "8f0dc981-2ff8-43e5-b3cc-4f589d05d96f",
+  "author": "doll-agent",
+  "content": "Implemented Generator::zipf(a, size) in ferray-random::distributions::discrete using Devroye's rejection algorithm (Non-Uniform Random Variate Generation, p. 551). Validates a > 1. Returns i64. 3 unit tests verify positive integer outputs, seed reproducibility, and parameter validation.",
+  "created_at": "2026-04-30T03:49:34.886413752Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAWQEwXmnpSsT/4i0BK55IXBpVOM+9dWnjMpv9Nsib8BXKM0J+4yzQF8uTcu26+x2+3HmMTWlabWOg3vZf0lZUBQ=="
+}
