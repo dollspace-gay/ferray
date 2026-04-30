@@ -1,0 +1,10 @@
+{
+  "uuid": "311007aa-c60a-4d9d-a5e8-0065e813a386",
+  "issue_uuid": "b397d051-90ad-43a2-bc65-6d0c73365086",
+  "author": "doll-agent",
+  "content": "Added Generator::standard_t(df, size) as a thin alias for the existing student_t(df, size). NumPy's official spelling is standard_t — we keep student_t as the primary because that's the existing API, but standard_t now matches numpy.random for ergonomic parity. Test verifies same-seed identical output via either spelling.",
+  "created_at": "2026-04-30T03:50:23.026318023Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA6d7ltOcM/2eRsXhJXcgxmUUiaP9Gjo5gZovlNeXBh/df+igpAKJQ/tC93+VGOAXjei5LOFSnpYjXd7MNSYNPDg=="
+}
