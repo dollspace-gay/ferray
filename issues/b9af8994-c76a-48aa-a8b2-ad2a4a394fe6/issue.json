@@ -2,11 +2,12 @@
   "uuid": "b9af8994-c76a-48aa-a8b2-ad2a4a394fe6",
   "display_id": 681,
   "title": "Release 0.3.0: GEMM kernel suite + perf optimizations + workspace polish",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T20:46:11.021146332Z",
-  "updated_at": "2026-04-30T20:46:12.401597784Z",
+  "updated_at": "2026-04-30T20:47:00.174786615Z",
+  "closed_at": "2026-04-30T20:47:00.174786615Z",
   "labels": [
     "workspace"
   ]
