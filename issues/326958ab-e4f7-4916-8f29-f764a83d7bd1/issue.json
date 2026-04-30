@@ -1,0 +1,10 @@
+{
+  "uuid": "326958ab-e4f7-4916-8f29-f764a83d7bd1",
+  "display_id": null,
+  "title": "ferray-ma: bitwise/comparison ufunc support (and/or/xor/shift, equal/less/greater family, logical_*, floor_divide/fmod/power/remainder/true_divide/hypot/negative/sqrt/square)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:58:39.175943757Z",
+  "updated_at": "2026-04-30T02:58:39.175943757Z"
+}
