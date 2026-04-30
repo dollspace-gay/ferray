@@ -1,0 +1,10 @@
+{
+  "uuid": "0efda12b-1661-43eb-b067-32686964ff79",
+  "display_id": null,
+  "title": "ferray-strings: add index/rindex (find variants that raise on miss)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:58:36.646553442Z",
+  "updated_at": "2026-04-30T02:58:36.646553442Z"
+}
