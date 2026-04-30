@@ -1,0 +1,10 @@
+{
+  "uuid": "9dcc112e-fd00-48ce-8635-9b411e4bdd3d",
+  "display_id": 665,
+  "title": "ferray-gemm: AVX-512 ZGEMM + CGEMM kernel ports",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T18:05:27.778566621Z",
+  "updated_at": "2026-04-30T18:05:27.778566621Z"
+}
