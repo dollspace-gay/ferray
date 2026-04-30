@@ -1,0 +1,10 @@
+{
+  "uuid": "9068ce1b-5d9e-4793-ba23-e75bd1d7f64f",
+  "issue_uuid": "4c30890a-733a-4020-ae82-36c3a4f5b686",
+  "author": "doll-agent",
+  "content": "Implemented SFC64 BitGenerator in ferray-random::bitgen::sfc64. Sebastian Vigna's 4-word Small Fast Counting generator. Period >= 2^64 (typical 2^255). seed_from_u64 sets a=b=c=seed, counter=1, then advances 12 times to warm up — exactly matches NumPy's reference. Re-exported as ferray_random::Sfc64. 3 unit tests.",
+  "created_at": "2026-04-30T03:50:03.855436452Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAHWjvWAqqheUXmoKi4RvUwsM0jBcampD11+DwOyP01kIlvcn8jyTPdzFBK0txS/DwnaOQwQOlX8477XDvz5iDCw=="
+}
