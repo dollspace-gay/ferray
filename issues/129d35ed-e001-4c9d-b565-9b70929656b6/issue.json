@@ -6,5 +6,8 @@
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T20:54:45.752460582Z",
-  "updated_at": "2026-04-30T20:54:45.752460582Z"
+  "updated_at": "2026-04-30T20:54:47.049816567Z",
+  "labels": [
+    "workspace"
+  ]
 }
