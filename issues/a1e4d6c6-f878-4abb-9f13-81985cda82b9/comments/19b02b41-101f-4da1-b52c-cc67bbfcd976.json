@@ -1,0 +1,10 @@
+{
+  "uuid": "19b02b41-101f-4da1-b52c-cc67bbfcd976",
+  "issue_uuid": "a1e4d6c6-f878-4abb-9f13-81985cda82b9",
+  "author": "doll-agent",
+  "content": "Implemented PCG64DXSM BitGenerator in ferray-random::bitgen::pcg64dxsm. 128-bit LCG with cheap-multiplier (0xda94204264dd58b5) and DXSM (double-xorshift-multiply) output function — Melissa O'Neill's 2022 recommended replacement for the classic XSL-RR PCG64. Period 2^128. Re-exported as ferray_random::Pcg64Dxsm. 3 unit tests.",
+  "created_at": "2026-04-30T03:49:56.861636321Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAvmvf6DBXh/cSK7NcjbfgmvQUtQPm0tDcDcnbC4HQBNCIurdpgYCB3TdaUDuR/skhLen3bMsixjJ59E5/xSOwDw=="
+}
