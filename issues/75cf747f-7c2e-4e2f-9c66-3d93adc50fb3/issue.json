@@ -1,0 +1,10 @@
+{
+  "uuid": "75cf747f-7c2e-4e2f-9c66-3d93adc50fb3",
+  "display_id": 680,
+  "title": "Workspace polish: re-bench, update BENCHMARKS.md, bump to 1.0.0, strict clippy + fmt",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T20:31:12.695051901Z",
+  "updated_at": "2026-04-30T20:31:12.695051901Z"
+}
