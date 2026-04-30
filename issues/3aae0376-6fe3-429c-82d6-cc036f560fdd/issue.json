@@ -1,6 +1,6 @@
 {
   "uuid": "3aae0376-6fe3-429c-82d6-cc036f560fdd",
-  "display_id": null,
+  "display_id": 631,
   "title": "ferray-strings: add translate (char-translate ufunc)",
   "status": "open",
   "priority": "medium",

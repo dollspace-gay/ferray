@@ -1,6 +1,6 @@
 {
   "uuid": "0588cd10-c971-4944-aa63-5e743651a0cb",
-  "display_id": null,
+  "display_id": 636,
   "title": "ferray-ma: linalg & set & corr ops (dot/inner/outer/innerproduct/outerproduct/trace, correlate/convolve/corrcoef/cov, unique/in1d/isin/intersect1d/setdiff1d/setxor1d/union1d, polyfit)",
   "status": "open",
   "priority": "medium",

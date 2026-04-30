@@ -1,6 +1,6 @@
 {
   "uuid": "df52a984-4958-43dc-b1f5-e76e17ed67b8",
-  "display_id": null,
+  "display_id": 622,
   "title": "ferray-polynomial: add mulx (multiply-by-x) for all 6 bases",
   "status": "open",
   "priority": "medium",

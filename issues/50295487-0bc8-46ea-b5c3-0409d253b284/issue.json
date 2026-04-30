@@ -1,6 +1,6 @@
 {
   "uuid": "50295487-0bc8-46ea-b5c3-0409d253b284",
-  "display_id": null,
+  "display_id": 623,
   "title": "ferray-strings: add decode/encode (UTF-8 codec ufuncs)",
   "status": "open",
   "priority": "medium",

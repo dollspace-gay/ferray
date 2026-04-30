@@ -1,6 +1,6 @@
 {
   "uuid": "f299ca1e-895b-45ff-949d-abbb1b0ac6ca",
-  "display_id": null,
+  "display_id": 593,
   "title": "ferray-ufunc: re-export matmul/vecdot/vecmat/matvec at top level for ufunc-call parity",
   "status": "open",
   "priority": "medium",

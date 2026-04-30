@@ -1,6 +1,6 @@
 {
   "uuid": "24e99479-7fd9-4ebc-8063-000ea8478898",
-  "display_id": null,
+  "display_id": 648,
   "title": "ferray-numpy-interop: Arrow RecordBatch (links #559)",
   "status": "open",
   "priority": "medium",

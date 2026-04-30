@@ -1,6 +1,6 @@
 {
   "uuid": "0efda12b-1661-43eb-b067-32686964ff79",
-  "display_id": null,
+  "display_id": 625,
   "title": "ferray-strings: add index/rindex (find variants that raise on miss)",
   "status": "open",
   "priority": "medium",

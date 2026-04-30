@@ -1,6 +1,6 @@
 {
   "uuid": "67a0e257-4fa6-4f68-9e35-34a92ae89794",
-  "display_id": null,
+  "display_id": 616,
   "title": "ferray-polynomial: add multivariate eval (val2d/val3d) for all 6 bases",
   "status": "open",
   "priority": "medium",

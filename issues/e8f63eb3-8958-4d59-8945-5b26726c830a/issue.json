@@ -1,6 +1,6 @@
 {
   "uuid": "e8f63eb3-8958-4d59-8945-5b26726c830a",
-  "display_id": null,
+  "display_id": 627,
   "title": "ferray-strings: add mod (printf-style % formatting)",
   "status": "open",
   "priority": "medium",

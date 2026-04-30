@@ -1,6 +1,6 @@
 {
   "uuid": "52f91b42-5b9b-4354-a424-558ddc9efdc9",
-  "display_id": null,
+  "display_id": 591,
   "title": "ferray-ufunc: add iscomplex/isreal/iscomplexobj/isrealobj/isscalar predicates",
   "status": "open",
   "priority": "medium",

@@ -1,6 +1,6 @@
 {
   "uuid": "6c0a0bc2-594d-4f46-a7c5-92c845c300e6",
-  "display_id": null,
+  "display_id": 598,
   "title": "ferray-stats: add histogram_bin_edges",
   "status": "open",
   "priority": "medium",

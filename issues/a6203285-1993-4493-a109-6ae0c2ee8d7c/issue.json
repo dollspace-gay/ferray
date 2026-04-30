@@ -1,6 +1,6 @@
 {
   "uuid": "a6203285-1993-4493-a109-6ae0c2ee8d7c",
-  "display_id": null,
+  "display_id": 594,
   "title": "ferray-ufunc: add isnat (datetime NaT — gated on datetime dtype scope)",
   "status": "open",
   "priority": "medium",

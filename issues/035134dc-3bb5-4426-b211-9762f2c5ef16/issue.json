@@ -1,6 +1,6 @@
 {
   "uuid": "035134dc-3bb5-4426-b211-9762f2c5ef16",
-  "display_id": null,
+  "display_id": 592,
   "title": "ferray-ufunc: add cumulative_sum/cumulative_prod aliases (Array API names)",
   "status": "open",
   "priority": "medium",

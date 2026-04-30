@@ -1,6 +1,6 @@
 {
   "uuid": "96113005-e3e7-49ac-95c7-585d3bcb14f7",
-  "display_id": null,
+  "display_id": 588,
   "title": "ferray-core: add c_/r_/index_exp slice builders",
   "status": "open",
   "priority": "medium",

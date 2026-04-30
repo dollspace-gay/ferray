@@ -1,6 +1,6 @@
 {
   "uuid": "e4ca81d6-4061-438f-a438-3ca61feedbbc",
-  "display_id": null,
+  "display_id": 632,
   "title": "ferray-ma: full reductions (sum/prod/mean/std/var/cumsum/cumprod/min/max/argmin/argmax/median/ptp/average/anom)",
   "status": "open",
   "priority": "medium",

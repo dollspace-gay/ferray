@@ -1,6 +1,6 @@
 {
   "uuid": "c4d16ff9-f9a1-4389-9018-fd5eb0a53728",
-  "display_id": null,
+  "display_id": 580,
   "title": "ferray-core: add broadcast/broadcast_arrays/broadcast_shapes top-level",
   "status": "open",
   "priority": "medium",

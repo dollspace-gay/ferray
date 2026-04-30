@@ -1,6 +1,6 @@
 {
   "uuid": "63524a9f-829d-49a5-a0c3-e1d584ad2f09",
-  "display_id": null,
+  "display_id": 643,
   "title": "ferray-numpy-interop: bool support (links #553/#557)",
   "status": "open",
   "priority": "medium",

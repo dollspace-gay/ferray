@@ -1,6 +1,6 @@
 {
   "uuid": "325d9350-0dc4-401a-9e36-c22846bd8ab3",
-  "display_id": null,
+  "display_id": 630,
   "title": "ferray-strings: add slice (string-slicing ufunc)",
   "status": "open",
   "priority": "medium",

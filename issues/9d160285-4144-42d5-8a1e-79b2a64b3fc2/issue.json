@@ -1,6 +1,6 @@
 {
   "uuid": "9d160285-4144-42d5-8a1e-79b2a64b3fc2",
-  "display_id": null,
+  "display_id": 618,
   "title": "ferray-polynomial: add multivariate Vandermonde (vander2d/vander3d) for all 6 bases",
   "status": "open",
   "priority": "medium",

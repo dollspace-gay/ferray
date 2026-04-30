@@ -1,6 +1,6 @@
 {
   "uuid": "16c7d789-abe7-472a-be35-be39cabfa484",
-  "display_id": null,
+  "display_id": 645,
   "title": "ferray-numpy-interop: Arrow FromArrow impls (links #555)",
   "status": "open",
   "priority": "medium",

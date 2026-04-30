@@ -1,6 +1,6 @@
 {
   "uuid": "326958ab-e4f7-4916-8f29-f764a83d7bd1",
-  "display_id": null,
+  "display_id": 639,
   "title": "ferray-ma: bitwise/comparison ufunc support (and/or/xor/shift, equal/less/greater family, logical_*, floor_divide/fmod/power/remainder/true_divide/hypot/negative/sqrt/square)",
   "status": "open",
   "priority": "medium",

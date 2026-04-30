@@ -1,6 +1,6 @@
 {
   "uuid": "3b50850c-7578-4d23-a154-25abc41080e0",
-  "display_id": null,
+  "display_id": 603,
   "title": "ferray-io: add lib.format helpers (descr_to_dtype, header_data_from_array_1_0, read_array, write_array)",
   "status": "open",
   "priority": "medium",

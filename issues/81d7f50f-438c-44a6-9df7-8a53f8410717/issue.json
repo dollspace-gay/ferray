@@ -1,6 +1,6 @@
 {
   "uuid": "81d7f50f-438c-44a6-9df7-8a53f8410717",
-  "display_id": null,
+  "display_id": 619,
   "title": "ferray-polynomial: add Gauss quadrature (chebgauss/leggauss/hermgauss/lagguass/hermegauss)",
   "status": "open",
   "priority": "medium",
