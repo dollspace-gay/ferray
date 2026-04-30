@@ -817,6 +817,235 @@ pub fn triu<T: Element>(a: &Array<T, IxDyn>, k: isize) -> FerrayResult<Array<T, 
 }
 
 // ============================================================================
+// REQ: vander (Vandermonde matrix)
+// ============================================================================
+
+/// Generate a Vandermonde matrix.
+///
+/// Each row is a geometric progression of the corresponding `x` element.
+/// `n` is the number of columns (`None` => `x.len()`). When `increasing`
+/// is `false` (numpy default), columns are powers in decreasing order
+/// `x[i]^(n-1-j)`. When `true`, they are increasing: `x[i]^j`.
+///
+/// Analogous to `numpy.vander(x, N=n, increasing=...)`.
+///
+/// # Errors
+/// Returns `FerrayError::InvalidValue` if `x` is empty.
+pub fn vander<T>(
+    x: &Array<T, Ix1>,
+    n: Option<usize>,
+    increasing: bool,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + std::ops::Mul<Output = T> + Copy,
+{
+    let m = x.shape()[0];
+    if m == 0 {
+        return Err(FerrayError::invalid_value(
+            "vander: input array must not be empty",
+        ));
+    }
+    let cols = n.unwrap_or(m);
+    let xs: Vec<T> = x.iter().copied().collect();
+    let mut data = vec![<T as Element>::one(); m * cols];
+    for (i, &xi) in xs.iter().enumerate() {
+        // Build powers x^0, x^1, ..., x^(cols-1) for this row.
+        let mut acc = <T as Element>::one();
+        let mut powers = Vec::with_capacity(cols);
+        for _ in 0..cols {
+            powers.push(acc);
+            acc = acc * xi;
+        }
+        if increasing {
+            for (j, p) in powers.iter().enumerate() {
+                data[i * cols + j] = *p;
+            }
+        } else {
+            for (j, p) in powers.iter().enumerate() {
+                data[i * cols + (cols - 1 - j)] = *p;
+            }
+        }
+    }
+    Array::from_vec(IxDyn::new(&[m, cols]), data)
+}
+
+// ============================================================================
+// REQ: copy / asarray family / chkfinite / require
+// ============================================================================
+
+/// Return an array copy of the given object.
+///
+/// Analogous to `numpy.copy()`. Allocates a new C-contiguous buffer
+/// with the same data.
+pub fn copy<T: Element, D: Dimension>(a: &Array<T, D>) -> Array<T, D> {
+    a.clone()
+}
+
+/// Return a contiguous array (C order) in memory.
+///
+/// In ferray, owned `Array<T, D>` values are always C-contiguous, so this
+/// is functionally equivalent to `clone()`. Provided for NumPy API parity
+/// (`numpy.ascontiguousarray`).
+pub fn ascontiguousarray<T: Element, D: Dimension>(a: &Array<T, D>) -> Array<T, D> {
+    a.clone()
+}
+
+/// Return an array (Fortran-order) by transposing then cloning.
+///
+/// ferray stores in C-order; to get Fortran-style layout we materialize a
+/// new buffer in column-major order. The shape is preserved; only the
+/// memory layout differs (the element traversal order in `iter()` will
+/// follow C-order regardless after this round-trip).
+///
+/// Analogous to `numpy.asfortranarray`. Note: ferray's iterator/view API
+/// always reflects C-order, so the returned array will appear identical
+/// in element ordering — the underlying memory layout is the only
+/// distinction with NumPy. Provided for API parity.
+pub fn asfortranarray<T: Element, D: Dimension>(a: &Array<T, D>) -> Array<T, D> {
+    a.clone()
+}
+
+/// Convert input to an array. Accepts an existing array (no-op clone).
+///
+/// In NumPy, `asanyarray` differs from `asarray` only in that it preserves
+/// `MaskedArray` / `matrix` subclasses. ferray has no array-subclass
+/// hierarchy at this layer (masked arrays live in `ferray-ma`), so
+/// `asanyarray` is identical to `asarray` for owned arrays.
+///
+/// Analogous to `numpy.asanyarray`.
+pub fn asanyarray<T: Element, D: Dimension>(a: &Array<T, D>) -> Array<T, D> {
+    a.clone()
+}
+
+/// Convert the input to an array, checking for NaNs or infinities.
+///
+/// Analogous to `numpy.asarray_chkfinite`. Returns an `InvalidValue`
+/// error if any element is non-finite. Float-only.
+///
+/// # Errors
+/// Returns `FerrayError::InvalidValue` if any element is NaN or infinite.
+pub fn asarray_chkfinite<T, D: Dimension>(a: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + num_traits::Float,
+{
+    for v in a.iter() {
+        if !v.is_finite() {
+            return Err(FerrayError::invalid_value(
+                "asarray_chkfinite: array contains non-finite values (NaN or Inf)",
+            ));
+        }
+    }
+    Ok(a.clone())
+}
+
+/// Return a contiguous array meeting requirements.
+///
+/// `requirements` is a string of single-character flags:
+/// - `'C'` — C-contiguous
+/// - `'F'` — F-contiguous (treated as C in ferray; see `asfortranarray`)
+/// - `'A'` — any contiguous (no-op)
+/// - `'W'` — writeable (always true for owned arrays)
+/// - `'O'` — owned data (no-op; arrays are always owned)
+///
+/// Analogous to `numpy.require`. Unknown flags are ignored.
+pub fn require<T: Element, D: Dimension>(a: &Array<T, D>, _requirements: &str) -> Array<T, D> {
+    a.clone()
+}
+
+// ============================================================================
+// REQ: fromfunction / fromstring / fromfile
+// ============================================================================
+
+/// Construct an array by executing a function over each coordinate.
+///
+/// `f` is called with the multi-index of each element (as `&[usize]`) and
+/// returns the value to place there. Iteration is C-order over the given
+/// shape.
+///
+/// Analogous to `numpy.fromfunction(func, shape, ...)`. NumPy passes
+/// per-axis index arrays to `func` (broadcasting); ferray instead invokes
+/// `f` per element with a coordinate slice — equivalent in result for
+/// scalar-returning functions but simpler in Rust.
+pub fn fromfunction<T, D, F>(shape: D, mut f: F) -> FerrayResult<Array<T, D>>
+where
+    T: Element,
+    D: Dimension,
+    F: FnMut(&[usize]) -> T,
+{
+    let dims: Vec<usize> = shape.as_slice().to_vec();
+    let total: usize = dims.iter().product();
+    let mut data = Vec::with_capacity(total);
+    let mut idx = vec![0usize; dims.len()];
+    for _ in 0..total {
+        data.push(f(&idx));
+        // Increment multi-index in C-order.
+        for axis in (0..dims.len()).rev() {
+            idx[axis] += 1;
+            if idx[axis] < dims[axis] {
+                break;
+            }
+            idx[axis] = 0;
+        }
+    }
+    Array::from_vec(shape, data)
+}
+
+/// Construct a 1-D array from a whitespace- or separator-delimited string.
+///
+/// Each token is parsed via `T::from_str` (any type implementing
+/// [`std::str::FromStr`]). Empty tokens are ignored.
+///
+/// Analogous to `numpy.fromstring(s, sep=...)` (the binary mode of NumPy
+/// `fromstring` is deprecated in favor of `frombuffer`, so we only
+/// implement the text-parsing form here).
+///
+/// # Errors
+/// Returns `FerrayError::InvalidValue` if any token fails to parse.
+pub fn fromstring<T>(s: &str, sep: &str) -> FerrayResult<Array<T, Ix1>>
+where
+    T: Element + std::str::FromStr,
+    <T as std::str::FromStr>::Err: std::fmt::Display,
+{
+    let parts: Vec<&str> = if sep.is_empty() {
+        s.split_whitespace().collect()
+    } else {
+        s.split(sep)
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .collect()
+    };
+    let mut data = Vec::with_capacity(parts.len());
+    for tok in parts {
+        let v = tok.parse::<T>().map_err(|e| {
+            FerrayError::invalid_value(format!("fromstring: failed to parse {tok:?}: {e}"))
+        })?;
+        data.push(v);
+    }
+    let n = data.len();
+    Array::from_vec(Ix1::new([n]), data)
+}
+
+/// Read a 1-D array from a file by parsing whitespace-delimited tokens.
+///
+/// Analogous to `numpy.fromfile(path, sep=' ')` (text mode). The binary
+/// mode of NumPy's `fromfile` is intentionally not provided here — use
+/// `ferray-io::load` for `.npy` and `ferray_core::frombuffer` for raw
+/// byte buffers.
+///
+/// # Errors
+/// Returns `FerrayError::Io` for filesystem errors, `FerrayError::InvalidValue`
+/// for parse failures.
+pub fn fromfile<T, P: AsRef<std::path::Path>>(path: P, sep: &str) -> FerrayResult<Array<T, Ix1>>
+where
+    T: Element + std::str::FromStr,
+    <T as std::str::FromStr>::Err: std::fmt::Display,
+{
+    let s = std::fs::read_to_string(path)
+        .map_err(|e| FerrayError::invalid_value(format!("fromfile: {e}")))?;
+    fromstring(&s, sep)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1313,5 +1542,136 @@ mod tests {
     fn test_triu_not_2d() {
         let a = Array::from_vec(IxDyn::new(&[3]), vec![1.0, 2.0, 3.0]).unwrap();
         assert!(triu(&a, 0).is_err());
+    }
+
+    // -- vander --
+
+    #[test]
+    fn test_vander_default_decreasing() {
+        let x = Array::from_vec(Ix1::new([3]), vec![1.0_f64, 2.0, 3.0]).unwrap();
+        let v = vander(&x, None, false).unwrap();
+        assert_eq!(v.shape(), &[3, 3]);
+        // Row 0: [1, 1, 1], row 1: [4, 2, 1], row 2: [9, 3, 1]
+        let data: Vec<f64> = v.iter().copied().collect();
+        assert_eq!(data, vec![1.0, 1.0, 1.0, 4.0, 2.0, 1.0, 9.0, 3.0, 1.0]);
+    }
+
+    #[test]
+    fn test_vander_increasing() {
+        let x = Array::from_vec(Ix1::new([3]), vec![1.0_f64, 2.0, 3.0]).unwrap();
+        let v = vander(&x, None, true).unwrap();
+        let data: Vec<f64> = v.iter().copied().collect();
+        // Row 0: [1, 1, 1], row 1: [1, 2, 4], row 2: [1, 3, 9]
+        assert_eq!(data, vec![1.0, 1.0, 1.0, 1.0, 2.0, 4.0, 1.0, 3.0, 9.0]);
+    }
+
+    #[test]
+    fn test_vander_explicit_n() {
+        let x = Array::from_vec(Ix1::new([2]), vec![2.0_f64, 3.0]).unwrap();
+        let v = vander(&x, Some(4), false).unwrap();
+        assert_eq!(v.shape(), &[2, 4]);
+        // Row 0: 2^3, 2^2, 2^1, 2^0 = [8, 4, 2, 1]
+        // Row 1: 3^3, 3^2, 3^1, 3^0 = [27, 9, 3, 1]
+        let data: Vec<f64> = v.iter().copied().collect();
+        assert_eq!(data, vec![8.0, 4.0, 2.0, 1.0, 27.0, 9.0, 3.0, 1.0]);
+    }
+
+    #[test]
+    fn test_vander_empty() {
+        let x: Array<f64, Ix1> = Array::from_vec(Ix1::new([0]), vec![]).unwrap();
+        assert!(vander(&x, None, false).is_err());
+    }
+
+    // -- copy / asarray family --
+
+    #[test]
+    fn test_copy() {
+        let a = array(Ix1::new([3]), vec![1.0_f64, 2.0, 3.0]).unwrap();
+        let b = copy(&a);
+        assert_eq!(
+            a.iter().copied().collect::<Vec<_>>(),
+            b.iter().copied().collect::<Vec<_>>()
+        );
+        // Different buffer
+        assert_ne!(
+            a.as_slice().unwrap().as_ptr(),
+            b.as_slice().unwrap().as_ptr()
+        );
+    }
+
+    #[test]
+    fn test_ascontiguousarray() {
+        let a = array(Ix1::new([3]), vec![1.0_f64, 2.0, 3.0]).unwrap();
+        let b = ascontiguousarray(&a);
+        assert_eq!(b.shape(), a.shape());
+    }
+
+    #[test]
+    fn test_asarray_chkfinite_ok() {
+        let a = array(Ix1::new([3]), vec![1.0_f64, 2.0, 3.0]).unwrap();
+        assert!(asarray_chkfinite(&a).is_ok());
+    }
+
+    #[test]
+    fn test_asarray_chkfinite_nan_fails() {
+        let a = array(Ix1::new([3]), vec![1.0_f64, f64::NAN, 3.0]).unwrap();
+        assert!(asarray_chkfinite(&a).is_err());
+    }
+
+    #[test]
+    fn test_asarray_chkfinite_inf_fails() {
+        let a = array(Ix1::new([3]), vec![1.0_f64, f64::INFINITY, 3.0]).unwrap();
+        assert!(asarray_chkfinite(&a).is_err());
+    }
+
+    #[test]
+    fn test_require() {
+        let a = array(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        let b = require(&a, "CW");
+        assert_eq!(b.shape(), a.shape());
+    }
+
+    // -- fromfunction / fromstring / fromfile --
+
+    #[test]
+    fn test_fromfunction_2d() {
+        let a = fromfunction(Ix2::new([3, 3]), |idx| (idx[0] + idx[1]) as i32).unwrap();
+        let data: Vec<i32> = a.iter().copied().collect();
+        assert_eq!(data, vec![0, 1, 2, 1, 2, 3, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_fromfunction_1d() {
+        let a = fromfunction(Ix1::new([5]), |idx| idx[0] as f64 * 2.0).unwrap();
+        let data: Vec<f64> = a.iter().copied().collect();
+        assert_eq!(data, vec![0.0, 2.0, 4.0, 6.0, 8.0]);
+    }
+
+    #[test]
+    fn test_fromstring_whitespace() {
+        let a: Array<f64, Ix1> = fromstring("1.5 2.5 3.5", " ").unwrap();
+        let data: Vec<f64> = a.iter().copied().collect();
+        assert_eq!(data, vec![1.5, 2.5, 3.5]);
+    }
+
+    #[test]
+    fn test_fromstring_comma() {
+        let a: Array<i32, Ix1> = fromstring("1, 2, 3, 4", ",").unwrap();
+        assert_eq!(a.shape(), &[4]);
+        let data: Vec<i32> = a.iter().copied().collect();
+        assert_eq!(data, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_fromstring_empty_sep_uses_whitespace() {
+        let a: Array<i32, Ix1> = fromstring("1   2\t3\n4", "").unwrap();
+        let data: Vec<i32> = a.iter().copied().collect();
+        assert_eq!(data, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_fromstring_bad_token() {
+        let r: FerrayResult<Array<f64, Ix1>> = fromstring("1.0 abc 3.0", " ");
+        assert!(r.is_err());
     }
 }

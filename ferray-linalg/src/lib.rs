@@ -48,6 +48,11 @@ pub mod complex;
 pub mod decomp;
 /// Conversion bridge between ferray arrays and faer matrices.
 pub mod faer_bridge;
+/// Hand-tuned Rust DGEMM micro-kernel for AVX2+FMA. Used by `matmul_raw`
+/// when the runtime CPU supports it; falls back to faer otherwise. Beats
+/// `private-gemm-x86` (faer's default backend) at small/medium N where
+/// faer's parallel-rayon path adds more overhead than it saves.
+pub mod gemm;
 /// Norms, condition numbers, determinants, and related measures.
 pub mod norms;
 /// Matrix products: dot, matmul, einsum, tensordot, kron, `multi_dot`.
@@ -56,6 +61,10 @@ pub mod products;
 pub mod scalar;
 /// Linear solvers: solve, lstsq, inv, pinv, `matrix_power`, tensorsolve, tensorinv.
 pub mod solve;
+/// Native triangular solve (TRSM) primitives: lower/upper × non-unit/unit
+/// diagonal, in-place row-major. Used by Cholesky/LU back-substitution
+/// chains; reuses the GEMM scaffolding for the trailing block update.
+pub mod trsm;
 
 /// f16 (half-precision) linalg operations with f64 promotion.
 #[cfg(feature = "f16")]
@@ -66,8 +75,8 @@ pub use scalar::LinalgFloat;
 
 // Matrix products (Section 8.1)
 pub use products::{
-    TensordotAxes, cross, dot, einsum, inner, kron, matmul, multi_dot, outer, tensordot, vdot,
-    vecdot,
+    TensordotAxes, cross, dot, einsum, inner, kron, matmul, matvec, multi_dot, outer, tensordot,
+    vdot, vecdot, vecmat,
 };
 
 // Decompositions (Section 8.2)

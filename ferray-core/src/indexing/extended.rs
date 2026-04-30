@@ -799,6 +799,153 @@ pub fn where_select<T: Element + Copy, D: Dimension>(
     Array::from_vec(x.dim().clone(), data)
 }
 
+// ===========================================================================
+// place / putmask / extract / mask_indices
+// ===========================================================================
+
+/// Change elements of `a` based on a boolean mask, taking values from `vals`
+/// (cycling) where the mask is true.
+///
+/// Mutates `a` in place. The mask shape must equal `a.shape()`. `vals` is
+/// reused cyclically if it has fewer elements than there are mask hits.
+///
+/// Analogous to `numpy.place(arr, mask, vals)`.
+///
+/// # Errors
+/// Returns `FerrayError::ShapeMismatch` if mask shape != array shape.
+/// Returns `FerrayError::InvalidValue` if there are mask hits but `vals` is empty.
+pub fn place<T: Element + Copy, D: Dimension>(
+    a: &mut Array<T, D>,
+    mask: &Array<bool, D>,
+    vals: &[T],
+) -> FerrayResult<()> {
+    if a.shape() != mask.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "place: mask shape {:?} differs from array shape {:?}",
+            mask.shape(),
+            a.shape(),
+        )));
+    }
+    let hits: usize = mask.iter().filter(|&&m| m).count();
+    if hits > 0 && vals.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "place: vals must be non-empty when mask has any true entries",
+        ));
+    }
+    let mut vi = 0usize;
+    for (slot, &m) in a.inner.iter_mut().zip(mask.iter()) {
+        if m {
+            *slot = vals[vi % vals.len()];
+            vi += 1;
+        }
+    }
+    Ok(())
+}
+
+/// Change elements of `a` based on a boolean mask, broadcasting/cycling values
+/// from a same-shape (or scalar) `values` slice where the mask is true.
+///
+/// Where `values.len() == 1`, that scalar is used. Otherwise `values` must
+/// have the same number of elements as `a` (mask hits use the corresponding
+/// element of `values`, like NumPy's `putmask`). Mutates `a` in place.
+///
+/// Analogous to `numpy.putmask(a, mask, values)`.
+///
+/// # Errors
+/// Returns `FerrayError::ShapeMismatch` if mask shape != array shape, or
+/// if `values.len()` is neither 1 nor `a.size()`.
+pub fn putmask<T: Element + Copy, D: Dimension>(
+    a: &mut Array<T, D>,
+    mask: &Array<bool, D>,
+    values: &[T],
+) -> FerrayResult<()> {
+    if a.shape() != mask.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "putmask: mask shape {:?} differs from array shape {:?}",
+            mask.shape(),
+            a.shape(),
+        )));
+    }
+    let n = a.size();
+    let scalar_mode = values.len() == 1;
+    if !scalar_mode && values.len() != n {
+        return Err(FerrayError::shape_mismatch(format!(
+            "putmask: values length {} must be 1 or equal to array size {}",
+            values.len(),
+            n,
+        )));
+    }
+    for (i, (slot, &m)) in a.inner.iter_mut().zip(mask.iter()).enumerate() {
+        if m {
+            *slot = if scalar_mode { values[0] } else { values[i] };
+        }
+    }
+    Ok(())
+}
+
+/// Return the elements of `a` where `condition` is true, as a 1-D array.
+///
+/// Analogous to `numpy.extract(condition, arr)`. Equivalent to
+/// `arr.flatten()[condition.flatten()]`.
+///
+/// # Errors
+/// Returns `FerrayError::ShapeMismatch` if `condition` does not have the
+/// same shape as `a`.
+pub fn extract<T: Element + Copy, D: Dimension>(
+    condition: &Array<bool, D>,
+    a: &Array<T, D>,
+) -> FerrayResult<Array<T, crate::dimension::Ix1>> {
+    if condition.shape() != a.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "extract: condition shape {:?} differs from array shape {:?}",
+            condition.shape(),
+            a.shape(),
+        )));
+    }
+    let data: Vec<T> = condition
+        .iter()
+        .zip(a.iter())
+        .filter_map(|(&c, &v)| if c { Some(v) } else { None })
+        .collect();
+    let n = data.len();
+    Array::from_vec(crate::dimension::Ix1::new([n]), data)
+}
+
+/// Mask kind for [`mask_indices`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaskKind {
+    /// Lower-triangular mask (corresponds to `np.tril`).
+    Tril,
+    /// Upper-triangular mask (corresponds to `np.triu`).
+    Triu,
+    /// Main-diagonal-only mask.
+    Diag,
+}
+
+/// Return the flat indices into an `(n, n)` array where the chosen mask is true.
+///
+/// `k` shifts the boundary: for `Tril`, elements with `j <= i + k` are
+/// selected; for `Triu`, elements with `j >= i + k`; for `Diag`, the
+/// `k`-th diagonal.
+///
+/// Analogous to `numpy.mask_indices(n, mask_func, k)`.
+pub fn mask_indices(n: usize, kind: MaskKind, k: isize) -> Vec<usize> {
+    let mut idx = Vec::new();
+    for i in 0..n {
+        for j in 0..n {
+            let select = match kind {
+                MaskKind::Tril => (j as isize) <= (i as isize) + k,
+                MaskKind::Triu => (j as isize) >= (i as isize) + k,
+                MaskKind::Diag => (j as isize) == (i as isize) + k,
+            };
+            if select {
+                idx.push(i * n + j);
+            }
+        }
+    }
+    idx
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1310,5 +1457,100 @@ mod tests {
         let result = where_select(&cond, &x, &y).unwrap();
         let data: Vec<i32> = result.iter().copied().collect();
         assert_eq!(data, vec![1, 20, 30, 4]);
+    }
+
+    // -- place / putmask / extract / mask_indices --
+
+    #[test]
+    fn test_place_basic() {
+        let mut a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 5, 6]).unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![false, true, false, true, false, true],
+        )
+        .unwrap();
+        place(&mut a, &mask, &[10, 20]).unwrap();
+        // Mask hits at positions 1, 3, 5 → cycled vals 10, 20, 10
+        let data: Vec<i32> = a.iter().copied().collect();
+        assert_eq!(data, vec![1, 10, 3, 20, 5, 10]);
+    }
+
+    #[test]
+    fn test_place_no_hits() {
+        let mut a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false; 3]).unwrap();
+        place(&mut a, &mask, &[]).unwrap(); // No hits, empty vals OK
+        assert_eq!(a.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_place_shape_mismatch() {
+        let mut a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![true; 4]).unwrap();
+        assert!(place(&mut a, &mask, &[0]).is_err());
+    }
+
+    #[test]
+    fn test_putmask_scalar() {
+        let mut a = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![1, 2, 3, 4]).unwrap();
+        let mask =
+            Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![true, false, true, false]).unwrap();
+        putmask(&mut a, &mask, &[99]).unwrap();
+        assert_eq!(a.iter().copied().collect::<Vec<_>>(), vec![99, 2, 99, 4]);
+    }
+
+    #[test]
+    fn test_putmask_full_array() {
+        let mut a = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![1, 2, 3, 4]).unwrap();
+        let mask =
+            Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![true, false, true, false]).unwrap();
+        putmask(&mut a, &mask, &[10, 20, 30, 40]).unwrap();
+        assert_eq!(a.iter().copied().collect::<Vec<_>>(), vec![10, 2, 30, 4]);
+    }
+
+    #[test]
+    fn test_putmask_bad_length() {
+        let mut a = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![1, 2, 3, 4]).unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![true; 4]).unwrap();
+        assert!(putmask(&mut a, &mask, &[1, 2]).is_err());
+    }
+
+    #[test]
+    fn test_extract_basic() {
+        let cond =
+            Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![true, false, true, false, true])
+                .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
+        let r = extract(&cond, &a).unwrap();
+        assert_eq!(r.iter().copied().collect::<Vec<_>>(), vec![1.0, 3.0, 5.0]);
+    }
+
+    #[test]
+    fn test_extract_2d() {
+        let cond =
+            Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![true, false, false, true]).unwrap();
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 2]), vec![10, 20, 30, 40]).unwrap();
+        let r = extract(&cond, &a).unwrap();
+        assert_eq!(r.iter().copied().collect::<Vec<_>>(), vec![10, 40]);
+    }
+
+    #[test]
+    fn test_mask_indices_tril() {
+        let idx = mask_indices(3, MaskKind::Tril, 0);
+        // Lower triangle of 3x3: positions (0,0), (1,0), (1,1), (2,0), (2,1), (2,2)
+        assert_eq!(idx, vec![0, 3, 4, 6, 7, 8]);
+    }
+
+    #[test]
+    fn test_mask_indices_triu() {
+        let idx = mask_indices(3, MaskKind::Triu, 0);
+        // Upper triangle: (0,0), (0,1), (0,2), (1,1), (1,2), (2,2)
+        assert_eq!(idx, vec![0, 1, 2, 4, 5, 8]);
+    }
+
+    #[test]
+    fn test_mask_indices_diag() {
+        let idx = mask_indices(3, MaskKind::Diag, 0);
+        assert_eq!(idx, vec![0, 4, 8]);
     }
 }

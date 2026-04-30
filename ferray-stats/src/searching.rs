@@ -291,6 +291,75 @@ where
     }
 }
 
+// ---------------------------------------------------------------------------
+// Array API standard names: unique_values / unique_counts / unique_inverse / unique_all
+// ---------------------------------------------------------------------------
+
+/// Sorted unique values of the (flattened) array.
+///
+/// Array-API-standard alias for [`unique`] with no extra return arrays.
+/// Equivalent to `numpy.unique_values(x)`.
+pub fn unique_values<T, D>(a: &Array<T, D>) -> FerrayResult<Array<T, Ix1>>
+where
+    T: Element + PartialOrd + Copy,
+    D: Dimension,
+{
+    Ok(unique(a, false, false, false)?.values)
+}
+
+/// Sorted unique values and their occurrence counts.
+///
+/// Equivalent to `numpy.unique_counts(x)` — returns `(values, counts)`.
+pub fn unique_counts<T, D>(a: &Array<T, D>) -> FerrayResult<(Array<T, Ix1>, Array<u64, Ix1>)>
+where
+    T: Element + PartialOrd + Copy,
+    D: Dimension,
+{
+    let r = unique(a, false, false, true)?;
+    Ok((r.values, r.counts.expect("return_counts requested")))
+}
+
+/// Sorted unique values and the inverse-index array.
+///
+/// Equivalent to `numpy.unique_inverse(x)` — returns `(values, inverse)`
+/// where `values[inverse]` reconstructs the flattened input.
+pub fn unique_inverse<T, D>(a: &Array<T, D>) -> FerrayResult<(Array<T, Ix1>, Array<u64, Ix1>)>
+where
+    T: Element + PartialOrd + Copy,
+    D: Dimension,
+{
+    let r = unique(a, false, true, false)?;
+    Ok((r.values, r.inverse.expect("return_inverse requested")))
+}
+
+/// Sorted unique values along with first-occurrence indices, inverse, and
+/// counts.
+///
+/// Equivalent to `numpy.unique_all(x)` — returns
+/// `(values, indices, inverse, counts)`. The four-tuple is the documented
+/// Array-API contract; suppress clippy's complexity warning.
+#[allow(clippy::type_complexity)]
+pub fn unique_all<T, D>(
+    a: &Array<T, D>,
+) -> FerrayResult<(
+    Array<T, Ix1>,
+    Array<u64, Ix1>,
+    Array<u64, Ix1>,
+    Array<u64, Ix1>,
+)>
+where
+    T: Element + PartialOrd + Copy,
+    D: Dimension,
+{
+    let r = unique(a, true, true, true)?;
+    Ok((
+        r.values,
+        r.indices.expect("return_index requested"),
+        r.inverse.expect("return_inverse requested"),
+        r.counts.expect("return_counts requested"),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -459,5 +528,47 @@ mod tests {
         let c = count_nonzero(&a, Some(1)).unwrap();
         let data: Vec<u64> = c.iter().copied().collect();
         assert_eq!(data, vec![1, 2]);
+    }
+
+    // -- Array API unique_* --
+
+    #[test]
+    fn test_unique_values_alias() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([6]), vec![3, 1, 2, 1, 3, 2]).unwrap();
+        let v = unique_values(&a).unwrap();
+        assert_eq!(v.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_unique_counts_alias() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([6]), vec![3, 1, 2, 1, 3, 2]).unwrap();
+        let (v, c) = unique_counts(&a).unwrap();
+        assert_eq!(v.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
+        assert_eq!(c.iter().copied().collect::<Vec<_>>(), vec![2, 2, 2]);
+    }
+
+    #[test]
+    fn test_unique_inverse_alias() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([6]), vec![3, 1, 2, 1, 3, 2]).unwrap();
+        let (v, inv) = unique_inverse(&a).unwrap();
+        // values = [1, 2, 3]; inverse maps each original to that index
+        // 3→2, 1→0, 2→1, 1→0, 3→2, 2→1
+        assert_eq!(v.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
+        assert_eq!(
+            inv.iter().copied().collect::<Vec<_>>(),
+            vec![2, 0, 1, 0, 2, 1]
+        );
+    }
+
+    #[test]
+    fn test_unique_all_alias() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([6]), vec![3, 1, 2, 1, 3, 2]).unwrap();
+        let (v, _idx, inv, c) = unique_all(&a).unwrap();
+        assert_eq!(v.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
+        assert_eq!(
+            inv.iter().copied().collect::<Vec<_>>(),
+            vec![2, 0, 1, 0, 2, 1]
+        );
+        assert_eq!(c.iter().copied().collect::<Vec<_>>(), vec![2, 2, 2]);
     }
 }

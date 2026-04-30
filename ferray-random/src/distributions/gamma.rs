@@ -224,6 +224,135 @@ impl<B: BitGenerator> Generator<B> {
         });
         vec_to_array_f64(data, &shape_vec)
     }
+
+    /// Alias for [`student_t`](Self::student_t) using NumPy's `standard_t` spelling.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `df <= 0` or `size` is invalid.
+    pub fn standard_t(
+        &mut self,
+        df: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
+        self.student_t(df, size)
+    }
+
+    /// Generate an array of noncentral chi-squared variates.
+    ///
+    /// `noncentral_chisquare(df, nonc)` is the distribution of
+    /// `sum((Z_i + mu_i)^2)` where `Z_i ~ N(0,1)` and the sum of the
+    /// `mu_i^2` equals `nonc`. Implemented via the Poisson-mixed central
+    /// chi-squared method: `N ~ Poisson(nonc/2)`, `X = 2 * Gamma((df + 2N)/2)`.
+    ///
+    /// Equivalent to `numpy.random.Generator.noncentral_chisquare`.
+    ///
+    /// # Errors
+    /// - `FerrayError::InvalidValue` if `df <= 0`, `nonc < 0`, or `size` is invalid.
+    pub fn noncentral_chisquare(
+        &mut self,
+        df: f64,
+        nonc: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
+        if df <= 0.0 {
+            return Err(FerrayError::invalid_value(format!(
+                "df must be positive, got {df}"
+            )));
+        }
+        if nonc < 0.0 {
+            return Err(FerrayError::invalid_value(format!(
+                "nonc must be non-negative, got {nonc}"
+            )));
+        }
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
+            // Sample N ~ Poisson(nonc / 2) inline via Knuth (small lambda).
+            // For nonc/2 in moderate range this is fast; for large nonc the
+            // call still terminates quickly in practice.
+            let lam = nonc / 2.0;
+            let n_pois: u64 = if lam == 0.0 {
+                0
+            } else {
+                let l = (-lam).exp();
+                let mut k: u64 = 0;
+                let mut p = 1.0;
+                loop {
+                    k += 1;
+                    p *= bg.next_f64();
+                    if p <= l {
+                        break k - 1;
+                    }
+                }
+            };
+            let total_df = df + 2.0 * (n_pois as f64);
+            2.0 * standard_gamma_single(bg, total_df / 2.0)
+        });
+        vec_to_array_f64(data, &shape_vec)
+    }
+
+    /// Generate an array of noncentral F-distributed variates.
+    ///
+    /// `noncentral_f(dfnum, dfden, nonc) = (Chi2_nc(dfnum, nonc)/dfnum) /
+    /// (Chi2(dfden)/dfden)`.
+    ///
+    /// Equivalent to `numpy.random.Generator.noncentral_f`.
+    ///
+    /// # Errors
+    /// - `FerrayError::InvalidValue` if any df is non-positive, `nonc < 0`,
+    ///   or `size` is invalid.
+    pub fn noncentral_f(
+        &mut self,
+        dfnum: f64,
+        dfden: f64,
+        nonc: f64,
+        size: impl IntoShape,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
+        if dfnum <= 0.0 {
+            return Err(FerrayError::invalid_value(format!(
+                "dfnum must be positive, got {dfnum}"
+            )));
+        }
+        if dfden <= 0.0 {
+            return Err(FerrayError::invalid_value(format!(
+                "dfden must be positive, got {dfden}"
+            )));
+        }
+        if nonc < 0.0 {
+            return Err(FerrayError::invalid_value(format!(
+                "nonc must be non-negative, got {nonc}"
+            )));
+        }
+        let shape_vec = size.into_shape()?;
+        let n = shape_size(&shape_vec);
+        let data = generate_vec(self, n, |bg| {
+            // Numerator: noncentral chi-squared sample (Poisson-mixed).
+            let lam = nonc / 2.0;
+            let n_pois: u64 = if lam == 0.0 {
+                0
+            } else {
+                let l = (-lam).exp();
+                let mut k: u64 = 0;
+                let mut p = 1.0;
+                loop {
+                    k += 1;
+                    p *= bg.next_f64();
+                    if p <= l {
+                        break k - 1;
+                    }
+                }
+            };
+            let total_dfnum = dfnum + 2.0 * (n_pois as f64);
+            let chi2_num = 2.0 * standard_gamma_single(bg, total_dfnum / 2.0);
+            let chi2_den = 2.0 * standard_gamma_single(bg, dfden / 2.0);
+            if chi2_den == 0.0 {
+                f64::INFINITY
+            } else {
+                (chi2_num / dfnum) / (chi2_den / dfden)
+            }
+        });
+        vec_to_array_f64(data, &shape_vec)
+    }
 }
 
 #[cfg(test)]
@@ -373,5 +502,63 @@ mod tests {
         assert!(rng.gamma(0.0, 1.0, 100).is_err());
         assert!(rng.gamma(1.0, 0.0, 100).is_err());
         assert!(rng.gamma(-1.0, 1.0, 100).is_err());
+    }
+
+    #[test]
+    fn standard_t_alias_matches_student_t() {
+        // Same seed → same draws via either spelling.
+        let mut rng_a = default_rng_seeded(7);
+        let mut rng_b = default_rng_seeded(7);
+        let a = rng_a.student_t(5.0, 100).unwrap();
+        let b = rng_b.standard_t(5.0, 100).unwrap();
+        assert_eq!(a.as_slice().unwrap(), b.as_slice().unwrap());
+    }
+
+    #[test]
+    fn noncentral_chisquare_mean_approx() {
+        // E[noncentral chi^2(df, lam)] = df + lam.
+        let mut rng = default_rng_seeded(42);
+        let n = 50_000;
+        let arr = rng.noncentral_chisquare(5.0, 3.0, n).unwrap();
+        let s = arr.as_slice().unwrap();
+        let mean: f64 = s.iter().sum::<f64>() / n as f64;
+        // 3 standard errors of slack — very generous for a Monte Carlo check.
+        assert!((mean - 8.0).abs() < 0.5, "noncentral_chisquare mean {mean}");
+    }
+
+    #[test]
+    fn noncentral_chisquare_zero_lambda_matches_chisquare() {
+        let mut rng_a = default_rng_seeded(11);
+        let mut rng_b = default_rng_seeded(11);
+        let a = rng_a.noncentral_chisquare(4.0, 0.0, 1000).unwrap();
+        let b = rng_b.chisquare(4.0, 1000).unwrap();
+        // Both algorithms reduce to 2 * Gamma(df/2) under the same RNG sequence.
+        for (x, y) in a.as_slice().unwrap().iter().zip(b.as_slice().unwrap()) {
+            assert!((x - y).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn noncentral_chisquare_bad_params() {
+        let mut rng = default_rng_seeded(0);
+        assert!(rng.noncentral_chisquare(0.0, 1.0, 10).is_err());
+        assert!(rng.noncentral_chisquare(1.0, -1.0, 10).is_err());
+    }
+
+    #[test]
+    fn noncentral_f_positive() {
+        let mut rng = default_rng_seeded(100);
+        let arr = rng.noncentral_f(5.0, 7.0, 2.0, 1000).unwrap();
+        for &v in arr.as_slice().unwrap() {
+            assert!(v >= 0.0);
+        }
+    }
+
+    #[test]
+    fn noncentral_f_bad_params() {
+        let mut rng = default_rng_seeded(0);
+        assert!(rng.noncentral_f(0.0, 1.0, 1.0, 10).is_err());
+        assert!(rng.noncentral_f(1.0, 0.0, 1.0, 10).is_err());
+        assert!(rng.noncentral_f(1.0, 1.0, -1.0, 10).is_err());
     }
 }

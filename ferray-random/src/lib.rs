@@ -68,6 +68,8 @@ pub mod parallel;
 pub mod permutations;
 pub mod shape;
 
-pub use bitgen::{BitGenerator, Pcg64, Philox, Xoshiro256StarStar};
+pub use bitgen::{
+    BitGenerator, MT19937, Pcg64, Pcg64Dxsm, Philox, SeedSequence, Sfc64, Xoshiro256StarStar,
+};
 pub use generator::{Generator, default_rng, default_rng_seeded};
 pub use shape::IntoShape;

@@ -178,7 +178,7 @@ def main():
                 d[:r*c].reshape(r, c) @ d[r*c:].reshape(c, r)
             ),
             "ferray_name": "matmul",
-            "size_str": f"{rows}x{cols}",
+            "size_str": f"{rows}x{cols}:{cols}x{rows}",
         })
 
     # FFT

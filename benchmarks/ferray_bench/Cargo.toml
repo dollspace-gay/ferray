@@ -11,6 +11,9 @@ ferray-ufunc = { path = "../../ferray-ufunc" }
 ferray-stats = { path = "../../ferray-stats" }
 ferray-linalg = { path = "../../ferray-linalg" }
 ferray-fft = { path = "../../ferray-fft" }
+ferray-polynomial = { path = "../../ferray-polynomial" }
+ferray-random = { path = "../../ferray-random" }
+ferray-window = { path = "../../ferray-window" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 num-complex = "0.4"

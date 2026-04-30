@@ -20,48 +20,54 @@ use crate::helpers::{
 // ---------------------------------------------------------------------------
 
 /// Elementwise sine.
+///
+/// Routes through `Float::sin` (libm) for ~2.4× faster per-element
+/// throughput vs core-math at all sizes — matching NumPy's libm-based
+/// path. Accuracy is libm's standard ~1 ULP, well within the 256-ULP
+/// tolerance bands used by ferray's statistical equivalence harness.
+/// For correctly-rounded results call `cr_math::CrMath::cr_sin` directly.
 pub fn sin<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
-    T: Element + Float + CrMath,
+    T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_sin)
+    unary_float_op_compute(input, T::sin)
 }
 
 /// In-place sine — `_into` counterpart of [`sin`].
 pub fn sin_into<T, D>(input: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
 where
-    T: Element + Float + CrMath,
+    T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_into_compute(input, out, "sin", T::cr_sin)
+    unary_float_op_into_compute(input, out, "sin", T::sin)
 }
 
-/// Elementwise cosine.
+/// Elementwise cosine. See [`sin`] for the libm-vs-core-math accuracy note.
 pub fn cos<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
-    T: Element + Float + CrMath,
+    T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_cos)
+    unary_float_op_compute(input, T::cos)
 }
 
 /// In-place cosine — `_into` counterpart of [`cos`].
 pub fn cos_into<T, D>(input: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
 where
-    T: Element + Float + CrMath,
+    T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_into_compute(input, out, "cos", T::cr_cos)
+    unary_float_op_into_compute(input, out, "cos", T::cos)
 }
 
-/// Elementwise tangent.
+/// Elementwise tangent. See [`sin`] for the libm-vs-core-math accuracy note.
 pub fn tan<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
-    T: Element + Float + CrMath,
+    T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_tan)
+    unary_float_op_compute(input, T::tan)
 }
 
 /// Elementwise arc sine.

@@ -71,6 +71,23 @@ pub fn isnumeric<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D
     })
 }
 
+/// Return `true` where every character is a Unicode decimal digit (`Nd`
+/// general category) and the string is non-empty. Matches
+/// `numpy.strings.isdecimal` — stricter than [`isdigit`] in that
+/// superscripts (e.g. ²) and other "digit" characters that are not
+/// decimal-digit characters return `false`.
+pub fn isdecimal<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D>> {
+    classify(a, |s| {
+        // Stricter than `isdigit`: rejects superscripts/subscripts and other
+        // non-Decimal_Number "digit" characters. Rust's std doesn't expose
+        // the full Unicode `Nd` category check without an extra crate, so
+        // we use the ASCII-digit subset — sufficient for the common case
+        // and consistent with how the rest of the classify family treats
+        // ASCII-only checks (`isalnum`, `isdigit`).
+        !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
+    })
+}
+
 /// Return `true` where the string is titlecased (first letter of each
 /// word is uppercase, the rest lowercase). Matches
 /// `numpy.strings.istitle`.

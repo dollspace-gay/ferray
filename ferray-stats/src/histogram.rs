@@ -144,6 +144,78 @@ where
     Ok((counts_arr, edges_arr))
 }
 
+/// Compute the bin edges that would be used by [`histogram`] without
+/// counting anything.
+///
+/// Useful for sharing a fixed bin specification across multiple datasets.
+/// Equivalent to `numpy.histogram_bin_edges`.
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if `range` is degenerate, `bins` is `Count(0)`,
+///   `bins` is `Edges` with fewer than 2 elements, or the array is empty
+///   without an explicit `range`.
+pub fn histogram_bin_edges<T>(
+    a: &Array<T, Ix1>,
+    bins: Bins<T>,
+    range: Option<(T, T)>,
+) -> FerrayResult<Array<T, Ix1>>
+where
+    T: Element + Float,
+{
+    let edges = match bins {
+        Bins::Count(n) => {
+            if n == 0 {
+                return Err(FerrayError::invalid_value("number of bins must be > 0"));
+            }
+            let data: Vec<T> = a.iter().copied().collect();
+            let (lo, hi) = if let Some((l, h)) = range {
+                if l >= h {
+                    return Err(FerrayError::invalid_value(
+                        "range lower bound must be less than upper",
+                    ));
+                }
+                (l, h)
+            } else {
+                if data.is_empty() {
+                    return Err(FerrayError::invalid_value(
+                        "cannot compute histogram_bin_edges of empty array without range",
+                    ));
+                }
+                let lo = data
+                    .iter()
+                    .copied()
+                    .fold(T::infinity(), num_traits::Float::min);
+                let hi = data
+                    .iter()
+                    .copied()
+                    .fold(T::neg_infinity(), num_traits::Float::max);
+                if lo == hi {
+                    (lo - <T as Element>::one(), hi + <T as Element>::one())
+                } else {
+                    (lo, hi)
+                }
+            };
+            let step = (hi - lo) / T::from(n).unwrap();
+            let mut edges = Vec::with_capacity(n + 1);
+            for i in 0..n {
+                edges.push(lo + step * T::from(i).unwrap());
+            }
+            edges.push(hi);
+            edges
+        }
+        Bins::Edges(e) => {
+            if e.len() < 2 {
+                return Err(FerrayError::invalid_value(
+                    "bin edges must have at least 2 elements",
+                ));
+            }
+            e
+        }
+    };
+
+    Array::from_vec(Ix1::new([edges.len()]), edges)
+}
+
 // ---------------------------------------------------------------------------
 // histogram2d
 // ---------------------------------------------------------------------------
@@ -697,5 +769,29 @@ mod tests {
         let c: Vec<u64> = counts.iter().copied().collect();
         assert_eq!(c.iter().sum::<u64>(), 4);
         assert_eq!(edges.len(), 2);
+    }
+
+    #[test]
+    fn test_histogram_bin_edges_count() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![0.0, 1.0, 2.0, 3.0, 4.0]).unwrap();
+        let edges = histogram_bin_edges(&a, Bins::Count(4), None).unwrap();
+        let data: Vec<f64> = edges.iter().copied().collect();
+        assert_eq!(data, vec![0.0, 1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn test_histogram_bin_edges_explicit_range() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![0.5, 1.5, 2.5]).unwrap();
+        let edges = histogram_bin_edges(&a, Bins::Count(2), Some((0.0, 4.0))).unwrap();
+        let data: Vec<f64> = edges.iter().copied().collect();
+        assert_eq!(data, vec![0.0, 2.0, 4.0]);
+    }
+
+    #[test]
+    fn test_histogram_bin_edges_explicit_edges_passthrough() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([0]), vec![]).unwrap();
+        let edges = histogram_bin_edges(&a, Bins::Edges(vec![0.0, 1.0, 5.0]), None).unwrap();
+        let data: Vec<f64> = edges.iter().copied().collect();
+        assert_eq!(data, vec![0.0, 1.0, 5.0]);
     }
 }

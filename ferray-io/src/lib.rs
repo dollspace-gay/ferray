@@ -28,6 +28,7 @@
     clippy::match_same_arms
 )]
 
+pub mod datasource;
 pub mod format;
 pub mod memmap;
 pub mod npy;
@@ -35,7 +36,10 @@ pub mod npz;
 pub mod text;
 
 // Re-export the most commonly used items at crate root for convenience.
-pub use format::MemmapMode;
+pub use datasource::{DataSource, DataSourceReader};
+pub use format::{
+    HeaderData, MemmapMode, descr_to_dtype, header_data_from_array_1_0, read_array, write_array,
+};
 pub use npy::{NpyElement, load, load_dynamic, save};
 pub use npz::{NpzFile, savez, savez_compressed};
-pub use text::{SaveTxtOptions, genfromtxt, loadtxt, savetxt};
+pub use text::{SaveTxtOptions, fromregex, fromregex_from_file, genfromtxt, loadtxt, savetxt};

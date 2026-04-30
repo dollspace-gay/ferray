@@ -755,6 +755,143 @@ where
 // mean
 // ---------------------------------------------------------------------------
 
+/// Range (peak-to-peak) of array elements over a given axis.
+///
+/// Returns `max - min`. Analogous to `numpy.ptp(a, axis=...)`.
+///
+/// # Errors
+/// Returns `FerrayError::InvalidValue` if the array is empty.
+pub fn ptp<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + PartialOrd + Copy + std::ops::Sub<Output = T>,
+    D: Dimension,
+{
+    if a.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "cannot compute ptp of empty array",
+        ));
+    }
+    let lo = min(a, axis)?;
+    let hi = max(a, axis)?;
+    let lo_data: Vec<T> = lo.iter().copied().collect();
+    let hi_data: Vec<T> = hi.iter().copied().collect();
+    let result: Vec<T> = hi_data
+        .into_iter()
+        .zip(lo_data)
+        .map(|(h, l)| h - l)
+        .collect();
+    make_result(lo.shape(), result)
+}
+
+/// Weighted average of array elements.
+///
+/// When `weights` is `None`, equivalent to [`mean`]. When `Some(w)`, computes
+/// `sum(a * w) / sum(w)` along the given axis (or over all elements when
+/// `axis=None`). The weights array must have the same shape as `a` (the
+/// 1-D-along-axis broadcasting form supported by NumPy is intentionally
+/// omitted here — call broadcast yourself first if you need it).
+///
+/// Analogous to `numpy.average`.
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if the array is empty.
+/// - `FerrayError::ShapeMismatch` if `weights.shape() != a.shape()`.
+/// - `FerrayError::InvalidValue` if the weight sum along an axis is zero.
+pub fn average<T, D>(
+    a: &Array<T, D>,
+    weights: Option<&Array<T, D>>,
+    axis: Option<usize>,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float + Send + Sync,
+    D: Dimension,
+{
+    let Some(w) = weights else {
+        return mean(a, axis);
+    };
+    if a.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "cannot compute average of empty array",
+        ));
+    }
+    if a.shape() != w.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "average: weights shape {:?} differs from array shape {:?}",
+            w.shape(),
+            a.shape(),
+        )));
+    }
+    let a_data = borrow_data(a);
+    let w_data = borrow_data(w);
+    match axis {
+        None => {
+            let mut wsum = <T as Element>::zero();
+            let mut acc = <T as Element>::zero();
+            for (&x, &wi) in a_data.iter().zip(w_data.iter()) {
+                wsum = wsum + wi;
+                acc = acc + x * wi;
+            }
+            if wsum == <T as Element>::zero() {
+                return Err(FerrayError::invalid_value("average: weights sum to zero"));
+            }
+            make_result(&[], vec![acc / wsum])
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape = a.shape();
+            let out_s = output_shape(shape, ax);
+            // Walk lanes for both arrays; we can reuse reduce_axis_general
+            // by zipping data + weights into a tagged buffer. Simpler path:
+            // build a side buffer of (a_lane, w_lane) per lane.
+            let outer: usize = out_s.iter().product::<usize>().max(1);
+            let lane_len = shape[ax];
+            // Use the same lane-walk as reduce_axis_general. We replicate
+            // the inner loop here so we can read both data + weights.
+            let mut result = Vec::with_capacity(outer);
+            // Compute strides for picking out the lane.
+            let mut strides = vec![1usize; shape.len()];
+            for i in (0..shape.len() - 1).rev() {
+                strides[i] = strides[i + 1] * shape[i + 1];
+            }
+            let mut idx = vec![0usize; shape.len()];
+            for _ in 0..outer {
+                let mut wsum = <T as Element>::zero();
+                let mut acc = <T as Element>::zero();
+                for j in 0..lane_len {
+                    idx[ax] = j;
+                    let mut flat = 0usize;
+                    for (d, &s) in idx.iter().zip(strides.iter()) {
+                        flat += d * s;
+                    }
+                    let x = a_data[flat];
+                    let wi = w_data[flat];
+                    wsum = wsum + wi;
+                    acc = acc + x * wi;
+                }
+                if wsum == <T as Element>::zero() {
+                    return Err(FerrayError::invalid_value(
+                        "average: weights sum to zero along axis",
+                    ));
+                }
+                result.push(acc / wsum);
+                // Advance multi-index over output dims (every dim except ax).
+                idx[ax] = 0;
+                for d in (0..shape.len()).rev() {
+                    if d == ax {
+                        continue;
+                    }
+                    idx[d] += 1;
+                    if idx[d] < shape[d] {
+                        break;
+                    }
+                    idx[d] = 0;
+                }
+            }
+            make_result(&out_s, result)
+        }
+    }
+}
+
 /// Mean of array elements over a given axis.
 ///
 /// Equivalent to `numpy.mean`. The result is always floating-point.
@@ -3238,5 +3375,74 @@ mod tests {
         {
             assert!((a - b).abs() < 1e-10);
         }
+    }
+
+    // -- ptp --
+
+    #[test]
+    fn test_ptp_1d() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 5.0, 3.0, 9.0, 2.0]).unwrap();
+        let r = ptp(&a, None).unwrap();
+        assert_eq!(r.iter().copied().next().unwrap(), 8.0);
+    }
+
+    #[test]
+    fn test_ptp_2d_axis() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 5.0, 3.0, 7.0, 2.0, 9.0])
+            .unwrap();
+        let r = ptp(&a, Some(1)).unwrap();
+        // row 0: max=5, min=1 → 4; row 1: max=9, min=2 → 7
+        assert_eq!(r.iter().copied().collect::<Vec<_>>(), vec![4.0, 7.0]);
+    }
+
+    #[test]
+    fn test_ptp_empty_errs() {
+        let a: Array<f64, Ix1> = Array::from_vec(Ix1::new([0]), vec![]).unwrap();
+        assert!(ptp(&a, None).is_err());
+    }
+
+    // -- average --
+
+    #[test]
+    fn test_average_unweighted_matches_mean() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let r = average(&a, None, None).unwrap();
+        assert!((r.iter().copied().next().unwrap() - 2.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_average_weighted() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let w = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 1.0, 1.0, 7.0]).unwrap();
+        // (1+2+3+4*7) / (1+1+1+7) = 34/10 = 3.4
+        let r = average(&a, Some(&w), None).unwrap();
+        assert!((r.iter().copied().next().unwrap() - 3.4).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_average_weighted_axis() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
+        let w = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+            .unwrap();
+        // With uniform weights, axis-1 average = row mean = [2, 5]
+        let r = average(&a, Some(&w), Some(1)).unwrap();
+        let data: Vec<f64> = r.iter().copied().collect();
+        assert!((data[0] - 2.0).abs() < 1e-12);
+        assert!((data[1] - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_average_weights_zero_sum_errs() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let w = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![0.0, 0.0, 0.0]).unwrap();
+        assert!(average(&a, Some(&w), None).is_err());
+    }
+
+    #[test]
+    fn test_average_shape_mismatch_errs() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let w = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0; 4]).unwrap();
+        assert!(average(&a, Some(&w), None).is_err());
     }
 }

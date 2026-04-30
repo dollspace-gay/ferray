@@ -320,6 +320,46 @@ where
     Some(Array::from_vec(input.dim().clone(), t_vec))
 }
 
+/// f32 sibling of [`try_simd_f64_unary`]. Returns `None` if `T` is not
+/// `f32`; otherwise dispatches the slice kernel and returns the result
+/// wrapped in `Some`.
+#[inline]
+pub fn try_simd_f32_unary<T, D>(
+    input: &Array<T, D>,
+    kernel: fn(&[f32], &mut [f32]),
+) -> Option<FerrayResult<Array<T, D>>>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    use std::any::TypeId;
+
+    if TypeId::of::<T>() != TypeId::of::<f32>() {
+        return None;
+    }
+
+    let n = input.size();
+    let src_t = contig_input(input);
+    // SAFETY: T is f32, verified by TypeId check above.
+    let src_f32: &[f32] = unsafe { std::slice::from_raw_parts(src_t.as_ptr().cast::<f32>(), n) };
+
+    let mut output = Vec::with_capacity(n);
+    #[allow(clippy::uninit_vec)]
+    unsafe {
+        output.set_len(n);
+    }
+    run_slice_kernel_f32(src_f32, &mut output, kernel);
+
+    let cap = output.capacity();
+    // SAFETY: T is f32.
+    let t_vec: Vec<T> = unsafe {
+        let mut md = std::mem::ManuallyDrop::new(output);
+        Vec::from_raw_parts(md.as_mut_ptr().cast::<T>(), n, cap)
+    };
+
+    Some(Array::from_vec(input.dim().clone(), t_vec))
+}
+
 /// Apply a unary function that maps T -> U, preserving dimension.
 #[inline]
 pub fn unary_map_op<T, U, D>(input: &Array<T, D>, f: impl Fn(T) -> U) -> FerrayResult<Array<U, D>>

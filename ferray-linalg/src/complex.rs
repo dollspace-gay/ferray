@@ -90,6 +90,109 @@ where
         )));
     }
 
+    // Hand-tuned AVX2 CGEMM (Complex<f32>) path. Translated from OpenBLAS
+    // cgemm_kernel_8x2_haswell.c. Mirrors the ZGEMM Complex<f64> path
+    // below but with f32 lanes.
+    #[cfg(target_arch = "x86_64")]
+    {
+        use std::any::TypeId;
+        const HAND_TUNED_MIN_DIM_C32: usize = 16;
+        if m.max(n).max(k1) >= HAND_TUNED_MIN_DIM_C32
+            && TypeId::of::<Complex<T>>() == TypeId::of::<Complex<f32>>()
+            && crate::gemm::cpu_supports_avx2_fma()
+        {
+            let a_complex: Vec<Complex<f32>> = a
+                .iter()
+                .map(|x| *unsafe { &*(x as *const Complex<T> as *const Complex<f32>) })
+                .collect();
+            let b_complex: Vec<Complex<f32>> = b
+                .iter()
+                .map(|x| *unsafe { &*(x as *const Complex<T> as *const Complex<f32>) })
+                .collect();
+            let mut c_complex: Vec<Complex<f32>> = vec![Complex { re: 0.0, im: 0.0 }; m * n];
+
+            let ok = unsafe {
+                crate::gemm::gemm_c32(
+                    m,
+                    n,
+                    k1,
+                    1.0,
+                    0.0,
+                    a_complex.as_ptr() as *const f32,
+                    b_complex.as_ptr() as *const f32,
+                    0.0,
+                    0.0,
+                    c_complex.as_mut_ptr() as *mut f32,
+                )
+            };
+            if ok {
+                let len = c_complex.len();
+                let cap = c_complex.capacity();
+                let ptr = c_complex.as_mut_ptr();
+                std::mem::forget(c_complex);
+                let data: Vec<Complex<T>> =
+                    unsafe { Vec::from_raw_parts(ptr.cast::<Complex<T>>(), len, cap) };
+                return Array::from_vec(Ix2::new([m, n]), data);
+            }
+        }
+    }
+
+    // Hand-tuned AVX2 4x2 ZGEMM path for Complex<f64> when AVX2+FMA is
+    // available. Translated from OpenBLAS zgemm_kernel_4x2_haswell.c.
+    // Routes via TypeId so f32 complex still goes through faer below.
+    #[cfg(target_arch = "x86_64")]
+    {
+        use std::any::TypeId;
+        const HAND_TUNED_MIN_DIM: usize = 16;
+        if m.max(n).max(k1) >= HAND_TUNED_MIN_DIM
+            && TypeId::of::<Complex<T>>() == TypeId::of::<Complex<f64>>()
+            && crate::gemm::cpu_supports_avx2_fma()
+        {
+            // Materialise A and B as flat row-major Complex<f64> buffers.
+            let a_complex: Vec<Complex<f64>> = a
+                .iter()
+                .map(|x| {
+                    // SAFETY: TypeId guard verified Complex<T> == Complex<f64>.
+                    *unsafe { &*(x as *const Complex<T> as *const Complex<f64>) }
+                })
+                .collect();
+            let b_complex: Vec<Complex<f64>> = b
+                .iter()
+                .map(|x| *unsafe { &*(x as *const Complex<T> as *const Complex<f64>) })
+                .collect();
+            let mut c_complex: Vec<Complex<f64>> = vec![Complex { re: 0.0, im: 0.0 }; m * n];
+
+            // SAFETY: Complex<f64> is repr(C) with 2 contiguous f64s, so
+            // we can reinterpret as *const/mut f64. Buffer lengths match
+            // the (m, n, k) dims; cpu_supports_avx2_fma verified at runtime.
+            let ok = unsafe {
+                crate::gemm::gemm_c64(
+                    m,
+                    n,
+                    k1,
+                    1.0,
+                    0.0,
+                    a_complex.as_ptr() as *const f64,
+                    b_complex.as_ptr() as *const f64,
+                    0.0,
+                    0.0,
+                    c_complex.as_mut_ptr() as *mut f64,
+                )
+            };
+            if ok {
+                // Convert Vec<Complex<f64>> -> Vec<Complex<T>> via reinterpret.
+                let len = c_complex.len();
+                let cap = c_complex.capacity();
+                let ptr = c_complex.as_mut_ptr();
+                std::mem::forget(c_complex);
+                // SAFETY: TypeId guard verified Complex<T> == Complex<f64>.
+                let data: Vec<Complex<T>> =
+                    unsafe { Vec::from_raw_parts(ptr.cast::<Complex<T>>(), len, cap) };
+                return Array::from_vec(Ix2::new([m, n]), data);
+            }
+        }
+    }
+
     let a_faer = array2c_to_faer(a);
     let b_faer = array2c_to_faer(b);
 

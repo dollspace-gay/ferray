@@ -475,6 +475,34 @@ where
     Array::from_vec(Ix1::new([n]), result)
 }
 
+// ---------------------------------------------------------------------------
+// sort_complex
+// ---------------------------------------------------------------------------
+
+/// Sort a 1-D complex array, comparing first by real part, then by imaginary.
+///
+/// Equivalent to `numpy.sort_complex`. Always returns a stable sort —
+/// matching NumPy's behavior. Operates on the flattened input.
+pub fn sort_complex<T>(
+    a: &Array<num_complex::Complex<T>, Ix1>,
+) -> FerrayResult<Array<num_complex::Complex<T>, Ix1>>
+where
+    T: Element + num_traits::Float,
+    num_complex::Complex<T>: Element,
+{
+    let mut data: Vec<num_complex::Complex<T>> = a.iter().copied().collect();
+    data.sort_by(|x, y| {
+        let r = x.re.partial_cmp(&y.re).unwrap_or(std::cmp::Ordering::Equal);
+        if r != std::cmp::Ordering::Equal {
+            r
+        } else {
+            x.im.partial_cmp(&y.im).unwrap_or(std::cmp::Ordering::Equal)
+        }
+    });
+    let n = data.len();
+    Array::from_vec(Ix1::new([n]), data)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -640,5 +668,30 @@ mod tests {
     fn test_sort_axis_out_of_bounds() {
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         assert!(sort(&a, Some(1), SortKind::Quick).is_err());
+    }
+
+    // -- sort_complex --
+
+    #[test]
+    fn test_sort_complex_basic() {
+        use num_complex::Complex64;
+        let a = Array::<Complex64, Ix1>::from_vec(
+            Ix1::new([4]),
+            vec![
+                Complex64::new(2.0, 1.0),
+                Complex64::new(1.0, 5.0),
+                Complex64::new(2.0, -3.0),
+                Complex64::new(1.0, 2.0),
+            ],
+        )
+        .unwrap();
+        let r = sort_complex(&a).unwrap();
+        let v: Vec<Complex64> = r.iter().copied().collect();
+        // Sort by real first (1, 1, 2, 2), then by imag for ties
+        // 1+2i, 1+5i, 2-3i, 2+1i
+        assert_eq!(v[0], Complex64::new(1.0, 2.0));
+        assert_eq!(v[1], Complex64::new(1.0, 5.0));
+        assert_eq!(v[2], Complex64::new(2.0, -3.0));
+        assert_eq!(v[3], Complex64::new(2.0, 1.0));
     }
 }

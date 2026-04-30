@@ -38,6 +38,7 @@
 
 pub mod arithmetic;
 pub mod constructors;
+pub mod extras;
 pub mod filled;
 pub mod interop;
 /// Binary I/O (save/load) for `MaskedArray` via ferray-io (#509).
@@ -87,6 +88,18 @@ pub use ufunc_support::{masked_binary, masked_unary};
 pub use ufunc_support::{
     arccos_domain, arccosh_domain, arcsin_domain, arctanh_domain, divide_domain, log_domain,
     log2_domain, log10_domain, masked_binary_domain, masked_unary_domain, sqrt_domain,
+};
+
+// numpy.ma extras: full reductions, constructors, mask manipulation,
+// linalg-lite, set ops, fill-value protocol, comparison/logical ufuncs,
+// and class helpers. See extras.rs for the catalogue.
+pub use extras::{
+    NOMASK, common_fill_value, default_fill_value_bool, default_fill_value_f32,
+    default_fill_value_f64, default_fill_value_i64, getmaskarray, ids, is_ma, is_masked_array,
+    ma_apply_along_axis, ma_apply_over_axes, ma_concatenate, ma_equal, ma_greater,
+    ma_greater_equal, ma_in1d, ma_isin, ma_less, ma_less_equal, ma_logical_and, ma_logical_not,
+    ma_logical_or, ma_logical_xor, ma_not_equal, ma_unique, ma_vander, make_mask, make_mask_none,
+    mask_or, masked_all, masked_all_like, masked_values, maximum_fill_value, minimum_fill_value,
 };
 
 #[cfg(test)]

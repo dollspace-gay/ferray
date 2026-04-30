@@ -195,6 +195,32 @@ pub fn load_dynamic_from_reader<R: Read>(reader: &mut R) -> FerrayResult<DynArra
         DType::Complex64 => {
             load_complex64_dynamic(reader, total, dim, hdr.fortran_order, hdr.endianness)
         }
+        DType::DateTime64(unit) => {
+            let data = <ferray_core::dtype::DateTime64 as NpyElement>::read_vec(
+                reader,
+                total,
+                hdr.endianness,
+            )?;
+            let arr = if hdr.fortran_order {
+                Array::<ferray_core::dtype::DateTime64, IxDyn>::from_vec_f(dim, data)?
+            } else {
+                Array::<ferray_core::dtype::DateTime64, IxDyn>::from_vec(dim, data)?
+            };
+            Ok(DynArray::DateTime64(arr, unit))
+        }
+        DType::Timedelta64(unit) => {
+            let data = <ferray_core::dtype::Timedelta64 as NpyElement>::read_vec(
+                reader,
+                total,
+                hdr.endianness,
+            )?;
+            let arr = if hdr.fortran_order {
+                Array::<ferray_core::dtype::Timedelta64, IxDyn>::from_vec_f(dim, data)?
+            } else {
+                Array::<ferray_core::dtype::Timedelta64, IxDyn>::from_vec(dim, data)?
+            };
+            Ok(DynArray::Timedelta64(arr, unit))
+        }
         _ => Err(FerrayError::invalid_dtype(format!(
             "unsupported dtype {:?} for .npy loading",
             hdr.dtype
@@ -567,6 +593,47 @@ impl_npy_element!(f64, 8);
 impl_npy_element!(half::f16, 2);
 #[cfg(feature = "bf16")]
 impl_npy_element!(half::bf16, 2);
+
+// datetime64 / timedelta64: i64-backed newtypes. Both delegate to i64's
+// bulk-bytes read/write path. We can't use `impl_npy_element!` because
+// the macro calls `<$ty>::from_ne_bytes`, which only exists on primitive
+// integers; the newtype wrapper has to translate by hand.
+
+impl private::NpySealed for ferray_core::dtype::DateTime64 {}
+impl private::NpySealed for ferray_core::dtype::Timedelta64 {}
+
+macro_rules! impl_npy_time_element {
+    ($ty:path) => {
+        impl NpyElement for $ty {
+            fn write_slice<W: Write>(data: &[Self], writer: &mut W) -> FerrayResult<()> {
+                for v in data {
+                    writer.write_all(&v.0.to_ne_bytes())?;
+                }
+                Ok(())
+            }
+
+            fn read_vec<R: Read>(
+                reader: &mut R,
+                count: usize,
+                endian: Endianness,
+            ) -> FerrayResult<Vec<Self>> {
+                let mut out = Vec::with_capacity(count);
+                let mut buf = [0u8; 8];
+                for _ in 0..count {
+                    reader.read_exact(&mut buf)?;
+                    if endian.needs_swap() {
+                        buf.reverse();
+                    }
+                    out.push(Self(i64::from_ne_bytes(buf)));
+                }
+                Ok(out)
+            }
+        }
+    };
+}
+
+impl_npy_time_element!(ferray_core::dtype::DateTime64);
+impl_npy_time_element!(ferray_core::dtype::Timedelta64);
 
 #[cfg(test)]
 mod tests {
@@ -1078,5 +1145,80 @@ mod tests {
             header.contains("bf16"),
             "expected 'bf16' in header, got: {header}"
         );
+    }
+
+    #[test]
+    fn datetime64_npy_roundtrip() {
+        use ferray_core::dtype::DateTime64;
+        let original = vec![
+            DateTime64(0),
+            DateTime64::nat(),
+            DateTime64(1_700_000_000_000_000_000),
+            DateTime64(-1),
+        ];
+        let arr = Array::<DateTime64, Ix1>::from_vec(Ix1::new([4]), original.clone()).unwrap();
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+        // Header should advertise the M8[ns] descriptor.
+        let header = String::from_utf8_lossy(&buf);
+        assert!(
+            header.contains("M8[ns]"),
+            "expected 'M8[ns]' in header, got: {header}"
+        );
+
+        let mut cursor = std::io::Cursor::new(buf);
+        let back: Array<DateTime64, Ix1> = load_from_reader(&mut cursor).unwrap();
+        let v: Vec<DateTime64> = back.iter().copied().collect();
+        // Direct bit-level equality (the underlying i64s must match).
+        for (a, b) in v.iter().zip(original.iter()) {
+            assert_eq!(a.0, b.0, "DateTime64 i64 round-trip mismatch");
+        }
+    }
+
+    #[test]
+    fn timedelta64_npy_roundtrip() {
+        use ferray_core::dtype::Timedelta64;
+        let original = vec![Timedelta64(1000), Timedelta64::nat(), Timedelta64(0)];
+        let arr = Array::<Timedelta64, Ix1>::from_vec(Ix1::new([3]), original.clone()).unwrap();
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+        let header = String::from_utf8_lossy(&buf);
+        assert!(
+            header.contains("m8[ns]"),
+            "expected 'm8[ns]' in header, got: {header}"
+        );
+
+        let mut cursor = std::io::Cursor::new(buf);
+        let back: Array<Timedelta64, Ix1> = load_from_reader(&mut cursor).unwrap();
+        let v: Vec<Timedelta64> = back.iter().copied().collect();
+        for (a, b) in v.iter().zip(original.iter()) {
+            assert_eq!(a.0, b.0);
+        }
+    }
+
+    #[test]
+    fn datetime64_dynarray_load_preserves_unit() {
+        use ferray_core::dtype::{DateTime64, TimeUnit};
+        let arr = Array::<DateTime64, Ix1>::from_vec(
+            Ix1::new([3]),
+            vec![DateTime64(0), DateTime64(1), DateTime64::nat()],
+        )
+        .unwrap();
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+
+        let mut cursor = std::io::Cursor::new(buf);
+        let dyn_arr = load_dynamic_from_reader(&mut cursor).unwrap();
+        // Unit is preserved (Ns from the Element::dtype default).
+        assert_eq!(
+            dyn_arr.dtype(),
+            ferray_core::DType::DateTime64(TimeUnit::Ns)
+        );
+        let (typed, unit) = dyn_arr.try_into_datetime64().unwrap();
+        assert_eq!(unit, TimeUnit::Ns);
+        let vals: Vec<i64> = typed.iter().map(|v| v.0).collect();
+        assert_eq!(vals[0], 0);
+        assert_eq!(vals[1], 1);
+        assert_eq!(vals[2], i64::MIN); // NaT
     }
 }

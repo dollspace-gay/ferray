@@ -236,6 +236,62 @@ pub fn simd_reciprocal_f64(input: &[f64], output: &mut [f64]) {
     }
 }
 
+/// SIMD abs for f32 slices.
+#[inline]
+pub fn simd_abs_f32(input: &[f32], output: &mut [f32]) {
+    debug_assert_eq!(input.len(), output.len());
+    if force_scalar() {
+        for (o, &i) in output.iter_mut().zip(input.iter()) {
+            *o = i.abs();
+        }
+    } else {
+        let arch = Arch::new();
+        arch.dispatch(AbsF32Op { input, output });
+    }
+}
+
+/// SIMD neg for f32 slices.
+#[inline]
+pub fn simd_neg_f32(input: &[f32], output: &mut [f32]) {
+    debug_assert_eq!(input.len(), output.len());
+    if force_scalar() {
+        for (o, &i) in output.iter_mut().zip(input.iter()) {
+            *o = -i;
+        }
+    } else {
+        let arch = Arch::new();
+        arch.dispatch(NegF32Op { input, output });
+    }
+}
+
+/// SIMD square (x*x) for f32 slices.
+#[inline]
+pub fn simd_square_f32(input: &[f32], output: &mut [f32]) {
+    debug_assert_eq!(input.len(), output.len());
+    if force_scalar() {
+        for (o, &i) in output.iter_mut().zip(input.iter()) {
+            *o = i * i;
+        }
+    } else {
+        let arch = Arch::new();
+        arch.dispatch(SquareF32Op { input, output });
+    }
+}
+
+/// SIMD reciprocal (1/x) for f32 slices.
+#[inline]
+pub fn simd_reciprocal_f32(input: &[f32], output: &mut [f32]) {
+    debug_assert_eq!(input.len(), output.len());
+    if force_scalar() {
+        for (o, &i) in output.iter_mut().zip(input.iter()) {
+            *o = 1.0 / i;
+        }
+    } else {
+        let arch = Arch::new();
+        arch.dispatch(ReciprocalF32Op { input, output });
+    }
+}
+
 // ---------------------------------------------------------------------------
 // SIMD intrinsic implementations (actual hardware SIMD, not scalar fallback)
 // ---------------------------------------------------------------------------
@@ -413,6 +469,114 @@ impl pulp::WithSimd for ReciprocalF64Op<'_> {
             let v = simd.partial_load_f64s(&self.input[i..i + lane_count]);
             let r = simd.div_f64s(one, v);
             simd.partial_store_f64s(&mut self.output[i..i + lane_count], r);
+        }
+        for i in simd_end..n {
+            self.output[i] = 1.0 / self.input[i];
+        }
+    }
+}
+
+// f32 siblings of the AbsF64Op / NegF64Op / SquareF64Op / ReciprocalF64Op
+// kernels above. Same shape, but operating on `S::f32s` lanes — half the
+// width per ymm/zmm but double the throughput per byte loaded, so the
+// f32 fast paths matter on AVX2 (8 lanes) and especially AVX-512 (16
+// lanes). Previously these ops fell through to scalar loops disguised
+// as SIMD dispatch — see #383.
+
+struct AbsF32Op<'a> {
+    input: &'a [f32],
+    output: &'a mut [f32],
+}
+
+impl pulp::WithSimd for AbsF32Op<'_> {
+    type Output = ();
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
+        let n = self.input.len();
+        let lane_count = size_of::<S::f32s>() / size_of::<f32>();
+        let simd_end = n - (n % lane_count);
+
+        for i in (0..simd_end).step_by(lane_count) {
+            let v = simd.partial_load_f32s(&self.input[i..i + lane_count]);
+            let r = simd.abs_f32s(v);
+            simd.partial_store_f32s(&mut self.output[i..i + lane_count], r);
+        }
+        for i in simd_end..n {
+            self.output[i] = self.input[i].abs();
+        }
+    }
+}
+
+struct NegF32Op<'a> {
+    input: &'a [f32],
+    output: &'a mut [f32],
+}
+
+impl pulp::WithSimd for NegF32Op<'_> {
+    type Output = ();
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
+        let n = self.input.len();
+        let lane_count = size_of::<S::f32s>() / size_of::<f32>();
+        let simd_end = n - (n % lane_count);
+
+        for i in (0..simd_end).step_by(lane_count) {
+            let v = simd.partial_load_f32s(&self.input[i..i + lane_count]);
+            let r = simd.neg_f32s(v);
+            simd.partial_store_f32s(&mut self.output[i..i + lane_count], r);
+        }
+        for i in simd_end..n {
+            self.output[i] = -self.input[i];
+        }
+    }
+}
+
+struct SquareF32Op<'a> {
+    input: &'a [f32],
+    output: &'a mut [f32],
+}
+
+impl pulp::WithSimd for SquareF32Op<'_> {
+    type Output = ();
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
+        let n = self.input.len();
+        let lane_count = size_of::<S::f32s>() / size_of::<f32>();
+        let simd_end = n - (n % lane_count);
+
+        for i in (0..simd_end).step_by(lane_count) {
+            let v = simd.partial_load_f32s(&self.input[i..i + lane_count]);
+            let r = simd.mul_f32s(v, v);
+            simd.partial_store_f32s(&mut self.output[i..i + lane_count], r);
+        }
+        for i in simd_end..n {
+            self.output[i] = self.input[i] * self.input[i];
+        }
+    }
+}
+
+struct ReciprocalF32Op<'a> {
+    input: &'a [f32],
+    output: &'a mut [f32],
+}
+
+impl pulp::WithSimd for ReciprocalF32Op<'_> {
+    type Output = ();
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, simd: S) -> Self::Output {
+        let n = self.input.len();
+        let lane_count = size_of::<S::f32s>() / size_of::<f32>();
+        let simd_end = n - (n % lane_count);
+        let one = simd.splat_f32s(1.0);
+
+        for i in (0..simd_end).step_by(lane_count) {
+            let v = simd.partial_load_f32s(&self.input[i..i + lane_count]);
+            let r = simd.div_f32s(one, v);
+            simd.partial_store_f32s(&mut self.output[i..i + lane_count], r);
         }
         for i in simd_end..n {
             self.output[i] = 1.0 / self.input[i];

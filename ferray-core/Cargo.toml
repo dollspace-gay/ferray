@@ -26,6 +26,12 @@ optional = true
 workspace = true
 optional = true
 
+[dependencies.chrono]
+version = "0.4"
+optional = true
+default-features = false
+features = ["clock"]
+
 [features]
 default = ["std"]
 # `std` gates everything that needs the ndarray-backed Array type,
@@ -38,6 +44,10 @@ f16 = ["dep:half"]
 bf16 = ["dep:half"]
 serde = ["dep:serde", "ndarray/serde"]
 const_shapes = []
+# `chrono` enables DateTime64 ↔ chrono::DateTime<Utc> conversions in
+# dtype::datetime. Independent of the dtype itself (which is always
+# available); only the bridge methods require this flag.
+chrono = ["dep:chrono"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

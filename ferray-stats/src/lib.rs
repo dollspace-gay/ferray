@@ -51,9 +51,9 @@ pub mod sorting;
 
 // Reductions
 pub use reductions::{
-    argmax, argmin, cumprod, cumsum, max, max_into, max_with, mean, mean_as_f64, mean_into,
-    mean_where, min, min_into, min_with, prod, prod_into, prod_with, std_, std_into, sum,
-    sum_as_f64, sum_into, sum_with, var, var_into,
+    argmax, argmin, average, cumprod, cumsum, max, max_into, max_with, mean, mean_as_f64,
+    mean_into, mean_where, min, min_into, min_with, prod, prod_into, prod_with, ptp, std_,
+    std_into, sum, sum_as_f64, sum_into, sum_with, var, var_into,
 };
 
 // Quantile-based
@@ -64,7 +64,8 @@ pub use reductions::quantile::{
 
 // NaN-aware reductions
 pub use reductions::nan_aware::{
-    nancumprod, nancumsum, nanmax, nanmean, nanmin, nanprod, nanstd, nansum, nanvar,
+    nanargmax, nanargmin, nancumprod, nancumsum, nanmax, nanmean, nanmin, nanprod, nanstd, nansum,
+    nanvar,
 };
 
 // Correlation and covariance
@@ -72,17 +73,21 @@ pub use correlation::{CorrelateMode, corrcoef, correlate, cov};
 
 // Histogram
 pub use histogram::{
-    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram2d, histogramdd,
+    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram_bin_edges,
+    histogram2d, histogramdd,
 };
 
 // Sorting
 pub use sorting::{
     Side, SortKind, argpartition, argsort, lexsort, partition, searchsorted,
-    searchsorted_with_sorter, sort,
+    searchsorted_with_sorter, sort, sort_complex,
 };
 
 // Searching
-pub use searching::{UniqueResult, count_nonzero, nonzero, unique, where_, where_condition};
+pub use searching::{
+    UniqueResult, count_nonzero, nonzero, unique, unique_all, unique_counts, unique_inverse,
+    unique_values, where_, where_condition,
+};
 
 // Set operations
 pub use set_ops::{in1d, intersect1d, isin, setdiff1d, setxor1d, union1d};

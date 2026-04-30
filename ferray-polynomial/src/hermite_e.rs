@@ -119,11 +119,18 @@ fn clenshaw_hermite_e(coeffs: &[f64], x: f64) -> f64 {
         return coeffs[0];
     }
 
+    // HermiteE recurrence: He_n = x * He_{n-1} - (n-1) * He_{n-2}
+    // Standard Clenshaw form P_n = α_n P_{n-1} + β_n P_{n-2} gives
+    //   α_n(x) = x,  β_n = -(n-1)
+    // Backward iteration: b_k = c_k + α_{k+1}(x) b_{k+1} + β_{k+2} b_{k+2}
+    //                         = c_k + x * b_{k+1} - (k + 1) * b_{k+2}
+    // (the previous code used `-k * b_{k+2}`, which silently produced wrong
+    // values once `n >= 4`).
     let mut b_k1 = 0.0;
     let mut b_k2 = 0.0;
 
     for k in (1..n).rev() {
-        let b_k = (k as f64).mul_add(-b_k2, x.mul_add(b_k1, coeffs[k]));
+        let b_k = ((k + 1) as f64).mul_add(-b_k2, x.mul_add(b_k1, coeffs[k]));
         b_k2 = b_k1;
         b_k1 = b_k;
     }

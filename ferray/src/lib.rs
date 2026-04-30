@@ -74,6 +74,7 @@ pub use ferray_core::dimension::{self, Axis, Dimension, Ix0, Ix1, Ix2, Ix3, Ix4,
 pub use ferray_core::dtype::casting;
 pub use ferray_core::dtype::finfo;
 pub use ferray_core::dtype::promotion;
+pub use ferray_core::dtype::{DateTime64, NAT, TimeUnit, Timedelta64};
 pub use ferray_core::{DType, Element, SliceInfoElem};
 
 // Error handling
@@ -106,9 +107,10 @@ pub use ferray_core::constants::{E, EULER_GAMMA, INF, NAN, NEG_INF, NEWAXIS, NZE
 // ---------------------------------------------------------------------------
 
 pub use ferray_core::creation::{
-    arange, array, asarray, diag, diagflat, empty, empty_like, eye, frombuffer, frombuffer_view,
-    fromiter, full, full_like, geomspace, identity, linspace, logspace, meshgrid, mgrid, ogrid,
-    ones, ones_like, tri, tril, triu, zeros, zeros_like,
+    arange, array, asanyarray, asarray, asarray_chkfinite, ascontiguousarray, asfortranarray, copy,
+    diag, diagflat, empty, empty_like, eye, frombuffer, frombuffer_view, fromfile, fromfunction,
+    fromiter, fromstring, full, full_like, geomspace, identity, linspace, logspace, meshgrid,
+    mgrid, ogrid, ones, ones_like, require, tri, tril, triu, vander, zeros, zeros_like,
 };
 
 // ---------------------------------------------------------------------------
@@ -116,13 +118,14 @@ pub use ferray_core::creation::{
 // ---------------------------------------------------------------------------
 
 pub use ferray_core::manipulation::{
-    array_split, block, broadcast_to, concatenate, dsplit, dstack, expand_dims, flatten, flip,
-    fliplr, flipud, hsplit, hstack, moveaxis, ravel, reshape, roll, rollaxis, rot90, split,
+    array_split, block, broadcast_to, c_, concatenate, dsplit, dstack, expand_dims, flatten, flip,
+    fliplr, flipud, hsplit, hstack, moveaxis, r_, ravel, reshape, roll, rollaxis, rot90, split,
     squeeze, stack, swapaxes, transpose, vsplit, vstack,
 };
 
 pub use ferray_core::manipulation::extended::{
-    append, delete, insert, pad, repeat, resize, tile, trim_zeros,
+    append, atleast_1d, atleast_2d, atleast_3d, delete, insert, pad, repeat, resize, tile,
+    trim_zeros,
 };
 
 // Broadcasted elementwise assignment (np.copyto equivalent) (#352, #353)
@@ -130,9 +133,10 @@ pub use ferray_core::ops::{copyto, copyto_where};
 
 // Indexing
 pub use ferray_core::indexing::extended::{
-    argwhere, choose, compress, diag_indices, diag_indices_from, flatnonzero, indices, ix_,
-    ndenumerate, ndindex, nonzero, ravel_multi_index, select, take, take_along_axis, tril_indices,
-    tril_indices_from, triu_indices, triu_indices_from, unravel_index,
+    MaskKind, argwhere, choose, compress, diag_indices, diag_indices_from, extract, flatnonzero,
+    indices, ix_, mask_indices, ndenumerate, ndindex, nonzero, place, putmask, ravel_multi_index,
+    select, take, take_along_axis, tril_indices, tril_indices_from, triu_indices,
+    triu_indices_from, unravel_index,
 };
 
 // ---------------------------------------------------------------------------
@@ -156,23 +160,33 @@ pub use ferray_ufunc::{around, ceil, fix, floor, rint, round, trunc};
 // Arithmetic
 pub use ferray_ufunc::{
     absolute, add, add_accumulate, add_broadcast, add_reduce, add_reduce_all, add_reduce_axes,
-    add_reduce_keepdims, cbrt, cross, cumprod, cumsum, diff, divide, divide_broadcast, divmod,
-    ediff1d, fabs, floor_divide, fmod, gcd, gradient, heaviside, lcm, mod_, multiply,
-    multiply_broadcast, multiply_outer, nan_add_reduce, nan_add_reduce_all, nan_add_reduce_axes,
-    nan_max_reduce, nan_max_reduce_all, nan_max_reduce_axes, nan_min_reduce, nan_min_reduce_all,
-    nan_min_reduce_axes, nan_multiply_reduce, nan_multiply_reduce_all, nan_multiply_reduce_axes,
-    nancumprod, nancumsum, negative, positive, power, reciprocal, remainder, sign, sqrt, square,
-    subtract, subtract_broadcast, trapezoid, true_divide,
+    add_reduce_keepdims, cbrt, cross, cumprod, cumsum, cumulative_prod, cumulative_sum, diff,
+    divide, divide_broadcast, divmod, ediff1d, fabs, floor_divide, fmod, gcd, gradient, heaviside,
+    lcm, mod_, multiply, multiply_broadcast, multiply_outer, nan_add_reduce, nan_add_reduce_all,
+    nan_add_reduce_axes, nan_max_reduce, nan_max_reduce_all, nan_max_reduce_axes, nan_min_reduce,
+    nan_min_reduce_all, nan_min_reduce_axes, nan_multiply_reduce, nan_multiply_reduce_all,
+    nan_multiply_reduce_axes, nancumprod, nancumsum, negative, positive, power, reciprocal,
+    remainder, sign, sqrt, square, subtract, subtract_broadcast, trapezoid, true_divide,
 };
 
 // Float intrinsics
 pub use ferray_ufunc::{
     clip, copysign, float_power, fmax, fmin, frexp, isfinite, isinf, isnan, isneginf, isposinf,
-    ldexp, maximum, minimum, nan_to_num, nextafter, signbit, spacing,
+    ldexp, maximum, minimum, modf, nan_to_num, nextafter, signbit, spacing,
 };
 
 // Complex
-pub use ferray_ufunc::{abs, angle, conj, conjugate, imag, real};
+pub use ferray_ufunc::{
+    abs, angle, conj, conjugate, imag, iscomplex, iscomplex_real, iscomplexobj, isreal,
+    isreal_real, isrealobj, isscalar, real,
+};
+
+// Datetime / timedelta
+pub use ferray_ufunc::{
+    add_datetime_timedelta, add_datetime_timedelta_promoted, add_timedelta, add_timedelta_promoted,
+    isnat_datetime, isnat_timedelta, sub_datetime, sub_datetime_promoted, sub_datetime_timedelta,
+    sub_timedelta,
+};
 
 // Bitwise
 pub use ferray_ufunc::{
@@ -216,8 +230,9 @@ pub use ferray_ufunc::{
 // above, so the stats versions are aliased in under different names
 // via full paths at use sites rather than re-exported here (#335).
 pub use ferray_stats::{
-    argmax, argmin, max, max_into, max_with, mean, mean_into, mean_where, min, min_into, min_with,
-    prod, prod_into, prod_with, std_, std_into, sum, sum_into, sum_with, var, var_into,
+    argmax, argmin, average, max, max_into, max_with, mean, mean_into, mean_where, min, min_into,
+    min_with, prod, prod_into, prod_with, ptp, std_, std_into, sum, sum_into, sum_with, var,
+    var_into,
 };
 
 // Quantile-based
@@ -229,7 +244,8 @@ pub use ferray_stats::{
 // `nancumprod` come from ferray-ufunc so we only re-export the
 // stats-specific reducers (#335).
 pub use ferray_stats::{
-    nanmax, nanmean, nanmedian, nanmin, nanpercentile, nanprod, nanstd, nansum, nanvar,
+    nanargmax, nanargmin, nanmax, nanmean, nanmedian, nanmin, nanpercentile, nanprod, nanstd,
+    nansum, nanvar,
 };
 
 // Correlation and covariance
@@ -237,16 +253,20 @@ pub use ferray_stats::{CorrelateMode, corrcoef, correlate, cov};
 
 // Histogram
 pub use ferray_stats::{
-    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram2d, histogramdd,
+    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram_bin_edges,
+    histogram2d, histogramdd,
 };
 
 // Sorting and searching
 pub use ferray_stats::{
-    Side, SortKind, argsort, lexsort, searchsorted, searchsorted_with_sorter, sort,
+    Side, SortKind, argsort, lexsort, searchsorted, searchsorted_with_sorter, sort, sort_complex,
 };
 // `nonzero` now lives in ferray-core (#373) and is re-exported above via
 // `ferray_core::indexing::extended`; don't re-export the stats version too.
-pub use ferray_stats::{UniqueResult, count_nonzero, unique, where_};
+pub use ferray_stats::{
+    UniqueResult, count_nonzero, unique, unique_all, unique_counts, unique_inverse, unique_values,
+    where_,
+};
 
 // Set operations
 pub use ferray_stats::{in1d, intersect1d, isin, setdiff1d, setxor1d, union1d};
@@ -262,6 +282,12 @@ pub use ferray_io as io;
 /// Linear algebra operations.
 #[cfg(feature = "linalg")]
 pub use ferray_linalg as linalg;
+
+// Top-level re-exports of the matmul/vecdot/matvec/vecmat ufunc-style
+// products, matching numpy where these live at top level
+// (`numpy.matmul`, `numpy.vecdot`, `numpy.matvec`, `numpy.vecmat`).
+#[cfg(feature = "linalg")]
+pub use ferray_linalg::{matmul, matvec, vecdot, vecmat};
 
 /// FFT operations.
 #[cfg(feature = "fft")]
@@ -290,6 +316,11 @@ pub use ferray_ma as ma;
 /// Stride manipulation utilities.
 #[cfg(feature = "stride-tricks")]
 pub use ferray_stride_tricks as stride_tricks;
+
+// Top-level re-exports of broadcast helpers, matching numpy where these
+// live at `numpy.broadcast_arrays` / `numpy.broadcast_shapes`.
+#[cfg(feature = "stride-tricks")]
+pub use ferray_stride_tricks::{broadcast_arrays, broadcast_shapes};
 
 /// Forward-mode automatic differentiation via `DualNumber<T>`.
 #[cfg(feature = "autodiff")]

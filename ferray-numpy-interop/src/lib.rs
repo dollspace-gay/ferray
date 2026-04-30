@@ -75,6 +75,9 @@
 
 pub mod dtype_map;
 
+#[cfg(any(feature = "arrow", feature = "polars"))]
+pub mod extras;
+
 #[cfg(feature = "python")]
 pub mod numpy_conv;
 
@@ -91,6 +94,18 @@ pub use arrow_conv::{
     FromArrow, FromArrowBool, ToArrow, ToArrowBool, array2_from_arrow_columns,
     array2_to_arrow_columns, arrayd_from_arrow_flat, arrayd_to_arrow_flat,
 };
+
+#[cfg(feature = "arrow")]
+pub use extras::{
+    array1_to_arrow_with_mask, arrow_to_dynarray_with_mask, dynarray_to_arrow,
+    dynarray_to_arrow_with_mask, record_batch_from_columns, record_batch_to_columns,
+};
+
+#[cfg(all(feature = "arrow", feature = "complex"))]
+pub use extras::{arrow_to_complex32, arrow_to_complex64, complex32_to_arrow, complex64_to_arrow};
+
+#[cfg(feature = "polars")]
+pub use extras::dataframe_from_columns;
 
 #[cfg(feature = "polars")]
 pub use polars_conv::{

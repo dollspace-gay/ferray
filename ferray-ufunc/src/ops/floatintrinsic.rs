@@ -418,6 +418,47 @@ where
     }
 }
 
+/// Decompose into fractional and integer parts.
+///
+/// Returns `(fractional, integer)` where each output has the same dtype and
+/// shape as the input. The fractional part has the same sign as the input
+/// and absolute value < 1; the integer part is `trunc(x)` (round toward zero).
+///
+/// Analogous to `numpy.modf` and C's `modf`. For NaN inputs both outputs are
+/// NaN; for infinite inputs the fractional part is `±0` and the integer part
+/// is the original infinity.
+///
+/// # Errors
+/// Returns `FerrayError::ShapeMismatch` only via the underlying allocation
+/// path (cannot fail for matched shapes — the inputs share `input.dim()`).
+pub fn modf<T, D>(input: &Array<T, D>) -> FerrayResult<(Array<T, D>, Array<T, D>)>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    let mut fracs = Vec::with_capacity(input.size());
+    let mut ints = Vec::with_capacity(input.size());
+    for &x in input.iter() {
+        if x.is_nan() {
+            fracs.push(x);
+            ints.push(x);
+        } else if x.is_infinite() {
+            // NumPy: modf(±inf) → (±0, ±inf)
+            let zero = <T as num_traits::Zero>::zero();
+            fracs.push(if x.is_sign_positive() { zero } else { -zero });
+            ints.push(x);
+        } else {
+            let i = x.trunc();
+            ints.push(i);
+            fracs.push(x - i);
+        }
+    }
+    Ok((
+        Array::from_vec(input.dim().clone(), fracs)?,
+        Array::from_vec(input.dim().clone(), ints)?,
+    ))
+}
+
 /// Elementwise copysign: magnitude of x1, sign of x2.
 pub fn copysign<T, D>(x1: &Array<T, D>, x2: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
@@ -969,5 +1010,64 @@ mod tests {
             assert!((s[1].to_f32() - 2.0).abs() < 0.01);
             assert!((s[2].to_f32() - 3.0).abs() < 0.01);
         }
+    }
+
+    // -- modf --
+
+    #[test]
+    fn test_modf_positive() {
+        let a = arr1(vec![3.5, 1.25, 0.0]);
+        let (frac, int) = modf(&a).unwrap();
+        let f = frac.as_slice().unwrap();
+        let i = int.as_slice().unwrap();
+        assert!((f[0] - 0.5).abs() < 1e-12);
+        assert!((f[1] - 0.25).abs() < 1e-12);
+        assert_eq!(f[2], 0.0);
+        assert_eq!(i, &[3.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn test_modf_negative() {
+        let a = arr1(vec![-3.5, -1.25]);
+        let (frac, int) = modf(&a).unwrap();
+        let f = frac.as_slice().unwrap();
+        let i = int.as_slice().unwrap();
+        assert!((f[0] - (-0.5)).abs() < 1e-12);
+        assert!((f[1] - (-0.25)).abs() < 1e-12);
+        assert_eq!(i, &[-3.0, -1.0]);
+    }
+
+    #[test]
+    fn test_modf_nan() {
+        let a = arr1(vec![f64::NAN]);
+        let (frac, int) = modf(&a).unwrap();
+        assert!(frac.as_slice().unwrap()[0].is_nan());
+        assert!(int.as_slice().unwrap()[0].is_nan());
+    }
+
+    #[test]
+    fn test_modf_infinity() {
+        let a = arr1(vec![f64::INFINITY, f64::NEG_INFINITY]);
+        let (frac, int) = modf(&a).unwrap();
+        let f = frac.as_slice().unwrap();
+        let i = int.as_slice().unwrap();
+        assert_eq!(f[0], 0.0);
+        assert!(f[0].is_sign_positive());
+        assert_eq!(f[1], 0.0);
+        assert!(f[1].is_sign_negative());
+        assert!(i[0].is_infinite() && i[0].is_sign_positive());
+        assert!(i[1].is_infinite() && i[1].is_sign_negative());
+    }
+
+    #[test]
+    fn test_modf_f32() {
+        let a: Array<f32, Ix1> = Array::from_vec(Ix1::new([3]), vec![2.75_f32, -0.5, 1.0]).unwrap();
+        let (frac, int) = modf(&a).unwrap();
+        let f = frac.as_slice().unwrap();
+        let i = int.as_slice().unwrap();
+        assert!((f[0] - 0.75).abs() < 1e-6);
+        assert!((f[1] - (-0.5)).abs() < 1e-6);
+        assert_eq!(f[2], 0.0);
+        assert_eq!(i, &[2.0_f32, 0.0, 1.0]);
     }
 }

@@ -5,7 +5,10 @@ use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, IxDyn};
 use num_traits::Float;
 
-use super::{borrow_data, make_result, output_shape, reduce_axis_general, validate_axis};
+use super::{
+    borrow_data, make_result, output_shape, reduce_axis_general, reduce_axis_general_u64,
+    validate_axis,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -264,6 +267,112 @@ where
     }
 }
 
+/// Index of the minimum value, skipping NaN. Errors on all-NaN input.
+///
+/// Equivalent to `numpy.nanargmin`. For axis=None returns a flat-index
+/// scalar; for axis=Some(ax) returns indices along that axis.
+///
+/// # Errors
+/// Returns `FerrayError::InvalidValue` for an empty array or an all-NaN
+/// slice/lane (matching NumPy's `ValueError` from `nanargmin`).
+pub fn nanargmin<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<u64, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    if a.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "cannot compute nanargmin of empty array",
+        ));
+    }
+    let data = borrow_data(a);
+    match axis {
+        None => {
+            let pick = data
+                .iter()
+                .enumerate()
+                .filter(|(_, x)| !x.is_nan())
+                .reduce(|(ai, av), (bi, bv)| if av <= bv { (ai, av) } else { (bi, bv) });
+            let idx = pick
+                .ok_or_else(|| FerrayError::invalid_value("nanargmin: all-NaN slice encountered"))?
+                .0 as u64;
+            make_result(&[], vec![idx])
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape = a.shape();
+            // The lane closure is infallible, so it returns `u64::MAX` for
+            // an all-NaN lane and we surface the ValueError after the
+            // reduction completes.
+            let result = reduce_axis_general_u64(&data, shape, ax, |lane| {
+                lane.iter()
+                    .enumerate()
+                    .filter(|(_, x)| !x.is_nan())
+                    .reduce(|(ai, av), (bi, bv)| if av <= bv { (ai, av) } else { (bi, bv) })
+                    .map_or(u64::MAX, |(i, _)| i as u64)
+            });
+            if result.contains(&u64::MAX) {
+                return Err(FerrayError::invalid_value(
+                    "nanargmin: all-NaN slice encountered along axis",
+                ));
+            }
+            let out_s = output_shape(shape, ax);
+            make_result(&out_s, result)
+        }
+    }
+}
+
+/// Index of the maximum value, skipping NaN. Errors on all-NaN input.
+///
+/// Equivalent to `numpy.nanargmax`. See [`nanargmin`] for axis semantics.
+///
+/// # Errors
+/// Returns `FerrayError::InvalidValue` for an empty array or an all-NaN
+/// slice/lane.
+pub fn nanargmax<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<u64, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    if a.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "cannot compute nanargmax of empty array",
+        ));
+    }
+    let data = borrow_data(a);
+    match axis {
+        None => {
+            let pick = data
+                .iter()
+                .enumerate()
+                .filter(|(_, x)| !x.is_nan())
+                .reduce(|(ai, av), (bi, bv)| if av >= bv { (ai, av) } else { (bi, bv) });
+            let idx = pick
+                .ok_or_else(|| FerrayError::invalid_value("nanargmax: all-NaN slice encountered"))?
+                .0 as u64;
+            make_result(&[], vec![idx])
+        }
+        Some(ax) => {
+            validate_axis(ax, a.ndim())?;
+            let shape = a.shape();
+            let result = reduce_axis_general_u64(&data, shape, ax, |lane| {
+                lane.iter()
+                    .enumerate()
+                    .filter(|(_, x)| !x.is_nan())
+                    .reduce(|(ai, av), (bi, bv)| if av >= bv { (ai, av) } else { (bi, bv) })
+                    .map_or(u64::MAX, |(i, _)| i as u64)
+            });
+            if result.contains(&u64::MAX) {
+                return Err(FerrayError::invalid_value(
+                    "nanargmax: all-NaN slice encountered along axis",
+                ));
+            }
+            let out_s = output_shape(shape, ax);
+            make_result(&out_s, result)
+        }
+    }
+}
+
 /// Cumulative sum, treating NaN as zero.
 ///
 /// Re-exported from `ferray_ufunc::nancumsum`.
@@ -370,5 +479,55 @@ mod tests {
         assert!((data[0] - 2.0).abs() < 1e-12);
         assert!((data[1] - 2.0).abs() < 1e-12);
         assert!((data[2] - 6.0).abs() < 1e-12);
+    }
+
+    // -- nanargmin / nanargmax --
+
+    #[test]
+    fn test_nanargmin_skips_nan() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![5.0, f64::NAN, 1.0, 3.0, f64::NAN])
+            .unwrap();
+        let r = nanargmin(&a, None).unwrap();
+        assert_eq!(r.iter().copied().next().unwrap(), 2);
+    }
+
+    #[test]
+    fn test_nanargmax_skips_nan() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![5.0, f64::NAN, 1.0, 9.0, f64::NAN])
+            .unwrap();
+        let r = nanargmax(&a, None).unwrap();
+        assert_eq!(r.iter().copied().next().unwrap(), 3);
+    }
+
+    #[test]
+    fn test_nanargmin_all_nan_errs() {
+        let a =
+            Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![f64::NAN, f64::NAN, f64::NAN]).unwrap();
+        assert!(nanargmin(&a, None).is_err());
+    }
+
+    #[test]
+    fn test_nanargmax_2d_axis() {
+        use ferray_core::Ix2;
+        let a = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, f64::NAN, 3.0, f64::NAN, 5.0, 4.0],
+        )
+        .unwrap();
+        // Axis-0: per column, max-non-nan index
+        // col 0: [1, NaN] → 0; col 1: [NaN, 5] → 1; col 2: [3, 4] → 1
+        let r = nanargmax(&a, Some(0)).unwrap();
+        assert_eq!(r.iter().copied().collect::<Vec<_>>(), vec![0, 1, 1]);
+    }
+
+    #[test]
+    fn test_nanargmin_axis_lane_all_nan_errs() {
+        use ferray_core::Ix2;
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![f64::NAN, 1.0, f64::NAN, 2.0])
+            .unwrap();
+        // Axis-1: row 0 = [NaN, 1] OK, row 1 = [NaN, 2] OK
+        // Axis-0: col 0 = [NaN, NaN] → all-NaN
+        assert!(nanargmin(&a, Some(0)).is_err());
+        assert!(nanargmin(&a, Some(1)).is_ok());
     }
 }

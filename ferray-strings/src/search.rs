@@ -1,6 +1,7 @@
 // ferray-strings: Search operations (REQ-8, REQ-9, REQ-10)
 //
-// Implements find, count, startswith, endswith, replace — elementwise on StringArray.
+// Implements find, rfind, index, rindex, count, startswith, endswith, replace —
+// elementwise on StringArray.
 
 // `find` returns an `i64` array following NumPy's `numpy.strings.find`
 // contract (with `-1` for "not found"); converting the `usize` char count
@@ -9,7 +10,7 @@
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
-use ferray_core::error::FerrayResult;
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::string_array::StringArray;
 
@@ -83,6 +84,66 @@ pub fn replace<D: Dimension>(
         None => s.replace(old, new),
         Some(n) => s.replacen(old, new, n),
     })
+}
+
+/// Find the highest character index of `sub` in each string element.
+///
+/// Returns `-1` for elements where `sub` is not found. Mirrors
+/// `numpy.strings.rfind`.
+///
+/// # Errors
+/// Returns an error if the internal array construction fails.
+pub fn rfind<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<i64, D>> {
+    let data: Vec<i64> = a.map_to_vec(|s| match s.rfind(sub) {
+        Some(byte_idx) => s[..byte_idx].chars().count() as i64,
+        None => -1,
+    });
+    Array::from_vec(a.dim().clone(), data)
+}
+
+/// Find the lowest character index of `sub` in each string element, raising
+/// when any element does not contain `sub`.
+///
+/// Mirrors `numpy.strings.index`. The first miss surfaces as
+/// `FerrayError::InvalidValue`.
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if any element does not contain `sub`.
+pub fn index<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<i64, D>> {
+    let mut data = Vec::with_capacity(a.iter().len());
+    for s in a.iter() {
+        match s.find(sub) {
+            Some(byte_idx) => data.push(s[..byte_idx].chars().count() as i64),
+            None => {
+                return Err(FerrayError::invalid_value(format!(
+                    "index: substring {sub:?} not found in element {s:?}"
+                )));
+            }
+        }
+    }
+    Array::from_vec(a.dim().clone(), data)
+}
+
+/// Find the highest character index of `sub` in each string element, raising
+/// when any element does not contain `sub`.
+///
+/// Mirrors `numpy.strings.rindex`.
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if any element does not contain `sub`.
+pub fn rindex<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<i64, D>> {
+    let mut data = Vec::with_capacity(a.iter().len());
+    for s in a.iter() {
+        match s.rfind(sub) {
+            Some(byte_idx) => data.push(s[..byte_idx].chars().count() as i64),
+            None => {
+                return Err(FerrayError::invalid_value(format!(
+                    "rindex: substring {sub:?} not found in element {s:?}"
+                )));
+            }
+        }
+    }
+    Array::from_vec(a.dim().clone(), data)
 }
 
 #[cfg(test)]

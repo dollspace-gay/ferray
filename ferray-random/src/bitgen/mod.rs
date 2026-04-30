@@ -1,7 +1,11 @@
 // ferray-random: BitGenerator trait and implementations
 
+mod mt19937;
 mod pcg64;
+mod pcg64dxsm;
 mod philox;
+mod seed_sequence;
+mod sfc64;
 mod xoshiro256;
 
 /// `SplitMix64`: a fast 64-bit hash-based PRNG used exclusively for
@@ -16,8 +20,12 @@ pub(crate) const fn splitmix64(state: &mut u64) -> u64 {
     z ^ (z >> 31)
 }
 
+pub use mt19937::MT19937;
 pub use pcg64::Pcg64;
+pub use pcg64dxsm::Pcg64Dxsm;
 pub use philox::Philox;
+pub use seed_sequence::SeedSequence;
+pub use sfc64::Sfc64;
 pub use xoshiro256::Xoshiro256StarStar;
 
 /// Trait for pluggable pseudo-random number generators.
@@ -25,7 +33,8 @@ pub use xoshiro256::Xoshiro256StarStar;
 /// All `BitGenerators` are `Send` (can be transferred between threads) but NOT `Sync`
 /// (they are stateful and require `&mut self`).
 ///
-/// Concrete implementations: [`Pcg64`], [`Philox`], [`Xoshiro256StarStar`].
+/// Concrete implementations: [`Pcg64`], [`Pcg64Dxsm`], [`Philox`],
+/// [`Xoshiro256StarStar`], [`MT19937`], [`Sfc64`].
 pub trait BitGenerator: Send {
     /// Generate the next 64-bit unsigned integer.
     fn next_u64(&mut self) -> u64;

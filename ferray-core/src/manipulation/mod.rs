@@ -982,6 +982,69 @@ pub fn roll<T: Element, D: Dimension>(
 }
 
 // ============================================================================
+// REQ: r_ / c_ — quick row/column builders (functional analogues of NumPy's
+//                np.r_ / np.c_ index_exp slicing-tuple machinery)
+// ============================================================================
+
+/// Concatenate a sequence of 1-D arrays into a single 1-D array.
+///
+/// This is the function-form of `numpy.r_[a, b, c, ...]` for the simple
+/// case of building up a 1-D vector. NumPy's `r_` also accepts slice
+/// objects (`r_[1:5, 8:12]`) which Rust syntax cannot replicate cleanly;
+/// for that, build the components with [`arange`](crate::creation::arange) /
+/// [`linspace`](crate::creation::linspace) first, then call `r_`.
+///
+/// # Errors
+/// Returns `FerrayError::InvalidValue` if `arrays` is empty.
+pub fn r_<T: Element>(arrays: &[Array<T, Ix1>]) -> FerrayResult<Array<T, Ix1>> {
+    if arrays.is_empty() {
+        return Err(FerrayError::invalid_value("r_: need at least one array"));
+    }
+    let total: usize = arrays.iter().map(|a| a.shape()[0]).sum();
+    let mut data = Vec::with_capacity(total);
+    for a in arrays {
+        data.extend(a.iter().cloned());
+    }
+    Array::from_vec(Ix1::new([total]), data)
+}
+
+/// Stack a sequence of 1-D arrays as columns of a 2-D array.
+///
+/// All inputs must have the same length `n`. The result has shape
+/// `(n, k)` where `k = arrays.len()`.
+///
+/// Function-form of `numpy.c_[a, b, c]` when each input is 1-D.
+///
+/// # Errors
+/// Returns `FerrayError::InvalidValue` if `arrays` is empty.
+/// Returns `FerrayError::ShapeMismatch` if the inputs differ in length.
+pub fn c_<T: Element>(arrays: &[Array<T, Ix1>]) -> FerrayResult<Array<T, IxDyn>> {
+    if arrays.is_empty() {
+        return Err(FerrayError::invalid_value("c_: need at least one array"));
+    }
+    let n = arrays[0].shape()[0];
+    for a in &arrays[1..] {
+        if a.shape()[0] != n {
+            return Err(FerrayError::shape_mismatch(format!(
+                "c_: all 1-D inputs must have the same length; got {} and {}",
+                n,
+                a.shape()[0],
+            )));
+        }
+    }
+    let k = arrays.len();
+    // Output is row-major (n, k); element (i, j) comes from arrays[j][i].
+    let cols: Vec<Vec<T>> = arrays.iter().map(|a| a.iter().cloned().collect()).collect();
+    let mut data = Vec::with_capacity(n * k);
+    for i in 0..n {
+        for col in &cols {
+            data.push(col[i].clone());
+        }
+    }
+    Array::from_vec(IxDyn::new(&[n, k]), data)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1507,5 +1570,46 @@ mod tests {
             result.iter().copied().collect::<Vec<_>>(),
             vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
         );
+    }
+
+    #[test]
+    fn test_r_concatenates_1d() {
+        use crate::Array;
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        let b = Array::<i32, Ix1>::from_vec(Ix1::new([2]), vec![4, 5]).unwrap();
+        let c = Array::<i32, Ix1>::from_vec(Ix1::new([1]), vec![6]).unwrap();
+        let r = r_(&[a, b, c]).unwrap();
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![1, 2, 3, 4, 5, 6]
+        );
+    }
+
+    #[test]
+    fn test_r_empty_input_errs() {
+        let r = r_::<f64>(&[]);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_c_columns_to_2d() {
+        use crate::Array;
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        let b = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![10, 20, 30]).unwrap();
+        let r = c_(&[a, b]).unwrap();
+        assert_eq!(r.shape(), &[3, 2]);
+        // Row-major: (0,0)=1 (0,1)=10 (1,0)=2 (1,1)=20 (2,0)=3 (2,1)=30
+        assert_eq!(
+            r.iter().copied().collect::<Vec<_>>(),
+            vec![1, 10, 2, 20, 3, 30],
+        );
+    }
+
+    #[test]
+    fn test_c_length_mismatch_errs() {
+        use crate::Array;
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        let b = Array::<i32, Ix1>::from_vec(Ix1::new([2]), vec![10, 20]).unwrap();
+        assert!(c_(&[a, b]).is_err());
     }
 }

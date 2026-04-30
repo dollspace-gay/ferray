@@ -5,7 +5,7 @@ use num_complex::Complex;
 use crate::array::owned::Array;
 use crate::dimension::IxDyn;
 use crate::dtype::casting::CastKind;
-use crate::dtype::{DType, I256};
+use crate::dtype::{DType, DateTime64, I256, TimeUnit, Timedelta64};
 use crate::error::{FerrayError, FerrayResult};
 
 /// A runtime-typed array whose element type is determined at runtime.
@@ -59,6 +59,13 @@ pub enum DynArray {
     /// `bf16` (bfloat16) elements (feature-gated)
     #[cfg(feature = "bf16")]
     BF16(Array<half::bf16, IxDyn>),
+    /// `datetime64[unit]` elements — the `TimeUnit` rides alongside the
+    /// data because [`DType::DateTime64`] is parameterized but the
+    /// element-level [`Element::dtype`](crate::dtype::Element::dtype)
+    /// can only return one fixed unit.
+    DateTime64(Array<DateTime64, IxDyn>, TimeUnit),
+    /// `timedelta64[unit]` elements.
+    Timedelta64(Array<Timedelta64, IxDyn>, TimeUnit),
 }
 
 /// Dispatch a single expression across every `DynArray` variant, binding
@@ -88,6 +95,10 @@ macro_rules! dispatch {
             Self::F16($binding) => $expr,
             #[cfg(feature = "bf16")]
             Self::BF16($binding) => $expr,
+            // datetime64 / timedelta64 carry an extra TimeUnit slot;
+            // the dispatch only needs to bind the inner Array.
+            Self::DateTime64($binding, _) => $expr,
+            Self::Timedelta64($binding, _) => $expr,
         }
     };
 }
@@ -117,6 +128,8 @@ impl DynArray {
             Self::F16(_) => DType::F16,
             #[cfg(feature = "bf16")]
             Self::BF16(_) => DType::BF16,
+            Self::DateTime64(_, u) => DType::DateTime64(*u),
+            Self::Timedelta64(_, u) => DType::Timedelta64(*u),
         }
     }
 
@@ -252,6 +265,18 @@ impl DynArray {
                 "DynArray::astype does not yet support I256 — construct I256 arrays directly",
             ));
         }
+        // datetime64 / timedelta64 don't go through the generic CastTo
+        // machinery (they're not in numeric promotion's hierarchy). Casts
+        // between time and numeric dtypes are intentionally not supported
+        // by NumPy either — datetime arithmetic uses dedicated kernels.
+        if matches!(self, Self::DateTime64(_, _) | Self::Timedelta64(_, _))
+            || matches!(target, DType::DateTime64(_) | DType::Timedelta64(_))
+        {
+            return Err(FerrayError::invalid_dtype(format!(
+                "DynArray::astype: cast involving {target} not supported \
+                 — datetime/timedelta dtypes use dedicated arithmetic, not generic casts"
+            )));
+        }
 
         // Inner macro: dispatch on the *source* variant. The target type `$U`
         // is fixed by the outer match below.
@@ -278,6 +303,9 @@ impl DynArray {
                     Self::F16(_) => unreachable!("f16 source rejected above"),
                     #[cfg(feature = "bf16")]
                     Self::BF16(_) => unreachable!("bf16 source rejected above"),
+                    Self::DateTime64(_, _) | Self::Timedelta64(_, _) => {
+                        unreachable!("time-dtype source rejected above")
+                    }
                 }
             };
         }
@@ -303,6 +331,9 @@ impl DynArray {
             DType::F16 => unreachable!("f16 target rejected above"),
             #[cfg(feature = "bf16")]
             DType::BF16 => unreachable!("bf16 target rejected above"),
+            DType::DateTime64(_) | DType::Timedelta64(_) => {
+                unreachable!("time-dtype target rejected above")
+            }
         })
     }
 
@@ -330,7 +361,54 @@ impl DynArray {
             DType::F16 => Self::F16(Array::zeros(dim)?),
             #[cfg(feature = "bf16")]
             DType::BF16 => Self::BF16(Array::zeros(dim)?),
+            // datetime64 / timedelta64 carry a TimeUnit alongside the
+            // typed Array. The element value is the i64 zero (the Unix
+            // epoch for datetime, a no-op duration for timedelta).
+            DType::DateTime64(unit) => Self::DateTime64(Array::zeros(dim)?, unit),
+            DType::Timedelta64(unit) => Self::Timedelta64(Array::zeros(dim)?, unit),
         })
+    }
+
+    /// Construct a [`DynArray::DateTime64`] from a typed array plus its unit.
+    #[must_use]
+    pub fn from_datetime64(arr: Array<DateTime64, IxDyn>, unit: TimeUnit) -> Self {
+        Self::DateTime64(arr, unit)
+    }
+
+    /// Construct a [`DynArray::Timedelta64`] from a typed array plus its unit.
+    #[must_use]
+    pub fn from_timedelta64(arr: Array<Timedelta64, IxDyn>, unit: TimeUnit) -> Self {
+        Self::Timedelta64(arr, unit)
+    }
+
+    /// Try to extract the inner `Array<DateTime64, IxDyn>` along with the
+    /// stored [`TimeUnit`].
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidDtype` if the dtype is not `datetime64`.
+    pub fn try_into_datetime64(self) -> FerrayResult<(Array<DateTime64, IxDyn>, TimeUnit)> {
+        match self {
+            Self::DateTime64(a, u) => Ok((a, u)),
+            other => Err(FerrayError::invalid_dtype(format!(
+                "expected datetime64, got {}",
+                other.dtype()
+            ))),
+        }
+    }
+
+    /// Try to extract the inner `Array<Timedelta64, IxDyn>` along with the
+    /// stored [`TimeUnit`].
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidDtype` if the dtype is not `timedelta64`.
+    pub fn try_into_timedelta64(self) -> FerrayResult<(Array<Timedelta64, IxDyn>, TimeUnit)> {
+        match self {
+            Self::Timedelta64(a, u) => Ok((a, u)),
+            other => Err(FerrayError::invalid_dtype(format!(
+                "expected timedelta64, got {}",
+                other.dtype()
+            ))),
+        }
     }
 }
 

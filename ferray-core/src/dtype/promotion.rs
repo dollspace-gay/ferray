@@ -441,6 +441,45 @@ pub fn result_type(a: DType, b: DType) -> FerrayResult<DType> {
     result.ok_or_else(|| FerrayError::invalid_dtype(format!("cannot promote {a} and {b}")))
 }
 
+/// Stable ordinal for promotion ordering.
+///
+/// `DType as u32` no longer compiles since `DateTime64(TimeUnit)` and
+/// `Timedelta64(TimeUnit)` carry data — Rust only allows the C-style
+/// cast for fieldless enums. We hand-build an ordinal that's consistent
+/// with the historical numeric ordering of the primitive variants and
+/// places the time types at the end (they don't promote with numeric
+/// types in NumPy either way).
+const fn dtype_ord(dt: DType) -> u32 {
+    use DType::{
+        Bool, Complex32, Complex64, F32, F64, I8, I16, I32, I64, I128, I256, U8, U16, U32, U64,
+        U128,
+    };
+    match dt {
+        Bool => 0,
+        U8 => 1,
+        U16 => 2,
+        U32 => 3,
+        U64 => 4,
+        U128 => 5,
+        I8 => 6,
+        I16 => 7,
+        I32 => 8,
+        I64 => 9,
+        I128 => 10,
+        I256 => 11,
+        F32 => 12,
+        F64 => 13,
+        Complex32 => 14,
+        Complex64 => 15,
+        #[cfg(feature = "f16")]
+        DType::F16 => 16,
+        #[cfg(feature = "bf16")]
+        DType::BF16 => 17,
+        DType::DateTime64(_) => 100,
+        DType::Timedelta64(_) => 101,
+    }
+}
+
 /// Internal promotion function returning Option.
 fn promote_dtypes(a: DType, b: DType) -> Option<DType> {
     use DType::{
@@ -452,9 +491,9 @@ fn promote_dtypes(a: DType, b: DType) -> Option<DType> {
         return Some(a);
     }
 
-    // Ensure canonical ordering: if b < a in our enum order, swap them
+    // Ensure canonical ordering: if b < a in our ordinal, swap them
     // so we only need to handle (smaller, larger) pairs.
-    let (lo, hi) = if (a as u32) <= (b as u32) {
+    let (lo, hi) = if dtype_ord(a) <= dtype_ord(b) {
         (a, b)
     } else {
         (b, a)

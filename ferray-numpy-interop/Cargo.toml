@@ -26,6 +26,14 @@ optional = true
 workspace = true
 optional = true
 
+[dependencies.half]
+workspace = true
+optional = true
+
+[dependencies.num-complex]
+workspace = true
+optional = true
+
 [dependencies.polars]
 version = "0.46"
 optional = true
@@ -37,6 +45,15 @@ default = []
 python = ["dep:pyo3", "dep:numpy"]
 arrow = ["dep:arrow"]
 polars = ["dep:polars"]
+# Forward ferray-core's `f16`/`bf16` knobs and pull in the `half` crate
+# so the dtype maps and (where supported) the Arrow/numpy bridges can
+# round-trip 16-bit floats.
+f16 = ["dep:half", "ferray-core/f16"]
+bf16 = ["dep:half", "ferray-core/bf16"]
+# Enable Complex<f32>/Complex<f64> mapping in the dtype layer. Arrow has
+# no native complex type — see complex_to_arrow_struct in arrow_conv for
+# the workaround.
+complex = ["dep:num-complex"]
 
 [dev-dependencies]
 proptest = { workspace = true }

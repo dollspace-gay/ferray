@@ -85,6 +85,10 @@ full = [
 
 f16 = ["ferray-core/f16", "ferray-ufunc/f16", "ferray-io?/f16"]
 bf16 = ["ferray-core/bf16", "ferray-io?/bf16"]
+# Forward ferray-core's chrono feature so users of the umbrella can opt
+# into DateTime64 ↔ chrono::DateTime<Utc> conversions without dropping
+# down to ferray-core (#343 Phase 2).
+chrono = ["ferray-core/chrono"]
 strings = ["dep:ferray-strings"]
 ma = ["dep:ferray-ma"]
 io = ["dep:ferray-io"]

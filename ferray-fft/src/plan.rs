@@ -223,18 +223,6 @@ pub(crate) fn get_cached_real_inverse_f32(size: usize) -> Arc<dyn ComplexToReal<
     plans.entry(size).or_insert(plan).clone()
 }
 
-/// Legacy f64 alias for the real-forward cache.
-#[allow(dead_code)]
-pub(crate) fn get_cached_real_forward(size: usize) -> Arc<dyn RealToComplex<f64>> {
-    get_cached_real_forward_f64(size)
-}
-
-/// Legacy f64 alias for the real-inverse cache.
-#[allow(dead_code)]
-pub(crate) fn get_cached_real_inverse(size: usize) -> Arc<dyn ComplexToReal<f64>> {
-    get_cached_real_inverse_f64(size)
-}
-
 /// A reusable FFT plan for a specific transform size.
 ///
 /// `FftPlan` caches the internal FFT algorithm for a given size,

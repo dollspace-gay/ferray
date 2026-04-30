@@ -263,6 +263,9 @@ where
     if let Some(r) = crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_abs_f64) {
         return r;
     }
+    if let Some(r) = crate::helpers::try_simd_f32_unary(input, crate::dispatch::simd_abs_f32) {
+        return r;
+    }
     unary_float_op(input, T::abs)
 }
 
@@ -314,6 +317,9 @@ where
     if let Some(r) = crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_neg_f64) {
         return r;
     }
+    if let Some(r) = crate::helpers::try_simd_f32_unary(input, crate::dispatch::simd_neg_f32) {
+        return r;
+    }
     unary_float_op(input, |x| -x)
 }
 
@@ -344,6 +350,10 @@ where
     D: Dimension,
 {
     if let Some(r) = crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_reciprocal_f64)
+    {
+        return r;
+    }
+    if let Some(r) = crate::helpers::try_simd_f32_unary(input, crate::dispatch::simd_reciprocal_f32)
     {
         return r;
     }
@@ -391,6 +401,9 @@ where
     D: Dimension,
 {
     if let Some(r) = crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_square_f64) {
+        return r;
+    }
+    if let Some(r) = crate::helpers::try_simd_f32_unary(input, crate::dispatch::simd_square_f32) {
         return r;
     }
     unary_float_op(input, |x| x * x)
@@ -1046,6 +1059,30 @@ where
     cumulative_with_preprocess(input, axis, |x| x, |a, b| a * b)
 }
 
+/// Cumulative sum (Array API standard name).
+///
+/// Alias of [`cumsum`] matching the Python Array API specification's
+/// `cumulative_sum` name (added to `numpy` in 2.0).
+pub fn cumulative_sum<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + std::ops::Add<Output = T> + Copy,
+    D: Dimension,
+{
+    cumsum(input, axis)
+}
+
+/// Cumulative product (Array API standard name).
+///
+/// Alias of [`cumprod`] matching the Python Array API specification's
+/// `cumulative_prod` name (added to `numpy` in 2.0).
+pub fn cumulative_prod<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + std::ops::Mul<Output = T> + Copy,
+    D: Dimension,
+{
+    cumprod(input, axis)
+}
+
 /// Cumulative sum ignoring NaNs.
 pub fn nancumsum<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
 where
@@ -1539,6 +1576,20 @@ mod tests {
     fn test_cumprod() {
         let a = arr1(vec![1.0, 2.0, 3.0, 4.0]);
         let r = cumprod(&a, None).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[1.0, 2.0, 6.0, 24.0]);
+    }
+
+    #[test]
+    fn test_cumulative_sum_alias() {
+        let a = arr1(vec![1.0, 2.0, 3.0, 4.0]);
+        let r = cumulative_sum(&a, None).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[1.0, 3.0, 6.0, 10.0]);
+    }
+
+    #[test]
+    fn test_cumulative_prod_alias() {
+        let a = arr1(vec![1.0, 2.0, 3.0, 4.0]);
+        let r = cumulative_prod(&a, None).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[1.0, 2.0, 6.0, 24.0]);
     }
 

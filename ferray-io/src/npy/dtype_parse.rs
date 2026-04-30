@@ -76,6 +76,26 @@ pub fn parse_dtype_str(s: &str) -> FerrayResult<(DType, Endianness)> {
         "bf16" => DType::BF16,
         "c8" => DType::Complex32,
         "c16" => DType::Complex64,
+        // datetime64 / timedelta64 with explicit unit:
+        //   "M8[ns]" / "m8[ns]" etc. The leading 'M'/'m' is the type tag
+        //   (M = datetime, m = timedelta), '8' is the byte size, and the
+        //   bracketed suffix is the TimeUnit.
+        other if other.starts_with("M8[") && other.ends_with(']') => {
+            let unit_str = &other[3..other.len() - 1];
+            let unit =
+                ferray_core::dtype::TimeUnit::from_descr_suffix(unit_str).ok_or_else(|| {
+                    FerrayError::invalid_dtype(format!("unknown datetime64 unit: '{unit_str}'"))
+                })?;
+            DType::DateTime64(unit)
+        }
+        other if other.starts_with("m8[") && other.ends_with(']') => {
+            let unit_str = &other[3..other.len() - 1];
+            let unit =
+                ferray_core::dtype::TimeUnit::from_descr_suffix(unit_str).ok_or_else(|| {
+                    FerrayError::invalid_dtype(format!("unknown timedelta64 unit: '{unit_str}'"))
+                })?;
+            DType::Timedelta64(unit)
+        }
         _ => {
             return Err(FerrayError::invalid_dtype(format!(
                 "unsupported dtype descriptor: '{s}'"
@@ -96,6 +116,23 @@ pub fn dtype_to_descr(dtype: DType, endian: Endianness) -> FerrayResult<String> 
         Endianness::Big => '>',
         Endianness::Native => '|',
     };
+
+    // datetime64 / timedelta64 carry a unit and so don't fit the simple
+    // `<type_str>` prefix path; format them directly here.
+    if let DType::DateTime64(u) = dtype {
+        let actual_prefix = match endian {
+            Endianness::Native => '|',
+            _ => prefix,
+        };
+        return Ok(format!("{actual_prefix}M8[{}]", u.descr_suffix()));
+    }
+    if let DType::Timedelta64(u) = dtype {
+        let actual_prefix = match endian {
+            Endianness::Native => '|',
+            _ => prefix,
+        };
+        return Ok(format!("{actual_prefix}m8[{}]", u.descr_suffix()));
+    }
 
     let type_str = match dtype {
         DType::Bool => "b1",
@@ -296,5 +333,68 @@ mod tests {
             assert!(!Endianness::Big.needs_swap());
         }
         assert!(!Endianness::Native.needs_swap());
+    }
+
+    // -- datetime64 / timedelta64 descriptor parsing --
+
+    #[test]
+    fn parse_datetime64_ns() {
+        use ferray_core::dtype::TimeUnit;
+        let (dt, e) = parse_dtype_str("<M8[ns]").unwrap();
+        assert_eq!(dt, DType::DateTime64(TimeUnit::Ns));
+        assert_eq!(e, Endianness::Little);
+    }
+
+    #[test]
+    fn parse_datetime64_us() {
+        use ferray_core::dtype::TimeUnit;
+        let (dt, _) = parse_dtype_str("<M8[us]").unwrap();
+        assert_eq!(dt, DType::DateTime64(TimeUnit::Us));
+    }
+
+    #[test]
+    fn parse_timedelta64_ms() {
+        use ferray_core::dtype::TimeUnit;
+        let (dt, _) = parse_dtype_str("<m8[ms]").unwrap();
+        assert_eq!(dt, DType::Timedelta64(TimeUnit::Ms));
+    }
+
+    #[test]
+    fn datetime64_roundtrip_descr() {
+        use ferray_core::dtype::TimeUnit;
+        for u in [
+            TimeUnit::Ns,
+            TimeUnit::Us,
+            TimeUnit::Ms,
+            TimeUnit::S,
+            TimeUnit::D,
+        ] {
+            let dt = DType::DateTime64(u);
+            let s = dtype_to_descr(dt, Endianness::Little).unwrap();
+            let (parsed, _) = parse_dtype_str(&s).unwrap();
+            assert_eq!(parsed, dt, "roundtrip failed for {dt}");
+        }
+    }
+
+    #[test]
+    fn timedelta64_roundtrip_descr() {
+        use ferray_core::dtype::TimeUnit;
+        for u in [
+            TimeUnit::Ns,
+            TimeUnit::Us,
+            TimeUnit::Ms,
+            TimeUnit::S,
+            TimeUnit::D,
+        ] {
+            let dt = DType::Timedelta64(u);
+            let s = dtype_to_descr(dt, Endianness::Little).unwrap();
+            let (parsed, _) = parse_dtype_str(&s).unwrap();
+            assert_eq!(parsed, dt, "roundtrip failed for {dt}");
+        }
+    }
+
+    #[test]
+    fn unknown_datetime_unit_errors() {
+        assert!(parse_dtype_str("<M8[foobar]").is_err());
     }
 }

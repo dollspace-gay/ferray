@@ -53,6 +53,7 @@
 
 pub mod chebyshev;
 pub mod companion;
+pub mod extras;
 pub mod fitting;
 pub mod hermite;
 pub mod hermite_e;
@@ -60,6 +61,7 @@ pub mod laguerre;
 pub mod legendre;
 pub mod mapping;
 pub mod power;
+pub mod power_f32;
 pub mod roots;
 pub mod traits;
 
@@ -70,4 +72,15 @@ pub use hermite_e::HermiteE;
 pub use laguerre::Laguerre;
 pub use legendre::Legendre;
 pub use power::Polynomial;
+pub use power_f32::PolynomialF32;
 pub use traits::{ConvertBasis, FromPowerBasis, Poly, ToPowerBasis};
+
+// Re-export the numpy.polynomial extras at the crate root.
+pub use extras::{
+    cheb2poly, chebfromroots, chebgauss, chebinterpolate, chebline, chebmulx, chebpts1, chebpts2,
+    chebweight, herm2poly, herme2poly, hermefromroots, hermegauss, hermeline, hermemulx,
+    hermfromroots, hermgauss, hermline, hermmulx, lag2poly, lagfromroots, laggauss, lagguass,
+    lagline, lagmulx, leg2poly, legfromroots, leggauss, legline, legmulx, poly2cheb, poly2herm,
+    poly2herme, poly2lag, poly2leg, polyfromroots, polygrid2d, polygrid3d, polyline, polymulx,
+    polyval2d, polyval3d, polyvalfromroots, polyvander2d, polyvander3d,
+};

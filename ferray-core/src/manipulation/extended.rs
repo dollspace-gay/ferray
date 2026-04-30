@@ -673,6 +673,63 @@ pub fn trim_zeros<T: Element + PartialEq>(
 }
 
 // ============================================================================
+// REQ: atleast_1d / atleast_2d / atleast_3d
+// ============================================================================
+
+/// View inputs as arrays with at least one dimension.
+///
+/// Scalars (0-D arrays) are reshaped to (1,). Arrays already 1-D or higher
+/// are returned with shape unchanged.
+///
+/// Analogous to `numpy.atleast_1d()` for a single input.
+pub fn atleast_1d<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrayResult<Array<T, IxDyn>> {
+    let shape = a.shape();
+    let data: Vec<T> = a.iter().cloned().collect();
+    let new_shape: Vec<usize> = if shape.is_empty() {
+        vec![1]
+    } else {
+        shape.to_vec()
+    };
+    Array::from_vec(IxDyn::new(&new_shape), data)
+}
+
+/// View inputs as arrays with at least two dimensions.
+///
+/// 0-D scalars become shape (1, 1); 1-D arrays of shape (N,) become (1, N);
+/// 2-D and higher arrays are returned unchanged.
+///
+/// Analogous to `numpy.atleast_2d()` for a single input.
+pub fn atleast_2d<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrayResult<Array<T, IxDyn>> {
+    let shape = a.shape();
+    let data: Vec<T> = a.iter().cloned().collect();
+    let new_shape: Vec<usize> = match shape.len() {
+        0 => vec![1, 1],
+        1 => vec![1, shape[0]],
+        _ => shape.to_vec(),
+    };
+    Array::from_vec(IxDyn::new(&new_shape), data)
+}
+
+/// View inputs as arrays with at least three dimensions.
+///
+/// 0-D scalars become shape (1, 1, 1); 1-D arrays of shape (N,) become
+/// (1, N, 1); 2-D arrays (M, N) become (M, N, 1); 3-D and higher are
+/// returned unchanged.
+///
+/// Analogous to `numpy.atleast_3d()` for a single input.
+pub fn atleast_3d<T: Element, D: Dimension>(a: &Array<T, D>) -> FerrayResult<Array<T, IxDyn>> {
+    let shape = a.shape();
+    let data: Vec<T> = a.iter().cloned().collect();
+    let new_shape: Vec<usize> = match shape.len() {
+        0 => vec![1, 1, 1],
+        1 => vec![1, shape[0], 1],
+        2 => vec![shape[0], shape[1], 1],
+        _ => shape.to_vec(),
+    };
+    Array::from_vec(IxDyn::new(&new_shape), data)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -937,5 +994,78 @@ mod tests {
     fn test_trim_zeros_bad_mode() {
         let a = arr1d(vec![1.0, 2.0]);
         assert!(trim_zeros(&a, "x").is_err());
+    }
+
+    // -- atleast_1d / atleast_2d / atleast_3d --
+
+    #[test]
+    fn test_atleast_1d_from_scalar() {
+        let a = Array::from_vec(IxDyn::new(&[]), vec![42.0]).unwrap();
+        let b = atleast_1d(&a).unwrap();
+        assert_eq!(b.shape(), &[1]);
+        assert_eq!(b.iter().copied().collect::<Vec<_>>(), vec![42.0]);
+    }
+
+    #[test]
+    fn test_atleast_1d_passthrough_1d() {
+        let a = arr1d(vec![1.0, 2.0, 3.0]);
+        let b = atleast_1d(&a).unwrap();
+        assert_eq!(b.shape(), &[3]);
+    }
+
+    #[test]
+    fn test_atleast_1d_passthrough_2d() {
+        let a = dyn_arr(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let b = atleast_1d(&a).unwrap();
+        assert_eq!(b.shape(), &[2, 3]);
+    }
+
+    #[test]
+    fn test_atleast_2d_from_scalar() {
+        let a = Array::from_vec(IxDyn::new(&[]), vec![7.0]).unwrap();
+        let b = atleast_2d(&a).unwrap();
+        assert_eq!(b.shape(), &[1, 1]);
+    }
+
+    #[test]
+    fn test_atleast_2d_from_1d() {
+        let a = arr1d(vec![1.0, 2.0, 3.0]);
+        let b = atleast_2d(&a).unwrap();
+        assert_eq!(b.shape(), &[1, 3]);
+    }
+
+    #[test]
+    fn test_atleast_2d_passthrough_2d() {
+        let a = dyn_arr(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let b = atleast_2d(&a).unwrap();
+        assert_eq!(b.shape(), &[2, 3]);
+    }
+
+    #[test]
+    fn test_atleast_3d_from_scalar() {
+        let a = Array::from_vec(IxDyn::new(&[]), vec![7.0]).unwrap();
+        let b = atleast_3d(&a).unwrap();
+        assert_eq!(b.shape(), &[1, 1, 1]);
+    }
+
+    #[test]
+    fn test_atleast_3d_from_1d() {
+        let a = arr1d(vec![1.0, 2.0, 3.0]);
+        let b = atleast_3d(&a).unwrap();
+        assert_eq!(b.shape(), &[1, 3, 1]);
+    }
+
+    #[test]
+    fn test_atleast_3d_from_2d() {
+        let a = dyn_arr(&[2, 3], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let b = atleast_3d(&a).unwrap();
+        assert_eq!(b.shape(), &[2, 3, 1]);
+    }
+
+    #[test]
+    fn test_atleast_3d_passthrough_3d() {
+        let a = dyn_arr(&[2, 2, 2], (0..8).map(|i| i as f64).collect());
+        let b = atleast_3d(&a).unwrap();
+        assert_eq!(b.shape(), &[2, 2, 2]);
     }
 }

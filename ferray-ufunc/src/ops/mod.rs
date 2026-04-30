@@ -7,6 +7,7 @@ pub mod bitwise;
 pub mod comparison;
 pub mod complex;
 pub mod convolution;
+pub mod datetime;
 pub mod explog;
 pub mod floatintrinsic;
 pub mod interpolation;

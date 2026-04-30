@@ -21,4 +21,4 @@ proc-macro2 = "1"
 
 [dev-dependencies]
 trybuild = "1.0"
-ferray-core = { path = "../ferray-core", version = "0.2.8" }
+ferray-core = { path = "../ferray-core", version = "0.3.0" }

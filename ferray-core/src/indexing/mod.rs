@@ -13,7 +13,10 @@ pub mod extended;
 // submodule for the common cases. Matches NumPy's flat top-level
 // namespace (`np.ravel_multi_index`, `np.unravel_index`, `np.nonzero`,
 // `np.argwhere`, `np.flatnonzero`).
-pub use extended::{argwhere, flatnonzero, nonzero, ravel_multi_index, unravel_index};
+pub use extended::{
+    MaskKind, argwhere, extract, flatnonzero, mask_indices, nonzero, place, putmask,
+    ravel_multi_index, unravel_index,
+};
 
 use crate::error::{FerrayError, FerrayResult};
 

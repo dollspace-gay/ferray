@@ -12,9 +12,133 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-30
+
+### Performance
+
+- ferray-ufunc: route default sin/cos/tan through libm (Float::sin) — ferray now wins or ties NumPy at every size for trig (#679)
+- ferray-stats: pairwise-sum base 256 → 4096, cuts horizontal-sum overhead 16× — sum/mean 100K-1M now beats NumPy or ties at DRAM ceiling (#678)
+- ferray-linalg: eliminate Vec round-trip in matmul/dot 2D dispatch — matmul 50×50 went from 1.33× **slower** than MKL to 1.04× **faster** (#677)
+
+### Added (GEMM)
+
+- ferray-linalg: optional OpenBLAS backend (cargo feature openblas) for perf-floor guarantee with system libopenblas (#675)
+- ferray-linalg: native TRSM primitives (block-recursive triangular solve, lower/upper × non-unit/unit-diag for f32/f64) (#674)
+- ferray-linalg: mixed-precision GEMM (gemm_bf16_f32 / gemm_f16_f32, behind `bf16`/`f16` features) (#673)
+- ferray-linalg: AVX-512 4×16 i16 GEMM kernel (32 i16 per VPMADDWD, 2× peak vs AVX2) (#672)
+- ferray-linalg: dedicated AVX2 i8 signed-signed kernel (pre-widen-A + i8-B + kernel-side VPMOVSXBW, 1.62× vs old wrapper at N=1024) (#671)
+- ferray-linalg: AVX-512 VNNI i8 GEMM kernel (zmm-wide vpdpbusd, 1.5 TOPS at N=1024) (#667)
+- ferray-linalg: i8 quantized GEMM (u8 × i8 → i32) for ML inference, with AVX2 baseline + AVX-VNNI fast path (#666)
+- ferray-linalg: AVX-512 ZGEMM + CGEMM kernel ports from OpenBLAS Skylake-X (#665)
+- ferray-linalg: CGEMM (Complex f32) kernel port from OpenBLAS Haswell (#664)
+- ferray-linalg: ZGEMM (Complex f64) kernel port from OpenBLAS Haswell (#663)
+- ferray-linalg: AVX-512 SGEMM kernel port from OpenBLAS Skylake-X (#662)
+- ferray-linalg: AVX-512 DGEMM kernel port from OpenBLAS Skylake-X (#661)
+- ferray-linalg: SGEMM Haswell kernel port from OpenBLAS (4×16 tile, 987 GFLOPS at N=1536) (#660)
+- ferray-linalg: hybrid 2D (M × N) parallelism grid for small-N regime (#659)
+- ferray-linalg: per-thread B-prepack + larger KC pushed N=512 past 200 GFLOPS (#657)
+- ferray-linalg: per-thread A-pack reuse (#656)
+- ferray-linalg: M1/M2 pipelining + better threading at mid-N for the translated 4×8 kernel (#655)
+- ferray-linalg: hand-tuned Rust BLAS micro-kernels (OpenBLAS Haswell DGEMM port, 4×8 tile, base of all later GEMM work) (#654)
+- ferray-linalg: matmul 50x50 was 10× slower than NumPy — sweep + regression analysis (#653)
+- ferray-linalg: quantized_matmul with zero-points + scales (ONNX QLinearMatMul / oneDNN formula) (#670)
+- ferray-linalg: i8 × i8 signed-signed GEMM via VPMOVSXBW + VPMADDWD (#669)
+- ferray-linalg: i16 × i16 → i32 GEMM via VPMADDWD (#668)
+
+### Added (other)
+
+- ferray-ufunc: f32 SIMD kernels for abs / neg / square / reciprocal (parity with f64; 8 lanes per AVX2 ymm) (#676)
+- ferray-ufunc: 20 complex transcendentals (sin/cos/tan, sinh/cosh/tanh, asin/acos/atan, asinh/acosh/atanh, exp/ln/log2/log10/sqrt/expm1/log1p/power) (#398)
+- ferray-ufunc: matmul / vecdot / matvec / vecmat already provide gufunc-semantic dispatch via IxDyn shape inspection (research-resolution closed) (#397)
+
+### Polish
+
+- Workspace polish: re-ran benchmarks, refreshed BENCHMARKS.md, bumped to 0.3.0, cargo fmt --all, cargo clippy --workspace -D warnings clean across default + bf16 + f16 + openblas feature combos, removed two truly-dead pub(crate) legacy aliases in ferray-fft/src/plan.rs (#680)
+
+### Notes
+
+- ferray-bench is held at version 0.1.0 (benchmark binary, not a published crate).
+- `bf16` cargo feature added on ferray-linalg (mirrors the existing `f16` feature).
+- The `openblas` feature defaults to `["system", "cblas"]` of openblas-src; users who want vendored static linking should add `openblas-src/static` at the workspace level.
+
 ## [0.2.11] - 2026-04-28
 
 ### Changed
+- ferray-ufunc: add isnat (datetime NaT — gated on datetime dtype scope) (#594)
+- ferray-numpy-interop: complex types (links #552) (#642)
+- ferray-numpy-interop: null/missing handling (links #556) (#646)
+- ferray-numpy-interop: Arrow RecordBatch (links #559) (#648)
+- ferray-numpy-interop: Polars DataFrame round-trip (links #558) (#647)
+- ferray-numpy-interop: null/missing handling (links #556) (#646)
+- ferray-numpy-interop: Arrow FromArrow impls (links #555) (#645)
+- ferray-numpy-interop: DynArray integration (links #554) (#644)
+- ferray-numpy-interop: bool support (links #553/#557) (#643)
+- ferray-numpy-interop: complex types (links #552) (#642)
+- ferray-numpy-interop: f16/bf16 support (links #551) (#641)
+- ferray-ma: class helpers (mvoid, nomask, masked_singleton, masked_print_option, mr_, isMaskedArray/isMA/isarray, getmaskarray, ids) (#640)
+- ferray-ma: bitwise/comparison ufunc support (and/or/xor/shift, equal/less/greater family, logical_*, floor_divide/fmod/power/remainder/true_divide/hypot/negative/sqrt/square) (#639)
+- ferray-ma: fill-value protocol (default_fill_value, maximum_fill_value, minimum_fill_value, set_fill_value, common_fill_value) (#638)
+- ferray-ma: apply_along_axis/apply_over_axes/vander (#637)
+- ferray-ma: linalg & set & corr ops (dot/inner/outer/innerproduct/outerproduct/trace, correlate/convolve/corrcoef/cov, unique/in1d/isin/intersect1d/setdiff1d/setxor1d/union1d, polyfit) (#636)
+- ferray-ma: mask manipulation (harden/soften, mask_or, make_mask*, compress_rows/cols/rowcols/nd, mask_rows/cols/rowcols, clump_*masked, *notmasked_contiguous/edges, flatten_mask, flatten_structured_array) (#635)
+- ferray-ma: manipulation (concatenate/stack family/reshape/ravel/squeeze/swapaxes/transpose/expand_dims/atleast_*/take/put/putmask/repeat/resize/append/diag/diagflat/diagonal/choose/clip) (#634)
+- ferray-ma: array creation (arange, zeros, ones, empty, identity, masked_all, masked_array, masked_values, masked_object, masked_outside, masked_less/_equal, masked_not_equal, frombuffer, fromfunction, fromflex) (#633)
+- ferray-ma: full reductions (sum/prod/mean/std/var/cumsum/cumprod/min/max/argmin/argmax/median/ptp/average/anom) (#632)
+- ferray-strings: add translate (char-translate ufunc) (#631)
+- ferray-strings: add slice (string-slicing ufunc) (#630)
+- ferray-strings: add rfind (#629)
+- ferray-strings: add partition/rpartition (#628)
+- ferray-strings: add mod (printf-style % formatting) (#627)
+- ferray-strings: add isdecimal (#626)
+- ferray-strings: add index/rindex (find variants that raise on miss) (#625)
+- ferray-strings: add expandtabs (#624)
+- ferray-strings: add decode/encode (UTF-8 codec ufuncs) (#623)
+- ferray-polynomial: add mulx (multiply-by-x) for all 6 bases (#622)
+- ferray-polynomial: expose explicit basis-conversion functions (cheb2poly, poly2cheb, etc.) (#621)
+- ferray-polynomial: add Chebyshev-only extras (chebpts1, chebpts2, chebweight, chebinterpolate) (#620)
+- ferray-polynomial: add Gauss quadrature (chebgauss/leggauss/hermgauss/lagguass/hermegauss) (#619)
+- ferray-polynomial: add multivariate Vandermonde (vander2d/vander3d) for all 6 bases (#618)
+- ferray-polynomial: add multivariate grid (grid2d/grid3d) for all 6 bases (#617)
+- ferray-polynomial: add multivariate eval (val2d/val3d) for all 6 bases (#616)
+- ferray-polynomial: add polyvalfromroots (#615)
+- ferray-polynomial: add polyline/chebline/legline/lagline/hermline/hermeline (#614)
+- ferray-polynomial: add polyfromroots/chebfromroots/legfromroots/lagfromroots/hermfromroots/hermefromroots (#613)
+- ferray-polynomial: lift from f64-only to T: Element + Float (and complex coeffs) (#612)
+- ferray-random: add standard_t alias for student_t (numpy spelling) (#611)
+- ferray-random: expose explicit SeedSequence type (#610)
+- ferray-random: add SFC64 BitGenerator (#609)
+- ferray-random: add PCG64DXSM BitGenerator (#608)
+- ferray-random: add MT19937 BitGenerator (#607)
+- ferray-random: add zipf distribution (#606)
+- ferray-random: add noncentral_f distribution (#605)
+- ferray-random: add noncentral_chisquare distribution (#604)
+- ferray-io: add lib.format helpers (descr_to_dtype, header_data_from_array_1_0, read_array, write_array) (#603)
+- ferray-io: add DataSource (URL/compressed file abstraction) (#602)
+- ferray-io: add fromregex (#601)
+- ferray-stats: add unique_values/unique_counts/unique_inverse/unique_all (Array API) (#600)
+- ferray-stats: add sort_complex (#599)
+- ferray-stats: add histogram_bin_edges (#598)
+- ferray-stats: add ptp (peak-to-peak) (#597)
+- ferray-stats: add average (weighted mean) (#596)
+- ferray-stats: add nanargmin/nanargmax (#595)
+- ferray-ufunc: add isnat (datetime NaT — gated on datetime dtype scope) (#594)
+- ferray-ufunc: re-export matmul/vecdot/vecmat/matvec at top level for ufunc-call parity (#593)
+- ferray-ufunc: add cumulative_sum/cumulative_prod aliases (Array API names) (#592)
+- ferray-ufunc: add iscomplex/isreal/iscomplexobj/isrealobj/isscalar predicates (#591)
+- ferray-ufunc: add modf (split into integer/fractional parts) (#590)
+- ferray-core: add top-level copy function (#589)
+- ferray-core: add c_/r_/index_exp slice builders (#588)
+- ferray-core: add fromfile/fromfunction/fromstring (#587)
+- ferray-core: add mask_indices (#586)
+- ferray-core: add place/putmask/extract (#585)
+- ferray-core: top-level alias for where (currently where_select) (#584)
+- ferray-core: top-level alias for unique (currently in ferray-stats) (#583)
+- ferray-core: add vander (Vandermonde matrix) (#582)
+- ferray-core: add ascontiguousarray/asfortranarray/asanyarray/asarray_chkfinite/require (#581)
+- ferray-core: add broadcast/broadcast_arrays/broadcast_shapes top-level (#580)
+- ferray-core: add atleast_1d/atleast_2d/atleast_3d (#579)
+- Fix crosslink hub sync divergence (225 commits ahead of remote) (#649)
+- release: commit 0.2.11 maintenance + dep upgrades (#577)
 - chore: periodic codebase maintenance pass (deps/lint/tests/docs/issues) (#569)
 - chore: bump workspace to 0.2.11 (#576)
 - Bump workspace to 0.2.11
@@ -34,6 +158,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.2.10] - 2026-04-28
 
 ### Added
+- ferray-ufunc: no matmul/vecdot/matvec ufuncs (gufuncs) (#397)
+- ferray-ufunc: complex transcendentals missing (complex exp, log, sin, cos, sqrt, power) (#398)
+- ferray-core: no datetime/timedelta dtype support (#343)
 - `MaskAware` trait + `ma_apply_unary` helper in ferray-ma for generic mask-preserving unary ops (#505)
 
 ### Changed

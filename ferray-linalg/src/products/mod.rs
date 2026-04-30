@@ -8,7 +8,7 @@ pub mod einsum;
 pub mod tensordot;
 
 use ferray_core::array::owned::Array;
-use ferray_core::dimension::{Ix2, IxDyn};
+use ferray_core::dimension::IxDyn;
 use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::scalar::LinalgFloat;
@@ -76,10 +76,19 @@ pub fn dot<T: LinalgFloat>(
                 .or_else(|_| Array::from_vec(IxDyn::new(&[1]), vec![sum]))
         }
         (2, 2) => {
-            // Matrix multiplication
-            let result = matmul_2d(a, b)?;
-            let data: Vec<T> = result.iter().copied().collect();
-            Array::from_vec(IxDyn::new(result.shape()), data)
+            // Matrix multiplication. Skip the Ix2 round-trip (#677) — go
+            // straight from the matmul_raw flat Vec to IxDyn.
+            let (m, k1) = (a_shape[0], a_shape[1]);
+            let (k2, n) = (b_shape[0], b_shape[1]);
+            if k1 != k2 {
+                return Err(FerrayError::shape_mismatch(format!(
+                    "dot: inner dimensions don't match ({m}x{k1} @ {k2}x{n})"
+                )));
+            }
+            let a_data = borrow_data(a);
+            let b_data = borrow_data(b);
+            let result = matmul_raw::<T>(&a_data, &b_data, m, k1, n);
+            Array::from_vec(IxDyn::new(&[m, n]), result)
         }
         (_, 1) => {
             // Sum product over last axis of a with b
@@ -292,9 +301,23 @@ pub fn matmul<T: LinalgFloat>(
             Array::from_vec(IxDyn::new(&[m]), result)
         }
         (2, 2) => {
-            let result = matmul_2d(a, b)?;
-            let data: Vec<T> = result.iter().copied().collect();
-            Array::from_vec(IxDyn::new(result.shape()), data)
+            // Skip the Ix2 round-trip that matmul_2d would force (#677):
+            // wrapping the result Vec as Array<T, Ix2> only to immediately
+            // re-collect into a Vec<T> for the IxDyn Array adds two
+            // memcpy passes over the result. For a 50×50 matmul that
+            // overhead alone was ~4 µs — the same magnitude as the
+            // matmul itself. Stay flat-Vec all the way and wrap once.
+            let (m, k1) = (a_shape[0], a_shape[1]);
+            let (k2, n) = (b_shape[0], b_shape[1]);
+            if k1 != k2 {
+                return Err(FerrayError::shape_mismatch(format!(
+                    "matmul: inner dimensions don't match ({m}x{k1} @ {k2}x{n})"
+                )));
+            }
+            let a_data = borrow_data(a);
+            let b_data = borrow_data(b);
+            let result = matmul_raw::<T>(&a_data, &b_data, m, k1, n);
+            Array::from_vec(IxDyn::new(&[m, n]), result)
         }
         _ => {
             // Batched matmul: use tensordot-like approach
@@ -303,11 +326,20 @@ pub fn matmul<T: LinalgFloat>(
     }
 }
 
-/// Below this threshold, use the naive ikj loop (avoids faer setup overhead).
-const FAER_MATMUL_THRESHOLD: usize = 64;
+/// Below this threshold, use the naive ikj loop. With zero-copy `MatRef`
+/// views (see `matmul_raw`), faer's setup cost is essentially nil, so the
+/// only reason to keep a fast path is to avoid the per-call dispatch
+/// overhead in faer's gemm at very small sizes. Empirically (#653) the
+/// crossover sits around N=8: at N=8 the naive loop ties NumPy/MKL; at
+/// N=16 faer-with-zero-copy wins decisively.
+const FAER_MATMUL_THRESHOLD: usize = 8;
 
-/// Above this threshold, use faer with Rayon parallelism.
-const FAER_PARALLEL_THRESHOLD: usize = 256;
+/// Whether to ever use faer with Rayon parallelism. Currently disabled
+/// because faer's `Par::rayon(0)` is a regression against `Par::Seq` at
+/// the sizes that fall through to the faer path (N < 256, after which
+/// our hand-tuned AVX2 path takes over). Re-enable per-call by gating on
+/// max_dim if the underlying faer regression is ever fixed.
+const FAER_USE_RAYON: bool = false;
 
 /// Compute C = A @ B where A is m×k (row-major), B is k×n (row-major),
 /// and returns C as a row-major flat Vec of length m×n.
@@ -346,59 +378,92 @@ pub(crate) fn matmul_raw<T: LinalgFloat>(a: &[T], b: &[T], m: usize, k: usize, n
         return result;
     }
 
-    // Faer's column-major Mat fed directly from the row-major slices.
-    let a_faer = faer::Mat::<T>::from_fn(m, k, |i, j| a[i * k + j]);
-    let b_faer = faer::Mat::<T>::from_fn(k, n, |i, j| b[i * n + j]);
-    let mut c_faer = faer::Mat::<T>::zeros(m, n);
+    // Hand-tuned AVX2 path for f64 (#654, #655, #657). Translated from
+    // OpenBLAS's dgemm_kernel_4x8_haswell.S; see ferray_linalg::gemm.
+    // Now uses M-slab upfront parallelism (each thread runs full sequential
+    // Goto on its M-rows), eliminating the per-pc-iter sync barrier that
+    // capped earlier IC-parallel scaling. At N=192 our per-thread pack_b
+    // (288 KB per thread) overhead still exceeds the kernel work, so faer
+    // wins below 256. At 256+ the parallel branch wins by 1.5x and grows
+    // to 2-2.5x at 384/512. Specialised via TypeId so f32 stays on faer.
+    const HAND_TUNED_MIN_DIM: usize = 256;
+    if max_dim >= HAND_TUNED_MIN_DIM
+        && std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>()
+        && crate::gemm::cpu_supports_avx2_fma()
+    {
+        // SAFETY: TypeId guard verified T is f64; the transmuted slice
+        // length is identical (T and f64 have the same layout).
+        let a_f64: &[f64] = unsafe { std::slice::from_raw_parts(a.as_ptr().cast(), a.len()) };
+        let b_f64: &[f64] = unsafe { std::slice::from_raw_parts(b.as_ptr().cast(), b.len()) };
+        let mut result_f64: Vec<f64> = vec![0.0; m * n];
+        if crate::gemm::gemm_f64(m, n, k, 1.0, a_f64, b_f64, 0.0, &mut result_f64) {
+            // Convert Vec<f64> -> Vec<T> by reinterpreting the buffer.
+            // SAFETY: T is f64 (TypeId guard), so the layouts match. We
+            // forget result_f64 to avoid double-free; the new Vec adopts
+            // the buffer.
+            let len = result_f64.len();
+            let cap = result_f64.capacity();
+            let ptr = result_f64.as_mut_ptr();
+            std::mem::forget(result_f64);
+            return unsafe { Vec::from_raw_parts(ptr.cast::<T>(), len, cap) };
+        }
+    }
 
-    // Use faer's built-in `Par::rayon(0)` to auto-detect the global
-    // rayon thread count. The previous `NonZeroUsize::new(0).unwrap_or(…)`
-    // always collapsed to a single thread, effectively running the
-    // "parallel" branch sequentially (#191).
-    let par = if max_dim >= FAER_PARALLEL_THRESHOLD {
+    // Hand-tuned AVX2 path for f32 (#660). Translated from the OpenBLAS
+    // SGEMM Haswell layout (4x16 register tile — 4 rows x 16 cols per
+    // ymm pair); see ferray_linalg::gemm. f32 lanes are double the count
+    // of f64 (8 per ymm vs 4), so peak FLOPs/cycle doubles too — most
+    // ML workloads are f32, so this path is the highest-leverage user-
+    // facing speed-up of the gemm port. Specialised via TypeId.
+    if max_dim >= HAND_TUNED_MIN_DIM
+        && std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>()
+        && crate::gemm::cpu_supports_avx2_fma()
+    {
+        // SAFETY: TypeId guard verified T is f32; layouts match.
+        let a_f32: &[f32] = unsafe { std::slice::from_raw_parts(a.as_ptr().cast(), a.len()) };
+        let b_f32: &[f32] = unsafe { std::slice::from_raw_parts(b.as_ptr().cast(), b.len()) };
+        let mut result_f32: Vec<f32> = vec![0.0; m * n];
+        if crate::gemm::gemm_f32(m, n, k, 1.0, a_f32, b_f32, 0.0, &mut result_f32) {
+            let len = result_f32.len();
+            let cap = result_f32.capacity();
+            let ptr = result_f32.as_mut_ptr();
+            std::mem::forget(result_f32);
+            return unsafe { Vec::from_raw_parts(ptr.cast::<T>(), len, cap) };
+        }
+    }
+
+    // Zero-copy: interpret the row-major input slices as faer `MatRef`s
+    // and the row-major output buffer as a `MatMut`. Previously this used
+    // `Mat::from_fn` which allocated three new column-major matrices and
+    // re-indexed every element through a closure — that copy overhead
+    // alone made matmul 10-15x slower than NumPy/MKL for N in [16, 256]
+    // (#653).
+    let a_ref = faer::MatRef::from_row_major_slice(a, m, k);
+    let b_ref = faer::MatRef::from_row_major_slice(b, k, n);
+    let mut result = vec![zero; m * n];
+    let c_mut = faer::MatMut::from_row_major_slice_mut(&mut result, m, n);
+
+    // Faer parallelism is gated on `FAER_USE_RAYON` (see the const for
+    // why it's currently disabled). When re-enabled, we'd auto-detect
+    // global rayon threads via `Par::rayon(0)` — the previous
+    // `NonZeroUsize::new(0).unwrap_or(…)` always collapsed to a single
+    // thread, effectively running the "parallel" branch sequentially (#191).
+    let par = if FAER_USE_RAYON {
         faer::Par::rayon(0)
     } else {
         faer::Par::Seq
     };
 
     faer::linalg::matmul::matmul(
-        c_faer.as_mut(),
+        c_mut,
         faer::Accum::Replace,
-        a_faer.as_ref(),
-        b_faer.as_ref(),
+        a_ref,
+        b_ref,
         T::from_f64_const(1.0),
         par,
     );
 
-    // Faer is column-major; transcribe back to row-major.
-    let mut result = Vec::with_capacity(m * n);
-    for i in 0..m {
-        for j in 0..n {
-            result.push(c_faer[(i, j)]);
-        }
-    }
     result
-}
-
-fn matmul_2d<T: LinalgFloat>(
-    a: &Array<T, IxDyn>,
-    b: &Array<T, IxDyn>,
-) -> FerrayResult<Array<T, Ix2>> {
-    let a_shape = a.shape();
-    let b_shape = b.shape();
-    let (m, k1) = (a_shape[0], a_shape[1]);
-    let (k2, n) = (b_shape[0], b_shape[1]);
-    if k1 != k2 {
-        return Err(FerrayError::shape_mismatch(format!(
-            "matmul: inner dimensions don't match ({m}x{k1} @ {k2}x{n})"
-        )));
-    }
-
-    let k = k1;
-    let a_data = borrow_data(a);
-    let b_data = borrow_data(b);
-    let result = matmul_raw::<T>(&a_data, &b_data, m, k, n);
-    Array::from_vec(Ix2::new([m, n]), result)
 }
 
 fn matmul_batched<T: LinalgFloat>(
@@ -831,6 +896,101 @@ pub fn vecdot<T: LinalgFloat>(
     }
 }
 
+/// Matrix-vector product (NumPy 2.0 `numpy.matvec`).
+///
+/// Computes `M @ v` where `M` has shape `(M, K)` and `v` has shape `(K,)`,
+/// returning a vector of shape `(M,)`. This is the explicit name for the
+/// matrix-times-vector case of `matmul` and avoids the broadcasting ambiguity
+/// that `matmul` has when one operand is 1-D.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if `m` is not 2-D or `v` is not 1-D, or if
+///   `m.shape()[1] != v.shape()[0]`.
+pub fn matvec<T: LinalgFloat>(
+    m: &Array<T, IxDyn>,
+    v: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
+    let m_shape = m.shape();
+    let v_shape = v.shape();
+    if m_shape.len() != 2 {
+        return Err(FerrayError::shape_mismatch(format!(
+            "matvec: first argument must be 2-D, got shape {m_shape:?}"
+        )));
+    }
+    if v_shape.len() != 1 {
+        return Err(FerrayError::shape_mismatch(format!(
+            "matvec: second argument must be 1-D, got shape {v_shape:?}"
+        )));
+    }
+    let (rows, k) = (m_shape[0], m_shape[1]);
+    if v_shape[0] != k {
+        return Err(FerrayError::shape_mismatch(format!(
+            "matvec: incompatible shapes ({rows}, {k}) @ ({},)",
+            v_shape[0]
+        )));
+    }
+    let m_data: Vec<T> = m.iter().copied().collect();
+    let v_data: Vec<T> = v.iter().copied().collect();
+    let mut out = vec![T::from_f64_const(0.0); rows];
+    for i in 0..rows {
+        let mut sum = T::from_f64_const(0.0);
+        for j in 0..k {
+            sum += m_data[i * k + j] * v_data[j];
+        }
+        out[i] = sum;
+    }
+    Array::from_vec(IxDyn::new(&[rows]), out)
+}
+
+/// Vector-matrix product (NumPy 2.0 `numpy.vecmat`).
+///
+/// Computes `v @ M` where `v` has shape `(K,)` and `M` has shape `(K, N)`,
+/// returning a vector of shape `(N,)`. The explicit name for the
+/// vector-times-matrix case of `matmul`.
+///
+/// NumPy's `vecmat` conjugates the first operand for complex inputs; ferray's
+/// version matches this for `Complex<T>` only via the underlying `LinalgFloat`
+/// arithmetic — the implementation here uses straight multiplication.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if `v` is not 1-D, `m` is not 2-D, or
+///   `v.shape()[0] != m.shape()[0]`.
+pub fn vecmat<T: LinalgFloat>(
+    v: &Array<T, IxDyn>,
+    m: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
+    let v_shape = v.shape();
+    let m_shape = m.shape();
+    if v_shape.len() != 1 {
+        return Err(FerrayError::shape_mismatch(format!(
+            "vecmat: first argument must be 1-D, got shape {v_shape:?}"
+        )));
+    }
+    if m_shape.len() != 2 {
+        return Err(FerrayError::shape_mismatch(format!(
+            "vecmat: second argument must be 2-D, got shape {m_shape:?}"
+        )));
+    }
+    let (k, cols) = (m_shape[0], m_shape[1]);
+    if v_shape[0] != k {
+        return Err(FerrayError::shape_mismatch(format!(
+            "vecmat: incompatible shapes ({},) @ ({k}, {cols})",
+            v_shape[0]
+        )));
+    }
+    let v_data: Vec<T> = v.iter().copied().collect();
+    let m_data: Vec<T> = m.iter().copied().collect();
+    let mut out = vec![T::from_f64_const(0.0); cols];
+    for j in 0..cols {
+        let mut sum = T::from_f64_const(0.0);
+        for i in 0..k {
+            sum += v_data[i] * m_data[i * cols + j];
+        }
+        out[j] = sum;
+    }
+    Array::from_vec(IxDyn::new(&[cols]), out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -935,6 +1095,50 @@ mod tests {
             Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![0.0, 5.0, 6.0, 7.0]).unwrap();
         let c = kron(&a, &b).unwrap();
         assert_eq!(c.shape(), &[4, 4]);
+    }
+
+    #[test]
+    fn matvec_basic() {
+        // M @ v: (2x3) @ (3,) = (2,)
+        let m =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
+        let v = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![7.0, 8.0, 9.0]).unwrap();
+        let r = matvec(&m, &v).unwrap();
+        assert_eq!(r.shape(), &[2]);
+        let data: Vec<f64> = r.iter().copied().collect();
+        // [1*7+2*8+3*9, 4*7+5*8+6*9] = [50, 122]
+        assert!((data[0] - 50.0).abs() < 1e-10);
+        assert!((data[1] - 122.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn matvec_shape_mismatch_errors() {
+        let m = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0.0; 6]).unwrap();
+        let v = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0, 2.0]).unwrap();
+        assert!(matvec(&m, &v).is_err());
+    }
+
+    #[test]
+    fn vecmat_basic() {
+        // v @ M: (3,) @ (3x2) = (2,)
+        let v = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let m =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 2]), vec![1.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+                .unwrap();
+        let r = vecmat(&v, &m).unwrap();
+        assert_eq!(r.shape(), &[2]);
+        let data: Vec<f64> = r.iter().copied().collect();
+        // [1*1+2*0+3*1, 1*0+2*1+3*1] = [4, 5]
+        assert!((data[0] - 4.0).abs() < 1e-10);
+        assert!((data[1] - 5.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn vecmat_shape_mismatch_errors() {
+        let v = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0, 2.0]).unwrap();
+        let m = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 2]), vec![0.0; 6]).unwrap();
+        assert!(vecmat(&v, &m).is_err());
     }
 
     #[test]

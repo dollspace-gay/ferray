@@ -345,6 +345,86 @@ pub fn genfromtxt_from_str(
     Array::from_vec(Ix2::new([nrows, ncols]), data)
 }
 
+// ---------------------------------------------------------------------------
+// fromregex
+// ---------------------------------------------------------------------------
+
+/// Read text using a regular expression to extract structured groups.
+///
+/// `regex` must contain at least one capturing group. For every line in
+/// `content`, the regex is matched against the full line; matches where every
+/// capture is parsed successfully via `T::from_str` produce one row of the
+/// output. Lines that do not match (or that contain unparseable captures)
+/// are skipped.
+///
+/// The result is a 2-D `Array<T, Ix2>` of shape `(rows, captures)`.
+///
+/// Analogous to `numpy.fromregex`. NumPy's structured-dtype support is not
+/// modeled here — every capture group must parse to the same `T`; for mixed
+/// dtypes use one call per column or the structured-record API in
+/// `ferray-core::record`.
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if the regex cannot be compiled or contains
+///   no capture groups.
+pub fn fromregex<T>(content: &str, regex: &str) -> FerrayResult<Array<T, Ix2>>
+where
+    T: Element + FromStr,
+    T::Err: Display,
+{
+    let re = regex::Regex::new(regex)
+        .map_err(|e| FerrayError::invalid_value(format!("fromregex: invalid regex: {e}")))?;
+    let n_groups = re.captures_len().saturating_sub(1);
+    if n_groups == 0 {
+        return Err(FerrayError::invalid_value(
+            "fromregex: regex must contain at least one capture group",
+        ));
+    }
+    let mut data: Vec<T> = Vec::new();
+    let mut nrows = 0usize;
+    'lines: for line in content.lines() {
+        if let Some(caps) = re.captures(line) {
+            // Try to parse every capture group into T. If any fails, skip this row.
+            let start = data.len();
+            for g in 1..=n_groups {
+                let m = caps.get(g).map_or("", |m| m.as_str());
+                match m.parse::<T>() {
+                    Ok(v) => data.push(v),
+                    Err(_) => {
+                        // Roll back this row's pushes, then continue with next line.
+                        data.truncate(start);
+                        continue 'lines;
+                    }
+                }
+            }
+            nrows += 1;
+        }
+    }
+    Array::from_vec(Ix2::new([nrows, n_groups]), data)
+}
+
+/// Read regex-extracted rows from a file, parsing every capture group as `T`.
+///
+/// Convenience wrapper that reads `path` to a string and calls [`fromregex`].
+///
+/// # Errors
+/// - `FerrayError::IoError` if the file cannot be read.
+/// - Errors from [`fromregex`] (regex compile / no groups).
+pub fn fromregex_from_file<T, P>(path: P, regex: &str) -> FerrayResult<Array<T, Ix2>>
+where
+    T: Element + FromStr,
+    T::Err: Display,
+    P: AsRef<Path>,
+{
+    let content = fs::read_to_string(path.as_ref()).map_err(|e| {
+        FerrayError::io_error(format!(
+            "fromregex: failed to read file '{}': {e}",
+            path.as_ref().display()
+        ))
+    })?;
+    fromregex::<T>(&content, regex)
+}
+
 #[cfg(test)]
 #[allow(clippy::float_cmp)] // Roundtrip tests assert exact equality on hand-picked text values.
 mod tests {
@@ -479,5 +559,58 @@ mod tests {
         let content = "";
         let arr: Array<f64, Ix2> = loadtxt_from_str(content, ',', 0).unwrap();
         assert_eq!(arr.shape(), &[0, 0]);
+    }
+
+    // -- fromregex --
+
+    #[test]
+    fn fromregex_basic_one_group() {
+        // Pull integers out of "value=NN" lines, ignore other lines.
+        let s = "value=10\nvalue=20\nirrelevant\nvalue=30\n";
+        let arr: Array<i32, Ix2> = fromregex(s, r"^value=(\d+)$").unwrap();
+        assert_eq!(arr.shape(), &[3, 1]);
+        assert_eq!(arr.as_slice().unwrap(), &[10, 20, 30]);
+    }
+
+    #[test]
+    fn fromregex_multiple_groups() {
+        // Two captures per row → shape (n, 2).
+        let s = "1,2\n3,4\n5,6\n";
+        let arr: Array<f64, Ix2> = fromregex(s, r"^([\d.]+),([\d.]+)$").unwrap();
+        assert_eq!(arr.shape(), &[3, 2]);
+        assert_eq!(arr.as_slice().unwrap(), &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    fn fromregex_no_groups_errs() {
+        let r: FerrayResult<Array<i32, Ix2>> = fromregex("a\nb\n", r"^[ab]$");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn fromregex_invalid_regex_errs() {
+        let r: FerrayResult<Array<i32, Ix2>> = fromregex("", r"(unclosed");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn fromregex_skips_unparseable_rows() {
+        // Second row has a non-numeric capture; it should be skipped silently.
+        let s = "v=10\nv=foo\nv=20\n";
+        let arr: Array<i32, Ix2> = fromregex(s, r"^v=(\S+)$").unwrap();
+        assert_eq!(arr.shape(), &[2, 1]);
+        assert_eq!(arr.as_slice().unwrap(), &[10, 20]);
+    }
+
+    #[test]
+    fn fromregex_from_file_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("ferray_io_fromregex_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("regex_test.txt");
+        std::fs::write(&path, "x=1\nx=2\nx=3\n").unwrap();
+        let arr: Array<i32, Ix2> = fromregex_from_file(&path, r"^x=(\d+)$").unwrap();
+        assert_eq!(arr.shape(), &[3, 1]);
+        assert_eq!(arr.as_slice().unwrap(), &[1, 2, 3]);
+        let _ = std::fs::remove_file(&path);
     }
 }

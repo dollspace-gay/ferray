@@ -5,11 +5,13 @@ use core::fmt;
 use num_complex::Complex;
 
 pub mod casting;
+pub mod datetime;
 pub mod finfo;
 pub mod i256;
 pub mod promotion;
 pub mod unsafe_cast;
 
+pub use datetime::{DateTime64, NAT, TimeUnit, Timedelta64};
 pub use i256::I256;
 
 // ---------------------------------------------------------------------------
@@ -82,6 +84,13 @@ pub enum DType {
     /// `bf16` (bfloat16) — only available with the `bf16` feature.
     #[cfg(feature = "bf16")]
     BF16,
+    /// `datetime64[unit]` — calendar instant as i64 ticks since the Unix
+    /// epoch, with the [`TimeUnit`] tagging the meaning of one tick.
+    /// Backed by the [`DateTime64`] element type.
+    DateTime64(TimeUnit),
+    /// `timedelta64[unit]` — duration as i64 ticks. Backed by the
+    /// [`Timedelta64`] element type.
+    Timedelta64(TimeUnit),
 }
 
 impl DType {
@@ -110,6 +119,9 @@ impl DType {
             Self::F16 => 2,
             #[cfg(feature = "bf16")]
             Self::BF16 => 2,
+            // datetime64 / timedelta64 are i64 counts; the unit changes
+            // the interpretation but not the storage size.
+            Self::DateTime64(_) | Self::Timedelta64(_) => 8,
         }
     }
 
@@ -139,6 +151,7 @@ impl DType {
             Self::F16 => core::mem::align_of::<half::f16>(),
             #[cfg(feature = "bf16")]
             Self::BF16 => core::mem::align_of::<half::bf16>(),
+            Self::DateTime64(_) | Self::Timedelta64(_) => core::mem::align_of::<i64>(),
         }
     }
 
@@ -217,29 +230,30 @@ impl DType {
 
 impl fmt::Display for DType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = match self {
-            Self::Bool => "bool",
-            Self::U8 => "uint8",
-            Self::U16 => "uint16",
-            Self::U32 => "uint32",
-            Self::U64 => "uint64",
-            Self::U128 => "uint128",
-            Self::I8 => "int8",
-            Self::I16 => "int16",
-            Self::I32 => "int32",
-            Self::I64 => "int64",
-            Self::I128 => "int128",
-            Self::I256 => "int256",
-            Self::F32 => "float32",
-            Self::F64 => "float64",
-            Self::Complex32 => "complex64",
-            Self::Complex64 => "complex128",
+        match self {
+            Self::Bool => f.write_str("bool"),
+            Self::U8 => f.write_str("uint8"),
+            Self::U16 => f.write_str("uint16"),
+            Self::U32 => f.write_str("uint32"),
+            Self::U64 => f.write_str("uint64"),
+            Self::U128 => f.write_str("uint128"),
+            Self::I8 => f.write_str("int8"),
+            Self::I16 => f.write_str("int16"),
+            Self::I32 => f.write_str("int32"),
+            Self::I64 => f.write_str("int64"),
+            Self::I128 => f.write_str("int128"),
+            Self::I256 => f.write_str("int256"),
+            Self::F32 => f.write_str("float32"),
+            Self::F64 => f.write_str("float64"),
+            Self::Complex32 => f.write_str("complex64"),
+            Self::Complex64 => f.write_str("complex128"),
             #[cfg(feature = "f16")]
-            Self::F16 => "float16",
+            Self::F16 => f.write_str("float16"),
             #[cfg(feature = "bf16")]
-            Self::BF16 => "bfloat16",
-        };
-        write!(f, "{name}")
+            Self::BF16 => f.write_str("bfloat16"),
+            Self::DateTime64(u) => write!(f, "datetime64[{u}]"),
+            Self::Timedelta64(u) => write!(f, "timedelta64[{u}]"),
+        }
     }
 }
 

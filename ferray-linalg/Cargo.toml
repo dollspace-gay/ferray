@@ -24,9 +24,47 @@ num-complex = { workspace = true }
 workspace = true
 optional = true
 
+[dependencies.openblas-src]
+version = "0.10"
+default-features = false
+features = ["system", "cblas"]
+optional = true
+
+[dependencies.cblas-sys]
+version = "0.3"
+optional = true
+
 [features]
 default = []
 f16 = ["dep:half", "ferray-core/f16"]
+# bf16 input / f32 accumulator GEMM. Off by default to avoid pulling in
+# the `half` crate. The kernel pre-widens bf16 → f32 in pack and
+# dispatches to the SGEMM path. AVX-512 BF16 (`vdpbf16ps`) native fast
+# path is a follow-up — see roadmap in gemm/mod.rs.
+bf16 = ["dep:half", "ferray-core/bf16"]
+# AVX-512F DGEMM kernel translated from OpenBLAS dgemm_kernel_16x2_skylakex.c.
+# Off by default because AVX-512 intrinsics in core::arch::x86_64 stabilised
+# in Rust 1.89; enabling this feature bumps the effective MSRV to 1.89+.
+# The kernel runtime-detects avx512f via is_x86_feature_detected! and falls
+# back to the AVX2 path when unavailable. Users on Sapphire Rapids, Zen4,
+# or Skylake-X / Cascade Lake should enable this for the f64 multi-thread
+# perf bump.
+avx512 = []
+# AVX-VNNI i8 GEMM kernel using vpdpbusd (single-instruction (u8, i8) →
+# i32 4-way dot product). Off by default because the AVX-VNNI intrinsic
+# `_mm256_dpbusd_avx_epi32` stabilised in Rust 1.87; enabling this
+# feature bumps the effective MSRV to 1.87+. The kernel runtime-detects
+# avxvnni via is_x86_feature_detected! and falls back to the portable
+# AVX2 vpmaddubsw + vpmaddwd chain when the CPU lacks it. Available on
+# Alder Lake +, Tiger Lake +, Sapphire Rapids +, Zen4 +.
+avxvnni = []
+# OpenBLAS backend for f32/f64/c32/c64 GEMM. When this feature is on,
+# the gemm_* entry points dispatch through cblas_*gemm instead of the
+# hand-tuned kernels, giving a perf-floor guarantee for users who already
+# have OpenBLAS installed. Defaults to system-linked OpenBLAS (expects
+# libopenblas-dev / equivalent on the host); for vendored static linking
+# pass `--features openblas-src/static` separately.
+openblas = ["dep:openblas-src", "dep:cblas-sys"]
 
 [dev-dependencies]
 proptest = { workspace = true }

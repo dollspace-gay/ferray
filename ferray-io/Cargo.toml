@@ -17,6 +17,7 @@ byteorder = { workspace = true }
 flate2 = { workspace = true }
 memmap2 = { workspace = true }
 num-complex = { workspace = true }
+regex = { workspace = true }
 zip = { workspace = true }
 
 [dependencies.half]

@@ -24,7 +24,20 @@ pub const PARALLEL_SORT_THRESHOLD: usize = 100_000;
 /// Below this size, we use an unrolled sequential sum. 256 elements gives a
 /// good balance: halves carry-merge overhead vs 128 while keeping the same
 /// O(ε log N) accuracy bound (just one fewer merge level).
-const PAIRWISE_BASE: usize = 256;
+/// Base-chunk size for pairwise summation. Each base chunk runs the
+/// flat SIMD inner-loop (4-way unrolled f64 adds with one horizontal
+/// reduction at the end); the pairwise tree only kicks in across base
+/// chunks. So this knob is the trade-off between (a) tree-induced
+/// horizontal-sum overhead — paid once per base chunk — and (b)
+/// numerical precision, which scales as O(ε * base_size) within a
+/// chunk and O(ε log N/base_size) across the tree.
+///
+/// 4096 puts the per-chunk error at ~12 ULP for f64 (well below f64's
+/// 52-bit mantissa) while cutting the horizontal-sum overhead 16× vs
+/// the previous 256. For N=1M that's 250 chunks instead of ~4000 — the
+/// difference between memory-bandwidth-bound (NumPy's 154 µs floor at
+/// 1M) and add-throughput-bound (242 µs at 1M).
+const PAIRWISE_BASE: usize = 4096;
 
 /// 8-wide unrolled base-case sum for auto-vectorization.
 #[inline(always)]

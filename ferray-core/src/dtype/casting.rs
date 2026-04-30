@@ -155,6 +155,12 @@ pub const fn min_scalar_type(dt: DType) -> DType {
         F16 => F16,
         #[cfg(feature = "bf16")]
         BF16 => BF16,
+        // datetime64 and timedelta64 are i64-backed and don't promote
+        // to a smaller integer family — keep them at their canonical
+        // ns-unit form. Real reduction across units is a separate
+        // arithmetic-promotion concern, not min-scalar-type.
+        DType::DateTime64(_) => DType::DateTime64(super::TimeUnit::Ns),
+        DType::Timedelta64(_) => DType::Timedelta64(super::TimeUnit::Ns),
     }
 }
 

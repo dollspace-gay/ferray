@@ -119,11 +119,18 @@ fn clenshaw_hermite(coeffs: &[f64], x: f64) -> f64 {
         return coeffs[0];
     }
 
+    // Hermite recurrence: H_n = 2x H_{n-1} - 2(n-1) H_{n-2}
+    // Clenshaw form P_n = α_n P_{n-1} + β_n P_{n-2} →
+    //   α_n(x) = 2x,  β_n = -2(n-1)
+    // Backward step: b_k = c_k + α_{k+1}(x) b_{k+1} + β_{k+2} b_{k+2}
+    //                    = c_k + 2x b_{k+1} - 2(k + 1) b_{k+2}
+    // (the previous version used `-2k`, which produced wrong values
+    // once `n >= 4`.)
     let mut b_k1 = 0.0;
     let mut b_k2 = 0.0;
 
     for k in (1..n).rev() {
-        let b_k = (2.0 * (k as f64)).mul_add(-b_k2, (2.0 * x).mul_add(b_k1, coeffs[k]));
+        let b_k = (2.0 * ((k + 1) as f64)).mul_add(-b_k2, (2.0 * x).mul_add(b_k1, coeffs[k]));
         b_k2 = b_k1;
         b_k1 = b_k;
     }

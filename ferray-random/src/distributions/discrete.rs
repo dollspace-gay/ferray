@@ -421,6 +421,49 @@ impl<B: BitGenerator> Generator<B> {
         });
         vec_to_array_i64(data, &shape_vec)
     }
+
+    /// Generate an array of Zipf-distributed variates.
+    ///
+    /// Samples from the Zipf (zeta) distribution with shape parameter `a > 1`,
+    /// using Devroye's rejection algorithm (Non-Uniform Random Variate
+    /// Generation, p. 551). The PMF is `P(k) = k^(-a) / zeta(a)` for
+    /// `k = 1, 2, ...`.
+    ///
+    /// Equivalent to `numpy.random.Generator.zipf`.
+    ///
+    /// # Errors
+    /// - `FerrayError::InvalidValue` if `a <= 1` or `size` is invalid.
+    pub fn zipf(&mut self, a: f64, size: impl IntoShape) -> Result<Array<i64, IxDyn>, FerrayError> {
+        if a <= 1.0 {
+            return Err(FerrayError::invalid_value(format!(
+                "a must be > 1 for Zipf, got {a}"
+            )));
+        }
+        let am1 = a - 1.0;
+        let b = 2.0_f64.powf(am1);
+        let shape_vec = size.into_shape()?;
+        let total = shape_size(&shape_vec);
+        let data = generate_vec_i64(self, total, |bg| {
+            loop {
+                let u = 1.0 - bg.next_f64();
+                let v = bg.next_f64();
+                let x = u.powf(-1.0 / am1).floor();
+                // Guard against overflow / non-positive results.
+                if !x.is_finite() || x < 1.0 {
+                    continue;
+                }
+                let t = (1.0 + 1.0 / x).powf(am1);
+                // Devroye's acceptance: v * x * (t - 1) / (b - 1) <= t / b
+                if v * x * (t - 1.0) / (b - 1.0) <= t / b {
+                    if x > i64::MAX as f64 {
+                        continue;
+                    }
+                    return x as i64;
+                }
+            }
+        });
+        vec_to_array_i64(data, &shape_vec)
+    }
 }
 
 /// Generate a single hypergeometric variate using the direct algorithm.
@@ -622,5 +665,34 @@ mod tests {
         assert!(rng.logseries(1.0, 10).is_err());
         assert!(rng.negative_binomial(0.0, 0.5, 10).is_err());
         assert!(rng.negative_binomial(5.0, 0.0, 10).is_err());
+    }
+
+    #[test]
+    fn zipf_positive_integers() {
+        use crate::default_rng_seeded;
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.zipf(2.5, 1000).unwrap();
+        for &v in arr.as_slice().unwrap() {
+            assert!(v >= 1, "zipf output must be >= 1, got {v}");
+        }
+    }
+
+    #[test]
+    fn zipf_seed_reproducible() {
+        use crate::default_rng_seeded;
+        let mut a = default_rng_seeded(7);
+        let mut b = default_rng_seeded(7);
+        let xs = a.zipf(3.0, 200).unwrap();
+        let ys = b.zipf(3.0, 200).unwrap();
+        assert_eq!(xs.as_slice().unwrap(), ys.as_slice().unwrap());
+    }
+
+    #[test]
+    fn zipf_bad_a_errs() {
+        use crate::default_rng_seeded;
+        let mut rng = default_rng_seeded(0);
+        assert!(rng.zipf(1.0, 10).is_err());
+        assert!(rng.zipf(0.5, 10).is_err());
+        assert!(rng.zipf(-2.0, 10).is_err());
     }
 }

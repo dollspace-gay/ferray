@@ -84,25 +84,47 @@ pub use ops::rounding::{around, ceil, fix, floor, rint, round, trunc};
 // Arithmetic
 pub use ops::arithmetic::{
     absolute, absolute_into, add, add_accumulate, add_broadcast, add_into, add_reduce,
-    add_reduce_all, add_reduce_axes, add_reduce_keepdims, cbrt, cross, cumprod, cumsum, diff,
-    divide, divide_broadcast, divide_into, divmod, ediff1d, fabs, floor_divide, fmod, gcd, gcd_int,
-    gradient, heaviside, lcm, lcm_int, mod_, multiply, multiply_broadcast, multiply_into,
-    multiply_outer, nan_add_reduce, nan_add_reduce_all, nan_add_reduce_axes, nan_max_reduce,
-    nan_max_reduce_all, nan_max_reduce_axes, nan_min_reduce, nan_min_reduce_all,
-    nan_min_reduce_axes, nan_multiply_reduce, nan_multiply_reduce_all, nan_multiply_reduce_axes,
-    nancumprod, nancumsum, negative, negative_into, positive, power, reciprocal, remainder, sign,
-    sqrt, sqrt_into, square, square_into, subtract, subtract_broadcast, subtract_into, trapezoid,
-    true_divide,
+    add_reduce_all, add_reduce_axes, add_reduce_keepdims, cbrt, cross, cumprod, cumsum,
+    cumulative_prod, cumulative_sum, diff, divide, divide_broadcast, divide_into, divmod, ediff1d,
+    fabs, floor_divide, fmod, gcd, gcd_int, gradient, heaviside, lcm, lcm_int, mod_, multiply,
+    multiply_broadcast, multiply_into, multiply_outer, nan_add_reduce, nan_add_reduce_all,
+    nan_add_reduce_axes, nan_max_reduce, nan_max_reduce_all, nan_max_reduce_axes, nan_min_reduce,
+    nan_min_reduce_all, nan_min_reduce_axes, nan_multiply_reduce, nan_multiply_reduce_all,
+    nan_multiply_reduce_axes, nancumprod, nancumsum, negative, negative_into, positive, power,
+    reciprocal, remainder, sign, sqrt, sqrt_into, square, square_into, subtract,
+    subtract_broadcast, subtract_into, trapezoid, true_divide,
 };
 
 // Float intrinsics
 pub use ops::floatintrinsic::{
     clip, clip_ord, copysign, float_power, fmax, fmin, frexp, isfinite, isinf, isnan, isneginf,
-    isposinf, ldexp, maximum, minimum, nan_to_num, nextafter, signbit, spacing,
+    isposinf, ldexp, maximum, minimum, modf, nan_to_num, nextafter, signbit, spacing,
 };
 
 // Complex
-pub use ops::complex::{abs, angle, conj, conjugate, imag, real};
+pub use ops::complex::{
+    abs, angle, conj, conjugate, imag, iscomplex, iscomplex_real, iscomplexobj, isreal,
+    isreal_real, isrealobj, isscalar, real,
+};
+
+// Complex transcendentals (sin/cos/tan, sinh/cosh/tanh, asin/acos/atan,
+// asinh/acosh/atanh, exp, expm1, ln (natural log), log2, log10, log1p,
+// sqrt, power) — NumPy parity for `np.sin(complex_array)` and friends.
+// Suffixed with _complex to avoid name clash with the real-valued ufuncs
+// re-exported above.
+pub use ops::complex::{
+    acos_complex, acosh_complex, asin_complex, asinh_complex, atan_complex, atanh_complex,
+    cos_complex, cosh_complex, exp_complex, expm1_complex, ln_complex, log1p_complex, log2_complex,
+    log10_complex, power_complex, sin_complex, sinh_complex, sqrt_complex, tan_complex,
+    tanh_complex,
+};
+
+// Datetime / timedelta
+pub use ops::datetime::{
+    add_datetime_timedelta, add_datetime_timedelta_promoted, add_timedelta, add_timedelta_promoted,
+    isnat_datetime, isnat_timedelta, sub_datetime, sub_datetime_promoted, sub_datetime_timedelta,
+    sub_timedelta,
+};
 
 // Bitwise
 pub use ops::bitwise::{
