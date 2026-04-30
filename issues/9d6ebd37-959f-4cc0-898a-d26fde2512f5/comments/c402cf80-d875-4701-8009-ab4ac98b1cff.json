@@ -1,0 +1,10 @@
+{
+  "uuid": "c402cf80-d875-4701-8009-ab4ac98b1cff",
+  "issue_uuid": "9d6ebd37-959f-4cc0-898a-d26fde2512f5",
+  "author": "doll-agent",
+  "content": "Root cause: /home/doll/ferray/.git/worktrees/-hub-cache/config.worktree sets user.signingkey to /home/doll/.ssh/id_ecdsa_signing (user's personal key, fingerprint SHA256:6GbEO9gckWEeR3l6YB3LUaTe1Oc9qqn0WLtMVuu7a8A), but allowedSignersFile only contains agent keys (doll-agent fp SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU). git verify-commit reports 'Good signature... No principal matched'. Original 225-commit divergence resolved itself when crosslink quick auto-pushed during issue creation. Plan: rewrite the hub-cache worktree signingkey to .crosslink/keys/doll-agent_ed25519 and override user.name/user.email to the agent identity for that worktree only.",
+  "created_at": "2026-04-30T03:06:12.967353306Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAzQ0fIf2B4tESoOnWCpVUKVHZzgQuuuSrgOyqSiYCPr/KuVwlcpBIz8FejC1DSt0eoiW8BsJVWV12g5bs2kb+Dw=="
+}
