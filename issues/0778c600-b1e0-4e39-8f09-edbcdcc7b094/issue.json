@@ -1,0 +1,10 @@
+{
+  "uuid": "0778c600-b1e0-4e39-8f09-edbcdcc7b094",
+  "display_id": 651,
+  "title": "speed_benchmark.py: matmul size_str missing second matrix shape",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T14:22:58.199183869Z",
+  "updated_at": "2026-04-30T14:22:58.199183869Z"
+}
