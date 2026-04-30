@@ -1,0 +1,10 @@
+{
+  "uuid": "5c645f03-fb65-4e07-ab3a-5c28f3ad01fd",
+  "issue_uuid": "96260fe8-fb83-428d-80fd-cf70921feb6e",
+  "author": "doll-agent",
+  "content": "Root cause: PAIRWISE_BASE=256 made sum(1M) run 4096 base chunks each with its own horizontal reduction. Fix: PAIRWISE_BASE 256 -> 4096 (ferray-stats/src/parallel.rs), cuts horizontal-sum overhead 16x. Per-chunk error ~12 ULP (well below f64 mantissa). Speed: sum 100K 1.2x slower -> 1.36x faster; sum 1M 1.6x slower -> 1.05x slower (DRAM ceiling); mean 100K 1.2x slower -> 1.44x faster; var/std 1M 2.3x -> 2.96x/2.69x faster. 230+18+13 tests pass, clippy clean, stat-equiv 47/47 PASS.",
+  "created_at": "2026-04-30T20:11:59.161371359Z",
+  "kind": "resolution",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAzzVry/aS/xgl03aDRTDr8BQBho56rl5uPlESxBgZM2v+RchDm6Osmx53PXR4AkOrL9QYEykSM2NUZ6903aWNCw=="
+}
