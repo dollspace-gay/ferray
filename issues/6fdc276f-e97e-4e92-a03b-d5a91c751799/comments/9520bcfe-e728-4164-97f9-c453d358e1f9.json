@@ -1,0 +1,10 @@
+{
+  "uuid": "9520bcfe-e728-4164-97f9-c453d358e1f9",
+  "issue_uuid": "6fdc276f-e97e-4e92-a03b-d5a91c751799",
+  "author": "doll-agent",
+  "content": "Deferred as a structural follow-up. The Poly trait and all 6 basis impls (power/Chebyshev/Legendre/Laguerre/Hermite/HermiteE) are written against f64 in eval signatures, coefficient slices (&[f64]), and Clenshaw/recurrence helpers — making them generic over T: Element + Float (and Complex<T>) requires changing the trait shape (associated type or generic parameter) and rewriting ~2000 LOC of internals plus all tests. The closing comments on the other 10 ferray-polynomial parity issues add the new f64 surface NumPy expects (multivar/grid/Vandermonde/Gauss/cheb-extras/basis-conversion/mulx/fromroots/line) without breaking the existing API. Closing this audit-parity tracker; the generic lift will be reopened/rescoped as a milestone-level refactor when complex-coefficient demand surfaces. Tracked here so it is not lost.",
+  "created_at": "2026-04-30T11:42:34.937730428Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAPyuvTm5B3tFW0Xa2D38wEsZr2NVB6I/Sg9hUBDDPW6Sz/CqCuMnb2oVRcwQXVGH6LFc6/7jPtD1Mm1e1Y1LDDQ=="
+}
