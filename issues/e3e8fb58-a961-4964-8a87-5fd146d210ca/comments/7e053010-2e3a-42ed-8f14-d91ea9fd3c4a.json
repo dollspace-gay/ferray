@@ -1,0 +1,10 @@
+{
+  "uuid": "7e053010-2e3a-42ed-8f14-d91ea9fd3c4a",
+  "issue_uuid": "e3e8fb58-a961-4964-8a87-5fd146d210ca",
+  "author": "doll-agent",
+  "content": "Implemented fromregex(content, regex) and fromregex_from_file(path, regex) in ferray-io::text. Each capture group becomes a column; lines with unparseable captures are skipped silently (matching numpy.fromregex's behavior on string-dtype output but applied uniformly to T: FromStr). NumPy's structured-dtype output is intentionally not modeled — every capture must parse to the same T; for mixed dtypes, call once per column or use ferray-core::record. Added regex to ferray-io workspace deps. Re-exported via ferray-io lib.rs. 6 unit tests cover basic, multi-group, no-groups error, invalid-regex error, unparseable-row skipping, and file-roundtrip paths.",
+  "created_at": "2026-04-30T03:40:13.447526615Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAlO464K07uRApN+x4ofWpZXDS8rCmGX5F2gN+e9fSkT0IFDY9NXCJouiUFxz/waM2MrOPgoekSmhadYPUH0CcCA=="
+}
