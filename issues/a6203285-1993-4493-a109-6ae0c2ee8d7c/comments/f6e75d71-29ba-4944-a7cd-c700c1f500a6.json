@@ -1,0 +1,10 @@
+{
+  "uuid": "f6e75d71-29ba-4944-a7cd-c700c1f500a6",
+  "issue_uuid": "a6203285-1993-4493-a109-6ae0c2ee8d7c",
+  "author": "doll-agent",
+  "content": "Marked as blocked-by #343 (datetime/timedelta dtype). isnat returns true on NaT (Not-a-Time) sentinels in datetime64/timedelta64 arrays (int64::MIN), and raises TypeError on any other dtype. Without DType::DateTime64 and DType::Timedelta64 in ferray-core, there's no array type for which isnat would have meaningful semantics — implementing a Float-isnan-style alternative would diverge from NumPy's contract. Will be implemented as part of the #343 datetime work or immediately after.",
+  "created_at": "2026-04-30T13:11:02.857464043Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAa/u37ZKePgD4IaUYpTdfIQKgpKYCCTgwQtcMapYFHEAiqflMzqsjfkeRDiHJsYrNdibjz54l1DBBcEs5xyOvAg=="
+}
