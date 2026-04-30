@@ -2,11 +2,12 @@
   "uuid": "325d9350-0dc4-401a-9e36-c22846bd8ab3",
   "display_id": 630,
   "title": "ferray-strings: add slice (string-slicing ufunc)",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:37.552185268Z",
-  "updated_at": "2026-04-30T02:58:37.635788903Z",
+  "updated_at": "2026-04-30T12:07:05.194817789Z",
+  "closed_at": "2026-04-30T12:07:05.194817789Z",
   "labels": [
     "audit-parity",
     "ferray-strings"
