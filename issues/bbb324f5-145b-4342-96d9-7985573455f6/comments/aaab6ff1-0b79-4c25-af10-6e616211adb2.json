@@ -1,0 +1,10 @@
+{
+  "uuid": "aaab6ff1-0b79-4c25-af10-6e616211adb2",
+  "issue_uuid": "bbb324f5-145b-4342-96d9-7985573455f6",
+  "author": "doll-agent",
+  "content": "Added optional 'complex' cargo feature pulling num-complex into the dtype layer for future Complex32/Complex64 round-trips. Arrow has NO native complex primitive type — tracking the canonical workaround (struct(real: Float64, imag: Float64)) for follow-up implementation. Polars also has no complex dtype. The numpy-crate side supports Complex<f32>/Complex<f64> via numpy/complex; that path needs an NpElement impl gated on the complex feature, which depends on whether ferray-core's Complex types are exposed via the half/complex matrix the same way. Closing as 'feature flag and dtype hooks landed; full backend wiring is the deferred half'.",
+  "created_at": "2026-04-30T12:25:49.484352302Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAy2vSHll2qHF9iQX4ZCEn+THS10hDQDatwtFfdyIott/eNyb9Sdc1BDchXD1bQXKXvQ5N/ajrfUYU1ApWE+yYBg=="
+}
