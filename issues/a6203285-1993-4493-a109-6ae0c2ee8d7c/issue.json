@@ -2,11 +2,12 @@
   "uuid": "a6203285-1993-4493-a109-6ae0c2ee8d7c",
   "display_id": 594,
   "title": "ferray-ufunc: add isnat (datetime NaT — gated on datetime dtype scope)",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:00.423336082Z",
-  "updated_at": "2026-04-30T13:10:49.962074514Z",
+  "updated_at": "2026-04-30T13:32:35.556806713Z",
+  "closed_at": "2026-04-30T13:32:35.556806713Z",
   "labels": [
     "audit-parity",
     "ferray-ufunc"
