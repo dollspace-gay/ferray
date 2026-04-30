@@ -3,6 +3,10 @@
   "next_comment_id": 1,
   "display_id_map": {},
   "locks": {
+    "-1": {
+      "agent_id": "doll-agent",
+      "claimed_at": "2026-04-30T02:59:56.875772321Z"
+    },
     "4": {
       "agent_id": "doll-agent",
       "claimed_at": "2026-04-23T19:35:17.754885072Z"
@@ -35,8 +39,8 @@
     }
   ],
   "watermark": {
-    "timestamp": "2026-04-30T02:59:03.303711210Z",
+    "timestamp": "2026-04-30T02:59:56.875772321Z",
     "agent_id": "doll-agent",
-    "agent_seq": 17
+    "agent_seq": 18
   }
 }
