@@ -1,0 +1,10 @@
+{
+  "uuid": "c83de84c-6e8a-4184-9442-2d98bf3f5013",
+  "issue_uuid": "d098b9ba-8d22-49b9-b961-691885b38068",
+  "author": "doll-agent",
+  "content": "Added vander() to ferray-core::creation with the NumPy signature (x, n=None, increasing=false). Default produces decreasing-power columns matching numpy.vander; tests cover decreasing/increasing, explicit-n, and empty-input error path.",
+  "created_at": "2026-04-30T03:08:52.892393877Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAKJjG7dhixw/E/3B91+tDq6P2qBIpZ+KXRpLfCKxXBaEPC6g2QsPT9LlBasUhPikpzVEDWvJ8bMfQMv1EeaojCw=="
+}
