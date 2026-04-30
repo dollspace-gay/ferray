@@ -1,0 +1,10 @@
+{
+  "uuid": "d89b8930-89b5-41a5-bad0-f866e134c1b1",
+  "issue_uuid": "a6828dae-c8c4-42b7-9ff0-12ad2e985648",
+  "author": "doll-agent",
+  "content": "Session auto-ended (stale after 671 minutes). No handoff notes provided.",
+  "created_at": "2026-04-30T14:11:29.412110658Z",
+  "kind": "handoff",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAVPuA1NCKA/GIJbuwa/Wmb3Py1d1DqoEzGqtcO4lzdFetmXmCxdU5sHBrybSeomGdA0ri5OBtrDf3LxAHyO0CDQ=="
+}
