@@ -1,0 +1,10 @@
+{
+  "uuid": "92adf93e-420c-47e6-9fdf-f964a516aa0a",
+  "issue_uuid": "ba3f8c07-1b44-4e5c-b8d1-70fa977ebc86",
+  "author": "doll-agent",
+  "content": "Added copy/ascontiguousarray/asfortranarray/asanyarray/asarray_chkfinite/require to ferray-core::creation. Owned arrays in ferray are always C-contiguous, so the layout-coercion variants degenerate to clone()-with-doc; asarray_chkfinite errors on NaN/Inf for floats. Re-exported at top level via ferray crate. Tests in ferray-core::creation cover all variants.",
+  "created_at": "2026-04-30T03:08:50.186360515Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAQQQ80PBD4++HwZdP4x1VxLYOWIstIA/EvC7V5S+EUPpytCNFtPUCoiYZTGJGG6eCKmNCNzILCccngqUcuhM8CA=="
+}
