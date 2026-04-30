@@ -1,0 +1,10 @@
+{
+  "uuid": "74e67576-caee-42e0-9cd2-b2f9a9da6353",
+  "issue_uuid": "c8814b5c-66b7-4f55-b3e0-71ff32b7a35a",
+  "author": "doll-agent",
+  "content": "Research conclusion: gufunc-semantic dispatch is valuable and is already implemented in ferray-linalg, just not under a generic gufunc abstraction layer. matmul/vecdot/matvec/vecmat handle (1D,2D), (2D,2D), and ND-batched cases by IxDyn shape inspection, with rayon parallel batching for the ND case. All four are re-exported at the ferray crate root for numpy-parity ergonomics. Adding a separate gufunc abstraction layer would duplicate the IxDyn shape match. Cannot add to ferray-ufunc directly because ferray-linalg already depends on ferray-ufunc. Closing without new code.",
+  "created_at": "2026-04-30T19:54:04.863122317Z",
+  "kind": "resolution",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA8NKyeV8ZiV8FQ2M2OOIdPCsQAe+hIBhWEv44PDrLWlP1BeKXyBGl0BJpj/VD1n2Hj2Tp4HuqP9KinJ0chlpeDw=="
+}
