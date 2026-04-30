@@ -1,0 +1,10 @@
+{
+  "uuid": "e6339bc8-ee6b-403e-a8f9-5cfceb29883f",
+  "issue_uuid": "6cb1638c-b67a-4fb4-a88c-3ff19988eae8",
+  "author": "doll-agent",
+  "content": "Already at top level: the umbrella ferray crate re-exports ferray_stats::unique as ferray::unique (line 256 of ferray/src/lib.rs). Verified the call path via 'ferray::unique' is available with default features. No code changes needed; closing as already satisfied.",
+  "created_at": "2026-04-30T03:09:00.093561175Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAmibcneGNn/nls1FG4xPPRgYk8RzHaxI5X9lt4CgfTAatXFHXjWm2zvZ1IcYq5V/ljUGwYaD6KOcfEEipn3Z6DQ=="
+}
