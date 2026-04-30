@@ -2,11 +2,12 @@
   "uuid": "0588cd10-c971-4944-aa63-5e743651a0cb",
   "display_id": 636,
   "title": "ferray-ma: linalg & set & corr ops (dot/inner/outer/innerproduct/outerproduct/trace, correlate/convolve/corrcoef/cov, unique/in1d/isin/intersect1d/setdiff1d/setxor1d/union1d, polyfit)",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:38.644294753Z",
-  "updated_at": "2026-04-30T02:58:38.723422712Z",
+  "updated_at": "2026-04-30T12:16:59.916552002Z",
+  "closed_at": "2026-04-30T12:16:59.916552002Z",
   "labels": [
     "audit-parity",
     "ferray-ma"
