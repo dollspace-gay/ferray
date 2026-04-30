@@ -2,11 +2,12 @@
   "uuid": "c8e428dc-39b9-493a-b936-4ba85e52f5fe",
   "display_id": 666,
   "title": "ferray-gemm: i8 quantized GEMM (u8 x i8 -> i32) for ML inference",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T18:20:24.179571492Z",
-  "updated_at": "2026-04-30T18:20:25.506423565Z",
+  "updated_at": "2026-04-30T19:05:12.099894657Z",
+  "closed_at": "2026-04-30T19:05:12.099894657Z",
   "labels": [
     "ferray-linalg"
   ]
