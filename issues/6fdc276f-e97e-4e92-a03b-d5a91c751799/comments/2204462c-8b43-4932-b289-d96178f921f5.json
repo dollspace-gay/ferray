@@ -1,0 +1,10 @@
+{
+  "uuid": "2204462c-8b43-4932-b289-d96178f921f5",
+  "issue_uuid": "6fdc276f-e97e-4e92-a03b-d5a91c751799",
+  "author": "doll-agent",
+  "content": "Continued benchmark work: fixed all 38 compile errors in benchmarks/ferray_bench/src/main.rs after API drift. Changes: (1) added missing deps ferray-polynomial/ferray-random/ferray-window to bench Cargo.toml; (2) updated linalg calls to use Ix2 matrices and current signatures (trace 1-arg; qr/svd/cholesky/eigh/det/inv take Ix2; solve takes Ix2 mat + IxDyn rhs; vector_norm 4-arg with NormOrder::L2); (3) fixed FFT calls to pass full 4-arg signature (n, axis, FftNorm::Backward); (4) fixed ufunc/stats signatures (diff 2-arg, gradient Option<T>, trapezoid 3-arg, median closure with axis, searchsorted Array<T,Ix1> queries, bincount_u64 usize minlength); (5) routed manipulation::tile through ::extended; (6) fixed flip(usize axis), roll(isize shift); (7) eye returns Ix2. Smoke test: 49/49 dispatched functions across all categories (ufuncs, reductions, sort/search, linalg, FFT, creation, manipulation, random, polynomial, window) emit raw per-iteration timings via batch JSON I/O. cargo check --workspace clean.",
+  "created_at": "2026-04-30T14:20:43.408881150Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAyqfTLid6SGsEF95yJsuo9oF+rWmiNJkTfy4UAb8eafPpbdCHNZ9uPKEEw9e+6x5zTkhrvS8SqUoS/OcLSIkvAQ=="
+}
