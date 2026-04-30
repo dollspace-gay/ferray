@@ -1,0 +1,10 @@
+{
+  "uuid": "a6203285-1993-4493-a109-6ae0c2ee8d7c",
+  "display_id": null,
+  "title": "ferray-ufunc: add isnat (datetime NaT — gated on datetime dtype scope)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:58:00.423336082Z",
+  "updated_at": "2026-04-30T02:58:00.423336082Z"
+}
