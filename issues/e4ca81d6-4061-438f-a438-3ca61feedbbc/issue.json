@@ -1,0 +1,10 @@
+{
+  "uuid": "e4ca81d6-4061-438f-a438-3ca61feedbbc",
+  "display_id": null,
+  "title": "ferray-ma: full reductions (sum/prod/mean/std/var/cumsum/cumprod/min/max/argmin/argmax/median/ptp/average/anom)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:58:37.912827101Z",
+  "updated_at": "2026-04-30T02:58:37.912827101Z"
+}
