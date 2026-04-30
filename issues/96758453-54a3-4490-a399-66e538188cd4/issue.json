@@ -1,0 +1,10 @@
+{
+  "uuid": "96758453-54a3-4490-a399-66e538188cd4",
+  "display_id": null,
+  "title": "ferray-numpy-interop: Polars DataFrame round-trip (links #558)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:58:40.482065242Z",
+  "updated_at": "2026-04-30T02:58:40.482065242Z"
+}
