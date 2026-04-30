@@ -1,0 +1,10 @@
+{
+  "uuid": "f264236b-136d-43ea-8f85-01b3eb10c245",
+  "issue_uuid": "6ef33718-f761-4687-8597-0e37fedfd954",
+  "author": "doll-agent",
+  "content": "Implemented DataSource in a new ferray-io::datasource module. open(name) returns a DataSourceReader (a Read impl) that transparently decompresses .gz files via flate2. Methods: new(base_dir), open(name), open_path(absolute_path), exists(name), abspath(name). URL fetching is intentionally NOT implemented — the project's safe-fetch path is preferred for remote sources; download first, then point DataSource at the local file. bz2/zstd decompression and the auto-cache behavior of NumPy's class are also out of scope. Re-exported as ferray_io::DataSource / DataSourceReader. 4 unit tests cover plain/gzip open, exists/abspath, and missing-file error.",
+  "created_at": "2026-04-30T03:40:20.520089230Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABACimzmqXu3quT6VlJDvysJbPAC5An2kCi3RejoPo+VRBzZQmNOYJpojHOgcaroD9HuAcBlGPd20PvOoDYuv1pCA=="
+}
