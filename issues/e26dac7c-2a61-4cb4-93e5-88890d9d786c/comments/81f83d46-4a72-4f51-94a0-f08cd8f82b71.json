@@ -1,0 +1,10 @@
+{
+  "uuid": "81f83d46-4a72-4f51-94a0-f08cd8f82b71",
+  "issue_uuid": "e26dac7c-2a61-4cb4-93e5-88890d9d786c",
+  "author": "doll-agent",
+  "content": "MaskedArray <-> Arrow null-bitmap interop is not implemented in this batch. The path forward: build a null bitmap from MaskedArray.mask() (true → null), pass it as the Arrow validity buffer when constructing PrimitiveArray, and the reverse — read the validity buffer of an incoming Arrow array into the mask. The existing prim_to_dyn helper in extras.rs panics on nulls, marking the contract clearly. Implementing this needs ferray-ma to be a soft dependency of ferray-numpy-interop (currently it isn't), or a pure-data Vec<bool> mask interface. Stays open as the documented next step. Tracks #556.",
+  "created_at": "2026-04-30T12:26:22.877517221Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAGoIXWxt2uzxgfuuXsMh794bp5x8PgXqoGS+0ZRnLYXl4nfghsrTrEimHmZZrDQrtCvWGS2nENBtm9ROLJTUCBQ=="
+}
