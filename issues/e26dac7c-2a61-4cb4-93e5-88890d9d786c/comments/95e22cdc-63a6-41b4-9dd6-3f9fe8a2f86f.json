@@ -1,0 +1,10 @@
+{
+  "uuid": "95e22cdc-63a6-41b4-9dd6-3f9fe8a2f86f",
+  "issue_uuid": "e26dac7c-2a61-4cb4-93e5-88890d9d786c",
+  "author": "doll-agent",
+  "content": "Implemented null-bitmap interop in ferray-numpy-interop::extras: dynarray_to_arrow_with_mask(arr, Option<&[bool]>) builds an Arrow PrimitiveArray with a validity buffer (mask[i]=true means null in Arrow's convention). arrow_to_dynarray_with_mask reads back (DynArray, Option<Vec<bool>>) — the mask is None when the Arrow array has no validity buffer, else a Vec<bool> with true=was-null. Null positions in the data buffer get T::default(); the mask carries the truth. array1_to_arrow_with_mask(arr, mask) is the typed-array convenience path that returns a properly-validity-buffered PrimitiveArray<T::ArrowType>. Vec<bool> primitive interface keeps ferray-numpy-interop free of a hard ferray-ma dependency — ma callers route through ma.mask().iter().copied().collect(). 7 unit tests cover round-trip, all-valid (mask=None), bool nulls, length-mismatch error, default-fill behavior, and the typed array1 path. Tracks #556.",
+  "created_at": "2026-04-30T13:08:04.692657558Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAiqBuwckaj53Jn6IK7kJUJepaG8bS2TB70gvJ2JP+mEjdRccwmOGfcFfVC+2qtIEoSc81ZvjpuJh9GgJKJxMKCg=="
+}
