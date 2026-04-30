@@ -1,0 +1,10 @@
+{
+  "uuid": "9a802415-c735-4f40-b8ba-8ba8aa409689",
+  "issue_uuid": "125b086c-5d30-4ea1-a800-b161394b8b10",
+  "author": "doll-agent",
+  "content": "Implemented MT19937-64 BitGenerator in ferray-random::bitgen::mt19937. 312-word state, period 2^19937 - 1. Standard tempering pipeline. seed_from_u64 uses the canonical multiplier 6364136223846793005 to expand a single u64 into the full state. jump() and stream() return None — for stream parallelism use Philox or seed multiple instances via SeedSequence. Re-exported as ferray_random::MT19937. 4 unit tests cover determinism, seed-divergence, full range, and unit-interval f64 sampling.",
+  "created_at": "2026-04-30T03:49:48.705199959Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABApKCktdE2m32iAW3V8f9PXRE03FF76uXC3uRDsJfloihE2QR2al4qajela+hveEF37k3bE/MpcbHzKcxFs+3WCQ=="
+}
