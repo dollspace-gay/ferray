@@ -2,11 +2,12 @@
   "uuid": "c0adf518-166c-4f62-8bef-c2e75bc14b9d",
   "display_id": 664,
   "title": "ferray-gemm: CGEMM (Complex f32) kernel port from OpenBLAS Haswell",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T17:56:38.526536418Z",
-  "updated_at": "2026-04-30T17:56:39.821725425Z",
+  "updated_at": "2026-04-30T19:05:04.272253726Z",
+  "closed_at": "2026-04-30T19:05:04.272253726Z",
   "labels": [
     "ferray-linalg"
   ]
