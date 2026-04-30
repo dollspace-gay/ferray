@@ -1,0 +1,10 @@
+{
+  "uuid": "8d9d9a27-fcf4-4eea-bf34-8484f1ebfb25",
+  "issue_uuid": "5b229101-f03e-4adb-88d9-651dd50d6dae",
+  "author": "doll-agent",
+  "content": "Implemented in ferray-linalg/src/gemm/mod.rs as a sign-extending wrapper around the i16 kernel:\n\n```rust\nunsafe fn gemm_i8_signed(m, n, k, a: *const i8, b: *const i8, c: *mut i32, accumulate: bool) -> bool\n```\n\n**Approach**: i8 inputs are widened to i16 (sign-extension) into temporary buffers, then dispatched to gemm_avx2_i16. This matches the vpmovsxbw + vpmaddwd pattern in OpenBLAS, except we materialize the widened operands once instead of per K-pair.\n\nTrade-off: 2× memory bandwidth on input vs in-kernel widening, but reuses the proven i16 4×8 tile + packing + parallel driver. Future optimization: dedicated i8 kernel that does vpmovsxbw inside the inner loop to avoid the widen pass.\n\n**Tests** (integer_tests.rs): 2 passing — full signed range incl. negatives matches naive ref; mixed pos/neg pattern at non-multiple dims.\n\nVerified: cargo test -p ferray-linalg --release, cargo clippy -D warnings clean.",
+  "created_at": "2026-04-30T18:57:07.127599255Z",
+  "kind": "resolution",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAv+ecrypdSeH3nVR+I3e7CLXRZ1UC7UYLkgNuBG1ZnBJwdbDQ8A7CZ611cpfqQJhYBgyPbr8ZygeCT+Gj7nvvDA=="
+}
