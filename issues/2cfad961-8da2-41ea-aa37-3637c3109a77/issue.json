@@ -1,0 +1,10 @@
+{
+  "uuid": "2cfad961-8da2-41ea-aa37-3637c3109a77",
+  "display_id": 670,
+  "title": "ferray-gemm: quantized_matmul with zero-points + scales (ONNX/oneDNN formula)",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T18:45:16.802817678Z",
+  "updated_at": "2026-04-30T18:45:16.802817678Z"
+}
