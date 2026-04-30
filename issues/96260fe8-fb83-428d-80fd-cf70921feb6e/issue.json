@@ -2,11 +2,12 @@
   "uuid": "96260fe8-fb83-428d-80fd-cf70921feb6e",
   "display_id": 678,
   "title": "ferray-stats: pairwise summation for sum/mean to close 100K-1M gap vs NumPy",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T20:09:10.284150790Z",
-  "updated_at": "2026-04-30T20:09:11.697947928Z",
+  "updated_at": "2026-04-30T20:12:09.445952677Z",
+  "closed_at": "2026-04-30T20:12:09.445952677Z",
   "labels": [
     "ferray-stats"
   ]
