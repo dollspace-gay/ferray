@@ -1,0 +1,10 @@
+{
+  "uuid": "ba778ed4-e16d-4e3d-80e9-ad575f0aca22",
+  "display_id": 663,
+  "title": "ferray-gemm: ZGEMM (complex f64) kernel port from OpenBLAS Haswell",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T17:44:49.530725525Z",
+  "updated_at": "2026-04-30T17:44:49.530725525Z"
+}
