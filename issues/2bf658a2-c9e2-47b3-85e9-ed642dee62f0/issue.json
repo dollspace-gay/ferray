@@ -2,11 +2,12 @@
   "uuid": "2bf658a2-c9e2-47b3-85e9-ed642dee62f0",
   "display_id": 640,
   "title": "ferray-ma: class helpers (mvoid, nomask, masked_singleton, masked_print_option, mr_, isMaskedArray/isMA/isarray, getmaskarray, ids)",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:39.357065375Z",
-  "updated_at": "2026-04-30T02:58:39.437869103Z",
+  "updated_at": "2026-04-30T12:17:38.433435961Z",
+  "closed_at": "2026-04-30T12:17:38.433435961Z",
   "labels": [
     "audit-parity",
     "ferray-ma"
