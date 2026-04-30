@@ -2,11 +2,12 @@
   "uuid": "ca42664b-16d9-4d34-829a-9bc3f42b497c",
   "display_id": 620,
   "title": "ferray-polynomial: add Chebyshev-only extras (chebpts1, chebpts2, chebweight, chebinterpolate)",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:15.655115544Z",
-  "updated_at": "2026-04-30T02:58:15.734372906Z",
+  "updated_at": "2026-04-30T11:43:57.231258566Z",
+  "closed_at": "2026-04-30T11:43:57.231258566Z",
   "labels": [
     "audit-parity",
     "ferray-polynomial"
