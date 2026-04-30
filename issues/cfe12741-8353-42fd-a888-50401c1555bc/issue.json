@@ -1,0 +1,10 @@
+{
+  "uuid": "cfe12741-8353-42fd-a888-50401c1555bc",
+  "display_id": 661,
+  "title": "ferray-gemm: AVX-512 DGEMM kernel port from OpenBLAS Skylake-X",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T17:22:42.914886577Z",
+  "updated_at": "2026-04-30T17:22:42.914886577Z"
+}
