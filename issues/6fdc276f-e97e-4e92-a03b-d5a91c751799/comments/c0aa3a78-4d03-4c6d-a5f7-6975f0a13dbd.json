@@ -1,0 +1,10 @@
+{
+  "uuid": "c0aa3a78-4d03-4c6d-a5f7-6975f0a13dbd",
+  "issue_uuid": "6fdc276f-e97e-4e92-a03b-d5a91c751799",
+  "author": "doll-agent",
+  "content": "REOPENED per user direction (don't close deferred issues). Generic-Float lift remains a milestone-level refactor; the 10 sibling parity issues already added the f64 surface NumPy expects.",
+  "created_at": "2026-04-30T12:02:02.461764485Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAMRSs3jeeKOqrDykwMj0C2Fno8yfXBI4RX6J0UZlthqShfXYGYUYJ9TMNkmfoZfS/tmfV7N3g7flIE5k35VpXAA=="
+}
