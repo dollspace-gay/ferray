@@ -1,0 +1,10 @@
+{
+  "uuid": "2efea806-f600-4755-ac22-fb114aa13e2d",
+  "issue_uuid": "81d7f50f-438c-44a6-9df7-8a53f8410717",
+  "author": "doll-agent",
+  "content": "Implemented full Gauss quadrature suite: chebgauss(n) — closed form (pi/n weights at Chebyshev-Gauss nodes); leggauss(n) — Newton iteration on Legendre polynomial roots, weights via 2/((1-x²)(P'_n)²); hermgauss(n) — Newton iteration with orthonormal Hermite recurrence (H̃_0 = π^(-1/4), seeded so weights sum to sqrt(π)); hermegauss(n) — derived from hermgauss via x → sqrt(2)y substitution; laggauss(n) — Newton iteration on Laguerre roots with weight x_k/((n+1)L_{n+1})². NumPy spelling lagguass is provided as an alias of laggauss. Tests verify ∫ exp(-x²) = sqrt(π) for hermgauss, ∫_{-∞}^{∞} exp(-x²/2) = sqrt(2π) for hermegauss, ∫_0^∞ exp(-x) = 1 and ∫_0^∞ x exp(-x) = 1 for laggauss, and ∫_{-1}^1 dx = 2 plus ∫_{-1}^1 x² dx = 2/3 for leggauss. While implementing, fixed pre-existing Clenshaw bugs in clenshaw_hermite (physicist's) and clenshaw_hermite_e (probabilist's) — the backward recurrence used '-k * b_{k+2}' where it should have been '-(k+1) * b_{k+2}', producing wrong values for n >= 4 in eval(). Existing tests only covered n <= 3 so the bug went unnoticed.",
+  "created_at": "2026-04-30T11:43:42.692402951Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABADTxbEjAQ+T3++MqSgYIkw+9d/8PQr063g4iGNguUqlwFp7Lhi/ASUvlbUIitUCTME13GYLMQSvjHf99npu9sBg=="
+}
