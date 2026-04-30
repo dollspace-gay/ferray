@@ -1,0 +1,10 @@
+{
+  "uuid": "8ac1d1d8-05d4-4f1e-bfe0-c54cd7b2eac3",
+  "issue_uuid": "75cf747f-7c2e-4e2f-9c66-3d93adc50fb3",
+  "author": "doll-agent",
+  "content": "Closed: bench re-run, BENCHMARKS.md updated, 0.3.0 bump, cargo fmt, workspace clippy -D warnings clean, dead-code audit. Full workspace tests + stat-equiv 47/47 PASS.",
+  "created_at": "2026-04-30T20:44:09.048144366Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABACnjmrekhEU9Dnafl6FW/EJwzmkMyajzF4D7VwvRVLuXvIgqq0A2gdyekOkQvGFaW/jOn1EM6p+h74TVZVFKGAw=="
+}
