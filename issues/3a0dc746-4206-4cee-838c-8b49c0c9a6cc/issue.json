@@ -1,0 +1,10 @@
+{
+  "uuid": "3a0dc746-4206-4cee-838c-8b49c0c9a6cc",
+  "display_id": null,
+  "title": "Audit ferray crates against NumPy modules to surface API gaps",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:46:10.594934926Z",
+  "updated_at": "2026-04-30T02:46:10.594934926Z"
+}
