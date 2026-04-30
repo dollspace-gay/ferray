@@ -1,0 +1,10 @@
+{
+  "uuid": "bfa22192-bb23-4c5d-94cc-6098cc3835dc",
+  "issue_uuid": "92d8e58d-ec3f-4f90-a0ed-9bb12296b026",
+  "author": "doll-agent",
+  "content": "Implemented in ferray-ufunc/src/ops/complex.rs. 20 new ufunc entries: trig (sin/cos/tan/asin/acos/atan), hyperbolic (sinh/cosh/tanh/asinh/acosh/atanh), exp/ln/log2/log10/sqrt/expm1/log1p/power. expm1 and log1p use cancellation-avoiding paths via exp_m1/ln_1p and the cos(x)-1 = -2 sin^2(x/2) identity for precision near z=0. 14 new tests pass; full ferray-ufunc 513 tests + ferray-linalg 244 unit + 21 oracle + 12 property pass; clippy -D warnings clean; statistical_equivalence.py 47/47 PASS.",
+  "created_at": "2026-04-30T19:49:05.000240751Z",
+  "kind": "resolution",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAMWqNYgjpKxAA7JZgCQw8gETSeLMahf/XVUkoBhvA+/ufVl5/MBELrQErqKIdicmcHSF/Wtl8K+yZB+3thlx2Bg=="
+}
