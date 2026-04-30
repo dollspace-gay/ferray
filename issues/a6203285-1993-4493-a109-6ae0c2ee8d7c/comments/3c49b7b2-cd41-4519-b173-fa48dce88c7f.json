@@ -1,0 +1,10 @@
+{
+  "uuid": "3c49b7b2-cd41-4519-b173-fa48dce88c7f",
+  "issue_uuid": "a6203285-1993-4493-a109-6ae0c2ee8d7c",
+  "author": "doll-agent",
+  "content": "REOPENED per user direction (don't close deferred issues). isnat needs a datetime/timedelta dtype which ferray doesn't have yet (tracked under #343). Will be implemented when datetime support lands.",
+  "created_at": "2026-04-30T12:02:13.891790288Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA3x3AbutrwY5KdHcJrcWrNb7hetJdUhKBNNtJR3dTTZMOx7A7jc0EDEaeYs9XbU1NXPhY7/F5mbNhktQpwbu3DA=="
+}
