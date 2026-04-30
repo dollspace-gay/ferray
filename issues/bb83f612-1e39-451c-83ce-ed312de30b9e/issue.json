@@ -1,0 +1,10 @@
+{
+  "uuid": "bb83f612-1e39-451c-83ce-ed312de30b9e",
+  "display_id": null,
+  "title": "ferray-ufunc: add modf (split into integer/fractional parts)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:57:59.843924239Z",
+  "updated_at": "2026-04-30T02:57:59.843924239Z"
+}
