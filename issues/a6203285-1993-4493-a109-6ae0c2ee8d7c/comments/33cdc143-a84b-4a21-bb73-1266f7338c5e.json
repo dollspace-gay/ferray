@@ -1,0 +1,10 @@
+{
+  "uuid": "33cdc143-a84b-4a21-bb73-1266f7338c5e",
+  "issue_uuid": "a6203285-1993-4493-a109-6ae0c2ee8d7c",
+  "author": "doll-agent",
+  "content": "UNBLOCKED — datetime/timedelta dtype landed via #343. Implemented isnat_datetime(arr: &Array<DateTime64, D>) and isnat_timedelta(arr: &Array<Timedelta64, D>) in ferray-ufunc::ops::datetime. Both return Array<bool, D> where each element is true iff the underlying i64 == NAT (i64::MIN). NumPy's TypeError-on-non-time-dtype contract is statically enforced via Rust's type system — non-time arrays simply fail to type-check. 4 unit tests cover skip-finite, all-NaT, mixed, and timedelta path. Re-exported via ferray-ufunc lib.rs and umbrella ferray crate.",
+  "created_at": "2026-04-30T13:32:34.025246921Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAAV9H28hWznIyicoWaWqRmQit8qrBM7BVRBUct/DYnBze1fyG1I+tLhIufJO3gyBGMV+JnmxG8PWrAakqJITyBg=="
+}
