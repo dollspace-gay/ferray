@@ -1,0 +1,10 @@
+{
+  "uuid": "570aa4f1-24df-47be-9910-dd23ca505d32",
+  "issue_uuid": "638e77e2-22ba-411b-8cbc-e6e27553365e",
+  "author": "doll-agent",
+  "content": "Implemented sort_complex() in ferray-stats::sorting for Array<Complex<T>, Ix1>. Stable lexicographic sort: real part first, then imaginary for ties. Added num-complex to ferray-stats workspace deps. Re-exported via ferray-stats lib.rs and umbrella ferray crate. 1 unit test verifies the lexicographic ordering.",
+  "created_at": "2026-04-30T03:29:36.371480779Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABACc2ehZK/lGqRkdrozuS6/FLPLIp7iraSRkDs8O7QVVOfIeYsJJz4254uKn6HwxRphtPQKs2mTTVwXhaM2Y6FBQ=="
+}
