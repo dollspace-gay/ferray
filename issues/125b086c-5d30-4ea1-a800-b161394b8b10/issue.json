@@ -2,11 +2,12 @@
   "uuid": "125b086c-5d30-4ea1-a800-b161394b8b10",
   "display_id": 607,
   "title": "ferray-random: add MT19937 BitGenerator",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:58:13.730783091Z",
-  "updated_at": "2026-04-30T02:58:13.807158506Z",
+  "updated_at": "2026-04-30T03:49:50.019328997Z",
+  "closed_at": "2026-04-30T03:49:50.019328997Z",
   "labels": [
     "audit-parity",
     "ferray-random"
