@@ -1,0 +1,10 @@
+{
+  "uuid": "ae0cd115-c7e1-4eaf-81b6-f88c839f6064",
+  "issue_uuid": "129d35ed-e001-4c9d-b565-9b70929656b6",
+  "author": "doll-agent",
+  "content": "Plan: when issue #681 (the 0.3.0 release issue) was closed, the crosslink hook auto-appended its title under the [0.2.11] section in CHANGELOG.md (the hook always appends to the most recent dated header it can parse, which is 0.2.11 since 0.3.0 has the date that matches today). #681 is curated under the [0.3.0] -> Notes section instead. Removing the auto-appended duplicate.",
+  "created_at": "2026-04-30T20:55:01.311264242Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAdREHe5To2ZOKf5G0Myx/LA0nRsD4Ifvdtlow5CUInv12ZqYSeTIj6bPn9EU7geKnqzgALlk1Z+tCrkBsdN+9Dw=="
+}
