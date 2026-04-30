@@ -1,0 +1,10 @@
+{
+  "uuid": "9dd0aa73-0496-410e-8351-43eec7580cf2",
+  "issue_uuid": "67a0e257-4fa6-4f68-9e35-34a92ae89794",
+  "author": "doll-agent",
+  "content": "Implemented polyval2d(xs, ys, coeffs, nx, ny) and polyval3d(xs, ys, zs, coeffs, nx, ny, nz) for the power basis. coeffs is row-major over (i, j[, k]); evaluation uses Horner per axis. Returns one value per element of the input axes; lengths must match. Re-exported at crate root. ShapeMismatch errors on length / coeffs-size mismatch. Per-basis variants (chebval2d, legval2d, ...) are deferred — power-basis users can always pivot via to_power_basis().",
+  "created_at": "2026-04-30T11:43:10.286857973Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA/ngpJ/dSQUMqedm1IK09MWd+yvyGByPPfRdqpLuAahsm5IEHWtcCqEpYJy14bapOGDyktbakyxzM9oLsh0S7Bw=="
+}
