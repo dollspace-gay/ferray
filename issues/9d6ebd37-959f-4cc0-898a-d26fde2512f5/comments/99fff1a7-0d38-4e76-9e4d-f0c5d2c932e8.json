@@ -1,0 +1,10 @@
+{
+  "uuid": "99fff1a7-0d38-4e76-9e4d-f0c5d2c932e8",
+  "issue_uuid": "9d6ebd37-959f-4cc0-898a-d26fde2512f5",
+  "author": "doll-agent",
+  "content": "Verification 4: ready to retry sync.",
+  "created_at": "2026-04-30T03:07:09.147975997Z",
+  "kind": "observation",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAH8XDlmGiH84i2KNhU9voMjcRMMXmE5jmrjR6euS4j068OhiqGDBpRHcBA1AWLX33400By3zRPU8eZBivaxK3Bw=="
+}
