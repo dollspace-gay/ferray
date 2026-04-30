@@ -1,0 +1,10 @@
+{
+  "uuid": "cf36bfc1-9d6e-4724-b1b9-159ca18f1e35",
+  "issue_uuid": "0138f766-ed32-4a7c-a747-0bc147fc5c62",
+  "author": "doll-agent",
+  "content": "Implemented nanargmin() and nanargmax() in ferray-stats::reductions::nan_aware. Both raise InvalidValue on all-NaN slices (matching NumPy's ValueError). Axis-mode uses a sentinel u64::MAX to flag all-NaN lanes, then post-scans the reduce result. Re-exported via ferray-stats lib.rs and umbrella ferray crate. 5 unit tests cover skip-NaN/all-NaN/2-D axis paths.",
+  "created_at": "2026-04-30T03:28:58.894842889Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA8agLx+yrq267997LU+UYJdwaV4Fsz7fdMSzCEURnX4jv1DcDwGe3xfhh/ZMg5SpqjETTpM7QZBSLJzX+CRdYAw=="
+}
