@@ -1,0 +1,10 @@
+{
+  "uuid": "0cfbdb51-d46b-4b5a-bd2b-a0b2c0d4f12f",
+  "issue_uuid": "63524a9f-829d-49a5-a0c3-e1d584ad2f09",
+  "author": "doll-agent",
+  "content": "Verified bool support across all three backends. NumPy: bool is in NpElement (numpy_conv.rs line 53). Arrow: dynarray_to_arrow handles DType::Bool by constructing a BooleanArray (the proper Arrow bitfield type). Polars: dataframe_from_columns handles DType::Bool. extras tests roundtrip a 3-element bool array end-to-end (test dynarray_to_arrow_bool_roundtrip). Tracks #553/#557.",
+  "created_at": "2026-04-30T12:25:56.859924169Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABASMroz/evnr1Jzh6anVXsABSQ+8oc1eu3jf3rOS/spkk9ptGy5bxwlZsuqFOGl3oZFUaMMbfJdGlHCVUldwjNBA=="
+}
