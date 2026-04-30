@@ -2,11 +2,12 @@
   "uuid": "d84a37fa-05ed-43ec-b904-bd762ce2b9dd",
   "display_id": 586,
   "title": "ferray-core: add mask_indices",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T02:57:48.845896999Z",
-  "updated_at": "2026-04-30T02:57:48.967088247Z",
+  "updated_at": "2026-04-30T03:09:15.746366560Z",
+  "closed_at": "2026-04-30T03:09:15.746366560Z",
   "labels": [
     "audit-parity",
     "ferray-core"
