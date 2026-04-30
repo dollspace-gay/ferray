@@ -1,0 +1,10 @@
+{
+  "uuid": "ee6533a0-756f-4d04-8b4e-d3e52b30adfc",
+  "issue_uuid": "3b50850c-7578-4d23-a154-25abc41080e0",
+  "author": "doll-agent",
+  "content": "Added the numpy.lib.format-equivalent helpers to ferray-io::format: descr_to_dtype(s) -> DType (wraps existing parse_dtype_str, drops endianness); HeaderData struct + header_data_from_array_1_0(arr) (descr/fortran_order/shape, always emits little-endian, fortran_order=false since ferray arrays are C-contiguous at the public boundary); read_array(reader) -> DynArray and write_array(writer, &DynArray) -> () delegating to existing load_dynamic_from_reader / save_dynamic_to_writer. The existing dtype_to_descr is already present and unchanged. Re-exported via ferray-io lib.rs. 4 unit tests cover descr_to_dtype basic+invalid, header_data_from_array, and round-trip write_array→read_array.",
+  "created_at": "2026-04-30T03:40:27.693330863Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA+hh5JvpJSgdwhm+6ZDl9KXB+Cd3Z+5ckFVDLy4QJpaM9ROu4VUXWEX4r+kjcFFaWw+d4sH8nyOBWCnOLCVA7DQ=="
+}
