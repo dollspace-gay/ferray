@@ -1,0 +1,10 @@
+{
+  "uuid": "c5842dc8-d9cd-4d92-a96a-4b668f290762",
+  "issue_uuid": "2cfad961-8da2-41ea-aa37-3637c3109a77",
+  "author": "doll-agent",
+  "content": "Implemented in ferray-linalg/src/gemm/mod.rs:\n\n```rust\nunsafe fn quantized_matmul(\n    m, n, k,\n    a: *const u8, a_zp: u8, scale_a: f32,\n    b: *const i8, b_zp: i8, scale_b: f32,\n    c: *mut f32, accumulate: bool,\n) -> bool\n```\n\n**Formula** (ONNX/oneDNN asymmetric quantization):\nc = scale_a * scale_b * sum_k((a[i,k] - a_zp) * (b[k,j] - b_zp))\n\nExpanded for kernel reuse:\nsum(a*b) - a_zp*sum_k(b[k,j]) - b_zp*sum_k(a[i,k]) + k*a_zp*b_zp\n\n**Pipeline**:\n1. raw[i,j] = sum_k(a[i,k] * b[k,j]) via gemm_i8 (u8 reinterpreted as i8 underneath; full correction added later)\n2. row_sum_a[i] = sum_k(a[i,k])  (scalar pass)\n3. col_sum_b[j] = sum_k(b[k,j])  (scalar pass)\n4. corrected = raw - a_zp*col_sum_b - b_zp*row_sum_a + k*a_zp*b_zp\n5. c = scale_a * scale_b * corrected (or += if accumulate)\n\n**AVX2 saturation caveat** (documented in the entry's doc comment): the AVX2 vpmaddubsw chain saturates intermediate i16 sums when full u8 × i8 products with consistent sign exceed ±32767. Production AVX2-only paths must restrict u8 to 7-bit; AVX-VNNI / AVX-512 VNNI's vpdpbusd accumulates directly into i32 with no saturation and avoids this entirely.\n\n**Tests** (integer_tests.rs): 3 passing — zero-zero-points reduces to scaled gemm_i8; non-zero a_zp=64/b_zp=-3 with 7-bit u8 inputs; accumulate=true.\n\nVerified: cargo test -p ferray-linalg --release (8/8 integer tests, 230 unit + 21 oracle + 12 property), cargo clippy -D warnings clean, statistical_equivalence.py 47/47 PASS.",
+  "created_at": "2026-04-30T18:57:22.804733571Z",
+  "kind": "resolution",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAZJ/PAB2a9R+O0LSJT2vEW7KcP40ui7C2QMlK/bLOVb8EeFgBJZ1knuhP6WqkEM4pcM29w8G3yUyDTRJjLqk4BA=="
+}
