@@ -1,0 +1,10 @@
+{
+  "uuid": "bb1e1183-5604-4799-8d85-df5c827360ca",
+  "issue_uuid": "a47f0c53-ecf4-4418-b44c-b66e97898d83",
+  "author": "doll-agent",
+  "content": "Already at top level: 'where' is a Rust keyword, so the spelling is 'where_' (re-exported from ferray-stats). The umbrella ferray crate also re-exports the array-form 'where_select' from ferray-core indexing. Both names are documented; no rename possible without breaking Rust syntax. Closing as already satisfied.",
+  "created_at": "2026-04-30T03:09:03.237578200Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAr65b/fa/cBmz+wO+leu5HKrmX9vvnLUn60VZWN8qK6DN63t4bH/NDB5E+57/6wWQOvPz4xa4gUIARQ4o4XwHDA=="
+}
