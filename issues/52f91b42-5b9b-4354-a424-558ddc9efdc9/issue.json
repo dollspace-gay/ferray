@@ -1,0 +1,10 @@
+{
+  "uuid": "52f91b42-5b9b-4354-a424-558ddc9efdc9",
+  "display_id": null,
+  "title": "ferray-ufunc: add iscomplex/isreal/iscomplexobj/isrealobj/isscalar predicates",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T02:58:00.004517340Z",
+  "updated_at": "2026-04-30T02:58:00.004517340Z"
+}
