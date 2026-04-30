@@ -6,5 +6,8 @@
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-04-30T19:49:47.943275499Z",
-  "updated_at": "2026-04-30T19:49:47.943275499Z"
+  "updated_at": "2026-04-30T19:49:49.204395783Z",
+  "labels": [
+    "ferray-ufunc"
+  ]
 }
