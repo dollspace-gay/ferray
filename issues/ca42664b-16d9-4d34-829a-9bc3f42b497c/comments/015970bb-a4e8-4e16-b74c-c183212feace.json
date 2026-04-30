@@ -1,0 +1,10 @@
+{
+  "uuid": "015970bb-a4e8-4e16-b74c-c183212feace",
+  "issue_uuid": "ca42664b-16d9-4d34-829a-9bc3f42b497c",
+  "author": "doll-agent",
+  "content": "Implemented Chebyshev-only extras: chebpts1(n) — Chebyshev-Gauss nodes cos((2k-1)π/(2n)); chebpts2(n) — Chebyshev-Gauss-Lobatto extrema cos(kπ/(n-1)); chebweight(x) — weight function 1/sqrt(1-x²) (returns Infinity at endpoints); chebinterpolate(f, deg) — interpolating Chebyshev polynomial of degree deg via the Discrete Chebyshev Transform on Chebyshev-Gauss nodes. Tests cover endpoint inclusion/exclusion, weight at zero, and constant-function interpolation.",
+  "created_at": "2026-04-30T11:43:55.862615792Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA8k1Y9LkW//LY65qQpx9fIwEnEGKmcJ87nYir3VCG2OmQNgw+/ZydaRHBk33FoBxceJvh9hpeAm79YXTPaGH1BQ=="
+}
