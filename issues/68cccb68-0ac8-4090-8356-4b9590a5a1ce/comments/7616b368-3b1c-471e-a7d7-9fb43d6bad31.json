@@ -1,0 +1,10 @@
+{
+  "uuid": "7616b368-3b1c-471e-a7d7-9fb43d6bad31",
+  "issue_uuid": "68cccb68-0ac8-4090-8356-4b9590a5a1ce",
+  "author": "doll-agent",
+  "content": "Implemented polygrid2d(xs, ys, coeffs, nx, ny) and polygrid3d for the power basis. Result is row-major over the Cartesian product xs × ys × zs. Per-basis grid* variants follow the same deferral as polyval*: pivot through to_power_basis when needed.",
+  "created_at": "2026-04-30T11:43:17.757216008Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAYrUqT/mVkvvsFo0AMD4dNiroAAgy3iciVEk0+hcq7C8qAGvsJJiTPYP9wkhOsuuFMkqUOacDuSeqKN5XujsjBA=="
+}
