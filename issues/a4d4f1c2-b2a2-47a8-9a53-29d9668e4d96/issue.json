@@ -1,0 +1,10 @@
+{
+  "uuid": "a4d4f1c2-b2a2-47a8-9a53-29d9668e4d96",
+  "display_id": 679,
+  "title": "ferray-ufunc: SIMD-vectorized sin/cos/tan to close 1K-100K gap vs NumPy",
+  "status": "open",
+  "priority": "high",
+  "created_by": "doll-agent",
+  "created_at": "2026-04-30T20:12:22.053349308Z",
+  "updated_at": "2026-04-30T20:12:22.053349308Z"
+}
