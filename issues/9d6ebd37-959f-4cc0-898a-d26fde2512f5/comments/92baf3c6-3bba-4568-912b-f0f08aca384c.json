@@ -1,0 +1,10 @@
+{
+  "uuid": "92baf3c6-3bba-4568-912b-f0f08aca384c",
+  "issue_uuid": "9d6ebd37-959f-4cc0-898a-d26fde2512f5",
+  "author": "doll-agent",
+  "content": "Verification 2: pushing bad sigs out of last-5 window.",
+  "created_at": "2026-04-30T03:07:06.675447459Z",
+  "kind": "observation",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABADYv8q2T2hUPPD5lvwijKdSW27OLK5E6sgF0KviVdtWMf3LAwfYfxFvIfDUFzREDR4jcu3VPiA1w/0cr4HZ+7DQ=="
+}
