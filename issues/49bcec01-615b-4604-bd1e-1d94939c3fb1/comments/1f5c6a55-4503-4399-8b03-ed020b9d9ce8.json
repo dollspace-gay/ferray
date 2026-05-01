@@ -1,0 +1,10 @@
+{
+  "uuid": "1f5c6a55-4503-4399-8b03-ed020b9d9ce8",
+  "issue_uuid": "49bcec01-615b-4604-bd1e-1d94939c3fb1",
+  "author": "doll-agent",
+  "content": "Done. Existing chebyshev::tests had only one integration test (integ_then_deriv_chebyshev) - a roundtrip that doesn't catch errors symmetric across deriv and integ. Integration constant was untested.\n\nAdded 7 tests pinning analytical antiderivative shapes and constant pass-through. ferray-polynomial: 167 -> 174 tests, all passing, clippy clean. Commit 437b4bd3.",
+  "created_at": "2026-05-01T20:55:25.317222823Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAv1P8JGQ9rnELKrEnfn1Pn5ZVfRLVNNbFgoR/C+C+3NxpKC6NQdEdPBKtu4BTjssTKp2JNUaha2ZqnGAC1PuJAA=="
+}
