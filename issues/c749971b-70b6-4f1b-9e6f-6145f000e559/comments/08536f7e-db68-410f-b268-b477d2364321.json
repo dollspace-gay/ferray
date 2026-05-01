@@ -1,0 +1,10 @@
+{
+  "uuid": "08536f7e-db68-410f-b268-b477d2364321",
+  "issue_uuid": "c749971b-70b6-4f1b-9e6f-6145f000e559",
+  "author": "doll-agent",
+  "content": "Done. Added solve_dyn(a: IxDyn, b: IxDyn) -> Array<T, IxDyn> as a dynamic-rank wrapper. Validates A is 2-D + square at runtime; reshapes internally and delegates to solve. No extra copy versus typed path.\n\nsolve and solve_dyn coexist as a dual API.\n\n3 tests covering happy path, non-2D rejection, non-square rejection. Re-exported at lib.rs root. ferray-linalg: 3 new tests, all passing, clippy clean. Commit b2574c99.",
+  "created_at": "2026-05-01T23:33:30.122678790Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAjVDfOD3phwgE0li8Hxdwb+ti+uHiSFtArUo8hzOkKvQsaOobb9R5QsmDZpk/S4TuJsRQEZNgDiEvisXAd9qPAw=="
+}
