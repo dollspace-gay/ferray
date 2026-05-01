@@ -1,0 +1,10 @@
+{
+  "uuid": "9d8188fe-2bb0-4da3-af8c-d1731b5c067a",
+  "issue_uuid": "d0ca7527-952d-486e-a3fd-9f63596fc9c3",
+  "author": "doll-agent",
+  "content": "Phase-1 long tail #695 delivered: column_stack, row_stack, block, r_, c_. r_/c_ accept varargs (numpy slice-syntax sugar np.r_[1:5,8:12] deferred — would need __getitem__ pyclass). block takes 2-D nested list. 525/525 passing.",
+  "created_at": "2026-05-01T17:48:54.793996737Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAr3UkYdYSysO4marTY8pulh3zZWNZP5naJI9Kh5AljnCYKEJO6Dh5h4cs6ofYvLbZN0wOVxlmcsbxueXsvMfEBw=="
+}
