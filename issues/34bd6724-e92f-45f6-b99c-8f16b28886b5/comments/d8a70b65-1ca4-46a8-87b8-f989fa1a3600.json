@@ -1,0 +1,10 @@
+{
+  "uuid": "d8a70b65-1ca4-46a8-87b8-f989fa1a3600",
+  "issue_uuid": "34bd6724-e92f-45f6-b99c-8f16b28886b5",
+  "author": "doll-agent",
+  "content": "Done. Two-part fix: (1) Restructured the direct O(n*m) convolve loop in ferray-ufunc/src/ops/convolution.rs from i,j-strided writes 'full[i+j] += a[i]*v[j]' to k-iterated dot-product 'full[k] = Σ a[i]*v[k-i]'. The new shape gives the auto-vectoriser a clean inner loop with linear indexing into both inputs and a register-resident accumulator — same algorithmic complexity, materially better SIMD codegen for f32/f64. (2) Added an opt-in 'fft-convolve' Cargo feature that pulls in ferray-fft and exposes a new fftconvolve(a, v, mode) function — O((n+m) log(n+m)) via real FFT (rfft → elementwise multiply → irfft), with all three numpy modes (Full/Same/Valid). Numerically equivalent to direct convolve up to ~1.78e-15 max error on a 5x3 example (verified by parity smoke test). The default 'convolve' stays direct to preserve the numpy.convolve contract — fftconvolve mirrors scipy.signal.fftconvolve for users who explicitly want the FFT path. cargo clippy clean both with and without the feature; cargo test ferray-ufunc passes with feature on (513 tests across all paths).",
+  "created_at": "2026-05-01T19:37:00.619312599Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAD2n1liLjID8SnHV0Q4NWp2yD3CBROyn/0D4q4HkEbrXLp6LlYwnHmyA5iyPlv1L8mUrHm1bV0V8cv+iGcDaPDA=="
+}
