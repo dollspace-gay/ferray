@@ -384,4 +384,120 @@ mod tests {
             );
         }
     }
+
+    // -----------------------------------------------------------------------
+    // v2.0 header coverage (#240).
+    //
+    // The v2.0 write path triggers when the dict exceeds u16::MAX bytes;
+    // organically that requires a shape with tens of thousands of axes.
+    // We exercise the writer by forcing a mega-shape, then exercise the
+    // reader against a hand-crafted v2.0 byte blob to catch any future
+    // skew between the two.
+    // -----------------------------------------------------------------------
+
+    /// Force the v2.0 write path with a synthetic 22000-dim shape and
+    /// confirm the round-trip produces a v2.0 header that parses back
+    /// to the same shape.
+    #[test]
+    fn v20_writer_roundtrip_huge_shape() {
+        // 22000 axes, each "1," contributes 2 chars beyond the prefix
+        // — comfortably above the 65535-byte v1 threshold.
+        let shape: Vec<usize> = vec![1usize; 22000];
+        let mut buf = Vec::new();
+        write_header(&mut buf, DType::F64, &shape, false).unwrap();
+
+        // Bytes [6..8] hold the version major/minor; v2.0 should kick in.
+        assert_eq!(buf[6], 2, "expected major version 2, got {}", buf[6]);
+        assert_eq!(buf[7], 0, "expected minor version 0, got {}", buf[7]);
+
+        let mut cursor = std::io::Cursor::new(buf);
+        let header = read_header(&mut cursor).unwrap();
+        assert_eq!(header.version, (2, 0));
+        assert_eq!(header.dtype, DType::F64);
+        assert_eq!(header.shape.len(), 22000);
+        assert!(header.shape.iter().all(|&d| d == 1));
+    }
+
+    /// Hand-craft a minimal v2.0 header and verify the reader walks
+    /// through the 4-byte length branch correctly. This guards against
+    /// the case where every v2.0 header happens to come from our own
+    /// writer (so a bug in the reader's u32 length branch would only
+    /// surface against numpy-produced files).
+    #[test]
+    fn v20_reader_handcrafted_minimal() {
+        // Build a tiny dict, then pad to the 64-byte boundary so the
+        // header is well-formed even though the v1 path could have
+        // covered it. The point is to assert the reader's u32-length
+        // branch parses correctly.
+        let dict = "{'descr': '<f8', 'fortran_order': False, 'shape': (5,), }";
+        let preamble_v2 = format::NPY_MAGIC_LEN + 2 + 4; // 12
+        let body_with_newline = dict.len() + 1;
+        let pad = {
+            let total = preamble_v2 + body_with_newline;
+            let r = total % format::HEADER_ALIGNMENT;
+            if r == 0 { 0 } else { format::HEADER_ALIGNMENT - r }
+        };
+        let header_len = dict.len() + pad + 1;
+
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(format::NPY_MAGIC);
+        bytes.extend_from_slice(&[2, 0]);
+        bytes.extend_from_slice(&(header_len as u32).to_le_bytes());
+        bytes.extend_from_slice(dict.as_bytes());
+        bytes.extend(std::iter::repeat_n(b' ', pad));
+        bytes.push(b'\n');
+
+        let mut cursor = std::io::Cursor::new(bytes);
+        let header = read_header(&mut cursor).unwrap();
+        assert_eq!(header.version, (2, 0));
+        assert_eq!(header.dtype, DType::F64);
+        assert_eq!(header.shape, vec![5]);
+        assert!(!header.fortran_order);
+    }
+
+    /// The reader caps v2.0 header length at 1 MB; a header claiming
+    /// more should be rejected before the buffer is allocated.
+    #[test]
+    fn v20_reader_rejects_oversized_header() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(format::NPY_MAGIC);
+        bytes.extend_from_slice(&[2, 0]);
+        // 2 MB header length — must be rejected.
+        bytes.extend_from_slice(&(2u32 * 1024 * 1024).to_le_bytes());
+        let mut cursor = std::io::Cursor::new(bytes);
+        let err = read_header(&mut cursor).unwrap_err();
+        assert!(
+            err.to_string().contains("exceeds maximum"),
+            "expected oversized-header error, got: {err}"
+        );
+    }
+
+    /// v3.0 is also accepted by the writer/reader pair (numpy added it
+    /// for UTF-8 field names). Make sure a v3.0 header round-trips
+    /// through the same u32-length branch as v2.0.
+    #[test]
+    fn v30_reader_handcrafted_minimal() {
+        let dict = "{'descr': '<f8', 'fortran_order': False, 'shape': (3,), }";
+        let preamble = format::NPY_MAGIC_LEN + 2 + 4;
+        let body_with_newline = dict.len() + 1;
+        let pad = {
+            let total = preamble + body_with_newline;
+            let r = total % format::HEADER_ALIGNMENT;
+            if r == 0 { 0 } else { format::HEADER_ALIGNMENT - r }
+        };
+        let header_len = dict.len() + pad + 1;
+
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(format::NPY_MAGIC);
+        bytes.extend_from_slice(&[3, 0]);
+        bytes.extend_from_slice(&(header_len as u32).to_le_bytes());
+        bytes.extend_from_slice(dict.as_bytes());
+        bytes.extend(std::iter::repeat_n(b' ', pad));
+        bytes.push(b'\n');
+
+        let mut cursor = std::io::Cursor::new(bytes);
+        let header = read_header(&mut cursor).unwrap();
+        assert_eq!(header.version, (3, 0));
+        assert_eq!(header.shape, vec![3]);
+    }
 }
