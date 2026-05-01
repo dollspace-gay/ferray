@@ -3,11 +3,12 @@
   "display_id": 308,
   "title": "ferray-numpy-interop: missing f16 <-> Float16 mapping in dtype_map",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nArrow 54 supports Float16 but dtype_to_arrow has no F16 entry.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:03:12.562134911Z",
-  "updated_at": "2026-03-25T16:03:21.801602909Z",
+  "updated_at": "2026-05-01T22:13:43.486761080Z",
+  "closed_at": "2026-05-01T22:13:43.486761080Z",
   "labels": [
     "refactor",
     "qa-audit"
