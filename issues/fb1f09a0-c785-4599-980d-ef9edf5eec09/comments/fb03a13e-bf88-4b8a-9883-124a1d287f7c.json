@@ -1,0 +1,10 @@
+{
+  "uuid": "fb03a13e-bf88-4b8a-9883-124a1d287f7c",
+  "issue_uuid": "fb1f09a0-c785-4599-980d-ef9edf5eec09",
+  "author": "doll-agent",
+  "content": "Done. ToArrow and ToPolars (plus bool variants) were impl'd only for Array1<T>. Multi-dim ferray arrays couldn't be sent to Arrow or Polars without an explicit flatten step.\n\nGeneralized to any Array<T, D>: both Arrow and Polars Series are inherently 1-D, so multi-dim inputs flatten via to_vec_flat() in row-major (C) order. Reverse path stays Array1; callers reshape after into_ferray.\n\n6 tests covering Array2 and ArrayD (3-D) flattening for Arrow and Polars + boolean variants.\n\nferray-numpy-interop: 71 -> 77 tests, all passing, clippy clean. Commit db3a5f14.",
+  "created_at": "2026-05-01T22:11:06.012793101Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABApe5XWhj92CtJSvtk8mJ3jAUNFKEdbtqy9XCBu7kqEDUj405xqR9iSCu2XwgUgkodL+ngOh/lq/rRzC2rn885Bg=="
+}
