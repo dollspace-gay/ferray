@@ -1,0 +1,10 @@
+{
+  "uuid": "1886829b-ea5b-4405-a2ec-03b66ed5c66a",
+  "display_id": 715,
+  "title": "ferray-python phase 4 follow-up: numpy.char namespace (lower/upper/strip/replace/find/count/etc) — needs StringArray pyclass",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-01T17:11:08.503725233Z",
+  "updated_at": "2026-05-01T17:11:08.503725233Z"
+}
