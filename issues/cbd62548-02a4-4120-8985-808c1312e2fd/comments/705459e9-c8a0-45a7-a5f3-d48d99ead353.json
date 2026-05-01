@@ -1,0 +1,10 @@
+{
+  "uuid": "705459e9-c8a0-45a7-a5f3-d48d99ead353",
+  "issue_uuid": "cbd62548-02a4-4120-8985-808c1312e2fd",
+  "author": "doll-agent",
+  "content": "Done. count_masked accepted an axis: Option<usize> argument and ignored it - a silent footgun where callers passing Some(axis) got the total mask count back instead of per-slice counts.\n\nDropped the unused argument and added count_masked_axis(ma, axis) that actually implements per-slice reduction. Returns Array<u64, IxDyn> (u64 because Element isn't impl'd for usize) with the reduced axis removed. Mirrors numpy.ma.count_masked(a, axis=k).\n\nUpdated 4 call sites: ferray-python ma.rs (2), property_tests.rs, lib.rs. 3 tests added covering 2D row counts, column counts, and axis-out-of-bounds rejection.\n\nferray-ma: 184 -> 187 lib tests, all passing, clippy clean. ferray-python builds clean. Commit 7b2faf1e.",
+  "created_at": "2026-05-01T21:11:48.286120704Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA6zo7FJi9yE/RIpRr5uo4GFEmnpOH/Vp0BTGjVYvSU0CS4dLubdP1BEFpUMAA1Aond84Nwk7KX4jZ0eC6+2HwBg=="
+}
