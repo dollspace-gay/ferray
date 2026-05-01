@@ -1,0 +1,10 @@
+{
+  "uuid": "34784dab-53d2-4eb9-a434-221a7b78fd44",
+  "issue_uuid": "7dc74553-27d7-4c5d-90ec-5854cd33e261",
+  "author": "doll-agent",
+  "content": "Add tests/divmod_non_power.rs covering 5 non-power bases (Chebyshev, Legendre, Hermite, HermiteE, Laguerre) for divmod accuracy. Each basis routes through a power-basis pivot, so round-trip conversion errors could compound silently.\n\n13 tests:\n- Per-basis invariant: a(x) == q(x)*b(x) + r(x) at 6+ test points (eval-based, robust against representation drift).\n- Per-basis higher-degree-divisor: q == 0, r == a.\n- Per-basis exact-division zero-remainder (Chebyshev only with explicit T-basis coeffs).\n- Per-basis division-by-zero errs.",
+  "created_at": "2026-05-01T20:56:57.627185079Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAu+fGu/SXBHHppWnikAEfsbpQ1JZGAGQuqCdd6IOD3sfKxFFHsFaFNOZSQ3QW3RKky9k1EPsBhQpVbl/YGvbOAw=="
+}
