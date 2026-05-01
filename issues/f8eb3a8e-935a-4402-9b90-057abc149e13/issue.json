@@ -3,11 +3,12 @@
   "display_id": 236,
   "title": "ferray-io: build_dim_from_shape uses Box<dyn Any> downcast",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nnpy/mod.rs L407-467: runtime heap alloc + type check. Use Dimension::from_shape or transmute.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:50:40.841360774Z",
-  "updated_at": "2026-03-25T15:50:47.254880261Z",
+  "updated_at": "2026-05-01T20:20:14.397965351Z",
+  "closed_at": "2026-05-01T20:20:14.397965351Z",
   "labels": [
     "refactor",
     "qa-audit"
