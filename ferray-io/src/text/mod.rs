@@ -466,16 +466,14 @@ mod tests {
         let data = vec![1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0];
         let arr = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
 
-        let dir = std::env::temp_dir().join(format!("ferray_io_text_{}", std::process::id()));
-        let _ = std::fs::create_dir_all(&dir);
-        let path = dir.join("test.csv");
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("test.csv");
 
         savetxt(&path, &arr, &SaveTxtOptions::default()).unwrap();
         let loaded: Array<f64, Ix2> = loadtxt(&path, ',', 0).unwrap();
 
         assert_eq!(loaded.shape(), &[2, 3]);
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -543,15 +541,13 @@ mod tests {
     #[test]
     fn genfromtxt_file() {
         let content = "1.0,2.0\n,4.0\n";
-        let dir = std::env::temp_dir().join(format!("ferray_io_text_{}", std::process::id()));
-        let _ = std::fs::create_dir_all(&dir);
-        let path = dir.join("genfromtxt_test.csv");
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("genfromtxt_test.csv");
         std::fs::write(&path, content).unwrap();
 
         let arr = genfromtxt(&path, ',', f64::NAN, 0, &[]).unwrap();
         assert_eq!(arr.shape(), &[2, 2]);
         assert!(arr.as_slice().unwrap()[2].is_nan());
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -604,13 +600,11 @@ mod tests {
 
     #[test]
     fn fromregex_from_file_roundtrip() {
-        let dir = std::env::temp_dir().join(format!("ferray_io_fromregex_{}", std::process::id()));
-        let _ = std::fs::create_dir_all(&dir);
-        let path = dir.join("regex_test.txt");
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("regex_test.txt");
         std::fs::write(&path, "x=1\nx=2\nx=3\n").unwrap();
         let arr: Array<i32, Ix2> = fromregex_from_file(&path, r"^x=(\d+)$").unwrap();
         assert_eq!(arr.shape(), &[3, 1]);
         assert_eq!(arr.as_slice().unwrap(), &[1, 2, 3]);
-        let _ = std::fs::remove_file(&path);
     }
 }

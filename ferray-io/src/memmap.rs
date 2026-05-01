@@ -347,14 +347,13 @@ mod tests {
     use crate::npy;
     use ferray_core::dimension::Ix1;
 
-    fn test_dir() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("ferray_io_mmap_{}", std::process::id()));
-        let _ = std::fs::create_dir_all(&dir);
-        dir
-    }
-
-    fn test_file(name: &str) -> std::path::PathBuf {
-        test_dir().join(name)
+    /// Construct a temporary file path inside a fresh `TempDir` (#244).
+    /// Caller binds the `TempDir` for the test's scope so on completion
+    /// or panic the directory is removed automatically.
+    fn temp_path(name: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::TempDir::new().expect("failed to create test TempDir");
+        let path = dir.path().join(name);
+        (dir, path)
     }
 
     #[test]
@@ -362,13 +361,12 @@ mod tests {
         let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0];
         let arr = Array::<f64, Ix1>::from_vec(Ix1::new([5]), data.clone()).unwrap();
 
-        let path = test_file("mm_ro_f64.npy");
+        let (_dir, path) = temp_path("mm_ro_f64.npy");
         npy::save(&path, &arr).unwrap();
 
         let mapped = memmap_readonly::<f64, _>(&path).unwrap();
         assert_eq!(mapped.shape(), &[5]);
         assert_eq!(mapped.as_slice(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -376,14 +374,13 @@ mod tests {
         let data = vec![10i32, 20, 30];
         let arr = Array::<i32, Ix1>::from_vec(Ix1::new([3]), data.clone()).unwrap();
 
-        let path = test_file("mm_to_arr.npy");
+        let (_dir, path) = temp_path("mm_to_arr.npy");
         npy::save(&path, &arr).unwrap();
 
         let mapped = memmap_readonly::<i32, _>(&path).unwrap();
         let owned = mapped.to_array().unwrap();
         assert_eq!(owned.shape(), &[3]);
         assert_eq!(owned.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -391,7 +388,7 @@ mod tests {
         let data = vec![1.0_f64, 2.0, 3.0];
         let arr = Array::<f64, Ix1>::from_vec(Ix1::new([3]), data).unwrap();
 
-        let path = test_file("mm_rw.npy");
+        let (_dir, path) = temp_path("mm_rw.npy");
         npy::save(&path, &arr).unwrap();
 
         // Modify via mmap
@@ -406,7 +403,6 @@ mod tests {
         assert_eq!(loaded.as_slice().unwrap()[0], 999.0);
         assert_eq!(loaded.as_slice().unwrap()[1], 2.0);
         assert_eq!(loaded.as_slice().unwrap()[2], 3.0);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -414,7 +410,7 @@ mod tests {
         let data = vec![1.0_f64, 2.0, 3.0];
         let arr = Array::<f64, Ix1>::from_vec(Ix1::new([3]), data).unwrap();
 
-        let path = test_file("mm_cow.npy");
+        let (_dir, path) = temp_path("mm_cow.npy");
         npy::save(&path, &arr).unwrap();
 
         // Modify via copy-on-write mmap
@@ -427,7 +423,6 @@ mod tests {
         // Original file should be unmodified
         let loaded: Array<f64, Ix1> = npy::load(&path).unwrap();
         assert_eq!(loaded.as_slice().unwrap()[0], 1.0);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -435,12 +430,11 @@ mod tests {
         let data = vec![1.0_f64, 2.0];
         let arr = Array::<f64, Ix1>::from_vec(Ix1::new([2]), data).unwrap();
 
-        let path = test_file("mm_wrong_dt.npy");
+        let (_dir, path) = temp_path("mm_wrong_dt.npy");
         npy::save(&path, &arr).unwrap();
 
         let result = memmap_readonly::<f32, _>(&path);
         assert!(result.is_err());
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -448,13 +442,12 @@ mod tests {
         let data = vec![1.0_f64, 2.0, 3.0];
         let arr = Array::<f64, Ix1>::from_vec(Ix1::new([3]), data.clone()).unwrap();
 
-        let path = test_file("mm_open_ro.npy");
+        let (_dir, path) = temp_path("mm_open_ro.npy");
         npy::save(&path, &arr).unwrap();
 
         let loaded = open_memmap::<f64, _>(&path, MemmapMode::ReadOnly).unwrap();
         assert_eq!(loaded.shape(), &[3]);
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -469,7 +462,7 @@ mod tests {
         )
         .unwrap();
 
-        let path = test_file("mm_view.npy");
+        let (_dir, path) = temp_path("mm_view.npy");
         npy::save(&path, &arr).unwrap();
 
         let mapped = memmap_readonly::<f64, _>(&path).unwrap();
@@ -477,7 +470,6 @@ mod tests {
         assert_eq!(view.shape(), &[2, 3]);
         let collected: Vec<f64> = view.iter().copied().collect();
         assert_eq!(collected, data);
-        let _ = std::fs::remove_file(&path);
     }
 
     // ----------------------------------------------------------------------
@@ -494,13 +486,12 @@ mod tests {
         )
         .unwrap();
 
-        let path = test_file("mm_ro_2d.npy");
+        let (_dir, path) = temp_path("mm_ro_2d.npy");
         npy::save(&path, &arr).unwrap();
 
         let mapped = memmap_readonly::<f64, _>(&path).unwrap();
         assert_eq!(mapped.shape(), &[3, 4]);
         assert_eq!(mapped.as_slice(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -512,13 +503,12 @@ mod tests {
         )
         .unwrap();
 
-        let path = test_file("mm_ro_3d.npy");
+        let (_dir, path) = temp_path("mm_ro_3d.npy");
         npy::save(&path, &arr).unwrap();
 
         let mapped = memmap_readonly::<i32, _>(&path).unwrap();
         assert_eq!(mapped.shape(), &[2, 3, 4]);
         assert_eq!(mapped.as_slice(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -530,7 +520,7 @@ mod tests {
         )
         .unwrap();
 
-        let path = test_file("mm_rw_2d.npy");
+        let (_dir, path) = temp_path("mm_rw_2d.npy");
         npy::save(&path, &arr).unwrap();
 
         // Modify the (1, 2) element via mmap (row-major linear index 5).
@@ -547,7 +537,6 @@ mod tests {
         assert_eq!(row1[5], -42.0);
         // Other elements unchanged.
         assert_eq!(row1[..5], [1.0, 2.0, 3.0, 4.0, 5.0]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -561,7 +550,7 @@ mod tests {
         )
         .unwrap();
 
-        let path = test_file("mm_view_3d.npy");
+        let (_dir, path) = temp_path("mm_view_3d.npy");
         npy::save(&path, &arr).unwrap();
 
         let mapped = memmap_readonly::<f64, _>(&path).unwrap();
@@ -569,7 +558,6 @@ mod tests {
         assert_eq!(view.shape(), &[2, 3, 4]);
         let collected: Vec<f64> = view.iter().copied().collect();
         assert_eq!(collected, data);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -583,13 +571,12 @@ mod tests {
         )
         .unwrap();
 
-        let path = test_file("mm_open_ro_2d.npy");
+        let (_dir, path) = temp_path("mm_open_ro_2d.npy");
         npy::save(&path, &arr).unwrap();
 
         let loaded = open_memmap::<f32, _>(&path, MemmapMode::ReadOnly).unwrap();
         assert_eq!(loaded.shape(), &[3, 5]);
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -602,7 +589,7 @@ mod tests {
         )
         .unwrap();
 
-        let path = test_file("mm_cow_2d.npy");
+        let (_dir, path) = temp_path("mm_cow_2d.npy");
         npy::save(&path, &arr).unwrap();
 
         {
@@ -615,6 +602,5 @@ mod tests {
         let loaded: Array<f64, ferray_core::dimension::Ix2> = npy::load(&path).unwrap();
         let flat: Vec<f64> = loaded.iter().copied().collect();
         assert_eq!(flat, data);
-        let _ = std::fs::remove_file(&path);
     }
 }

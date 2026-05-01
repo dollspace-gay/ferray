@@ -613,16 +613,14 @@ mod tests {
     use ferray_core::dimension::{Ix1, Ix2};
     use std::io::Cursor;
 
-    /// Create a temporary directory for tests that auto-cleans on drop.
-    fn test_dir() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("ferray_io_test_{}", std::process::id()));
-        let _ = std::fs::create_dir_all(&dir);
-        dir
-    }
-
-    fn test_file(name: &str) -> std::path::PathBuf {
-        let dir = test_dir();
-        dir.join(name)
+    /// Construct a temporary file path inside a fresh `TempDir`.
+    /// Caller binds the `TempDir` to keep it alive for the test's
+    /// scope; on test completion or panic the directory and its
+    /// contents are removed automatically (#244).
+    fn temp_path(name: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::TempDir::new().expect("failed to create test TempDir");
+        let path = dir.path().join(name);
+        (dir, path)
     }
 
     #[test]
@@ -630,13 +628,12 @@ mod tests {
         let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0];
         let arr = Array::<f64, Ix1>::from_vec(Ix1::new([5]), data.clone()).unwrap();
 
-        let path = test_file("rt_f64_1d.npy");
+        let (_dir, path) = temp_path("rt_f64_1d.npy");
         save(&path, &arr).unwrap();
         let loaded: Array<f64, Ix1> = load(&path).unwrap();
 
         assert_eq!(loaded.shape(), &[5]);
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -644,13 +641,12 @@ mod tests {
         let data = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0];
         let arr = Array::<f32, Ix2>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
 
-        let path = test_file("rt_f32_2d.npy");
+        let (_dir, path) = temp_path("rt_f32_2d.npy");
         save(&path, &arr).unwrap();
         let loaded: Array<f32, Ix2> = load(&path).unwrap();
 
         assert_eq!(loaded.shape(), &[2, 3]);
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -658,11 +654,10 @@ mod tests {
         let data = vec![10i32, 20, 30, 40];
         let arr = Array::<i32, Ix1>::from_vec(Ix1::new([4]), data.clone()).unwrap();
 
-        let path = test_file("rt_i32.npy");
+        let (_dir, path) = temp_path("rt_i32.npy");
         save(&path, &arr).unwrap();
         let loaded: Array<i32, Ix1> = load(&path).unwrap();
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -670,11 +665,10 @@ mod tests {
         let data = vec![100i64, 200, 300];
         let arr = Array::<i64, Ix1>::from_vec(Ix1::new([3]), data.clone()).unwrap();
 
-        let path = test_file("rt_i64.npy");
+        let (_dir, path) = temp_path("rt_i64.npy");
         save(&path, &arr).unwrap();
         let loaded: Array<i64, Ix1> = load(&path).unwrap();
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -682,11 +676,10 @@ mod tests {
         let data = vec![0u8, 128, 255];
         let arr = Array::<u8, Ix1>::from_vec(Ix1::new([3]), data.clone()).unwrap();
 
-        let path = test_file("rt_u8.npy");
+        let (_dir, path) = temp_path("rt_u8.npy");
         save(&path, &arr).unwrap();
         let loaded: Array<u8, Ix1> = load(&path).unwrap();
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -694,11 +687,10 @@ mod tests {
         let data = vec![true, false, true, true, false];
         let arr = Array::<bool, Ix1>::from_vec(Ix1::new([5]), data.clone()).unwrap();
 
-        let path = test_file("rt_bool.npy");
+        let (_dir, path) = temp_path("rt_bool.npy");
         save(&path, &arr).unwrap();
         let loaded: Array<bool, Ix1> = load(&path).unwrap();
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -719,13 +711,12 @@ mod tests {
         let data = vec![1.0_f64, 2.0, 3.0];
         let arr = Array::<f64, Ix1>::from_vec(Ix1::new([3]), data).unwrap();
 
-        let path = test_file("dyn_f64.npy");
+        let (_dir, path) = temp_path("dyn_f64.npy");
         save(&path, &arr).unwrap();
         let dyn_arr = load_dynamic(&path).unwrap();
 
         assert_eq!(dyn_arr.dtype(), DType::F64);
         assert_eq!(dyn_arr.shape(), &[3]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -733,12 +724,11 @@ mod tests {
         let data = vec![1.0_f64, 2.0, 3.0];
         let arr = Array::<f64, Ix1>::from_vec(Ix1::new([3]), data).unwrap();
 
-        let path = test_file("wrong_dtype.npy");
+        let (_dir, path) = temp_path("wrong_dtype.npy");
         save(&path, &arr).unwrap();
 
         let result = load::<f32, Ix1, _>(&path);
         assert!(result.is_err());
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -746,12 +736,11 @@ mod tests {
         let data = vec![1.0_f64, 2.0, 3.0];
         let arr = Array::<f64, Ix1>::from_vec(Ix1::new([3]), data).unwrap();
 
-        let path = test_file("wrong_ndim.npy");
+        let (_dir, path) = temp_path("wrong_ndim.npy");
         save(&path, &arr).unwrap();
 
         let result = load::<f64, Ix2, _>(&path);
         assert!(result.is_err());
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -760,7 +749,7 @@ mod tests {
         let arr = Array::<i32, IxDyn>::from_vec(IxDyn::new(&[3]), data.clone()).unwrap();
         let dyn_arr = DynArray::I32(arr);
 
-        let path = test_file("rt_dynamic.npy");
+        let (_dir, path) = temp_path("rt_dynamic.npy");
         save_dynamic(&path, &dyn_arr).unwrap();
 
         let loaded = load_dynamic(&path).unwrap();
@@ -769,7 +758,6 @@ mod tests {
 
         let loaded_arr = loaded.try_into_i32().unwrap();
         assert_eq!(loaded_arr.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -777,14 +765,13 @@ mod tests {
         let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0];
         let arr = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
 
-        let path = test_file("dyn_ixdyn.npy");
+        let (_dir, path) = temp_path("dyn_ixdyn.npy");
         save(&path, &arr).unwrap();
 
         // Load as IxDyn
         let loaded: Array<f64, IxDyn> = load(&path).unwrap();
         assert_eq!(loaded.shape(), &[2, 3]);
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -1002,12 +989,11 @@ mod tests {
             .collect();
         let arr = Array::<f16, Ix1>::from_vec(Ix1::new([6]), data.clone()).unwrap();
 
-        let path = test_file("rt_f16_1d.npy");
+        let (_dir, path) = temp_path("rt_f16_1d.npy");
         save(&path, &arr).unwrap();
         let loaded: Array<f16, Ix1> = load(&path).unwrap();
         assert_eq!(loaded.shape(), &[6]);
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[cfg(feature = "f16")]
@@ -1019,12 +1005,11 @@ mod tests {
             .collect();
         let arr = Array::<f16, Ix2>::from_vec(Ix2::new([3, 4]), data.clone()).unwrap();
 
-        let path = test_file("rt_f16_2d.npy");
+        let (_dir, path) = temp_path("rt_f16_2d.npy");
         save(&path, &arr).unwrap();
         let loaded: Array<f16, Ix2> = load(&path).unwrap();
         assert_eq!(loaded.shape(), &[3, 4]);
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[cfg(feature = "f16")]
@@ -1035,7 +1020,7 @@ mod tests {
         let arr = Array::<f16, IxDyn>::from_vec(IxDyn::new(&[2, 4]), data.clone()).unwrap();
         let dyn_in = DynArray::F16(arr);
 
-        let path = test_file("rt_f16_dyn.npy");
+        let (_dir, path) = temp_path("rt_f16_dyn.npy");
         save_dynamic(&path, &dyn_in).unwrap();
         let loaded = load_dynamic(&path).unwrap();
         assert_eq!(loaded.dtype(), DType::F16);
@@ -1044,7 +1029,6 @@ mod tests {
             DynArray::F16(a) => assert_eq!(a.as_slice().unwrap(), &data[..]),
             _ => panic!("expected F16 variant"),
         }
-        let _ = std::fs::remove_file(&path);
     }
 
     #[cfg(feature = "f16")]
@@ -1075,12 +1059,11 @@ mod tests {
             .collect();
         let arr = Array::<bf16, Ix1>::from_vec(Ix1::new([6]), data.clone()).unwrap();
 
-        let path = test_file("rt_bf16_1d.npy");
+        let (_dir, path) = temp_path("rt_bf16_1d.npy");
         save(&path, &arr).unwrap();
         let loaded: Array<bf16, Ix1> = load(&path).unwrap();
         assert_eq!(loaded.shape(), &[6]);
         assert_eq!(loaded.as_slice().unwrap(), &data[..]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[cfg(feature = "bf16")]
@@ -1091,7 +1074,7 @@ mod tests {
         let arr = Array::<bf16, IxDyn>::from_vec(IxDyn::new(&[2, 3]), data.clone()).unwrap();
         let dyn_in = DynArray::BF16(arr);
 
-        let path = test_file("rt_bf16_dyn.npy");
+        let (_dir, path) = temp_path("rt_bf16_dyn.npy");
         save_dynamic(&path, &dyn_in).unwrap();
         let loaded = load_dynamic(&path).unwrap();
         assert_eq!(loaded.dtype(), DType::BF16);
@@ -1100,7 +1083,6 @@ mod tests {
             DynArray::BF16(a) => assert_eq!(a.as_slice().unwrap(), &data[..]),
             _ => panic!("expected BF16 variant"),
         }
-        let _ = std::fs::remove_file(&path);
     }
 
     #[cfg(feature = "bf16")]

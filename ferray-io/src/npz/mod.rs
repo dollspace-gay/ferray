@@ -196,14 +196,13 @@ mod tests {
     use ferray_core::dimension::IxDyn;
     use ferray_core::dtype::DType;
 
-    fn test_dir() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("ferray_io_npz_{}", std::process::id()));
-        let _ = std::fs::create_dir_all(&dir);
-        dir
-    }
-
-    fn test_file(name: &str) -> std::path::PathBuf {
-        test_dir().join(name)
+    /// Construct a temporary file path inside a fresh `TempDir` (#244).
+    /// Caller binds the `TempDir` for the test's scope so on completion
+    /// or panic the directory is removed automatically.
+    fn temp_path(name: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::TempDir::new().expect("failed to create test TempDir");
+        let path = dir.path().join(name);
+        (dir, path)
     }
 
     fn make_f64_dyn(data: Vec<f64>, shape: &[usize]) -> DynArray {
@@ -221,7 +220,7 @@ mod tests {
         let a = make_f64_dyn(vec![1.0, 2.0, 3.0], &[3]);
         let b = make_i32_dyn(vec![10, 20, 30, 40], &[2, 2]);
 
-        let path = test_file("test.npz");
+        let (_dir, path) = temp_path("test.npz");
         savez(&path, &[("a", &a), ("b", &b)]).unwrap();
 
         let mut npz = NpzFile::open(&path).unwrap();
@@ -238,14 +237,13 @@ mod tests {
         let loaded_b = npz.get("b").unwrap();
         assert_eq!(loaded_b.dtype(), DType::I32);
         assert_eq!(loaded_b.shape(), &[2, 2]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
     fn savez_compressed_and_load() {
         let a = make_f64_dyn(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &[2, 3]);
 
-        let path = test_file("test_compressed.npz");
+        let (_dir, path) = temp_path("test_compressed.npz");
         savez_compressed(&path, &[("data", &a)]).unwrap();
 
         let mut npz = NpzFile::open(&path).unwrap();
@@ -254,19 +252,17 @@ mod tests {
         let loaded = npz.get("data").unwrap();
         assert_eq!(loaded.dtype(), DType::F64);
         assert_eq!(loaded.shape(), &[2, 3]);
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
     fn npz_missing_key() {
         let a = make_f64_dyn(vec![1.0], &[1]);
 
-        let path = test_file("npz_missing.npz");
+        let (_dir, path) = temp_path("npz_missing.npz");
         savez(&path, &[("a", &a)]).unwrap();
 
         let mut npz = NpzFile::open(&path).unwrap();
         assert!(npz.get("nonexistent").is_err());
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -277,7 +273,7 @@ mod tests {
         let a = make_f64_dyn(vec![1.0, 2.0, 3.0], &[3]);
         let b = make_i32_dyn(vec![10, 20, 30], &[3]);
 
-        let path = test_file("test_lazy.npz");
+        let (_dir, path) = temp_path("test_lazy.npz");
         savez(&path, &[("a", &a), ("b", &b)]).unwrap();
 
         let mut npz = NpzFile::open(&path).unwrap();
@@ -285,17 +281,15 @@ mod tests {
         let _b1 = npz.get("b").unwrap();
         let _a = npz.get("a").unwrap();
         let _b2 = npz.get("b").unwrap();
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
     fn npz_empty() {
-        let path = test_file("npz_empty.npz");
+        let (_dir, path) = temp_path("npz_empty.npz");
         savez(&path, &[]).unwrap();
 
         let npz = NpzFile::open(&path).unwrap();
         assert!(npz.is_empty());
         assert_eq!(npz.len(), 0);
-        let _ = std::fs::remove_file(&path);
     }
 }

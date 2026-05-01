@@ -18,11 +18,12 @@ members = [
     "ferray-stride-tricks",
     "ferray-numpy-interop",
     "ferray-autodiff",
+    "ferray-python",
     "ferray-test-oracle",
 ]
 
 [workspace.package]
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -33,6 +34,7 @@ categories = ["science", "mathematics"]
 
 [workspace.dependencies]
 # Internal crates
+ferray = { path = "ferray", version = "0.3.1" }
 ferray-core = { path = "ferray-core", version = "0.3.1" }
 ferray-core-macros = { path = "ferray-core-macros", version = "0.3.1" }
 ferray-ufunc = { path = "ferray-ufunc", version = "0.3.1" }
@@ -74,4 +76,5 @@ polars = { version = "0.53", default-features = false }
 rand_core = "0.10"
 getrandom = "0.4"
 proptest = "1.11"
+tempfile = "3"
 core-math = "1.0"
