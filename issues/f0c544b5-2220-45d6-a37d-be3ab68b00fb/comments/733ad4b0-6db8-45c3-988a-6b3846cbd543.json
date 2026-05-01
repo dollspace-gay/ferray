@@ -1,0 +1,10 @@
+{
+  "uuid": "733ad4b0-6db8-45c3-988a-6b3846cbd543",
+  "issue_uuid": "f0c544b5-2220-45d6-a37d-be3ab68b00fb",
+  "author": "doll-agent",
+  "content": "Done. Tests previously used std::env::temp_dir() with PID-keyed subdirectories and manual std::fs::remove_file() at the end of each test. On panic, cleanup never ran and files leaked across runs.\n\nMigrated to tempfile::TempDir-owned scopes:\n\n- Added tempfile = '3' to [workspace.dependencies] and ferray-io's [dev-dependencies].\n- Replaced test_dir()/test_file() helpers in npy/mod.rs, memmap.rs, npz/mod.rs with temp_path(name) -> (TempDir, PathBuf). Each test binds the TempDir; Drop runs on either normal completion or stack unwinding.\n- Migrated text/mod.rs's three inline env::temp_dir() constructions to tempfile::TempDir directly.\n- Dropped all 37 manual remove_file() calls.\n\nferray-io: 109 tests pass (no test count regression), clippy clean. Net -15 lines. Commit 9e70597b.",
+  "created_at": "2026-05-01T20:33:34.769378251Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAaVo7IJm3jcqKTuBRdmCnSiYy5T0SV5+wJmSngB88D/axF8sXge/s4bsYJ7hzQbRg7z0vbvjohWIdKYMHtZIJDQ=="
+}
