@@ -1,0 +1,10 @@
+{
+  "uuid": "ba177d6a-3dee-4e1a-bf92-68344bfe3b54",
+  "issue_uuid": "47284904-831c-4918-8ade-1b776e161d6c",
+  "author": "doll-agent",
+  "content": "Document why the four Bool traits exist as separate types: Arrow's BooleanArray is bit-packed (not a PrimitiveArray<BooleanType>) and Polars uses BooleanChunked, neither of which slot into the ArrowPrimitiveType / PolarsNumericType machinery the main trait uses. Unifying would require a new abstraction over 'primitive vs. bit-packed' / 'numeric vs. boolean' — more API surface than the duplication saves. Add 'Why a separate trait? (#311)' sections to all four trait docstrings.",
+  "created_at": "2026-05-01T22:22:50.632799528Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAD2sLI6YhDQGjxRKLZBdDylOdahFUb6cDHdidStvQd9bRV93xzS9r20mTPW86KMXryBIyqshv5xrIABfd8PSoBg=="
+}
