@@ -3,11 +3,12 @@
   "display_id": 177,
   "title": "ferray-stats: no tests for infinity values in any statistical function",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNo tests with f64::INFINITY or NEG_INFINITY inputs.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:40:34.035405271Z",
-  "updated_at": "2026-03-25T15:40:48.729707297Z",
+  "updated_at": "2026-05-01T19:57:18.595844061Z",
+  "closed_at": "2026-05-01T19:57:18.595844061Z",
   "labels": [
     "bug",
     "qa-audit"
