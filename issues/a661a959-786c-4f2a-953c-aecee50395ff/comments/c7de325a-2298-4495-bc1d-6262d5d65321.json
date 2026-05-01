@@ -1,0 +1,10 @@
+{
+  "uuid": "c7de325a-2298-4495-bc1d-6262d5d65321",
+  "issue_uuid": "a661a959-786c-4f2a-953c-aecee50395ff",
+  "author": "doll-agent",
+  "content": "Done. companion::companion_size was pub but only called from its own companion_size_quadratic test - no callers anywhere in the workspace (verified via grep across ferray-core, ferray-linalg, ferray-stats, ferray-fft, ferray-ufunc, ferray-numpy-interop, ferray-python, the ferray meta-crate, and benchmarks). The function duplicated trim-trailing-zeros logic already inlined into companion_matrix.\n\nDeleted the function and its lone test.\n\nferray-polynomial: 133 tests pass (was 134), clippy clean. Net -21 lines. Commit f127a0d1.",
+  "created_at": "2026-05-01T20:36:36.686270410Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAYaZjKBBSr2AqgKPrYBEZZ/icfEq5SexKU1Hb+eM+dHbXUjotX4+E24wSGblDrRZcaKpvYjjjlKNN0rgQADo9CQ=="
+}
