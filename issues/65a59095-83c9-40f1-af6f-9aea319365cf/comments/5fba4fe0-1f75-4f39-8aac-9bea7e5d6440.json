@@ -1,0 +1,10 @@
+{
+  "uuid": "5fba4fe0-1f75-4f39-8aac-9bea7e5d6440",
+  "issue_uuid": "65a59095-83c9-40f1-af6f-9aea319365cf",
+  "author": "doll-agent",
+  "content": "Phase-1 long tail #693 delivered: meshgrid (varargs + indexing='xy'/'ij'), mgrid (call form with [(start,stop,step)] tuples since Python slice syntax doesn't translate to fn call), ogrid (sparse open mesh), vander (Vandermonde matrix, numeric dtypes via match_dtype_numeric — no bool). 525/525 still passing. mgrid/ogrid slice-syntax sugar (np.mgrid[0:5,0:3]) deferred — would need an MGridIndexer Python class with __getitem__.",
+  "created_at": "2026-05-01T17:44:54.393069388Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA3kYpfPYq7SKA0vh6cSkgnwVkf5ciD2bXCfoKatMEDsHmG2EbSNcxDLaEuGsR5f7CyfKWgzoW5El56uS3tLNGAA=="
+}
