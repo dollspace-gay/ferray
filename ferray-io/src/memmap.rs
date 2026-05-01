@@ -26,10 +26,9 @@ use crate::npy::header::{self, NpyHeader};
 /// The array data is mapped directly from the file. No copy is made.
 /// The data remains valid as long as this struct is alive.
 pub struct MemmapArray<T: Element> {
-    /// The underlying memory map.
-    _mmap: Mmap,
-    /// Pointer to the start of element data.
-    data_ptr: *const T,
+    /// The underlying memory map. The data pointer is always derived
+    /// from this on demand (#238) so it can never dangle.
+    mmap: Mmap,
     /// Shape of the array.
     shape: Vec<usize>,
     /// Number of elements.
@@ -38,8 +37,9 @@ pub struct MemmapArray<T: Element> {
     _marker: PhantomData<T>,
 }
 
-// SAFETY: The underlying Mmap is Send + Sync and the data pointer
-// is derived from it. We only provide read access to the data.
+// SAFETY: Mmap is Send + Sync, and we only expose &T views derived
+// from the live mmap. PhantomData<T> stays well-defined (T: Element
+// requires Send + Sync via the trait bounds).
 unsafe impl<T: Element> Send for MemmapArray<T> {}
 unsafe impl<T: Element> Sync for MemmapArray<T> {}
 
@@ -50,12 +50,21 @@ impl<T: Element> MemmapArray<T> {
         &self.shape
     }
 
+    /// Pointer to the start of element data, always derived from the
+    /// live mmap (#238). The previous design stored a `*const T`
+    /// alongside the mmap; refactors that took ownership of `_mmap`
+    /// or reordered fields could leave the pointer dangling. Deriving
+    /// on demand makes the invariant structural.
+    fn data_ptr(&self) -> *const T {
+        self.mmap.as_ptr().cast::<T>()
+    }
+
     /// Return the mapped data as a slice.
     #[must_use]
-    pub const fn as_slice(&self) -> &[T] {
-        // SAFETY: data_ptr points to properly aligned, initialized data
-        // within the mmap region, and self.len is validated during construction.
-        unsafe { std::slice::from_raw_parts(self.data_ptr, self.len) }
+    pub fn as_slice(&self) -> &[T] {
+        // SAFETY: data_ptr is derived from a live Mmap that outlives
+        // this borrow; alignment and length are validated at construction.
+        unsafe { std::slice::from_raw_parts(self.data_ptr(), self.len) }
     }
 
     /// Copy the memory-mapped data into an owned `Array`.
@@ -76,11 +85,11 @@ impl<T: Element> MemmapArray<T> {
         for i in (0..ndim.saturating_sub(1)).rev() {
             strides[i] = strides[i + 1] * self.shape[i + 1];
         }
-        // SAFETY: `data_ptr` is valid for reads of `len * size_of::<T>()`
-        // bytes for the lifetime of `self._mmap`, which transitively
+        // SAFETY: data_ptr() is valid for reads of `len * size_of::<T>()`
+        // bytes for the lifetime of `self.mmap`, which transitively
         // outlives the borrow `&self`. Strides describe the same
         // C-contiguous layout the data was written in.
-        unsafe { ArrayView::from_shape_ptr(self.data_ptr, &self.shape, &strides) }
+        unsafe { ArrayView::from_shape_ptr(self.data_ptr(), &self.shape, &strides) }
     }
 }
 
@@ -88,10 +97,9 @@ impl<T: Element> MemmapArray<T> {
 ///
 /// Modifications to the array data are written back to the underlying file.
 pub struct MemmapArrayMut<T: Element> {
-    /// The underlying mutable memory map.
+    /// The underlying mutable memory map. The data pointer is always
+    /// derived from this on demand (#238) so it can never dangle.
     mmap: MmapMut,
-    /// Pointer to the start of element data.
-    data_ptr: *mut T,
     /// Shape of the array.
     shape: Vec<usize>,
     /// Number of elements.
@@ -110,18 +118,27 @@ impl<T: Element> MemmapArrayMut<T> {
         &self.shape
     }
 
+    fn data_ptr(&self) -> *const T {
+        self.mmap.as_ptr().cast::<T>()
+    }
+
+    fn data_ptr_mut(&mut self) -> *mut T {
+        self.mmap.as_mut_ptr().cast::<T>()
+    }
+
     /// Return the mapped data as a slice.
     #[must_use]
-    pub const fn as_slice(&self) -> &[T] {
-        unsafe { std::slice::from_raw_parts(self.data_ptr, self.len) }
+    pub fn as_slice(&self) -> &[T] {
+        unsafe { std::slice::from_raw_parts(self.data_ptr(), self.len) }
     }
 
     /// Return the mapped data as a mutable slice.
     ///
     /// Modifications will be persisted to the file (for `ReadWrite` mode)
     /// or kept in memory only (for `CopyOnWrite` mode).
-    pub const fn as_slice_mut(&mut self) -> &mut [T] {
-        unsafe { std::slice::from_raw_parts_mut(self.data_ptr, self.len) }
+    pub fn as_slice_mut(&mut self) -> &mut [T] {
+        let len = self.len;
+        unsafe { std::slice::from_raw_parts_mut(self.data_ptr_mut(), len) }
     }
 
     /// Copy the memory-mapped data into an owned `Array`.
@@ -140,9 +157,8 @@ impl<T: Element> MemmapArrayMut<T> {
         for i in (0..ndim.saturating_sub(1)).rev() {
             strides[i] = strides[i + 1] * self.shape[i + 1];
         }
-        // SAFETY: same invariants as MemmapArray::view; the *mut T is
-        // immediately demoted to *const T.
-        unsafe { ArrayView::from_shape_ptr(self.data_ptr.cast_const(), &self.shape, &strides) }
+        // SAFETY: same invariants as MemmapArray::view.
+        unsafe { ArrayView::from_shape_ptr(self.data_ptr(), &self.shape, &strides) }
     }
 
     /// Flush changes to disk (only meaningful for `ReadWrite` mode).
@@ -176,18 +192,17 @@ pub fn memmap_readonly<T: Element + NpyElement, P: AsRef<Path>>(
             .map(&file)
             .map_err(|e| FerrayError::io_error(format!("mmap failed: {e}")))?
     };
-    let data_ptr = mmap.as_ptr().cast::<T>();
-
-    // Validate alignment
-    if (data_ptr as usize) % std::mem::align_of::<T>() != 0 {
+    // Validate alignment against the live mmap pointer; we don't store
+    // it (#238) so re-derive once here for the alignment check.
+    let probe_ptr = mmap.as_ptr().cast::<T>();
+    if (probe_ptr as usize) % std::mem::align_of::<T>() != 0 {
         return Err(FerrayError::io_error(
             "memory-mapped data is not properly aligned for the element type",
         ));
     }
 
     Ok(MemmapArray {
-        _mmap: mmap,
-        data_ptr,
+        mmap,
         shape: header.shape,
         len,
         _marker: PhantomData,
@@ -248,9 +263,8 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
         MemmapMode::ReadOnly => unreachable!(),
     };
 
-    let data_ptr = mmap.as_ptr().cast::<T>().cast_mut();
-
-    if (data_ptr as usize) % std::mem::align_of::<T>() != 0 {
+    let probe_ptr = mmap.as_ptr().cast::<T>();
+    if (probe_ptr as usize) % std::mem::align_of::<T>() != 0 {
         return Err(FerrayError::io_error(
             "memory-mapped data is not properly aligned for the element type",
         ));
@@ -258,7 +272,6 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
 
     Ok(MemmapArrayMut {
         mmap,
-        data_ptr,
         shape: header.shape,
         len,
         _marker: PhantomData,
