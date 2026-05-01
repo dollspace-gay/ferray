@@ -1,0 +1,10 @@
+{
+  "uuid": "38df125d-92c4-4b3f-9481-a66cd387a8b0",
+  "issue_uuid": "caa4941a-af23-423b-8d82-6a387b588708",
+  "author": "doll-agent",
+  "content": "Add 5 non-symmetric eig correctness tests at the bottom of decomp/eigen.rs:\n- eig_upper_triangular_real_spectrum: eigenvalues == diag, A*v=lambda*v\n- eig_non_symmetric_3x3_real_spectrum: block-triangular with mixed real spectrum\n- eig_rotation_matrix_complex_spectrum: rotation matrix returns +/-i\n- eigvals_complex_spectrum: eigvals path matches eig path\n- eig_reconstruction_diagonalizable: V * Lambda * V^-1 == A\n\nHelper assert_eig_identity verifies A*v_j == lambda_j*v_j across all eigenpairs.",
+  "created_at": "2026-05-01T20:16:45.986813460Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA0yG2U1aMhpmibKEtWLhwCvNV0w5LZI475iTZfhaeCNBotkJyI73TSrWXcnLKy9DfW49jUB/A76OBgKOA7DebAw=="
+}
