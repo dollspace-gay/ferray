@@ -103,6 +103,8 @@ impl<'a, T: Element, D: Dimension> ArrayViewMut<'a, T, D> {
             f_contiguous: layout.is_f_contiguous(),
             owndata: false,
             writeable: true,
+            // #345: same alignment story as the immutable view path.
+            aligned: (self.inner.as_ptr() as usize) % core::mem::align_of::<T>() == 0,
         }
     }
 }

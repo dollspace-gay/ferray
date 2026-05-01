@@ -135,6 +135,8 @@ impl<'a, T: Element, D: Dimension> CowArray<'a, T, D> {
                     f_contiguous: layout.is_f_contiguous(),
                     owndata: true,
                     writeable: true,
+                    // CowArray::Owned wraps an Array (Vec<T> path) — aligned (#345).
+                    aligned: true,
                 }
             }
         }

@@ -36,6 +36,16 @@ pub struct ArrayFlags {
     pub owndata: bool,
     /// Whether the array is writeable.
     pub writeable: bool,
+    /// Whether the underlying data pointer is properly aligned for the
+    /// element type (#345). Mirrors numpy's NPY_ARRAY_ALIGNED flag.
+    ///
+    /// Owned arrays produced through ferray's safe constructors are
+    /// always aligned because they go through `Vec<T>` which the
+    /// allocator guarantees to align for `T`. Views constructed via
+    /// `from_shape_ptr` from a raw pointer can be misaligned and
+    /// will report `aligned = false` here so callers can detect the
+    /// degenerate case before passing into a SIMD path.
+    pub aligned: bool,
 }
 
 // Re-export the main types at this module level for convenience.

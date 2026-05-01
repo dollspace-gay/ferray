@@ -81,6 +81,9 @@ impl<T: Element, D: Dimension> Array<T, D> {
             f_contiguous: layout.is_f_contiguous(),
             owndata: true,
             writeable: true,
+            // Owned arrays go through Vec<T>, whose allocator
+            // guarantees alignment for T (#345).
+            aligned: true,
         }
     }
 }
@@ -149,6 +152,19 @@ mod tests {
         assert!(f.c_contiguous);
         assert!(f.owndata);
         assert!(f.writeable);
+        assert!(f.aligned, "owned arrays go through Vec<T> — always aligned");
+    }
+
+    #[test]
+    fn flags_owned_aligned_for_various_dtypes() {
+        // #345: owned arrays of every supported dtype must report
+        // aligned=true. Vec<T>'s allocator guarantees this.
+        let f64_arr = Array::<f64, Ix1>::zeros(Ix1::new([8])).unwrap();
+        assert!(f64_arr.flags().aligned);
+        let i32_arr = Array::<i32, Ix1>::zeros(Ix1::new([8])).unwrap();
+        assert!(i32_arr.flags().aligned);
+        let u8_arr = Array::<u8, Ix1>::zeros(Ix1::new([8])).unwrap();
+        assert!(u8_arr.flags().aligned);
     }
 
     #[test]

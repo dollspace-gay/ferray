@@ -219,6 +219,9 @@ impl<T: Element, D: Dimension> ArcArray<T, D> {
             f_contiguous: layout.is_f_contiguous(),
             owndata: true, // ArcArray conceptually owns (shared ownership)
             writeable: true,
+            // ArcArray wraps an Arc<ndarray::ArrayD<T>> which goes
+            // through the Vec<T> allocator path — always aligned (#345).
+            aligned: true,
         }
     }
 }

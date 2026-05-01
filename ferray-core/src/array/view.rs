@@ -102,6 +102,9 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
             f_contiguous: layout.is_f_contiguous(),
             owndata: false,
             writeable: false,
+            // #345: views may originate from raw pointers (`from_shape_ptr`);
+            // verify the head-of-buffer pointer satisfies T's alignment.
+            aligned: (self.inner.as_ptr() as usize) % core::mem::align_of::<T>() == 0,
         }
     }
 }
