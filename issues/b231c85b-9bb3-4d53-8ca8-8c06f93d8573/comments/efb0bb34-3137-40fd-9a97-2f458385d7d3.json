@@ -1,0 +1,10 @@
+{
+  "uuid": "efb0bb34-3137-40fd-9a97-2f458385d7d3",
+  "issue_uuid": "b231c85b-9bb3-4d53-8ca8-8c06f93d8573",
+  "author": "doll-agent",
+  "content": "Done. Companion-matrix eigendecomposition is numerically ill-conditioned for repeated roots - LAPACK spreads a multiplicity-k root across a cluster of size ~eps^(1/k). Added 5 tests bracketing the canonical cases:\n\n- roots_double_at_one: (x-1)^2, both roots within ~1e-3 of 1.0.\n- roots_triple_at_one: (x-1)^3, eps^(1/3) cluster radius; centroid sum == 3.0 within 1e-4.\n- roots_double_plus_simple: (x-2)^2 (x+1), simple root well-separated from double root.\n- roots_quadruple_at_origin: x^4, centroid small in both real and imaginary parts.\n- roots_repeated_complex_pair: (x^2+1)^2, accepts either Ok with valid clusters OR FerrayError::ConvergenceFailure - documents the known limitation that single-stage QR may fail on repeated complex roots through a real-coefficient polynomial. Tightening is future work (multi-stage root finder with deflation + nudging).\n\nferray-polynomial: 146 -> 151 tests, all passing, clippy clean. Commit aa62f15a.",
+  "created_at": "2026-05-01T20:48:20.780146887Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAupwkMJbt0awYRww7X81y1aDrrQQCTwUBaLqDMmMA4xLyCRNrsXM3sqvLAHY/t3hmqdEdpuNytO2KBXtQnAv1Cg=="
+}
