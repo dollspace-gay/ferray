@@ -1,0 +1,10 @@
+{
+  "uuid": "9975e013-76ef-4531-961f-91ad223e3ff9",
+  "issue_uuid": "ac41a4e1-ee0e-4be8-abe5-1df89ab07ea4",
+  "author": "doll-agent",
+  "content": "Done. DualNumber<T> is generic over component type, so DualNumber<DualNumber<f64>> computes (value, first deriv, second deriv) in one pass - never tested.\n\nAdded tests/nested_dual.rs with a second_deriv(f, a) helper. 11 tests covering closed-form second derivatives: x^2 (=2), x^3 (=6x), x^4 (=12x^2), sin/cos, exp, ln (=-1/x^2), sqrt (=-1/(4 x^1.5)), sin(x^2) chain rule, constant, identity.\n\nAll 11 pass on first run. ferray-autodiff: 11 new integration tests, clippy clean. Commit 2d2076ea.",
+  "created_at": "2026-05-01T22:06:54.727015275Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAIeZyT31r98pSOqULuT+eOK/lk4wUG10nWbRRAyixkAz8ZI5j4HP1Xo2va2OXyzFi0l4cEa0UZ25J9JmE4oAwAA=="
+}
