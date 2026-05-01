@@ -1,0 +1,90 @@
+{
+  "function": "numpy.strings.add",
+  "ferray_function": "ferray_strings::add",
+  "test_cases": [
+    {
+      "name": "same_shape_concat",
+      "inputs": {
+        "x": {
+          "data": ["foo", "bar", "baz"],
+          "shape": [3],
+          "dtype": "str"
+        },
+        "y": {
+          "data": ["1", "22", "333"],
+          "shape": [3],
+          "dtype": "str"
+        }
+      },
+      "expected": {
+        "data": ["foo1", "bar22", "baz333"],
+        "shape": [3],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "broadcast_scalar_right",
+      "inputs": {
+        "x": {
+          "data": ["hello", "world"],
+          "shape": [2],
+          "dtype": "str"
+        },
+        "y": {
+          "data": ["!"],
+          "shape": [1],
+          "dtype": "str"
+        }
+      },
+      "expected": {
+        "data": ["hello!", "world!"],
+        "shape": [2],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "broadcast_scalar_left",
+      "inputs": {
+        "x": {
+          "data": [">> "],
+          "shape": [1],
+          "dtype": "str"
+        },
+        "y": {
+          "data": ["alpha", "beta", "gamma"],
+          "shape": [3],
+          "dtype": "str"
+        }
+      },
+      "expected": {
+        "data": [">> alpha", ">> beta", ">> gamma"],
+        "shape": [3],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "with_empty_string",
+      "inputs": {
+        "x": {
+          "data": ["", "x"],
+          "shape": [2],
+          "dtype": "str"
+        },
+        "y": {
+          "data": ["a", ""],
+          "shape": [2],
+          "dtype": "str"
+        }
+      },
+      "expected": {
+        "data": ["a", "x"],
+        "shape": [2],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "function": "regex extract first capture group",
+  "ferray_function": "ferray_strings::extract",
+  "test_cases": [
+    {
+      "name": "extract_digits",
+      "inputs": {
+        "x": {
+          "data": ["abc123", "def", "ghi456"],
+          "shape": [3],
+          "dtype": "str"
+        },
+        "pattern": "(\\d+)"
+      },
+      "expected": {
+        "data": ["123", "", "456"],
+        "shape": [3],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

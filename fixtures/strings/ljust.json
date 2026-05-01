@@ -1,0 +1,40 @@
+{
+  "function": "numpy.strings.ljust",
+  "ferray_function": "ferray_strings::ljust",
+  "test_cases": [
+    {
+      "name": "simple",
+      "inputs": {
+        "x": {
+          "data": ["hi", "abc", "test"],
+          "shape": [3],
+          "dtype": "str"
+        },
+        "width": 5
+      },
+      "expected": {
+        "data": ["hi   ", "abc  ", "test "],
+        "shape": [3],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "width_smaller_than_string_returns_unchanged",
+      "inputs": {
+        "x": {
+          "data": ["hello", "world"],
+          "shape": [2],
+          "dtype": "str"
+        },
+        "width": 3
+      },
+      "expected": {
+        "data": ["hello", "world"],
+        "shape": [2],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

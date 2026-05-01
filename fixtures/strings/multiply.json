@@ -1,0 +1,57 @@
+{
+  "function": "numpy.strings.multiply",
+  "ferray_function": "ferray_strings::multiply",
+  "test_cases": [
+    {
+      "name": "repeat_three_times",
+      "inputs": {
+        "x": {
+          "data": ["ab", "cd", "ef"],
+          "shape": [3],
+          "dtype": "str"
+        },
+        "n": 3
+      },
+      "expected": {
+        "data": ["ababab", "cdcdcd", "efefef"],
+        "shape": [3],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "repeat_zero_yields_empty",
+      "inputs": {
+        "x": {
+          "data": ["hello", "world"],
+          "shape": [2],
+          "dtype": "str"
+        },
+        "n": 0
+      },
+      "expected": {
+        "data": ["", ""],
+        "shape": [2],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "repeat_one_returns_original",
+      "inputs": {
+        "x": {
+          "data": ["foo", "bar"],
+          "shape": [2],
+          "dtype": "str"
+        },
+        "n": 1
+      },
+      "expected": {
+        "data": ["foo", "bar"],
+        "shape": [2],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "function": "numpy.strings.center",
+  "ferray_function": "ferray_strings::center",
+  "test_cases": [
+    {
+      "name": "simple",
+      "inputs": {
+        "x": {
+          "data": ["hi", "abc", "test"],
+          "shape": [3],
+          "dtype": "str"
+        },
+        "width": 6
+      },
+      "expected": {
+        "data": ["  hi  ", " abc  ", " test "],
+        "shape": [3],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "width_smaller_than_string_returns_unchanged",
+      "inputs": {
+        "x": {
+          "data": ["hello", "world"],
+          "shape": [2],
+          "dtype": "str"
+        },
+        "width": 3
+      },
+      "expected": {
+        "data": ["hello", "world"],
+        "shape": [2],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "with_empty_strings",
+      "inputs": {
+        "x": {
+          "data": ["", "x"],
+          "shape": [2],
+          "dtype": "str"
+        },
+        "width": 3
+      },
+      "expected": {
+        "data": ["   ", " x "],
+        "shape": [2],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

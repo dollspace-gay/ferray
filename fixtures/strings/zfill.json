@@ -1,0 +1,74 @@
+{
+  "function": "numpy.strings.zfill",
+  "ferray_function": "ferray_strings::zfill",
+  "test_cases": [
+    {
+      "name": "simple_numeric",
+      "inputs": {
+        "x": {
+          "data": ["42", "7", "1234"],
+          "shape": [3],
+          "dtype": "str"
+        },
+        "width": 5
+      },
+      "expected": {
+        "data": ["00042", "00007", "01234"],
+        "shape": [3],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "with_signs",
+      "inputs": {
+        "x": {
+          "data": ["-42", "+1", "-100"],
+          "shape": [3],
+          "dtype": "str"
+        },
+        "width": 5
+      },
+      "expected": {
+        "data": ["-0042", "+0001", "-0100"],
+        "shape": [3],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "non_numeric_strings_padded",
+      "inputs": {
+        "x": {
+          "data": ["abc", "x"],
+          "shape": [2],
+          "dtype": "str"
+        },
+        "width": 5
+      },
+      "expected": {
+        "data": ["00abc", "0000x"],
+        "shape": [2],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "width_smaller_returns_unchanged",
+      "inputs": {
+        "x": {
+          "data": ["hello"],
+          "shape": [1],
+          "dtype": "str"
+        },
+        "width": 3
+      },
+      "expected": {
+        "data": ["hello"],
+        "shape": [1],
+        "dtype": "str"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

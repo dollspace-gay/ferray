@@ -203,3 +203,122 @@ fn oracle_replace() {
         }
     }
 }
+
+// ----- Alignment / padding (#284) ------------------------------------
+
+#[test]
+fn oracle_center() {
+    let suite = load_fixture(&strings_path("center.json"));
+    for case in &suite.test_cases {
+        let arr = make_string_array(&case.inputs["x"]);
+        let width = case.inputs["width"].as_u64().unwrap() as usize;
+        let result = ferray_strings::center(&arr, width, ' ').unwrap();
+        let expected = parse_string_data(&case.expected["data"]);
+        for (i, (a, e)) in result.as_slice().iter().zip(expected.iter()).enumerate() {
+            assert_eq!(a, e, "center case '{}' [{i}]", case.name);
+        }
+    }
+}
+
+#[test]
+fn oracle_ljust() {
+    let suite = load_fixture(&strings_path("ljust.json"));
+    for case in &suite.test_cases {
+        let arr = make_string_array(&case.inputs["x"]);
+        let width = case.inputs["width"].as_u64().unwrap() as usize;
+        let result = ferray_strings::ljust(&arr, width).unwrap();
+        let expected = parse_string_data(&case.expected["data"]);
+        for (i, (a, e)) in result.as_slice().iter().zip(expected.iter()).enumerate() {
+            assert_eq!(a, e, "ljust case '{}' [{i}]", case.name);
+        }
+    }
+}
+
+#[test]
+fn oracle_rjust() {
+    let suite = load_fixture(&strings_path("rjust.json"));
+    for case in &suite.test_cases {
+        let arr = make_string_array(&case.inputs["x"]);
+        let width = case.inputs["width"].as_u64().unwrap() as usize;
+        let result = ferray_strings::rjust(&arr, width).unwrap();
+        let expected = parse_string_data(&case.expected["data"]);
+        for (i, (a, e)) in result.as_slice().iter().zip(expected.iter()).enumerate() {
+            assert_eq!(a, e, "rjust case '{}' [{i}]", case.name);
+        }
+    }
+}
+
+#[test]
+fn oracle_zfill() {
+    let suite = load_fixture(&strings_path("zfill.json"));
+    for case in &suite.test_cases {
+        let arr = make_string_array(&case.inputs["x"]);
+        let width = case.inputs["width"].as_u64().unwrap() as usize;
+        let result = ferray_strings::zfill(&arr, width).unwrap();
+        let expected = parse_string_data(&case.expected["data"]);
+        for (i, (a, e)) in result.as_slice().iter().zip(expected.iter()).enumerate() {
+            assert_eq!(a, e, "zfill case '{}' [{i}]", case.name);
+        }
+    }
+}
+
+// ----- Concatenation (#284) ------------------------------------------
+
+#[test]
+fn oracle_add() {
+    let suite = load_fixture(&strings_path("add.json"));
+    for case in &suite.test_cases {
+        let x = make_string_array(&case.inputs["x"]);
+        let y = make_string_array(&case.inputs["y"]);
+        let result = ferray_strings::add(&x, &y).unwrap();
+        let expected = parse_string_data(&case.expected["data"]);
+        for (i, (a, e)) in result.as_slice().iter().zip(expected.iter()).enumerate() {
+            assert_eq!(a, e, "add case '{}' [{i}]", case.name);
+        }
+    }
+}
+
+#[test]
+fn oracle_multiply() {
+    let suite = load_fixture(&strings_path("multiply.json"));
+    for case in &suite.test_cases {
+        let arr = make_string_array(&case.inputs["x"]);
+        let n = case.inputs["n"].as_u64().unwrap() as usize;
+        let result = ferray_strings::multiply(&arr, n).unwrap();
+        let expected = parse_string_data(&case.expected["data"]);
+        for (i, (a, e)) in result.as_slice().iter().zip(expected.iter()).enumerate() {
+            assert_eq!(a, e, "multiply case '{}' [{i}]", case.name);
+        }
+    }
+}
+
+// ----- Regex (#284) ---------------------------------------------------
+
+#[test]
+fn oracle_match() {
+    let suite = load_fixture(&strings_path("match.json"));
+    for case in &suite.test_cases {
+        let arr = make_string_array(&case.inputs["x"]);
+        let pattern = case.inputs["pattern"].as_str().unwrap();
+        let result = ferray_strings::match_(&arr, pattern).unwrap();
+        let expected = parse_bool_data(&case.expected["data"]);
+        let result_slice = result.as_slice().unwrap();
+        for (i, (&a, &e)) in result_slice.iter().zip(expected.iter()).enumerate() {
+            assert_eq!(a, e, "match case '{}' [{i}]", case.name);
+        }
+    }
+}
+
+#[test]
+fn oracle_extract() {
+    let suite = load_fixture(&strings_path("extract.json"));
+    for case in &suite.test_cases {
+        let arr = make_string_array(&case.inputs["x"]);
+        let pattern = case.inputs["pattern"].as_str().unwrap();
+        let result = ferray_strings::extract(&arr, pattern).unwrap();
+        let expected = parse_string_data(&case.expected["data"]);
+        for (i, (a, e)) in result.as_slice().iter().zip(expected.iter()).enumerate() {
+            assert_eq!(a, e, "extract case '{}' [{i}]", case.name);
+        }
+    }
+}
