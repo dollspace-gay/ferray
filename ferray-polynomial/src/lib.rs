@@ -60,6 +60,7 @@ pub mod hermite_e;
 pub mod laguerre;
 pub mod legendre;
 pub mod mapping;
+pub mod ops;
 pub mod power;
 pub mod power_f32;
 pub mod roots;

@@ -91,7 +91,7 @@ impl Polynomial {
     /// result. Operations that combine two polynomials (add/sub/mul/divmod)
     /// must explicitly verify both mappings match before calling this.
     #[inline]
-    const fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
+    pub(crate) const fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
         Self {
             coeffs,
             domain: self.domain,

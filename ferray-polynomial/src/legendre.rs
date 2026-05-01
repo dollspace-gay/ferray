@@ -88,7 +88,7 @@ impl Legendre {
 
     /// Internal: build a new Legendre with the same mapping as self.
     #[inline]
-    const fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
+    pub(crate) const fn with_same_mapping(&self, coeffs: Vec<f64>) -> Self {
         Self {
             coeffs,
             domain: self.domain,
