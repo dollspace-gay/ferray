@@ -1,0 +1,10 @@
+{
+  "uuid": "bb451b16-d4fa-4954-a303-40d40a661eae",
+  "issue_uuid": "3a0dc746-4206-4cee-838c-8b49c0c9a6cc",
+  "author": "doll-agent",
+  "content": "Verified done. Per the 2026-04-30 02:51 audit comment: 'Audit complete. Methodology: extracted pub fns/structs from each ferray crate src/, dumped numpy 2.4.4 __all__ per submodule, diffed. Findings: ferray-fft and ferray-linalg are 100% covered; ferray-core/ufunc/stats are mostly there with named gaps; ferray-ma is the lowest-coverage crate (~30%). Full gap report delivered.' The audit deliverable is the gap report itself; subsequent implementation work lives in per-crate parity issues filed since. Closing now.",
+  "created_at": "2026-05-01T19:18:12.246706596Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA0z5MMXmVUJ6i7ONM+Nbwer0X+KzMdTG98/eNq9GRnp23ZtWVuqoX8Tr7ORhcYLkRO3opsQT7Pu9BgCT1CieQCA=="
+}
