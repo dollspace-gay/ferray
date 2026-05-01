@@ -1,0 +1,10 @@
+{
+  "uuid": "e828575e-c17c-41c6-8fc0-9d299c741010",
+  "issue_uuid": "33fc6e82-be3b-43e1-9cf6-90a0abbea029",
+  "author": "doll-agent",
+  "content": "Closed as architecturally blocked by #365 (Element trait is sealed via private::Sealed in ferray-core). Adding 'impl Element for DualNumber' from inside ferray-autodiff is impossible by design — only ferray-core can implement Element for any concrete type because the marker trait is sealed.\n\nTwo paths to actually fix this, both bigger than a refactor under #186:\n1. Move DualNumber into ferray-core as a primitive type (alongside Complex). ferray-autodiff would then re-export it and add the gradient/jacobian helpers on top. Removes the ferray-autodiff → ferray-core dependency direction conflict.\n2. Add an opt-in unsealing mechanism (e.g. an extension trait) in #365.\n\nThe standalone-DualNumber-in-Array<T, D> use case the issue describes really does need the trait unsealing (#365) or the type-relocation (option 1 above). Tracking that as the umbrella; not actionable independently.\n\nIn the meantime, the Python binding for DualNumber (ferray.autodiff.DualNumber, landed in ferray-python phase 4) covers the user-facing 'dual numbers in arrays' need by stacking individual DualNumber pyclass instances; the Rust-side ergonomics issue stays parked on #365.",
+  "created_at": "2026-05-01T20:05:22.416714704Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAbDe1DjJAEbgKuF5DiavZeEsVaBAWM3CrgMbBEZ91je6nRQHFLtVp9akKtRzbjaD5qQtVmXiA+CuXmkTtXofZCQ=="
+}
