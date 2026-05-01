@@ -58,6 +58,14 @@ impl_arrow_element!(i64, arrow::datatypes::Int64Type);
 impl_arrow_element!(f32, arrow::datatypes::Float32Type);
 impl_arrow_element!(f64, arrow::datatypes::Float64Type);
 
+// f16 (half-precision) maps to Arrow's IEEE 754 binary16 column.
+// Arrow 58 exposes Float16Type::Native = half::f16, so the existing
+// ToArrow / FromArrow generics cover f16 once the marker is impl'd
+// (#308). The dtype_to_arrow / arrow_to_dtype layer already had the
+// Float16 entries; this closes the missing element-trait gap.
+#[cfg(feature = "f16")]
+impl_arrow_element!(half::f16, arrow::datatypes::Float16Type);
+
 // ---------------------------------------------------------------------------
 // ferray -> Arrow  (REQ-4)
 // ---------------------------------------------------------------------------
@@ -421,6 +429,30 @@ mod tests {
     test_roundtrip!(roundtrip_u16, u16, vec![0u16, 1000, 65535]);
     test_roundtrip!(roundtrip_u32, u32, vec![0u32, 1, u32::MAX]);
     test_roundtrip!(roundtrip_u64, u64, vec![0u64, 1, u64::MAX]);
+
+    // f16 roundtrip (#308) — covers the new Float16Type ArrowElement impl.
+    #[cfg(feature = "f16")]
+    #[test]
+    fn roundtrip_f16() {
+        use half::f16;
+        let data: Vec<f16> = vec![
+            f16::from_f32(0.0),
+            f16::from_f32(1.0),
+            f16::from_f32(-1.0),
+            f16::from_f32(0.5),
+            f16::from_f32(-1234.0),
+            f16::INFINITY,
+        ];
+        let len = data.len();
+        let arr = Array1::<f16>::from_vec(Ix1::new([len]), data.clone()).unwrap();
+        let arrow_arr = arr.to_arrow().unwrap();
+        assert_eq!(arrow_arr.len(), len);
+        let back: Array1<f16> = arrow_arr.into_ferray().unwrap();
+        // f16 → Arrow Float16 → f16 must round-trip bit-exactly.
+        for (got, want) in back.as_slice().unwrap().iter().zip(data.iter()) {
+            assert_eq!(got.to_bits(), want.to_bits());
+        }
+    }
 
     #[test]
     fn roundtrip_bool() {
