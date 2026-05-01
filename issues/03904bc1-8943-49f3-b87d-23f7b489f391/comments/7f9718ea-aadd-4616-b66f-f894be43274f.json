@@ -1,0 +1,10 @@
+{
+  "uuid": "7f9718ea-aadd-4616-b66f-f894be43274f",
+  "issue_uuid": "03904bc1-8943-49f3-b87d-23f7b489f391",
+  "author": "doll-agent",
+  "content": "Add 6 memmap tests covering 2D and 3D paths in src/memmap.rs:\n- memmap_readonly_2d_shape_and_data (3x4 f64)\n- memmap_readonly_3d_shape_and_data (2x3x4 i32)\n- memmap_readwrite_2d_persists (modify (1,2) element, verify persistence)\n- memmap_view_3d_strides_match_row_major (logical layout reconstruction)\n- memmap_open_memmap_2d_readonly (numpy-shaped entry point)\n- memmap_copy_on_write_2d_isolates_changes (CoW doesn't touch file)",
+  "created_at": "2026-05-01T20:29:12.963826014Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAWnYpMkSklNqIjc3skMrGWCUkBE77gXcqA/9jkoTApb0qPRO/5h91Uorlk1MVOkAPG8/5+O9M787XyX7LICNiCw=="
+}
