@@ -1,0 +1,10 @@
+{
+  "uuid": "df86fa3b-05de-4156-a374-0bacfff08e41",
+  "issue_uuid": "f0c544b5-2220-45d6-a37d-be3ab68b00fb",
+  "author": "doll-agent",
+  "content": "Migrate ferray-io tests from manual remove_file cleanup (which leaks files on panic) to RAII via tempfile::TempDir.\n\nAdd tempfile = '3' to workspace deps, ferray-io dev-deps. Replace test_dir/test_file helpers in npy/mod.rs, memmap.rs, npz/mod.rs with temp_path(name) -> (TempDir, PathBuf). Each test binds the TempDir for its scope; on completion or panic the directory is removed automatically. Drop all remove_file calls. Migrate text/mod.rs's three inline temp-dir constructions.",
+  "created_at": "2026-05-01T20:33:15.446718141Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABABf0S+mfy2zXFfbQUIqQP5goy4TTSeuGVk9fr2br5AyoFfQnZwObagbdil0ECIkzTGhxbr8nY8FHgEFJxWjvCBg=="
+}
