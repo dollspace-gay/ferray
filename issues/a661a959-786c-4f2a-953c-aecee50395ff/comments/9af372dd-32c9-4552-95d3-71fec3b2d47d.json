@@ -1,0 +1,10 @@
+{
+  "uuid": "9af372dd-32c9-4552-95d3-71fec3b2d47d",
+  "issue_uuid": "a661a959-786c-4f2a-953c-aecee50395ff",
+  "author": "doll-agent",
+  "content": "Delete companion_size from ferray-polynomial/src/companion.rs along with its companion_size_quadratic test. Verified no internal or external callers via grep across the entire workspace including ferray-python.",
+  "created_at": "2026-05-01T20:36:16.915609131Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAkL0jgb4FVVKGl3H9RBC3BQMoDw1sE/kcjU5FjwrnpXBYZaYmHSlDpQWjiDsGToT0ebqO5siqiSV9A2758CZjAQ=="
+}
