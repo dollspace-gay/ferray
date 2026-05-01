@@ -1,0 +1,10 @@
+{
+  "uuid": "1f9293a3-3bd2-4905-9da3-788efc8c985b",
+  "issue_uuid": "dc725417-7ca1-46e4-90a5-278bf5def637",
+  "author": "doll-agent",
+  "content": "Verified done. masked_array.rs:316-341 already has the O(1) direct-indexing fast path: 'if let Some(slice) = mask.as_slice_mut() { slice[flat_idx] = value; }' (line 332). The iter_mut().nth(flat_idx) only runs in the rare case where the mask is non-contiguous. For typical contiguous masks (which is everything constructed via the public API), set_mask_flat is O(1). Two tests (set_mask_flat_false_on_nomask_stays_zero_allocation, set_mask_flat_true_on_nomask_materializes_and_promotes) cover the path. Issue was filed against an older revision; the current code is fine.",
+  "created_at": "2026-05-01T19:49:15.795384743Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABALyl0FgzoEcy2OioJID7S+6ultyaMlmy4xr4yMLwgjo4RbNj2jra25ybz5UyludwauXCfD8xizgZ1Lh/Ty1TxCw=="
+}
