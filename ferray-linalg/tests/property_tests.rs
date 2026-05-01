@@ -17,7 +17,7 @@
 use ferray_core::Array;
 use ferray_core::dimension::{Ix2, IxDyn};
 
-use ferray_linalg::decomp::{QrMode, qr, svd};
+use ferray_linalg::decomp::{QrMode, cholesky, lu, qr, svd};
 use ferray_linalg::norms::{NormOrder, det, norm, trace};
 use ferray_linalg::products::dot;
 use ferray_linalg::solve::{inv, solve};
@@ -350,4 +350,198 @@ proptest! {
             ab_val[0], ba_val[0]
         );
     }
+
+    // -----------------------------------------------------------------------
+    // 13. Cholesky reconstruction: L * L^T == A for SPD A (#215)
+    //
+    // Build A = X * X^T + n*I from arbitrary X to guarantee
+    // symmetric positive-definite without rejection sampling.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn prop_cholesky_reconstructs(
+        x_data in proptest::collection::vec(-3.0f64..3.0, 9),
+    ) {
+        let n = 3;
+        // a = x * x^T + n*I (SPD by construction)
+        let mut a_data = naive_matmul(
+            &x_data,
+            &transpose_3x3(&x_data),
+            n, n, n,
+        );
+        for i in 0..n {
+            a_data[i * n + i] += n as f64;
+        }
+        let a = mat2(n, n, a_data.clone());
+
+        let l = cholesky(&a).unwrap();
+        let ls = l.as_slice().unwrap();
+        let lt = transpose_3x3(ls);
+        let reconstructed = naive_matmul(ls, &lt, n, n, n);
+
+        for i in 0..(n * n) {
+            prop_assert!(
+                (reconstructed[i] - a_data[i]).abs() < 1e-8,
+                "L*L^T[{}] = {} != A[{}] = {}",
+                i, reconstructed[i], i, a_data[i]
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 14. Cholesky lower-triangular: L[i,j] == 0 for j > i (#215)
+    // -----------------------------------------------------------------------
+    #[test]
+    fn prop_cholesky_lower_triangular(
+        x_data in proptest::collection::vec(-3.0f64..3.0, 9),
+    ) {
+        let n = 3;
+        let mut a_data = naive_matmul(
+            &x_data,
+            &transpose_3x3(&x_data),
+            n, n, n,
+        );
+        for i in 0..n {
+            a_data[i * n + i] += n as f64;
+        }
+        let a = mat2(n, n, a_data);
+
+        let l = cholesky(&a).unwrap();
+        let ls = l.as_slice().unwrap();
+        for i in 0..n {
+            for j in (i + 1)..n {
+                prop_assert!(
+                    ls[i * n + j].abs() < 1e-12,
+                    "L[{},{}] = {} should be 0 (upper triangle)",
+                    i, j, ls[i * n + j]
+                );
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 15. Cholesky positive diagonal: L[i,i] > 0 (#215)
+    // -----------------------------------------------------------------------
+    #[test]
+    fn prop_cholesky_positive_diagonal(
+        x_data in proptest::collection::vec(-3.0f64..3.0, 9),
+    ) {
+        let n = 3;
+        let mut a_data = naive_matmul(
+            &x_data,
+            &transpose_3x3(&x_data),
+            n, n, n,
+        );
+        for i in 0..n {
+            a_data[i * n + i] += n as f64;
+        }
+        let a = mat2(n, n, a_data);
+
+        let l = cholesky(&a).unwrap();
+        let ls = l.as_slice().unwrap();
+        for i in 0..n {
+            prop_assert!(
+                ls[i * n + i] > 0.0,
+                "L[{},{}] = {} should be positive",
+                i, i, ls[i * n + i]
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 16. LU reconstruction: P * A == L * U (#215)
+    // -----------------------------------------------------------------------
+    #[test]
+    fn prop_lu_reconstructs(
+        data in proptest::collection::vec(-5.0f64..5.0, 9),
+    ) {
+        let n = 3;
+        // Diag-dominant to keep the matrix well-conditioned and
+        // non-singular under partial pivoting.
+        let dd = diag_dominant_matrix(n, data);
+        let a = mat2(n, n, dd.clone());
+
+        let (p, l, u) = lu(&a).unwrap();
+        let ps = p.as_slice().unwrap();
+        let ls = l.as_slice().unwrap();
+        let us = u.as_slice().unwrap();
+
+        let pa = naive_matmul(ps, &dd, n, n, n);
+        let lu_prod = naive_matmul(ls, us, n, n, n);
+
+        for i in 0..(n * n) {
+            prop_assert!(
+                (pa[i] - lu_prod[i]).abs() < 1e-8,
+                "P*A[{}] = {} != L*U[{}] = {}",
+                i, pa[i], i, lu_prod[i]
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 17. LU L is lower-triangular with unit diagonal (#215)
+    // -----------------------------------------------------------------------
+    #[test]
+    fn prop_lu_l_unit_lower(
+        data in proptest::collection::vec(-5.0f64..5.0, 9),
+    ) {
+        let n = 3;
+        let dd = diag_dominant_matrix(n, data);
+        let a = mat2(n, n, dd);
+
+        let (_p, l, _u) = lu(&a).unwrap();
+        let ls = l.as_slice().unwrap();
+
+        for i in 0..n {
+            prop_assert!(
+                (ls[i * n + i] - 1.0).abs() < 1e-12,
+                "L[{},{}] = {} should be 1 (unit diagonal)",
+                i, i, ls[i * n + i]
+            );
+            for j in (i + 1)..n {
+                prop_assert!(
+                    ls[i * n + j].abs() < 1e-12,
+                    "L[{},{}] = {} should be 0 (upper triangle)",
+                    i, j, ls[i * n + j]
+                );
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 18. LU U is upper-triangular (#215)
+    // -----------------------------------------------------------------------
+    #[test]
+    fn prop_lu_u_upper(
+        data in proptest::collection::vec(-5.0f64..5.0, 9),
+    ) {
+        let n = 3;
+        let dd = diag_dominant_matrix(n, data);
+        let a = mat2(n, n, dd);
+
+        let (_p, _l, u) = lu(&a).unwrap();
+        let us = u.as_slice().unwrap();
+
+        for i in 0..n {
+            for j in 0..i {
+                prop_assert!(
+                    us[i * n + j].abs() < 1e-12,
+                    "U[{},{}] = {} should be 0 (lower triangle)",
+                    i, j, us[i * n + j]
+                );
+            }
+        }
+    }
+}
+
+/// Transpose a 3x3 row-major matrix. Outside the proptest! block to avoid
+/// the macro pulling in helpers per-iteration.
+fn transpose_3x3(m: &[f64]) -> Vec<f64> {
+    let n = 3;
+    let mut t = vec![0.0; n * n];
+    for i in 0..n {
+        for j in 0..n {
+            t[j * n + i] = m[i * n + j];
+        }
+    }
+    t
 }
