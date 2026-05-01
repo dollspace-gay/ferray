@@ -1,0 +1,10 @@
+{
+  "uuid": "27795b6f-fffc-43c5-ac8b-4bd7e9072d45",
+  "issue_uuid": "36138ae9-aa74-4e0a-894d-053c203be61e",
+  "author": "doll-agent",
+  "content": "Done. Added einsum_pairwise() in ferray-linalg/src/products/einsum/mod.rs that handles 3+ operand expressions by contracting left-to-right, dispatching each pair through the existing matmul/tensordot/generic 2-operand path. For chain expressions like 'ij,jk,kl->il' on n×n matrices this drops the cost from O(n^4) (the original generic odometer that walks the full Cartesian product of all dims) to O(n^3) — a sum of pairwise matmul-shaped contractions. The intermediate label set at each step is computed by keeping any label that appears in the remaining operands or the final output and dropping labels that only appeared in the pair being contracted (so they get summed out at the contraction step). Two new tests confirm parity with the generic path: einsum_three_operand_chain_matches_generic (compares 'ij,jk,kl->il' results directly) and einsum_three_operand_inner_chain (full reduction 'i,ij,j->'). Full optimal-path planner (à la numpy's optimize='greedy'/'optimal') deferred — left-to-right matches numpy's optimize=False behaviour and handles most real einsum usage. cargo test workspace clean, cargo clippy -D warnings clean.",
+  "created_at": "2026-05-01T19:40:05.505027707Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAbY+BhOlIBgsIZ1/S3Nt8vktzKJZDFapdV4lh9biAQpaFlFdH40yFIFqaQm46bq1DF08+xQMSVC5RN015mvM7BQ=="
+}
