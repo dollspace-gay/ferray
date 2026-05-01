@@ -3,11 +3,12 @@
   "display_id": 157,
   "title": "ferray-ma: ufuncs don't delegate to SIMD-accelerated ferray-ufunc",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nufunc_support.rs: all scalar loops via num_traits. ferray-ufunc dependency listed but unused.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:37:03.252649886Z",
-  "updated_at": "2026-03-25T15:37:37.766237874Z",
+  "updated_at": "2026-05-01T19:51:30.843233886Z",
+  "closed_at": "2026-05-01T19:51:30.843233886Z",
   "labels": [
     "refactor",
     "qa-audit"
