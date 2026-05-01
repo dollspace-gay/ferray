@@ -2,11 +2,12 @@
   "uuid": "eb4386a0-068b-44f2-99c7-57a01c98b504",
   "display_id": 705,
   "title": "ferray-python phase 2 follow-up: lexsort/partition/argpartition, sort_complex, unique_all/counts/inverse, allclose/isclose/array_equal/array_equiv",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T16:38:45.262908436Z",
-  "updated_at": "2026-05-01T16:38:46.483660553Z",
+  "updated_at": "2026-05-01T17:41:36.060055829Z",
+  "closed_at": "2026-05-01T17:41:36.060055829Z",
   "labels": [
     "feature"
   ]
