@@ -1,0 +1,10 @@
+{
+  "uuid": "f415bf12-e5bb-4eff-bcdb-13bd01c2b6d8",
+  "issue_uuid": "32b36299-a3b4-413c-be39-e1b9406f83a8",
+  "author": "doll-agent",
+  "content": "Add 4 tests covering the v2.0 header path:\n1. v20_writer_roundtrip_huge_shape: 22000-dim shape forces v2.0 write, asserts version bytes and round-trip parse.\n2. v20_reader_handcrafted_minimal: hand-built v2.0 byte blob; guards against writer/reader codependence on the u32-length branch.\n3. v20_reader_rejects_oversized_header: 2 MB header length is rejected before allocation.\n4. v30_reader_handcrafted_minimal: same u32 branch via v3.0, ensures version-2 logic doesn't bake in major==2.",
+  "created_at": "2026-05-01T20:23:51.839631516Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAsfl4/RXs1Q9GEWdAMFXtvir0cKSs6XdkY5c3kTKx1wApg6cN9phkFmZmy0Fi0J0vzy8S0esjtev+5TZwWIQRBQ=="
+}
