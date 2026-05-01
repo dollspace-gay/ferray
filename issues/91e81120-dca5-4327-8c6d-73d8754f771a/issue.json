@@ -3,11 +3,12 @@
   "display_id": 271,
   "title": "ferray-ma: sort/compressed always flatten to 1D",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nsorting.rs L25, filled.rs L38: no axis support.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:58:15.045706159Z",
-  "updated_at": "2026-03-25T15:58:30.311005456Z",
+  "updated_at": "2026-05-01T21:18:31.972282470Z",
+  "closed_at": "2026-05-01T21:18:31.972282470Z",
   "labels": [
     "refactor",
     "qa-audit"
