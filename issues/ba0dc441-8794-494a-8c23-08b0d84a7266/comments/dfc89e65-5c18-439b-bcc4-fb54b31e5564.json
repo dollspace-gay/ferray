@@ -1,0 +1,10 @@
+{
+  "uuid": "dfc89e65-5c18-439b-bcc4-fb54b31e5564",
+  "issue_uuid": "ba0dc441-8794-494a-8c23-08b0d84a7266",
+  "author": "doll-agent",
+  "content": "Done. proptest was a dev-dep but never used. Added tests/property_tests.rs with 12 round-trip properties:\n\nArrow (7): i32, i64, u8, u32 round-trip; f32/f64 bit-exact via to_bits (preserves NaN/Inf); bool round-trip; length preservation.\nPolars (4): i32, i64 round-trip; f64 bit-exact (NaN filtered to 0 since Polars uses NaN-canonical equality); bool round-trip.\n\n256 cases per property. Module-level cfg gates so default cargo test skips them; --features arrow,polars exercises all 12.\n\n12 new property tests, all passing, clippy clean. Commit 53a03f13.",
+  "created_at": "2026-05-01T22:25:49.888694968Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAl79uwZcaYOhUUtMaR4GgwbNKybNHZjIAjq3nRKwDr1orrtHaQKa/qiJD3dKl2SEUCYv7hO8GiGn8UuHwa51cAg=="
+}
