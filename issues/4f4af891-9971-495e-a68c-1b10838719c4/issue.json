@@ -3,11 +3,12 @@
   "display_id": 314,
   "title": "ferray-numpy-interop: misleading SAFETY comment on safe API call",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\narrow_conv.rs L89: // SAFETY comment but no unsafe code.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:04:24.426929734Z",
-  "updated_at": "2026-03-25T16:04:34.389675398Z",
+  "updated_at": "2026-05-01T22:28:36.221517426Z",
+  "closed_at": "2026-05-01T22:28:36.221517426Z",
   "labels": [
     "refactor",
     "qa-audit"
