@@ -1,0 +1,10 @@
+{
+  "uuid": "d8debf03-abb9-45b4-aa08-d16d1121d87b",
+  "issue_uuid": "eb4386a0-068b-44f2-99c7-57a01c98b504",
+  "author": "doll-agent",
+  "content": "Phase-2 long tail #705 delivered: array_equal, array_equiv, allclose, isclose (top-level ufunc) + partition, argpartition, lexsort, unique_extended (stats). 525/525 passing. Comparison handles broadcasting + dtype mismatch (returns False rather than raising). unique_extended returns flat ndarray when no flags set, tuple when return_index/_inverse/_counts requested — matches numpy.unique. sort_complex deferred (needs Complex<T> handling).",
+  "created_at": "2026-05-01T17:41:34.630200385Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABASvFvhlDJdcsEO57Mok6DKNEBdW/M/i+3AKwtxv8LwQDdjkjX6gf+cZkeHaYK8SJKv6fGDms3VoAzzDAtLlg6BQ=="
+}
