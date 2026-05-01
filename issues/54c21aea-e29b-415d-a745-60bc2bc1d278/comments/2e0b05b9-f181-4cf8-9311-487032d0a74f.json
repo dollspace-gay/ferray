@@ -1,0 +1,10 @@
+{
+  "uuid": "2e0b05b9-f181-4cf8-9311-487032d0a74f",
+  "issue_uuid": "54c21aea-e29b-415d-a745-60bc2bc1d278",
+  "author": "doll-agent",
+  "content": "Done. masked_unary_op (the hot path used by ma::sin/cos/tan/asin/acos/atan/sinh/cosh/tanh/exp/log/log2/log10/sqrt/abs and the *_domain wrappers) was a single branchy iterator pass that the compiler couldn't auto-vectorise because of the mask-test in the inner loop. Split it into two passes:\n\n1. Apply f to ma.data() across all elements unconditionally → auto-vectorisable, gives SIMD on the bulk via the same pattern that ferray-ufunc's binary ops now use after #88.\n2. Walk the result + mask, patching masked positions with fill_value.\n\nNumPy's masked ufuncs take the same shape — wasted compute on masked elements (typically a small fraction of the array) is the cost of unlocking SIMD on the unmasked bulk. For partial-domain ops (log, sqrt, arcsin) the *_domain helpers in ufunc_support.rs validate inputs separately before reaching this point, so masked-but-invalid underlying data is overwritten with fill_value before it surfaces.\n\nThe previously-orphaned ferray-ufunc Cargo dep (already removed earlier per #272) is not reintroduced — staying in pure ferray-core land keeps the layering clean. The SIMD wins come from compiler auto-vectorisation of the now-unbranchy inner loop, not from delegating to a different crate.\n\n199 ferray-ma tests pass; cargo clippy clean.",
+  "created_at": "2026-05-01T19:51:29.404566601Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAEF8fPINeamssMPvcitFfxs2+Tv5kxiVLGVj5FzJvZ6kaOGPY8Gnfhrt1pXgYw+ao+8EUf3KphSVvjShsMsD8Dg=="
+}
