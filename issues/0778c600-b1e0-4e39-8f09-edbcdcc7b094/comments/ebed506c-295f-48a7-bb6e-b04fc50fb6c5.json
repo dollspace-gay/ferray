@@ -1,0 +1,10 @@
+{
+  "uuid": "ebed506c-295f-48a7-bb6e-b04fc50fb6c5",
+  "issue_uuid": "0778c600-b1e0-4e39-8f09-edbcdcc7b094",
+  "author": "doll-agent",
+  "content": "Verified done. benchmarks/speed_benchmark.py line 181: matmul size_str is 'f\"{rows}x{cols}:{cols}x{rows}\"' — both matrix shapes encoded with the ':' separator that ShapeSpec::parse in ferray_bench/src/main.rs splits on (lines 78-89). The ShapeSpec carries Vec<Vec<usize>> so multiple operand shapes parse correctly for binary ops. matmul/100x100 dispatch confirmed working in the stat-equiv run.",
+  "created_at": "2026-05-01T19:00:22.492635657Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA3SSieqt/m1DN8xewy9oDBbxacAJAvDNI16vkeE6Cfk8wNQJIUYlYHCbnErt+mG94va9vYZl51wsgf0QoejPMBA=="
+}
