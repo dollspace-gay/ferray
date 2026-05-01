@@ -3,11 +3,12 @@
   "display_id": 246,
   "title": "ferray-polynomial: companion_size is dead code",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\ncompanion.rs L75: pub but never called outside own module.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:52:49.915194726Z",
-  "updated_at": "2026-03-25T15:52:57.080759084Z",
+  "updated_at": "2026-05-01T20:36:41.736244838Z",
+  "closed_at": "2026-05-01T20:36:41.736244838Z",
   "labels": [
     "refactor",
     "qa-audit"
