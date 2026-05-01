@@ -68,7 +68,7 @@ pub use regex_ops::{extract, extract_compiled, match_, match_compiled};
 // don't have to add a direct `regex` dependency to construct one.
 pub use regex::Regex;
 pub use search::{count, endswith, find, index, replace, rfind, rindex, startswith};
-pub use split_join::{join, join_array, split};
+pub use split_join::{join, join_array, split, split_ragged};
 pub use str_ops::{equal, greater, greater_equal, less, less_equal, not_equal, str_len, swapcase};
 pub use strip::{lstrip, rstrip, strip};
 
@@ -104,16 +104,13 @@ mod integration_tests {
 
     #[test]
     fn ac4_split() {
-        // AC-4: strings::split(&["a-b", "c-d"], "-") returns [vec!["a","b"], vec!["c","d"]]
+        // AC-4 (#277): strings::split returns a 2-D StringArray of
+        // shape (n_inputs, max_parts). split_ragged keeps the
+        // ragged Vec<Vec<String>> form for callers that need it.
         let a = array(&["a-b", "c-d"]).unwrap();
         let result = split(&a, "-").unwrap();
-        assert_eq!(
-            result,
-            vec![
-                vec!["a".to_string(), "b".to_string()],
-                vec!["c".to_string(), "d".to_string()],
-            ]
-        );
+        assert_eq!(result.shape(), &[2, 2]);
+        assert_eq!(result.as_slice(), &["a", "b", "c", "d"]);
     }
 
     #[test]

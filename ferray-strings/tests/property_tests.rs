@@ -9,7 +9,7 @@ use ferray_strings::array;
 use ferray_strings::case::{lower, upper};
 use ferray_strings::concat::{add, multiply};
 use ferray_strings::search::{count, endswith, find, replace, startswith};
-use ferray_strings::split_join::{join, split};
+use ferray_strings::split_join::join;
 use ferray_strings::strip::strip;
 
 fn config() -> ProptestConfig {
@@ -79,11 +79,13 @@ proptest! {
         s3 in "[a-z]{1,5}",
     ) {
         // Use "|" as separator; generated strings contain only [a-z]
+        // so the separator never appears in the input. Each split
+        // produces a single-element row → rejoin gives back the
+        // original string.
         let sep = "|";
         let a = array(&[&s1, &s2, &s3]).unwrap();
-        let parts = split(&a, sep).unwrap();
+        let parts = ferray_strings::split_ragged(&a, sep).unwrap();
         let rejoined = join(sep, &parts).unwrap();
-        // Each element should be unchanged since sep is not in any string
         prop_assert_eq!(a.as_slice(), rejoined.as_slice());
     }
 
