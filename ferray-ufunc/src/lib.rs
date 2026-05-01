@@ -50,6 +50,7 @@
 
 pub mod cr_math;
 pub mod dispatch;
+pub mod errstate;
 pub mod fast_exp;
 pub mod fast_trig;
 pub mod helpers;
@@ -149,6 +150,8 @@ pub use ops::special::{i0, sinc};
 
 // Convolution
 pub use ops::convolution::{ConvolveMode, convolve};
+#[cfg(feature = "fft-convolve")]
+pub use ops::convolution::fftconvolve;
 
 // Interpolation
 pub use ops::interpolation::{interp, interp_one};
