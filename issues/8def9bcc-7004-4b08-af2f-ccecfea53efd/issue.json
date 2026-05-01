@@ -1,0 +1,10 @@
+{
+  "uuid": "8def9bcc-7004-4b08-af2f-ccecfea53efd",
+  "display_id": 698,
+  "title": "ferray-numpy-interop: preserve F-contiguous layout through IntoNumPy (asfortranarray gap)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-01T16:06:16.872591726Z",
+  "updated_at": "2026-05-01T16:06:16.872591726Z"
+}
