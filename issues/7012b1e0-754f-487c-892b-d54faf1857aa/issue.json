@@ -1,0 +1,10 @@
+{
+  "uuid": "7012b1e0-754f-487c-892b-d54faf1857aa",
+  "display_id": 710,
+  "title": "ferray-python phase 3 follow-up: norm_axis, cond, einsum, multi_dot, matmul/vecdot/matvec/vecmat at top level (numpy 2.0 vector products)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-01T17:02:10.199649002Z",
+  "updated_at": "2026-05-01T17:02:10.199649002Z"
+}
