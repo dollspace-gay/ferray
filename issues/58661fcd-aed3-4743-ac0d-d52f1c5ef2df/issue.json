@@ -3,11 +3,12 @@
   "display_id": 265,
   "title": "ferray-random: weighted_sample_with_replacement uses O(log n) binary search, not O(1) alias method",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\npermutations.rs L176-198: Vose's alias method would be O(1) per sample.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:56:17.001629635Z",
-  "updated_at": "2026-03-25T15:56:24.893413610Z",
+  "updated_at": "2026-05-01T21:02:57.831703931Z",
+  "closed_at": "2026-05-01T21:02:57.831703931Z",
   "labels": [
     "refactor",
     "qa-audit"
