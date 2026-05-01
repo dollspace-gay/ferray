@@ -558,21 +558,13 @@ where
                 bdata.partition_point(|b| b <= &v)
             }
         } else {
-            // Decreasing bins: search reversed
+            // Decreasing bins: numpy returns the number of bins strictly
+            // above (right=false) or at-or-above (right=true) v, mirroring
+            // the increasing-bins right-edge rule across the descending order.
             if right {
-                bdata.len()
-                    - bdata
-                        .iter()
-                        .rev()
-                        .position(|b| b < &v)
-                        .unwrap_or(bdata.len())
+                bdata.iter().filter(|b| **b >= v).count()
             } else {
-                bdata.len()
-                    - bdata
-                        .iter()
-                        .rev()
-                        .position(|b| b <= &v)
-                        .unwrap_or(bdata.len())
+                bdata.iter().filter(|b| **b > v).count()
             }
         };
         result.push(idx as u64);
@@ -740,21 +732,48 @@ mod tests {
 
     #[test]
     fn test_digitize_decreasing_bins() {
-        // Issue #187: decreasing bins. NumPy reverses the logic:
-        // searchsorted on a decreasing array effectively mirrors it.
-        // ferray's digitize delegates to searchsorted which requires
-        // ascending bins — check that it either handles decreasing
-        // bins or returns a sensible result.
-        // For now, just verify it doesn't panic and returns the right
-        // length.
+        // #187: decreasing bins. NumPy: np.digitize([0.5, 1.5, 2.5], [3.0, 2.0, 1.0])
+        // returns [3, 2, 1] — for descending bins, count is the number of bins
+        // strictly above the value.
         let x = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![0.5, 1.5, 2.5]).unwrap();
         let bins = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![3.0, 2.0, 1.0]).unwrap();
-        let d = digitize(&x, &bins, false);
-        // If digitize doesn't support decreasing bins, it should
-        // still not panic. The result may be wrong but the function
-        // is callable.
-        assert!(d.is_ok());
-        assert_eq!(d.unwrap().shape(), &[3]);
+        let d = digitize(&x, &bins, false).unwrap();
+        let r: Vec<u64> = d.iter().copied().collect();
+        assert_eq!(r, vec![3, 2, 1]);
+    }
+
+    #[test]
+    fn test_digitize_decreasing_bins_value_above_max() {
+        // Value above max bin: index 0 (no bin above v).
+        let x = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![10.0]).unwrap();
+        let bins = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![5.0, 3.0, 1.0]).unwrap();
+        let d = digitize(&x, &bins, false).unwrap();
+        assert_eq!(d.iter().copied().next().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_digitize_decreasing_bins_value_below_min() {
+        // Value below min bin: all bins above → index = bin count.
+        let x = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![-10.0]).unwrap();
+        let bins = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![5.0, 3.0, 1.0]).unwrap();
+        let d = digitize(&x, &bins, false).unwrap();
+        assert_eq!(d.iter().copied().next().unwrap(), 3);
+    }
+
+    #[test]
+    fn test_digitize_decreasing_bins_right_param() {
+        // With right=True semantics on decreasing bins, the bin-edge
+        // inclusion swaps. Spot-check that the right=True branch is
+        // exercised on the decreasing path (different code path from
+        // both increasing-right and decreasing-default).
+        let x = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![3.0, 2.0, 1.0]).unwrap();
+        let bins = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![3.0, 2.0, 1.0]).unwrap();
+        let d = digitize(&x, &bins, true).unwrap();
+        // Verify all three values produce a valid in-range index (0..=3)
+        // and that the function doesn't panic on bin-edge values.
+        for r in d.iter() {
+            assert!(*r <= 3);
+        }
     }
 
     #[test]
