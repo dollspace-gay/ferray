@@ -479,4 +479,142 @@ mod tests {
         assert_eq!(collected, data);
         let _ = std::fs::remove_file(&path);
     }
+
+    // ----------------------------------------------------------------------
+    // Multidimensional memmap coverage (#243). Existing tests are nearly
+    // all 1-D; add 2-D and 3-D paths for readonly, ReadWrite, and view.
+    // ----------------------------------------------------------------------
+
+    #[test]
+    fn memmap_readonly_2d_shape_and_data() {
+        let data: Vec<f64> = (0..12).map(|i| i as f64 + 0.5).collect();
+        let arr = Array::<f64, ferray_core::dimension::Ix2>::from_vec(
+            ferray_core::dimension::Ix2::new([3, 4]),
+            data.clone(),
+        )
+        .unwrap();
+
+        let path = test_file("mm_ro_2d.npy");
+        npy::save(&path, &arr).unwrap();
+
+        let mapped = memmap_readonly::<f64, _>(&path).unwrap();
+        assert_eq!(mapped.shape(), &[3, 4]);
+        assert_eq!(mapped.as_slice(), &data[..]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn memmap_readonly_3d_shape_and_data() {
+        let data: Vec<i32> = (0..24).collect();
+        let arr = Array::<i32, ferray_core::dimension::Ix3>::from_vec(
+            ferray_core::dimension::Ix3::new([2, 3, 4]),
+            data.clone(),
+        )
+        .unwrap();
+
+        let path = test_file("mm_ro_3d.npy");
+        npy::save(&path, &arr).unwrap();
+
+        let mapped = memmap_readonly::<i32, _>(&path).unwrap();
+        assert_eq!(mapped.shape(), &[2, 3, 4]);
+        assert_eq!(mapped.as_slice(), &data[..]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn memmap_readwrite_2d_persists() {
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let arr = Array::<f64, ferray_core::dimension::Ix2>::from_vec(
+            ferray_core::dimension::Ix2::new([2, 3]),
+            data,
+        )
+        .unwrap();
+
+        let path = test_file("mm_rw_2d.npy");
+        npy::save(&path, &arr).unwrap();
+
+        // Modify the (1, 2) element via mmap (row-major linear index 5).
+        {
+            let mut mapped = memmap_mut::<f64, _>(&path, MemmapMode::ReadWrite).unwrap();
+            assert_eq!(mapped.shape(), &[2, 3]);
+            mapped.as_slice_mut()[5] = -42.0;
+            mapped.flush().unwrap();
+        }
+
+        let loaded: Array<f64, ferray_core::dimension::Ix2> = npy::load(&path).unwrap();
+        assert_eq!(loaded.shape(), &[2, 3]);
+        let row1: Vec<f64> = loaded.iter().copied().collect();
+        assert_eq!(row1[5], -42.0);
+        // Other elements unchanged.
+        assert_eq!(row1[..5], [1.0, 2.0, 3.0, 4.0, 5.0]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn memmap_view_3d_strides_match_row_major() {
+        // The view's stride pattern must reconstruct the original logical
+        // layout for a 3-D array. Stride[k] = product(shape[k+1..]).
+        let data: Vec<f64> = (0..24).map(|i| i as f64).collect();
+        let arr = Array::<f64, ferray_core::dimension::Ix3>::from_vec(
+            ferray_core::dimension::Ix3::new([2, 3, 4]),
+            data.clone(),
+        )
+        .unwrap();
+
+        let path = test_file("mm_view_3d.npy");
+        npy::save(&path, &arr).unwrap();
+
+        let mapped = memmap_readonly::<f64, _>(&path).unwrap();
+        let view = mapped.view();
+        assert_eq!(view.shape(), &[2, 3, 4]);
+        let collected: Vec<f64> = view.iter().copied().collect();
+        assert_eq!(collected, data);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn memmap_open_memmap_2d_readonly() {
+        // open_memmap (the numpy-shaped entry point) must preserve 2-D
+        // shape on the readonly path.
+        let data: Vec<f32> = (0..15).map(|i| i as f32 * 0.1).collect();
+        let arr = Array::<f32, ferray_core::dimension::Ix2>::from_vec(
+            ferray_core::dimension::Ix2::new([3, 5]),
+            data.clone(),
+        )
+        .unwrap();
+
+        let path = test_file("mm_open_ro_2d.npy");
+        npy::save(&path, &arr).unwrap();
+
+        let loaded = open_memmap::<f32, _>(&path, MemmapMode::ReadOnly).unwrap();
+        assert_eq!(loaded.shape(), &[3, 5]);
+        assert_eq!(loaded.as_slice().unwrap(), &data[..]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn memmap_copy_on_write_2d_isolates_changes() {
+        // CoW changes must stay in memory; the on-disk file is unchanged.
+        let data = vec![10.0_f64, 20.0, 30.0, 40.0];
+        let arr = Array::<f64, ferray_core::dimension::Ix2>::from_vec(
+            ferray_core::dimension::Ix2::new([2, 2]),
+            data.clone(),
+        )
+        .unwrap();
+
+        let path = test_file("mm_cow_2d.npy");
+        npy::save(&path, &arr).unwrap();
+
+        {
+            let mut mapped = memmap_mut::<f64, _>(&path, MemmapMode::CopyOnWrite).unwrap();
+            assert_eq!(mapped.shape(), &[2, 2]);
+            mapped.as_slice_mut()[3] = 999.0;
+            assert_eq!(mapped.as_slice()[3], 999.0);
+        }
+
+        let loaded: Array<f64, ferray_core::dimension::Ix2> = npy::load(&path).unwrap();
+        let flat: Vec<f64> = loaded.iter().copied().collect();
+        assert_eq!(flat, data);
+        let _ = std::fs::remove_file(&path);
+    }
 }
