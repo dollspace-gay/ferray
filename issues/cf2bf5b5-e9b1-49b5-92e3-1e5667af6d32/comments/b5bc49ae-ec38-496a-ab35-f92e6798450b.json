@@ -1,0 +1,10 @@
+{
+  "uuid": "b5bc49ae-ec38-496a-ab35-f92e6798450b",
+  "issue_uuid": "cf2bf5b5-e9b1-49b5-92e3-1e5667af6d32",
+  "author": "doll-agent",
+  "content": "Done. Numeric primitive NpyElement impls already used bulk I/O (single write_all/read_exact via impl_npy_element!), but three impls still did per-element loops:\n- bool: write_all per byte, read_exact per byte\n- DateTime64: write_all per 8-byte i64, read_exact per 8-byte block\n- Timedelta64: same as DateTime64\n\nReplaced with single-syscall paths:\n- bool::write_slice: stage Vec<u8> via .iter().map(u8::from), single write_all.\n- bool::read_vec: single read_exact then map bytes -> bool.\n- impl_npy_time_element!: leverage repr(transparent) over i64 to reinterpret &[Self] as &[u8] for a single write_all; bulk read_exact + chunk-decode on read with byte-swap branch isolated to keep the native-endian path branch-free.\n\nferray-io: 93 tests pass, clippy clean. On-disk byte layout matches numpy's native-endian npy format, unchanged from before. Commit 82bbc0d2.",
+  "created_at": "2026-05-01T20:18:41.715751846Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAhLomm0Yz4INoJBznJBG9jEMkj+USYIi8n6y+m4UKmZDL192+v18mz0aweFQDoFNiJNql35pAaptaf9fd29miBw=="
+}
