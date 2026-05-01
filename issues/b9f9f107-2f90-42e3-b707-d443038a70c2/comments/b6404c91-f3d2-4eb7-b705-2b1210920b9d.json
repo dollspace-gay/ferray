@@ -1,0 +1,10 @@
+{
+  "uuid": "b6404c91-f3d2-4eb7-b705-2b1210920b9d",
+  "issue_uuid": "b9f9f107-2f90-42e3-b707-d443038a70c2",
+  "author": "doll-agent",
+  "content": "Replace stored data_ptr with derived data_ptr() method on MemmapArray and MemmapArrayMut. The pointer is now always computed from the live mmap field on demand, eliminating the structural invariant 'pointer must outlive mmap and stay synchronized with it'. as_slice/as_slice_mut/view all route through the helper. Removes redundant *mut/*const T fields. The alignment check on construction is preserved (uses a one-shot probe pointer).",
+  "created_at": "2026-05-01T20:21:57.171666886Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAdPBVOb698osG+6aMzSIm4bRPe5GaH/W3xdy+gpVVdives+CR468u58OCfXXt7rHy37gqzBWD23l0EoYGTr1mDA=="
+}
