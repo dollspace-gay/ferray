@@ -1,0 +1,10 @@
+{
+  "uuid": "32298f3f-f42e-4927-9913-2430c4889e1e",
+  "issue_uuid": "d4f333bf-e0e7-45b0-893d-b2750dbf0917",
+  "author": "doll-agent",
+  "content": "Replace 4 unwrap_or fallbacks in mean/var/mean_axis/var_axis. The fallback (1.0) silently turned a failed count→T conversion into 'divide by 1' (i.e., return sum). Surface the failure properly:\n- mean/var (impl method): return Err with a typed message.\n- mean_axis/var_axis (closure-based): use ? to mask the cell when conversion fails (closure return type is Option<T>, so the None propagates).\n\nFor f32/f64 the conversion never actually fails, but the misbehavior was a real correctness hole for any T where it could.",
+  "created_at": "2026-05-01T21:06:53.330122704Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAzjyR/6w1tbg52igF/j60NiGqlK2Tp7txaFKS7oV9hEr+hwLuK4d7a/3IwoNnhDbeNtBngOicEa2UYXBNX71vDg=="
+}
