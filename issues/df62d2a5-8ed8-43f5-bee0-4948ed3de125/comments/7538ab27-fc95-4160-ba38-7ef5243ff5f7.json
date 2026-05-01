@@ -1,0 +1,10 @@
+{
+  "uuid": "7538ab27-fc95-4160-ba38-7ef5243ff5f7",
+  "issue_uuid": "df62d2a5-8ed8-43f5-bee0-4948ed3de125",
+  "author": "doll-agent",
+  "content": "Reject empty separator in split() and split_ragged() to match numpy's ValueError behavior. Rust's str::split('') returns the surprising ['', 'a', 'b', 'c', ''] pattern (one empty token around each char boundary). Add validate_separator helper that returns FerrayError::InvalidValue for empty input. 4 tests: empty separator errs in split, errs in split_ragged, single-char separator still works, multi-char separator splits on the full sequence.",
+  "created_at": "2026-05-01T21:55:43.562454455Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAl4TWk7kfRFZOZvXgEQDS89kcxKAsuEPT20VNnqcvGnXV5G4QO3i6TVp134Je+27XGwJU3xi3x810OKiJH9slDw=="
+}
