@@ -3,11 +3,12 @@
   "display_id": 282,
   "title": "ferray-strings: no tests for empty arrays (zero elements)",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nNo test passes zero-length StringArray.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:59:40.833937701Z",
-  "updated_at": "2026-03-25T15:59:45.340946578Z",
+  "updated_at": "2026-05-01T21:53:50.922668155Z",
+  "closed_at": "2026-05-01T21:53:50.922668155Z",
   "labels": [
     "bug",
     "qa-audit"
