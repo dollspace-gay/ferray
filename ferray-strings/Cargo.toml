@@ -14,7 +14,9 @@ description = "String operations on character arrays for ferray"
 [dependencies]
 ferray-core = { workspace = true }
 regex = { workspace = true }
+serde = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
 ferray-test-oracle = { path = "../ferray-test-oracle" }
+serde_json = "1.0"

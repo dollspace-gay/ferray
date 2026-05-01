@@ -47,6 +47,7 @@ pub mod concat;
 pub mod extras;
 pub mod regex_ops;
 pub mod search;
+pub mod serde_impl;
 pub mod split_join;
 pub mod str_ops;
 pub mod string_array;

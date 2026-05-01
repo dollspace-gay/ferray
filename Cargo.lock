@@ -1255,6 +1255,8 @@ dependencies = [
  "ferray-test-oracle",
  "proptest",
  "regex",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
