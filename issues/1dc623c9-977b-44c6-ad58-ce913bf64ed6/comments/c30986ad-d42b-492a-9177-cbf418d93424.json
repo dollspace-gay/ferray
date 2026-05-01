@@ -1,0 +1,10 @@
+{
+  "uuid": "c30986ad-d42b-492a-9177-cbf418d93424",
+  "issue_uuid": "1dc623c9-977b-44c6-ad58-ce913bf64ed6",
+  "author": "doll-agent",
+  "content": "Added tests/oracle_f32.rs covering 16 linalg ops on the f32 monomorphization: det, trace, inv, cholesky, matmul, dot, inner, outer, kron, vdot, norm, solve, matrix_rank, eigh, svd, qr.\n\nApproach: fixtures stay float64 (single source of truth); helpers cast inputs and expected values down to f32 and compare with a 4096-ULP budget that absorbs the f32 precision gap (~7 vs ~15 digits). Per-case tolerance_ulps still applies via .max().\n\nNew ferray-test-oracle helpers:\n- assert_f32_slice_ulp\n- should_skip_f32 (accepts float32 and float64 fixtures)\n- make_f32_array_from_any (native f32 column or f64 cast-down)\n\nResults: 16/16 f32 tests passing first try, 21 f64 tests still passing, clippy clean across both crates. Commit 775e9d70.",
+  "created_at": "2026-05-01T20:13:30.852363403Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABANMxjgMLEyXd+HgC1OHhNg1XVYz9QDjRZF5QZcCnj0oMA7fOw4pDYLjJiFhjQfXIDixMmdk5hVS+8HD8mvgjkAA=="
+}
