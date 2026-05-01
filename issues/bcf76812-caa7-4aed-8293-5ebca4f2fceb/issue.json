@@ -2,11 +2,12 @@
   "uuid": "bcf76812-caa7-4aed-8293-5ebca4f2fceb",
   "display_id": 717,
   "title": "ferray-python phase 4 follow-up: numpy.polynomial class API — Polynomial/Chebyshev/Hermite/HermiteE/Laguerre/Legendre #[pyclass] wrappers",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T17:11:20.361277772Z",
-  "updated_at": "2026-05-01T17:11:21.579883954Z",
+  "updated_at": "2026-05-01T17:22:44.551874518Z",
+  "closed_at": "2026-05-01T17:22:44.551874518Z",
   "labels": [
     "feature"
   ]
