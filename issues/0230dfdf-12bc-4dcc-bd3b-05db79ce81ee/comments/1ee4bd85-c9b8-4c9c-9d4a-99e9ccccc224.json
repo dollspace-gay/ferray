@@ -1,0 +1,10 @@
+{
+  "uuid": "1ee4bd85-c9b8-4c9c-9d4a-99e9ccccc224",
+  "issue_uuid": "0230dfdf-12bc-4dcc-bd3b-05db79ce81ee",
+  "author": "doll-agent",
+  "content": "Done. Added ferray-ufunc/src/errstate.rs with numpy's errstate/seterr API.\n\nTypes: FpErrorClass (DivideByZero/Overflow/Underflow/Invalid), FpErrorState (Ignore/Warn/Raise).\nAPI: seterr/geterr (per-class policy mutators), with_errstate (RAII scope guard, panic-safe), record_fp_event (kernels call this), take_fp_events (drain Warn log), check_fp_errors (return Err for queued Raise).\n\nPer-thread state via thread_local. Default policies match numpy: invalid=Warn, others=Ignore.\n\nModule docstring is explicit about the per-kernel integration gap (kernels don't yet call record_fp_event - that's follow-up).\n\n7 tests covering defaults, seterr round-trip, all three policies, scoped overrides, panic-safe restoration. 7 new tests, all passing, clippy clean. Commit 8eb12f07.",
+  "created_at": "2026-05-01T23:23:06.119088996Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAcpJpV+5+XvRitBllPIak2LjtKCKqxPB3o8fdqJz+5YXqgyauZHHlkPbeBLXEr2f6o52iL7o+nmORDiL2/RjvDw=="
+}
