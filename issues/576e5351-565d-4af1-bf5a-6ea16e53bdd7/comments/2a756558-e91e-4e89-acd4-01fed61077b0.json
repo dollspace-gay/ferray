@@ -1,0 +1,10 @@
+{
+  "uuid": "2a756558-e91e-4e89-acd4-01fed61077b0",
+  "issue_uuid": "576e5351-565d-4af1-bf5a-6ea16e53bdd7",
+  "author": "doll-agent",
+  "content": "Remove dead x_pow_prev state from power_to_chebyshev (chebyshev.rs L255-292) and power_to_legendre (legendre.rs L207-244). The variable is computed each iteration but never read; the loop only uses x_pow (current). Drop the let mut declaration, the assignment in the loop body, and the let _ = x_pow_prev suppression at the end.",
+  "created_at": "2026-05-01T20:34:49.396511738Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAVJASl9TI9x6CXQe4IVBwxwzEe+A0XkbTZa74uGTzeg05hyIOJdZeKc+6Gq+QBCqtNtLsyGoLryf7eBd+WK8WAA=="
+}
