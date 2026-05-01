@@ -1,0 +1,10 @@
+{
+  "uuid": "047eeab4-5d5a-45a9-ba8b-3f2b18dbba20",
+  "issue_uuid": "0230dfdf-12bc-4dcc-bd3b-05db79ce81ee",
+  "author": "doll-agent",
+  "content": "Add ferray-ufunc/src/errstate.rs implementing numpy's errstate/seterr API: per-thread policy mapping (Ignore/Warn/Raise) for each FpErrorClass (DivideByZero/Overflow/Underflow/Invalid). Public API: seterr/geterr, with_errstate (RAII scope guard), record_fp_event (kernels call this when they detect an event), take_fp_events (drain Warn-recorded events), check_fp_errors (return Err for queued Raise events).\n\nModule docstring is honest about the fact that ufunc kernels don't yet call record_fp_event - that's the per-kernel integration as follow-up. The state-management infrastructure is the deliverable here.\n\n7 tests covering defaults, seterr/geterr, Warn/Ignore/Raise dispatch, scoped overrides, and panic-safe restoration on Drop.",
+  "created_at": "2026-05-01T23:22:27.911000467Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAvlfP2hAThg3w8FCvFoP4aWZsJ1njcE6nfiA6HoD/JAcF25a3cfhufutR0SaOJetxmrgwEqUaVEcga/LSQt5zAA=="
+}
