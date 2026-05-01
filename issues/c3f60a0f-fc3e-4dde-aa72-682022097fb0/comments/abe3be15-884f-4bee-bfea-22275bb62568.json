@@ -1,0 +1,10 @@
+{
+  "uuid": "abe3be15-884f-4bee-bfea-22275bb62568",
+  "issue_uuid": "c3f60a0f-fc3e-4dde-aa72-682022097fb0",
+  "author": "doll-agent",
+  "content": "ferray.autodiff delivered. src/autodiff.rs binds DualNumber<f64> as a #[pyclass] with constants/variable static constructors, real/dual getters, full arithmetic dunder set (__add__/__radd__/__sub__/__rsub__/__mul__/__rmul__/__truediv__/__rtruediv__/__neg__/__pow__) supporting mixed DualNumber+int/float operands, plus 16 elementary functions (sin/cos/tan/asin/acos/atan/atan2/sinh/cosh/tanh/exp/ln/log2/log10/sqrt/abs). High-level helpers (derivative, gradient, jacobian) implemented in pure Python (python/ferray/autodiff/__init__.py) on top of the bound DualNumber class. 31 new pytest passing (525/525 total). Strategy: f64-only since pyclass can't be generic; DualNumber<f32>/<Complex> deferred. ferray.autodiff is ferray-specific (NumPy doesn't have first-class autodiff) but useful for optimisation/sensitivity pipelines.",
+  "created_at": "2026-05-01T17:36:46.617363513Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAs97TY+rKvF/6Y5uCHniGhmnbwKecvlH6U8xefZaYDPyVnKd3zEoVvcEn+asSHY7K3BBvLIm5Edb1T0gULk7/Dw=="
+}
