@@ -1,0 +1,10 @@
+{
+  "uuid": "d528d288-a2ce-419b-9efc-d0cba5c20734",
+  "display_id": 690,
+  "title": "ferray-python: CI wheel matrix (Linux/macOS/Windows × py3.10-3.13) + PyPI publish",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-01T15:38:22.135788597Z",
+  "updated_at": "2026-05-01T15:38:22.135788597Z"
+}
