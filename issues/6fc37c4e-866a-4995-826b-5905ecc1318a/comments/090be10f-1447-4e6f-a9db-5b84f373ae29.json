@@ -1,0 +1,10 @@
+{
+  "uuid": "090be10f-1447-4e6f-a9db-5b84f373ae29",
+  "issue_uuid": "6fc37c4e-866a-4995-826b-5905ecc1318a",
+  "author": "doll-agent",
+  "content": "Phase 4 main slice delivered: ~37 functions across three NumPy areas (window functions, stride_tricks, polynomial). New files: src/window.rs (130 lines, 14 fns), src/stride_tricks.rs (115 lines, 3 fns), src/polynomial.rs (235 lines, 25 fns). lib.rs gained register_window_module / register_polynomial_module / register_stride_tricks_module helpers; the 5 canonical NumPy windows (hanning/hamming/blackman/bartlett/kaiser) and broadcast_arrays/broadcast_shapes are also surfaced at top-level to match np.* convention. python/ferray/__init__.py exports the new submodules. Notable design points: (1) as_strided intentionally NOT bound (deferred to #714) — NumPy uses byte strides while ferray uses element strides, the translation needs careful work; (2) chebpts1/chebpts2 reverse the result in the binding because ferray-Rust returns descending mathematical order while NumPy returns ascending — Python parity wins; (3) sliding_window_view materialises ferray's ArrayView into an owned ArrayD before crossing FFI to avoid lifetime issues; (4) autodiff/ma/char/polynomial-classes deferred to #715-#719 (each large enough to be its own follow-up). cargo clippy -D warnings clean. 346/346 pytest passing (309 phases 0-3 + 37 new phase-4). Phase 4 follow-ups #714-#719 plus the deferred surface from earlier phases (#692-#713) cover the remaining numpy parity gap. The parent epic #684 now has a concrete remaining-surface punchlist.",
+  "created_at": "2026-05-01T17:12:06.173704120Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAENDk0K50xqwqnDo2h0KKt/BIsBQPgvSJlmdUbz+OzXmABzNXuEMANKbnRyL/H0Dkau/xvDEMt9G3yxXAmw7gCw=="
+}
