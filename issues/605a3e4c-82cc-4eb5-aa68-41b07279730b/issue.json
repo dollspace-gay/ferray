@@ -1,0 +1,10 @@
+{
+  "uuid": "605a3e4c-82cc-4eb5-aa68-41b07279730b",
+  "display_id": 721,
+  "title": "ferray-ufunc: expand f32 test coverage in arithmetic.rs (follow-up to #152)",
+  "status": "open",
+  "priority": "low",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-01T19:48:36.327001309Z",
+  "updated_at": "2026-05-01T19:48:36.327001309Z"
+}
