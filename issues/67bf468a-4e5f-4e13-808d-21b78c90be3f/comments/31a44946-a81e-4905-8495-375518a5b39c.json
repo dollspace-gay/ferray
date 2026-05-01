@@ -1,0 +1,10 @@
+{
+  "uuid": "31a44946-a81e-4905-8495-375518a5b39c",
+  "issue_uuid": "67bf468a-4e5f-4e13-808d-21b78c90be3f",
+  "author": "doll-agent",
+  "content": "Pragmatic fix: keep the existing string-based parser (works in practice) but add (1) a FRAGILITY NOTE in the impl describing the to_string() approach, the formatting risk, and the planned future TokenTree-walking refactor, plus (2) 5 new tests pinning robust shapes that would catch any pretty-printer drift: variable bounds, arithmetic expressions, function-call bounds, step-from-variable, typed literal index. Full TokenTree-walking refactor is non-trivial (~200 lines of recursive-descent parser) and out of scope for a fragility-mitigation pass.",
+  "created_at": "2026-05-01T22:30:59.237606070Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABATZ327FLifk1hPLpEHXuuQEGyJVqhSDOnBmwb34QEQWRd8udwpgAbcp+OYuJ9unStZVrb/GTEN9pz8gpbF3kCCA=="
+}
