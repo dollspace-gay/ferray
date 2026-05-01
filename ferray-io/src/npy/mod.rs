@@ -402,16 +402,14 @@ fn save_complex_raw<T, W: Write>(
 }
 
 /// Build a dimension value of type `D` from a shape slice.
+///
+/// Delegates to `Dimension::from_dim_slice` (#236), which is the
+/// trait's canonical inverse of `as_slice` and already supports
+/// every fixed rank Ix0..Ix6 plus IxDyn. The previous implementation
+/// boxed each candidate into `Box<dyn Any>` and downcast against
+/// `TypeId::of::<D>()` — that path required a heap allocation per
+/// load and broke when the dimension trait grew new variants.
 fn build_dimension<D: Dimension>(shape: &[usize]) -> FerrayResult<D> {
-    build_dim_from_shape::<D>(shape)
-}
-
-/// Helper to build a dimension from a shape slice.
-/// This works for all fixed dimensions (Ix0-Ix6) and `IxDyn`.
-fn build_dim_from_shape<D: Dimension>(shape: &[usize]) -> FerrayResult<D> {
-    use ferray_core::dimension::{Ix0, Ix1, Ix2, Ix3, Ix4, Ix5, Ix6, IxDyn};
-    use std::any::Any;
-
     if let Some(ndim) = D::NDIM {
         if shape.len() != ndim {
             return Err(FerrayError::shape_mismatch(format!(
@@ -420,54 +418,11 @@ fn build_dim_from_shape<D: Dimension>(shape: &[usize]) -> FerrayResult<D> {
             )));
         }
     }
-
-    let type_id = std::any::TypeId::of::<D>();
-
-    macro_rules! try_dim {
-        ($dim_ty:ty, $dim_val:expr) => {
-            if type_id == std::any::TypeId::of::<$dim_ty>() {
-                let boxed: Box<dyn Any> = Box::new($dim_val);
-                return Ok(*boxed.downcast::<D>().unwrap());
-            }
-        };
-    }
-
-    try_dim!(IxDyn, IxDyn::new(shape));
-
-    match shape.len() {
-        0 => {
-            try_dim!(Ix0, Ix0);
-        }
-        1 => {
-            try_dim!(Ix1, Ix1::new([shape[0]]));
-        }
-        2 => {
-            try_dim!(Ix2, Ix2::new([shape[0], shape[1]]));
-        }
-        3 => {
-            try_dim!(Ix3, Ix3::new([shape[0], shape[1], shape[2]]));
-        }
-        4 => {
-            try_dim!(Ix4, Ix4::new([shape[0], shape[1], shape[2], shape[3]]));
-        }
-        5 => {
-            try_dim!(
-                Ix5,
-                Ix5::new([shape[0], shape[1], shape[2], shape[3], shape[4]])
-            );
-        }
-        6 => {
-            try_dim!(
-                Ix6,
-                Ix6::new([shape[0], shape[1], shape[2], shape[3], shape[4], shape[5]])
-            );
-        }
-        _ => {}
-    }
-
-    Err(FerrayError::io_error(
-        "unsupported dimension type for .npy loading",
-    ))
+    D::from_dim_slice(shape).ok_or_else(|| {
+        FerrayError::shape_mismatch(format!(
+            "shape {shape:?} does not match dimension type"
+        ))
+    })
 }
 
 // ---------------------------------------------------------------------------
