@@ -1,0 +1,10 @@
+{
+  "uuid": "ed3f79dc-6917-45cb-b0ff-b82cdd1d15f3",
+  "issue_uuid": "03904bc1-8943-49f3-b87d-23f7b489f391",
+  "author": "doll-agent",
+  "content": "Done. memmap.rs had only one 2-D test (the view test from #496); every other memmap test was 1-D. Added 6 tests covering 2-D and 3-D shapes across all access modes:\n\n- memmap_readonly_2d_shape_and_data: 3x4 f64.\n- memmap_readonly_3d_shape_and_data: 2x3x4 i32.\n- memmap_readwrite_2d_persists: 2x3 f64 with cell modification + flush; verifies on-disk persistence and isolation of surrounding cells.\n- memmap_view_3d_strides_match_row_major: 2x3x4 view; iterator reconstructs original sequence (validates stride[k] = product(shape[k+1..])).\n- memmap_open_memmap_2d_readonly: numpy-shaped entry point.\n- memmap_copy_on_write_2d_isolates_changes: CoW writes stay in memory.\n\nferray-io: 103 -> 109 passing, clippy clean. Commit 559c4036.",
+  "created_at": "2026-05-01T20:29:34.666901053Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABATcIMjWE8s/qKcg4uoWYMAhzUD1Rm7HYpZiBM7fmacktf77tqzDeRjVzwzsEkyfa+i8IPS4Aeb6KvFO+WphVdAQ=="
+}
