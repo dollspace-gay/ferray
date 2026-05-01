@@ -91,6 +91,16 @@ fn impl_ferray_record(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
     let field_count = fields.len();
     let mut field_descriptors = Vec::with_capacity(field_count);
 
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    // Type-with-generics name used in field-offset / size-of expressions.
+    // `#name` alone is the bare ident (`Mixed`), which won't compile in
+    // `offset_of!` or `size_of::<>` for generic structs (#326). We
+    // reconstruct `Mixed::<A, B>` by combining `#name` with the
+    // turbofished form of `#ty_generics`.
+    let ty_generics_turbofish = input.generics.split_for_impl().1.as_turbofish();
+    let name_with_generics = quote! { #name #ty_generics_turbofish };
+
     for field in fields {
         let field_name = field.ident.as_ref().unwrap();
         let field_name_str = field_name.to_string();
@@ -100,35 +110,53 @@ fn impl_ferray_record(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
             ferray_core::record::FieldDescriptor {
                 name: #field_name_str,
                 dtype: <#field_ty as ferray_core::dtype::Element>::dtype(),
-                offset: std::mem::offset_of!(#name, #field_name),
+                offset: std::mem::offset_of!(#name_with_generics, #field_name),
                 size: std::mem::size_of::<#field_ty>(),
             }
         });
     }
 
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
     let expanded = quote! {
         unsafe impl #impl_generics ferray_core::record::FerrayRecord for #name #ty_generics #where_clause {
             fn field_descriptors() -> &'static [ferray_core::record::FieldDescriptor] {
-                // Issue #323 asked whether this could be a `const` static
-                // array. `offset_of!` and `size_of::<T>()` are both const,
-                // but `<T as Element>::dtype()` is a trait method call and
-                // trait methods are not `const` on stable Rust yet — so
-                // the LazyLock is unavoidable without breaking
-                // `Element::dtype()` for every user. Re-evaluate once
-                // `const_trait_impl` stabilises.
-                static FIELDS: std::sync::LazyLock<Vec<ferray_core::record::FieldDescriptor>> =
-                    std::sync::LazyLock::new(|| {
-                        vec![
+                // #326: a plain `static FIELDS: LazyLock<Vec<…>>` here
+                // can't reference the outer generic parameters
+                // (`error[E0401]: use of generic parameter from outer
+                // item` — statics are independent items). Use a
+                // TypeId-keyed cache that lazily inserts the descriptor
+                // vector on first call per monomorphization, then
+                // returns the leaked slice. For non-generic structs
+                // this lookups the same entry every call; for generic
+                // structs each instantiation gets its own slot keyed
+                // by `TypeId::of::<Self>()`.
+                //
+                // Issue #323 asked whether this could be a `const`
+                // static array. `offset_of!` and `size_of::<T>()` are
+                // both const, but `<T as Element>::dtype()` is a trait
+                // method call and trait methods are not `const` on
+                // stable Rust yet — so the runtime cache is
+                // unavoidable. Re-evaluate once `const_trait_impl`
+                // stabilises.
+                use std::any::TypeId;
+                use std::collections::HashMap;
+                use std::sync::{OnceLock, Mutex};
+                static CACHE: OnceLock<
+                    Mutex<HashMap<TypeId, &'static [ferray_core::record::FieldDescriptor]>>,
+                > = OnceLock::new();
+                let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+                let mut guard = cache.lock().unwrap();
+                *guard
+                    .entry(TypeId::of::<#name_with_generics>())
+                    .or_insert_with(|| {
+                        let v: Vec<ferray_core::record::FieldDescriptor> = vec![
                             #(#field_descriptors),*
-                        ]
-                    });
-                &FIELDS
+                        ];
+                        Box::leak(v.into_boxed_slice())
+                    })
             }
 
             fn record_size() -> usize {
-                std::mem::size_of::<#name>()
+                std::mem::size_of::<#name_with_generics>()
             }
         }
     };

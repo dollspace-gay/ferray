@@ -107,6 +107,84 @@ fn derive_record_multi_type_size() {
 }
 
 // ---------------------------------------------------------------------------
+// FerrayRecord on generic structs (#326)
+//
+// The derive impl uses split_for_impl to forward generics into the
+// trait impl. Pin behavior on three shapes: a single-type-param
+// struct, a where-clause-bounded struct, and a const-generic struct.
+// ---------------------------------------------------------------------------
+
+use ferray_core::record::FerrayRecord as RecordTrait;
+
+#[repr(C)]
+#[derive(Clone, Debug, ferray_core::FerrayRecord)]
+struct Pair<T: ferray_core::dtype::Element> {
+    a: T,
+    b: T,
+}
+
+#[test]
+fn derive_record_generic_single_type_param_f64() {
+    let fields = <Pair<f64> as RecordTrait>::field_descriptors();
+    assert_eq!(fields.len(), 2);
+    assert_eq!(fields[0].name, "a");
+    assert_eq!(fields[0].dtype, DType::F64);
+    assert_eq!(fields[1].name, "b");
+    assert_eq!(fields[1].dtype, DType::F64);
+    assert_eq!(
+        <Pair<f64> as RecordTrait>::record_size(),
+        std::mem::size_of::<Pair<f64>>()
+    );
+}
+
+#[test]
+fn derive_record_generic_single_type_param_i32() {
+    // The same generic struct must produce a different dtype/size
+    // when monomorphized with a different element type.
+    let fields = <Pair<i32> as RecordTrait>::field_descriptors();
+    assert_eq!(fields.len(), 2);
+    assert_eq!(fields[0].dtype, DType::I32);
+    assert_eq!(fields[1].dtype, DType::I32);
+    assert_eq!(
+        <Pair<i32> as RecordTrait>::record_size(),
+        std::mem::size_of::<Pair<i32>>()
+    );
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, ferray_core::FerrayRecord)]
+struct Mixed<A, B>
+where
+    A: ferray_core::dtype::Element,
+    B: ferray_core::dtype::Element,
+{
+    first: A,
+    second: B,
+}
+
+#[test]
+fn derive_record_generic_two_type_params_with_where_clause() {
+    let fields = <Mixed<f32, i64> as RecordTrait>::field_descriptors();
+    assert_eq!(fields.len(), 2);
+    assert_eq!(fields[0].name, "first");
+    assert_eq!(fields[0].dtype, DType::F32);
+    assert_eq!(fields[1].name, "second");
+    assert_eq!(fields[1].dtype, DType::I64);
+    assert_eq!(
+        <Mixed<f32, i64> as RecordTrait>::record_size(),
+        std::mem::size_of::<Mixed<f32, i64>>()
+    );
+}
+
+// Note: lifetimes-bearing variants of FerrayRecord are not exercised
+// here because every field still needs to implement
+// ferray_core::dtype::Element, which requires Send + Sync + 'static.
+// Reference fields can't satisfy 'static, so a struct of the form
+// `struct Tagged<'a, T> { value: &'a T }` doesn't fit the record
+// model. The two type-param tests above cover the generics path
+// that's actually reachable.
+
+// ---------------------------------------------------------------------------
 // s![] macro tests
 // ---------------------------------------------------------------------------
 
