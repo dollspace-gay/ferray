@@ -56,6 +56,36 @@ fn arr1_bool(data: Vec<bool>) -> Array<bool, Ix1> {
     Array::<bool, Ix1>::from_vec(Ix1::new([n]), data).unwrap()
 }
 
+fn arr1_u16(data: Vec<u16>) -> Array<u16, Ix1> {
+    let n = data.len();
+    Array::<u16, Ix1>::from_vec(Ix1::new([n]), data).unwrap()
+}
+
+fn arr1_u32(data: Vec<u32>) -> Array<u32, Ix1> {
+    let n = data.len();
+    Array::<u32, Ix1>::from_vec(Ix1::new([n]), data).unwrap()
+}
+
+fn arr1_u64(data: Vec<u64>) -> Array<u64, Ix1> {
+    let n = data.len();
+    Array::<u64, Ix1>::from_vec(Ix1::new([n]), data).unwrap()
+}
+
+fn arr1_u128(data: Vec<u128>) -> Array<u128, Ix1> {
+    let n = data.len();
+    Array::<u128, Ix1>::from_vec(Ix1::new([n]), data).unwrap()
+}
+
+fn arr1_i16(data: Vec<i16>) -> Array<i16, Ix1> {
+    let n = data.len();
+    Array::<i16, Ix1>::from_vec(Ix1::new([n]), data).unwrap()
+}
+
+fn arr1_i128(data: Vec<i128>) -> Array<i128, Ix1> {
+    let n = data.len();
+    Array::<i128, Ix1>::from_vec(Ix1::new([n]), data).unwrap()
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
@@ -286,5 +316,70 @@ proptest! {
         let loaded: Array<f64, Ix1> = load_from_reader(&mut cursor).unwrap();
         prop_assert_eq!(loaded.shape(), &[0usize]);
         prop_assert!(loaded.as_slice().unwrap().is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // 13-18. npy roundtrips for the remaining integer dtypes (#242).
+    // u8/i32/i64 already covered above; add u16, u32, u64, u128, i16, i128.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn prop_npy_u16_roundtrip(data in proptest::collection::vec(any::<u16>(), 0..=100)) {
+        let arr = arr1_u16(data.clone());
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+        let mut cursor = Cursor::new(&buf);
+        let loaded: Array<u16, Ix1> = load_from_reader(&mut cursor).unwrap();
+        prop_assert_eq!(loaded.as_slice().unwrap(), &data[..]);
+    }
+
+    #[test]
+    fn prop_npy_u32_roundtrip(data in proptest::collection::vec(any::<u32>(), 0..=100)) {
+        let arr = arr1_u32(data.clone());
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+        let mut cursor = Cursor::new(&buf);
+        let loaded: Array<u32, Ix1> = load_from_reader(&mut cursor).unwrap();
+        prop_assert_eq!(loaded.as_slice().unwrap(), &data[..]);
+    }
+
+    #[test]
+    fn prop_npy_u64_roundtrip(data in proptest::collection::vec(any::<u64>(), 0..=100)) {
+        let arr = arr1_u64(data.clone());
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+        let mut cursor = Cursor::new(&buf);
+        let loaded: Array<u64, Ix1> = load_from_reader(&mut cursor).unwrap();
+        prop_assert_eq!(loaded.as_slice().unwrap(), &data[..]);
+    }
+
+    #[test]
+    fn prop_npy_u128_roundtrip(data in proptest::collection::vec(any::<u128>(), 0..=100)) {
+        let arr = arr1_u128(data.clone());
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+        let mut cursor = Cursor::new(&buf);
+        let loaded: Array<u128, Ix1> = load_from_reader(&mut cursor).unwrap();
+        prop_assert_eq!(loaded.as_slice().unwrap(), &data[..]);
+    }
+
+    #[test]
+    fn prop_npy_i16_roundtrip(data in proptest::collection::vec(any::<i16>(), 0..=100)) {
+        let arr = arr1_i16(data.clone());
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+        let mut cursor = Cursor::new(&buf);
+        let loaded: Array<i16, Ix1> = load_from_reader(&mut cursor).unwrap();
+        prop_assert_eq!(loaded.as_slice().unwrap(), &data[..]);
+    }
+
+    #[test]
+    fn prop_npy_i128_roundtrip(data in proptest::collection::vec(any::<i128>(), 0..=100)) {
+        let arr = arr1_i128(data.clone());
+        let mut buf = Vec::new();
+        save_to_writer(&mut buf, &arr).unwrap();
+        let mut cursor = Cursor::new(&buf);
+        let loaded: Array<i128, Ix1> = load_from_reader(&mut cursor).unwrap();
+        prop_assert_eq!(loaded.as_slice().unwrap(), &data[..]);
     }
 }
