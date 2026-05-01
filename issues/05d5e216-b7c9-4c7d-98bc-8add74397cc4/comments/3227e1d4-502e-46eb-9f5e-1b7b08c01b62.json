@@ -1,0 +1,10 @@
+{
+  "uuid": "3227e1d4-502e-46eb-9f5e-1b7b08c01b62",
+  "issue_uuid": "05d5e216-b7c9-4c7d-98bc-8add74397cc4",
+  "author": "doll-agent",
+  "content": "Already addressed at the right layer. The issue's premise that 'ferray-io must assume native byte order' is incorrect.\n\nferray-io has its own Endianness enum (Native/Little/Big) in npy/dtype_parse.rs. Every npy code path plumbs it:\n- header.rs::read_header parses the descriptor's endianness prefix ('<', '>', '|', '=').\n- NpyElement::read_vec takes Endianness and byte-swaps when needs_swap().\n- load_dynamic, load typed, complex32/64, DateTime64/Timedelta64 all pass it through.\n\nWhy DType doesn't carry endianness: DType describes in-memory representation, which on a given CPU is always native byte order. Endianness only matters at serialization boundaries; ferray puts it on the I/O layer not the dtype. Numpy works the same way - dtype('>i4') and dtype('<i4') have identical in-memory layout, the byte-order flag matters only for I/O.\n\nConfirmation tests: #240 (v2.0/v3.0 header round-trips through byte-swap branches) and #312 (property tests round-trip every primitive integer type).\n\nClosing as already-resolved.",
+  "created_at": "2026-05-01T22:39:48.396437295Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAhfzN3UphuHq4jrbrMff9rvJXo+BMwjE3NLvaCw/eKU4Vplt+DFNCOnc2da+OWYj4JB0gM9dugaGdIxuqyv+lDA=="
+}
