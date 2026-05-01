@@ -1,0 +1,10 @@
+{
+  "uuid": "a1569c5d-f480-48c9-8854-307e2e85790c",
+  "issue_uuid": "8501ae75-f36c-479e-a441-f8c798103167",
+  "author": "doll-agent",
+  "content": "Done. Added FerrayError::is_linalg_error() -> bool predicate returning true for SingularMatrix, ConvergenceFailure, NumericalInstability variants. The Rust equivalent of catching numpy's LinAlgError without cascading API changes.\n\nAvoids the alternative refactors (separate LinalgError type or FerrayError::Linalg variant) which would require rewriting every error construction site across ferray-linalg / ferray-stats / ferray-fft.\n\n2 tests covering true (3 variants) and false (5 non-linalg) cases. ferray-core: 639 -> 641 lib tests, all passing, clippy clean. Commit fe9f903c.",
+  "created_at": "2026-05-01T23:39:28.562897769Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA+siTL8EEAT9Q8e2J7qdcnKt/C47mnyGOLRzerMtSusnroiYVOiH8lfxPrYT5mbK2c0foPYHCYocRite649gRCA=="
+}
