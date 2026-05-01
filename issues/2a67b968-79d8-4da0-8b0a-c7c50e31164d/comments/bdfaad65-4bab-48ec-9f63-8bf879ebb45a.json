@@ -1,0 +1,10 @@
+{
+  "uuid": "bdfaad65-4bab-48ec-9f63-8bf879ebb45a",
+  "issue_uuid": "2a67b968-79d8-4da0-8b0a-c7c50e31164d",
+  "author": "doll-agent",
+  "content": "Done. Each orthogonal-basis module had two pairwise From impls (Polynomial<->Chebyshev, Polynomial<->Legendre, etc.) duplicating the basis-conversion logic already exposed via ConvertBasis::convert<T>() (blanket-impl'd via ToPowerBasis + FromPowerBasis using the canonical power-basis pivot). The From impls also silently swallowed any conversion errors that ConvertBasis surfaces.\n\nVerified no callers anywhere in the workspace use the bare ::from(X) form - only Self::from_power_basis() and .convert::<T>(). Deleted 10 impls (5 modules x 2 directions).\n\nferray-polynomial: 146 tests pass, clippy clean. Net -61 lines. Commit 718d03da.",
+  "created_at": "2026-05-01T20:45:51.575972808Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAX7qA4u5KYoMuTG+bTla58LYLd2DYEYpUJ7GHOA+LDY5I/il96DwwLXufnp2Jq1zJsvgh24IYk5j8EoB8OpTKAw=="
+}
