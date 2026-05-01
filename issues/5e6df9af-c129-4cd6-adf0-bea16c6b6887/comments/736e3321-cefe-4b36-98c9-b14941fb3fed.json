@@ -1,0 +1,10 @@
+{
+  "uuid": "736e3321-cefe-4b36-98c9-b14941fb3fed",
+  "issue_uuid": "5e6df9af-c129-4cd6-adf0-bea16c6b6887",
+  "author": "doll-agent",
+  "content": "Add v1<=v2 swap in masked_inside and masked_outside to match numpy.ma. Add 5 tests: canonical interior mask, canonical exterior mask, swap-on-inside, swap-on-outside, and degenerate equal-endpoint case.",
+  "created_at": "2026-05-01T21:04:16.039412903Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAvIcZMv0wOMyJLix1BZiAqK/pKzDBNJ32NRgF694ggsa9eilIQrx1mkRaw6plSl6BR46ydf93yiX+evn7Y+eqBQ=="
+}
