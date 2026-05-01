@@ -563,19 +563,6 @@ impl FromPowerBasis for Chebyshev {
     }
 }
 
-// Pairwise From impls for basis conversion
-impl From<crate::power::Polynomial> for Chebyshev {
-    fn from(p: crate::power::Polynomial) -> Self {
-        Self::new(&power_to_chebyshev(p.coeffs()))
-    }
-}
-
-impl From<Chebyshev> for crate::power::Polynomial {
-    fn from(c: Chebyshev) -> Self {
-        Self::new(&chebyshev_to_power(&c.coeffs))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

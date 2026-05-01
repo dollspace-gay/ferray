@@ -496,18 +496,6 @@ impl FromPowerBasis for Legendre {
     }
 }
 
-impl From<crate::power::Polynomial> for Legendre {
-    fn from(p: crate::power::Polynomial) -> Self {
-        Self::new(&power_to_legendre(p.coeffs()))
-    }
-}
-
-impl From<Legendre> for crate::power::Polynomial {
-    fn from(l: Legendre) -> Self {
-        Self::new(&legendre_to_power(&l.coeffs))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

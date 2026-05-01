@@ -471,18 +471,6 @@ impl FromPowerBasis for Laguerre {
     }
 }
 
-impl From<crate::power::Polynomial> for Laguerre {
-    fn from(p: crate::power::Polynomial) -> Self {
-        Self::new(&power_to_laguerre(p.coeffs()))
-    }
-}
-
-impl From<Laguerre> for crate::power::Polynomial {
-    fn from(l: Laguerre) -> Self {
-        Self::new(&laguerre_to_power(&l.coeffs))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

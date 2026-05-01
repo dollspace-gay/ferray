@@ -465,18 +465,6 @@ impl FromPowerBasis for Hermite {
     }
 }
 
-impl From<crate::power::Polynomial> for Hermite {
-    fn from(p: crate::power::Polynomial) -> Self {
-        Self::new(&power_to_hermite(p.coeffs()))
-    }
-}
-
-impl From<Hermite> for crate::power::Polynomial {
-    fn from(h: Hermite) -> Self {
-        Self::new(&hermite_to_power(&h.coeffs))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
