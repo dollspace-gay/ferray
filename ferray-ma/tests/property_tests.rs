@@ -47,7 +47,7 @@ proptest! {
         let mask_data: Vec<bool> = data.iter().map(|x| *x > 50.0).collect();
         let ma = MaskedArray::new(arr1(data), mask1(mask_data)).unwrap();
         let count = ma.count().unwrap();
-        let masked = count_masked(&ma, None).unwrap();
+        let masked = count_masked(&ma).unwrap();
         prop_assert_eq!(
             count + masked, n,
             "count({}) + count_masked({}) != size({})", count, masked, n

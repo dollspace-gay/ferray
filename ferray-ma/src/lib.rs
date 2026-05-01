@@ -71,7 +71,7 @@ pub use arithmetic::{
 };
 
 // Re-export mask manipulation functions
-pub use mask_ops::{count_masked, getdata, getmask, is_masked};
+pub use mask_ops::{count_masked, count_masked_axis, getdata, getmask, is_masked};
 
 // Re-export MaskAware trait (#505) for downstream code that wants
 // to write functions polymorphic over Array and MaskedArray.
@@ -468,7 +468,52 @@ mod tests {
             Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![true, false, true, true, false])
                 .unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
-        assert_eq!(count_masked(&ma, None).unwrap(), 3);
+        assert_eq!(count_masked(&ma).unwrap(), 3);
+    }
+
+    #[test]
+    fn count_masked_axis_2d_along_rows() {
+        // #268: per-row masked counts on a 2x3 array.
+        // Mask:
+        //   [[T, F, T],
+        //    [F, F, T]]
+        use ferray_core::dimension::Ix2;
+        let data = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![true, false, true, false, false, true],
+        )
+        .unwrap();
+        let ma = MaskedArray::new(data, mask).unwrap();
+        // axis=1 reduces columns -> per-row counts: [2, 1].
+        let counts = count_masked_axis(&ma, 1).unwrap();
+        assert_eq!(counts.shape(), &[2]);
+        assert_eq!(counts.as_slice().unwrap(), &[2u64, 1]);
+    }
+
+    #[test]
+    fn count_masked_axis_2d_along_cols() {
+        // axis=0 reduces rows -> per-column counts: [1, 0, 2].
+        use ferray_core::dimension::Ix2;
+        let data = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![true, false, true, false, false, true],
+        )
+        .unwrap();
+        let ma = MaskedArray::new(data, mask).unwrap();
+        let counts = count_masked_axis(&ma, 0).unwrap();
+        assert_eq!(counts.shape(), &[3]);
+        assert_eq!(counts.as_slice().unwrap(), &[1u64, 0, 2]);
+    }
+
+    #[test]
+    fn count_masked_axis_rejects_out_of_bounds() {
+        use ferray_core::dimension::Ix2;
+        let data = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
+        let ma = MaskedArray::new(data, mask).unwrap();
+        assert!(count_masked_axis(&ma, 2).is_err());
     }
 
     #[test]
