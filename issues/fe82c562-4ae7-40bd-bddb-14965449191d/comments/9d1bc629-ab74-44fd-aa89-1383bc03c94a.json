@@ -1,0 +1,10 @@
+{
+  "uuid": "9d1bc629-ab74-44fd-aa89-1383bc03c94a",
+  "issue_uuid": "fe82c562-4ae7-40bd-bddb-14965449191d",
+  "author": "doll-agent",
+  "content": "Done. Complex32 and Complex64 take a dedicated raw-bytes path (save_complex_raw + load_complex{32,64}_dynamic) instead of the NpyElement macro path used by every other dtype. That special handling was untested.\n\nAdded 6 tests:\n- complex64_dynamic_roundtrip: 1D Complex<f32> with infinities and signed components.\n- complex128_dynamic_roundtrip: 2D Complex<f64> with computed values; shape preservation through DynArray.\n- complex64_dynamic_header_tag: descr is '<c8'.\n- complex128_dynamic_header_tag: descr is '<c16'.\n- complex64_dynamic_2d_shape: 3x4 multidim shape preserved.\n- complex128_dynamic_special_values: NaN, infinities, signed zero round-trip bit-exactly via to_bits().\n\nferray-io: 97 -> 103 passing, clippy clean. Commit e5b2bb27.",
+  "created_at": "2026-05-01T20:26:30.195759994Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAowexTiwIEnH/kWJok6xSPb8Pt2K1BEEIRKV2ykaXSlFQtQjyW5GrYEzeqNV8QbdPnBgQzRbT2s6fM/NWQM4FDA=="
+}
