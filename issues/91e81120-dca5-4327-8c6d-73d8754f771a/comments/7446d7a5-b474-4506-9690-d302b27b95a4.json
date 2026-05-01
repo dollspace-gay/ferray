@@ -1,0 +1,10 @@
+{
+  "uuid": "7446d7a5-b474-4506-9690-d302b27b95a4",
+  "issue_uuid": "91e81120-dca5-4327-8c6d-73d8754f771a",
+  "author": "doll-agent",
+  "content": "Done. MaskedArray::sort flattened the array to 1-D, making axis-aware sort impossible. Added sort_axis(axis) returning MaskedArray<T, IxDyn> with input shape preserved - each lane along axis sorts independently, masked entries trail the unmasked ascending values within each lane.\n\nExisting sort() unchanged for backward compat.\n\nNote: numpy.ma.compressed also always returns 1-D (documented behavior), so no axis parameter added there.\n\n3 tests added. ferray-ma: 193 -> 196 lib tests, all passing, clippy clean. Commit 0ef53e03.",
+  "created_at": "2026-05-01T21:18:25.583246705Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAgZgmbRTFsRfViL0N8LvLFkhADhu+zedlvkRFhk2+pji1b6BNbPSCJbU+Nu4rrcQrCYucKB8IF1Bf/clrwdDRAA=="
+}
