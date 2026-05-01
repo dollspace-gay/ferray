@@ -348,6 +348,122 @@ mod tests {
         assert!(least_squares_fit(&v, x.len(), 2, &y, Some(&w)).is_err());
     }
 
+    // ----- Non-uniform weighting (#255) ---------------------------------
+    //
+    // The existing fit_weighted test used uniform [1,1,1,1,1] weights,
+    // which exercises only the same code path as unweighted fit. Add
+    // tests where the weighting actually affects the solution.
+
+    #[test]
+    fn fit_weighted_outlier_suppression() {
+        // Inliers on y = 2x + 1; outlier at x=4 (an extreme x) where
+        // it has leverage on the slope. Uniform weights skew both
+        // intercept and slope; down-weighting the outlier recovers
+        // the inlier line.
+        let x = vec![0.0, 1.0, 2.0, 3.0, 4.0];
+        let y_with_outlier = vec![1.0, 3.0, 5.0, 7.0, 100.0];
+        let v = power_vandermonde(&x, 1);
+
+        // Uniform weights — outlier at x=4 has leverage; slope should
+        // be far from 2.
+        let unif = vec![1.0; 5];
+        let c_unif = least_squares_fit(&v, x.len(), 2, &y_with_outlier, Some(&unif)).unwrap();
+        assert!(
+            (c_unif[1] - 2.0).abs() > 5.0,
+            "uniform fit should be skewed by leverage outlier; got slope {}",
+            c_unif[1]
+        );
+
+        // Down-weight the outlier — line snaps back to y = 2x + 1.
+        let mut down = vec![1.0; 5];
+        down[4] = 1e-9;
+        let c_down = least_squares_fit(&v, x.len(), 2, &y_with_outlier, Some(&down)).unwrap();
+        assert!(
+            (c_down[0] - 1.0).abs() < 1e-3,
+            "down-weighted intercept = {} != 1.0",
+            c_down[0]
+        );
+        assert!(
+            (c_down[1] - 2.0).abs() < 1e-3,
+            "down-weighted slope = {} != 2.0",
+            c_down[1]
+        );
+    }
+
+    #[test]
+    fn fit_weighted_zero_weight_excludes_point() {
+        // Setting w[i] = 0 must produce the same coefficients as
+        // dropping that point from x and y entirely.
+        let x_full = vec![0.0, 1.0, 2.0, 3.0, 4.0];
+        let y_full = vec![1.0, 3.0, 999.0, 7.0, 9.0];
+        let w_zero = vec![1.0, 1.0, 0.0, 1.0, 1.0];
+        let v_full = power_vandermonde(&x_full, 1);
+        let c_zero = least_squares_fit(&v_full, 5, 2, &y_full, Some(&w_zero)).unwrap();
+
+        // Compare to fit on only the 4 inliers.
+        let x_sub = vec![0.0, 1.0, 3.0, 4.0];
+        let y_sub = vec![1.0, 3.0, 7.0, 9.0];
+        let v_sub = power_vandermonde(&x_sub, 1);
+        let c_sub = least_squares_fit(&v_sub, 4, 2, &y_sub, None).unwrap();
+
+        assert!(
+            (c_zero[0] - c_sub[0]).abs() < 1e-10,
+            "intercept: weighted={}, dropped={}",
+            c_zero[0],
+            c_sub[0]
+        );
+        assert!(
+            (c_zero[1] - c_sub[1]).abs() < 1e-10,
+            "slope: weighted={}, dropped={}",
+            c_zero[1],
+            c_sub[1]
+        );
+    }
+
+    #[test]
+    fn fit_weighted_scaling_invariance() {
+        // Multiplying all weights by a positive constant must not
+        // change the coefficients (the scalar factors out of both
+        // sides of the normal equations).
+        let x = vec![0.0, 1.0, 2.0, 3.0, 4.0];
+        let y = vec![1.5, 2.7, 5.1, 7.4, 9.8];
+        let w_unit = vec![0.5, 1.0, 2.0, 1.5, 0.8];
+        let w_scaled: Vec<f64> = w_unit.iter().map(|&w| w * 7.5).collect();
+
+        let v = power_vandermonde(&x, 2);
+        let c_unit = least_squares_fit(&v, 5, 3, &y, Some(&w_unit)).unwrap();
+        let c_scaled = least_squares_fit(&v, 5, 3, &y, Some(&w_scaled)).unwrap();
+
+        for (i, (&a, &b)) in c_unit.iter().zip(c_scaled.iter()).enumerate() {
+            assert!(
+                (a - b).abs() < 1e-9,
+                "coeff {i}: unit={a}, scaled={b}",
+                a = a,
+                b = b
+            );
+        }
+    }
+
+    #[test]
+    fn fit_weighted_emphasizes_specific_point() {
+        // Heavily over-weighting a single point should pull the fit
+        // line to pass nearly through that point.
+        let x = vec![0.0, 1.0, 2.0, 3.0];
+        let y = vec![10.0, 0.0, 0.0, 0.0]; // the y[0] is a "must hit" target.
+        let v = power_vandermonde(&x, 1);
+
+        // Weights pin the target.
+        let w = vec![1e6, 1.0, 1.0, 1.0];
+        let c = least_squares_fit(&v, 4, 2, &y, Some(&w)).unwrap();
+
+        // Predicted y at x=0 should be near 10.
+        let pred_at_0 = c[0]; // intercept.
+        assert!(
+            (pred_at_0 - 10.0).abs() < 1e-3,
+            "high-weight point not pinned: pred(0) = {pred_at_0}"
+        );
+    }
+
     #[test]
     fn chebyshev_vandermonde_basic() {
         let x = vec![0.0, 0.5, 1.0];
