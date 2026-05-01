@@ -1,0 +1,10 @@
+{
+  "uuid": "238742b7-3903-42db-abfd-e163334bde47",
+  "issue_uuid": "43f98385-c7bf-4a5b-accc-aa17bb930526",
+  "author": "doll-agent",
+  "content": "Already implemented. f32 SIMD intrinsic kernels at parity with f64.\n\ndispatch.rs has dedicated pulp WithSimd impls for SqrtF32Op (line 353), AbsF32Op (486), NegF32Op (511), SquareF32Op (536), ReciprocalF32Op (561).\n\nsimd_f32.rs has binops: add_f32 (41), mul_f32 (47), sub_f32 (53), div_f32 (59).\n\nEach routes through pulp's f32s lane type with runtime dispatch (SSE2/AVX2/AVX-512/NEON). Closing as already-resolved.",
+  "created_at": "2026-05-01T23:13:51.171808889Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA9tB1kKp3nEDFiB88MJ2YhMzdrhI9Z+70FaUwPYIDyr0/fb5/z41T+ccfuUAqBtUI0RxjxGzBaEzvlQxBUloOAw=="
+}
