@@ -601,4 +601,133 @@ mod tests {
             assert!((r - e).abs() < 1e-4, "root {i}: expected {e}, got {r}");
         }
     }
+
+    // ----- Repeated-root coverage (#250) ---------------------------------
+    //
+    // Companion-matrix eigendecomposition is numerically ill-conditioned
+    // for polynomials with repeated roots — the LAPACK output can spread
+    // a multiplicity-k root across a cluster of size ~eps^(1/k). Tests
+    // here use bands wide enough to absorb that spread (~1e-3 for double
+    // roots, ~1e-2 for triple roots) while still pinning the cluster
+    // location and overall multiplicity.
+
+    #[test]
+    fn roots_double_at_one() {
+        // (x-1)^2 = x^2 - 2x + 1
+        let coeffs = [1.0, -2.0, 1.0];
+        let roots = find_roots_from_power_coeffs(&coeffs).unwrap();
+        assert_eq!(roots.len(), 2);
+        for (i, r) in roots.iter().enumerate() {
+            assert!(
+                (r.re - 1.0).abs() < 1e-3,
+                "root {i} re = {} far from 1.0",
+                r.re
+            );
+            assert!(
+                r.im.abs() < 1e-3,
+                "root {i} im = {} expected ~0",
+                r.im
+            );
+        }
+    }
+
+    #[test]
+    fn roots_triple_at_one() {
+        // (x-1)^3 = x^3 - 3x^2 + 3x - 1
+        let coeffs = [-1.0, 3.0, -3.0, 1.0];
+        let roots = find_roots_from_power_coeffs(&coeffs).unwrap();
+        assert_eq!(roots.len(), 3);
+        // Triple root: spread ~ eps^(1/3) ~ 6e-6, but each root's
+        // distance to 1.0 (in 2-D, |re-1| + |im|) should still be small.
+        for (i, r) in roots.iter().enumerate() {
+            let dist = ((r.re - 1.0).powi(2) + r.im.powi(2)).sqrt();
+            assert!(
+                dist < 1e-2,
+                "root {i} = ({}, {}) too far from cluster at 1.0 (dist = {dist})",
+                r.re,
+                r.im
+            );
+        }
+        // The centroid of the three roots should match the algebraic
+        // average — for a triple root at 1.0, the sum is 3.0. Tolerance
+        // accommodates the eps^(1/3) ~ 6e-6 spread of the cluster.
+        let re_sum: f64 = roots.iter().map(|r| r.re).sum();
+        assert!(
+            (re_sum - 3.0).abs() < 1e-4,
+            "sum of root real parts = {re_sum}, expected 3.0"
+        );
+    }
+
+    #[test]
+    fn roots_double_plus_simple() {
+        // (x-2)^2 (x+1) = (x^2 - 4x + 4)(x + 1) = x^3 - 3x^2 + 0*x + 4
+        let coeffs = [4.0, 0.0, -3.0, 1.0];
+        let roots = find_roots_from_power_coeffs(&coeffs).unwrap();
+        assert_eq!(roots.len(), 3);
+        let mut real_roots: Vec<f64> = roots.iter().map(|r| r.re).collect();
+        real_roots.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        // After sorting: [-1, 2, 2] with the simple root well-separated.
+        assert!(
+            (real_roots[0] - (-1.0)).abs() < 1e-6,
+            "simple root: got {} expected -1.0",
+            real_roots[0]
+        );
+        for r in &real_roots[1..] {
+            assert!(
+                (r - 2.0).abs() < 1e-3,
+                "double root: got {r} expected 2.0"
+            );
+        }
+        // Imaginary parts should all be small.
+        for r in &roots {
+            assert!(r.im.abs() < 1e-3);
+        }
+    }
+
+    #[test]
+    fn roots_quadruple_at_origin() {
+        // x^4 = (x-0)^4 — quadruple root at 0.
+        let coeffs = [0.0, 0.0, 0.0, 0.0, 1.0];
+        let roots = find_roots_from_power_coeffs(&coeffs).unwrap();
+        assert_eq!(roots.len(), 4);
+        // Quadruple root spread ~ eps^(1/4) ~ 1e-4. Centroid is 0.
+        let centroid_re: f64 = roots.iter().map(|r| r.re).sum::<f64>() / 4.0;
+        let centroid_im: f64 = roots.iter().map(|r| r.im).sum::<f64>() / 4.0;
+        assert!(centroid_re.abs() < 1e-9);
+        assert!(centroid_im.abs() < 1e-9);
+        for r in &roots {
+            assert!(r.norm() < 1e-3);
+        }
+    }
+
+    #[test]
+    fn roots_repeated_complex_pair() {
+        // (x^2 + 1)^2 = x^4 + 2x^2 + 1, repeated roots at +i and -i.
+        // Repeated complex roots through a real-coefficient polynomial
+        // make the companion matrix's QR iteration ill-conditioned —
+        // it can either converge with a wider cluster than usual or
+        // fail to converge entirely. Accept both outcomes.
+        let coeffs = [1.0, 0.0, 2.0, 0.0, 1.0];
+        match find_roots_from_power_coeffs(&coeffs) {
+            Ok(roots) => {
+                assert_eq!(roots.len(), 4);
+                for r in &roots {
+                    assert!(r.re.abs() < 1e-2, "real part {} should be ~0", r.re);
+                    assert!(
+                        (r.im.abs() - 1.0).abs() < 1e-2,
+                        "|im| = {} should be ~1.0",
+                        r.im.abs()
+                    );
+                }
+                let im_sum: f64 = roots.iter().map(|r| r.im).sum();
+                assert!(im_sum.abs() < 1e-6);
+            }
+            Err(FerrayError::ConvergenceFailure { .. }) => {
+                // Acceptable: documents the known limitation. A future
+                // multi-stage root-finder (deflation + nudging on
+                // repeated roots) would tighten this branch up.
+            }
+            Err(e) => panic!("unexpected error variant: {e}"),
+        }
+    }
 }
