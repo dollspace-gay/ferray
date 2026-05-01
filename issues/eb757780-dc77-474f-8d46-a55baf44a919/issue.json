@@ -3,11 +3,12 @@
   "display_id": 242,
   "title": "ferray-io: no property tests for u16/u32/u64/i16/u128/i128 roundtrips",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nMissing 6 integer types in property tests.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:51:55.771959578Z",
-  "updated_at": "2026-03-25T15:52:02.549912738Z",
+  "updated_at": "2026-05-01T20:28:07.946171396Z",
+  "closed_at": "2026-05-01T20:28:07.946171396Z",
   "labels": [
     "bug",
     "qa-audit"
