@@ -1,0 +1,10 @@
+{
+  "uuid": "858d0653-a518-454d-a0cf-17e633d4590e",
+  "issue_uuid": "7dc74553-27d7-4c5d-90ec-5854cd33e261",
+  "author": "doll-agent",
+  "content": "Done. divmod for the 5 non-power bases routes through a power-basis pivot - round-trip conversion errors could compound silently. Existing tests only covered the power-basis path.\n\nAdded tests/divmod_non_power.rs with 13 tests:\n- 5 invariant checks: a(x) == q(x)*b(x) + r(x) at 6+ eval points per basis.\n- 2 higher-degree-divisor checks (Chebyshev, Legendre): q == 0, r == a.\n- 1 exact-division check (Chebyshev): (x^2-1)/(x-1) yields r == 0.\n- 5 division-by-zero error checks (one per basis).\n\nferray-polynomial: 13 new integration tests, existing 174 lib tests still pass, clippy clean. Commit de7c7b0b.",
+  "created_at": "2026-05-01T20:57:20.628123345Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAFLbRYvdLhjMUuFsgQWrogALPbwHj3KJrMqZxMxvVT5+JhH2/8jff76Hl8/uhrwLmQnOCavl6yPlfGMIi5az0Ag=="
+}
