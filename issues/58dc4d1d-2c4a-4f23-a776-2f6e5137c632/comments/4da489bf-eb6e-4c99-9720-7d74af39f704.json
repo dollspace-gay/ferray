@@ -1,0 +1,10 @@
+{
+  "uuid": "4da489bf-eb6e-4c99-9720-7d74af39f704",
+  "issue_uuid": "58dc4d1d-2c4a-4f23-a776-2f6e5137c632",
+  "author": "doll-agent",
+  "content": "Implement WritebackGuard<'a, T, D> as a Drop-based scope guard in new ferray-core/src/writeback.rs. Pattern: new(target) clones target into a contiguous scratch, scratch_mut() exposes mutable access for kernels, commit() writes back element-by-element via iter_mut (works for any target layout), discard()/drop without commit leaves target untouched. Element-by-element copy in logical order handles non-contig targets (Fortran-order, sliced views) automatically. 6 tests covering commit, discard, panic-safety drop, 2D contiguous, scratch initialization, and Fortran-order target.",
+  "created_at": "2026-05-01T22:56:52.810458679Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAP9S/Y+vLgJz7PkRWQYZ6hCgVqjmkIac6y9oaqZFf3F8jR4j1oYn2sKUGJq5IO8w7xZIRK65BU4Po5ihLBRgDDA=="
+}
