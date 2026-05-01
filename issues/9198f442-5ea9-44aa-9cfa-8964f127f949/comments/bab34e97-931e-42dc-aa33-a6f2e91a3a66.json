@@ -1,0 +1,10 @@
+{
+  "uuid": "bab34e97-931e-42dc-aa33-a6f2e91a3a66",
+  "issue_uuid": "9198f442-5ea9-44aa-9cfa-8964f127f949",
+  "author": "doll-agent",
+  "content": "Research outcome: keep concrete-types architecture; defer dispatch protocol indefinitely.\n\nThe numpy story: __array_function__ is a runtime dispatch hook that lets Dask/CuPy/JAX intercept numpy function calls. Works because Python is duck-typed.\n\nWhy this doesn't translate to Rust:\n1. Rust's monomorphization model is the opposite of runtime dispatch. Backend selection is conventionally done at the type system (generic over a trait), which is more powerful (zero-overhead, type-safe, optimizable per backend) and doesn't need a protocol.\n2. The 'same code runs on numpy/dask/cupy' use case is a Python interpreter-shape concern. Rust users already write generic code over traits.\n\nAn ArrayLike trait would need ~30 methods (shape, dtype, indexing, slicing, etc.); most ferray ops would need rewriting generic over ArrayLike, doubling the API surface.\n\nThe right path for a multi-backend ferray future: build specific backend trait families when concrete demand appears (ferray-cuda, ferray-lazy as their own crates with compatible-but-distinct types). Architecture is more like Polars+DataFusion than numpy+dask.\n\nClosing as decided. Revisit if a credible Rust-native generic-array protocol emerges in the wider ecosystem.",
+  "created_at": "2026-05-01T22:48:11.518950134Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAIA3Sr9doQFx83LN5IV6hEvICf+ffNxlZD8E49C6Cw1j23iHbuCLn5jvZpCAPR1KI1UYPTtT6I9qXWHULbzKiBw=="
+}
