@@ -1,0 +1,10 @@
+{
+  "uuid": "387358dd-cbc4-444a-beb6-5f2d2f347fa5",
+  "display_id": 708,
+  "title": "ferray-python phase 3 follow-up: complex linalg (matmul_complex, solve_complex, det_complex, inv_complex, eig)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-01T17:01:58.084824292Z",
+  "updated_at": "2026-05-01T17:01:58.084824292Z"
+}
