@@ -3,11 +3,12 @@
   "display_id": 215,
   "title": "ferray-linalg: no property tests for Cholesky or LU",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nproperty_tests.rs: covers QR/SVD/inv etc but not L*L^T=A or P*A=L*U.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:47:34.674553134Z",
-  "updated_at": "2026-03-25T15:47:42.218107353Z",
+  "updated_at": "2026-05-01T20:15:16.988610430Z",
+  "closed_at": "2026-05-01T20:15:16.988610430Z",
   "labels": [
     "bug",
     "qa-audit"
