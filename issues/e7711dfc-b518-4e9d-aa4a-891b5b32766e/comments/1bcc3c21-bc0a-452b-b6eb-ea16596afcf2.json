@@ -1,0 +1,10 @@
+{
+  "uuid": "1bcc3c21-bc0a-452b-b6eb-ea16596afcf2",
+  "issue_uuid": "e7711dfc-b518-4e9d-aa4a-891b5b32766e",
+  "author": "doll-agent",
+  "content": "numpy.lib functional utilities delivered as a pure-Python package (python/ferray/lib/__init__.py). vectorize, apply_along_axis, apply_over_axes, piecewise — all delegate directly to numpy. Honest design choice: NumPy itself implements these as Python wrappers around user callables, and there's no Rust kernel that can speed up an arbitrary Python function called per-element. Bridging Python-callable-from-Rust adds GIL hops without any computational benefit, so reaching for numpy under the hood is the right call. The Rust ferray-window crate has typed apply_along_axis/vectorize for Rust closures — those remain useful inside Rust pipelines but don't translate to Python performance gains. The new lib/ Python package also re-exports the existing Rust stride_tricks submodule (broadcast_arrays/broadcast_shapes/sliding_window_view), so callers see a unified ferray.lib namespace whether the implementation is Rust or Python. 14 new pytest passing (494/494 total). For users wanting Rust-fast loops over named ferray functions, the recommended pattern is to call the typed function directly (e.g. ferray.sin(slice)) instead of going through this layer.",
+  "created_at": "2026-05-01T17:33:11.228443706Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAupWEce/NSP37HvsMcY5LxVpKbI4/5o2GkReyE4NGrFkW8kk1JgyqTHqfdqn36h6fRLv4oaXyRJzULjjPDV70Cg=="
+}
