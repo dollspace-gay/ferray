@@ -1,0 +1,10 @@
+{
+  "uuid": "7c9ccd0b-0e29-4f7e-88d7-4d2603dd828d",
+  "issue_uuid": "2cd90325-1817-4e00-ae22-db551d9e1842",
+  "author": "doll-agent",
+  "content": "Phase-3 long tail #709 delivered: cholesky_batched, qr_batched, svd_batched, eigh_batched, eigvalsh_batched, solve_batched, inv_batched, pinv_batched, det_batched, slogdet_batched, matrix_rank_batched. 525/525 passing.",
+  "created_at": "2026-05-01T18:16:09.425574356Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAgbE1NsDIU8fB4xxPApW9clogHp7rFE4+cSBHDNtRPo16XbzbpuN9Y0Ka9F0OebZ7K3c6DuK58BMlf7wCprzIAQ=="
+}
