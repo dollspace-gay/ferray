@@ -1,0 +1,10 @@
+{
+  "uuid": "01a50fb7-8af7-4bba-b472-437ce35d87d6",
+  "issue_uuid": "4b0da694-99b1-4908-8fbd-084ae5078d33",
+  "author": "doll-agent",
+  "content": "Research outcome: keep Element sealed; FerrayRecord covers the user-defined-type use cases.\n\nWhy Element is sealed:\n1. Element invariants (dtype consistency, Send+Sync+'static, promotion rules) are too risky to let downstream crates impl arbitrarily.\n2. The closed universe lets every DType match be exhaustive — opening it would force dynamic dispatch on dtype (slower) or break exhaustiveness.\n3. Numpy NEP 42/43 user-dtypes work because Python is dynamically typed; Rust's monomorphization model can't replicate it without sacrificing zero-cost.\n\nThree options analyzed:\n1. Unseal Element with a contract: ~2-3 weeks across 4 crates, breaks DType::Copy invariant from #342, low payoff (most user-types end up reinventing FerrayRecord).\n2. Opaque N-byte type: thinner version of option 1, leaves arithmetic unimplemented.\n3. FerrayRecord: already covers practical user-dtype needs (physical units, fixed-point, etc.) at zero cost.\n\nDecision: keep Element sealed. FerrayRecord + user-side op functions cover the practical need.\n\nReopening criteria: a credible Rust-native dynamic-dtype protocol emerges (ndarray standardization) or multiple crates request the same user-dtype kernel.\n\nClosing as decided.",
+  "created_at": "2026-05-01T22:51:51.996150559Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABADwCWEmA1tFL6/mCO6XhZ8MBz7hmJvqwYv1J7EqsToGuV7K3qw5gGNX6kDlRJj65lRYSNsdQCSbRglk/RJ3nrAQ=="
+}
