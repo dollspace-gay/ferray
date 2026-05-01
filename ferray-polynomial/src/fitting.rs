@@ -187,6 +187,18 @@ pub fn least_squares_fit(
             n
         )));
     }
+    // NaN/Inf inputs would silently produce garbage coefficients
+    // through the normal-equations solve, #252.
+    if let Some((i, _)) = v.iter().enumerate().find(|(_, c)| !c.is_finite()) {
+        return Err(FerrayError::invalid_value(format!(
+            "Vandermonde matrix entry at index {i} is not finite"
+        )));
+    }
+    if let Some((i, _)) = y.iter().enumerate().find(|(_, c)| !c.is_finite()) {
+        return Err(FerrayError::invalid_value(format!(
+            "y has a non-finite value at index {i}"
+        )));
+    }
     if let Some(w) = w {
         if w.len() != n {
             return Err(FerrayError::invalid_value(format!(
@@ -195,9 +207,10 @@ pub fn least_squares_fit(
                 n
             )));
         }
-        // Issue #256: weights are squared via sqrt() to build the
-        // weighted system; a negative weight would silently produce
-        // NaN. Reject up front so the caller gets a useful error
+        // #256: weights are squared via sqrt() to build the weighted
+        // system; a non-finite or negative weight would silently produce
+        // NaN. The is_finite branch also covers #252 for the weight
+        // column. Reject up front so the caller gets a useful error
         // instead of "polynomial fit returned NaN coefficients".
         for (i, &wi) in w.iter().enumerate() {
             if !wi.is_finite() || wi < 0.0 {

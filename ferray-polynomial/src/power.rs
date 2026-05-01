@@ -882,6 +882,39 @@ mod tests {
     }
 
     #[test]
+    fn fit_rejects_nan_in_y() {
+        // NaN in y silently produces garbage coefficients without
+        // validation (#252).
+        let x = vec![0.0, 1.0, 2.0, 3.0];
+        let y = vec![1.0, 2.0, f64::NAN, 4.0];
+        let err = Polynomial::fit(&x, &y, 1).unwrap_err();
+        assert!(err.to_string().contains("non-finite"));
+    }
+
+    #[test]
+    fn fit_rejects_inf_in_x() {
+        // Inf in x produces an Inf-laden Vandermonde row → NaN coeffs.
+        let x = vec![0.0, 1.0, f64::INFINITY, 3.0];
+        let y = vec![1.0, 2.0, 3.0, 4.0];
+        let err = Polynomial::fit(&x, &y, 1).unwrap_err();
+        assert!(err.to_string().contains("not finite"));
+    }
+
+    #[test]
+    fn with_domain_rejects_nan_endpoint() {
+        let result = Polynomial::new(&[1.0]).with_domain([f64::NAN, 1.0]);
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("non-finite"));
+    }
+
+    #[test]
+    fn with_window_rejects_inf_endpoint() {
+        let result = Polynomial::new(&[1.0]).with_window([0.0, f64::INFINITY]);
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("non-finite"));
+    }
+
+    #[test]
     fn add_precision_preserved_huge_minus_huge() {
         // (1e15 + 1.0) - 1e15 should still round-trip the small term
         // through subtract — but classic floating-point cancellation

@@ -30,6 +30,17 @@ pub fn find_roots_from_power_coeffs(coeffs: &[f64]) -> Result<Vec<Complex<f64>>,
         ));
     }
 
+    // NaN/Inf coefficients would silently corrupt the companion-matrix
+    // eigendecomposition (and the quadratic formula path) into producing
+    // NaN roots, #252.
+    for (i, &c) in coeffs.iter().enumerate() {
+        if !c.is_finite() {
+            return Err(FerrayError::invalid_value(format!(
+                "polynomial coefficient at index {i} is not finite: {c}"
+            )));
+        }
+    }
+
     // Trim trailing near-zero coefficients
     let mut n = coeffs.len();
     while n > 1 && coeffs[n - 1].abs() < f64::EPSILON * 100.0 {
@@ -729,5 +740,31 @@ mod tests {
             }
             Err(e) => panic!("unexpected error variant: {e}"),
         }
+    }
+
+    // ----- NaN/Inf input rejection (#252) --------------------------------
+
+    #[test]
+    fn roots_rejects_nan_coefficient() {
+        let coeffs = [1.0, f64::NAN, 1.0];
+        let err = find_roots_from_power_coeffs(&coeffs).unwrap_err();
+        assert!(
+            err.to_string().contains("not finite"),
+            "expected non-finite-coefficient error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn roots_rejects_inf_coefficient() {
+        let coeffs = [1.0, 2.0, f64::INFINITY];
+        let err = find_roots_from_power_coeffs(&coeffs).unwrap_err();
+        assert!(err.to_string().contains("not finite"));
+    }
+
+    #[test]
+    fn roots_rejects_neg_inf_coefficient() {
+        let coeffs = [f64::NEG_INFINITY, 0.0, 1.0];
+        let err = find_roots_from_power_coeffs(&coeffs).unwrap_err();
+        assert!(err.to_string().contains("not finite"));
     }
 }

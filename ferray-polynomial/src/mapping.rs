@@ -49,8 +49,17 @@ pub fn map_x(x: f64, offset: f64, scale: f64) -> f64 {
     scale.mul_add(x, offset)
 }
 
-/// Validate a domain/window pair (both must have non-degenerate spans).
+/// Validate a domain/window pair (both must have non-degenerate spans
+/// and be finite — NaN/Inf endpoints would silently corrupt every
+/// downstream eval, fit, and root-finding operation, #252).
 pub fn validate_domain_window(domain: [f64; 2], window: [f64; 2]) -> Result<(), FerrayError> {
+    for (label, pair) in [("domain", domain), ("window", window)] {
+        if !pair[0].is_finite() || !pair[1].is_finite() {
+            return Err(FerrayError::invalid_value(format!(
+                "polynomial {label} contains a non-finite value: {pair:?}"
+            )));
+        }
+    }
     if domain[0] == domain[1] {
         return Err(FerrayError::invalid_value(format!(
             "polynomial domain is degenerate: {domain:?}"
