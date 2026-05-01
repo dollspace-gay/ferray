@@ -1,0 +1,10 @@
+{
+  "uuid": "b493a18f-7abe-4047-99fe-a0ed08d1b083",
+  "issue_uuid": "74ca6c04-2db8-4707-9820-fe8642204cb3",
+  "author": "doll-agent",
+  "content": "The issue claimed FerrayRecord 'handles generics but untested'. Adding generic tests revealed the macro was actually broken for generics: it generated 'std::mem::size_of::<Mixed>()' (no generic args) and 'static FIELDS' (statics can't reference outer-fn generics).\n\nFix: use #ty_generics_turbofish to produce 'Mixed::<A,B>' in offset_of! and size_of!, plus replace the LazyLock<Vec> static cache with a TypeId-keyed OnceLock<Mutex<HashMap>>. Each monomorphization gets its own slot keyed by TypeId::of::<Self>(); first call leaks a Box<[FieldDescriptor]> into the cache.\n\nAdd 3 tests: Pair<f64> + Pair<i32> (single type param, distinct dtypes), Mixed<A, B> with where clause.",
+  "created_at": "2026-05-01T22:35:54.601234352Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAQm36hCdKrsc7P7kVFGExKCFzAX0Gypf4Mdlydnrv8KtnLWwcn57ujIMqhmHwtNl3CZrpDhiKa8x04tJMNyfhCA=="
+}
