@@ -1,0 +1,10 @@
+{
+  "uuid": "61a30110-8dc7-413d-9e9a-ad1db7eb4ca4",
+  "issue_uuid": "5e6df9af-c129-4cd6-adf0-bea16c6b6887",
+  "author": "doll-agent",
+  "content": "Done. numpy.ma.masked_inside and masked_outside accept (v1, v2) in either order: if v1 > v2, the bounds are swapped so the interval is always [min, max]. ferray's implementations took the bounds literally - masked_inside(data, 4, 2) tested 'v >= 4 && v <= 2', trivially false, masking nothing.\n\nAdded a canonicalization pass: (lo, hi) = if v1 <= v2 { (v1, v2) } else { (v2, v1) } in both functions.\n\n5 tests added covering canonical-order, swap-on-inside, swap-on-outside, and degenerate equal-endpoint cases.\n\nferray-ma: 184 tests pass, clippy clean. Commit 1b8dab23.",
+  "created_at": "2026-05-01T21:04:45.755375936Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAn+MdhDXFAFbTLy9O+L84FVrjNjFXDNMZOZy0YeG1UDBdqKGVrV1VwMnR7oAKhov1VueFl39F43PxeFVp/qP+Dg=="
+}
