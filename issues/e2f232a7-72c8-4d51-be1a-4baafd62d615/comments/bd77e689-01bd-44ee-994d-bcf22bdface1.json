@@ -1,0 +1,10 @@
+{
+  "uuid": "bd77e689-01bd-44ee-994d-bcf22bdface1",
+  "issue_uuid": "e2f232a7-72c8-4d51-be1a-4baafd62d615",
+  "author": "doll-agent",
+  "content": "Added 9 windows (cosine, exponential, gaussian, general_cosine, general_hamming, nuttall, parzen, taylor, tukey) to ferray-window/src/windows/mod.rs. 22 new tests, all 52 ferray-window tests pass. Clippy clean (-D warnings). Workspace version bumped 0.3.0 -> 0.3.1. Committed as f6fc8199. Ready for cargo publish.",
+  "created_at": "2026-05-01T15:14:45.651169735Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAg2uM9VPsvyTSwkk6QJzJoI2SyhZgMsI1L14g9hB5rMQQAnVhKY1AkJ4T4NzULezBxROt9UoZckRrPsobpFQUAw=="
+}
