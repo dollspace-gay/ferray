@@ -83,7 +83,8 @@ pub use products::{
 pub use decomp::{
     QrMode, UPLO, cholesky, cholesky_batched, cholesky_upper, cholesky_upper_batched, eig, eigh,
     eigh_batched, eigh_batched_uplo, eigh_uplo, eigvals, eigvalsh, eigvalsh_batched,
-    eigvalsh_batched_uplo, eigvalsh_uplo, lu, qr, qr_batched, svd, svd_batched, svdvals,
+    eigvalsh_batched_uplo, eigvalsh_uplo, lu, qr, qr_batched, svd, svd_batched, svd_hermitian,
+    svdvals,
 };
 
 // Solving and inversion (Section 8.3)

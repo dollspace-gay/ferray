@@ -20,4 +20,4 @@ pub use eigen::{
 };
 pub use lu::lu;
 pub use qr::{QrMode, qr, qr_batched};
-pub use svd::{svd, svd_batched, svdvals};
+pub use svd::{svd, svd_batched, svd_hermitian, svdvals};
