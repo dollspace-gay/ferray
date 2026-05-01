@@ -1,0 +1,10 @@
+{
+  "uuid": "756773d2-1d37-4b7d-b600-49523ccf3438",
+  "issue_uuid": "9c7cb25e-77da-4901-bc11-3638ea2a2b0c",
+  "author": "doll-agent",
+  "content": "Add 9 large/small coefficient magnitude tests in power.rs:\n- eval_large_coefficients_1e15: 1e15 + 2e15*x at x=1.\n- eval_small_coefficients_1e_minus_15: 1e-15 + 2e-15*x.\n- add_huge_magnitudes: 1e15 + 1e15 = 2e15 component-wise.\n- mul_tiny_magnitudes_1e_minus_15: (1e-15+1e-15*x)^2 = 1e-30 + 2e-30*x + 1e-30*x^2.\n- trim_large_tolerance_drops_small_coefficients: 1e-12 dropped at 1e-6 tol.\n- trim_tight_tolerance_preserves_small_coefficients: 1e-12 kept at 1e-15 tol.\n- eval_mixed_magnitudes_1e15_and_1e_minus_15: leading-term dominance.\n- deriv_large_coefficients: 3e15 x^2 -> 6e15 x.\n- add_precision_preserved_huge_minus_huge: huge-cancellation behavior.",
+  "created_at": "2026-05-01T20:49:46.589488970Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA+XEXEcAzvSW2lBbvnPKCcMapafc7RcffUZo2gycyUte5U9mWJysrgZuo7jbkug5YxS7d/nQ1ljHtPUoRV+n4Bg=="
+}
