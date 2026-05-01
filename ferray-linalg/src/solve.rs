@@ -93,6 +93,37 @@ pub fn solve<T: LinalgFloat>(
     Ok(result)
 }
 
+/// Dynamic-rank wrapper for [`solve`] (#411).
+///
+/// Accepts `a` as `IxDyn` (rather than `Ix2`) and validates rank +
+/// squareness at runtime. Useful for callers that have arrays in
+/// dynamic-rank form already (e.g. from a deserialization path or a
+/// user-facing API) and don't want to round-trip through Ix2 just to
+/// call `solve`.
+///
+/// # Errors
+/// - `FerrayError::ShapeMismatch` if `a` is not 2-D or not square.
+/// - Same errors as [`solve`] for the actual factorization.
+pub fn solve_dyn<T: LinalgFloat>(
+    a: &Array<T, IxDyn>,
+    b: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>> {
+    let a_shape = a.shape();
+    if a_shape.len() != 2 {
+        return Err(FerrayError::shape_mismatch(format!(
+            "solve_dyn requires a 2-D matrix A, got {}-D",
+            a_shape.len()
+        )));
+    }
+    // Reshape A into the typed Ix2 form expected by solve(). The
+    // call to to_vec_flat materialises the data; that's a single
+    // copy that the typed solve() would have triggered anyway via
+    // its faer_bridge step.
+    let a_data: Vec<T> = a.to_vec_flat();
+    let a_2d = Array::<T, Ix2>::from_vec(Ix2::new([a_shape[0], a_shape[1]]), a_data)?;
+    solve(&a_2d, b)
+}
+
 /// Compute the least-squares solution to `A @ x = b`.
 ///
 /// Returns `(x, residuals, rank, singular_values)`.
@@ -1288,5 +1319,37 @@ mod tests {
         let d: Vec<f64> = x.iter().copied().collect();
         assert!((d[0] - 3.0).abs() < 1e-10);
         assert!((d[1] - 4.0).abs() < 1e-10);
+    }
+
+    // ----- solve_dyn (#411) ---------------------------------------------
+
+    #[test]
+    fn solve_dyn_2d_a_works() {
+        // [[2, 1], [1, 3]] * x = [4, 7] → x = [1, 2].
+        let a = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![2.0, 1.0, 1.0, 3.0],
+        )
+        .unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![4.0, 7.0]).unwrap();
+        let x = solve_dyn(&a, &b).unwrap();
+        assert_eq!(x.shape(), &[2]);
+        let d: Vec<f64> = x.iter().copied().collect();
+        assert!((d[0] - 1.0).abs() < 1e-10);
+        assert!((d[1] - 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn solve_dyn_rejects_non_2d_a() {
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1.0, 2.0, 3.0]).unwrap();
+        assert!(solve_dyn(&a, &b).is_err());
+    }
+
+    #[test]
+    fn solve_dyn_rejects_non_square_a() {
+        let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0; 6]).unwrap();
+        let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0, 2.0]).unwrap();
+        assert!(solve_dyn(&a, &b).is_err());
     }
 }

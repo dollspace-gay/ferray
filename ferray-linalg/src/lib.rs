@@ -90,7 +90,7 @@ pub use decomp::{
 // Solving and inversion (Section 8.3)
 pub use solve::{
     inv, inv_batched, lstsq, matrix_power, matrix_power_batched, pinv, pinv_batched, solve,
-    solve_batched, tensorinv, tensorsolve,
+    solve_batched, solve_dyn, tensorinv, tensorsolve,
 };
 
 // Norms and measures (Section 8.4)
