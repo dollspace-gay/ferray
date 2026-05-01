@@ -1,0 +1,10 @@
+{
+  "uuid": "e5698c88-feb3-4b74-8d83-25d70c807f1f",
+  "issue_uuid": "b9f9f107-2f90-42e3-b707-d443038a70c2",
+  "author": "doll-agent",
+  "content": "Done. The fragility was that data_ptr lived in parallel with the mmap field — a future refactor (taking ownership of mmap, splitting the pointer into a separate struct, reordering fields) could break the unsafe invariant silently.\n\nFix: replace stored *const T / *mut T pointers with derived data_ptr() / data_ptr_mut() methods that re-compute from self.mmap.as_ptr() on each call. The pointer can no longer exist without going through the live mmap field, making the invariant structural.\n\nKnock-on:\n- as_slice / as_slice_mut drop the const fn qualifier (memmap2 as_ptr isn't const-callable). Mmap construction is runtime-only anyway, so const wasn't reachable in practice.\n- Alignment check at construction uses a one-shot probe pointer.\n- _mmap renamed to mmap since it's now used.\n\nferray-io: 93 tests pass, clippy clean. Public surface for slice/view/flush/shape is unchanged. Commit b629f5d4.",
+  "created_at": "2026-05-01T20:22:16.031960125Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAm7oURL01tqBU7jXPMZvdIuDM25l3Ty5bKLCLEl98ac8e9YeqlkOH9t3DDTs8gg4ApJjONOps6tKXzUHCRt2PCA=="
+}
