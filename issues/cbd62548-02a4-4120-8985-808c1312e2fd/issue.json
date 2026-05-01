@@ -3,11 +3,12 @@
   "display_id": 268,
   "title": "ferray-ma: count_masked ignores axis parameter",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nmask_ops.rs L82-88: _axis accepted but ignored. Silent footgun.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:57:12.663772580Z",
-  "updated_at": "2026-03-25T15:57:25.171033791Z",
+  "updated_at": "2026-05-01T21:11:53.649389808Z",
+  "closed_at": "2026-05-01T21:11:53.649389808Z",
   "labels": [
     "refactor",
     "qa-audit"
