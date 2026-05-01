@@ -1,0 +1,10 @@
+{
+  "uuid": "0be68aa7-b7df-430a-a1b6-8b2538be1424",
+  "issue_uuid": "2673b007-27b0-494b-8fda-7629c5b71733",
+  "author": "doll-agent",
+  "content": "Done. ferray_core::Array<T, D> already supported serde via array/serde_impl, but StringArray<D> didn't - strings couldn't be persisted alongside numeric arrays.\n\nAdded Serialize and Deserialize impls in src/serde_impl.rs mirroring ferray-core's pattern: { 'shape': [...], 'data': [...] } row-major. Deserialize validates rank against D::NDIM and rebuilds via D::from_dim_slice.\n\nAdded serde as regular dependency (matching ferray-core's unconditional exposure) and serde_json as dev-dep.\n\n6 tests covering 1D/2D/IxDyn round-trips, unicode preservation, rank/size mismatch errors. ferray-strings: 140 -> 146 lib tests, clippy clean. Commit 4532cba8.",
+  "created_at": "2026-05-01T21:49:08.765373818Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA+k4jvSx7nH59dKlpTpexG4tN/ypxVz6P05WlvkuCembY7EczWo1cT/PurxV3u81G1VrP8Tz7S75tjt46UE+lDg=="
+}
