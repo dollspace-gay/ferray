@@ -1,0 +1,10 @@
+{
+  "uuid": "5a405dd2-a54a-4727-8579-44435102be50",
+  "issue_uuid": "e9b39323-27fa-44bf-a511-6215ebeaf4bb",
+  "author": "doll-agent",
+  "content": "Parent epic complete: ~310+ NumPy functions bound across phases 0-4 + the entire long-tail follow-up sweep, F-contiguous round-trip fix landed in both ferray-numpy-interop and ferray-core (#698), CI wheel matrix configured (20 cells × 4 Python versions on Linux/macOS/Windows + sdist + OIDC trusted publishing on tag) (#690), repo-local Claude skills written for binding patterns / NumPy parity / Rust conventions (#691). 525/525 ferray-python pytest passing, cargo clippy -D warnings clean across all touched crates. Workspace bumped to 0.3.2 — ready to tag ferray-python-v0.3.2 once the PyPI pending-publisher is registered. All 23 originally-filed phase-N follow-ups (#692-#714) closed. Coverage matrix and architecture documented in ferray-python/README.md; release process documented in ferray-python/RELEASING.md.",
+  "created_at": "2026-05-01T18:55:42.615231780Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA1IpsanyVWWu7CyZtnWsqAz0dwydzr8iiwkfTVCjEGjUB0fqtan35UZyne1pcIc3ObJQZChYwpOhUYuIxN/AzAg=="
+}
