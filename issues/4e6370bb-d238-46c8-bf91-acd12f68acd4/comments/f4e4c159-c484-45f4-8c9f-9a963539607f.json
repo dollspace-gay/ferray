@@ -1,0 +1,10 @@
+{
+  "uuid": "f4e4c159-c484-45f4-8c9f-9a963539607f",
+  "issue_uuid": "4e6370bb-d238-46c8-bf91-acd12f68acd4",
+  "author": "doll-agent",
+  "content": "Already implemented. The issue's claim that 'ferray has no einsum anywhere in the workspace' is stale.\n\nferray_linalg::einsum at ferray-linalg/src/products/einsum/mod.rs supports:\n- Subscript notation parsing (parse_subscripts).\n- 2-operand strategy: Matmul shortcut, Tensordot shortcut, generic fallback.\n- Pairwise contraction for 3+ operands (#102), reducing chain 'ij,jk,kl->il' from O(n^k) to sum of O(n^3) matmul-shaped costs.\n- Generic contraction fallback.\n\nRe-exported from the ferray meta-crate. Tests cover trace, matmul, tensordot, batch matmul, multi-operand pairwise.\n\nClosing as already-resolved.",
+  "created_at": "2026-05-01T22:46:21.142388521Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAo6Jx8rFOD2Rq8D7Rrqi6HlHHt/YC4uvOhf22xDmwFP+KbaHeQuetBsA3lCWQpT4jLVxAx8PqmVZADYhYl2U/DA=="
+}
