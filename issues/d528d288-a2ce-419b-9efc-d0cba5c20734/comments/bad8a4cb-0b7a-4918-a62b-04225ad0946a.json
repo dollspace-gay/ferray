@@ -1,0 +1,10 @@
+{
+  "uuid": "bad8a4cb-0b7a-4918-a62b-04225ad0946a",
+  "issue_uuid": "d528d288-a2ce-419b-9efc-d0cba5c20734",
+  "author": "doll-agent",
+  "content": "CI wheels delivered. New file: .github/workflows/ferray-python-wheels.yml — a 5-job matrix workflow that builds 20 wheel cells (Linux/macOS/Windows × Python 3.10/3.11/3.12/3.13, plus dual-arch on Linux/macOS) plus an sdist. New file: ferray-python/RELEASING.md documents the tag-based release process. Highlights: (1) Trusted publishing via PyPI OIDC — no API token in repo secrets, the workflow's id-token + environment=pypi declaration is enough once a pending publisher is configured at pypi.org/manage/account/publishing/. (2) Per-version wheels (not abi3) for minimal call overhead in a numerical library. (3) Smoke test on every native build runs ferray.zeros, ferray.array_equal, ferray.sin to verify import + basic correctness before upload. (4) Tag scheme 'ferray-python-vX.Y.Z' so this doesn't clash with future Rust-crate-only tags in the workspace. (5) workflow_dispatch lets a maintainer trigger a full matrix build on demand. (6) Concurrency group cancels in-flight runs on the same branch when a new commit lands. YAML validated. ferray-python README updated to point at PyPI install instructions and RELEASING.md. Local state: 525/525 pytest still passing, cargo clippy clean. Pre-merge action items: (a) add the PyPI pending publisher, (b) verify the workflow runs successfully on a PR before the first tag.",
+  "created_at": "2026-05-01T18:40:39.321393580Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAGivCWE21ywd2drfHv/KYyogkbMPe/ouWUouBWGUlosWEJKDvkoQ6ai3XKTyxNFQgtIJpXbvv13LnJuiq0t9tAg=="
+}
