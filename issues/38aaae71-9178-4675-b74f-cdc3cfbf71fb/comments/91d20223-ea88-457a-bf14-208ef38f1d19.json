@@ -1,0 +1,10 @@
+{
+  "uuid": "91d20223-ea88-457a-bf14-208ef38f1d19",
+  "issue_uuid": "38aaae71-9178-4675-b74f-cdc3cfbf71fb",
+  "author": "doll-agent",
+  "content": "Phase-1 long tail #694 delivered: pad (constant/edge/reflect/symmetric/wrap modes), tile, repeat, delete, insert, append, resize, trim_zeros. All bound at top-level matching numpy.* convention. pad accepts int/tuple/sequence pad_width. linear_ramp/maximum/minimum/mean/median pad modes deferred. Per-element repeat counts deferred (only scalar 'repeats' bound). 525+ pytest still green.",
+  "created_at": "2026-05-01T17:43:29.440252728Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAcnOBk2fwCtorLfPa0y1FCmaPQBeQp6FcKb1zRi/NZbNrr1EG5qW8BacZqbAKli97/UOy1c/iVnq3R9Z6rrBODA=="
+}
