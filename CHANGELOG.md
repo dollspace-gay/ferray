@@ -12,6 +12,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-01
+
+### Added
+
+- ferray-window: 9 new windows extending the existing bartlett/blackman/hamming/hanning/kaiser
+  set with the SciPy / `torch.signal.windows` extras: `cosine`, `exponential` (with optional
+  centre + tau), `gaussian` (configurable std), `general_cosine` (arbitrary cosine-sum
+  coefficients — recovers Hann, Blackman, etc.), `general_hamming` (alpha-parameterised),
+  `nuttall` (4-term minimum-derivative), `parzen` (cubic B-spline), `taylor` (Carrara &
+  Goodman with `nbar`/`sll`/`norm` knobs), `tukey` (cosine-tapered, `alpha` ∈ [0, 1]).
+  All return `Array<f64, Ix1>` matching the existing convention; 22 new tests cover
+  endpoints, symmetry, equivalence with the canonical-cosine forms (Hann ≡ Tukey(1) ≡
+  general_hamming(0.5), classical Blackman ≡ general_cosine([0.42, 0.5, 0.08])), and
+  parameter-validation error paths. (#683)
+
+### Workspace
+
+- All workspace crates bumped from 0.3.0 → 0.3.1 to ship the new windows.
+
 ## [0.3.0] - 2026-04-30
 
 ### Performance

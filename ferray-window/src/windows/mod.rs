@@ -1,7 +1,10 @@
 // ferray-window: Window functions for signal processing and spectral analysis
 //
-// Implements NumPy-equivalent window functions: bartlett, blackman, hamming,
-// hanning, and kaiser. Each returns an Array1<f64> of the specified length M.
+// Implements NumPy- and SciPy-equivalent window functions:
+//   - bartlett, blackman, hamming, hanning, kaiser (NumPy core)
+//   - cosine, exponential, gaussian, general_cosine, general_hamming,
+//     nuttall, parzen, taylor, tukey (SciPy / torch.signal.windows extras)
+// Each returns an Array1<f64> of length M.
 
 // Window-function coefficients (Blackman 0.42/0.5/0.08, Hamming 0.54/0.46,
 // Kaiser modified-Bessel I0 series) are textbook constants reproduced
@@ -148,6 +151,282 @@ pub fn kaiser(m: usize, beta: f64) -> FerrayResult<Array<f64, Ix1>> {
         let t = (n as f64 - alpha) / alpha;
         let arg = beta * (1.0 - t * t).max(0.0).sqrt();
         bessel_i0_scalar::<f64>(arg) / i0_beta
+    })
+}
+
+// ===========================================================================
+// SciPy-extended windows (cosine, exponential, gaussian, general_cosine,
+// general_hamming, nuttall, parzen, taylor, tukey).
+//
+// All are symmetric ("sym=True" in scipy parlance); a non-symmetric "periodic"
+// variant can be obtained by computing window of length m+1 and dropping the
+// last sample (NumPy convention).
+// ===========================================================================
+
+/// Half-cycle cosine window (also known as the "sine" window).
+///
+/// `w(n) = sin(pi * (n + 0.5) / M)` for `n = 0..M-1`.
+///
+/// Mirrors `scipy.signal.windows.cosine` /
+/// `torch.signal.windows.cosine`.
+pub fn cosine(m: usize) -> FerrayResult<Array<f64, Ix1>> {
+    if m == 0 {
+        return Array::from_vec(Ix1::new([0]), vec![]);
+    }
+    if m == 1 {
+        return Array::from_vec(Ix1::new([1]), vec![1.0]);
+    }
+    let mf = m as f64;
+    gen_window(m, |n| (PI * (n as f64 + 0.5) / mf).sin())
+}
+
+/// Exponentially decaying window centred on `center` with time-constant `tau`.
+///
+/// `w(n) = exp(-|n - center| / tau)`. If `center` is `None`, defaults to
+/// the geometric centre `(M - 1) / 2`. `tau` must be > 0.
+///
+/// Mirrors `scipy.signal.windows.exponential` /
+/// `torch.signal.windows.exponential`.
+pub fn exponential(m: usize, center: Option<f64>, tau: f64) -> FerrayResult<Array<f64, Ix1>> {
+    if !tau.is_finite() || tau <= 0.0 {
+        return Err(FerrayError::invalid_value(format!(
+            "exponential: tau must be positive and finite, got {tau}"
+        )));
+    }
+    let centre = center.unwrap_or((m.saturating_sub(1)) as f64 / 2.0);
+    gen_window(m, |n| (-((n as f64) - centre).abs() / tau).exp())
+}
+
+/// Gaussian window with standard deviation `std`.
+///
+/// `w(n) = exp(-((n - (M-1)/2) / std)^2 / 2)`. `std` must be > 0.
+///
+/// Mirrors `scipy.signal.windows.gaussian` /
+/// `torch.signal.windows.gaussian`.
+pub fn gaussian(m: usize, std: f64) -> FerrayResult<Array<f64, Ix1>> {
+    if !std.is_finite() || std <= 0.0 {
+        return Err(FerrayError::invalid_value(format!(
+            "gaussian: std must be positive and finite, got {std}"
+        )));
+    }
+    let centre = (m.saturating_sub(1)) as f64 / 2.0;
+    gen_window(m, |n| {
+        let z = ((n as f64) - centre) / std;
+        (-0.5 * z * z).exp()
+    })
+}
+
+/// Generalized cosine sum window: `w(n) = Σ_k (-1)^k a[k] cos(2π k n / (M-1))`.
+///
+/// `coeffs` is the slice `[a_0, a_1, a_2, ...]`. Setting `[0.5, 0.5]` gives
+/// the Hann window; `[0.42, 0.5, 0.08]` gives the classical Blackman.
+///
+/// Mirrors `scipy.signal.windows.general_cosine` /
+/// `torch.signal.windows.general_cosine`.
+pub fn general_cosine(m: usize, coeffs: &[f64]) -> FerrayResult<Array<f64, Ix1>> {
+    if coeffs.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "general_cosine: coeffs must not be empty",
+        ));
+    }
+    let denom = (m.saturating_sub(1)) as f64;
+    let coeffs = coeffs.to_vec();
+    gen_window(m, |n| {
+        let nf = n as f64;
+        let mut sum = 0.0_f64;
+        for (k, &a) in coeffs.iter().enumerate() {
+            let sign = if k % 2 == 0 { 1.0 } else { -1.0 };
+            sum += sign * a * (2.0 * PI * (k as f64) * nf / denom).cos();
+        }
+        sum
+    })
+}
+
+/// Generalized Hamming window: `w(n) = α - (1 - α) cos(2π n / (M - 1))`.
+///
+/// `alpha = 0.5` gives the Hann window; `alpha = 25/46 ≈ 0.5435` gives a
+/// "perfect" Hamming (NumPy uses 0.54 by tradition).
+///
+/// Mirrors `scipy.signal.windows.general_hamming` /
+/// `torch.signal.windows.general_hamming`.
+pub fn general_hamming(m: usize, alpha: f64) -> FerrayResult<Array<f64, Ix1>> {
+    if !alpha.is_finite() {
+        return Err(FerrayError::invalid_value(format!(
+            "general_hamming: alpha must be finite, got {alpha}"
+        )));
+    }
+    let denom = (m.saturating_sub(1)) as f64;
+    gen_window(m, |n| {
+        alpha - (1.0 - alpha) * (2.0 * PI * (n as f64) / denom).cos()
+    })
+}
+
+/// 4-term Nuttall window with continuous first derivative.
+///
+/// Coefficients [0.3635819, 0.4891775, 0.1365995, 0.0106411] (Nuttall 1981,
+/// "minimum 4-term Blackman-Harris with continuous first derivative").
+///
+/// Mirrors `scipy.signal.windows.nuttall` /
+/// `torch.signal.windows.nuttall`.
+pub fn nuttall(m: usize) -> FerrayResult<Array<f64, Ix1>> {
+    general_cosine(m, &[0.3635819, 0.4891775, 0.1365995, 0.0106411])
+}
+
+/// Parzen (de la Vallée Poussin) window: a piecewise-cubic B-spline.
+///
+/// Mirrors `scipy.signal.windows.parzen` / `torch.signal.windows.parzen`.
+pub fn parzen(m: usize) -> FerrayResult<Array<f64, Ix1>> {
+    if m == 0 {
+        return Array::from_vec(Ix1::new([0]), vec![]);
+    }
+    if m == 1 {
+        return Array::from_vec(Ix1::new([1]), vec![1.0]);
+    }
+    // Parzen formula: |x| in [0, M/4]: 1 - 6 r^2 + 6 |r|^3,
+    //                |x| in (M/4, M/2]: 2 (1 - |r|)^3, where r = x / (M/2).
+    let half = m as f64 / 2.0;
+    gen_window(m, |n| {
+        let x = (n as f64) - (m as f64 - 1.0) / 2.0;
+        let r = x.abs() / half;
+        if r <= 0.5 {
+            1.0 - 6.0 * r * r + 6.0 * r * r * r
+        } else if r <= 1.0 {
+            let one_minus_r = 1.0 - r;
+            2.0 * one_minus_r * one_minus_r * one_minus_r
+        } else {
+            0.0
+        }
+    })
+}
+
+/// Taylor window with `nbar` near-side lobes and a sidelobe level of `sll`
+/// dB below the main lobe.
+///
+/// `nbar` (typically 4) controls how many sidelobes are constrained at the
+/// design level; `sll` (typically 30) is the desired peak sidelobe
+/// attenuation in **positive** dB. When `norm` is true the window is
+/// normalised so `w[(M-1)/2] = 1`.
+///
+/// Implementation follows Carrara & Goodman, "Symmetric Taylor Window"
+/// (Synthetic Aperture Radar, 1995). For the radar/array-processing
+/// applications where Taylor windows are used, `nbar = 4`, `sll = 30`
+/// gives equiripple sidelobes ~30 dB down — the usual default.
+///
+/// Mirrors `scipy.signal.windows.taylor` / `torch.signal.windows.taylor`.
+pub fn taylor(
+    m: usize,
+    nbar: usize,
+    sll: f64,
+    norm: bool,
+) -> FerrayResult<Array<f64, Ix1>> {
+    if m == 0 {
+        return Array::from_vec(Ix1::new([0]), vec![]);
+    }
+    if m == 1 {
+        return Array::from_vec(Ix1::new([1]), vec![1.0]);
+    }
+    if nbar == 0 {
+        return Err(FerrayError::invalid_value("taylor: nbar must be >= 1"));
+    }
+    if !sll.is_finite() {
+        return Err(FerrayError::invalid_value("taylor: sll must be finite"));
+    }
+    // R = 10^(sll/20), B = (1/π) acosh(R)
+    let r = 10.0_f64.powf(sll / 20.0);
+    let b = r.acosh() / PI;
+    let nbar_f = nbar as f64;
+    // sigma^2 chosen so the (nbar)-th zero of the Taylor pattern is at
+    // n = nbar (Carrara & Goodman eq. 13).
+    let sigma2 = (nbar_f * nbar_f) / (b * b + (nbar_f - 0.5) * (nbar_f - 0.5));
+
+    // Compute coefficients F_m for m = 1..nbar-1.
+    let mut f_coeffs = Vec::with_capacity(nbar.saturating_sub(1));
+    for mm in 1..nbar {
+        let mmf = mm as f64;
+        // Numerator: ((-1)^(m+1) / 2) * Π_{n=1..nbar-1} [1 - m^2 / (sigma^2 * (B^2 + (n - 0.5)^2))]
+        // Denominator: Π_{n=1..nbar-1, n != m} [1 - m^2 / n^2]
+        let mut num = 1.0_f64;
+        for n in 1..nbar {
+            let nf = n as f64;
+            num *= 1.0 - mmf * mmf / (sigma2 * (b * b + (nf - 0.5) * (nf - 0.5)));
+        }
+        let sign = if mm % 2 == 0 { -1.0 } else { 1.0 };
+        let mut den = 1.0_f64;
+        for n in 1..nbar {
+            if n == mm {
+                continue;
+            }
+            let nf = n as f64;
+            den *= 1.0 - mmf * mmf / (nf * nf);
+        }
+        // The 0.5 prefactor: F_0 = 1 contributes the constant term, and
+        // each F_m doubles when reflected about zero in the cosine sum,
+        // so we halve the inverse-Fourier coefficients here.
+        f_coeffs.push(0.5 * sign * num / den);
+    }
+
+    let denom = (m - 1) as f64;
+    let arr = gen_window(m, |n| {
+        let xn = (n as f64) - denom / 2.0;
+        let mut w = 1.0_f64;
+        for (idx, &fk) in f_coeffs.iter().enumerate() {
+            let kk = (idx + 1) as f64;
+            w += 2.0 * fk * (2.0 * PI * kk * xn / m as f64).cos();
+        }
+        w
+    })?;
+
+    if !norm {
+        return Ok(arr);
+    }
+    // Normalise so the centre value is 1.
+    let s = arr.as_slice().unwrap().to_vec();
+    let centre_val = if m % 2 == 1 {
+        s[m / 2]
+    } else {
+        // For even M, centre is between two samples — average.
+        0.5 * (s[m / 2 - 1] + s[m / 2])
+    };
+    if centre_val == 0.0 {
+        return Ok(arr); // pathological; leave un-normalised
+    }
+    let normed: Vec<f64> = s.into_iter().map(|v| v / centre_val).collect();
+    Array::from_vec(Ix1::new([m]), normed)
+}
+
+/// Tukey (cosine-tapered) window with taper ratio `alpha` ∈ [0, 1].
+///
+/// `alpha = 0` gives a rectangular window; `alpha = 1` gives a Hann
+/// window. The middle `(1 - alpha) * (M - 1)` samples are unity, and the
+/// edges are tapered with a half-cosine.
+///
+/// Mirrors `scipy.signal.windows.tukey` / `torch.signal.windows.tukey`.
+pub fn tukey(m: usize, alpha: f64) -> FerrayResult<Array<f64, Ix1>> {
+    if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
+        return Err(FerrayError::invalid_value(format!(
+            "tukey: alpha must be in [0, 1], got {alpha}"
+        )));
+    }
+    if m == 0 {
+        return Array::from_vec(Ix1::new([0]), vec![]);
+    }
+    if m == 1 {
+        return Array::from_vec(Ix1::new([1]), vec![1.0]);
+    }
+    if alpha == 0.0 {
+        return Array::from_vec(Ix1::new([m]), vec![1.0; m]);
+    }
+    let denom = (m - 1) as f64;
+    let width = alpha * denom / 2.0;
+    gen_window(m, |n| {
+        let nf = n as f64;
+        if nf < width {
+            0.5 * (1.0 + (PI * (nf / width - 1.0)).cos())
+        } else if nf <= denom - width {
+            1.0
+        } else {
+            0.5 * (1.0 + (PI * ((denom - nf) / width - 1.0)).cos())
+        }
     })
 }
 
@@ -476,5 +755,269 @@ mod tests {
         assert!(kaiser(8, 1000.0).is_err());
         // 700 is still safe.
         assert!(kaiser(8, 700.0).is_ok());
+    }
+
+    // =======================================================================
+    // SciPy-extended windows (cosine, exponential, gaussian, general_cosine,
+    // general_hamming, nuttall, parzen, taylor, tukey).
+    // =======================================================================
+
+    fn close(a: f64, b: f64, tol: f64) -> bool {
+        (a - b).abs() < tol
+    }
+
+    // ----- cosine -----
+
+    #[test]
+    fn cosine_length_and_endpoints() {
+        // cosine(M) = sin(pi(n + 0.5)/M); endpoints are sin(pi/2M) and
+        // sin(pi(M-0.5)/M) — both small but nonzero.
+        let w = cosine(8).unwrap();
+        let s = w.as_slice().unwrap();
+        assert_eq!(s.len(), 8);
+        // Symmetric.
+        for i in 0..4 {
+            assert!(close(s[i], s[7 - i], 1e-14));
+        }
+    }
+
+    #[test]
+    fn cosine_m1_and_m0() {
+        assert_eq!(cosine(0).unwrap().shape(), &[0]);
+        assert_eq!(cosine(1).unwrap().as_slice().unwrap(), &[1.0]);
+    }
+
+    // ----- exponential -----
+
+    #[test]
+    fn exponential_centred_default() {
+        // tau=1, default centre = (M-1)/2 = 3.5 for M=8 — midpoint
+        // between samples 3 and 4.
+        let w = exponential(8, None, 1.0).unwrap();
+        let s = w.as_slice().unwrap();
+        // Symmetric.
+        for i in 0..4 {
+            assert!(close(s[i], s[7 - i], 1e-14));
+        }
+        // Centre samples have largest values.
+        let centre_max = s[3].max(s[4]);
+        for &v in s {
+            assert!(v <= centre_max + 1e-14);
+        }
+    }
+
+    #[test]
+    fn exponential_rejects_nonpositive_tau() {
+        assert!(exponential(8, None, 0.0).is_err());
+        assert!(exponential(8, None, -1.0).is_err());
+        assert!(exponential(8, None, f64::NAN).is_err());
+    }
+
+    // ----- gaussian -----
+
+    #[test]
+    fn gaussian_centre_is_one() {
+        // For odd M, centre sample is exactly 1.
+        let w = gaussian(11, 2.0).unwrap();
+        let s = w.as_slice().unwrap();
+        assert!(close(s[5], 1.0, 1e-14));
+    }
+
+    #[test]
+    fn gaussian_known_value() {
+        // gaussian(7, 1) at n=4: z = (4 - 3) / 1 = 1, exp(-0.5) = 0.6065...
+        let w = gaussian(7, 1.0).unwrap();
+        let s = w.as_slice().unwrap();
+        assert!(close(s[4], (-0.5_f64).exp(), 1e-14));
+    }
+
+    #[test]
+    fn gaussian_rejects_nonpositive_std() {
+        assert!(gaussian(8, 0.0).is_err());
+        assert!(gaussian(8, -1.0).is_err());
+    }
+
+    // ----- general_cosine -----
+
+    #[test]
+    fn general_cosine_with_hann_coeffs_matches_hann() {
+        // [0.5, 0.5] → 0.5 - 0.5 cos(2πn/(M-1)) = Hann.
+        let m = 9;
+        let gc = general_cosine(m, &[0.5, 0.5]).unwrap();
+        let hn = hanning(m).unwrap();
+        for i in 0..m {
+            assert!(close(
+                gc.as_slice().unwrap()[i],
+                hn.as_slice().unwrap()[i],
+                1e-14,
+            ));
+        }
+    }
+
+    #[test]
+    fn general_cosine_with_blackman_coeffs_matches_blackman() {
+        // [0.42, 0.5, 0.08] → classical Blackman.
+        let m = 9;
+        let gc = general_cosine(m, &[0.42, 0.5, 0.08]).unwrap();
+        let bk = blackman(m).unwrap();
+        for i in 0..m {
+            assert!(close(
+                gc.as_slice().unwrap()[i],
+                bk.as_slice().unwrap()[i],
+                1e-12,
+            ));
+        }
+    }
+
+    #[test]
+    fn general_cosine_rejects_empty_coeffs() {
+        assert!(general_cosine(8, &[]).is_err());
+    }
+
+    // ----- general_hamming -----
+
+    #[test]
+    fn general_hamming_alpha_half_matches_hann() {
+        let m = 9;
+        let gh = general_hamming(m, 0.5).unwrap();
+        let hn = hanning(m).unwrap();
+        for i in 0..m {
+            assert!(close(
+                gh.as_slice().unwrap()[i],
+                hn.as_slice().unwrap()[i],
+                1e-14,
+            ));
+        }
+    }
+
+    #[test]
+    fn general_hamming_alpha_054_matches_hamming() {
+        let m = 9;
+        let gh = general_hamming(m, 0.54).unwrap();
+        let hm = hamming(m).unwrap();
+        for i in 0..m {
+            assert!(close(
+                gh.as_slice().unwrap()[i],
+                hm.as_slice().unwrap()[i],
+                1e-14,
+            ));
+        }
+    }
+
+    // ----- nuttall -----
+
+    #[test]
+    fn nuttall_endpoints_are_small() {
+        // Nuttall is engineered to have very low sidelobes; endpoints
+        // are O(1e-3) for typical M.
+        let w = nuttall(64).unwrap();
+        let s = w.as_slice().unwrap();
+        assert!(s[0].abs() < 1e-2);
+        assert!(s[s.len() - 1].abs() < 1e-2);
+    }
+
+    #[test]
+    fn nuttall_is_symmetric() {
+        let m = 33;
+        let w = nuttall(m).unwrap();
+        let s = w.as_slice().unwrap();
+        for i in 0..m / 2 {
+            assert!(close(s[i], s[m - 1 - i], 1e-14));
+        }
+    }
+
+    // ----- parzen -----
+
+    #[test]
+    fn parzen_endpoints_are_zero() {
+        let w = parzen(16).unwrap();
+        let s = w.as_slice().unwrap();
+        // Outer edge of Parzen has very small value (cubic falloff).
+        assert!(s[0].abs() < 1e-2);
+        assert!(s[s.len() - 1].abs() < 1e-2);
+    }
+
+    #[test]
+    fn parzen_centre_is_one() {
+        // For odd M, centre is at sample (M-1)/2; r = 0 → w = 1.
+        let w = parzen(13).unwrap();
+        let s = w.as_slice().unwrap();
+        assert!(close(s[6], 1.0, 1e-14));
+    }
+
+    #[test]
+    fn parzen_is_symmetric() {
+        let m = 21;
+        let w = parzen(m).unwrap();
+        let s = w.as_slice().unwrap();
+        for i in 0..m / 2 {
+            assert!(close(s[i], s[m - 1 - i], 1e-14));
+        }
+    }
+
+    // ----- taylor -----
+
+    #[test]
+    fn taylor_default_normalised_centre_is_one() {
+        // With norm=true the centre sample is 1.0.
+        let w = taylor(33, 4, 30.0, true).unwrap();
+        let s = w.as_slice().unwrap();
+        assert!(close(s[16], 1.0, 1e-12));
+    }
+
+    #[test]
+    fn taylor_is_symmetric() {
+        let m = 33;
+        let w = taylor(m, 4, 30.0, true).unwrap();
+        let s = w.as_slice().unwrap();
+        for i in 0..m / 2 {
+            assert!(close(s[i], s[m - 1 - i], 1e-12));
+        }
+    }
+
+    #[test]
+    fn taylor_rejects_nbar_zero() {
+        assert!(taylor(8, 0, 30.0, true).is_err());
+        assert!(taylor(8, 4, f64::NAN, true).is_err());
+    }
+
+    // ----- tukey -----
+
+    #[test]
+    fn tukey_alpha_zero_is_rectangular() {
+        let w = tukey(8, 0.0).unwrap();
+        for &v in w.as_slice().unwrap() {
+            assert!(close(v, 1.0, 1e-14));
+        }
+    }
+
+    #[test]
+    fn tukey_alpha_one_matches_hann() {
+        // alpha=1 → fully Hann-shaped.
+        let m = 9;
+        let tk = tukey(m, 1.0).unwrap();
+        let hn = hanning(m).unwrap();
+        for i in 0..m {
+            assert!(close(
+                tk.as_slice().unwrap()[i],
+                hn.as_slice().unwrap()[i],
+                1e-12,
+            ));
+        }
+    }
+
+    #[test]
+    fn tukey_centre_is_one() {
+        let m = 21;
+        let w = tukey(m, 0.5).unwrap();
+        // Wide flat-top region: middle must be 1.
+        assert!(close(w.as_slice().unwrap()[m / 2], 1.0, 1e-14));
+    }
+
+    #[test]
+    fn tukey_rejects_invalid_alpha() {
+        assert!(tukey(8, -0.1).is_err());
+        assert!(tukey(8, 1.1).is_err());
+        assert!(tukey(8, f64::NAN).is_err());
     }
 }

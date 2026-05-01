@@ -35,7 +35,10 @@ pub mod functional;
 pub mod windows;
 
 // Re-export window functions at crate root for convenience
-pub use windows::{bartlett, blackman, hamming, hanning, kaiser};
+pub use windows::{
+    bartlett, blackman, cosine, exponential, gaussian, general_cosine, general_hamming, hamming,
+    hanning, kaiser, nuttall, parzen, taylor, tukey,
+};
 
 // Re-export functional utilities at crate root. `vectorize_nd` was
 // removed as a redundant alias for `vectorize` — vectorize itself is
