@@ -1,0 +1,10 @@
+{
+  "uuid": "f1700a66-39ce-4931-baf3-b8ff261b30b1",
+  "issue_uuid": "301f8ed2-409e-4e69-b73a-f3bf7b23328a",
+  "author": "doll-agent",
+  "content": "Add 4 non-uniform-weight tests in fitting::tests:\n- fit_weighted_outlier_suppression: leverage outlier at x=4 with weight 1e-9 recovers the inlier line.\n- fit_weighted_zero_weight_excludes_point: w[i]=0 produces same fit as omitting the point.\n- fit_weighted_scaling_invariance: w * 7.5 yields identical coefficients (scalar factors out).\n- fit_weighted_emphasizes_specific_point: heavy weight (1e6) pins the fit through that point.",
+  "created_at": "2026-05-01T20:59:21.245544669Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAloki+Zhc+9KgZ/xamDjL+anukJNO5C3TEj24YQlEDyfA96D2Y9TEj30SVruiBBp2ta4h9QZ2gqNevftsQ3TvCQ=="
+}
