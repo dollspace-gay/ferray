@@ -1,0 +1,10 @@
+{
+  "uuid": "eeebfa1d-d17e-49ad-aed8-2cf1a30edf04",
+  "issue_uuid": "18f21157-0d62-421d-b734-60b2cdd52c21",
+  "author": "doll-agent",
+  "content": "Three repo-local Claude skills delivered in .claude/skills/ — each is a single markdown file with YAML frontmatter that the runtime auto-injects when a user prompt matches the description field. (1) ferray-python-binding (~5KB) — covers the dispatch-macro pattern, marshalling helpers, registration in lib.rs, sys.modules wiring for submodules, pyclass form (Polynomial/MaskedArray/DualNumber/Generator), and ~10 named pitfalls (PyO3 0.28 from_py_object deprecation, PyAnyMethods::downcast→cast, F-contiguous, complex bypassing NpElement, sys.modules dance for submodule imports, etc). (2) ferray-numpy-parity (~5.5KB) — dtype-promotion rules table, shape rules, pytest parity-test patterns with tolerances per dtype, NumPy 2.0 deprecations history, when-to-defer guidance. (3) ferray-rust-conventions (~6KB) — workspace shape, Element/NpElement matrix, error-handling patterns, SIMD via pulp (NOT std::simd), test layers (unit + oracle + property + fuzz), naming and dependency conventions. Plus a skills/README.md explaining how agents use them and how to add more. The skills are designed evergreen — they capture stable guidance, not changelogs. ferray-python: 525/525 still passing. The parent epic #684 is now ready to close: parity surface complete, F-contiguous fix landed, CI wheels configured, agent tooling ready.",
+  "created_at": "2026-05-01T18:46:13.595331825Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAefyuM4l5XW2ZZiOmT5zM4kP7eAdUGY+Z5YluihJO4O7d1aWQJLnt0l8cfIKxA06UiAFSKue88idMKU8yotl5Dw=="
+}
