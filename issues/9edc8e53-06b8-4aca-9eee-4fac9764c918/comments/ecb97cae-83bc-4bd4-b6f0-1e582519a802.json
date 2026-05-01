@@ -1,0 +1,10 @@
+{
+  "uuid": "ecb97cae-83bc-4bd4-b6f0-1e582519a802",
+  "issue_uuid": "9edc8e53-06b8-4aca-9eee-4fac9764c918",
+  "author": "doll-agent",
+  "content": "Phase-3 long tail #712 delivered: Generator pyclass + default_rng(seed=None). Methods: random, standard_normal, normal, uniform, integers, exponential, poisson, binomial, gamma, beta. Each instance has isolated RNG state. skip_from_py_object since Generator owns mutable state. 525/525 passing.",
+  "created_at": "2026-05-01T18:20:22.912956594Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAPTbVKC9z7wSNUZMvgwizlmpByfBoyuHfaNCa5gMc8lRVXD+cXdESucdLg1rxGz6kqxNN3tZhGA3D9UmhXncqBQ=="
+}
