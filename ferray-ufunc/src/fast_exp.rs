@@ -20,8 +20,30 @@
 /// Fast exp(x) using Even/Odd Remez decomposition with expm1 reconstruction.
 ///
 /// Returns e^x with ≤1 ULP accuracy (faithfully rounded). Handles all IEEE 754
-/// edge cases: NaN, ±inf, overflow, underflow. Subnormal outputs (x < -708.4)
-/// are flushed to zero.
+/// edge cases: NaN, ±inf, overflow, underflow.
+///
+/// # ⚠️ Subnormal handling (#401)
+///
+/// **Subnormal outputs (`x < -708.4`) are flushed to zero.** This is a
+/// deliberate accuracy-vs-speed trade-off: numpy's `np.exp` and Rust's
+/// `f64::exp` produce correctly-rounded subnormal results down to the
+/// minimum representable f64 (~5e-324, achieved at `x ≈ -745.13`),
+/// while this fast path emits zero.
+///
+/// **When this matters.** Algorithms like log-sum-exp, softmax with
+/// large negative logits, and probabilistic graphical models can hit
+/// inputs in the (-745, -708.4) subnormal range. Silent flushing to
+/// zero produces a 0/0 NaN downstream. If your inputs may sit in
+/// that range, prefer the standard library:
+///
+/// ```ignore
+/// // Subnormal-preserving slow path:
+/// let y = x.exp();   // f64::exp is correctly-rounded down to ~5e-324.
+/// ```
+///
+/// or apply the standard log-sum-exp shifting trick (subtract max
+/// before exponentiating) which keeps every intermediate above the
+/// subnormal range.
 #[inline(always)]
 #[allow(
     clippy::excessive_precision,
@@ -118,6 +140,15 @@ pub fn exp_fast_batch_f64(input: &[f64], output: &mut [f64]) {
 ///
 /// f32 has only 24 mantissa bits, so the f64 result rounded to f32 is
 /// correctly rounded for all finite f32 inputs.
+///
+/// # ⚠️ Subnormal handling (#401)
+///
+/// Inherits the f64 path's subnormal flush: f32 inputs below ~-87.3
+/// (where the f64 result before downcast would be subnormal in f64)
+/// flush to zero. f32 subnormals are reachable from larger inputs
+/// (~-103 to -88), so the f32 wrapper actually loses subnormal range
+/// the f64 path would have preserved. Use `f32::exp` directly if you
+/// need subnormal-correct f32 exp.
 #[inline(always)]
 #[must_use]
 pub fn exp_fast_f32(x: f32) -> f32 {
