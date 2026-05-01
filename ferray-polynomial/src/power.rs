@@ -281,14 +281,31 @@ impl Poly for Polynomial {
     }
 
     fn pow(&self, n: usize) -> Result<Self, FerrayError> {
+        // Binary exponentiation: O(log n) polynomial multiplies versus
+        // the previous O(n) loop (#247).
         if n == 0 {
             return Ok(self.with_same_mapping(vec![1.0]));
         }
-        let mut result = self.clone();
-        for _ in 1..n {
-            result = result.mul(self)?;
+        if n == 1 {
+            return Ok(self.clone());
         }
-        Ok(result)
+        let mut base = self.clone();
+        let mut result: Option<Self> = None;
+        let mut exp = n;
+        while exp > 0 {
+            if exp & 1 == 1 {
+                result = Some(match result.take() {
+                    Some(r) => r.mul(&base)?,
+                    None => base.clone(),
+                });
+            }
+            exp >>= 1;
+            if exp > 0 {
+                base = base.mul(&base)?;
+            }
+        }
+        // n >= 1 guarantees the low-bit path ran at least once.
+        Ok(result.expect("binary exponentiation must produce a result for n >= 1"))
     }
 
     fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrayError> {
@@ -511,6 +528,35 @@ mod tests {
         let p0 = p.pow(0).unwrap();
         assert_eq!(p0.coeffs.len(), 1);
         assert!((p0.coeffs[0] - 1.0).abs() < 1e-14);
+    }
+
+    #[test]
+    fn pow_one_returns_self() {
+        // #247: binary exponentiation has a dedicated n==1 fast path;
+        // the result must be coefficient-equal to self.
+        let p = Polynomial::new(&[1.0, 2.0, 3.0]);
+        let p1 = p.pow(1).unwrap();
+        assert_eq!(p1.coeffs, p.coeffs);
+    }
+
+    #[test]
+    fn pow_high_exponent_matches_naive_loop() {
+        // #247: cross-check binary exponentiation against the naive
+        // O(n) loop for an exponent that exercises both odd and even
+        // bits (n=11 = 0b1011).
+        let p = Polynomial::new(&[1.0, 1.0]); // (1 + x)
+        let result = p.pow(11).unwrap();
+        // (1 + x)^11 expansion: binomial coefficients C(11, k).
+        let expected: [f64; 12] = [
+            1.0, 11.0, 55.0, 165.0, 330.0, 462.0, 462.0, 330.0, 165.0, 55.0, 11.0, 1.0,
+        ];
+        assert_eq!(result.coeffs.len(), 12);
+        for (i, (got, want)) in result.coeffs.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-9,
+                "coeff[{i}] = {got}, expected {want}"
+            );
+        }
     }
 
     #[test]

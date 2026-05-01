@@ -378,14 +378,29 @@ impl Poly for Laguerre {
     }
 
     fn pow(&self, n: usize) -> Result<Self, FerrayError> {
+        // Binary exponentiation (#247) — O(log n) polynomial multiplies.
         if n == 0 {
             return Ok(self.with_same_mapping(vec![1.0]));
         }
-        let mut result = self.clone();
-        for _ in 1..n {
-            result = result.mul(self)?;
+        if n == 1 {
+            return Ok(self.clone());
         }
-        Ok(result)
+        let mut base = self.clone();
+        let mut result: Option<Self> = None;
+        let mut exp = n;
+        while exp > 0 {
+            if exp & 1 == 1 {
+                result = Some(match result.take() {
+                    Some(r) => r.mul(&base)?,
+                    None => base.clone(),
+                });
+            }
+            exp >>= 1;
+            if exp > 0 {
+                base = base.mul(&base)?;
+            }
+        }
+        Ok(result.expect("binary exponentiation must produce a result for n >= 1"))
     }
 
     fn divmod(&self, other: &Self) -> Result<(Self, Self), FerrayError> {
