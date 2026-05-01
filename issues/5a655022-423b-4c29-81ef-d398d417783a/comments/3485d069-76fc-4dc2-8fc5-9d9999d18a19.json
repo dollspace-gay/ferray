@@ -1,0 +1,10 @@
+{
+  "uuid": "3485d069-76fc-4dc2-8fc5-9d9999d18a19",
+  "issue_uuid": "5a655022-423b-4c29-81ef-d398d417783a",
+  "author": "doll-agent",
+  "content": "The dtype_to_arrow / arrow_to_dtype layer already mapped F16 <-> Float16 (added previously). The actual gap was in the ArrowElement marker — half::f16 had no impl, so the generic ToArrow / FromArrow paths couldn't dispatch on it. Add impl_arrow_element!(half::f16, arrow::datatypes::Float16Type) behind #[cfg(feature = 'f16')]. Add a roundtrip_f16 test asserting bit-exact preservation through Arrow Float16.",
+  "created_at": "2026-05-01T22:13:12.045367891Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABABoBHmoXMBGmLaTE2k4+1oE8/ZOYSaT2mPqIG22Ti1/8FZUKcOn/dFAtoVYgaXu4Kbrbr/0rkUeljKWtq9dmIBg=="
+}
