@@ -2,11 +2,12 @@
   "uuid": "26aec598-36f9-47b7-a10f-51729f077ce8",
   "display_id": 704,
   "title": "ferray-python phase 2 follow-up: histogram/histogram2d/histogramdd/bincount/digitize",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T16:38:39.940023904Z",
-  "updated_at": "2026-05-01T16:38:41.111752290Z",
+  "updated_at": "2026-05-01T18:06:17.614294986Z",
+  "closed_at": "2026-05-01T18:06:17.614294986Z",
   "labels": [
     "feature"
   ]
