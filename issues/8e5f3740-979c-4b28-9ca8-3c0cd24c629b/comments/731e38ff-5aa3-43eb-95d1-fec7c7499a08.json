@@ -1,0 +1,10 @@
+{
+  "uuid": "731e38ff-5aa3-43eb-95d1-fec7c7499a08",
+  "issue_uuid": "8e5f3740-979c-4b28-9ca8-3c0cd24c629b",
+  "author": "doll-agent",
+  "content": "Phase-1 long tail #697 delivered: take, take_along_axis, choose, compress, select, place, putmask, extract. select aliased as select_indexing in the facade. place/putmask return new arrays (documented). 525/525 passing.",
+  "created_at": "2026-05-01T17:52:41.517725548Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAtDoOUsphvLRpJ0y4tbZAwpkLMztV0cUKy2czd0cnLdohEU3fT3vkW7I8o52HY8Pjxsen2ZvSqJidrVUhrM7dCA=="
+}
