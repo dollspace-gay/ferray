@@ -1,0 +1,10 @@
+{
+  "uuid": "738018ef-4067-411a-a5fa-f51c28338d14",
+  "issue_uuid": "f0782055-d531-4ee7-aabd-c8783ad78e3d",
+  "author": "doll-agent",
+  "content": "Done — DType::Struct landed at the dtype layer.\n\nDesign: DType::Struct(&'static [FieldDescriptor]) — slice reference (not Arc) keeps DType: Copy intact, avoiding ~100-site by-value rewrite. FerrayRecord derive's field_descriptors() returns the right shape directly:\n    let dt = DType::Struct(<Point as FerrayRecord>::field_descriptors());\n\nUpdates:\n- size_of/alignment compute over fields (lost const-ness).\n- Display emits 'struct[(name, dtype), ...]' matching numpy.\n- promotion::dtype_ord places Struct at ord 200; promote_dtypes returns None for any Struct involvement.\n- DynArray::cast and zeros return InvalidDtype with clear message - the DynArray-side Struct variant is next-step work.\n- FieldDescriptor: derive Hash.\n\n5 tests covering size, alignment, Display, equality+hash, Copy regression-pin.\n\nferray-core: 634 -> 639 lib tests, all passing, clippy clean. Workspace builds clean. Commit 119ebd36.",
+  "created_at": "2026-05-01T23:11:48.832928598Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAVnQnWK9IeZ4aCgFfJrIv1uIOFNcssxE3r4kU851gGPmm4ujhhtydopL4/aNkkzRgBjleYoJMY27BgiRHKOsACA=="
+}
