@@ -1,0 +1,10 @@
+{
+  "uuid": "544b40aa-c2da-4d3c-9aa9-9ee790570dc1",
+  "display_id": 722,
+  "title": "ferray-stats::correlate computes convolution instead of cross-correlation (numpy mismatch)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-01T20:00:42.625781356Z",
+  "updated_at": "2026-05-01T20:00:42.625781356Z"
+}
