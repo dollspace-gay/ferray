@@ -1,0 +1,10 @@
+{
+  "uuid": "5a7c80b8-b5ad-428c-8f71-5a45b13c0a53",
+  "issue_uuid": "58661fcd-aed3-4743-ac0d-d52f1c5ef2df",
+  "author": "doll-agent",
+  "content": "Done. weighted_sample_with_replacement used a build-CDF + binary-search sampler (O(n) setup, O(log n) per sample). Replaced with Vose's alias method: O(n) setup, O(1) per sample (one uniform integer + one uniform float comparison).\n\nSubtle correctness bug avoided: 'while let (Some(s), Some(l)) = (small.pop(), large.pop())' pops both stacks unconditionally and silently drops one element when the other is empty. Used explicit !small.is_empty() && !large.is_empty() guard. The existing choice_with_weights test caught this on the first run.\n\nTests added:\n- weighted_with_replacement_alias_distribution_recovers_probs: 100k samples on uneven 5-bin distribution, empirical frequencies within 1.5% of target.\n- weighted_with_replacement_unnormalized_probs: arbitrary-sum probs reproduce implied distribution.\n\nferray-random: 182 -> 184 tests, all passing, clippy clean. Commit 6d17adc7.",
+  "created_at": "2026-05-01T21:02:52.796132095Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAtYTAtviZgoYcwO02abnAi/eOJV7gXAcP28KmwNIsBNlf7g4gy6xdRqE1pUnxhH2i7A19qMamiFNctDBeA4YbDw=="
+}
