@@ -1,0 +1,10 @@
+{
+  "uuid": "5e859f95-f7c9-4ae2-abe2-3d5e692cea0d",
+  "issue_uuid": "994828c6-0fcf-4e5b-b5af-e29eef4bcf3a",
+  "author": "doll-agent",
+  "content": "Research outcome: keep element-counted strides, decline the byte-stride refactor.\n\nThe constraint: numpy's byte strides enable dtype-erased pointer arithmetic on char* buffers. ferray inherits ndarray's element-counted strides; dtype-erased iteration goes through DynArray's match-over-variants.\n\nWhy byte strides would cost more than they save:\n1. ferray's Element trait is sealed; the universe is closed and fully enumerable. DynArray::iter dispatches once per call - match cost amortizes across the iteration.\n2. Element-typed strides are the basis for all SIMD dispatch (pulp lane counts, contiguous-flat shortcuts). Byte strides would either duplicate the stride machinery or require recomputing element strides at every SIMD entry.\n3. Real numpy use cases (buffer-protocol export, type-erased C interop) already have first-class workarounds: ferray-numpy-interop produces correctly-typed PyArray<T,D>, ascontiguousarray is per-variant, copyto-from-untyped is dtype-level memcpy.\n\nWhat would change the calculus: a future feature that needs erased aggregation (concatenate across DynArrays) or direct Python buffer-protocol ABI without going through PyArray would tip the balance.\n\nFor now: closed-Element + DynArray dispatch is the cheaper bet. Closing as decided.",
+  "created_at": "2026-05-01T22:37:19.057354655Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA7BVs/EQebH7DZ35jYswvEuOXVuaJu9dIxDT6tgQPd6bwyGb7wR/wgiK0fIcxtJEBfKouj9BdHtBOeji+5TkzCA=="
+}
