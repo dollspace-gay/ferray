@@ -7,7 +7,7 @@
 use crate::dtype::DType;
 
 /// Describes a single field within a structured (record) dtype.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FieldDescriptor {
     /// Name of the field.
     pub name: &'static str,

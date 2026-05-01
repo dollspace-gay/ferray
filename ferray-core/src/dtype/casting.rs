@@ -161,6 +161,10 @@ pub const fn min_scalar_type(dt: DType) -> DType {
         // arithmetic-promotion concern, not min-scalar-type.
         DType::DateTime64(_) => DType::DateTime64(super::TimeUnit::Ns),
         DType::Timedelta64(_) => DType::Timedelta64(super::TimeUnit::Ns),
+        // Struct dtypes don't participate in scalar-type promotion;
+        // structured arrays are atomic in this layer (#342). Return
+        // the input dtype unchanged.
+        DType::Struct(_) => dt,
     }
 }
 

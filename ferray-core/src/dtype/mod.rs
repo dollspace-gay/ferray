@@ -91,13 +91,37 @@ pub enum DType {
     /// `timedelta64[unit]` — duration as i64 ticks. Backed by the
     /// [`Timedelta64`] element type.
     Timedelta64(TimeUnit),
+    /// Structured (record) dtype holding a static descriptor for each
+    /// field (#342). Mirrors numpy's structured dtype:
+    ///
+    /// ```text
+    /// np.dtype([('x', 'f4'), ('y', 'f4')])
+    /// ```
+    ///
+    /// The slice is `&'static` so that `DType` stays `Copy`. The
+    /// `FerrayRecord` derive macro emits exactly this shape via
+    /// `Type::field_descriptors() -> &'static [FieldDescriptor]`,
+    /// so the typical construction site is:
+    ///
+    /// ```ignore
+    /// let dt = DType::Struct(<Point as FerrayRecord>::field_descriptors());
+    /// ```
+    ///
+    /// Dynamically-constructed descriptors must be leaked into a
+    /// `&'static [FieldDescriptor]` (e.g. via `Box::leak`); ferray-core
+    /// does not allocate field descriptors at runtime.
+    Struct(&'static [crate::record::FieldDescriptor]),
 }
 
 impl DType {
     /// Size in bytes of one element of this dtype.
+    ///
+    /// Note: lost const-ness when [`Self::Struct`] was added (#342) —
+    /// computing struct size requires iterating field descriptors,
+    /// which stable const fn doesn't support yet.
     #[inline]
     #[must_use]
-    pub const fn size_of(self) -> usize {
+    pub fn size_of(self) -> usize {
         match self {
             Self::Bool => core::mem::size_of::<bool>(),
             Self::U8 => 1,
@@ -122,13 +146,31 @@ impl DType {
             // datetime64 / timedelta64 are i64 counts; the unit changes
             // the interpretation but not the storage size.
             Self::DateTime64(_) | Self::Timedelta64(_) => 8,
+            // #342: struct size = max(field.offset + field.size). This
+            // matches `size_of::<T>()` for a #[repr(C)] FerrayRecord
+            // because the derive emits offsets via `offset_of!` and
+            // sizes via `size_of::<field_ty>()`.
+            Self::Struct(fields) => {
+                let mut max_end = 0usize;
+                for f in fields {
+                    let end = f.offset + f.size;
+                    if end > max_end {
+                        max_end = end;
+                    }
+                }
+                max_end
+            }
         }
     }
 
     /// Required alignment in bytes for this dtype.
+    ///
+    /// Note: lost const-ness with [`Self::Struct`] (#342) — struct
+    /// alignment is the max of field alignments, which requires
+    /// iterating field descriptors.
     #[inline]
     #[must_use]
-    pub const fn alignment(self) -> usize {
+    pub fn alignment(self) -> usize {
         match self {
             Self::Bool => core::mem::align_of::<bool>(),
             Self::U8 => 1,
@@ -152,6 +194,18 @@ impl DType {
             #[cfg(feature = "bf16")]
             Self::BF16 => core::mem::align_of::<half::bf16>(),
             Self::DateTime64(_) | Self::Timedelta64(_) => core::mem::align_of::<i64>(),
+            // #342: struct alignment = max of field alignments.
+            // Falls back to 1 for an empty struct.
+            Self::Struct(fields) => {
+                let mut max_align = 1usize;
+                for f in fields {
+                    let a = f.dtype.alignment();
+                    if a > max_align {
+                        max_align = a;
+                    }
+                }
+                max_align
+            }
         }
     }
 
@@ -253,6 +307,17 @@ impl fmt::Display for DType {
             Self::BF16 => f.write_str("bfloat16"),
             Self::DateTime64(u) => write!(f, "datetime64[{u}]"),
             Self::Timedelta64(u) => write!(f, "timedelta64[{u}]"),
+            Self::Struct(fields) => {
+                // numpy's structured-dtype repr: [('name', dtype), ...]
+                f.write_str("struct[")?;
+                for (i, fld) in fields.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "('{}', {})", fld.name, fld.dtype)?;
+                }
+                f.write_str("]")
+            }
         }
     }
 }
@@ -541,5 +606,103 @@ mod tests {
         assert!(DType::Complex64.is_signed());
         assert!(!DType::U32.is_signed());
         assert!(!DType::Bool.is_signed());
+    }
+
+    // ----- DType::Struct (#342) ----------------------------------------
+
+    #[test]
+    fn struct_dtype_size_of_sums_field_extents() {
+        // Two f64 fields at offsets 0 and 8 → size 16.
+        static FIELDS: &[crate::record::FieldDescriptor] = &[
+            crate::record::FieldDescriptor {
+                name: "x",
+                dtype: DType::F64,
+                offset: 0,
+                size: 8,
+            },
+            crate::record::FieldDescriptor {
+                name: "y",
+                dtype: DType::F64,
+                offset: 8,
+                size: 8,
+            },
+        ];
+        assert_eq!(DType::Struct(FIELDS).size_of(), 16);
+    }
+
+    #[test]
+    fn struct_dtype_alignment_is_max_field_alignment() {
+        // f64 field (align 8) + i8 field (align 1) → max alignment 8.
+        static FIELDS: &[crate::record::FieldDescriptor] = &[
+            crate::record::FieldDescriptor {
+                name: "big",
+                dtype: DType::F64,
+                offset: 0,
+                size: 8,
+            },
+            crate::record::FieldDescriptor {
+                name: "tag",
+                dtype: DType::I8,
+                offset: 8,
+                size: 1,
+            },
+        ];
+        assert_eq!(DType::Struct(FIELDS).alignment(), 8);
+    }
+
+    #[test]
+    fn struct_dtype_display_format() {
+        static FIELDS: &[crate::record::FieldDescriptor] = &[
+            crate::record::FieldDescriptor {
+                name: "x",
+                dtype: DType::F32,
+                offset: 0,
+                size: 4,
+            },
+            crate::record::FieldDescriptor {
+                name: "y",
+                dtype: DType::I32,
+                offset: 4,
+                size: 4,
+            },
+        ];
+        let s = format!("{}", DType::Struct(FIELDS));
+        assert_eq!(s, "struct[('x', float32), ('y', int32)]");
+    }
+
+    #[test]
+    fn struct_dtype_equality_and_hash_via_field_slice() {
+        static A: &[crate::record::FieldDescriptor] = &[crate::record::FieldDescriptor {
+            name: "x",
+            dtype: DType::F64,
+            offset: 0,
+            size: 8,
+        }];
+        static B: &[crate::record::FieldDescriptor] = &[crate::record::FieldDescriptor {
+            name: "x",
+            dtype: DType::F64,
+            offset: 0,
+            size: 8,
+        }];
+        // Different static addresses but identical contents → equal.
+        assert_eq!(DType::Struct(A), DType::Struct(B));
+        // Hash consistency: equal values must produce equal hashes.
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut ha = DefaultHasher::new();
+        let mut hb = DefaultHasher::new();
+        DType::Struct(A).hash(&mut ha);
+        DType::Struct(B).hash(&mut hb);
+        assert_eq!(ha.finish(), hb.finish());
+    }
+
+    #[test]
+    fn struct_dtype_is_copy() {
+        // The whole point of using &'static [FieldDescriptor] (rather
+        // than Arc<[...]>) is to keep DType: Copy. Pin that contract.
+        static FIELDS: &[crate::record::FieldDescriptor] = &[];
+        let dt = DType::Struct(FIELDS);
+        let copied = dt; // Implicit Copy.
+        assert_eq!(dt, copied);
     }
 }

@@ -477,6 +477,10 @@ const fn dtype_ord(dt: DType) -> u32 {
         DType::BF16 => 17,
         DType::DateTime64(_) => 100,
         DType::Timedelta64(_) => 101,
+        // Struct dtypes don't promote (#342). Place them out of the
+        // numeric ordering range; promote_dtypes returns None when
+        // either side is structured (atomic dtype).
+        DType::Struct(_) => 200,
     }
 }
 

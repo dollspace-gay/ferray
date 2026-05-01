@@ -159,7 +159,7 @@ impl DynArray {
 
     /// Size in bytes of one element.
     #[must_use]
-    pub const fn itemsize(&self) -> usize {
+    pub fn itemsize(&self) -> usize {
         self.dtype().size_of()
     }
 
@@ -334,6 +334,15 @@ impl DynArray {
             DType::DateTime64(_) | DType::Timedelta64(_) => {
                 unreachable!("time-dtype target rejected above")
             }
+            // #342: DynArray currently has no Struct variant; casting
+            // a numeric array to a structured dtype is rejected.
+            // Future work: extend DynArray with a Struct variant
+            // backed by a raw byte buffer.
+            DType::Struct(_) => {
+                return Err(FerrayError::invalid_dtype(
+                    "DynArray cannot represent structured dtype targets yet",
+                ));
+            }
         })
     }
 
@@ -366,6 +375,14 @@ impl DynArray {
             // epoch for datetime, a no-op duration for timedelta).
             DType::DateTime64(unit) => Self::DateTime64(Array::zeros(dim)?, unit),
             DType::Timedelta64(unit) => Self::Timedelta64(Array::zeros(dim)?, unit),
+            // #342: structured dtype zero-construction not yet wired
+            // into DynArray (would need a Struct variant + per-field
+            // zero initialization).
+            DType::Struct(_) => {
+                return Err(FerrayError::invalid_dtype(
+                    "DynArray::zeros doesn't support structured dtypes yet",
+                ));
+            }
         })
     }
 
