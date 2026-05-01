@@ -1,0 +1,10 @@
+{
+  "uuid": "49633880-5813-4b28-9eaf-bc8233ea4ad5",
+  "issue_uuid": "5a655022-423b-4c29-81ef-d398d417783a",
+  "author": "doll-agent",
+  "content": "Done. dtype_to_arrow / arrow_to_dtype already mapped F16 <-> Float16 (behind f16 feature), but the ArrowElement marker trait had no impl for half::f16 - so generic ToArrow/FromArrow paths couldn't dispatch on f16 arrays.\n\nAdded impl_arrow_element!(half::f16, arrow::datatypes::Float16Type) behind #[cfg(feature = 'f16')]. Arrow 58 exposes Float16Type::Native = half::f16, so existing generics cover the full path.\n\nroundtrip_f16 test asserts bit-exact preservation through Arrow Float16 via to_bits().\n\nferray-numpy-interop: 77 -> 78 tests with arrow+f16, all passing, clippy clean. Commit 629ec650.",
+  "created_at": "2026-05-01T22:13:37.588680135Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAtvBOpkl9qvmGmaZSj9PPLyHx+8rc2mnkxVtSTt1ob/4FNZWtkWDDJKTjsW4rV6r2n8qZx1oNsJMBRn/wWijtBA=="
+}
