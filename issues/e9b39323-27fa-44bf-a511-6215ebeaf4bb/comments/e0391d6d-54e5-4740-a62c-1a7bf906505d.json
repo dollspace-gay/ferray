@@ -1,0 +1,10 @@
+{
+  "uuid": "e0391d6d-54e5-4740-a62c-1a7bf906505d",
+  "issue_uuid": "e9b39323-27fa-44bf-a511-6215ebeaf4bb",
+  "author": "doll-agent",
+  "content": "Parity target locked: **100% NumPy API parity** (drop-in replacement for the entire numpy.* namespace, not a subset). README, lib.rs docstring, and Python __init__.py docstring all updated to reflect this explicitly. Phase 0 (#685) shipped: ferray-python crate scaffolded as wheel-only cdylib (no Rust test target — pytest is the test surface), maturin develop --release green, 26/26 phase-0 pytest passing. Phase 1 (#686) is unblocked.",
+  "created_at": "2026-05-01T15:47:34.298013101Z",
+  "kind": "note",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABALCUMqxNRZSOeoP1ePrutd+kEeY4D8loWefDoiNir73ZKdThyy4IdPHRO2ISp5eeI2dmcbAKxYaliZhZCJdceBw=="
+}
