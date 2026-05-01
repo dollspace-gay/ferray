@@ -3,11 +3,12 @@
   "display_id": 102,
   "title": "ferray-linalg: einsum generic_contraction uses scalar loops for all cases",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\neinsum/contraction.rs L136-174: odometer-style counter. O(product of all dims) for multi-operand.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:28:28.828047137Z",
-  "updated_at": "2026-03-25T15:28:32.632511844Z",
+  "updated_at": "2026-05-01T19:40:06.999987693Z",
+  "closed_at": "2026-05-01T19:40:06.999987693Z",
   "labels": [
     "refactor",
     "qa-audit"
