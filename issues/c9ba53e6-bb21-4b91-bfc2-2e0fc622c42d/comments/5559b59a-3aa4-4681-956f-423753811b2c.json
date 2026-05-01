@@ -1,0 +1,10 @@
+{
+  "uuid": "5559b59a-3aa4-4681-956f-423753811b2c",
+  "issue_uuid": "c9ba53e6-bb21-4b91-bfc2-2e0fc622c42d",
+  "author": "doll-agent",
+  "content": "Done — implemented Smaller/Larger associated types in Dimension trait + updated index_axis/insert_axis/remove_axis on both Array<T,D> and ArrayView<'a,T,D> to return rank-preserving views.\n\nMappings: Ix1..Ix5 chain naturally (Smaller = previous, Larger = next); Ix6::Larger = IxDyn (saturate; no Ix7); Ix0::Smaller = Ix0 (saturate); IxDyn closed under both ops.\n\n5 tests pinning static return types via explicit type annotations: 2D->1D, 3D->2D, insert_axis 2D->3D, remove_axis 3D->2D, and Ix3->Ix2->Ix1->Ix0 chain.\n\nferray-core: 629 -> 634 lib tests, all passing, clippy clean. Full workspace builds clean - no call sites broke because no caller explicitly typed the return as IxDyn. Commit bf522c48.",
+  "created_at": "2026-05-01T23:05:40.835799739Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAWPT5uBSLJQDxMPb9EMqETNJklWGQjnf3km2/K2/FWr+HuljDdFo7E1gPJNmmjzMoUDxHWFUp/tiFhweeoPSNBQ=="
+}
