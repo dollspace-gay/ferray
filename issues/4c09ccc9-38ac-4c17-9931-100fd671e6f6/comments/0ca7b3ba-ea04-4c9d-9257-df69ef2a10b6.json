@@ -1,0 +1,10 @@
+{
+  "uuid": "0ca7b3ba-ea04-4c9d-9257-df69ef2a10b6",
+  "issue_uuid": "4c09ccc9-38ac-4c17-9931-100fd671e6f6",
+  "author": "doll-agent",
+  "content": "Phase-1 long tail #692 delivered: frombuffer (Vec<u8> → typed Array1, count/offset support), fromiter (Python iterable, count support), fromstring (text parsing via sep), fromfile (text mode; binary mode → use frombuffer), fromfunction (per-index Python callback). Binary fromfile mode (sep='') deferred. 525/525 passing.",
+  "created_at": "2026-05-01T17:57:10.300875388Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA0clE/TM6tEUtA9xxzJnjRtQgnVqmOot9AFULI8+8g7eAL8wGK3zJP7gh+FJUGzuUDAl9rEXzku3zmTKpz/DBCw=="
+}
