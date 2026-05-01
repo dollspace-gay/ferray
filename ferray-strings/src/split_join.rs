@@ -3,9 +3,22 @@
 // Implements split and join — elementwise on StringArray.
 
 use ferray_core::dimension::{Dimension, Ix1, Ix2};
-use ferray_core::error::FerrayResult;
+use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::string_array::{StringArray, StringArray1, StringArray2};
+
+/// Reject the empty separator: Rust's `str::split("")` returns the
+/// surprising `["", "a", "b", "c", ""]` pattern (one empty token per
+/// boundary including the ends), but numpy's `np.char.split` raises
+/// ValueError on an empty separator. Reject up front to match (#283).
+fn validate_separator(sep: &str) -> FerrayResult<()> {
+    if sep.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "split separator must not be empty",
+        ));
+    }
+    Ok(())
+}
 
 /// Split each string element by the given separator.
 ///
@@ -17,6 +30,7 @@ use crate::string_array::{StringArray, StringArray1, StringArray2};
 /// # Errors
 /// Returns an error if the internal array construction fails.
 pub fn split<D: Dimension>(a: &StringArray<D>, sep: &str) -> FerrayResult<StringArray2> {
+    validate_separator(sep)?;
     let parts: Vec<Vec<String>> = a
         .iter()
         .map(|s| s.split(sep).map(String::from).collect())
@@ -42,6 +56,7 @@ pub fn split_ragged<D: Dimension>(
     a: &StringArray<D>,
     sep: &str,
 ) -> FerrayResult<Vec<Vec<String>>> {
+    validate_separator(sep)?;
     let result: Vec<Vec<String>> = a
         .iter()
         .map(|s| s.split(sep).map(String::from).collect())
@@ -161,5 +176,45 @@ mod tests {
                 vec!["c".to_string(), "d".to_string()],
             ]
         );
+    }
+
+    // ----- Empty separator rejection (#283) ------------------------------
+
+    #[test]
+    fn test_split_empty_separator_errs() {
+        // #283: Rust's str::split("") returns the surprising
+        // ["", "a", "b", "c", ""] pattern with empty tokens around
+        // every char boundary. numpy's np.char.split raises ValueError
+        // for an empty separator. Match numpy's strict path.
+        let a = array(&["abc", "def"]).unwrap();
+        let err = split(&a, "").unwrap_err();
+        assert!(
+            err.to_string().contains("separator must not be empty"),
+            "expected empty-separator error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_split_ragged_empty_separator_errs() {
+        let a = array(&["abc"]).unwrap();
+        assert!(split_ragged(&a, "").is_err());
+    }
+
+    #[test]
+    fn test_split_single_char_separator_works() {
+        // Sanity check: a single-char separator still splits correctly
+        // — the validation gates only the empty-string case.
+        let a = array(&["a,b,c"]).unwrap();
+        let result = split_ragged(&a, ",").unwrap();
+        assert_eq!(result[0], vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_split_multichar_separator_works() {
+        // Multi-character separator: "::" should split exactly on the
+        // 2-byte sequence, not on each byte.
+        let a = array(&["a::b::c"]).unwrap();
+        let result = split_ragged(&a, "::").unwrap();
+        assert_eq!(result[0], vec!["a", "b", "c"]);
     }
 }
