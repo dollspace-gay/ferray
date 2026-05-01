@@ -1,0 +1,10 @@
+{
+  "uuid": "accf70d5-46df-4684-9d00-cd2a305d4ed7",
+  "issue_uuid": "f0782055-d531-4ee7-aabd-c8783ad78e3d",
+  "author": "doll-agent",
+  "content": "Add DType::Struct(&'static [FieldDescriptor]) variant. Using &'static [FieldDescriptor] (slice ref) instead of Arc<[FieldDescriptor]> keeps DType: Copy intact - the static slice is itself Copy. The FerrayRecord derive's existing field_descriptors() -> &'static [FieldDescriptor] is the natural construction site:\n\n    let dt = DType::Struct(<Point as FerrayRecord>::field_descriptors());\n\nUpdate size_of (sum of field extents), alignment (max field alignment), Display ('struct[(name, dtype), ...]'), promotion ord, casting passthrough, dynarray::cast and zeros (return InvalidDtype since DynArray's Struct variant isn't wired yet). Drop const from size_of/alignment (struct path needs slice iteration). Add Hash to FieldDescriptor.\n\n5 tests covering size, alignment, Display, equality+hash, and the Copy-still-works pin.",
+  "created_at": "2026-05-01T23:11:12.684961338Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAKZdanYqzfoNuA6iJWUzU7v9Q1oFVrBHks9jbF3ItbfrWpO0Go7skbwuZ4R1Jkg5BNGulw17KOHThvAP5AWWODw=="
+}
