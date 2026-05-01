@@ -1,0 +1,10 @@
+{
+  "uuid": "0c2fbb23-8700-4184-94fd-fc004f02e825",
+  "issue_uuid": "8657d19f-951f-49a2-9c3d-825c959f1c84",
+  "author": "doll-agent",
+  "content": "Add a second proptest! block in tests/property_tests.rs covering 11 f32 monomorphization properties: sin/cos derivatives, exp, ln, sqrt, chain rule, power rule, constant zero, identity, pythagorean cancellation, and add commutativity. Use approx_eq_f32 with relative tolerance 1e-4 (absorbs f32's ~1e-7 precision floor at moderate x). 256 cases per property. NaN-aware comparison.",
+  "created_at": "2026-05-01T22:04:42.070142687Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAk4mrNDz2MXMGQE6hlpg7+ohltOc6Khtn5+J0EuJyFx+FEdehBj0Ugd6Z8wa3Y/2ZJOMWiYR9fdKpM3Siu8J0Cg=="
+}
