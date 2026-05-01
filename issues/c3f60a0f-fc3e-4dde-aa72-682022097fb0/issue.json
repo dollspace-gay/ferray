@@ -2,11 +2,12 @@
   "uuid": "c3f60a0f-fc3e-4dde-aa72-682022097fb0",
   "display_id": 718,
   "title": "ferray-python phase 4 follow-up: ferray.autodiff DualNumber bindings (ferray-specific, not NumPy parity but useful for Python users)",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T17:11:25.827495469Z",
-  "updated_at": "2026-05-01T17:11:27.079787029Z",
+  "updated_at": "2026-05-01T17:36:47.927930769Z",
+  "closed_at": "2026-05-01T17:36:47.927930769Z",
   "labels": [
     "feature"
   ]
