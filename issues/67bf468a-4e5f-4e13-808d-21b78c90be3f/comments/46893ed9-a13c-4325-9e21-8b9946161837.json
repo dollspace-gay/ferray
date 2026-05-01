@@ -1,0 +1,10 @@
+{
+  "uuid": "46893ed9-a13c-4325-9e21-8b9946161837",
+  "issue_uuid": "67bf468a-4e5f-4e13-808d-21b78c90be3f",
+  "author": "doll-agent",
+  "content": "Pragmatic mitigation. The s! macro routes through TokenStream::to_string() and string-parses the result; Rust's pretty-printer whitespace can drift across compiler versions. A full TokenTree-walking refactor is ~200 lines of recursive-descent parsing - left as future cleanup.\n\nSmaller mitigation:\n1. FRAGILITY NOTE comment in impl_s_macro documenting the approach, drift risk, and planned future refactor.\n2. 5 new integration tests pinning input shapes that would surface drift: variable bounds, arithmetic expressions, function-call bounds, step-from-variable, typed-literal index.\n\nTest count: 39 -> 44, all passing, clippy clean. Commit c27f6b94.",
+  "created_at": "2026-05-01T22:31:33.210394029Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAsRm0M4j9/7+3Aix5jOrIyTw1Qz/8m5kCqt+sHLmT/dzgps5e00g5gb19oX+NxYwyeX49yxMqSAcX7Yg74YwqCA=="
+}
