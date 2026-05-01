@@ -1,0 +1,10 @@
+{
+  "uuid": "4285e1f1-d14d-4bba-80ee-8b03c8cc2bcd",
+  "issue_uuid": "5ab02aaa-5bfb-4954-b558-c93cb2e7d977",
+  "author": "doll-agent",
+  "content": "Done. Added pairwise_sum_f32 and simd_sum_sq_diff_f32 in ferray-stats/src/parallel.rs — structurally identical to the f64 versions but using pulp's f32s SIMD type. Wider lane count per register (e.g. AVX-512: 16 lanes for f32 vs 8 for f64) means better throughput on the same hardware. Stack-based pairwise tree, 4-accumulator unroll, partial-load/partial-store boundary handling are all preserved.\n\nUpdated try_simd_pairwise_sum and try_simd_sum_sq_diff in reductions/mod.rs to dispatch on TypeId — adds an f32 branch alongside the existing f64 branch. Both use the same transmute_copy pattern (safe under the TypeId guard) for T → f32 → T round-tripping. Anything that goes through sum/var/std_/cumsum/cumprod with an f32 array now hits the SIMD path.\n\nVerified: 234 ferray-stats tests pass (covers f32 sum/var/std exhaustively via existing tests that use f32 arrays), cargo clippy clean. Performance: f32 reductions now match f64 reductions per byte, which is the parity goal.",
+  "created_at": "2026-05-01T19:56:18.505327857Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABADxNCltQ8uInmes+aDuyz1pdIos+M2g6qHwprX/id1d6cHHkOyzTCTDVp4ulR7+Cb1JThL4Z83vIE5cGM4KSqDQ=="
+}
