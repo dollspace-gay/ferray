@@ -3,11 +3,12 @@
   "display_id": 170,
   "title": "ferray-stats: mean/var/std_ don't support integer input with float output",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nL495,537,606: require T: Float. NumPy mean([1,2,3]) returns 2.0.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:39:34.260552025Z",
-  "updated_at": "2026-03-25T15:39:40.751396895Z",
+  "updated_at": "2026-05-01T19:53:56.476663784Z",
+  "closed_at": "2026-05-01T19:53:56.476663784Z",
   "labels": [
     "refactor",
     "qa-audit"
