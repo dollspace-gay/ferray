@@ -2,11 +2,12 @@
   "uuid": "e9b39323-27fa-44bf-a511-6215ebeaf4bb",
   "display_id": 684,
   "title": "ferray-python: NumPy drop-in replacement crate (PyO3 bindings, phased)",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T15:36:51.362609165Z",
-  "updated_at": "2026-05-01T15:36:52.705352928Z",
+  "updated_at": "2026-05-01T18:55:50.705392391Z",
+  "closed_at": "2026-05-01T18:55:50.705392391Z",
   "labels": [
     "feature"
   ]
