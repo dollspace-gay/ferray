@@ -1,0 +1,10 @@
+{
+  "uuid": "787dc631-f517-4704-a871-08d932a55133",
+  "issue_uuid": "a5e6ca30-8def-47ce-8fe1-36d770d6f18b",
+  "author": "doll-agent",
+  "content": "Add var_ddof and std_ddof scalar methods plus var_axis_ddof and std_axis_ddof axis methods to MaskedArray. Existing var/std/var_axis/std_axis delegate to the new ddof variants with ddof=0 to preserve API. ddof=0 is population, ddof=1 is sample (Bessel's correction). When count <= ddof, return NaN (or mask the cell on axis variants) matching numpy. 6 tests covering ddof=0 vs ddof=1, masked elements, count<=ddof NaN behavior, std=sqrt(var) consistency, and axis variant.",
+  "created_at": "2026-05-01T21:15:35.205620466Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAUqc4w3jWtwtVUPlCbURLKC9kzj8xZ1hQVI/RpbFxrwGzBCueGGBfFMfDabJ67lFIzG/KVuWfUabqxJJdgCyDBA=="
+}
