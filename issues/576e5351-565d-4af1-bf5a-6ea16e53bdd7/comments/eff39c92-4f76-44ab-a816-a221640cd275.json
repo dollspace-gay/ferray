@@ -1,0 +1,10 @@
+{
+  "uuid": "eff39c92-4f76-44ab-a816-a221640cd275",
+  "issue_uuid": "576e5351-565d-4af1-bf5a-6ea16e53bdd7",
+  "author": "doll-agent",
+  "content": "Done. power_to_chebyshev and power_to_legendre maintained an x_pow_prev variable assigned each iteration but never read. The recurrences only consume x_pow (current) -> x_pow_next, so the prev state was dead. The trailing 'let _ = x_pow_prev;' was a band-aid suppressing the unused-assignment warning rather than fixing the root cause.\n\nDropped the variable in both files: the initial x_pow.clone(), the per-iteration assignment, and the trailing let _ line.\n\nferray-polynomial: 134 tests pass, clippy clean. Commit 68e618a5.",
+  "created_at": "2026-05-01T20:35:07.910445807Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA7hhWask4FzH9Ti6ZUdEDSLtm6Gpo3o3M4fS+Rl8pzVlYpNUDbxWfco87roxqBM0MMWduviiC2bn2j+v60HgoBQ=="
+}
