@@ -3,11 +3,12 @@
   "display_id": 310,
   "title": "ferray-numpy-interop: IntoNumPy for Array2 uses flatten-then-reshape",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nnumpy_conv.rs L133-141: use PyArray2::from_owned_array directly.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:03:39.869914195Z",
-  "updated_at": "2026-03-25T16:03:48.085791586Z",
+  "updated_at": "2026-05-01T22:21:04.418493979Z",
+  "closed_at": "2026-05-01T22:21:04.418493979Z",
   "labels": [
     "refactor",
     "qa-audit"
