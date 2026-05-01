@@ -1,0 +1,10 @@
+{
+  "uuid": "887ae4e3-2d25-4c49-921a-41fbc569e176",
+  "display_id": 701,
+  "title": "ferray-python phase 2 follow-up: gcd/lcm, frexp/ldexp/modf/spacing/nextafter, exp_fast, divmod, fmod",
+  "status": "open",
+  "priority": "low",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-01T16:38:23.697059359Z",
+  "updated_at": "2026-05-01T16:38:23.697059359Z"
+}
