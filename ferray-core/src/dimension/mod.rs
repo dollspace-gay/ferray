@@ -34,6 +34,28 @@ pub trait Dimension: Clone + PartialEq + Eq + fmt::Debug + Send + Sync + 'static
     #[cfg(feature = "std")]
     type NdarrayDim: ndarray::Dimension;
 
+    /// Dimension type produced by removing one axis (#349). Mirrors
+    /// ndarray's `RemoveAxis::Smaller`. Used to express the rank of
+    /// `index_axis` and `remove_axis` results at the type level so
+    /// `Array<T, Ix2>::index_axis(...)` returns `ArrayView<T, Ix1>`
+    /// instead of `ArrayView<T, IxDyn>`.
+    ///
+    /// Saturation rules:
+    /// - `Ix0::Smaller = Ix0` (no negative ranks; calling
+    ///   `remove_axis` on a scalar is a runtime error).
+    /// - `IxDyn::Smaller = IxDyn` (closed under the operation).
+    type Smaller: Dimension;
+
+    /// Dimension type produced by inserting one axis (#349). Mirrors
+    /// ndarray's `Larger`. Used by `insert_axis` to preserve compile-
+    /// time rank.
+    ///
+    /// Saturation rules:
+    /// - `Ix6::Larger = IxDyn` (we don't expose Ix7 / Ix8 / etc.; the
+    ///   insertion point hops to dynamic rank for higher dimensions).
+    /// - `IxDyn::Larger = IxDyn` (closed).
+    type Larger: Dimension;
+
     /// Return the shape as a slice.
     fn as_slice(&self) -> &[usize];
 
@@ -74,7 +96,7 @@ pub trait Dimension: Clone + PartialEq + Eq + fmt::Debug + Send + Sync + 'static
 // ---------------------------------------------------------------------------
 
 macro_rules! impl_fixed_dimension {
-    ($name:ident, $n:expr, $ndarray_ty:ty) => {
+    ($name:ident, $n:expr, $ndarray_ty:ty, $smaller:ty, $larger:ty) => {
         /// A fixed-rank dimension with
         #[doc = concat!(stringify!($n), " axes.")]
         #[derive(Clone, PartialEq, Eq, Hash)]
@@ -108,6 +130,9 @@ macro_rules! impl_fixed_dimension {
 
             #[cfg(feature = "std")]
             type NdarrayDim = $ndarray_ty;
+
+            type Smaller = $smaller;
+            type Larger = $larger;
 
             #[inline]
             fn as_slice(&self) -> &[usize] {
@@ -146,12 +171,17 @@ macro_rules! impl_fixed_dimension {
     };
 }
 
-impl_fixed_dimension!(Ix1, 1, ndarray::Ix1);
-impl_fixed_dimension!(Ix2, 2, ndarray::Ix2);
-impl_fixed_dimension!(Ix3, 3, ndarray::Ix3);
-impl_fixed_dimension!(Ix4, 4, ndarray::Ix4);
-impl_fixed_dimension!(Ix5, 5, ndarray::Ix5);
-impl_fixed_dimension!(Ix6, 6, ndarray::Ix6);
+// Smaller / Larger relationships per #349:
+//   Ix1 → Smaller=Ix0,   Larger=Ix2
+//   Ix2 → Smaller=Ix1,   Larger=Ix3
+//   ...
+//   Ix6 → Smaller=Ix5,   Larger=IxDyn (no Ix7 type; saturate to dyn rank)
+impl_fixed_dimension!(Ix1, 1, ndarray::Ix1, Ix0, Ix2);
+impl_fixed_dimension!(Ix2, 2, ndarray::Ix2, Ix1, Ix3);
+impl_fixed_dimension!(Ix3, 3, ndarray::Ix3, Ix2, Ix4);
+impl_fixed_dimension!(Ix4, 4, ndarray::Ix4, Ix3, Ix5);
+impl_fixed_dimension!(Ix5, 5, ndarray::Ix5, Ix4, Ix6);
+impl_fixed_dimension!(Ix6, 6, ndarray::Ix6, Ix5, IxDyn);
 
 // ---------------------------------------------------------------------------
 // Ix0: scalar (0-dimensional)
@@ -172,6 +202,11 @@ impl Dimension for Ix0 {
 
     #[cfg(feature = "std")]
     type NdarrayDim = ndarray::Ix0;
+
+    // Saturation: removing an axis from a scalar is a runtime error
+    // anyway, but the type still has to map somewhere. Stay at Ix0.
+    type Smaller = Ix0;
+    type Larger = Ix1;
 
     #[inline]
     fn as_slice(&self) -> &[usize] {
@@ -241,6 +276,10 @@ impl Dimension for IxDyn {
 
     #[cfg(feature = "std")]
     type NdarrayDim = ndarray::IxDyn;
+
+    // Closed under Smaller / Larger: IxDyn handles any rank at runtime.
+    type Smaller = IxDyn;
+    type Larger = IxDyn;
 
     #[inline]
     fn as_slice(&self) -> &[usize] {

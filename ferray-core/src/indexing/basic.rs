@@ -100,10 +100,18 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// # Errors
     /// - `AxisOutOfBounds` if `axis >= ndim`
     /// - `IndexOutOfBounds` if `index` is out of range (supports negative)
-    pub fn index_axis(&self, axis: Axis, index: isize) -> FerrayResult<ArrayView<'_, T, IxDyn>>
+    pub fn index_axis(
+        &self,
+        axis: Axis,
+        index: isize,
+    ) -> FerrayResult<ArrayView<'_, T, D::Smaller>>
     where
-        D::NdarrayDim: ndarray::RemoveAxis,
+        D::NdarrayDim: ndarray::RemoveAxis<
+                Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim,
+            >,
     {
+        // #349: return type now preserves rank — Array<T, Ix2>::index_axis
+        // produces ArrayView<T, Ix1> instead of the old IxDyn fallback.
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
@@ -114,8 +122,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
         let nd_axis = ndarray::Axis(ax);
         let sub = self.inner.index_axis(nd_axis, idx);
-        let dyn_view = sub.into_dyn();
-        Ok(ArrayView::from_ndarray(dyn_view))
+        Ok(ArrayView::from_ndarray(sub))
     }
 
     /// Slice the array along a given axis, returning a view.
@@ -198,31 +205,39 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// Insert a new axis of length 1 at the given position.
     ///
     /// This is equivalent to `np.expand_dims` or `np.newaxis`.
-    /// Returns a dynamic-rank view with one more dimension.
+    /// Returns a view with rank one greater than `Self` (#349) —
+    /// `Array<T, Ix2>::insert_axis` produces `ArrayView<T, Ix3>`.
     ///
     /// # Errors
     /// - `AxisOutOfBounds` if `axis > ndim`
-    pub fn insert_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'_, T, IxDyn>> {
+    pub fn insert_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'_, T, D::Larger>>
+    where
+        D::NdarrayDim:
+            ndarray::Dimension<Larger = <D::Larger as crate::dimension::Dimension>::NdarrayDim>,
+    {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax > ndim {
             return Err(FerrayError::axis_out_of_bounds(ax, ndim + 1));
         }
-
-        let dyn_view = self.inner.view().into_dyn();
-        let expanded = dyn_view.insert_axis(ndarray::Axis(ax));
+        let expanded = self.inner.view().insert_axis(ndarray::Axis(ax));
         Ok(ArrayView::from_ndarray(expanded))
     }
 
     /// Remove an axis of length 1.
     ///
     /// This is equivalent to `np.squeeze` for a single axis.
-    /// Returns a dynamic-rank view with one fewer dimension.
+    /// Returns a view with rank one less than `Self` (#349).
     ///
     /// # Errors
     /// - `AxisOutOfBounds` if `axis >= ndim`
     /// - `InvalidValue` if the axis has size != 1
-    pub fn remove_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'_, T, IxDyn>> {
+    pub fn remove_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'_, T, D::Smaller>>
+    where
+        D::NdarrayDim: ndarray::RemoveAxis<
+                Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim,
+            >,
+    {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
@@ -235,10 +250,7 @@ impl<T: Element, D: Dimension> Array<T, D> {
                 self.shape()[ax]
             )));
         }
-
-        // index_axis_move at 0 removes the axis (consumes the view, preserving lifetime)
-        let dyn_view = self.inner.view().into_dyn();
-        let squeezed = dyn_view.index_axis_move(ndarray::Axis(ax), 0);
+        let squeezed = self.inner.view().index_axis_move(ndarray::Axis(ax), 0);
         Ok(ArrayView::from_ndarray(squeezed))
     }
 
@@ -345,9 +357,16 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
 impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
     /// Index into the view along a given axis, removing that axis.
-    pub fn index_axis(&self, axis: Axis, index: isize) -> FerrayResult<ArrayView<'a, T, IxDyn>>
+    /// Returns a view with rank one less than `Self` (#349).
+    pub fn index_axis(
+        &self,
+        axis: Axis,
+        index: isize,
+    ) -> FerrayResult<ArrayView<'a, T, D::Smaller>>
     where
-        D::NdarrayDim: ndarray::RemoveAxis,
+        D::NdarrayDim: ndarray::RemoveAxis<
+                Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim,
+            >,
     {
         let ndim = self.ndim();
         let ax = axis.index();
@@ -360,8 +379,7 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
         let nd_axis = ndarray::Axis(ax);
         // clone() on ArrayView is cheap (it's Copy-like)
         let sub = self.inner.clone().index_axis_move(nd_axis, idx);
-        let dyn_view = sub.into_dyn();
-        Ok(ArrayView::from_ndarray(dyn_view))
+        Ok(ArrayView::from_ndarray(sub))
     }
 
     /// Slice the view along a given axis.
@@ -382,20 +400,29 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
     }
 
     /// Insert a new axis of length 1 at the given position.
-    pub fn insert_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
+    /// Returns a view with rank one greater than `Self` (#349).
+    pub fn insert_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'a, T, D::Larger>>
+    where
+        D::NdarrayDim:
+            ndarray::Dimension<Larger = <D::Larger as crate::dimension::Dimension>::NdarrayDim>,
+    {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax > ndim {
             return Err(FerrayError::axis_out_of_bounds(ax, ndim + 1));
         }
-
-        let dyn_view = self.inner.clone().into_dyn();
-        let expanded = dyn_view.insert_axis(ndarray::Axis(ax));
+        let expanded = self.inner.clone().insert_axis(ndarray::Axis(ax));
         Ok(ArrayView::from_ndarray(expanded))
     }
 
     /// Remove an axis of length 1.
-    pub fn remove_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
+    /// Returns a view with rank one less than `Self` (#349).
+    pub fn remove_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'a, T, D::Smaller>>
+    where
+        D::NdarrayDim: ndarray::RemoveAxis<
+                Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim,
+            >,
+    {
         let ndim = self.ndim();
         let ax = axis.index();
         if ax >= ndim {
@@ -409,8 +436,7 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
             )));
         }
 
-        let dyn_view = self.inner.clone().into_dyn();
-        let squeezed = dyn_view.index_axis_move(ndarray::Axis(ax), 0);
+        let squeezed = self.inner.clone().index_axis_move(ndarray::Axis(ax), 0);
         Ok(ArrayView::from_ndarray(squeezed))
     }
 
@@ -815,5 +841,69 @@ mod tests {
         let plane = arr.index_axis(Axis(0), 1).unwrap();
         assert_eq!(plane.shape(), &[3, 4]);
         assert_eq!(*plane.get(&[0, 0]).unwrap(), 12);
+    }
+
+    // ---- Rank-preserving indexing (#349) ------------------------------
+    //
+    // index_axis on a fixed-rank Array now returns a fixed-rank
+    // ArrayView with one fewer axis; insert_axis adds one axis. These
+    // tests pin the *static type* of the result via explicit type
+    // annotations (compile-time check, not just runtime shape).
+
+    #[test]
+    fn index_axis_2d_returns_ix1() {
+        let arr = Array::<f64, crate::dimension::Ix2>::from_vec(
+            crate::dimension::Ix2::new([3, 4]),
+            (0..12).map(|i| i as f64).collect(),
+        )
+        .unwrap();
+        // The variable's type is explicit — must compile to Ix1, not IxDyn.
+        let row: ArrayView<'_, f64, crate::dimension::Ix1> =
+            arr.index_axis(Axis(0), 1).unwrap();
+        assert_eq!(row.shape(), &[4]);
+    }
+
+    #[test]
+    fn index_axis_3d_returns_ix2() {
+        let arr = Array::<i32, Ix3>::from_vec(Ix3::new([2, 3, 4]), (0..24).collect()).unwrap();
+        let plane: ArrayView<'_, i32, crate::dimension::Ix2> =
+            arr.index_axis(Axis(0), 0).unwrap();
+        assert_eq!(plane.shape(), &[3, 4]);
+    }
+
+    #[test]
+    fn insert_axis_ix2_returns_ix3() {
+        let arr = Array::<f64, crate::dimension::Ix2>::from_vec(
+            crate::dimension::Ix2::new([2, 3]),
+            (0..6).map(|i| i as f64).collect(),
+        )
+        .unwrap();
+        let expanded: ArrayView<'_, f64, Ix3> = arr.insert_axis(Axis(0)).unwrap();
+        assert_eq!(expanded.shape(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn remove_axis_ix3_returns_ix2() {
+        let arr = Array::<f64, Ix3>::from_vec(
+            Ix3::new([1, 3, 4]),
+            (0..12).map(|i| i as f64).collect(),
+        )
+        .unwrap();
+        let squeezed: ArrayView<'_, f64, crate::dimension::Ix2> =
+            arr.remove_axis(Axis(0)).unwrap();
+        assert_eq!(squeezed.shape(), &[3, 4]);
+    }
+
+    #[test]
+    fn index_axis_chains_preserve_rank_at_each_step() {
+        // Ix3 → Ix2 → Ix1 → Ix0 chain.
+        let arr = Array::<i32, Ix3>::from_vec(Ix3::new([2, 3, 4]), (0..24).collect()).unwrap();
+        let plane: ArrayView<'_, i32, crate::dimension::Ix2> =
+            arr.index_axis(Axis(0), 1).unwrap();
+        let row: ArrayView<'_, i32, crate::dimension::Ix1> =
+            plane.index_axis(Axis(0), 1).unwrap();
+        let scalar: ArrayView<'_, i32, crate::dimension::Ix0> =
+            row.index_axis(Axis(0), 2).unwrap();
+        assert_eq!(scalar.shape(), &[] as &[usize]);
     }
 }
