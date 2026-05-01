@@ -3,11 +3,12 @@
   "display_id": 267,
   "title": "ferray-ma: mean() unwrap_or(one) could silently return sum instead of mean",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nreductions.rs L73: T::from(count).unwrap_or(one) falls back to dividing by 1.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:57:04.672247949Z",
-  "updated_at": "2026-03-25T15:57:09.547428922Z",
+  "updated_at": "2026-05-01T21:07:25.367983516Z",
+  "closed_at": "2026-05-01T21:07:25.367983516Z",
   "labels": [
     "bug",
     "qa-audit"
