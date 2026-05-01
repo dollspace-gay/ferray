@@ -1,0 +1,10 @@
+{
+  "uuid": "d3ea9df1-51af-451f-bbf1-b2ae9d769b9d",
+  "issue_uuid": "cbc9d47d-f0bf-4969-9fad-096a5583e3d2",
+  "author": "doll-agent",
+  "content": "Done. Added svd_hermitian(a) -> (U, S, Vt) in ferray-linalg as a sibling function (not a hermitian= parameter on svd, since that would break ~10 call sites).\n\nAlgorithm: route through eigh; sort indices by |eigenvalue| descending; build U with sign-flipped columns for negative eigenvalues so s = |λ| stays non-negative; Vt = transpose of unsigned Q reordered.\n\n5 tests covering diagonal, singular-value match vs full SVD, U*diag(s)*Vt == A reconstruction, non-square rejection, negative-definite → positive singular values.\n\nRe-exported at decomp::mod.rs and lib.rs root. ferray-linalg: 5 new tests, all passing, clippy clean. Commit 841722a1.",
+  "created_at": "2026-05-01T23:30:05.515980822Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAUWb0pAlntRUOhUagzVqWy0VkCgmVAdiEYEsHNzZ3W58KOBbfzgGPhyp/4L0PcVIj/zoqlUg1I7q8SpN8Bq2VDQ=="
+}
