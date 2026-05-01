@@ -1,0 +1,10 @@
+{
+  "uuid": "5e46c8b5-91e9-4363-aa18-1bf4384cc402",
+  "issue_uuid": "58661fcd-aed3-4743-ac0d-d52f1c5ef2df",
+  "author": "doll-agent",
+  "content": "Replace inverse-CDF binary-search sampler in weighted_sample_with_replacement with Vose's alias method. Setup is O(n); each sample becomes O(1) (one uniform integer + one uniform float, no binary search). Reference: M. D. Vose, IEEE TSE 17(9), 1991.\n\nTests added: alias distribution recovers expected frequencies on uneven probability vectors (100k samples within 1.5% of target); unnormalized probs handled cleanly through the internal scaling pass.",
+  "created_at": "2026-05-01T21:02:23.598706956Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAasmXRjYsiFNUvSRKlB/KS5o5r8RZku5b4E6qBo22qga2giCzDWtzhH7fQSu2kxWKa5xKGjNZVa5DJAwkS6QzBg=="
+}
