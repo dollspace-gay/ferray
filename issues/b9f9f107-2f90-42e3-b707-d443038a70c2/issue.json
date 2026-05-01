@@ -3,11 +3,12 @@
   "display_id": 238,
   "title": "ferray-io: MemmapArray Send/Sync impl is fragile",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nmemmap.rs L40-42: data_ptr stored separately from _mmap. Future API change could cause dangling.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:51:07.061567660Z",
-  "updated_at": "2026-03-25T15:51:15.321476756Z",
+  "updated_at": "2026-05-01T20:22:19.804066433Z",
+  "closed_at": "2026-05-01T20:22:19.804066433Z",
   "labels": [
     "bug",
     "qa-audit"
