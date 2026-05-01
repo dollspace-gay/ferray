@@ -1,0 +1,10 @@
+{
+  "uuid": "a8b51337-0b7e-4e3f-88eb-860f3f8227a8",
+  "issue_uuid": "5277a992-b149-4c8d-a369-86968ed174eb",
+  "author": "doll-agent",
+  "content": "Added 6 property tests covering Cholesky and LU decomposition invariants.\n\nCholesky (3 props, SPD construction A = X*X^T + n*I to bypass rejection sampling):\n- prop_cholesky_reconstructs: L * L^T == A\n- prop_cholesky_lower_triangular: L[i,j] == 0 for j > i\n- prop_cholesky_positive_diagonal: L[i,i] > 0\n\nLU (3 props, diag-dominant matrices to ensure non-singularity under partial pivoting):\n- prop_lu_reconstructs: P * A == L * U\n- prop_lu_l_unit_lower: L is unit lower-triangular\n- prop_lu_u_upper: U is upper-triangular\n\nProperty test count grew 12 -> 18, each running 256 proptest cases. All passing, clippy clean. Commit 57f12df6.",
+  "created_at": "2026-05-01T20:15:12.245954539Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAabiM2YOVZ0avBq6uu/YsY+H5m+lW/LeB/G0f4rwaNprcpOA86CA0dhcZ+sdLBwWJ6qYhr9xL5iEMSK0HdcbJAg=="
+}
