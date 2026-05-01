@@ -1,0 +1,10 @@
+{
+  "uuid": "0a8998b8-e51e-4b75-b3ce-ddef8907be0e",
+  "issue_uuid": "26aec598-36f9-47b7-a10f-51729f077ce8",
+  "author": "doll-agent",
+  "content": "Phase-2 long tail #704 delivered: histogram, histogram_bin_edges, histogram2d, histogramdd, bincount (uint64 + optional float64 weights), digitize. histogram/histogramdd float-only. bincount returns int64 unweighted, float64 weighted. 525/525 passing.",
+  "created_at": "2026-05-01T18:06:16.191990834Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA4etJp5QDV6CB6nXgtiiZfbIOqV3e+oshp1S1urO73RYyuitiXRi0Qjv+cEU6yYmuNw5WGEL5xcFqi4P7MYnWBw=="
+}
