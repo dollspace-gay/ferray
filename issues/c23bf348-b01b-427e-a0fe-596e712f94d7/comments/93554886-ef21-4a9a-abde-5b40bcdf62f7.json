@@ -1,0 +1,10 @@
+{
+  "uuid": "93554886-ef21-4a9a-abde-5b40bcdf62f7",
+  "issue_uuid": "c23bf348-b01b-427e-a0fe-596e712f94d7",
+  "author": "doll-agent",
+  "content": "Verified done. All 6 polynomial bases (Polynomial, Chebyshev, Legendre, Laguerre, Hermite, HermiteE) have with_domain([f64;2]), with_window([f64;2]), and fit_with_domain(x, y, deg) methods, plus a private domain→window affine mapping (auto_domain / map_x / mapparms / validate_domain_window in src/mapping.rs) that's applied in eval. CHEBYSHEV_DEFAULT_DOMAIN/WINDOW etc. are exposed as constants. Each polynomial type stores its domain/window as fields, so a polynomial fitted on [a,b] correctly maps inputs through to the canonical [-1,1] window for evaluation. The infrastructure landed sometime after this issue was filed (2026-03-25); marking as already-resolved.",
+  "created_at": "2026-05-01T19:40:52.083143959Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAP/YBBs2fYlQD9FJyEeoAd3XeUsdI1hUZy/TSKPn9B5Eqc4RIsi9tdAIuP/DIIjI7XDGc4zeduXvgw8uSFMr8BA=="
+}
