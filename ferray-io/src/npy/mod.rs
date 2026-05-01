@@ -555,9 +555,12 @@ impl private::NpySealed for bool {}
 
 impl NpyElement for bool {
     fn write_slice<W: Write>(data: &[Self], writer: &mut W) -> FerrayResult<()> {
-        for &val in data {
-            writer.write_all(&[u8::from(val)])?;
-        }
+        // Stage one u8 per bool into a single contiguous buffer, then
+        // emit one bulk write_all instead of one syscall per element
+        // (#234). For very large bool arrays the staging cost is a
+        // memory copy that's far cheaper than per-element I/O.
+        let bytes: Vec<u8> = data.iter().map(|&v| u8::from(v)).collect();
+        writer.write_all(&bytes)?;
         Ok(())
     }
 
@@ -566,13 +569,11 @@ impl NpyElement for bool {
         count: usize,
         _endian: Endianness,
     ) -> FerrayResult<Vec<Self>> {
-        let mut result = Vec::with_capacity(count);
-        let mut buf = [0u8; 1];
-        for _ in 0..count {
-            reader.read_exact(&mut buf)?;
-            result.push(buf[0] != 0);
-        }
-        Ok(result)
+        // Bulk read all bytes in a single read_exact, then map to bool
+        // (#234) — eliminates the per-element read syscall.
+        let mut raw = vec![0u8; count];
+        reader.read_exact(&mut raw)?;
+        Ok(raw.into_iter().map(|b| b != 0).collect())
     }
 }
 
@@ -606,9 +607,19 @@ macro_rules! impl_npy_time_element {
     ($ty:path) => {
         impl NpyElement for $ty {
             fn write_slice<W: Write>(data: &[Self], writer: &mut W) -> FerrayResult<()> {
-                for v in data {
-                    writer.write_all(&v.0.to_ne_bytes())?;
-                }
+                // Bulk write: the newtype is `#[repr(transparent)]` over
+                // i64, so a `&[Self]` is bit-identical to a `&[i64]`,
+                // and reinterpreting as `&[u8]` of length `len * 8`
+                // gives us a single write_all (#234).
+                // SAFETY: Self is repr(transparent) over i64, contiguous
+                // and properly aligned for u8 reinterpretation.
+                let bytes = unsafe {
+                    std::slice::from_raw_parts(
+                        data.as_ptr().cast::<u8>(),
+                        data.len() * 8,
+                    )
+                };
+                writer.write_all(bytes)?;
                 Ok(())
             }
 
@@ -617,14 +628,20 @@ macro_rules! impl_npy_time_element {
                 count: usize,
                 endian: Endianness,
             ) -> FerrayResult<Vec<Self>> {
+                let mut raw = vec![0u8; count * 8];
+                reader.read_exact(&mut raw)?;
                 let mut out = Vec::with_capacity(count);
-                let mut buf = [0u8; 8];
-                for _ in 0..count {
-                    reader.read_exact(&mut buf)?;
-                    if endian.needs_swap() {
-                        buf.reverse();
+                if endian.needs_swap() {
+                    for chunk in raw.chunks_exact_mut(8) {
+                        chunk.reverse();
+                        let arr: [u8; 8] = chunk.try_into().unwrap();
+                        out.push(Self(i64::from_ne_bytes(arr)));
                     }
-                    out.push(Self(i64::from_ne_bytes(buf)));
+                } else {
+                    for chunk in raw.chunks_exact(8) {
+                        let arr: [u8; 8] = chunk.try_into().unwrap();
+                        out.push(Self(i64::from_ne_bytes(arr)));
+                    }
                 }
                 Ok(out)
             }
