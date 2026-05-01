@@ -1,0 +1,10 @@
+{
+  "uuid": "439645da-3f20-4e4c-be22-ee0337f5c98d",
+  "issue_uuid": "abedb0a1-0a7a-4540-8d01-c2a6a36a5d2f",
+  "author": "doll-agent",
+  "content": "Add fft_into / ifft_into / rfft_into / irfft_into. Each accepts a &mut Array<_, IxDyn>, validates the buffer's shape against the FFT output, and copies into its contiguous slice. Tests cover round-trip equality with the allocating versions plus the shape-mismatch error path.",
+  "created_at": "2026-05-01T23:45:14.825133645Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABASixdhOMv1Ld6rlMGbUczGJ5/iId3vwpJpNIzfKquyxiQk1m/chf55WaBgrIXBOczMPfivy11fmD3qfUGtV9pCg=="
+}
