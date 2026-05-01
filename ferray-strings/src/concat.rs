@@ -26,8 +26,7 @@ pub fn add<Da: Dimension, Db: Dimension>(
     let b_data = b.as_slice();
 
     let data: Vec<String> = pairs
-        .iter()
-        .map(|&(ia, ib)| format!("{}{}", a_data[ia], b_data[ib]))
+        .map(|(ia, ib)| format!("{}{}", a_data[ia], b_data[ib]))
         .collect();
 
     StringArray::from_vec(IxDyn::new(&out_shape), data)

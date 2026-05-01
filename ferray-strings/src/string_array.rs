@@ -330,34 +330,73 @@ pub fn array(items: &[&str]) -> FerrayResult<StringArray1> {
 
 use ferray_core::dimension::broadcast::broadcast_shapes;
 
-/// Result of broadcasting two arrays: the output shape and paired indices.
-pub(crate) type BroadcastResult = (Vec<usize>, Vec<(usize, usize)>);
-
-/// Compute the broadcast result of two `StringArray`s, returning paired
-/// element indices into the flat data of each array.
+/// Streaming pair iterator produced by [`broadcast_binary`] (#281).
 ///
-/// Returns `(broadcast_shape, pairs)` where each pair is `(idx_a, idx_b)`.
+/// Walks the broadcast output shape in row-major order, producing
+/// `(idx_a, idx_b)` flat-index pairs on demand instead of allocating
+/// the full `out_size`-sized `Vec` up front.
+pub(crate) struct BroadcastIter {
+    out_shape: Vec<usize>,
+    shape_a: Vec<usize>,
+    shape_b: Vec<usize>,
+    strides_a: Vec<usize>,
+    strides_b: Vec<usize>,
+    out_size: usize,
+    linear: usize,
+}
+
+impl Iterator for BroadcastIter {
+    type Item = (usize, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.linear >= self.out_size {
+            return None;
+        }
+        let multi = linear_to_multi(self.linear, &self.out_shape);
+        let idx_a = multi_to_broadcast_linear(&multi, &self.shape_a, &self.strides_a);
+        let idx_b = multi_to_broadcast_linear(&multi, &self.shape_b, &self.strides_b);
+        self.linear += 1;
+        Some((idx_a, idx_b))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.out_size - self.linear;
+        (remaining, Some(remaining))
+    }
+}
+
+impl ExactSizeIterator for BroadcastIter {}
+
+/// Compute the broadcast result of two `StringArray`s, returning the
+/// output shape and a lazy iterator of paired flat indices.
+///
+/// Replaces the previous version that materialized every `(idx_a, idx_b)`
+/// pair into a `Vec` of size `out_shape.iter().product()`. Callers
+/// iterate sequentially (see `concat::add`), so streaming pairs is
+/// strictly memory-equivalent and avoids the intermediate allocation
+/// for large broadcast results (#281).
 pub(crate) fn broadcast_binary<Da: Dimension, Db: Dimension>(
     a: &StringArray<Da>,
     b: &StringArray<Db>,
-) -> FerrayResult<BroadcastResult> {
-    let shape_a = a.shape();
-    let shape_b = b.shape();
-    let out_shape = broadcast_shapes(shape_a, shape_b)?;
+) -> FerrayResult<(Vec<usize>, BroadcastIter)> {
+    let shape_a = a.shape().to_vec();
+    let shape_b = b.shape().to_vec();
+    let out_shape = broadcast_shapes(&shape_a, &shape_b)?;
     let out_size: usize = out_shape.iter().product();
 
-    let strides_a = compute_strides(shape_a);
-    let strides_b = compute_strides(shape_b);
+    let strides_a = compute_strides(&shape_a);
+    let strides_b = compute_strides(&shape_b);
 
-    let mut pairs = Vec::with_capacity(out_size);
-    for linear in 0..out_size {
-        let multi = linear_to_multi(linear, &out_shape);
-        let idx_a = multi_to_broadcast_linear(&multi, shape_a, &strides_a);
-        let idx_b = multi_to_broadcast_linear(&multi, shape_b, &strides_b);
-        pairs.push((idx_a, idx_b));
-    }
-
-    Ok((out_shape, pairs))
+    let iter = BroadcastIter {
+        out_shape: out_shape.clone(),
+        shape_a,
+        shape_b,
+        strides_a,
+        strides_b,
+        out_size,
+        linear: 0,
+    };
+    Ok((out_shape, iter))
 }
 
 /// Compute C-order strides from a shape.
@@ -472,7 +511,8 @@ mod tests {
         let b = array(&["!"]).unwrap();
         let (shape, pairs) = broadcast_binary(&a, &b).unwrap();
         assert_eq!(shape, vec![2]);
-        assert_eq!(pairs, vec![(0, 0), (1, 0)]);
+        let collected: Vec<(usize, usize)> = pairs.collect();
+        assert_eq!(collected, vec![(0, 0), (1, 0)]);
     }
 
     #[test]
@@ -481,7 +521,18 @@ mod tests {
         let b = array(&["x", "y", "z"]).unwrap();
         let (shape, pairs) = broadcast_binary(&a, &b).unwrap();
         assert_eq!(shape, vec![3]);
-        assert_eq!(pairs, vec![(0, 0), (1, 1), (2, 2)]);
+        let collected: Vec<(usize, usize)> = pairs.collect();
+        assert_eq!(collected, vec![(0, 0), (1, 1), (2, 2)]);
+    }
+
+    #[test]
+    fn broadcast_binary_iter_size_hint() {
+        // #281: ExactSizeIterator size_hint should match out_size.
+        let a = array(&["hello", "world"]).unwrap();
+        let b = array(&["!"]).unwrap();
+        let (_shape, pairs) = broadcast_binary(&a, &b).unwrap();
+        assert_eq!(pairs.size_hint(), (2, Some(2)));
+        assert_eq!(pairs.len(), 2);
     }
 
     #[test]
