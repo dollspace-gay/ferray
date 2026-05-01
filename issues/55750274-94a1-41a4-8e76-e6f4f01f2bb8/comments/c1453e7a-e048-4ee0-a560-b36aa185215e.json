@@ -1,0 +1,10 @@
+{
+  "uuid": "c1453e7a-e048-4ee0-a560-b36aa185215e",
+  "issue_uuid": "55750274-94a1-41a4-8e76-e6f4f01f2bb8",
+  "author": "doll-agent",
+  "content": "Phase 3 main slice delivered: ~50 functions across three NumPy submodules. New files: src/linalg.rs (450 lines, 22 fns), src/fft.rs (430 lines, 16 fns including the 6 added during a final coverage audit — fft2/ifft2/rfft2/irfft2/rfftn/irfftn), src/random.rs (290 lines, 12 fns backed by a thread-local Generator<Xoshiro256StarStar>). lib.rs gained register_linalg_module / register_fft_module / register_random_module helpers; python/ferray/__init__.py exposes them as ferray.linalg / ferray.fft / ferray.random. Notable design points: (1) FFT bypasses ferray-numpy-interop for Complex<T> round-trips since the interop crate's NpElement marker doesn't cover complex — manual extract+reshape pipeline; (2) FFT promotes integer/real input to complex128 to match numpy semantics; (3) random uses a thread-local RefCell<Generator> matching numpy's legacy module-level API, with a documented deviation that shuffle returns a copy rather than mutating in place (PyReadonlyArray1 forbids mutation through extract); (4) linalg returns 0-D ndarrays for scalar outputs (det, norm, trace, vdot) for shape-printability — NumPy returns 0-D scalars, behaviorally interchangeable. cargo clippy -D warnings clean. 309/309 pytest passing (193 phases 0-2 + 116 new phase-3). Phase 3 long tail filed as #707-#713: hfft/ihfft, complex+batched linalg, einsum/multi_dot/norm_axis/cond, lstsq tuple return, modern Generator class, additional distributions. Phase 4 (#689, window + polynomial + autodiff + strings + ma + stride_tricks) is unblocked.",
+  "created_at": "2026-05-01T17:03:05.492234304Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABALPsMx7cTKwbDEky4WwoGiTUNLp0gzoge5aUOqrf5cbaJ573/2y+rhHlQ6H4daNeIusFD0LjMc4U0gQvQ9ZhHDg=="
+}
