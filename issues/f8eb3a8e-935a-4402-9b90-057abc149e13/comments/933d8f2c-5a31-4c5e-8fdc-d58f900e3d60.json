@@ -1,0 +1,10 @@
+{
+  "uuid": "933d8f2c-5a31-4c5e-8fdc-d58f900e3d60",
+  "issue_uuid": "f8eb3a8e-935a-4402-9b90-057abc149e13",
+  "author": "doll-agent",
+  "content": "Replace build_dim_from_shape's Box<dyn Any> downcast machinery with direct trait call to Dimension::from_dim_slice (already exists, canonical inverse of as_slice). Eliminates per-load heap alloc + TypeId check + manual Ix0..Ix6 dispatch. Inline build_dimension, remove the helper.",
+  "created_at": "2026-05-01T20:19:50.661690671Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAoYtTNhT/tVBQLOqALuz90mx2KXM5W3ylJcVtjcRW2FNWJIbrEf4CUIpfG3N1rgjyVEFqznuQdJRTgwNX2gu3Dw=="
+}
