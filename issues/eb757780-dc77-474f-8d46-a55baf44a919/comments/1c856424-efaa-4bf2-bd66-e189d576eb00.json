@@ -1,0 +1,10 @@
+{
+  "uuid": "1c856424-efaa-4bf2-bd66-e189d576eb00",
+  "issue_uuid": "eb757780-dc77-474f-8d46-a55baf44a919",
+  "author": "doll-agent",
+  "content": "Add 6 property tests covering missing integer types in tests/property_tests.rs: prop_npy_u16_roundtrip, prop_npy_u32_roundtrip, prop_npy_u64_roundtrip, prop_npy_u128_roundtrip, prop_npy_i16_roundtrip, prop_npy_i128_roundtrip. Pattern matches existing u8/i32/i64 tests: any::<T>(), 0..=100 elements, 256 cases each.",
+  "created_at": "2026-05-01T20:27:46.300631775Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABARtxFS964YYfqD5piLbuk4ggdCVlYcoLAlkIoAu52zColmq9zlW3cF7RdUCaZd9HLvwH+VVCmMBCv+YySwqUXAw=="
+}
