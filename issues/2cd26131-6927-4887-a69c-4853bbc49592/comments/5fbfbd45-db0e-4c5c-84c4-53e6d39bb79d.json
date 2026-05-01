@@ -1,0 +1,10 @@
+{
+  "uuid": "5fbfbd45-db0e-4c5c-84c4-53e6d39bb79d",
+  "issue_uuid": "2cd26131-6927-4887-a69c-4853bbc49592",
+  "author": "doll-agent",
+  "content": "Already implemented. Every API the issue lists exists in ferray-stats:\n- unique (searching.rs:40) plus unique_values, unique_counts, unique_inverse.\n- searchsorted and searchsorted_with_sorter (sorting.rs:393, 417).\n- in1d (set_ops.rs:249).\n- intersect1d, union1d, setdiff1d (set_ops.rs:91/36/137).\n\nRe-exported from ferray meta-crate. Python bindings exist for unique, searchsorted, in1d, unique_extended.\n\nClosing as already-resolved.",
+  "created_at": "2026-05-01T23:12:44.824676045Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA9YjOsW+h3Vhp+o84Hm+W4Ld6udbhXDX/nZnQvJ2AIN03VFiPGCCHEnUtpDRPLqGVXHbCkoS3QD9bwn9BW61dDA=="
+}
