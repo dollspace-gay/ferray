@@ -110,6 +110,51 @@ where
     Array::from_vec(IxDyn::new(&new_shape), result)
 }
 
+/// In-place variant of [`fft`] writing the result into a pre-allocated
+/// `out` buffer (#429).
+///
+/// `out` must be a contiguous `Array<Complex<T>, IxDyn>` whose shape
+/// matches the result of `fft(a, n, axis, norm)`. Returns an error if
+/// the shapes mismatch or the buffer is non-contiguous. Useful for
+/// real-time signal processing where the output shape is known and
+/// repeated transforms should reuse the same allocation.
+///
+/// # Errors
+/// - Same as [`fft`] for axis/n validation.
+/// - `FerrayError::ShapeMismatch` if `out` has a different shape than
+///   the FFT would produce.
+/// - `FerrayError::InvalidValue` if `out` is non-contiguous.
+pub fn fft_into<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
+    n: Option<usize>,
+    axis: Option<isize>,
+    norm: FftNorm,
+    out: &mut Array<Complex<T>, IxDyn>,
+) -> FerrayResult<()>
+where
+    Complex<T>: ferray_core::Element,
+{
+    let shape = a.shape().to_vec();
+    let ndim = shape.len();
+    let ax = resolve_axis(ndim, axis)?;
+    let data = borrow_complex_flat(a);
+    let (new_shape, result) = fft_along_axis::<T>(&data, &shape, ax, n, false, norm)?;
+    if out.shape() != new_shape.as_slice() {
+        return Err(ferray_core::error::FerrayError::shape_mismatch(format!(
+            "fft_into: out shape {:?} does not match fft output shape {:?}",
+            out.shape(),
+            new_shape
+        )));
+    }
+    let out_slice = out.as_slice_mut().ok_or_else(|| {
+        ferray_core::error::FerrayError::invalid_value(
+            "fft_into requires a contiguous out buffer",
+        )
+    })?;
+    out_slice.copy_from_slice(&result);
+    Ok(())
+}
+
 /// Compute the one-dimensional inverse discrete Fourier Transform.
 ///
 /// Analogous to `numpy.fft.ifft`.
@@ -139,6 +184,46 @@ where
     let (new_shape, result) = fft_along_axis::<T>(&data, &shape, ax, n, true, norm)?;
 
     Array::from_vec(IxDyn::new(&new_shape), result)
+}
+
+/// In-place variant of [`ifft`] writing the result into a
+/// pre-allocated `out` buffer (#429). Same shape requirements and
+/// error model as [`fft_into`].
+///
+/// # Errors
+/// - Same as [`ifft`] for axis/n validation.
+/// - `FerrayError::ShapeMismatch` if `out`'s shape doesn't match
+///   the inverse FFT's output shape.
+/// - `FerrayError::InvalidValue` if `out` is non-contiguous.
+pub fn ifft_into<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
+    n: Option<usize>,
+    axis: Option<isize>,
+    norm: FftNorm,
+    out: &mut Array<Complex<T>, IxDyn>,
+) -> FerrayResult<()>
+where
+    Complex<T>: ferray_core::Element,
+{
+    let shape = a.shape().to_vec();
+    let ndim = shape.len();
+    let ax = resolve_axis(ndim, axis)?;
+    let data = borrow_complex_flat(a);
+    let (new_shape, result) = fft_along_axis::<T>(&data, &shape, ax, n, true, norm)?;
+    if out.shape() != new_shape.as_slice() {
+        return Err(ferray_core::error::FerrayError::shape_mismatch(format!(
+            "ifft_into: out shape {:?} does not match ifft output shape {:?}",
+            out.shape(),
+            new_shape
+        )));
+    }
+    let out_slice = out.as_slice_mut().ok_or_else(|| {
+        ferray_core::error::FerrayError::invalid_value(
+            "ifft_into requires a contiguous out buffer",
+        )
+    })?;
+    out_slice.copy_from_slice(&result);
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -527,6 +612,37 @@ mod tests {
                 rec.im
             );
         }
+    }
+
+    #[test]
+    fn fft_into_writes_into_preallocated_buffer() {
+        // #429: fft_into / ifft_into should match the allocating
+        // versions exactly and reject mis-sized output buffers.
+        let a = make_1d(vec![c(1.0, 0.0), c(0.0, 0.0), c(0.0, 0.0), c(0.0, 0.0)]);
+        let expected = fft(&a, None, None, FftNorm::Backward).unwrap();
+
+        let mut out: Array<Complex<f64>, IxDyn> =
+            Array::from_vec(IxDyn::new(&[4]), vec![c(0.0, 0.0); 4]).unwrap();
+        fft_into(&a, None, None, FftNorm::Backward, &mut out).unwrap();
+        for (e, o) in expected.iter().zip(out.iter()) {
+            assert!((e.re - o.re).abs() < 1e-12);
+            assert!((e.im - o.im).abs() < 1e-12);
+        }
+
+        // Round-trip through ifft_into.
+        let mut recovered: Array<Complex<f64>, IxDyn> =
+            Array::from_vec(IxDyn::new(&[4]), vec![c(0.0, 0.0); 4]).unwrap();
+        ifft_into(&out, None, None, FftNorm::Backward, &mut recovered).unwrap();
+        for (orig, rec) in a.iter().zip(recovered.iter()) {
+            assert!((orig.re - rec.re).abs() < 1e-10);
+            assert!((orig.im - rec.im).abs() < 1e-10);
+        }
+
+        // Wrong-size out buffer is rejected.
+        let mut wrong: Array<Complex<f64>, IxDyn> =
+            Array::from_vec(IxDyn::new(&[3]), vec![c(0.0, 0.0); 3]).unwrap();
+        let err = fft_into(&a, None, None, FftNorm::Backward, &mut wrong).unwrap_err();
+        assert!(err.to_string().contains("does not match"));
     }
 
     #[test]

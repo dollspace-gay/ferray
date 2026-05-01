@@ -83,6 +83,9 @@ pub use plan::FftPlan;
 // Complex FFTs (REQ-1..REQ-4)
 pub use complex::{fft, fft2, fftn, ifft, ifft2, ifftn};
 
+// Pre-allocated `_into` variants of the 1-D complex/real FFTs (#429).
+pub use complex::{fft_into, ifft_into};
+
 // Real-input convenience wrappers — auto-promote real arrays to complex.
 // For the Hermitian-folded half-spectrum form use `rfft`/`rfftn` instead.
 pub use complex::{fft_real, fft_real2, fft_realn, ifft_real};
@@ -90,8 +93,11 @@ pub use complex::{fft_real, fft_real2, fft_realn, ifft_real};
 // Real FFTs (REQ-5..REQ-7)
 pub use real::{irfft, irfft2, irfftn, rfft, rfft2, rfftn};
 
+// Pre-allocated `_into` variants of the 1-D real FFTs (#429).
+pub use real::{irfft_into, rfft_into};
+
 // Hermitian FFTs (REQ-8)
-pub use hermitian::{hfft, ihfft};
+pub use hermitian::{hfft, hfft2, hfftn, ihfft, ihfft2, ihfftn};
 
 // Frequency utilities (REQ-9, REQ-10)
 pub use freq::{fftfreq, rfftfreq};

@@ -67,6 +67,43 @@ where
     Array::from_vec(IxDyn::new(&out_shape), out_data)
 }
 
+/// In-place variant of [`rfft`] writing into a pre-allocated `out`
+/// buffer (#429).
+///
+/// # Errors
+/// - Same as [`rfft`] for axis/n validation.
+/// - `FerrayError::ShapeMismatch` if `out`'s shape doesn't match the
+///   rfft output shape (`n/2 + 1` along the transform axis).
+/// - `FerrayError::InvalidValue` if `out` is non-contiguous.
+pub fn rfft_into<T: FftFloat, D: Dimension>(
+    a: &Array<T, D>,
+    n: Option<usize>,
+    axis: Option<isize>,
+    norm: FftNorm,
+    out: &mut Array<Complex<T>, IxDyn>,
+) -> FerrayResult<()>
+where
+    Complex<T>: Element,
+{
+    let shape = a.shape().to_vec();
+    let ndim = shape.len();
+    let ax = resolve_axis(ndim, axis)?;
+    let real_data: Vec<T> = a.iter().copied().collect();
+    let (out_shape, out_data) = rfft_along_axis::<T>(&real_data, &shape, ax, n, norm)?;
+    if out.shape() != out_shape.as_slice() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "rfft_into: out shape {:?} does not match rfft output shape {:?}",
+            out.shape(),
+            out_shape
+        )));
+    }
+    let out_slice = out
+        .as_slice_mut()
+        .ok_or_else(|| FerrayError::invalid_value("rfft_into requires a contiguous out buffer"))?;
+    out_slice.copy_from_slice(&out_data);
+    Ok(())
+}
+
 /// Compute the inverse of `rfft`, producing real-valued output.
 ///
 /// Analogous to `numpy.fft.irfft`. Takes `n/2 + 1` complex values and
@@ -111,6 +148,51 @@ where
     let complex_data: Vec<Complex<T>> = a.iter().copied().collect();
     let (out_shape, out_data) = irfft_along_axis::<T>(&complex_data, &shape, ax, output_len, norm)?;
     Array::from_vec(IxDyn::new(&out_shape), out_data)
+}
+
+/// In-place variant of [`irfft`] writing real-valued output into a
+/// pre-allocated `out` buffer (#429).
+///
+/// # Errors
+/// - Same as [`irfft`] for axis/n validation.
+/// - `FerrayError::ShapeMismatch` if `out`'s shape doesn't match the
+///   irfft output shape.
+/// - `FerrayError::InvalidValue` if `out` is non-contiguous.
+pub fn irfft_into<T: FftFloat, D: Dimension>(
+    a: &Array<Complex<T>, D>,
+    n: Option<usize>,
+    axis: Option<isize>,
+    norm: FftNorm,
+    out: &mut Array<T, IxDyn>,
+) -> FerrayResult<()>
+where
+    Complex<T>: Element,
+{
+    let shape = a.shape().to_vec();
+    let ndim = shape.len();
+    let ax = resolve_axis(ndim, axis)?;
+    let half_len = shape[ax];
+    let output_len = n.unwrap_or(2 * (half_len - 1));
+    if output_len == 0 {
+        return Err(FerrayError::invalid_value(
+            "irfft_into output length must be > 0",
+        ));
+    }
+    let complex_data: Vec<Complex<T>> = a.iter().copied().collect();
+    let (out_shape, out_data) =
+        irfft_along_axis::<T>(&complex_data, &shape, ax, output_len, norm)?;
+    if out.shape() != out_shape.as_slice() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "irfft_into: out shape {:?} does not match irfft output shape {:?}",
+            out.shape(),
+            out_shape
+        )));
+    }
+    let out_slice = out
+        .as_slice_mut()
+        .ok_or_else(|| FerrayError::invalid_value("irfft_into requires a contiguous out buffer"))?;
+    out_slice.copy_from_slice(&out_data);
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -418,6 +500,30 @@ mod tests {
         for (o, r) in original.iter().zip(rec_data.iter()) {
             assert!((o - r).abs() < 1e-10, "{o} vs {r}");
         }
+    }
+
+    #[test]
+    fn rfft_irfft_into_roundtrip() {
+        // #429: pre-allocated _into variants for real FFTs.
+        let original = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let a = make_real_1d(original.clone());
+
+        let mut spectrum: Array<Complex<f64>, IxDyn> =
+            Array::from_vec(IxDyn::new(&[5]), vec![Complex::new(0.0, 0.0); 5]).unwrap();
+        rfft_into(&a, None, None, FftNorm::Backward, &mut spectrum).unwrap();
+
+        let mut recovered: Array<f64, IxDyn> =
+            Array::from_vec(IxDyn::new(&[8]), vec![0.0; 8]).unwrap();
+        irfft_into(&spectrum, Some(8), None, FftNorm::Backward, &mut recovered).unwrap();
+        for (o, r) in original.iter().zip(recovered.iter()) {
+            assert!((o - r).abs() < 1e-10);
+        }
+
+        // Wrong-size out buffer is rejected.
+        let mut wrong: Array<Complex<f64>, IxDyn> =
+            Array::from_vec(IxDyn::new(&[4]), vec![Complex::new(0.0, 0.0); 4]).unwrap();
+        let err = rfft_into(&a, None, None, FftNorm::Backward, &mut wrong).unwrap_err();
+        assert!(err.to_string().contains("does not match"));
     }
 
     #[test]
