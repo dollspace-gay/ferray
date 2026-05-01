@@ -221,10 +221,17 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
         }
     }
 
-    /// Return a mutable reference to the underlying data array.
+    /// Return a mutable element slice into the underlying data array.
+    ///
+    /// The masked-array invariant (data shape == mask shape) requires
+    /// the data length to remain fixed. Returning `&mut [T]` here
+    /// (instead of `&mut Array<T, D>`) lets callers update individual
+    /// element values while blocking any reshape/resize that would
+    /// break the invariant (#273). Returns `None` for non-contiguous
+    /// data layouts where a flat slice can't be exposed.
     #[inline]
-    pub const fn data_mut(&mut self) -> &mut Array<T, D> {
-        &mut self.data
+    pub fn data_mut(&mut self) -> Option<&mut [T]> {
+        self.data.as_slice_mut()
     }
 
     /// Return the shape of the masked array.

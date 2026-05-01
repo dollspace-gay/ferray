@@ -585,6 +585,24 @@ mod tests {
     }
 
     #[test]
+    fn data_mut_only_exposes_element_slice() {
+        // #273: data_mut returns &mut [T], not &mut Array — callers can
+        // update values but cannot reshape or resize.
+        let data = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([4]), vec![false; 4]).unwrap();
+        let mut ma = MaskedArray::new(data, mask).unwrap();
+        // Mutate values in place.
+        if let Some(s) = ma.data_mut() {
+            s[2] = 99.0;
+        }
+        assert_eq!(ma.shape(), &[4]);
+        let vals: Vec<f64> = ma.data().iter().copied().collect();
+        assert_eq!(vals, vec![1.0, 2.0, 99.0, 4.0]);
+        // Mask stays the same length and value.
+        assert_eq!(ma.mask().shape(), &[4]);
+    }
+
+    #[test]
     fn masked_add_array_test() {
         let data = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
