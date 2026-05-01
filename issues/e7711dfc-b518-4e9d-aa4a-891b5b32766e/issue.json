@@ -1,0 +1,10 @@
+{
+  "uuid": "e7711dfc-b518-4e9d-aa4a-891b5b32766e",
+  "display_id": 719,
+  "title": "ferray-python phase 4 follow-up: numpy.lib top-level (vectorize, apply_along_axis, apply_over_axes, piecewise from ferray-window functional utilities)",
+  "status": "open",
+  "priority": "low",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-01T17:11:31.351659459Z",
+  "updated_at": "2026-05-01T17:11:31.351659459Z"
+}
