@@ -2,11 +2,12 @@
   "uuid": "4c09ccc9-38ac-4c17-9931-100fd671e6f6",
   "display_id": 692,
   "title": "ferray-python phase 1 follow-up: bind frombuffer/fromfile/fromstring/fromiter/fromfunction",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T16:05:39.369860310Z",
-  "updated_at": "2026-05-01T16:05:40.781181367Z",
+  "updated_at": "2026-05-01T17:57:11.962856474Z",
+  "closed_at": "2026-05-01T17:57:11.962856474Z",
   "labels": [
     "feature"
   ]
