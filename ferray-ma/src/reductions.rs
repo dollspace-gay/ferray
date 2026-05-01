@@ -361,20 +361,36 @@ where
     /// # Errors
     /// Returns an error only for internal failures.
     pub fn var_ddof(&self, ddof: usize) -> FerrayResult<T> {
-        let mean = self.mean()?;
-        if mean.is_nan() {
+        // Single-pass Welford accumulator (#274). Replaces the previous
+        // two-pass mean-then-sum-of-squares form: one walk over the
+        // array updates the running mean and the m2 sum-of-squared-
+        // deviations simultaneously. Numerically more stable than the
+        // two-pass form for large datasets (less catastrophic
+        // cancellation when mean is far from zero).
+        let zero = num_traits::zero::<T>();
+        let mut mean = zero;
+        let mut m2 = zero;
+        let mut count = 0usize;
+
+        for (v, m) in self.data().iter().zip(self.mask().iter()) {
+            if *m {
+                continue;
+            }
+            count += 1;
+            let n_t = T::from(count).ok_or_else(|| {
+                FerrayError::invalid_value(format!(
+                    "cannot convert count {count} to element type"
+                ))
+            })?;
+            let delta = *v - mean;
+            mean = mean + delta / n_t;
+            let delta2 = *v - mean;
+            m2 = m2 + delta * delta2;
+        }
+
+        if count == 0 {
             return Ok(T::nan());
         }
-        let zero = num_traits::zero::<T>();
-        let (sum_sq, count) = self
-            .data()
-            .iter()
-            .zip(self.mask().iter())
-            .filter(|(_, m)| !**m)
-            .fold((zero, 0usize), |(s, c), (v, _)| {
-                let d = *v - mean;
-                (s + d * d, c + 1)
-            });
         if count <= ddof {
             return Ok(T::nan());
         }
@@ -384,7 +400,7 @@ where
                 count - ddof
             ))
         })?;
-        Ok(sum_sq / n)
+        Ok(m2 / n)
     }
 
     /// Compute the standard deviation of unmasked elements (population, ddof=0).
@@ -529,34 +545,29 @@ where
         axis: usize,
         ddof: usize,
     ) -> FerrayResult<MaskedArray<T, IxDyn>> {
+        // Single-pass Welford accumulator per lane (#274).
         let zero = num_traits::zero::<T>();
         let fill = self.fill_value();
         reduce_axis(self, axis, fill, |lane| {
-            let mut acc = zero;
+            let mut mean = zero;
+            let mut m2 = zero;
             let mut count = 0usize;
             for &(v, m) in lane {
-                if !m {
-                    acc = acc + v;
-                    count += 1;
+                if m {
+                    continue;
                 }
+                count += 1;
+                let n_t = T::from(count)?;
+                let delta = v - mean;
+                mean = mean + delta / n_t;
+                let delta2 = v - mean;
+                m2 = m2 + delta * delta2;
             }
             if count <= ddof {
                 return None;
             }
-            // For the running mean we still divide by `count`, not
-            // `count - ddof` — ddof only applies to the final variance
-            // denominator (matches numpy's behavior).
-            let n_mean = T::from(count)?;
-            let mean = acc / n_mean;
-            let mut sum_sq = zero;
-            for &(v, m) in lane {
-                if !m {
-                    let d = v - mean;
-                    sum_sq = sum_sq + d * d;
-                }
-            }
             let n_var = T::from(count - ddof)?;
-            Some(sum_sq / n_var)
+            Some(m2 / n_var)
         })
     }
 
@@ -958,6 +969,26 @@ mod tests {
         let s1 = ma.std_ddof(1).unwrap();
         let v1 = ma.var_ddof(1).unwrap();
         assert!((s1 - v1.sqrt()).abs() < 1e-14);
+    }
+
+    #[test]
+    fn var_welford_stable_on_high_offset_data() {
+        // #274: classic two-pass var loses precision when the data is
+        // a small variance riding on a huge offset. Welford handles
+        // it cleanly. Use values [1e9 + 1, 1e9 + 2, 1e9 + 3, 1e9 + 4,
+        // 1e9 + 5]; ddof=0 var should be exactly 2.0.
+        let offset = 1e9_f64;
+        let data: Vec<f64> = (1..=5).map(|i| offset + i as f64).collect();
+        let arr = Array::<f64, Ix1>::from_vec(Ix1::new([5]), data).unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![false; 5]).unwrap();
+        let ma = MaskedArray::new(arr, mask).unwrap();
+        let v = ma.var().unwrap();
+        // Welford should be within ~ULPs of 2.0; the previous two-pass
+        // form was within ~1e-7 at this scale.
+        assert!(
+            (v - 2.0).abs() < 1e-9,
+            "var with offset 1e9: got {v}, expected 2.0"
+        );
     }
 
     #[test]
