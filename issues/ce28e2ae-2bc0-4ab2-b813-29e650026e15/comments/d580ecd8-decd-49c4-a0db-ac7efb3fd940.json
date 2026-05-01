@@ -1,0 +1,10 @@
+{
+  "uuid": "d580ecd8-decd-49c4-a0db-ac7efb3fd940",
+  "issue_uuid": "ce28e2ae-2bc0-4ab2-b813-29e650026e15",
+  "author": "doll-agent",
+  "content": "Replace flatten-then-reshape in IntoNumPy<Ix2>::into_pyarray and IntoNumPy<IxDyn>::into_pyarray with direct PyArray2::from_owned_array / PyArrayDyn::from_owned_array. ferray's into_ndarray() is a move (no copy) and the underlying ndarray::Array preserves contiguity, so PyO3's numpy crate sees the source layout and produces correctly-flagged output without a manual F/C branch. -32 lines. Drops PyArrayMethods/NPY_ORDER imports from the lib (kept PyArrayMethods inside the test module since tests still call .readonly()).",
+  "created_at": "2026-05-01T22:20:27.814593664Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA3puTezbfoEcdpFt6yfvi6npVCVCn+ERXIWcdos3mUe5EGaujD+wgKyk/GG35BhtNzW9rbgyOQRTaktgg6IUOBA=="
+}
