@@ -1,0 +1,10 @@
+{
+  "uuid": "ba49f288-6960-4caf-ad63-fdfceeea06ef",
+  "issue_uuid": "a5e6ca30-8def-47ce-8fe1-36d770d6f18b",
+  "author": "doll-agent",
+  "content": "Done. var() and std() were hardcoded to ddof=0 (population). numpy.ma accepts a ddof keyword for Bessel's correction (ddof=1 = sample variance, divides by n-1).\n\nAdded 4 new methods (var_ddof, std_ddof, var_axis_ddof, std_axis_ddof). Existing var/std/var_axis/std_axis become thin shims to the ddof=0 path - no breaking change.\n\nEdge cases: count <= ddof returns NaN (scalar) or masks the cell (axis), matching numpy. Running mean divides by count, not count-ddof.\n\n6 tests added. ferray-ma: 187 -> 193 tests, all passing, clippy clean. Commit c82d8ecc.",
+  "created_at": "2026-05-01T21:16:02.814297785Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAeqbWcbg1DWI8zbEMO5JWAUd5k7mD/XVmiMJrwLiSH6edadd7sdIexP5Mg8t+jWazbZi0IuvuurEXPne78+viDg=="
+}
