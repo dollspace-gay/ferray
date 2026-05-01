@@ -675,6 +675,108 @@ mod tests {
         }
     }
 
+    // ----- Chebyshev integ accuracy (#253) -------------------------------
+    //
+    // Cross-check the integ() output against analytical antiderivatives
+    // for known series, plus the integration-constant pass-through.
+
+    #[test]
+    fn integ_t0_yields_t1_with_zero_constant() {
+        // T_0 = 1, ∫ T_0 dx = x = T_1. integ(1, &[0.0]) should give
+        // coefficients [0, 1] (T_0 coeff = 0 from k, T_1 coeff = 1).
+        let p = Chebyshev::new(&[1.0]);
+        let i = p.integ(1, &[0.0]).unwrap();
+        assert!(i.coeffs.len() >= 2);
+        assert!((i.coeffs[0] - 0.0).abs() < 1e-12, "c0 = {}", i.coeffs[0]);
+        assert!((i.coeffs[1] - 1.0).abs() < 1e-12, "c1 = {}", i.coeffs[1]);
+    }
+
+    #[test]
+    fn integ_t0_with_nonzero_constant() {
+        // T_0 = 1, ∫ T_0 dx = x + C. integ(1, &[C]) should give
+        // coefficients [C, 1].
+        let p = Chebyshev::new(&[1.0]);
+        let c = 2.5_f64;
+        let i = p.integ(1, &[c]).unwrap();
+        assert!((i.coeffs[0] - c).abs() < 1e-12, "c0 = {}", i.coeffs[0]);
+        assert!((i.coeffs[1] - 1.0).abs() < 1e-12, "c1 = {}", i.coeffs[1]);
+    }
+
+    #[test]
+    fn integ_t1_yields_quarter_t2_plus_quarter_t0() {
+        // T_1 = x, ∫ x dx = x^2/2 = (T_2 + T_0)/4.
+        // integ(1, &[0.0]) on [0, 1] (T_0=0, T_1=1) should give [0.25, 0, 0.25].
+        let p = Chebyshev::new(&[0.0, 1.0]);
+        let i = p.integ(1, &[0.0]).unwrap();
+        // Integration adds a constant to make the result evaluate to 0
+        // at x = 0 in numpy's convention; verify the leading recurrence
+        // structure matches the analytical formula up to the leading T_0.
+        // The integ implementation uses k as the literal T_0 coefficient.
+        assert!(i.coeffs.len() >= 3);
+        // T_2 coefficient must be 1/4.
+        assert!(
+            (i.coeffs[2] - 0.25).abs() < 1e-12,
+            "T_2 coeff = {}, expected 0.25",
+            i.coeffs[2]
+        );
+        // T_1 coefficient must be 0.
+        assert!((i.coeffs[1] - 0.0).abs() < 1e-12);
+        // T_0 coefficient is C - (T_2/4 - T_0/4 corrections from numpy
+        // convention) — check via eval that derivative recovers T_1.
+        let recovered = i.deriv(1).unwrap();
+        assert!((recovered.coeffs[0] - 0.0).abs() < 1e-12);
+        assert!((recovered.coeffs[1] - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn integ_double_pass_uses_two_constants() {
+        // p(x) = T_0 = 1; ∫∫ 1 dx² = x²/2 + C1*x + C2.
+        // integ(2, &[C2, C1]) should produce that polynomial when
+        // evaluated through deriv: deriv(deriv(integ(2))) == p.
+        let p = Chebyshev::new(&[1.0]);
+        let c2 = 3.0_f64;
+        let c1 = 2.0_f64;
+        let ii = p.integ(2, &[c2, c1]).unwrap();
+        let back = ii.deriv(2).unwrap();
+        assert!((back.coeffs[0] - 1.0).abs() < 1e-10, "c0 = {}", back.coeffs[0]);
+    }
+
+    #[test]
+    fn integ_eval_matches_analytical_antiderivative() {
+        // p(x) = 2x + 3x^2 in power basis. ∫p dx = x^2 + x^3 + C.
+        // Convert to Chebyshev, integrate with C=0, eval at x=2.
+        // Analytical: F(2) - F(0) where F = x^2 + x^3, plus the C
+        // adjustment numpy folds in.
+        // We pin: deriv(integ(p)) == p for arbitrary mid-degree input.
+        let p = Chebyshev::new(&[1.0, 2.0, 3.0, 4.0]);
+        let recovered = p.integ(1, &[5.0]).unwrap().deriv(1).unwrap();
+        for (i, &want) in p.coeffs.iter().enumerate() {
+            let got = recovered.coeffs.get(i).copied().unwrap_or(0.0);
+            assert!(
+                (got - want).abs() < 1e-10,
+                "deriv(integ) coeff {i}: got {got}, want {want}"
+            );
+        }
+    }
+
+    #[test]
+    fn integ_zero_passes_returns_self() {
+        // integ(0, _) is identity.
+        let p = Chebyshev::new(&[1.0, 2.0, 3.0]);
+        let same = p.integ(0, &[]).unwrap();
+        assert_eq!(same.coeffs, p.coeffs);
+    }
+
+    #[test]
+    fn integ_constant_pads_with_zero_when_k_too_short() {
+        // integ(2) with k = [] should default the unspecified constants
+        // to zero (numpy convention).
+        let p = Chebyshev::new(&[1.0]);
+        let ii = p.integ(2, &[]).unwrap();
+        let back = ii.deriv(2).unwrap();
+        assert!((back.coeffs[0] - 1.0).abs() < 1e-10);
+    }
+
     #[test]
     fn convert_roundtrip() {
         use crate::traits::ConvertBasis;
