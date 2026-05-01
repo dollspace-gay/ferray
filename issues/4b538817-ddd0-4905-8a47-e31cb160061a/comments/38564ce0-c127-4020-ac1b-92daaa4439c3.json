@@ -1,0 +1,10 @@
+{
+  "uuid": "38564ce0-c127-4020-ac1b-92daaa4439c3",
+  "issue_uuid": "4b538817-ddd0-4905-8a47-e31cb160061a",
+  "author": "doll-agent",
+  "content": "Done. Polynomial APIs had no NaN/Inf input validation; non-finite values silently produced garbage in three error-prone paths. Added validation in mapping::validate_domain_window (covers all 6 bases through with_domain/with_window), roots::find_roots_from_power_coeffs (per-coefficient check), and fitting::least_squares_fit (Vandermonde entries + y values; weights already covered by existing #256 rejection).\n\nNaN-tolerant operations (eval, add, sub, mul, deriv, integ) keep their NaN-propagation - matches numpy's arithmetic convention.\n\n7 tests added covering all rejection paths.\n\nferray-polynomial: 160 -> 167 tests, all passing, clippy clean. Commit 87b9a1d2.",
+  "created_at": "2026-05-01T20:53:33.121991237Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABADyxiJoY8ra9uo1R+cQw25+GYSOrVurhsYRUclziS3RldNKc7k0ll+J8QZGNr1cW7odKIEavist3VJ8F2LAayCQ=="
+}
