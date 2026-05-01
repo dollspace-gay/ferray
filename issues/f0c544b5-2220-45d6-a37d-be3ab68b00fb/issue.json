@@ -3,11 +3,12 @@
   "display_id": 244,
   "title": "ferray-io: test cleanup relies on remove_file, not RAII",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nTests leave files on panic. Use tempfile::TempDir.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:52:22.652879239Z",
-  "updated_at": "2026-03-25T15:52:33.195840472Z",
+  "updated_at": "2026-05-01T20:33:40.154388400Z",
+  "closed_at": "2026-05-01T20:33:40.154388400Z",
   "labels": [
     "bug",
     "qa-audit"
