@@ -1,0 +1,10 @@
+{
+  "uuid": "b78ef2a1-79d0-4692-a1c7-2a5e199e2156",
+  "issue_uuid": "caa4941a-af23-423b-8d82-6a387b588708",
+  "author": "doll-agent",
+  "content": "Added 5 non-symmetric eig correctness tests at the bottom of decomp/eigen.rs.\n\neig() previously had only the non-square error test; eigenvalue/eigenvector correctness on real non-symmetric inputs was untested.\n\nTests added:\n- eig_upper_triangular_real_spectrum: spectrum == diagonal entries, verifies A*v_j == lambda_j*v_j\n- eig_non_symmetric_3x3_real_spectrum: block-triangular with mixed real spectrum {1,4,6}\n- eig_rotation_matrix_complex_spectrum: 90-deg rotation returns {+i,-i}, conjugate-pair check\n- eigvals_complex_spectrum: eigvals path matches eig path\n- eig_reconstruction_diagonalizable: V*Lambda*V^-1 == A for a 2x2 shear\n\nShared assert_eig_identity helper checks the spectral identity column-by-column at 1e-9 absolute tolerance.\n\ndecomp::eigen test count: 20 -> 25, all passing, clippy clean. Commit 3041af00.",
+  "created_at": "2026-05-01T20:17:01.885944367Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA1hZy05cjux7Sb0HrFcOnPkIw7O6OKjxn3kv/DYKALXBTVfBto/vJ/Rvtz2+1Eh9lkoZACcihIVw9ftWGwH44Aw=="
+}
