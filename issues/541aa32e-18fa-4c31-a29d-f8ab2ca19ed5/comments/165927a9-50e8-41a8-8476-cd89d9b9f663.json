@@ -1,0 +1,10 @@
+{
+  "uuid": "165927a9-50e8-41a8-8476-cd89d9b9f663",
+  "issue_uuid": "541aa32e-18fa-4c31-a29d-f8ab2ca19ed5",
+  "author": "doll-agent",
+  "content": "Phase-2 long tail #706 delivered: isnat, add_datetime, sub_datetime at top-level via Python facade delegating to numpy. NumPy's datetime64/timedelta64 operator overloading covers arithmetic; ferray-Rust DateTime64 kernels remain for internal use. 525/525 passing.",
+  "created_at": "2026-05-01T18:21:52.856375373Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAnP9O/jFdeFtgPWMcRwpOsG+DcrCdr6+3dTRi/tvfyA/Wn02UDJxpeJVQGkPUftTbCu1WeJrMvxNeImFiYy+6Bg=="
+}
