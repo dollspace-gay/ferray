@@ -1,0 +1,10 @@
+{
+  "uuid": "cc642524-e74c-4d01-91c7-387d1fdb14c8",
+  "issue_uuid": "041679bc-d7a8-42ff-acd4-bbff22c0168a",
+  "author": "doll-agent",
+  "content": "Done. Existing test corpus used 3-7 element arrays. Added tests/large_arrays.rs with 6 tests at 10k-100k scale.\n\nArrow (4): i32 10k, f64 100k bit-exact, bool 50k (mixed patterns for BooleanArray chunking), 2D 100x100 row-major flatten.\nPolars (2): i64 10k, f64 100k bit-exact.\n\nModule-level cfg gates so default cargo test skips them. 6 new integration tests, all passing, clippy clean. Commit 50f768df.",
+  "created_at": "2026-05-01T22:27:30.681053570Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAbzD7i6fMX4uD+KRZDXfyUNq/AodzfQw7UKLPGESR6cDG+uIn4yw2FezhkqcAjzfCJgtQvylxe3qbCgXqvKgTAg=="
+}
