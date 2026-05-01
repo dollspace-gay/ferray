@@ -1,0 +1,10 @@
+{
+  "uuid": "12ba6561-3939-4ce8-84cc-f301aa6c2520",
+  "issue_uuid": "4a7ba8ed-8dc5-4da1-8a48-8f696759b287",
+  "author": "doll-agent",
+  "content": "Change MaskedArray::data_mut signature from -> &mut Array<T, D> to -> Option<&mut [T]>. Returning the full mutable Array let callers reshape/resize, breaking the (data shape == mask shape) invariant. The slice form permits in-place element updates only. Returns None for non-contiguous layouts where a flat slice can't be exposed.\n\nNo real callers exist (verified via grep), so the change is non-breaking in practice.",
+  "created_at": "2026-05-01T21:20:13.593692017Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA8IjKh69yvB5Mj7cR5crdNL3okacpavAKvW4MmaNd7Fhng/k9u/U0ccVeXbeJyvo5q6nMX1u9SRTcxdet0d8kAg=="
+}
