@@ -1,0 +1,10 @@
+{
+  "uuid": "cf2ffe7a-be10-4e19-8764-100ad21e5883",
+  "issue_uuid": "d036f965-63fc-469d-8bcb-781577a40d1c",
+  "author": "doll-agent",
+  "content": "Done. The strings oracle suite covered case ops, strip variants, and search ops but skipped alignment (center/ljust/rjust/zfill), concat (add/multiply), and regex (match/extract).\n\nAdded 8 fixture files pinned to numpy semantics: center (left-bias on odd remainder), ljust/rjust (passthrough on width-smaller), zfill (sign preservation), add (with broadcast and empty composition), multiply (n=0/1/3), match (digit-anywhere and anchored), extract (first capture group with empty fallback).\n\n8 new oracle test functions in tests/oracle.rs.\n\nferray-strings: 12 -> 20 oracle tests, all passing, clippy clean.",
+  "created_at": "2026-05-01T22:00:09.119867320Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA6kH7bUuH19SCThiOkQmo8bI00KC5AQUjs9w9p94cR9VjLA/T4QBuE2nlav4FTfP2cyzxdCE4De8vhtm7pQPaCw=="
+}
