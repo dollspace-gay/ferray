@@ -1,0 +1,10 @@
+{
+  "uuid": "8789ee85-fe64-4c0f-a954-d605009f5dba",
+  "issue_uuid": "1886829b-ea5b-4405-a2ec-03b66ed5c66a",
+  "author": "doll-agent",
+  "content": "numpy.char namespace delivered. src/char.rs binds 22 functions: case ops (lower/upper/capitalize/title/swapcase), strip family (strip/lstrip/rstrip with optional chars), search/query (count/find/startswith/endswith/str_len), modification (replace/add/multiply), and pairwise comparison (equal/not_equal/less/less_equal/greater/greater_equal). Marshalling: numpy str ndarray <-> ferray StringArray<IxDyn> via numpy.asarray — no foreign pyclass; users see numpy.ndarray throughout. 28 new pytest cases all passing (448/448 total). Deferred follow-up: regex/encoding/splitting/alignment/translate ops in ferray-strings.",
+  "created_at": "2026-05-01T17:26:10.745201472Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAqfpNThhNGxRpoMVAdY5wjanfCP3G3vVn1M9B4CD4wZAlEaDdccvqpnGVlT2XA4NUtlSATSmxUZBCMJ83o9p0Aw=="
+}
