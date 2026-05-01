@@ -1,0 +1,10 @@
+{
+  "uuid": "14d9205c-3a66-4fdc-8d60-31a8a3c1edf7",
+  "issue_uuid": "2a67b968-79d8-4da0-8b0a-c7c50e31164d",
+  "author": "doll-agent",
+  "content": "Delete the 10 pairwise From<X> impls from chebyshev.rs, legendre.rs, hermite.rs, hermite_e.rs, laguerre.rs. ConvertBasis::convert<T>() (blanket-impl'd via ToPowerBasis + FromPowerBasis) already covers the same conversions through the canonical power-basis pivot. Verified no callers anywhere in the workspace use the bare ::from(X) form — only Self::from_power_basis() and .convert::<T>().",
+  "created_at": "2026-05-01T20:45:29.401668360Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABApPpKiDLl2S897qtm2ykpQAWeVS8dCmWEEtnEVGimAi0lfGjwH/ixqV83V+RCVUHtHAIITBMtjXRCUDEOFFH0Cw=="
+}
