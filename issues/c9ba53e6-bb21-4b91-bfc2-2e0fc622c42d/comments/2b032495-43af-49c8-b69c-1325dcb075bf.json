@@ -1,0 +1,10 @@
+{
+  "uuid": "2b032495-43af-49c8-b69c-1325dcb075bf",
+  "issue_uuid": "c9ba53e6-bb21-4b91-bfc2-2e0fc622c42d",
+  "author": "doll-agent",
+  "content": "Deferred: substantial refactor across Dimension trait + every indexing method.\n\nThe refactor:\n1. Extend Dimension with rank-relating associated types (mirroring ndarray's RemoveAxis/InsertAxis): type Smaller: Dimension; type Larger: Dimension. Ix2::Smaller = Ix1, Ix3::Smaller = Ix2, IxDyn::Smaller = IxDyn (closed under the operation).\n2. Change index_axis/slice_axis/insert_axis return types from ArrayView<T, IxDyn> to ArrayView<T, D::Smaller>/<T, D::Larger>. ~10 signatures across owned.rs, view.rs, view_mut.rs, indexing/basic.rs.\n3. Update call sites that consumed IxDyn. Some genuinely want IxDyn (dynamic-rank algorithms); they keep .into_dyn() at the boundary.\n4. Update batch ops in ferray-linalg, ferray-fft etc. that currently exploit the IxDyn return shape. ~20 call sites workspace-wide.\n\nScope: ~3-4 days dedicated work across ferray-core + half the downstream crates.\n\nWorth doing eventually because ferray's selling point is compile-time rank safety; losing it at every index_axis is a real wart. The D::NdarrayDim: ndarray::RemoveAxis bounds in 10+ method signatures already encode the constraint conceptually - just not exposed at the type level.\n\nDeferred because the change cuts across many files and risks regressing batch ops that the IxDyn shape smoothly handled. Lands best as a single coordinated PR.\n\nClosing as decided-future. Filed as roadmap.",
+  "created_at": "2026-05-01T22:45:17.309693371Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAU8bc+wIgoIGFTYxACwsD/yFtCMoV7hyhicPjdf31OEgSEkpomFNtP23phszt9nKCyrK6a49JiC4ggqeafH4DBw=="
+}
