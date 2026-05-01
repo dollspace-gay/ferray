@@ -78,6 +78,8 @@ pub mod nditer;
 pub mod ops;
 #[cfg(feature = "std")]
 pub mod prelude;
+#[cfg(feature = "std")]
+pub mod writeback;
 
 // Re-export key types at crate root for ergonomics (std only)
 #[cfg(feature = "std")]
