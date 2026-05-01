@@ -144,22 +144,41 @@ impl<D: ferray_core::dimension::Dimension> ToArrowBool for ferray_core::Array<bo
 
 /// Extension trait for converting an Arrow primitive array to a ferray
 /// 1-D array.
-pub trait FromArrow<T: Element>: Sized {
-    /// Convert an Arrow array to a ferray `Array1<T>`.
+///
+/// The conversion always copies (Arrow buffers can be ref-counted but
+/// ferray arrays own their backing `Vec<T>`), so the receiver is
+/// `&self` rather than `self` (#309). Borrow form lets callers reuse
+/// the Arrow array after conversion.
+pub trait FromArrow<T: Element> {
+    /// Convert an Arrow array reference to a ferray `Array1<T>`.
     ///
     /// # Errors
     ///
     /// Returns [`FerrayError::InvalidDtype`] if the Arrow array dtype does
     /// not match `T`, or [`FerrayError::InvalidValue`] if the Arrow array
     /// contains nulls (ferray arrays do not support null values).
-    fn into_ferray(self) -> Result<Array1<T>, FerrayError>;
+    fn to_ferray(&self) -> Result<Array1<T>, FerrayError>;
+
+    /// Compatibility alias for [`Self::to_ferray`]. Previously named
+    /// `into_ferray(self)` even though it always copied; the consuming
+    /// receiver was unnecessary (#309). Forwards to `to_ferray`.
+    #[deprecated(
+        since = "0.3.2",
+        note = "use `to_ferray` (takes &self instead of self) — the consuming form was misleading because the impl always copies"
+    )]
+    fn into_ferray(self) -> Result<Array1<T>, FerrayError>
+    where
+        Self: Sized,
+    {
+        self.to_ferray()
+    }
 }
 
 impl<T: ArrowElement> FromArrow<T> for PrimitiveArray<T::ArrowType>
 where
     T::ArrowType: ArrowPrimitiveType<Native = T>,
 {
-    fn into_ferray(self) -> Result<Array1<T>, FerrayError> {
+    fn to_ferray(&self) -> Result<Array1<T>, FerrayError> {
         // Validate no nulls
         if self.null_count() > 0 {
             return Err(FerrayError::invalid_value(format!(
@@ -186,18 +205,32 @@ where
 }
 
 /// Extension trait for converting an Arrow [`BooleanArray`] to a ferray
-/// `Array1<bool>`.
-pub trait FromArrowBool: Sized {
-    /// Convert an Arrow boolean array to a ferray `Array1<bool>`.
+/// `Array1<bool>`. Receiver is `&self` (#309) because the conversion
+/// always copies.
+pub trait FromArrowBool {
+    /// Convert an Arrow boolean array reference to a ferray `Array1<bool>`.
     ///
     /// # Errors
     ///
     /// Returns [`FerrayError::InvalidValue`] if the array contains nulls.
-    fn into_ferray_bool(self) -> Result<Array1<bool>, FerrayError>;
+    fn to_ferray_bool(&self) -> Result<Array1<bool>, FerrayError>;
+
+    /// Compatibility alias for [`Self::to_ferray_bool`]; the original
+    /// consuming receiver was unnecessary because the impl copies (#309).
+    #[deprecated(
+        since = "0.3.2",
+        note = "use `to_ferray_bool` (takes &self instead of self) — the consuming form was misleading because the impl always copies"
+    )]
+    fn into_ferray_bool(self) -> Result<Array1<bool>, FerrayError>
+    where
+        Self: Sized,
+    {
+        self.to_ferray_bool()
+    }
 }
 
 impl FromArrowBool for BooleanArray {
-    fn into_ferray_bool(self) -> Result<Array1<bool>, FerrayError> {
+    fn to_ferray_bool(&self) -> Result<Array1<bool>, FerrayError> {
         if self.null_count() > 0 {
             return Err(FerrayError::invalid_value(format!(
                 "Arrow BooleanArray contains {} null values; ferray arrays do not support nulls",
@@ -412,7 +445,7 @@ mod tests {
                 assert_eq!(arrow_arr.len(), len);
 
                 // arrow -> ferray
-                let back: Array1<$ty> = arrow_arr.into_ferray().unwrap();
+                let back: Array1<$ty> = arrow_arr.to_ferray().unwrap();
                 assert_eq!(back.shape(), &[len]);
                 assert_eq!(back.as_slice().unwrap(), &data[..]);
             }
@@ -447,7 +480,7 @@ mod tests {
         let arr = Array1::<f16>::from_vec(Ix1::new([len]), data.clone()).unwrap();
         let arrow_arr = arr.to_arrow().unwrap();
         assert_eq!(arrow_arr.len(), len);
-        let back: Array1<f16> = arrow_arr.into_ferray().unwrap();
+        let back: Array1<f16> = arrow_arr.to_ferray().unwrap();
         // f16 → Arrow Float16 → f16 must round-trip bit-exactly.
         for (got, want) in back.as_slice().unwrap().iter().zip(data.iter()) {
             assert_eq!(got.to_bits(), want.to_bits());
@@ -463,7 +496,7 @@ mod tests {
         let arrow_arr = arr.to_arrow().unwrap();
         assert_eq!(arrow_arr.len(), len);
 
-        let back = arrow_arr.into_ferray_bool().unwrap();
+        let back = arrow_arr.to_ferray_bool().unwrap();
         assert_eq!(back.as_slice().unwrap(), &data[..]);
     }
 
@@ -473,7 +506,7 @@ mod tests {
         let arrow_arr = arr.to_arrow().unwrap();
         assert_eq!(arrow_arr.len(), 0);
 
-        let back: Array1<f64> = arrow_arr.into_ferray().unwrap();
+        let back: Array1<f64> = arrow_arr.to_ferray().unwrap();
         assert_eq!(back.shape(), &[0]);
     }
 
@@ -482,7 +515,7 @@ mod tests {
         // Create an Arrow array with a null
         let arr =
             PrimitiveArray::<arrow::datatypes::Float64Type>::from(vec![Some(1.0), None, Some(3.0)]);
-        let result: Result<Array1<f64>, _> = arr.into_ferray();
+        let result: Result<Array1<f64>, _> = arr.to_ferray();
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("null"));
@@ -491,7 +524,7 @@ mod tests {
     #[test]
     fn bool_arrow_with_nulls_rejected() {
         let arr = BooleanArray::from(vec![Some(true), None, Some(false)]);
-        let result = arr.into_ferray_bool();
+        let result = arr.to_ferray_bool();
         assert!(result.is_err());
     }
 
@@ -520,7 +553,7 @@ mod tests {
         let len = original.len();
         let arr = Array1::<f64>::from_vec(Ix1::new([len]), original.clone()).unwrap();
         let arrow_arr = arr.to_arrow().unwrap();
-        let back: Array1<f64> = arrow_arr.into_ferray().unwrap();
+        let back: Array1<f64> = arrow_arr.to_ferray().unwrap();
 
         let back_slice = back.as_slice().unwrap();
         for (i, (a, b)) in original.iter().zip(back_slice.iter()).enumerate() {
@@ -654,5 +687,35 @@ mod tests {
         assert_eq!(arrow_arr.len(), 6);
         let got: Vec<bool> = (0..arrow_arr.len()).map(|i| arrow_arr.value(i)).collect();
         assert_eq!(got, data);
+    }
+
+    // ----- to_ferray takes &self, allowing reuse (#309) ------------------
+
+    #[test]
+    fn to_ferray_borrow_form_allows_reuse() {
+        // The conversion takes &self, so the source Arrow array is
+        // still usable after the call. With the previous self-by-value
+        // signature this would have been a move error.
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0];
+        let arr = Array1::<f64>::from_vec(Ix1::new([4]), data.clone()).unwrap();
+        let arrow_arr = arr.to_arrow().unwrap();
+
+        let first: Array1<f64> = arrow_arr.to_ferray().unwrap();
+        // Reuse the same Arrow array.
+        let second: Array1<f64> = arrow_arr.to_ferray().unwrap();
+        assert_eq!(first.as_slice().unwrap(), &data[..]);
+        assert_eq!(second.as_slice().unwrap(), &data[..]);
+    }
+
+    #[test]
+    fn to_ferray_bool_borrow_form_allows_reuse() {
+        let data = vec![true, false, true];
+        let arr = Array1::<bool>::from_vec(Ix1::new([3]), data.clone()).unwrap();
+        let arrow_arr = ToArrowBool::to_arrow(&arr).unwrap();
+
+        let first = arrow_arr.to_ferray_bool().unwrap();
+        let second = arrow_arr.to_ferray_bool().unwrap();
+        assert_eq!(first.as_slice().unwrap(), &data[..]);
+        assert_eq!(second.as_slice().unwrap(), &data[..]);
     }
 }
