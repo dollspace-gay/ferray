@@ -1,0 +1,10 @@
+{
+  "uuid": "fa425556-0ebe-42c9-adf8-66e09f916eb2",
+  "issue_uuid": "cbc9d47d-f0bf-4969-9fad-096a5583e3d2",
+  "author": "doll-agent",
+  "content": "Add svd_hermitian(a) function in ferray-linalg/src/decomp/svd.rs that routes through eigh and reconstructs the SVD: singular values = |eigenvalues| sorted descending; U = sign-fixed eigenvector matrix (columns flipped for negative eigenvalues); Vt = transpose of unsigned eigenvector matrix. Same return shape as svd. Faster than full SVD because eigh exploits symmetry and operates on one triangle.\n\nAdded as a sibling function rather than a hermitian= parameter on svd because adding a parameter would break ~10 call sites; svd_hermitian is opt-in. 5 tests covering diagonal, singular-value match vs full SVD, U*diag(S)*Vt == A reconstruction, non-square rejection, negative-definite matrix → positive singular values.",
+  "created_at": "2026-05-01T23:29:25.334227064Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAGBZHLe1iET5OELyG1NDj2L98Q1T3aHEVx4HecnHp4Ex2j19H5xrpnrFCZMooej0bajivwJhXuLMfsHQN2IHIBg=="
+}
