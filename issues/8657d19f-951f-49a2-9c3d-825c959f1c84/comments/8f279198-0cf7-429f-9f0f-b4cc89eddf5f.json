@@ -1,0 +1,10 @@
+{
+  "uuid": "8f279198-0cf7-429f-9f0f-b4cc89eddf5f",
+  "issue_uuid": "8657d19f-951f-49a2-9c3d-825c959f1c84",
+  "author": "doll-agent",
+  "content": "Done. property_tests.rs had 20 properties on DualNumber<f64> but the f32 monomorphization was completely uncovered.\n\nAdded 11 f32 properties mirroring the most important f64 ones: sin/cos derivatives, exp, ln, sqrt, chain rule, power rule, constant-is-zero, identity-is-one, pythagorean cancellation, add commutativity. approx_eq_f32 with relative tolerance 1e-4. NaN-aware.\n\n256 cases per property. ferray-autodiff: 20 -> 31 property tests, all passing first run, clippy clean. Commit fe5bc0b2.",
+  "created_at": "2026-05-01T22:05:05.701609139Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAYhUkUO+nuRqhlanGNkNM+sB8CAlKaqbJcGsmDti+JEsoBJkDVnTMimv2+8eGre3H2F0Sk3p9+V2NZKMnrIgbDw=="
+}
