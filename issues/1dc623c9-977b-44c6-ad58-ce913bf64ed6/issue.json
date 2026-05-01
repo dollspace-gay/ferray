@@ -3,11 +3,12 @@
   "display_id": 213,
   "title": "ferray-linalg: no f32 oracle tests",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nAll oracle tests use f64.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:46:58.428083873Z",
-  "updated_at": "2026-03-25T15:47:32.786270819Z",
+  "updated_at": "2026-05-01T20:13:34.579254044Z",
+  "closed_at": "2026-05-01T20:13:34.579254044Z",
   "labels": [
     "bug",
     "qa-audit"
