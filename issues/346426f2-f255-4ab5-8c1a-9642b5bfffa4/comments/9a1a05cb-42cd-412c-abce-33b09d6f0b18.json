@@ -1,0 +1,10 @@
+{
+  "uuid": "9a1a05cb-42cd-412c-abce-33b09d6f0b18",
+  "issue_uuid": "346426f2-f255-4ab5-8c1a-9642b5bfffa4",
+  "author": "doll-agent",
+  "content": "Done. split() returned Vec<Vec<String>>, breaking the convention used by every other ferray-strings function (StringArray<D> or Array<X, D>).\n\nSwitched split() to return StringArray<Ix2> of shape (n_inputs, max_parts), padding rows shorter than max_parts with empty strings. Added split_ragged() returning Vec<Vec<String>> for callers that need to preserve per-element variable length.\n\nUpdated lib.rs re-exports, AC4 test, property_tests roundtrip. 2 new tests covering padding and ragged-form preservation.\n\nferray-strings: 140 lib tests + 12 property tests, all passing, clippy clean. Commit 700a3c64.",
+  "created_at": "2026-05-01T21:26:49.495996738Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAv16Xyz79HZsrNWq2pSb2/ghVCn7KshxjZvOM0wpI29uTEA4rgucJ7xpS1EDBZY9+fJ45yMjTkgjKcG8LCVoeCw=="
+}
