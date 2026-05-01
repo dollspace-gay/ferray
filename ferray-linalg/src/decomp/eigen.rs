@@ -669,4 +669,156 @@ mod tests {
             assert!((l - u).abs() < 1e-10);
         }
     }
+
+    // ----- Non-symmetric eig correctness (#221) -------------------------
+    //
+    // eig() previously had only the non-square error test. These tests
+    // verify the spectral identity A*v_j == lambda_j*v_j on:
+    //   - upper-triangular real-spectrum matrices,
+    //   - 3x3 mixed real-spectrum matrices,
+    //   - rotation matrices with complex eigenvalues,
+    // plus a full reconstruction A == V*Lambda*V^-1 check.
+
+    /// Verify A*v_j == lambda_j*v_j for each (eigenvalue, eigenvector)
+    /// pair. Eigenvectors are stored row-major with column j at indices
+    /// `[i * n + j]`.
+    fn assert_eig_identity(a: &[f64], vals: &[Complex<f64>], vecs: &[Complex<f64>], n: usize) {
+        for j in 0..n {
+            let lambda = vals[j];
+            for i in 0..n {
+                let mut av = Complex::new(0.0, 0.0);
+                for k in 0..n {
+                    av += Complex::new(a[i * n + k], 0.0) * vecs[k * n + j];
+                }
+                let expected = lambda * vecs[i * n + j];
+                let diff = av - expected;
+                assert!(
+                    diff.norm() < 1e-9,
+                    "eigenpair {j}: (A*v - lambda*v)[{i}] = {diff} (||={})",
+                    diff.norm()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn eig_upper_triangular_real_spectrum() {
+        // Eigenvalues are exactly the diagonal entries (2, 3) for an
+        // upper-triangular matrix.
+        let a_data = vec![2.0, 1.0, 0.0, 3.0];
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), a_data.clone()).unwrap();
+        let (vals, vecs) = eig(&a).unwrap();
+
+        let vs = vals.as_slice().unwrap();
+        let mut real_parts: Vec<f64> = vs.iter().map(|c| c.re).collect();
+        real_parts.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        assert!((real_parts[0] - 2.0).abs() < 1e-10);
+        assert!((real_parts[1] - 3.0).abs() < 1e-10);
+        for c in vs {
+            assert!(c.im.abs() < 1e-10);
+        }
+
+        assert_eig_identity(&a_data, vs, vecs.as_slice().unwrap(), 2);
+    }
+
+    #[test]
+    fn eig_non_symmetric_3x3_real_spectrum() {
+        // Block triangular: spectrum {1, 4, 6}. Verifies the identity
+        // even when the matrix is non-normal.
+        let a_data = vec![1.0, 2.0, 0.0, 0.0, 4.0, 5.0, 0.0, 0.0, 6.0];
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([3, 3]), a_data.clone()).unwrap();
+        let (vals, vecs) = eig(&a).unwrap();
+
+        let vs = vals.as_slice().unwrap();
+        let mut real_parts: Vec<f64> = vs.iter().map(|c| c.re).collect();
+        real_parts.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        for (got, want) in real_parts.iter().zip([1.0, 4.0, 6.0].iter()) {
+            assert!(
+                (got - want).abs() < 1e-10,
+                "eigenvalue {got} != expected {want}"
+            );
+        }
+
+        assert_eig_identity(&a_data, vs, vecs.as_slice().unwrap(), 3);
+    }
+
+    #[test]
+    fn eig_rotation_matrix_complex_spectrum() {
+        // 90-degree 2-D rotation has eigenvalues +i and -i.
+        let a_data = vec![0.0, -1.0, 1.0, 0.0];
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), a_data.clone()).unwrap();
+        let (vals, vecs) = eig(&a).unwrap();
+
+        let vs = vals.as_slice().unwrap();
+        // |im| of each eigenvalue must be 1, real part 0.
+        for c in vs {
+            assert!(c.re.abs() < 1e-10, "real part should be 0, got {}", c.re);
+            assert!(
+                (c.im.abs() - 1.0).abs() < 1e-10,
+                "|im| should be 1, got {}",
+                c.im
+            );
+        }
+        // The imaginary parts must come in conjugate pairs (+1, -1).
+        let im_sum: f64 = vs.iter().map(|c| c.im).sum();
+        assert!(im_sum.abs() < 1e-10);
+
+        assert_eig_identity(&a_data, vs, vecs.as_slice().unwrap(), 2);
+    }
+
+    #[test]
+    fn eigvals_complex_spectrum() {
+        // eigvals() should return the same complex spectrum as eig().0
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![0.0, -1.0, 1.0, 0.0]).unwrap();
+        let vals = eigvals(&a).unwrap();
+        let vs = vals.as_slice().unwrap();
+        let im_sum: f64 = vs.iter().map(|c| c.im).sum();
+        assert!(im_sum.abs() < 1e-10, "complex eigenvalues should be conjugate pairs");
+        for c in vs {
+            assert!(c.re.abs() < 1e-10);
+            assert!((c.im.abs() - 1.0).abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn eig_reconstruction_diagonalizable() {
+        // For a diagonalizable A, V * Lambda * V^-1 == A. Use a 2x2
+        // shear with distinct real eigenvalues so V is invertible.
+        let a_data = vec![3.0, 1.0, 0.0, 2.0];
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), a_data.clone()).unwrap();
+        let (vals, vecs) = eig(&a).unwrap();
+        let vs = vals.as_slice().unwrap();
+        let es = vecs.as_slice().unwrap();
+        let n = 2;
+
+        // Compute V * Lambda (column-scale V by eigenvalues).
+        let mut vl = vec![Complex::new(0.0, 0.0); n * n];
+        for i in 0..n {
+            for j in 0..n {
+                vl[i * n + j] = es[i * n + j] * vs[j];
+            }
+        }
+
+        // Invert V (2x2 closed form). det = es[0]*es[3] - es[1]*es[2].
+        let det = es[0] * es[3] - es[1] * es[2];
+        assert!(det.norm() > 1e-12, "V must be invertible");
+        let inv = [es[3] / det, -es[1] / det, -es[2] / det, es[0] / det];
+
+        // (V*Lambda) * V^-1 should reconstruct A.
+        for i in 0..n {
+            for j in 0..n {
+                let mut acc = Complex::new(0.0, 0.0);
+                for k in 0..n {
+                    acc += vl[i * n + k] * inv[k * n + j];
+                }
+                let expected = Complex::new(a_data[i * n + j], 0.0);
+                let diff = acc - expected;
+                assert!(
+                    diff.norm() < 1e-9,
+                    "reconstruction[{i},{j}] off by {} (got {acc}, want {expected})",
+                    diff.norm()
+                );
+            }
+        }
+    }
 }
