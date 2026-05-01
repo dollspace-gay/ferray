@@ -1,0 +1,10 @@
+{
+  "uuid": "01b42ce5-f51b-44db-a181-ad70a1d102bb",
+  "issue_uuid": "e1614849-0077-464c-a932-3093186d77a1",
+  "author": "doll-agent",
+  "content": "Add 'aligned' field to ArrayFlags (numpy NPY_ARRAY_ALIGNED equivalent) and populate it in all 5 flags() impls: Array (introspect.rs), ArrayView, ArrayViewMut, ArcArray, CowArray. Owned/Arc/Cow paths go through Vec<T>'s allocator (guaranteed aligned, so true). View paths verify ((ptr as usize) % align_of::<T>()) == 0 for the head-of-buffer pointer (catches misaligned from_shape_ptr). 2 tests covering owned and various dtypes.",
+  "created_at": "2026-05-01T22:43:26.528611652Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAan9/B/tnx7+eC8O+k3tweFjwgka/VmXJVpILNABXoTjLS+otLQV6Hc73pWKjZgqdioKXmcXlFKYWq0J8q0iWDg=="
+}
