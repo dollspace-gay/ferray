@@ -1,0 +1,10 @@
+{
+  "uuid": "49dae689-a0ad-4b9f-bb0a-440297715000",
+  "issue_uuid": "42bc44c1-140d-4bc0-b75a-b34f6be3fe05",
+  "author": "doll-agent",
+  "content": "Done. Added 9 new infinity tests in ferray-stats/src/reductions/mod.rs covering the previously-uncovered reductions: prod_with_infinity_propagates, prod_with_zero_and_infinity_is_nan (0*INF=NaN per IEEE 754), var_with_infinity_is_nan ((INF-INF)^2 = NaN), std_with_infinity_is_nan, argmin_finds_neg_infinity, argmax_finds_infinity, cumsum_propagates_infinity, cumprod_inf_then_zero_yields_nan (INF*0=NaN at the third element), ptp_with_infinity_is_inf. Combined with the pre-existing 5 INF tests for sum/mean/min/max (filed under this issue's earlier round), the reductions now have INF coverage across every operation. 243 lib tests pass.",
+  "created_at": "2026-05-01T19:57:17.179190448Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA8RM6ku4Mmny7Bj2lH37atevgoqqI8Ya3sEu1w+CwHg3LL0JgDponczGXjcvwIyp/iqG+/qXtaCiC9QGEwO4HCg=="
+}
