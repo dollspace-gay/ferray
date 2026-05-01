@@ -3,11 +3,12 @@
   "display_id": 274,
   "title": "ferray-ma: var() iterates data twice",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nreductions.rs L132-152: mean then sum-of-squares. Welford single-pass better.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:58:48.121001074Z",
-  "updated_at": "2026-03-25T15:58:51.735810841Z",
+  "updated_at": "2026-05-01T21:23:05.346287453Z",
+  "closed_at": "2026-05-01T21:23:05.346287453Z",
   "labels": [
     "refactor",
     "qa-audit"
