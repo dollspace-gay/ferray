@@ -3,11 +3,12 @@
   "display_id": 185,
   "title": "ferray-stats: no f32 tests anywhere",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nAll tests use f64. SIMD f64-only optimizations and generic path never tested separately.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:41:59.774884466Z",
-  "updated_at": "2026-03-25T15:42:32.591807151Z",
+  "updated_at": "2026-05-01T20:04:33.035598934Z",
+  "closed_at": "2026-05-01T20:04:33.035598934Z",
   "labels": [
     "bug",
     "qa-audit"
