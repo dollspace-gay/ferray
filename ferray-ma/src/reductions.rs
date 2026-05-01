@@ -259,7 +259,6 @@ where
     /// Returns an error only for internal failures.
     pub fn mean(&self) -> FerrayResult<T> {
         let zero = num_traits::zero::<T>();
-        let one: T = num_traits::one();
         let (sum, count) = self
             .data()
             .iter()
@@ -269,7 +268,16 @@ where
         if count == 0 {
             return Ok(T::nan());
         }
-        Ok(sum / T::from(count).unwrap_or(one))
+        // #267: T::from(count).unwrap_or(one) silently returned the
+        // sum as the "mean" if the conversion ever failed. Surface a
+        // typed error instead so a downstream NaN/garbage isn't
+        // misattributed to upstream data.
+        let n = T::from(count).ok_or_else(|| {
+            FerrayError::invalid_value(format!(
+                "cannot convert unmasked count {count} to element type"
+            ))
+        })?;
+        Ok(sum / n)
     }
 
     /// Compute the minimum of unmasked elements.
@@ -343,7 +351,6 @@ where
             return Ok(T::nan());
         }
         let zero = num_traits::zero::<T>();
-        let one: T = num_traits::one();
         let (sum_sq, count) = self
             .data()
             .iter()
@@ -356,7 +363,12 @@ where
         if count == 0 {
             return Ok(T::nan());
         }
-        Ok(sum_sq / T::from(count).unwrap_or(one))
+        let n = T::from(count).ok_or_else(|| {
+            FerrayError::invalid_value(format!(
+                "cannot convert unmasked count {count} to element type"
+            ))
+        })?;
+        Ok(sum_sq / n)
     }
 
     /// Compute the standard deviation of unmasked elements (population, ddof=0).
@@ -412,7 +424,11 @@ where
             if count == 0 {
                 None
             } else {
-                Some(acc / T::from(count).unwrap_or_else(|| num_traits::one()))
+                // #267: a failed count→T conversion would silently
+                // divide by 1, returning the sum as the "mean". Mask
+                // the cell instead — for f32/f64 the conversion never
+                // fails, so this only triggers on pathological types.
+                T::from(count).map(|n| acc / n)
             }
         })
     }
@@ -484,7 +500,9 @@ where
             if count == 0 {
                 return None;
             }
-            let n = T::from(count).unwrap_or_else(|| num_traits::one());
+            // #267: silent div-by-1 fallback removed; mask the cell
+            // if the count→T conversion ever fails.
+            let n = T::from(count)?;
             let mean = acc / n;
             let mut sum_sq = zero;
             for &(v, m) in lane {
