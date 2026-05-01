@@ -1,0 +1,10 @@
+{
+  "uuid": "ff6f2312-2314-45c1-8ef1-757eb5b78512",
+  "issue_uuid": "aac0602a-91b7-4cff-97f1-95dda53909eb",
+  "author": "doll-agent",
+  "content": "Done. MaskedArray::argsort returned Vec<usize> while MaskedArray::sort returned a MaskedArray - inconsistent. Switched the return type to Array<u64, Ix1>, matching the indexing dtype used elsewhere in ferray (Element isn't impl'd for usize, hence u64). Inner logic unchanged.\n\nUpdated the one Rust test caller; no Python binding exists for ma argsort.\n\nferray-ma: 187 tests pass, clippy clean. Commit 59257b83.",
+  "created_at": "2026-05-01T21:13:37.820149493Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAKdJUTo+4hUkRKSTS+cwDJml5reuxyMMjHTps3StUUr1QizKhgiJ3AsyppM7B7WSxL/pMAT5aiiSBIvNaOEmkDQ=="
+}
