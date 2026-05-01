@@ -1,0 +1,10 @@
+{
+  "uuid": "bfdf1ef2-19b2-4459-8caa-5b9dfb426a44",
+  "issue_uuid": "387358dd-cbc4-444a-beb6-5f2d2f347fa5",
+  "author": "doll-agent",
+  "content": "Phase-3 long tail #708 delivered: matmul_complex, inv_complex, det_complex, solve_complex (1D/2D b), eig. complex64/128 dispatch via dedicated 1d/2d complex helpers. 525/525 passing.",
+  "created_at": "2026-05-01T18:13:40.146123847Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABADm1d3sBxEFNrMx2Gd4pHL9ZWFmkfwMB8emIRusH2MCAclPD5xHpfMkDutj6IliB+rMmrfPeF37cLyiX1ksbGDA=="
+}
