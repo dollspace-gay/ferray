@@ -122,6 +122,17 @@ where
 /// Extension trait for converting a ferray boolean array to an Arrow
 /// [`BooleanArray`]. Multi-dimensional inputs flatten to 1-D in
 /// row-major order (#307).
+///
+/// # Why a separate trait? (#311)
+///
+/// Arrow stores booleans as bit-packed [`BooleanArray`] rather than
+/// as a `PrimitiveArray<BooleanType>` — there is no `BooleanType`
+/// in Arrow's primitive type hierarchy. The trait machinery used by
+/// [`ToArrow`] (which dispatches through `ArrowPrimitiveType::Native`)
+/// has no slot for a bit-packed type, so booleans get a parallel
+/// trait that returns `BooleanArray` directly. Unifying the two
+/// would require an additional abstraction over "primitive vs.
+/// bit-packed", which is more API surface than the savings warrant.
 pub trait ToArrowBool {
     /// Convert this ferray bool array to an Arrow [`BooleanArray`].
     ///
@@ -207,6 +218,12 @@ where
 /// Extension trait for converting an Arrow [`BooleanArray`] to a ferray
 /// `Array1<bool>`. Receiver is `&self` (#309) because the conversion
 /// always copies.
+///
+/// # Why a separate trait? (#311)
+///
+/// See [`ToArrowBool`] for the rationale. Arrow's bit-packed
+/// `BooleanArray` is not a `PrimitiveArray`, so it needs its own
+/// FromArrow-shaped trait rather than slotting into [`FromArrow`].
 pub trait FromArrowBool {
     /// Convert an Arrow boolean array reference to a ferray `Array1<bool>`.
     ///

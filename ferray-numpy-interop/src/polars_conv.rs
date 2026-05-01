@@ -96,6 +96,18 @@ where
 /// Extension trait for converting a ferray boolean array to a Polars
 /// [`Series`]. Multi-dimensional inputs flatten to 1-D in row-major
 /// order (#307).
+///
+/// # Why a separate trait? (#311)
+///
+/// Polars represents booleans as a [`BooleanChunked`], not as a
+/// `ChunkedArray<BooleanType>`-via-`PolarsNumericType`. The
+/// machinery used by [`ToPolars`] dispatches through
+/// `PolarsNumericType::Native`, which has no boolean slot, so bool
+/// gets its own parallel trait that builds the `BooleanChunked`
+/// directly. Unifying with [`ToPolars`] would require an additional
+/// abstraction over "numeric vs. boolean", which is more API
+/// surface than the savings warrant — the Arrow side uses the same
+/// trait split for the same reason.
 pub trait ToPolarsBool {
     /// Convert this ferray bool array to a Polars [`Series`].
     ///
@@ -158,6 +170,14 @@ impl<T: PolarsElement> FromPolars<T> for Series {
 
 /// Extension trait for converting a Polars [`Series`] with boolean dtype
 /// to a ferray `Array1<bool>`.
+///
+/// # Why a separate trait? (#311)
+///
+/// Same rationale as [`ToPolarsBool`]: Polars' bool path goes
+/// through `BooleanChunked`, not through a numeric `ChunkedArray<T>`,
+/// so the [`FromPolars`] trait machinery (parameterized over
+/// `PolarsNumericType`) doesn't fit. Hence a separate FromPolars-
+/// shaped trait for the bool conversion.
 pub trait FromPolarsBool: Sized {
     /// Convert a Polars boolean Series to a ferray `Array1<bool>`.
     ///
