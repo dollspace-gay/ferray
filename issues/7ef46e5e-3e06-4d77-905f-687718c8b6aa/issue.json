@@ -1,0 +1,10 @@
+{
+  "uuid": "7ef46e5e-3e06-4d77-905f-687718c8b6aa",
+  "display_id": 699,
+  "title": "ferray-python phase 2 follow-up: bitwise ops (bitwise_and/or/xor/not/invert, left_shift, right_shift, bitwise_count)",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-01T16:38:11.778487604Z",
+  "updated_at": "2026-05-01T16:38:11.778487604Z"
+}
