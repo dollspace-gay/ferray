@@ -1,0 +1,10 @@
+{
+  "uuid": "88e1e8e5-a538-4b1f-951f-0d50d23001be",
+  "issue_uuid": "b401c9d3-0e5c-4b61-8b0c-d4e68533638c",
+  "author": "doll-agent",
+  "content": "Superseded by #612 (explicit milestone-level tracker for lifting ferray-polynomial from f64-only to T: Element + Float and Complex). #612 was filed later (2026-04-30) with more scope — covers both the trait redesign and per-basis generic lifts — and has been kept explicitly open per maintainer direction. PolynomialF32 already landed as proof-of-concept partial progress on #612. Closing #126 as duplicate; track the work on #612.",
+  "created_at": "2026-05-01T19:42:41.738265796Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAegh/ihovPctVhgi07D06tWmdlU0hte5zFM/n4WmvNV7Py6oF2fy6odX2z7eQ6rPPedm4vyH5LSjXRbnUROwMAQ=="
+}
