@@ -57,11 +57,15 @@ where
     /// Return the indices that would sort the masked array, with masked
     /// elements placed at the end.
     ///
-    /// Returns a `Vec<usize>` of indices.
+    /// Returns a 1-D `Array<u64, Ix1>` of indices, matching the index
+    /// dtype used elsewhere in ferray (#269). Previous versions returned
+    /// `Vec<usize>` which was inconsistent with [`MaskedArray::sort`]
+    /// (returns a `MaskedArray`) and forced callers to wrap manually
+    /// for any downstream array op.
     ///
     /// # Errors
     /// Returns an error only for internal failures.
-    pub fn argsort(&self) -> FerrayResult<Vec<usize>> {
+    pub fn argsort(&self) -> FerrayResult<Array<u64, Ix1>> {
         let vals: Vec<T> = self.data().iter().copied().collect();
         let masks: Vec<bool> = self.mask().iter().copied().collect();
 
@@ -84,11 +88,16 @@ where
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        // Concatenate: sorted unmasked indices, then masked indices
-        let mut result = Vec::with_capacity(unmasked_indices.len() + masked_indices.len());
-        result.extend_from_slice(&unmasked_indices);
-        result.extend_from_slice(&masked_indices);
+        // Concatenate: sorted unmasked indices, then masked indices.
+        let total = unmasked_indices.len() + masked_indices.len();
+        let mut result: Vec<u64> = Vec::with_capacity(total);
+        for &i in &unmasked_indices {
+            result.push(i as u64);
+        }
+        for &i in &masked_indices {
+            result.push(i as u64);
+        }
 
-        Ok(result)
+        Array::from_vec(Ix1::new([total]), result)
     }
 }

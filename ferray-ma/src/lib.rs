@@ -443,9 +443,9 @@ mod tests {
                 .unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
         let indices = ma.argsort().unwrap();
-        let idx_vals: Vec<usize> = indices;
         // Unmasked: index 1 (1.0), 3 (2.0), 4 (4.0), 0 (5.0); masked: 2
-        assert_eq!(idx_vals, vec![1, 3, 4, 0, 2]);
+        assert_eq!(indices.shape(), &[5]);
+        assert_eq!(indices.as_slice().unwrap(), &[1u64, 3, 4, 0, 2]);
     }
 
     #[test]
