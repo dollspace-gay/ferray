@@ -3,11 +3,12 @@
   "display_id": 255,
   "title": "ferray-polynomial: no tests for fit_weighted with non-uniform weights",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nTest uses uniform [1,1,1,1,1]. Non-uniform never tested.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:54:35.337849223Z",
-  "updated_at": "2026-03-25T15:54:42.513799702Z",
+  "updated_at": "2026-05-01T20:59:49.394038683Z",
+  "closed_at": "2026-05-01T20:59:49.394038683Z",
   "labels": [
     "bug",
     "qa-audit"
