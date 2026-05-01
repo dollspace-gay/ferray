@@ -1,0 +1,10 @@
+{
+  "uuid": "60488627-2223-456e-ae5c-22ca8c833c6e",
+  "issue_uuid": "cbab9512-b0b7-45d5-b43f-e01b4017a803",
+  "author": "doll-agent",
+  "content": "Phase 1 main slice delivered: ~50 functions bound across creation, manipulation, and indexing. Code refactored into per-namespace modules (creation.rs, manipulation.rs, indexing.rs) with shared dispatch macros (match_dtype_all! / match_dtype_float!) in conv.rs. cargo clippy -D warnings clean. 116/116 pytest passing (90 new phase-1 + 26 phase-0 retained). One known marshalling-layer gap surfaced and split out: asfortranarray's F-contiguous flag is lost on the trip back through PyArray1::from_vec (issue #698 against ferray-numpy-interop). Phase-1 long tail is filed as #692-#697 for follow-up: from* family, grid builders (meshgrid/mgrid/ogrid/vander), extended manipulation (pad/tile/repeat/delete/insert/append/resize/trim_zeros), block/r_/c_/column_stack/row_stack, split family, and the take/choose/compress/select/place/putmask/extract group. Phase 2 (#687, ufunc + stats) is unblocked.",
+  "created_at": "2026-05-01T16:06:36.356897914Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAvNfUG6EysL8vxIhQVxQGzXpZowqj/7UW7lr7i1k4EP/mMTsyWTWGgLi773W+ASMpq8NyAfM60vLANw3VdsFlCw=="
+}
