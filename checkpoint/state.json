@@ -102,6 +102,10 @@
     "703": {
       "agent_id": "doll-agent",
       "claimed_at": "2026-05-01T16:38:37.620345910Z"
+    },
+    "704": {
+      "agent_id": "doll-agent",
+      "claimed_at": "2026-05-01T16:38:42.985936474Z"
     }
   },
   "issues": {},
@@ -123,8 +127,8 @@
     }
   ],
   "watermark": {
-    "timestamp": "2026-05-01T16:38:37.620345910Z",
+    "timestamp": "2026-05-01T16:38:42.985936474Z",
     "agent_id": "doll-agent",
-    "agent_seq": 241
+    "agent_seq": 242
   }
 }
