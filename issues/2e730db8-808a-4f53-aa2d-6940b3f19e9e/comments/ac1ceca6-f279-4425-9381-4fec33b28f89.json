@@ -1,0 +1,10 @@
+{
+  "uuid": "ac1ceca6-f279-4425-9381-4fec33b28f89",
+  "issue_uuid": "2e730db8-808a-4f53-aa2d-6940b3f19e9e",
+  "author": "doll-agent",
+  "content": "numpy.ma masked-array support delivered (f64 main slice). src/ma.rs binds: PyMaskedArray pyclass wrapping ferray_ma::MaskedArray<f64, IxDyn> with __new__/data/mask/shape/ndim/size/dtype getters, count/sum/mean/min/max/var/std reductions, sum_axis/mean_axis/min_axis/max_axis returning MaskedArray, filled(fill_value=None)/compressed methods, __repr__/__len__/__array__ (numpy protocol). Free constructors: array, masked_array, masked_where, masked_invalid, masked_equal/_not_equal/_greater/_greater_equal/_less/_less_equal, masked_inside, masked_outside. Helpers: count_masked, is_masked, getmask, getdata, filled, compressed at module level. Strategy: f64-only since PyO3 pyclass can't be generic; __array__ protocol lets numpy.asarray(ma) interoperate. 32 new pytest passing (480/480 total). Deferred: per-dtype variants, arithmetic (masked_add/_sub/_mul/_div), domain-aware ufuncs (sqrt_domain, log_domain), manipulation/sorting/IO, ma_apply_along_axis, ma set ops.",
+  "created_at": "2026-05-01T17:31:07.384913488Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA+N6jbjQueuh8km1h0ol8B/cY41X1UT0sfeciIyvDfVBpKoGKutwb6eNwDHyytjOXI6uNUVh7Rc11IVWgPbhPDA=="
+}
