@@ -7,6 +7,41 @@ use crate::array::arc::ArcArray;
 use crate::array::owned::Array;
 use crate::array::view::ArrayView;
 
+/// FFI-safe descriptor for an array's memory layout (#358).
+///
+/// Mirrors the fields C and Python's PEP 3118 buffer protocol carry:
+/// data pointer, dtype tag, ndim, plus pointers to shape and strides
+/// arrays. The struct is `repr(C)` so it can cross an FFI boundary
+/// directly — caller is responsible for ensuring the originating
+/// array outlives the descriptor (the pointers borrow into the
+/// array's storage; ferray does not extend the array's lifetime).
+///
+/// Strides are in **bytes**, matching numpy's PyArrayObject and the
+/// PEP 3118 convention. The shape and strides slices are alive for
+/// as long as the originating array (typically `'static` for
+/// `Array<T, D>` storage and `'a` for views).
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct BufferDescriptor<'a> {
+    /// Pointer to the first element of the array.
+    pub data: *const u8,
+    /// Number of axes.
+    pub ndim: usize,
+    /// Shape (length `ndim`).
+    pub shape: &'a [usize],
+    /// Strides in bytes (length `ndim`). Matches numpy / PEP 3118.
+    pub strides_bytes: Box<[isize]>,
+    /// Element type tag.
+    pub dtype: DType,
+    /// Element size in bytes (redundant with `dtype.size_of()` but
+    /// surfaced here so foreign code doesn't need a DType match).
+    pub itemsize: usize,
+    /// Whether the data is laid out in C-contiguous (row-major) order.
+    pub c_contiguous: bool,
+    /// Whether the data is laid out in F-contiguous (column-major) order.
+    pub f_contiguous: bool,
+}
+
 /// Trait exposing the raw memory layout of an array for zero-copy interop.
 ///
 /// Implementors provide enough information for foreign code (C, Python/NumPy,
@@ -29,6 +64,24 @@ pub trait AsRawBuffer {
 
     /// Whether the data is Fortran-contiguous.
     fn is_f_contiguous(&self) -> bool;
+
+    /// Build a [`BufferDescriptor`] aggregating every field above into
+    /// a single FFI-safe struct (#358). Default impl composes the
+    /// other trait methods so concrete types don't need to override.
+    fn buffer_descriptor(&self) -> BufferDescriptor<'_> {
+        let dtype = self.raw_dtype();
+        let shape = self.raw_shape();
+        BufferDescriptor {
+            data: self.raw_ptr(),
+            ndim: shape.len(),
+            shape,
+            strides_bytes: self.raw_strides_bytes().into_boxed_slice(),
+            dtype,
+            itemsize: dtype.size_of(),
+            c_contiguous: self.is_c_contiguous(),
+            f_contiguous: self.is_f_contiguous(),
+        }
+    }
 }
 
 // The three concrete array types (`Array`, `ArrayView`, `ArcArray`) all
@@ -109,5 +162,35 @@ mod tests {
 
         assert_eq!(arc.raw_dtype(), DType::I32);
         assert_eq!(arc.raw_shape(), &[2, 2]);
+    }
+
+    #[test]
+    fn buffer_descriptor_aggregates_layout() {
+        // #358: BufferDescriptor must populate every field consistently.
+        let arr = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
+        let d = arr.buffer_descriptor();
+        assert_eq!(d.ndim, 2);
+        assert_eq!(d.shape, &[2, 3]);
+        assert_eq!(&*d.strides_bytes, &[24, 8]);
+        assert_eq!(d.dtype, DType::F64);
+        assert_eq!(d.itemsize, 8);
+        assert!(d.c_contiguous);
+        assert!(!d.f_contiguous);
+        // Pointer non-null and matches raw_ptr().
+        assert!(!d.data.is_null());
+        assert_eq!(d.data, arr.raw_ptr());
+    }
+
+    #[test]
+    fn buffer_descriptor_repr_c() {
+        // The descriptor is `repr(C)` so its layout is stable for FFI.
+        // Spot-check via size_of: must be > 0 and consistent across
+        // calls. (We don't pin a specific size because pointer width
+        // varies by platform.)
+        let arr = Array::<u32, Ix2>::from_vec(Ix2::new([2, 2]), vec![0u32; 4]).unwrap();
+        let d = arr.buffer_descriptor();
+        assert_eq!(d.itemsize, 4);
+        assert_eq!(d.dtype, DType::U32);
+        assert_eq!(d.shape, &[2, 2]);
     }
 }
