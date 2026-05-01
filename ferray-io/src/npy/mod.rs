@@ -1193,4 +1193,165 @@ mod tests {
         assert_eq!(vals[1], 1);
         assert_eq!(vals[2], i64::MIN); // NaT
     }
+
+    // ----------------------------------------------------------------------
+    // Complex roundtrips through save_dynamic / load_dynamic (#241).
+    //
+    // Complex32/64 take the dedicated raw-bytes path (save_complex_raw +
+    // load_complex{32,64}_dynamic) rather than the NpyElement macro path.
+    // These tests pin that special handling: header dtype tag, buffer
+    // layout (interleaved re/im), and round-trip exactness.
+    // ----------------------------------------------------------------------
+
+    #[test]
+    fn complex64_dynamic_roundtrip() {
+        use num_complex::Complex;
+        let data: Vec<Complex<f32>> = vec![
+            Complex::new(1.0, 2.0),
+            Complex::new(-3.5, 4.25),
+            Complex::new(0.0, -7.0),
+            Complex::new(f32::INFINITY, f32::NEG_INFINITY),
+        ];
+        let arr =
+            Array::<Complex<f32>, IxDyn>::from_vec(IxDyn::new(&[4]), data.clone()).unwrap();
+        let dyn_in = DynArray::Complex32(arr);
+
+        let mut buf = Vec::new();
+        save_dynamic_to_writer(&mut buf, &dyn_in).unwrap();
+
+        let mut cursor = Cursor::new(buf);
+        let loaded = load_dynamic_from_reader(&mut cursor).unwrap();
+        assert_eq!(loaded.dtype(), DType::Complex32);
+        assert_eq!(loaded.shape(), &[4]);
+        match loaded {
+            DynArray::Complex32(a) => {
+                let got: Vec<Complex<f32>> = a.iter().copied().collect();
+                assert_eq!(got, data);
+            }
+            _ => panic!("expected Complex32 variant"),
+        }
+    }
+
+    #[test]
+    fn complex128_dynamic_roundtrip() {
+        use num_complex::Complex;
+        let data: Vec<Complex<f64>> = (0..6)
+            .map(|i| Complex::new(i as f64 * 0.5, -i as f64 * 0.25))
+            .collect();
+        let arr =
+            Array::<Complex<f64>, IxDyn>::from_vec(IxDyn::new(&[2, 3]), data.clone()).unwrap();
+        let dyn_in = DynArray::Complex64(arr);
+
+        let mut buf = Vec::new();
+        save_dynamic_to_writer(&mut buf, &dyn_in).unwrap();
+
+        let mut cursor = Cursor::new(buf);
+        let loaded = load_dynamic_from_reader(&mut cursor).unwrap();
+        assert_eq!(loaded.dtype(), DType::Complex64);
+        assert_eq!(loaded.shape(), &[2, 3]);
+        match loaded {
+            DynArray::Complex64(a) => {
+                let got: Vec<Complex<f64>> = a.iter().copied().collect();
+                assert_eq!(got, data);
+            }
+            _ => panic!("expected Complex64 variant"),
+        }
+    }
+
+    #[test]
+    fn complex64_dynamic_header_tag() {
+        // The on-disk descr for Complex<f32> must be '<c8' (numpy tag).
+        use num_complex::Complex;
+        let arr = Array::<Complex<f32>, IxDyn>::from_vec(
+            IxDyn::new(&[2]),
+            vec![Complex::new(1.0, 2.0), Complex::new(3.0, 4.0)],
+        )
+        .unwrap();
+        let dyn_in = DynArray::Complex32(arr);
+
+        let mut buf = Vec::new();
+        save_dynamic_to_writer(&mut buf, &dyn_in).unwrap();
+        // Inspect the header without touching the data: parse via read_header.
+        let mut cursor = Cursor::new(buf);
+        let hdr = header::read_header(&mut cursor).unwrap();
+        assert_eq!(hdr.dtype, DType::Complex32);
+        assert_eq!(hdr.shape, vec![2]);
+        assert_eq!(hdr.descr, "<c8");
+    }
+
+    #[test]
+    fn complex128_dynamic_header_tag() {
+        use num_complex::Complex;
+        let arr = Array::<Complex<f64>, IxDyn>::from_vec(
+            IxDyn::new(&[2]),
+            vec![Complex::new(1.0, 2.0), Complex::new(3.0, 4.0)],
+        )
+        .unwrap();
+        let dyn_in = DynArray::Complex64(arr);
+
+        let mut buf = Vec::new();
+        save_dynamic_to_writer(&mut buf, &dyn_in).unwrap();
+        let mut cursor = Cursor::new(buf);
+        let hdr = header::read_header(&mut cursor).unwrap();
+        assert_eq!(hdr.dtype, DType::Complex64);
+        assert_eq!(hdr.descr, "<c16");
+    }
+
+    #[test]
+    fn complex64_dynamic_2d_shape() {
+        // Multidim shape is preserved through the dynamic path.
+        use num_complex::Complex;
+        let data: Vec<Complex<f32>> = (0..12)
+            .map(|i| Complex::new(i as f32, (i + 100) as f32))
+            .collect();
+        let arr =
+            Array::<Complex<f32>, IxDyn>::from_vec(IxDyn::new(&[3, 4]), data.clone()).unwrap();
+        let dyn_in = DynArray::Complex32(arr);
+
+        let mut buf = Vec::new();
+        save_dynamic_to_writer(&mut buf, &dyn_in).unwrap();
+
+        let mut cursor = Cursor::new(buf);
+        let loaded = load_dynamic_from_reader(&mut cursor).unwrap();
+        assert_eq!(loaded.shape(), &[3, 4]);
+        match loaded {
+            DynArray::Complex32(a) => {
+                let got: Vec<Complex<f32>> = a.iter().copied().collect();
+                assert_eq!(got, data);
+            }
+            _ => panic!("expected Complex32 variant"),
+        }
+    }
+
+    #[test]
+    fn complex128_dynamic_special_values() {
+        // NaN + inf + signed zero round-trip bit-exactly through the
+        // raw-bytes path.
+        use num_complex::Complex;
+        let data: Vec<Complex<f64>> = vec![
+            Complex::new(f64::NAN, 0.0),
+            Complex::new(0.0, f64::NAN),
+            Complex::new(f64::INFINITY, f64::NEG_INFINITY),
+            Complex::new(0.0, -0.0),
+        ];
+        let arr =
+            Array::<Complex<f64>, IxDyn>::from_vec(IxDyn::new(&[4]), data.clone()).unwrap();
+        let dyn_in = DynArray::Complex64(arr);
+
+        let mut buf = Vec::new();
+        save_dynamic_to_writer(&mut buf, &dyn_in).unwrap();
+        let mut cursor = Cursor::new(buf);
+        let loaded = load_dynamic_from_reader(&mut cursor).unwrap();
+        match loaded {
+            DynArray::Complex64(a) => {
+                let got: Vec<Complex<f64>> = a.iter().copied().collect();
+                // NaN != NaN — compare bit patterns instead.
+                for (g, e) in got.iter().zip(data.iter()) {
+                    assert_eq!(g.re.to_bits(), e.re.to_bits());
+                    assert_eq!(g.im.to_bits(), e.im.to_bits());
+                }
+            }
+            _ => panic!("expected Complex64 variant"),
+        }
+    }
 }
