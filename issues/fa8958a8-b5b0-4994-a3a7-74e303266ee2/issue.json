@@ -6,5 +6,8 @@
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T15:37:53.677394839Z",
-  "updated_at": "2026-05-01T15:37:53.677394839Z"
+  "updated_at": "2026-05-01T15:37:54.914368565Z",
+  "labels": [
+    "feature"
+  ]
 }
