@@ -1,0 +1,10 @@
+{
+  "uuid": "37cb4eb5-4521-436b-ad3e-f4a2815987f0",
+  "issue_uuid": "9f7e84a4-4aa0-4867-aebb-dabb1b4843a8",
+  "author": "doll-agent",
+  "content": "Done. Wired f64/f32 SIMD dispatch into add/subtract/multiply/divide. Changes: (1) ferray-ufunc/src/helpers.rs: added try_simd_f64_binary / try_simd_f32_binary helpers (mirroring try_simd_*_unary) plus run_slice_kernel_binary_f{64,32} that does the rayon-parallel chunking when n >= THRESHOLD_COMPUTE_BOUND. Both bail to None on (a) wrong dtype or (b) shape mismatch — broadcasting still goes through the generic path because broadcast views are stride-tricked and don't have a contig fast path. (2) ferray-ufunc/src/kernels/simd_f{64,32}.rs: added sub/div kernels alongside the existing add/mul. (3) ferray-ufunc/src/ops/arithmetic.rs: add/subtract/multiply/divide now try the f64 then f32 SIMD path before falling through to binary_elementwise_op. Same-shape paths now hit explicit pulp::Arch dispatch via dispatch_binary_f{64,32}; broadcasting paths and integer dtypes use the auto-vectorising scalar loop as before. cargo test --workspace --exclude ferray-python passes (modulo pre-existing kernel_edge_i8 debug-overflow). cargo clippy --workspace clean.",
+  "created_at": "2026-05-01T19:32:53.713741972Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAaEEFI4Jrgk1OduT/QZABVYXHX7NfyIrgJwIHGNqT7VjfoiM7HJB30rOSXsit4wCnaKlOYH5idcMAHA9T3oNPCQ=="
+}
