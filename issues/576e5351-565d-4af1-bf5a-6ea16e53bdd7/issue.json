@@ -3,11 +3,12 @@
   "display_id": 245,
   "title": "ferray-polynomial: x_pow_prev computed but never used in power_to_chebyshev/legendre",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nchebyshev.rs L162, legendre.rs L132: dead state with let _ = suppression.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:52:36.610178772Z",
-  "updated_at": "2026-03-25T15:52:45.440042972Z",
+  "updated_at": "2026-05-01T20:35:12.405743225Z",
+  "closed_at": "2026-05-01T20:35:12.405743225Z",
   "labels": [
     "refactor",
     "qa-audit"
