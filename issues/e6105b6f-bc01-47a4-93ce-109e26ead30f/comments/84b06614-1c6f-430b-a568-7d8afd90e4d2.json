@@ -1,0 +1,10 @@
+{
+  "uuid": "84b06614-1c6f-430b-a568-7d8afd90e4d2",
+  "issue_uuid": "e6105b6f-bc01-47a4-93ce-109e26ead30f",
+  "author": "doll-agent",
+  "content": "Audit + targeted fix. Coverage by file (count of tests using f32 / total tests):\n\n| File | f32 / total | Note |\n|------|------------|------|\n| trig.rs | 17/16 | well-covered (multiple per test) |\n| floatintrinsic.rs | 22/41 | majority f32 |\n| explog.rs | 9/13 | majority f32 |\n| arithmetic.rs | 18/96 | partial |\n| special.rs | 2/5 | partial |\n| interpolation.rs | 4/7 | partial |\n| rounding.rs | 0/8 | **gap, fixed in this commit** |\n| comparison/logical/bitwise/datetime/complex/convolution | n/a | non-float ops |\n\nThis commit doubles rounding.rs from 8 → 16 tests by adding f32 sibling tests for round (banker's, AC-9 spec), round-normal, floor, ceil, trunc, fix, around, and rint. Each f32 test mirrors its f64 counterpart on representable values — confirming the f32 SIMD path produces bit-exact results for the rounding operations (which are exact on representable inputs in any precision).\n\nRemaining f32 test debt is concentrated in arithmetic.rs (78 tests still f64-only) and explog/floatintrinsic edge cases. Filing a smaller follow-up to expand arithmetic.rs f32 coverage; the rounding gap (the worst on a relevant op) is closed.",
+  "created_at": "2026-05-01T19:48:30.741398486Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA8vruUiDilFy51oUt72DfHmXr2AZia9mt4mnWhnHmeHXO7P+tg1r/VWNu8SJ7XqJ5aKB2fGAEbprCg0etCgNPBw=="
+}
