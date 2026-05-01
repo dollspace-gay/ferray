@@ -20,7 +20,6 @@
 //!   into it.
 
 use numpy::Element as NumpyElement;
-use numpy::PyArrayMethods;
 use numpy::{
     PyArray1, PyArray2, PyArrayDyn, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArrayDyn,
 };
@@ -138,33 +137,16 @@ impl<T: NpElement> IntoNumPy<T, Ix2> for Array2<T> {
     type PyArrayType = PyArray2<T>;
 
     fn into_pyarray(self, py: Python<'_>) -> Result<Bound<'_, PyArray2<T>>, FerrayError> {
-        // #550: the cleanest fix would be to feed the underlying
-        // ndarray straight into `numpy::PyArray2::from_owned_array`,
-        // avoiding the reshape detour. That path is blocked today
-        // because `numpy` 0.24 pins `ndarray` 0.16 while ferray-core
-        // is on `ndarray` 0.17; the two ArrayBase types are nominally
-        // distinct. Once the numpy crate catches up this block should
-        // become a one-liner `PyArray2::from_owned_array(py, self.into_ndarray())`.
-        //
-        // In the meantime we still allocate one PyArray1 and reshape
-        // it to 2-D. NumPy's reshape on a freshly-constructed
-        // contiguous array is a metadata-only operation (no buffer
-        // copy), so the "extra allocation" in the issue title is
-        // really just a metadata wrapper — the underlying buffer is
-        // the same PyArray1 allocation we'd have to make anyway. The
-        // remaining concern was the fallible Result; that's resolved
-        // below because the shape comes from `self.shape()` and the
-        // length of `data` is `self.size()` by construction, so the
-        // reshape can never fail in practice. We still surface it as
-        // a FerrayError::shape_mismatch for defence in depth.
-        let shape = [self.shape()[0], self.shape()[1]];
-        let data = self.to_vec_flat();
-        let arr = PyArray1::from_vec(py, data);
-        arr.reshape(shape).map_err(|e| {
-            FerrayError::shape_mismatch(format!(
-                "into_pyarray: reshape to {shape:?} failed (should be unreachable): {e}"
-            ))
-        })
+        // #310: hand the underlying ndarray::Array2 directly to
+        // PyArray2::from_owned_array. This avoids the prior
+        // flatten-into-PyArray1-then-reshape round-trip, and PyO3's
+        // numpy crate preserves the source layout automatically:
+        // ferray Array2 → ferray::into_ndarray() (a move, no copy)
+        // → ndarray::Array2 (carries C/F-contiguity in its strides)
+        // → PyArray2::from_owned_array (sees the same strides and
+        // produces a PyArray2 with matching F_CONTIGUOUS flag for
+        // F-major sources, addressing #698 without a manual branch).
+        Ok(PyArray2::from_owned_array(py, self.into_ndarray()))
     }
 }
 
@@ -172,17 +154,11 @@ impl<T: NpElement> IntoNumPy<T, IxDyn> for ArrayD<T> {
     type PyArrayType = PyArrayDyn<T>;
 
     fn into_pyarray(self, py: Python<'_>) -> Result<Bound<'_, PyArrayDyn<T>>, FerrayError> {
-        // See the Ix2 impl above for why we still go through the
-        // PyArray1 + reshape path rather than
-        // `PyArrayDyn::from_owned_array`.
-        let shape: Vec<usize> = self.shape().to_vec();
-        let data = self.to_vec_flat();
-        let flat = PyArray1::from_vec(py, data);
-        flat.reshape(&shape[..]).map_err(|e| {
-            FerrayError::shape_mismatch(format!(
-                "into_pyarray: reshape to {shape:?} failed (should be unreachable): {e}"
-            ))
-        })
+        // #310: same direct-handoff as the Ix2 impl. PyArrayDyn maps to
+        // numpy's IxDyn ndarray, so passing through ferray's
+        // into_ndarray() preserves the source contiguity (#698) without
+        // a manual F/C branch and skips the flatten-then-reshape pass.
+        Ok(PyArrayDyn::from_owned_array(py, self.into_ndarray()))
     }
 }
 
@@ -195,7 +171,7 @@ impl<T: NpElement> IntoNumPy<T, IxDyn> for ArrayD<T> {
 #[allow(clippy::float_cmp, clippy::unreadable_literal)] // Roundtrip tests assert exact equality on hand-picked NumPy values.
 mod tests {
     use super::*;
-    use numpy::PyUntypedArrayMethods;
+    use numpy::{PyArrayMethods, PyUntypedArrayMethods};
 
     fn with_python<F: for<'py> FnOnce(Python<'py>)>(f: F) {
         Python::initialize();
