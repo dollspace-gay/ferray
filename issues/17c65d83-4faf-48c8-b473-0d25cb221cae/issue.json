@@ -3,11 +3,12 @@
   "display_id": 324,
   "title": "ferray-core-macros: all macro errors point to call_site() instead of actual token span",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nL237-326: poor error locality. Requires moving away from string parsing.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:07:02.388973071Z",
-  "updated_at": "2026-03-25T16:07:31.099185289Z",
+  "updated_at": "2026-05-01T22:32:31.259250260Z",
+  "closed_at": "2026-05-01T22:32:31.259250260Z",
   "labels": [
     "refactor",
     "qa-audit"
