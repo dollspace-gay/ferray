@@ -1,0 +1,10 @@
+{
+  "uuid": "bdc952a8-2e9b-4a40-981e-b14b81341658",
+  "issue_uuid": "bcc4752a-c90f-48c8-b114-171430c9ed70",
+  "author": "doll-agent",
+  "content": "Done. Added 6 edge-case tests for correlate in ferray-stats/src/correlation.rs: single-element full/valid (15.0 = 3*5), identical-arrays shape+finiteness, all-zeros yields all-zeros, [1.0] kernel is identity in same mode, empty input errors. 253 stats tests pass.\n\nWhile writing these noticed ferray's correlate is actually computing convolution (indexing 'a[i-j] * v[j]' is the convolution kernel-flip, not cross-correlation 'a[i+j] * v[j]'). Filed as #722 medium-priority bug. The edge-case tests don't depend on the formula so they're stable either way.",
+  "created_at": "2026-05-01T20:01:01.739333702Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAAwgs3RjJwWw1QO8zzGp3A+vbFTuyxW2tfyeiaKi37RLK6PygrEHqwA4ItR31KuwcBQ+I8gX6qzjGmC2lxv9TBA=="
+}
