@@ -1,0 +1,10 @@
+{
+  "uuid": "09ac98e7-f05e-4023-b154-1176a36df47d",
+  "issue_uuid": "1b3d6554-9014-4164-b27b-63fe88ea8a6a",
+  "author": "doll-agent",
+  "content": "Phase-3 long tail #711 delivered: lstsq (4-tuple x/residuals/rank/singular_values), tensorinv, tensorsolve, matrix_transpose, diagonal (top-level + linalg). 525/525 passing.",
+  "created_at": "2026-05-01T18:09:57.203147095Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA95853maeWX/HIe2E7Lqxl72IPeJXslG9J6e1eNpMBSw3Mmgg6f1hqC4VWRJP6WDP7BKPiPE1dhTANYgOPTGkBw=="
+}
