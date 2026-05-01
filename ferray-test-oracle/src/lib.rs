@@ -37,33 +37,48 @@ pub use serde_json;
 
 /// Minimum ULP tolerance applied to all oracle comparisons.
 ///
-/// Pure-Rust implementations (faer, rustfft, `serde_json`) may round differently
-/// from the C/Fortran stack `NumPy` uses (LAPACK, pocketfft, cpython json) on
-/// the last few bits. 128 ULP on f64 still guarantees ~15.1 correct decimal
-/// digits — well beyond any scientific measurement precision.
+/// Tightened to 10 ULP (#47) to characterize the real pure-Rust
+/// precision envelope. Pure-Rust implementations (faer, rustfft,
+/// `serde_json`) generally round to within a few ULPs of NumPy's
+/// C/Fortran stack (LAPACK, pocketfft); 10 ULP gives a meaningful
+/// signal when ferray drifts further than expected, while leaving
+/// headroom for the legitimate last-bit divergences caused by
+/// different summation orders / kernel choices.
 ///
-/// Note: in several cases (polyfit, roots) ferray's iterative refinement
-/// produces answers *closer to mathematical truth* than `NumPy`'s. The
-/// tolerance must accommodate divergence in both directions — ferray being
-/// less precise than `NumPy` AND ferray being more precise than `NumPy` (where
-/// the fixture records `NumPy`'s slightly imprecise result as "expected").
-pub const MIN_ULP_TOLERANCE: u64 = 128;
+/// 10 ULP on f64 still guarantees ~15.7 correct decimal digits —
+/// well beyond any scientific measurement precision.
+///
+/// In several cases (polyfit, roots) ferray's iterative refinement
+/// produces answers *closer to mathematical truth* than NumPy's. The
+/// tolerance accommodates divergence in both directions.
+///
+/// Per-fixture overrides (set higher in individual `tolerance_ulps`
+/// JSON fields) are still honoured for ops with known wider envelopes
+/// (e.g. matmul/FFT at scale, where O(n)/O(log n) error growth is
+/// inherent).
+pub const MIN_ULP_TOLERANCE: u64 = 10;
 
-/// Unified near-zero absolute tolerance for f64 ULP comparisons.
+/// Near-zero absolute tolerance for f64 ULP comparisons.
 ///
 /// Values with magnitude below this are considered indistinguishable
 /// from rounding error and treated as a match regardless of ULP
 /// distance (which is meaningless near zero: adjacent subnormals
-/// differ by millions of ULPs). Derived from the min ULP tolerance
-/// and `f64::EPSILON` so changes to `MIN_ULP_TOLERANCE` propagate in
-/// one place (#315).
-pub const F64_NOISE_FLOOR: f64 = MIN_ULP_TOLERANCE as f64 * f64::EPSILON;
+/// differ by millions of ULPs).
+///
+/// Decoupled from `MIN_ULP_TOLERANCE` (#47): the noise floor is an
+/// absolute-value cutoff with units of "smallest distinguishable
+/// f64 magnitude", whereas the ULP tolerance is a relative bit-count
+/// cutoff. Tightening the ULP tolerance shouldn't tighten the
+/// noise floor (and vice versa) — the two characterize different
+/// failure modes. Set at `128 * f64::EPSILON ≈ 2.84e-14`, which
+/// covers the typical near-zero output of pure-Rust FFT/linalg
+/// (rustfft sine returns ~6e-15 instead of NumPy's exact 0 at the
+/// fundamental frequency).
+pub const F64_NOISE_FLOOR: f64 = 128.0 * f64::EPSILON;
 
-/// f32 counterpart. Uses the same ULP knob so the f32 and f64
-/// comparisons behave consistently (#316 — previously f32 used a
-/// hard-coded `4.0 * f32::EPSILON` and f64 used a different constant
-/// at the assert level).
-pub const F32_NOISE_FLOOR: f32 = MIN_ULP_TOLERANCE as f32 * f32::EPSILON;
+/// f32 counterpart. Decoupled from `MIN_ULP_TOLERANCE` for the same
+/// reasons as `F64_NOISE_FLOOR`.
+pub const F32_NOISE_FLOOR: f32 = 128.0 * f32::EPSILON;
 
 // ---------------------------------------------------------------------------
 // JSON schema types
@@ -470,6 +485,59 @@ pub fn assert_f64_slice_ulp(actual: &[f64], expected: &[f64], tolerance: u64, ca
             tolerance,
             &format!("case '{case_name}' [element {i}]"),
         );
+    }
+}
+
+/// Compare two f32 slices element-by-element within ULP tolerance.
+pub fn assert_f32_slice_ulp(actual: &[f32], expected: &[f32], tolerance: u64, case_name: &str) {
+    assert_eq!(
+        actual.len(),
+        expected.len(),
+        "case '{case_name}': length mismatch ({} vs {})",
+        actual.len(),
+        expected.len()
+    );
+    for (i, (&a, &e)) in actual.iter().zip(expected.iter()).enumerate() {
+        assert_f32_ulp(
+            a,
+            e,
+            tolerance,
+            &format!("case '{case_name}' [element {i}]"),
+        );
+    }
+}
+
+/// Mirror of [`should_skip_f64`] for f32: skip non-float dtypes and 0-d
+/// scalars. f64 fixtures are accepted because they cast down to f32
+/// cleanly within the f32 ULP tolerance budget.
+#[must_use]
+pub fn should_skip_f32(input: &serde_json::Value) -> bool {
+    let dtype = get_dtype(input);
+    if dtype != "float32" && dtype != "float64" {
+        return true;
+    }
+    let shape = parse_shape(&input["shape"]);
+    if shape.is_empty() {
+        return true;
+    }
+    false
+}
+
+/// Materialize an f32 array from a fixture value, casting from f64 if the
+/// fixture stores a native float64 column. Mirrors [`make_f64_array`] for
+/// f32 oracle paths (#213).
+#[must_use]
+pub fn make_f32_array_from_any(value: &serde_json::Value) -> Array<f32, IxDyn> {
+    let dtype = get_dtype(value);
+    let shape = parse_shape(&value["shape"]);
+    if dtype == "float32" {
+        make_f32_array(value)
+    } else {
+        let data: Vec<f32> = parse_f64_data(&value["data"])
+            .into_iter()
+            .map(|x| x as f32)
+            .collect();
+        Array::<f32, IxDyn>::from_vec(IxDyn::new(&shape), data).unwrap()
     }
 }
 
