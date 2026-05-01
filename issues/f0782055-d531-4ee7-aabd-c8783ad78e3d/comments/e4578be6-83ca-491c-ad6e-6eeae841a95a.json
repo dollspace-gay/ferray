@@ -1,0 +1,10 @@
+{
+  "uuid": "e4578be6-83ca-491c-ad6e-6eeae841a95a",
+  "issue_uuid": "f0782055-d531-4ee7-aabd-c8783ad78e3d",
+  "author": "doll-agent",
+  "content": "Deferred: large architectural change. Documenting the design path.\n\nThe blocker: DType is #[derive(Copy)]. Adding Struct(Vec<FieldDescriptor>) or Struct(Arc<[FieldDescriptor]>) loses Copy. Every downstream type holding a DType (every Array<T,D>, DynArray variant, Element::dtype() call site, npy parsing, ferray-numpy-interop dtype maps) would need to switch from copy-by-value to clone-by-reference.\n\nFull change sketch:\n1. Drop Copy from DType (~100+ trivial-copy sites need explicit clones or pass-by-ref).\n2. Add DType::Struct(Arc<[FieldDescriptor]>) with cheap eq/hash via Arc-pointer.\n3. Extend dtype::Element with a sealed Struct marker so FerrayRecord types can live in Array<T,D> directly.\n4. Extend DynArray with a Struct variant - needs a typeless byte-buffer Array variant (also the missing piece for #341's byte-stride concern).\n5. Extend npy I/O for numpy structured dtype descriptors.\n6. Expose field-name indexing at the Python binding level.\n\nScope: ~1 week dedicated work across 4 crates.\n\nCurrent workaround: FerrayRecord-derived types provide structured-record functionality via #[derive] + Vec<T>. Users who need numpy-shaped structured arrays today can stage through this.\n\nClosing as decided-future. Entry point is DType::Copy removal; every other change cascades. Filed as explicit roadmap for a future milestone.",
+  "created_at": "2026-05-01T22:38:40.623208763Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA97QNWw7S6R4gEquYt1xCinx2D0jePPWe7l3fA7oAokHeHwIYiC750q/xBgXwx2T6eJEAkQnTLorBl2WU5+pEAg=="
+}
