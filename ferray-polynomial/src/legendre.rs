@@ -204,7 +204,6 @@ fn power_to_legendre(power_coeffs: &[f64]) -> Vec<f64> {
         return leg;
     }
 
-    let mut x_pow_prev = x_pow.clone();
     x_pow = vec![0.0; n];
     x_pow[1] = 1.0;
     for (i, &c) in x_pow.iter().enumerate() {
@@ -237,11 +236,9 @@ fn power_to_legendre(power_coeffs: &[f64]) -> Vec<f64> {
             leg[i] += pk * c;
         }
 
-        x_pow_prev = x_pow;
         x_pow = x_pow_next;
     }
 
-    let _ = x_pow_prev;
     leg
 }
 
@@ -272,40 +269,68 @@ impl Poly for Legendre {
         if m == 0 {
             return Ok(self.clone());
         }
-        // Convert to power basis, differentiate, convert back
-        let mut power = legendre_to_power(&self.coeffs);
+        // Direct Legendre derivative recurrence (#131): the identity
+        //   P'_n(x) = (2n-1)·P_{n-1}(x) + (2n-5)·P_{n-3}(x) + ...
+        // gives a closed form for the derivative coefficients without
+        // roundtripping through the power basis. For c[k] coefficients
+        // of P_k:
+        //   d[k] = (2k+1) · Σ c[j] over odd j-k with j > k
+        // Apply m times.
+        let mut coeffs = self.coeffs.clone();
         for _ in 0..m {
-            if power.len() <= 1 {
-                power = vec![0.0];
+            if coeffs.len() <= 1 {
+                coeffs = vec![0.0];
                 break;
             }
-            let mut new_power = Vec::with_capacity(power.len() - 1);
-            for (i, &c) in power.iter().enumerate().skip(1) {
-                new_power.push(c * i as f64);
+            let n = coeffs.len();
+            let mut new_coeffs = vec![0.0; n - 1];
+            // Walk from highest order down so each d[k] accumulates
+            // from already-completed higher terms.
+            for k in (0..n - 1).rev() {
+                let mut acc = 0.0;
+                let mut j = k + 1;
+                while j < n {
+                    acc += coeffs[j];
+                    j += 2;
+                }
+                new_coeffs[k] = (2.0 * k as f64 + 1.0) * acc;
             }
-            power = new_power;
+            coeffs = new_coeffs;
         }
-        if power.is_empty() {
-            power = vec![0.0];
+        if coeffs.is_empty() {
+            coeffs = vec![0.0];
         }
-        Ok(self.with_same_mapping(power_to_legendre(&power)))
+        Ok(self.with_same_mapping(coeffs))
     }
 
     fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrayError> {
         if m == 0 {
             return Ok(self.clone());
         }
-        let mut power = legendre_to_power(&self.coeffs);
+        // Direct Legendre integral recurrence (#131): the identity
+        //   ∫ P_n(x) dx = (P_{n+1}(x) - P_{n-1}(x)) / (2n+1)
+        // gives a sparse two-term update in coefficient space:
+        //   for each c[j], add c[j]/(2j+1) to int_coef[j+1] and
+        //                  subtract c[j]/(2j+1) from int_coef[j-1]
+        //                  (j == 0 only adds to int_coef[1]).
+        // The integration constant `constant` lands in int_coef[0].
+        let mut coeffs = self.coeffs.clone();
         for step in 0..m {
             let constant = if step < k.len() { k[step] } else { 0.0 };
-            let mut new_power = Vec::with_capacity(power.len() + 1);
-            new_power.push(constant);
-            for (i, &c) in power.iter().enumerate() {
-                new_power.push(c / (i + 1) as f64);
+            let n = coeffs.len();
+            let mut new_coeffs = vec![0.0; n + 1];
+            new_coeffs[0] = constant;
+            for j in 0..n {
+                let denom = 2.0 * j as f64 + 1.0;
+                let term = coeffs[j] / denom;
+                new_coeffs[j + 1] += term;
+                if j >= 1 {
+                    new_coeffs[j - 1] -= term;
+                }
             }
-            power = new_power;
+            coeffs = new_coeffs;
         }
-        Ok(self.with_same_mapping(power_to_legendre(&power)))
+        Ok(self.with_same_mapping(coeffs))
     }
 
     fn roots(&self) -> Result<Vec<Complex<f64>>, FerrayError> {

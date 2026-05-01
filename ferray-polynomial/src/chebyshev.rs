@@ -252,7 +252,6 @@ fn power_to_chebyshev(power_coeffs: &[f64]) -> Vec<f64> {
     }
 
     // x^1 = T_1
-    let mut x_pow_prev = x_pow.clone();
     x_pow = vec![0.0; n];
     x_pow[1] = 1.0;
     for (i, &c) in x_pow.iter().enumerate() {
@@ -285,11 +284,8 @@ fn power_to_chebyshev(power_coeffs: &[f64]) -> Vec<f64> {
             cheb_coeffs[i] += pk * c;
         }
 
-        x_pow_prev = x_pow;
         x_pow = x_pow_next;
     }
-
-    let _ = x_pow_prev; // suppress unused warning
 
     cheb_coeffs
 }
