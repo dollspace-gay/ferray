@@ -1,0 +1,10 @@
+{
+  "uuid": "b6395bd0-9da5-450f-93fa-c1c7ec61e3c8",
+  "issue_uuid": "74ca6c04-2db8-4707-9820-fe8642204cb3",
+  "author": "doll-agent",
+  "content": "Done. The issue claimed FerrayRecord 'handles generics but untested'. Adding tests revealed the derive was broken for generics:\n1. 'std::mem::size_of::<#name>()' used the bare ident, producing 'size_of::<Mixed>()' for 'Mixed<A,B>' - fails to compile.\n2. 'static FIELDS: LazyLock<Vec<...>>' inside the trait method couldn't reference outer generics (E0401).\n\nFixes:\n- Use ty_generics.as_turbofish() for 'Mixed::<A,B>' in offset_of!/size_of!.\n- Replace LazyLock<Vec> cache with TypeId-keyed OnceLock<Mutex<HashMap>>; each monomorphization gets its own slot via TypeId::of::<Self>(); first call leaks a Box<[FieldDescriptor]>.\n\n3 new tests covering Pair<f64>/Pair<i32>/Mixed<A,B> with where-clause.\n\nferray-core macro_tests: 44 -> 47, all passing, clippy clean. Commit ea0ff10d.",
+  "created_at": "2026-05-01T22:36:25.519945019Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAD5vuAD4nRJfJUxO3n0HuCgSpCkF2/Ztcp/7hgz5NVvZG8e65xhxUlvxdL51SICJz674olNECUh+00L0g57W2CA=="
+}
