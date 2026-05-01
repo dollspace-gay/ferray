@@ -517,6 +517,74 @@ mod tests {
     }
 
     #[test]
+    fn sort_axis_2d_per_row() {
+        // #271: sort along axis=1 (columns) should sort each row
+        // independently. Row 0: [3, 1, _] (mask 2) → unmasked sorted
+        // ascending [1, 3] then masked → [1, 3, _].
+        // Row 1: [_, 4, 2] (mask 0) → [2, 4, _].
+        use ferray_core::dimension::Ix2;
+        let data = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![3.0, 1.0, 99.0, 99.0, 4.0, 2.0],
+        )
+        .unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![false, false, true, true, false, false],
+        )
+        .unwrap();
+        let ma = MaskedArray::new(data, mask).unwrap();
+        let sorted = ma.sort_axis(1).unwrap();
+        assert_eq!(sorted.shape(), &[2, 3]);
+        let d: Vec<f64> = sorted.data().iter().copied().collect();
+        let m: Vec<bool> = sorted.mask().iter().copied().collect();
+        // Row 0
+        assert!((d[0] - 1.0).abs() < 1e-12);
+        assert!((d[1] - 3.0).abs() < 1e-12);
+        assert!(m[2], "row 0 col 2 should be masked");
+        // Row 1
+        assert!((d[3] - 2.0).abs() < 1e-12);
+        assert!((d[4] - 4.0).abs() < 1e-12);
+        assert!(m[5], "row 1 col 2 should be masked");
+    }
+
+    #[test]
+    fn sort_axis_2d_per_column() {
+        // axis=0 sorts each column. Column 0: [3, 1] both unmasked →
+        // [1, 3]. Column 1: [2, _] (row 1 masked) → [2, _].
+        use ferray_core::dimension::Ix2;
+        let data = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 2]),
+            vec![3.0, 2.0, 1.0, 99.0],
+        )
+        .unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 2]),
+            vec![false, false, false, true],
+        )
+        .unwrap();
+        let ma = MaskedArray::new(data, mask).unwrap();
+        let sorted = ma.sort_axis(0).unwrap();
+        let d: Vec<f64> = sorted.data().iter().copied().collect();
+        let m: Vec<bool> = sorted.mask().iter().copied().collect();
+        // Column 0: index [0,0]=1, [1,0]=3.
+        assert!((d[0] - 1.0).abs() < 1e-12);
+        assert!((d[2] - 3.0).abs() < 1e-12);
+        // Column 1: index [0,1]=2 (unmasked), [1,1]=99 (masked).
+        assert!((d[1] - 2.0).abs() < 1e-12);
+        assert!(m[3]);
+    }
+
+    #[test]
+    fn sort_axis_rejects_out_of_bounds() {
+        use ferray_core::dimension::Ix2;
+        let data = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
+        let ma = MaskedArray::new(data, mask).unwrap();
+        assert!(ma.sort_axis(2).is_err());
+    }
+
+    #[test]
     fn masked_add_array_test() {
         let data = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
