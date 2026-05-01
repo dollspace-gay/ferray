@@ -3,11 +3,12 @@
   "display_id": 279,
   "title": "ferray-strings: no Serialize/Deserialize support for StringArray",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\nUnlike core NdArray. Cannot be serialized.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:59:20.120140579Z",
-  "updated_at": "2026-03-25T15:59:26.021568695Z",
+  "updated_at": "2026-05-01T21:49:15.925063846Z",
+  "closed_at": "2026-05-01T21:49:15.925063846Z",
   "labels": [
     "refactor",
     "qa-audit"
