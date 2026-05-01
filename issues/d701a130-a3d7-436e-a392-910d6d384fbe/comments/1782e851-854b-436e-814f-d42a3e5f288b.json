@@ -1,0 +1,10 @@
+{
+  "uuid": "1782e851-854b-436e-814f-d42a3e5f288b",
+  "issue_uuid": "d701a130-a3d7-436e-a392-910d6d384fbe",
+  "author": "doll-agent",
+  "content": "Add greedy contraction-order picking to einsum_pairwise. Compute label_size map up front; at each pairwise step, score every (i, j) pair by the size of the resulting intermediate (= product of dim sizes for labels in i∪j that are needed downstream or in the output). Pick the pair with smallest intermediate. Reorder current_ops/current_inputs and continue with the existing pair-contraction step.\n\nFor chain expressions like 'ab,bc,cd,de->ae' this can pick a different order than left-to-right when intermediate sizes differ. Adds 1 test exercising the 4-operand chain expression.",
+  "created_at": "2026-05-01T23:36:14.872075715Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAsvm2Htgicei6I0nYbvp4+PeaX825xRR19T3KuXRC2TSpf2oJ0kjKWTUK/FrI9XzDMnOJ7DsUMTeIPudp6JTDDw=="
+}
