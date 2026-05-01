@@ -3,11 +3,12 @@
   "display_id": 311,
   "title": "ferray-numpy-interop: duplicate Bool traits (ToArrowBool/FromArrowBool/ToPolarsBool/FromPolarsBool)",
   "description": "Current state: \n\nDesired state: \n\nReason: \n\n4 separate traits for bool. Confusing. Document or unify.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T16:03:50.924676660Z",
-  "updated_at": "2026-03-25T16:03:57.525804506Z",
+  "updated_at": "2026-05-01T22:23:31.010954613Z",
+  "closed_at": "2026-05-01T22:23:31.010954613Z",
   "labels": [
     "refactor",
     "qa-audit"
