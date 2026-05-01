@@ -247,6 +247,85 @@ fn s_macro_negative_index() {
     assert_eq!(slices[0], SliceInfoElem::Index(-1));
 }
 
+// --- s![] macro tests: expression robustness (#322) ---
+//
+// The macro routes through `proc_macro2::TokenStream::to_string()`
+// then string-parses the result. The Rust pretty-printer's whitespace
+// rules can drift slightly between compiler versions; these tests pin
+// the macro's behavior on inputs that exercise non-trivial token
+// shapes (variables, arithmetic, function calls, scoped paths).
+
+#[test]
+fn s_macro_variable_bounds() {
+    let start = 1isize;
+    let end = 5isize;
+    let slices = ferray_core::s![start..end];
+    assert_eq!(slices.len(), 1);
+    assert_eq!(
+        slices[0],
+        SliceInfoElem::Slice {
+            start: 1,
+            end: Some(5),
+            step: 1,
+        }
+    );
+}
+
+#[test]
+fn s_macro_arithmetic_expressions() {
+    let n = 10isize;
+    let slices = ferray_core::s![n - 5..n - 1];
+    assert_eq!(slices.len(), 1);
+    assert_eq!(
+        slices[0],
+        SliceInfoElem::Slice {
+            start: 5,
+            end: Some(9),
+            step: 1,
+        }
+    );
+}
+
+#[test]
+fn s_macro_function_call_in_bound() {
+    fn compute_end() -> isize {
+        7
+    }
+    let slices = ferray_core::s![0..compute_end()];
+    assert_eq!(slices.len(), 1);
+    assert_eq!(
+        slices[0],
+        SliceInfoElem::Slice {
+            start: 0,
+            end: Some(7),
+            step: 1,
+        }
+    );
+}
+
+#[test]
+fn s_macro_step_from_variable() {
+    let step = 3isize;
+    let slices = ferray_core::s![0..10;step];
+    assert_eq!(slices.len(), 1);
+    assert_eq!(
+        slices[0],
+        SliceInfoElem::Slice {
+            start: 0,
+            end: Some(10),
+            step: 3,
+        }
+    );
+}
+
+#[test]
+fn s_macro_isize_constant_in_index() {
+    // Pin behaviour on an indexed expression with a typed literal.
+    let slices = ferray_core::s![5isize];
+    assert_eq!(slices.len(), 1);
+    assert_eq!(slices[0], SliceInfoElem::Index(5));
+}
+
 #[test]
 fn s_macro_negative_start() {
     let slices = ferray_core::s![-3..];

@@ -181,6 +181,18 @@ fn impl_s_macro(input: proc_macro2::TokenStream) -> syn::Result<proc_macro2::Tok
     //
     // Since proc macros can't easily parse arbitrary Rust expressions with range syntax
     // mixed with custom `;step` syntax, we'll use a simpler token-based approach.
+    //
+    // FRAGILITY NOTE (#322): the implementation routes through
+    // `TokenStream::to_string()` and string-parses the result. Rust's
+    // pretty-printer formatting between tokens (whitespace placement
+    // around `..`, `;`, parens) is technically allowed to drift across
+    // compiler versions. The integration tests in
+    // ferray-core/tests/macro_tests.rs (s_macro_*) pin a representative
+    // set of inputs — variable bounds, arithmetic expressions, function
+    // calls, typed literals — to catch any drift. A future cleanup
+    // could walk the token tree directly via `into_iter()` and avoid
+    // `to_string()` entirely; that requires writing a small recursive-
+    // descent parser for `expr (.. expr)? (; expr)?` over `TokenTree`.
 
     let input_str = input.to_string();
 
