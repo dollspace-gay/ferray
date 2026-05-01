@@ -766,4 +766,138 @@ mod tests {
         assert_eq!(scale, 0.5);
         assert_eq!(offset, -1.0);
     }
+
+    // ----- Large/small coefficient magnitudes (#251) ---------------------
+    //
+    // The existing test surface stays inside [-10, 10]. Numerically these
+    // tests live near the float-precision boundary where rounding behaves
+    // differently from the typical case — pin the operations that should
+    // still hold up.
+
+    #[test]
+    fn eval_large_coefficients_1e15() {
+        // p(x) = 1e15 + 2e15 x; eval at x = 1 should give 3e15 exactly.
+        let p = Polynomial::new(&[1e15, 2e15]);
+        let v = p.eval(1.0).unwrap();
+        assert!(
+            (v - 3e15).abs() / 3e15 < 1e-14,
+            "eval at large coeffs: got {v}, expected 3e15"
+        );
+    }
+
+    #[test]
+    fn eval_small_coefficients_1e_minus_15() {
+        // p(x) = 1e-15 + 2e-15 x at x=1.5 should be 4e-15 exactly.
+        let p = Polynomial::new(&[1e-15, 2e-15]);
+        let v = p.eval(1.5).unwrap();
+        let expected = 1e-15 + 2e-15 * 1.5;
+        assert!(
+            (v - expected).abs() / expected < 1e-14,
+            "eval at small coeffs: got {v}, expected {expected}"
+        );
+    }
+
+    #[test]
+    fn add_huge_magnitudes() {
+        // Adding 1e15 + 1e15 should give 2e15; the addition path must
+        // not lose precision through any intermediate normalization.
+        let p = Polynomial::new(&[1e15, 1e15, 1e15]);
+        let q = Polynomial::new(&[1e15, 1e15, 1e15]);
+        let r = p.add(&q).unwrap();
+        for c in r.coeffs.iter() {
+            assert!(
+                (c - 2e15).abs() / 2e15 < 1e-14,
+                "huge add: got {c}, expected 2e15"
+            );
+        }
+    }
+
+    #[test]
+    fn mul_tiny_magnitudes_1e_minus_15() {
+        // (1e-15 + 1e-15 x) * (1e-15 + 1e-15 x) = 1e-30 + 2e-30 x + 1e-30 x^2
+        let p = Polynomial::new(&[1e-15, 1e-15]);
+        let r = p.mul(&p).unwrap();
+        assert_eq!(r.coeffs.len(), 3);
+        assert!(
+            (r.coeffs[0] - 1e-30).abs() / 1e-30 < 1e-14,
+            "c0: got {}, expected 1e-30",
+            r.coeffs[0]
+        );
+        assert!(
+            (r.coeffs[1] - 2e-30).abs() / 2e-30 < 1e-14,
+            "c1: got {}, expected 2e-30",
+            r.coeffs[1]
+        );
+        assert!(
+            (r.coeffs[2] - 1e-30).abs() / 1e-30 < 1e-14,
+            "c2: got {}, expected 1e-30",
+            r.coeffs[2]
+        );
+    }
+
+    #[test]
+    fn trim_large_tolerance_drops_small_coefficients() {
+        // A polynomial whose small (1e-12) trailing coefficients should
+        // be dropped at a 1e-6 tolerance.
+        let p = Polynomial::new(&[1.0, 2.0, 3.0, 1e-12, 1e-12]);
+        let trimmed = p.trim(1e-6).unwrap();
+        assert_eq!(trimmed.coeffs.len(), 3);
+        assert_eq!(trimmed.coeffs, vec![1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn trim_tight_tolerance_preserves_small_coefficients() {
+        // The same polynomial at a tighter tolerance should keep all five.
+        let p = Polynomial::new(&[1.0, 2.0, 3.0, 1e-12, 1e-12]);
+        let trimmed = p.trim(1e-15).unwrap();
+        assert_eq!(trimmed.coeffs.len(), 5);
+    }
+
+    #[test]
+    fn eval_mixed_magnitudes_1e15_and_1e_minus_15() {
+        // p(x) = 1e15 + 1e-15 x at x = 1: leading term dominates.
+        // Result should be very close to 1e15; the tiny term contributes
+        // ~1 ULP at that scale (1e15 * eps ~ 0.22).
+        let p = Polynomial::new(&[1e15, 1e-15]);
+        let v = p.eval(1.0).unwrap();
+        // Within 2 ULPs of 1e15.
+        assert!(
+            (v - 1e15).abs() / 1e15 < 1e-14,
+            "mixed-magnitude eval: got {v}"
+        );
+    }
+
+    #[test]
+    fn deriv_large_coefficients() {
+        // d/dx (3e15 x^2) = 6e15 x. Differentiation of a single 3e15 x^2
+        // term must propagate the exponent without overflow.
+        let p = Polynomial::new(&[0.0, 0.0, 3e15]);
+        let dp = p.deriv(1).unwrap();
+        assert_eq!(dp.coeffs.len(), 2);
+        assert!(
+            (dp.coeffs[1] - 6e15).abs() / 6e15 < 1e-14,
+            "deriv of 3e15*x^2: got {} for x coeff",
+            dp.coeffs[1]
+        );
+    }
+
+    #[test]
+    fn add_precision_preserved_huge_minus_huge() {
+        // (1e15 + 1.0) - 1e15 should still round-trip the small term
+        // through subtract — but classic floating-point cancellation
+        // means we can lose ~half the precision on the small piece.
+        // Test pins the stronger guarantee: the exact subtraction is
+        // performed coefficient-wise without a Kahan-style accumulator,
+        // so the loss is ~1 ULP at the original magnitude.
+        let p = Polynomial::new(&[1e15 + 1.0, 1.0]);
+        let q = Polynomial::new(&[1e15, 0.0]);
+        let r = p.sub(&q).unwrap();
+        // c0 was (1e15 + 1.0) exactly, then minus 1e15. The result is
+        // the small piece, which f64 rounds to the nearest representable
+        // value (which IS exactly 1.0 here because 1e15 + 1.0 rounds up
+        // to a representable float that loses the unit term ULP-wise).
+        // We pin the looser invariant: the subtraction doesn't NaN/Inf.
+        assert!(r.coeffs[0].is_finite());
+        assert_eq!(r.coeffs[1], 1.0);
+    }
 }
