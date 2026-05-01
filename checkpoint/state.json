@@ -63,10 +63,6 @@
       "agent_id": "doll-agent",
       "claimed_at": "2026-05-01T17:02:07.861211750Z"
     },
-    "710": {
-      "agent_id": "doll-agent",
-      "claimed_at": "2026-05-01T17:02:13.374911367Z"
-    },
     "711": {
       "agent_id": "doll-agent",
       "claimed_at": "2026-05-01T17:02:19.091115249Z"
@@ -103,8 +99,8 @@
     }
   ],
   "watermark": {
-    "timestamp": "2026-05-01T18:06:18.823998346Z",
+    "timestamp": "2026-05-01T18:08:22.536659307Z",
     "agent_id": "doll-agent",
-    "agent_seq": 278
+    "agent_seq": 279
   }
 }
