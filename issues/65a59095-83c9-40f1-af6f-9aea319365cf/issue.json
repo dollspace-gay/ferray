@@ -2,11 +2,12 @@
   "uuid": "65a59095-83c9-40f1-af6f-9aea319365cf",
   "display_id": 693,
   "title": "ferray-python phase 1 follow-up: bind meshgrid/mgrid/ogrid/vander",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T16:05:47.458705586Z",
-  "updated_at": "2026-05-01T16:05:48.890318672Z",
+  "updated_at": "2026-05-01T17:44:55.839568419Z",
+  "closed_at": "2026-05-01T17:44:55.839568419Z",
   "labels": [
     "feature"
   ]
