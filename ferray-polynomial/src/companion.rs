@@ -68,27 +68,6 @@ pub fn companion_matrix(coeffs: &[f64]) -> Result<Vec<f64>, FerrayError> {
     Ok(mat)
 }
 
-/// Return the size of the companion matrix (degree of the polynomial).
-///
-/// # Errors
-/// Returns an error if the coefficients represent a constant polynomial.
-pub fn companion_size(coeffs: &[f64]) -> Result<usize, FerrayError> {
-    if coeffs.is_empty() {
-        return Err(FerrayError::invalid_value("empty coefficients"));
-    }
-    let mut n = coeffs.len();
-    while n > 1 && coeffs[n - 1].abs() < f64::EPSILON * 100.0 {
-        n -= 1;
-    }
-    let deg = n - 1;
-    if deg == 0 {
-        return Err(FerrayError::invalid_value(
-            "constant polynomial has no companion matrix",
-        ));
-    }
-    Ok(deg)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,10 +103,5 @@ mod tests {
     #[test]
     fn companion_matrix_empty_err() {
         assert!(companion_matrix(&[]).is_err());
-    }
-
-    #[test]
-    fn companion_size_quadratic() {
-        assert_eq!(companion_size(&[2.0, -3.0, 1.0]).unwrap(), 2);
     }
 }
