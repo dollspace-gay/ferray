@@ -1,0 +1,10 @@
+{
+  "uuid": "0ae81504-0068-4239-97dd-57a0f0e0ce2d",
+  "issue_uuid": "e53a864e-b26b-4398-a863-973d61d83f4f",
+  "author": "doll-agent",
+  "content": "Replace naive O(n) repeated-multiply pow loop with O(log n) binary exponentiation in all five Poly impls: power.rs, chebyshev.rs, legendre.rs, hermite.rs, hermite_e.rs, laguerre.rs. The Polynomial::mul method is the expensive primitive; binary exponentiation reduces invocations from n-1 to ~2*log2(n).\n\nAdd 2 cross-check tests in power.rs: pow_one_returns_self (exercises the n==1 fast path) and pow_high_exponent_matches_naive_loop (n=11 = 0b1011, both odd and even bits, validates against analytical binomial coefficients of (1+x)^11).",
+  "created_at": "2026-05-01T20:39:22.191721376Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAPpdHkR0u2UUm0htGaHxgvBlymwnnpSjGr9tTAxS06/jLDlPTpiNzyfyGs74SXW3SZagXUOYLXprvLF69hdnXCA=="
+}
