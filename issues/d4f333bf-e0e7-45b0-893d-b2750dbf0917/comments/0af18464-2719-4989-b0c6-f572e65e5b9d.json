@@ -1,0 +1,10 @@
+{
+  "uuid": "0af18464-2719-4989-b0c6-f572e65e5b9d",
+  "issue_uuid": "d4f333bf-e0e7-45b0-893d-b2750dbf0917",
+  "author": "doll-agent",
+  "content": "Done. Four sites used T::from(count).unwrap_or(one) - the 1.0 fallback silently turned 'sum / n' into 'sum / 1' (returning the sum and calling it the mean).\n\nReplaced each fallback:\n- mean / var (impl methods, return FerrayResult<T>): ok_or_else with a typed error propagates failure.\n- mean_axis / var_axis (closures with Option<T> return inside reduce_axis): T::from(count).map(...) and T::from(count)? - None masks the cell.\n\nFor f32/f64 the conversion never fails in practice, so behavior is unchanged. The fix closes the silent-misattribution hole for any future T where it could fail.\n\nferray-ma: 184 tests pass, clippy clean. Commit c6a55260.",
+  "created_at": "2026-05-01T21:07:20.235626812Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA6mlijxdDbORnRlYKdZRZq4J81oDN3bBxRSzs2x95C0XEtr7i3LmWlw3G0qcjBrL2RMIjcIG3zOQO32u4Yum0AQ=="
+}
