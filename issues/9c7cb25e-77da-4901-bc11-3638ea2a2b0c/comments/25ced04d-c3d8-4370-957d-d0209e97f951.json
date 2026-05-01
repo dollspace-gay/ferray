@@ -1,0 +1,10 @@
+{
+  "uuid": "25ced04d-c3d8-4370-957d-d0209e97f951",
+  "issue_uuid": "9c7cb25e-77da-4901-bc11-3638ea2a2b0c",
+  "author": "doll-agent",
+  "content": "Done. The existing power.rs test surface stayed inside [-10, 10], leaving the float-precision-edge regimes (1e15, 1e-15) uncovered. Added 9 tests covering eval, add, mul, trim, deriv, and huge-cancellation behavior across both extreme magnitudes.\n\nferray-polynomial: 151 -> 160 tests, all passing, clippy clean. Commit 71a35099.",
+  "created_at": "2026-05-01T20:50:10.186413007Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAiV4FiBWXCjl7ZiBO19zsHkqhQbEFsSfL5pqeHraJZecrnQiDD474DsMuzExS/XcOFfW1tcrTZLnBFQDlJlUSCw=="
+}
