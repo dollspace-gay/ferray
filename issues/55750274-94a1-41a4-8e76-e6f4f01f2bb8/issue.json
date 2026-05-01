@@ -2,11 +2,12 @@
   "uuid": "55750274-94a1-41a4-8e76-e6f4f01f2bb8",
   "display_id": 688,
   "title": "ferray-python phase 3: linalg + fft + random submodule bindings",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T15:38:11.055918742Z",
-  "updated_at": "2026-05-01T15:38:12.358807060Z",
+  "updated_at": "2026-05-01T17:03:06.979718486Z",
+  "closed_at": "2026-05-01T17:03:06.979718486Z",
   "labels": [
     "feature"
   ]
