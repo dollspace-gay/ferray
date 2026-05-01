@@ -1,0 +1,10 @@
+{
+  "uuid": "22e57584-b714-4c0d-bce0-00da6a210573",
+  "issue_uuid": "c8ff9ef5-ad1c-41d7-9f96-2d7f2632576a",
+  "author": "doll-agent",
+  "content": "Closed as not actionable as standalone work. Audit details: of the ~500-line files for chebyshev/legendre/laguerre/hermite/hermite_e, only ~50 lines per file is truly identical across bases (struct field declarations, with_domain/with_window setters, coeffs/degree accessors). The remaining ~450 lines per file is genuinely basis-specific: recurrence relations (T_n+1 = 2x*T_n - T_n-1 vs L_n+1 = ((2n+1-x)*L_n - n*L_n-1)/(n+1) etc.), Vandermonde matrix construction, Gauss quadrature points and weights, basis-to-power-basis conversion, multiplication via three-term recurrence, etc. — all mathematically distinct.\n\nThe natural place for a deeper unification is alongside #612 (lift Poly trait from f64 to T: Element + Float and Complex), where the trait redesign would absorb the field declarations and accessors into a generic shape. Trying to extract a macro_rules! shell now would risk regressions in well-tested numerical kernels for ~5% line savings.\n\nClosing as superseded-by-context: #612 is the right milestone for any code-organization refactor of this surface.",
+  "created_at": "2026-05-01T19:44:13.425681730Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA5gfyE2DWrO/p+3mtrqD0/fnalUbpQdMJupVzgHuMEhn84ozFywxtwkweaUe9ttr+P4cYVy2O2XhEuHbUrQdaBg=="
+}
