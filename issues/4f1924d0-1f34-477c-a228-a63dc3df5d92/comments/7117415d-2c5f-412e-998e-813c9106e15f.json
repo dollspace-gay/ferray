@@ -1,0 +1,10 @@
+{
+  "uuid": "7117415d-2c5f-412e-998e-813c9106e15f",
+  "issue_uuid": "4f1924d0-1f34-477c-a228-a63dc3df5d92",
+  "author": "doll-agent",
+  "content": "Tarpaulin coverage analysis complete. Workspace total: 62.5% (16081/25750 lines). Per-crate breakdown saved to coverage/COVERAGE.md alongside the raw lcov.info (32k lines) and interactive tarpaulin-report.html. Top performers: ferray-stride-tricks 97.8%, ferray-window 94.2%, ferray-fft 89.3%, ferray-random 84.6%, ferray-strings 83.1%, ferray-stats 82.9%. Apparent zeros (ferray-numpy-interop, ferray-python, ferray-core-macros) are explained in the report — they have tests but tarpaulin can't see them (Python-feature-gated, wheel-only, proc-macro). Ran via --engine llvm because the default ptrace engine conflicts with pulp's compile-time const-assertion path. Two pre-existing tests skipped via --skip filters: force_scalar_env (asserts !force_scalar() which contradicts the env override) and kernel_edge_i8_signed_handles_partial (debug-build i8 multiply overflow); both are real bugs but unrelated to coverage. Going-forward path documented in COVERAGE.md: integrate tarpaulin into CI and push lcov.info to coveralls/codecov for historical tracking — out of scope for this analysis-only issue. Closing.",
+  "created_at": "2026-05-01T19:25:00.141839216Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAXmE5yFwyHSPKHg7qSGYkl8Q+pbW9n0tCOrXGIMgL4P5YoRjVKSz/TIzynTm8W9LH2zkUbjdFcr7R+s2dSedTCw=="
+}
