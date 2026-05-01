@@ -62,7 +62,14 @@ impl_arrow_element!(f64, arrow::datatypes::Float64Type);
 // ferray -> Arrow  (REQ-4)
 // ---------------------------------------------------------------------------
 
-/// Extension trait for converting a ferray 1-D array to an Arrow array.
+/// Extension trait for converting a ferray array to an Arrow array.
+///
+/// Multi-dimensional inputs flatten to a 1-D Arrow primitive in
+/// row-major (C) order — Arrow's columnar primitive format is
+/// inherently 1-D, so any dimensionality information is dropped on
+/// the way out. The reverse path returns a 1-D ferray array; callers
+/// who need to recover the original shape should `.reshape()` after
+/// [`FromArrow::into_ferray`] (#307).
 pub trait ToArrow {
     /// The Arrow array type produced by the conversion.
     type ArrowArray;
@@ -77,10 +84,11 @@ pub trait ToArrow {
     fn to_arrow(&self) -> Result<Self::ArrowArray, FerrayError>;
 }
 
-impl<T> ToArrow for Array1<T>
+impl<T, D> ToArrow for ferray_core::Array<T, D>
 where
     T: ArrowElement,
     T::ArrowType: ArrowPrimitiveType<Native = T>,
+    D: ferray_core::dimension::Dimension,
 {
     type ArrowArray = PrimitiveArray<T::ArrowType>;
 
@@ -103,8 +111,9 @@ where
     }
 }
 
-/// Extension trait for converting a ferray `Array1<bool>` to an Arrow
-/// [`BooleanArray`].
+/// Extension trait for converting a ferray boolean array to an Arrow
+/// [`BooleanArray`]. Multi-dimensional inputs flatten to 1-D in
+/// row-major order (#307).
 pub trait ToArrowBool {
     /// Convert this ferray bool array to an Arrow [`BooleanArray`].
     ///
@@ -114,7 +123,7 @@ pub trait ToArrowBool {
     fn to_arrow(&self) -> Result<BooleanArray, FerrayError>;
 }
 
-impl ToArrowBool for Array1<bool> {
+impl<D: ferray_core::dimension::Dimension> ToArrowBool for ferray_core::Array<bool, D> {
     fn to_arrow(&self) -> Result<BooleanArray, FerrayError> {
         let values: Vec<bool> = self.to_vec_flat();
         Ok(BooleanArray::from(values))
@@ -576,5 +585,42 @@ mod tests {
         let flat = arrayd_to_arrow_flat(&a).unwrap();
         // 6 elements cannot reshape to (2, 4).
         assert!(arrayd_from_arrow_flat::<f64>(&flat, &[2, 4]).is_err());
+    }
+
+    // ----- ToArrow now generic over Dimension (#307) ---------------------
+
+    #[test]
+    fn to_arrow_from_array2_flattens_row_major() {
+        use ferray_core::Array;
+        use ferray_core::dimension::Ix2;
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let arr = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
+        let arrow_arr = arr.to_arrow().unwrap();
+        assert_eq!(arrow_arr.len(), 6);
+        let values: Vec<f64> = arrow_arr.values().iter().copied().collect();
+        // Row-major flattening: original [[1,2,3],[4,5,6]] → [1,2,3,4,5,6].
+        assert_eq!(values, data);
+    }
+
+    #[test]
+    fn to_arrow_from_arrayd_flattens_row_major() {
+        let data: Vec<f32> = (0..24).map(|i| i as f32).collect();
+        let arr = ArrayD::<f32>::from_vec(IxDyn::new(&[2, 3, 4]), data.clone()).unwrap();
+        let arrow_arr = arr.to_arrow().unwrap();
+        assert_eq!(arrow_arr.len(), 24);
+        let values: Vec<f32> = arrow_arr.values().iter().copied().collect();
+        assert_eq!(values, data);
+    }
+
+    #[test]
+    fn to_arrow_bool_from_array2_flattens() {
+        use ferray_core::Array;
+        use ferray_core::dimension::Ix2;
+        let data = vec![true, false, false, true, false, true];
+        let arr = Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
+        let arrow_arr = arr.to_arrow().unwrap();
+        assert_eq!(arrow_arr.len(), 6);
+        let got: Vec<bool> = (0..arrow_arr.len()).map(|i| arrow_arr.value(i)).collect();
+        assert_eq!(got, data);
     }
 }

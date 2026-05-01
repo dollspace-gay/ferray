@@ -60,7 +60,13 @@ impl_polars_element!(f64, Float64Type, f64);
 // ferray -> Polars  (REQ-6)
 // ---------------------------------------------------------------------------
 
-/// Extension trait for converting a ferray 1-D array to a Polars [`Series`].
+/// Extension trait for converting a ferray array to a Polars [`Series`].
+///
+/// Multi-dimensional inputs flatten to a 1-D Series in row-major (C)
+/// order — a Polars Series is inherently a single column, so shape
+/// information is dropped on the way out. Callers who need to
+/// recover an N-D ferray array should `.reshape()` after
+/// [`FromPolars::from_polars_series`] (#307).
 pub trait ToPolars {
     /// Convert this ferray array to a Polars [`Series`] with the given name.
     ///
@@ -71,8 +77,10 @@ pub trait ToPolars {
     fn to_polars_series(&self, name: &str) -> Result<Series, FerrayError>;
 }
 
-impl<T: PolarsElement> ToPolars for Array1<T>
+impl<T, D> ToPolars for ferray_core::Array<T, D>
 where
+    T: PolarsElement,
+    D: ferray_core::dimension::Dimension,
     ChunkedArray<T::PolarsType>: IntoSeries,
 {
     fn to_polars_series(&self, name: &str) -> Result<Series, FerrayError> {
@@ -85,7 +93,9 @@ where
     }
 }
 
-/// Extension trait for converting a ferray `Array1<bool>` to a Polars [`Series`].
+/// Extension trait for converting a ferray boolean array to a Polars
+/// [`Series`]. Multi-dimensional inputs flatten to 1-D in row-major
+/// order (#307).
 pub trait ToPolarsBool {
     /// Convert this ferray bool array to a Polars [`Series`].
     ///
@@ -95,7 +105,7 @@ pub trait ToPolarsBool {
     fn to_polars_series(&self, name: &str) -> Result<Series, FerrayError>;
 }
 
-impl ToPolarsBool for Array1<bool> {
+impl<D: ferray_core::dimension::Dimension> ToPolarsBool for ferray_core::Array<bool, D> {
     fn to_polars_series(&self, name: &str) -> Result<Series, FerrayError> {
         let data: Vec<bool> = self.to_vec_flat();
         let ca = BooleanChunked::new(name.into(), &data);
@@ -519,5 +529,47 @@ mod tests {
         let df = array2_to_polars_dataframe(&a, &["c0", "c1"]).unwrap();
         // Request the wrong type on the way back.
         assert!(array2_from_polars_dataframe::<i32>(&df).is_err());
+    }
+
+    // ----- ToPolars now generic over Dimension (#307) -------------------
+
+    #[test]
+    fn to_polars_series_from_array2_flattens_row_major() {
+        use ferray_core::Array;
+        use ferray_core::dimension::Ix2;
+        let data = vec![1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let arr = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
+        let series = arr.to_polars_series("flat").unwrap();
+        assert_eq!(series.len(), 6);
+        let ca = series.f64().unwrap();
+        let got: Vec<f64> = ca.into_no_null_iter().collect();
+        assert_eq!(got, data);
+    }
+
+    #[test]
+    fn to_polars_series_from_arrayd_flattens() {
+        use ferray_core::dimension::IxDyn;
+        let data: Vec<i64> = (0..24).collect();
+        let arr =
+            ferray_core::Array::<i64, IxDyn>::from_vec(IxDyn::new(&[2, 3, 4]), data.clone())
+                .unwrap();
+        let series = arr.to_polars_series("flat3d").unwrap();
+        assert_eq!(series.len(), 24);
+        let ca = series.i64().unwrap();
+        let got: Vec<i64> = ca.into_no_null_iter().collect();
+        assert_eq!(got, data);
+    }
+
+    #[test]
+    fn to_polars_bool_from_array2_flattens() {
+        use ferray_core::Array;
+        use ferray_core::dimension::Ix2;
+        let data = vec![true, false, false, true, false, true];
+        let arr = Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
+        let series = arr.to_polars_series("bools").unwrap();
+        assert_eq!(series.len(), 6);
+        let ca = series.bool().unwrap();
+        let got: Vec<bool> = ca.into_no_null_iter().collect();
+        assert_eq!(got, data);
     }
 }
