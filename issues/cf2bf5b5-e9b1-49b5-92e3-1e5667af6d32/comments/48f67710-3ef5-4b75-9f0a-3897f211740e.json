@@ -1,0 +1,10 @@
+{
+  "uuid": "48f67710-3ef5-4b75-9f0a-3897f211740e",
+  "issue_uuid": "cf2bf5b5-e9b1-49b5-92e3-1e5667af6d32",
+  "author": "doll-agent",
+  "content": "Replace per-element I/O loops in NpyElement impls for bool, DateTime64, Timedelta64. Numeric primitives already use bulk read/write via the impl_npy_element! macro. The boolean impl wrote one byte per element via write_all (one syscall per bool); newtype impls for DateTime64/Timedelta64 wrote 8 bytes per element. Stage to a single buffer, write_all once. For reads, read_exact the whole block then map. The newtype impls leverage repr(transparent) over i64 to reinterpret the slice directly.",
+  "created_at": "2026-05-01T20:18:20.024846076Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA2uvVKK3I+ABgu/3JFoI5x5S7Jn9V2xdRrm5jubUhemfpZ/dYsiWydh5WPv16jYyNyz1x+Z4wEqNy9itRFLtiDw=="
+}
