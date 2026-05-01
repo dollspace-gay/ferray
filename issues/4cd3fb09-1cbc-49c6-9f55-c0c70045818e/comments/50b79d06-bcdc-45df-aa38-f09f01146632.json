@@ -1,0 +1,10 @@
+{
+  "uuid": "50b79d06-bcdc-45df-aa38-f09f01146632",
+  "issue_uuid": "4cd3fb09-1cbc-49c6-9f55-c0c70045818e",
+  "author": "doll-agent",
+  "content": "Done. Audit: cov_single_observation_errors and corrcoef_single_observation_diagonal_is_one were added previously under this same issue. Added 3 new tests for the constant-variable case:\n\n- corrcoef_constant_variable_off_diagonal_is_zero: pins the ferray behaviour (returns 0.0 for constant-variable correlations) and notes the numpy-deviation in the docstring. Filed #723 as a separate low-priority bug since changing the value would break consumers depending on the current 0.0 contract.\n- corrcoef_all_constant_variables_yields_nans: degenerate input (every variable constant) doesn't panic; just verifies shape and clean return.\n- cov_constant_variable_yields_zero_variance: cov(rowvar=true) of a constant row gives 0 variance and 0 covariances — well-defined; the constant row's row/col entries should all be 0 in the cov matrix (asserted on a 2x3 example with row 0 = [5,5,5], row 1 = [1,2,3]).\n\n256 ferray-stats lib tests pass.",
+  "created_at": "2026-05-01T20:02:42.629046291Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA0ISkdb/hXSuqSXGImyUEdYwjrm1wdmtyyzi0+7DtOY5N49/N5nYYILSSh/ySf1KujnSHY/FW3vODn7VAytxKDg=="
+}
