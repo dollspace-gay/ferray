@@ -159,6 +159,9 @@ pub fn masked_less_equal<T: Element + PartialOrd + Copy, D: Dimension>(
 
 /// Create a `MaskedArray` by masking elements inside the closed interval `[v1, v2]`.
 ///
+/// Matches `numpy.ma.masked_inside`: if `v1 > v2` they are swapped so
+/// the interval is always non-degenerate (#266).
+///
 /// # Errors
 /// Returns an error only for internal failures.
 pub fn masked_inside<T: Element + PartialOrd + Copy, D: Dimension>(
@@ -166,12 +169,16 @@ pub fn masked_inside<T: Element + PartialOrd + Copy, D: Dimension>(
     v1: T,
     v2: T,
 ) -> FerrayResult<MaskedArray<T, D>> {
-    let mask_data: Vec<bool> = data.iter().map(|v| *v >= v1 && *v <= v2).collect();
+    let (lo, hi) = if v1 <= v2 { (v1, v2) } else { (v2, v1) };
+    let mask_data: Vec<bool> = data.iter().map(|v| *v >= lo && *v <= hi).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
     MaskedArray::new(data.clone(), mask)
 }
 
 /// Create a `MaskedArray` by masking elements outside the closed interval `[v1, v2]`.
+///
+/// Matches `numpy.ma.masked_outside`: if `v1 > v2` they are swapped so
+/// the interval is always non-degenerate (#266).
 ///
 /// # Errors
 /// Returns an error only for internal failures.
@@ -180,7 +187,8 @@ pub fn masked_outside<T: Element + PartialOrd + Copy, D: Dimension>(
     v1: T,
     v2: T,
 ) -> FerrayResult<MaskedArray<T, D>> {
-    let mask_data: Vec<bool> = data.iter().map(|v| *v < v1 || *v > v2).collect();
+    let (lo, hi) = if v1 <= v2 { (v1, v2) } else { (v2, v1) };
+    let mask_data: Vec<bool> = data.iter().map(|v| *v < lo || *v > hi).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
     MaskedArray::new(data.clone(), mask)
 }
@@ -278,6 +286,65 @@ mod tests {
         assert_eq!(
             ma.mask().iter().copied().collect::<Vec<_>>(),
             vec![false, true, false, false, false, true]
+        );
+    }
+
+    // ----- masked_inside / masked_outside swap (#266) ---------------------
+
+    #[test]
+    fn masked_inside_canonical_order_masks_interior() {
+        let data = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let ma = masked_inside(&data, 2, 4).unwrap();
+        assert_eq!(
+            ma.mask().iter().copied().collect::<Vec<_>>(),
+            vec![false, true, true, true, false]
+        );
+    }
+
+    #[test]
+    fn masked_inside_swaps_when_v1_greater_than_v2() {
+        // #266: numpy auto-swaps; masked_inside(data, 4, 2) must be
+        // equivalent to masked_inside(data, 2, 4).
+        let data = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let swapped = masked_inside(&data, 4, 2).unwrap();
+        let canonical = masked_inside(&data, 2, 4).unwrap();
+        assert_eq!(
+            swapped.mask().iter().copied().collect::<Vec<_>>(),
+            canonical.mask().iter().copied().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn masked_outside_canonical_order_masks_exterior() {
+        let data = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let ma = masked_outside(&data, 2, 4).unwrap();
+        assert_eq!(
+            ma.mask().iter().copied().collect::<Vec<_>>(),
+            vec![true, false, false, false, true]
+        );
+    }
+
+    #[test]
+    fn masked_outside_swaps_when_v1_greater_than_v2() {
+        // #266: same swap behavior on the exterior path.
+        let data = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let swapped = masked_outside(&data, 4, 2).unwrap();
+        let canonical = masked_outside(&data, 2, 4).unwrap();
+        assert_eq!(
+            swapped.mask().iter().copied().collect::<Vec<_>>(),
+            canonical.mask().iter().copied().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn masked_inside_equal_endpoints_masks_only_that_value() {
+        // [v, v] is a degenerate interval — masking should still pick
+        // up exact-equal entries.
+        let data = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let ma = masked_inside(&data, 3, 3).unwrap();
+        assert_eq!(
+            ma.mask().iter().copied().collect::<Vec<_>>(),
+            vec![false, false, true, false, false]
         );
     }
 }
