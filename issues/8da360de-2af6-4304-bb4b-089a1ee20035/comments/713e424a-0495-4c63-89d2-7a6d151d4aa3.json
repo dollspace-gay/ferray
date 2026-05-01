@@ -1,0 +1,10 @@
+{
+  "uuid": "713e424a-0495-4c63-89d2-7a6d151d4aa3",
+  "issue_uuid": "8da360de-2af6-4304-bb4b-089a1ee20035",
+  "author": "doll-agent",
+  "content": "Verified done. ferray_bench has three modes (lines 34-58 of main.rs): 'batch' for timing, 'bench-exp' for the exp-algorithm comparison, and the default 'single-call' mode (lines 185-212) that reads a JSON f64 array from stdin and returns either {data:[..]} for real results or {data_real:[..],data_imag:[..]} for complex. statistical_equivalence.py uses this mode (run_ferray) to extract raw arrays for ULP-level accuracy comparison. 47/47 stat-equiv tests pass through this path.",
+  "created_at": "2026-05-01T19:00:28.309483592Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA/mOyV8Y4rmL44WGzVD+D/MTydes4ErgkcX7UT08jhNEiEd582zK2Ul2ESSHDsQmBs8SMcjAKY9ftDkw/zYZ6DA=="
+}
