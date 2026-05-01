@@ -1,0 +1,10 @@
+{
+  "uuid": "c63a7a18-cecd-4de4-a643-da0aa0e44a82",
+  "issue_uuid": "32b36299-a3b4-413c-be39-e1b9406f83a8",
+  "author": "doll-agent",
+  "content": "Done. The v2.0 write branch (u32 header length, triggered when dict > 65535 bytes) and the corresponding reader branch were untested.\n\nAdded 4 tests:\n- v20_writer_roundtrip_huge_shape: forces writer through v2.0 with a 22000-axis shape; asserts version bytes (2, 0) and round-trip exactness.\n- v20_reader_handcrafted_minimal: hand-built v2.0 byte blob - guards against codependent bugs where every v2.0 header comes from our own writer.\n- v20_reader_rejects_oversized_header: 2 MB claimed header length is rejected before allocation, exercising the existing 1 MB cap.\n- v30_reader_handcrafted_minimal: same u32 branch via v3.0 to ensure reader doesn't bake in major==2.\n\nnpy::header::tests: 9 -> 13, ferray-io: 93 -> 97 passing, clippy clean. Commit 4eef9cc2.",
+  "created_at": "2026-05-01T20:24:16.192138847Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAm0Jd14HaBt6KIjjliHIcl2jsF5wZUsrFk9uCZqQ9L6hqP8/EXnYO+dK7I7uzz9Oepj6x8dGtd3ZO1Ngk5S5SDA=="
+}
