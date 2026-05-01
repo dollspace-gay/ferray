@@ -3,11 +3,12 @@
   "display_id": 241,
   "title": "ferray-io: no complex type roundtrip through save/load_dynamic",
   "description": "Steps to reproduce:\n1. \n\nExpected: \nActual: \n\nComplex32/64 special handling untested.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "phase-4-coordinator",
   "created_at": "2026-03-25T15:51:47.080181553Z",
-  "updated_at": "2026-03-25T15:51:51.973972418Z",
+  "updated_at": "2026-05-01T20:26:34.988226040Z",
+  "closed_at": "2026-05-01T20:26:34.988226040Z",
   "labels": [
     "bug",
     "qa-audit"
