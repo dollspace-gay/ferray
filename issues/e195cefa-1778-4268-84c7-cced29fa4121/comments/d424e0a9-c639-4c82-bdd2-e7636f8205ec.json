@@ -1,0 +1,10 @@
+{
+  "uuid": "d424e0a9-c639-4c82-bdd2-e7636f8205ec",
+  "issue_uuid": "e195cefa-1778-4268-84c7-cced29fa4121",
+  "author": "doll-agent",
+  "content": "Done. None of the polynomial types implemented std::ops, so users had to write p.add(&q).unwrap() instead of p + q. Added Add, Sub, Mul, Neg for all six bases (Polynomial, Chebyshev, Legendre, Hermite, HermiteE, Laguerre).\n\nDesign: operator forms panic on domain/window mismatch (matches ndarray's shape-mismatch convention). The fallible Poly::{add,sub,mul} methods stay for code that needs to recover.\n\nImplementation in new src/ops.rs via impl_poly_ops! macro keyed on (struct name, module name). 8 impls per type (owned and ref forms x Add/Sub/Mul/Neg) gives 48 impls total without duplication. Bumped with_same_mapping to pub(crate) in all 6 polynomial files so the macro can construct mapping-preserving results.\n\n11 tests covering Add/Sub/Mul/Neg owned and ref forms across all 6 bases plus the panic-on-mismatch path.\n\nferray-polynomial: 135 -> 146 tests, all passing, clippy clean. Commit ada6e4c7.",
+  "created_at": "2026-05-01T20:43:23.971973754Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAlgncW5GDyU0MgajDpzAzWOf/ywvlw/ezP64hV01vFkAMaLHd3mzDkp8ZwyF5v2DqHmuCMzRqM9Q4ufC5EVSSCw=="
+}
