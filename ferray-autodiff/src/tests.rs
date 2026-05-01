@@ -414,6 +414,139 @@ mod unit_tests {
         assert!(d.is_infinite());
     }
 
+    // --- Extended edge cases at domain boundaries (#303) -------------
+    //
+    // The basic singularities are pinned above; broaden the coverage to
+    // the negative side and the out-of-domain cases that should produce
+    // NaN, plus a few logarithmic-family boundaries that previously had
+    // no coverage at all.
+
+    #[test]
+    fn test_asin_at_neg_one() {
+        // d/dx asin(x) = 1/sqrt(1-x^2). At x=-1 the derivative is
+        // also +inf (symmetric to x=1), since 1 - x^2 = 0 from the
+        // positive side.
+        let d = derivative(super::super::dual::DualNumber::asin, -1.0_f64);
+        assert!(d.is_infinite() || d.is_nan());
+    }
+
+    #[test]
+    fn test_asin_outside_domain_is_nan() {
+        // |x| > 1: asin itself is NaN, derivative also NaN.
+        let d = derivative(super::super::dual::DualNumber::asin, 1.5_f64);
+        assert!(d.is_nan());
+    }
+
+    #[test]
+    fn test_acos_at_one_is_singular() {
+        // d/dx acos(x) = -1/sqrt(1-x^2), -inf at x=1.
+        let d = derivative(super::super::dual::DualNumber::acos, 1.0_f64);
+        assert!(d.is_infinite() || d.is_nan());
+    }
+
+    #[test]
+    fn test_atanh_at_neg_one_is_singular() {
+        // d/dx atanh(x) = 1/(1-x^2), +inf at x=-1 by symmetry with x=1.
+        let d = derivative(super::super::dual::DualNumber::atanh, -1.0_f64);
+        assert!(d.is_infinite());
+    }
+
+    #[test]
+    fn test_atanh_outside_domain_returns_finite_derivative_formula() {
+        // |x| > 1: atanh's value is NaN, but the dual implementation
+        // computes the derivative algebraically as 1/(1-x^2), which
+        // evaluates to a finite value for any x != ±1. Pin that the
+        // derivative pair stays computable here even though the
+        // function value is NaN.
+        let d = derivative(super::super::dual::DualNumber::atanh, 2.0_f64);
+        // 1 / (1 - 4) = -1/3.
+        assert!(d.is_finite());
+        assert!((d - (-1.0 / 3.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_acosh_outside_domain_is_nan() {
+        // x < 1: acosh itself is NaN, derivative NaN.
+        let d = derivative(super::super::dual::DualNumber::acosh, 0.5_f64);
+        assert!(d.is_nan());
+    }
+
+    #[test]
+    fn test_sqrt_negative_is_nan() {
+        // sqrt of a negative is NaN; derivative NaN.
+        let d = derivative(super::super::dual::DualNumber::sqrt, -1.0_f64);
+        assert!(d.is_nan());
+    }
+
+    #[test]
+    fn test_ln_negative_is_nan() {
+        // ln(x<0) is NaN, derivative 1/x is finite but the chain
+        // through ln makes the value/derivative pair both NaN.
+        let d = derivative(super::super::dual::DualNumber::ln, -1.0_f64);
+        // The derivative of ln at a negative number is 1/(-1) = -1
+        // formally, but the function value ln(-1) is NaN; the dual
+        // pair propagates NaN through the result.
+        // We accept either: -1.0 (mathematical derivative formula) or
+        // NaN (NaN-poisoned dual). Pin behaviour: must not panic.
+        assert!(d.is_nan() || (d - (-1.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_log2_at_zero_is_singular() {
+        // d/dx log2(x) = 1/(x*ln(2)), +inf at x=0+.
+        let d = derivative(super::super::dual::DualNumber::log2, 0.0_f64);
+        assert!(d.is_infinite());
+    }
+
+    #[test]
+    fn test_log10_at_zero_is_singular() {
+        let d = derivative(super::super::dual::DualNumber::log10, 0.0_f64);
+        assert!(d.is_infinite());
+    }
+
+    #[test]
+    fn test_ln_1p_at_neg_one_is_singular() {
+        // d/dx ln(1+x) = 1/(1+x); at x=-1, ln(1+x)=ln(0), derivative -inf.
+        let d = derivative(super::super::dual::DualNumber::ln_1p, -1.0_f64);
+        assert!(d.is_infinite());
+    }
+
+    #[test]
+    fn test_powf_zero_base_negative_exponent_is_inf() {
+        // 0^(-1) is undefined / +inf for the value; derivative is also
+        // singular. Exact behaviour depends on f64::powf rules.
+        let d = derivative(
+            |x: super::super::dual::DualNumber<f64>| {
+                x.powf(super::super::dual::DualNumber::new(-1.0, 0.0))
+            },
+            0.0_f64,
+        );
+        // Either inf or NaN is acceptable; pin no-panic.
+        assert!(d.is_infinite() || d.is_nan());
+    }
+
+    #[test]
+    fn test_powi_zero_base_negative_exponent_is_singular() {
+        // 0^-2 is undefined; derivative also singular.
+        let d = derivative(
+            |x: super::super::dual::DualNumber<f64>| x.powi(-2),
+            0.0_f64,
+        );
+        assert!(d.is_infinite() || d.is_nan());
+    }
+
+    #[test]
+    fn test_recip_at_zero_negative_side() {
+        // d/dx 1/x = -1/x^2 → -inf as x→0 from either side, but a
+        // floating-point 0.0 has no sign distinction in the derivative
+        // formula. Pin no-panic + non-finite result.
+        let d = derivative(
+            super::super::dual::DualNumber::recip,
+            -0.0_f64,
+        );
+        assert!(d.is_infinite() || d.is_nan());
+    }
+
     // --- Hyperbolic derivatives ---
 
     #[test]
