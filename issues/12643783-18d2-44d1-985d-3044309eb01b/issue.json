@@ -2,11 +2,12 @@
   "uuid": "12643783-18d2-44d1-985d-3044309eb01b",
   "display_id": 700,
   "title": "ferray-python phase 2 follow-up: complex ops (real/imag/conj/conjugate/angle, iscomplex/isreal)",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T16:38:17.293328445Z",
-  "updated_at": "2026-05-01T16:38:18.694114546Z",
+  "updated_at": "2026-05-01T17:59:23.935367625Z",
+  "closed_at": "2026-05-01T17:59:23.935367625Z",
   "labels": [
     "feature"
   ]
