@@ -278,3 +278,124 @@ proptest! {
         prop_assert!(approx_eq(sum.dual, n as f64));
     }
 }
+
+// ============================================================================
+// f32 monomorphization properties (#304)
+//
+// The DualNumber<T> generic produces both f32 and f64 instantiations;
+// these properties exercise the f32 path with a wider tolerance to
+// absorb the ~1e-7 relative precision floor of single-precision floats.
+// ============================================================================
+
+const TOL_F32: f32 = 1e-4;
+
+fn approx_eq_f32(a: f32, b: f32) -> bool {
+    if a.is_nan() && b.is_nan() {
+        return true;
+    }
+    let scale = a.abs().max(b.abs()).max(1.0);
+    (a - b).abs() / scale < TOL_F32
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn prop_f32_derivative_sin_is_cos(x in -10.0f32..10.0) {
+        let d = derivative(DualNumber::<f32>::sin, x);
+        let expected = x.cos();
+        prop_assert!(
+            approx_eq_f32(d, expected),
+            "f32 d/dx sin({x}) = {d}, expected cos = {expected}"
+        );
+    }
+
+    #[test]
+    fn prop_f32_derivative_cos_is_neg_sin(x in -10.0f32..10.0) {
+        let d = derivative(DualNumber::<f32>::cos, x);
+        let expected = -x.sin();
+        prop_assert!(
+            approx_eq_f32(d, expected),
+            "f32 d/dx cos({x}) = {d}, expected -sin = {expected}"
+        );
+    }
+
+    #[test]
+    fn prop_f32_derivative_exp_is_exp(x in -5.0f32..5.0) {
+        let d = derivative(DualNumber::<f32>::exp, x);
+        let expected = x.exp();
+        prop_assert!(approx_eq_f32(d, expected));
+    }
+
+    #[test]
+    fn prop_f32_derivative_ln_is_recip(x in 0.1f32..100.0) {
+        let d = derivative(DualNumber::<f32>::ln, x);
+        let expected = 1.0 / x;
+        prop_assert!(approx_eq_f32(d, expected));
+    }
+
+    #[test]
+    fn prop_f32_derivative_sqrt_formula(x in 0.1f32..100.0) {
+        let d = derivative(DualNumber::<f32>::sqrt, x);
+        let expected = 1.0 / (2.0 * x.sqrt());
+        prop_assert!(approx_eq_f32(d, expected));
+    }
+
+    #[test]
+    fn prop_f32_chain_rule(x in -5.0f32..5.0) {
+        let d = derivative(|x| x.sin().exp(), x);
+        let expected = x.cos() * x.sin().exp();
+        prop_assert!(
+            approx_eq_f32(d, expected),
+            "f32 d/dx exp(sin({x})) = {d}, expected {expected}"
+        );
+    }
+
+    #[test]
+    fn prop_f32_power_rule(x in -10.0f32..10.0) {
+        let d = derivative(|x| x.powi(3), x);
+        let expected = 3.0 * x * x;
+        prop_assert!(approx_eq_f32(d, expected));
+    }
+
+    #[test]
+    fn prop_f32_derivative_of_constant_is_zero(c in -100.0f32..100.0) {
+        let d = derivative(|_x| DualNumber::<f32>::constant(c), 1.0_f32);
+        prop_assert!(d == 0.0);
+    }
+
+    #[test]
+    fn prop_f32_derivative_of_identity_is_one(x in -100.0f32..100.0) {
+        let d = derivative(|v| v, x);
+        prop_assert!(approx_eq_f32(d, 1.0));
+    }
+
+    #[test]
+    fn prop_f32_pythagorean_derivative(x in -5.0f32..5.0) {
+        let d = derivative(
+            |x| {
+                let s = x.sin();
+                let c = x.cos();
+                s * s + c * c
+            },
+            x,
+        );
+        // For f32 at moderate x, |d| stays under 1e-5.
+        prop_assert!(d.abs() < 1e-5, "d = {d}");
+    }
+
+    #[test]
+    fn prop_f32_add_commutative(
+        ar in -100.0f32..100.0,
+        ad in -100.0f32..100.0,
+        br in -100.0f32..100.0,
+        bd in -100.0f32..100.0,
+    ) {
+        let a = DualNumber::<f32>::new(ar, ad);
+        let b = DualNumber::<f32>::new(br, bd);
+        let ab = a + b;
+        let ba = b + a;
+        prop_assert_eq!(ab.real, ba.real);
+        prop_assert_eq!(ab.dual, ba.dual);
+    }
+}
