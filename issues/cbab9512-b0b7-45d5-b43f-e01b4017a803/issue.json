@@ -2,11 +2,12 @@
   "uuid": "cbab9512-b0b7-45d5-b43f-e01b4017a803",
   "display_id": 686,
   "title": "ferray-python phase 1: core creation + dtype + manipulation + indexing bindings",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T15:38:00.033866891Z",
-  "updated_at": "2026-05-01T15:38:01.260869760Z",
+  "updated_at": "2026-05-01T16:06:37.868664860Z",
+  "closed_at": "2026-05-01T16:06:37.868664860Z",
   "labels": [
     "feature"
   ]
