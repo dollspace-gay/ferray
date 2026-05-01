@@ -1,0 +1,10 @@
+{
+  "uuid": "af2c1dbd-cfc6-4325-b896-bc550abf3151",
+  "issue_uuid": "e53a864e-b26b-4398-a863-973d61d83f4f",
+  "author": "doll-agent",
+  "content": "Done. All five Poly impls (Polynomial in power.rs, Chebyshev, Legendre, Hermite, HermiteE, Laguerre) used a naive O(n) loop. mul is the expensive primitive (O(n^2) for power basis; routed through power-basis conversion for orthogonal bases). Replaced with binary exponentiation that squares the running base and accumulates only when the current exponent bit is 1. For n = 100, multiply count drops from 99 to ~13. Same n==1 fast-path short-circuit added to all six files.\n\nAdded 2 cross-check tests in power.rs:\n- pow_one_returns_self: validates the n==1 short-circuit.\n- pow_high_exponent_matches_naive_loop: n=11 (binary 0b1011, both odd and even bits) checked against the analytical binomial expansion of (1+x)^11.\n\nferray-polynomial: 133 -> 135 tests, all passing, clippy clean. Commit ed4cd2a0.",
+  "created_at": "2026-05-01T20:39:46.572521271Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA/EyUkkxVF+URKDgiQGUb1mOxZJabuolzvhHOVVl3dEkOOhaVGeBk212an8fBBWJI/ZoJSdVp/TMeFhttScKOCQ=="
+}
