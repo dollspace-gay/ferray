@@ -1,0 +1,10 @@
+{
+  "uuid": "b9940e60-5475-48a2-b64a-8316d5bbd250",
+  "issue_uuid": "7012b1e0-754f-487c-892b-d54faf1857aa",
+  "author": "doll-agent",
+  "content": "Phase-3 long tail #710 delivered: einsum, multi_dot, norm_axis, cond, matvec/vecmat/vecdot (numpy 2.0 vector products at top level + linalg submodule). 525/525 passing.",
+  "created_at": "2026-05-01T18:08:19.723780639Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAMsGuIHx41knrdz4wMVh4Q3nuyRmJwp6HqsHF7Z/3yUobfMInwFXsnzKXnsrEe9Bv+NIwHfAkhGLijHKNObgQBw=="
+}
