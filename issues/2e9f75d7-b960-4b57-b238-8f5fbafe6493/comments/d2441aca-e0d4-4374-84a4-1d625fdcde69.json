@@ -1,0 +1,10 @@
+{
+  "uuid": "d2441aca-e0d4-4374-84a4-1d625fdcde69",
+  "issue_uuid": "2e9f75d7-b960-4b57-b238-8f5fbafe6493",
+  "author": "doll-agent",
+  "content": "Partial done. Audit: Chebyshev was already migrated to direct recurrences (deriv, integ — see chebyshev.rs:304+ which uses the d[k] = c'[k+2] + 2(k+1)*c[k+1] formula instead of the previous to_power → deriv → from_power roundtrip). Migrated Legendre's deriv and integ to direct Bonnet-style recurrences in this commit:\n\n- deriv: P'_n(x) = (2n-1)P_{n-1} + (2n-5)P_{n-3} + ..., implemented as d[k] = (2k+1) Σ c[j] for odd j-k with j > k. Replaces a to_power → power-deriv → power_to_legendre roundtrip.\n- integ: ∫P_n = (P_{n+1} - P_{n-1})/(2n+1), implemented as a sparse two-term update on each coefficient. Replaces the same roundtrip.\n\nHermite, HermiteE, Laguerre still roundtrip through power for deriv/integ. Each has its own direct recurrence (Hermite: H'_n = 2n·H_{n-1}; HermiteE: He'_n = n·He_{n-1}; Laguerre: L'_n = -L^{(1)}_{n-1} which mixes bases) — those migrations follow the same pattern as Legendre but require basis-specific math. Filed as a low-priority follow-up since the current roundtrip is correct (just less numerically clean for high-degree polynomials).\n\nmul stays via roundtrip across all non-Chebyshev bases — direct multiplication tables for orthogonal bases are basis-specific and complex; the roundtrip is a reasonable trade-off there.\n\n134 polynomial lib tests + 16 oracle tests + 3 doctests pass. cargo clippy clean.",
+  "created_at": "2026-05-01T19:46:43.337236789Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAL16kYzu6U7RVYtXhSJwyDljJOnuyu3L7IPkzV2mq+5UCaKSIXmo1dU+gPBGdJ+Dmm+/LiG7fscTP4onoA/EYBw=="
+}
