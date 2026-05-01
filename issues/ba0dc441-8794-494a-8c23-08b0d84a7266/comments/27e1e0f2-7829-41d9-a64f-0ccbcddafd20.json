@@ -1,0 +1,10 @@
+{
+  "uuid": "27e1e0f2-7829-41d9-a64f-0ccbcddafd20",
+  "issue_uuid": "ba0dc441-8794-494a-8c23-08b0d84a7266",
+  "author": "doll-agent",
+  "content": "Add tests/property_tests.rs with 12 round-trip properties: 7 Arrow (i32/i64/u8/u32/f32/f64/bool) and 4 Polars (i32/i64/f64/bool) plus 1 arrow-length-preservation. proptest was a dev-dep but unused. Property modules gated behind feature flags so a default cargo test run skips them; arrow,polars features run all 12. Float round-trips check bit-exact via to_bits(). Polars f64 path filters out NaN inputs (Polars uses NaN-canonical equality).",
+  "created_at": "2026-05-01T22:25:19.064023427Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAP4+b480eIoz3GlWYXa90p6MrbzhFLa07OHtFWmdcGaNO6Ceh6HvDMt56b22NvpV9VEkQmE18Sw4/TbL636L9Bg=="
+}
