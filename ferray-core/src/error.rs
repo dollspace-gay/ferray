@@ -99,6 +99,37 @@ pub enum FerrayError {
 pub type FerrayResult<T> = Result<T, FerrayError>;
 
 impl FerrayError {
+    /// Returns `true` when this error originates from a linear-algebra
+    /// operation (singular matrix, non-convergence, numerical
+    /// instability) — the rough Rust equivalent of catching numpy's
+    /// `LinAlgError` exception (#423).
+    ///
+    /// Use this to distinguish linalg-specific failures from generic
+    /// shape / dtype / I/O errors when writing recovery code:
+    ///
+    /// ```ignore
+    /// match ferray_linalg::solve(&a, &b) {
+    ///     Ok(x) => x,
+    ///     Err(e) if e.is_linalg_error() => fall_back_to_pinv(&a, &b)?,
+    ///     Err(e) => return Err(e),
+    /// }
+    /// ```
+    ///
+    /// The predicate covers `SingularMatrix`, `ConvergenceFailure`,
+    /// and `NumericalInstability`. Shape / dtype / index / I/O errors
+    /// stay outside the linalg category.
+    #[must_use]
+    pub const fn is_linalg_error(&self) -> bool {
+        matches!(
+            self,
+            Self::SingularMatrix { .. }
+                | Self::ConvergenceFailure { .. }
+                | Self::NumericalInstability { .. }
+        )
+    }
+}
+
+impl FerrayError {
     /// Create a `ShapeMismatch` error with a formatted message.
     pub fn shape_mismatch(msg: impl fmt::Display) -> Self {
         Self::ShapeMismatch {
@@ -200,5 +231,35 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file missing");
         let ferray_err: FerrayError = io_err.into();
         assert!(ferray_err.to_string().contains("file missing"));
+    }
+
+    // ----- is_linalg_error predicate (#423) -----------------------------
+
+    #[test]
+    fn is_linalg_error_returns_true_for_linalg_variants() {
+        assert!(FerrayError::SingularMatrix {
+            message: "test".into()
+        }
+        .is_linalg_error());
+        assert!(FerrayError::ConvergenceFailure {
+            iterations: 100,
+            message: "test".into()
+        }
+        .is_linalg_error());
+        assert!(FerrayError::NumericalInstability {
+            message: "test".into()
+        }
+        .is_linalg_error());
+    }
+
+    #[test]
+    fn is_linalg_error_returns_false_for_other_variants() {
+        assert!(!FerrayError::shape_mismatch("test").is_linalg_error());
+        assert!(!FerrayError::invalid_dtype("test").is_linalg_error());
+        assert!(!FerrayError::invalid_value("test").is_linalg_error());
+        assert!(!FerrayError::io_error("test").is_linalg_error());
+        assert!(
+            !FerrayError::axis_out_of_bounds(2, 1).is_linalg_error()
+        );
     }
 }
