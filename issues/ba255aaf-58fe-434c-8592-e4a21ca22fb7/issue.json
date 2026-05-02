@@ -2,11 +2,12 @@
   "uuid": "ba255aaf-58fe-434c-8592-e4a21ca22fb7",
   "display_id": 720,
   "title": "ferray-polynomial: migrate Hermite/HermiteE/Laguerre deriv/integ to direct recurrences (follow-up to #131)",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T19:46:55.614255272Z",
-  "updated_at": "2026-05-01T19:46:56.880528048Z",
+  "updated_at": "2026-05-02T02:01:53.876815874Z",
+  "closed_at": "2026-05-02T02:01:53.876815874Z",
   "labels": [
     "refactor"
   ]
