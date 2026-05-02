@@ -1,0 +1,10 @@
+{
+  "uuid": "fd4f693d-af15-44e0-8a53-894384562e8f",
+  "issue_uuid": "67cce4b7-6c6d-45dc-8e20-f6a22c03f79a",
+  "author": "doll-agent",
+  "content": "Add three _into variants on Generator: random_into, standard_normal_into, standard_exponential_into. Each takes &mut Array<f64, IxDyn>, validates the buffer is contiguous, and overwrites in place — no Vec allocation. The three chosen entry points are the ones numpy explicitly calls out (Generator.random/standard_normal/standard_exponential with out=); they cover the hot per-batch loops that motivated #454. 5 tests cover same-seed equivalence with the allocating versions and value-range sanity.",
+  "created_at": "2026-05-02T00:27:19.918040567Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAOJ5dLuYGN6s0MbCNJ7mNuPll/xjS6m2x1MfMClpeox88PKqyNAJEf2MXF2v77CrwNYyipvUvvK77wUzDeJWECA=="
+}
