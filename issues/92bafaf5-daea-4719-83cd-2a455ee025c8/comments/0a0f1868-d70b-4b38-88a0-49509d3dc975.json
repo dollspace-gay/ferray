@@ -1,0 +1,10 @@
+{
+  "uuid": "0a0f1868-d70b-4b38-88a0-49509d3dc975",
+  "issue_uuid": "92bafaf5-daea-4719-83cd-2a455ee025c8",
+  "author": "doll-agent",
+  "content": "cargo fmt across 49 files. cargo clippy --workspace --all-targets -- -D warnings clean at 0.3.5. Workspace test suite green: 3061 tests passing across all crates (excluding ferray-numpy-interop / ferray-python which need pyo3 link config). Fixed pre-existing kernel_edge_i8_signed_handles_partial overflow by switching the test harness to wrapping_mul/wrapping_sub. Bumped version 0.3.2 → 0.3.5 in workspace Cargo.toml + the per-crate path-version pins. Wrote curated 0.3.5 CHANGELOG entry covering ~30 new features grouped by crate. Added What's-new section to root README.",
+  "created_at": "2026-05-02T03:31:30.350701220Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA/qWEQ6mANZTGjMYWZ4FER/sbYMU4kJcBubwEzAtMAgoM3fvPDutcLXQk1pJaHQYxhUmhdbFGbeHEfBXcLsQlDg=="
+}
