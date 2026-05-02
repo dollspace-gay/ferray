@@ -43,22 +43,33 @@ pub fn parse_dtype_str(s: &str) -> FerrayResult<(DType, Endianness)> {
         )));
     }
 
-    // Structured (record) dtype descriptor — numpy serialises these
-    // as a Python list literal, e.g. "[('x', '<f4'), ('y', '<f4')]".
-    // ferray-io recognises the form for a clearer diagnostic but
-    // doesn't yet load into a FerrayRecord array; tracked in #735.
+    // Structured (record) dtype descriptor (#742). numpy serialises
+    // these as a Python list literal,
+    // e.g. "[('x', '<f4'), ('y', '<f4')]". We parse the field list,
+    // resolve each (name, dtype) into a FieldDescriptor with byte
+    // offsets and sizes, then leak the resulting slice into 'static
+    // memory so the `DType::Struct(&'static [FieldDescriptor])`
+    // contract holds. Leaks are bounded — one leak per distinct
+    // structured dtype encountered, and only at load time.
     if s.starts_with('[') && s.ends_with(']') {
         let fields = parse_structured_descr(s)?;
-        let pretty: Vec<String> = fields
-            .iter()
-            .map(|(name, dt)| format!("('{name}', '{dt}')"))
-            .collect();
-        return Err(FerrayError::invalid_dtype(format!(
-            "structured dtype '[{}]' (fields: {}) is recognised but loading \
-             into FerrayRecord arrays is tracked in issue #735",
-            pretty.join(", "),
-            fields.len()
-        )));
+        let mut descriptors: Vec<ferray_core::record::FieldDescriptor> =
+            Vec::with_capacity(fields.len());
+        let mut offset = 0_usize;
+        for (name, dt_str) in &fields {
+            let (field_dtype, _field_endian) = parse_dtype_str(dt_str)?;
+            let size = field_dtype.size_of();
+            descriptors.push(ferray_core::record::FieldDescriptor {
+                name: Box::leak(name.clone().into_boxed_str()),
+                dtype: field_dtype,
+                offset,
+                size,
+            });
+            offset += size;
+        }
+        let leaked: &'static [ferray_core::record::FieldDescriptor] =
+            Box::leak(descriptors.into_boxed_slice());
+        return Ok((DType::Struct(leaked), Endianness::Native));
     }
 
     let (endian, type_str) = match s.as_bytes()[0] {
@@ -168,6 +179,32 @@ pub fn dtype_to_descr(dtype: DType, endian: Endianness) -> FerrayResult<String> 
             _ => prefix,
         };
         return Ok(format!("{actual_prefix}m8[{}]", u.descr_suffix()));
+    }
+    // Structured dtype (#742): emit numpy's list-of-tuples form,
+    // recursing per-field through dtype_to_descr with the same
+    // endianness selection.
+    if let DType::Struct(fields) = dtype {
+        let mut parts = Vec::with_capacity(fields.len());
+        for fld in fields {
+            let inner = dtype_to_descr(fld.dtype, endian)?;
+            parts.push(format!("('{}', '{inner}')", fld.name));
+        }
+        return Ok(format!("[{}]", parts.join(", ")));
+    }
+    // Fixed-width string / void dtypes (#741): emit the canonical
+    // numpy descriptor with byte-aligned prefix.
+    if let DType::FixedAscii(n) = dtype {
+        return Ok(format!("|S{n}"));
+    }
+    if let DType::FixedUnicode(n) = dtype {
+        let actual_prefix = match endian {
+            Endianness::Native => '<',
+            _ => prefix,
+        };
+        return Ok(format!("{actual_prefix}U{n}"));
+    }
+    if let DType::RawBytes(n) = dtype {
+        return Ok(format!("|V{n}"));
     }
 
     let type_str = match dtype {
@@ -503,32 +540,57 @@ mod tests {
         assert!(parse_dtype_str("<M8[foobar]").is_err());
     }
 
-    // ---- structured dtype descriptors (#735) ---------------------------
+    // ---- structured dtype descriptors (#735, #742) ---------------------
 
     #[test]
-    fn parse_structured_two_fields_recognised() {
-        let err = parse_dtype_str("[('x', '<f4'), ('y', '<f4')]").unwrap_err();
-        let s = err.to_string();
-        assert!(s.contains("'x'") && s.contains("'y'"), "got: {s}");
-        assert!(s.contains("fields: 2"));
-        assert!(s.contains("#735"));
+    fn parse_structured_two_fields_returns_struct() {
+        let (dt, _) = parse_dtype_str("[('x', '<f4'), ('y', '<f4')]").unwrap();
+        match dt {
+            DType::Struct(fields) => {
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].name, "x");
+                assert_eq!(fields[0].dtype, DType::F32);
+                assert_eq!(fields[0].offset, 0);
+                assert_eq!(fields[0].size, 4);
+                assert_eq!(fields[1].name, "y");
+                assert_eq!(fields[1].dtype, DType::F32);
+                assert_eq!(fields[1].offset, 4);
+                assert_eq!(fields[1].size, 4);
+            }
+            _ => panic!("expected Struct, got {dt:?}"),
+        }
     }
 
     #[test]
-    fn parse_structured_three_mixed_fields_recognised() {
-        let err =
-            parse_dtype_str("[('a', '<i4'), ('b', '<f8'), ('c', '|S10')]").unwrap_err();
-        let s = err.to_string();
-        assert!(s.contains("fields: 3"), "got: {s}");
-        assert!(s.contains("#735"));
+    fn parse_structured_three_mixed_fields_returns_struct() {
+        let (dt, _) =
+            parse_dtype_str("[('a', '<i4'), ('b', '<f8'), ('c', '|S10')]").unwrap();
+        match dt {
+            DType::Struct(fields) => {
+                assert_eq!(fields.len(), 3);
+                assert_eq!(fields[0].dtype, DType::I32);
+                assert_eq!(fields[1].dtype, DType::F64);
+                assert_eq!(fields[2].dtype, DType::FixedAscii(10));
+                // Offsets accumulate: 0, 4, 12.
+                assert_eq!(fields[0].offset, 0);
+                assert_eq!(fields[1].offset, 4);
+                assert_eq!(fields[2].offset, 12);
+            }
+            _ => panic!("expected Struct, got {dt:?}"),
+        }
     }
 
     #[test]
-    fn parse_structured_single_field() {
-        let err = parse_dtype_str("[('only', '<f8')]").unwrap_err();
-        let s = err.to_string();
-        assert!(s.contains("'only'"));
-        assert!(s.contains("fields: 1"));
+    fn parse_structured_single_field_returns_struct() {
+        let (dt, _) = parse_dtype_str("[('only', '<f8')]").unwrap();
+        match dt {
+            DType::Struct(fields) => {
+                assert_eq!(fields.len(), 1);
+                assert_eq!(fields[0].name, "only");
+                assert_eq!(fields[0].dtype, DType::F64);
+            }
+            _ => panic!("expected Struct, got {dt:?}"),
+        }
     }
 
     #[test]

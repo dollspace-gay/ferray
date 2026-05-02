@@ -40,7 +40,7 @@ pub use datasource::{DataSource, DataSourceReader};
 pub use format::{
     HeaderData, MemmapMode, descr_to_dtype, header_data_from_array_1_0, read_array, write_array,
 };
-pub use npy::{NpyElement, load, load_dynamic, save};
+pub use npy::{NpyElement, load, load_dynamic, load_record, save, save_record};
 pub use npz::{NpzFile, savez, savez_compressed};
 pub use text::{
     SaveTxtOptions, fromregex, fromregex_from_file, genfromtxt, loadtxt, loadtxt_1d, savetxt,

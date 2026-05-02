@@ -116,8 +116,18 @@ pub fn write_header<W: std::io::Write>(
 
     let shape_str = format_shape(shape);
 
+    // Structured-dtype descriptors are Python list literals
+    // (e.g. "[('x', '<f4'), ('y', '<f4')]") and contain
+    // embedded apostrophes — emit them without the outer quotes
+    // so the parser can read them back. Numeric scalars use the
+    // canonical quoted form (#742).
+    let descr_field = if descr.starts_with('[') {
+        format!("'descr': {descr}")
+    } else {
+        format!("'descr': '{descr}'")
+    };
     let dict =
-        format!("{{'descr': '{descr}', 'fortran_order': {fortran_str}, 'shape': {shape_str}, }}");
+        format!("{{{descr_field}, 'fortran_order': {fortran_str}, 'shape': {shape_str}, }}");
 
     // Try version 1.0 first (header length fits in u16)
     // Preamble: magic(6) + version(2) + header_len(2) = 10 for v1
@@ -216,28 +226,54 @@ fn parse_header_dict(header: &str) -> FerrayResult<(String, bool, Vec<usize>)> {
 }
 
 /// Extract a string value for a given key from the dict body.
+///
+/// Handles both numpy's quoted scalar descrs (`'<f8'`) and the
+/// unquoted Python list-literal form used for structured dtypes
+/// (`[('x', '<f4'), ('y', '<f4')]`) (#742).
 fn extract_string_value(dict_body: &str, key: &str) -> FerrayResult<String> {
-    // Look for 'key': 'value'
     let pattern = format!("'{key}':");
     let pos = dict_body
         .find(&pattern)
         .ok_or_else(|| FerrayError::io_error(format!("header missing key '{key}'")))?;
 
-    let after_key = &dict_body[pos + pattern.len()..].trim_start();
+    let after_key = dict_body[pos + pattern.len()..].trim_start();
 
-    // Find the opening quote
-    let quote_char = after_key
+    let first = after_key
         .as_bytes()
         .first()
         .ok_or_else(|| FerrayError::io_error(format!("missing value for key '{key}'")))?;
 
-    if *quote_char != b'\'' && *quote_char != b'"' {
+    // Structured-dtype descriptor — Python list literal. Walk by
+    // bracket depth, accepting any apostrophes inside the list.
+    if *first == b'[' {
+        let mut depth = 0_i32;
+        let mut end = None;
+        for (i, c) in after_key.char_indices() {
+            match c {
+                '[' => depth += 1,
+                ']' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(i + 1);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let end = end.ok_or_else(|| {
+            FerrayError::io_error(format!("unterminated structured descr for key '{key}'"))
+        })?;
+        return Ok(after_key[..end].to_string());
+    }
+
+    if *first != b'\'' && *first != b'"' {
         return Err(FerrayError::io_error(format!(
             "expected string value for key '{key}'"
         )));
     }
 
-    let qc = *quote_char as char;
+    let qc = *first as char;
     let value_start = &after_key[1..];
     let end = value_start
         .find(qc)

@@ -18,6 +18,7 @@ use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::dtype::{DType, Element};
 use ferray_core::dynarray::DynArray;
 use ferray_core::error::{FerrayError, FerrayResult};
+use ferray_core::record::FerrayRecord;
 
 use self::dtype_parse::Endianness;
 
@@ -146,6 +147,157 @@ pub fn load_from_reader<T: Element + NpyElement, D: Dimension, R: Read>(
     } else {
         Array::from_vec(dim, data)
     }
+}
+
+/// Load a structured-dtype `.npy` file into an `Array<T, D>` where
+/// `T: FerrayRecord` (#742).
+///
+/// The file's structured dtype must match `T`'s field descriptors
+/// exactly: same number of fields, same names, same per-field
+/// dtype, same offsets, same record size. Mismatches produce a
+/// `FerrayError::InvalidDtype` describing the conflict.
+///
+/// On match, the raw byte block is read into a `Vec<u8>` and
+/// reinterpreted as `Vec<T>` via the record's known size and
+/// `#[repr(C)]` layout. The resulting array borrows the same
+/// row-major / fortran-order convention as numeric loads.
+///
+/// # Safety
+/// `T: FerrayRecord` carries an unsafe-trait contract that the
+/// type is `#[repr(C)]` with no padding outside the field
+/// descriptors. The reinterpretation only proceeds after
+/// validating the file's descriptors match.
+///
+/// # Errors
+/// - `FerrayError::InvalidDtype` if the file doesn't carry a
+///   structured dtype, or if its field layout disagrees with
+///   `T::field_descriptors()`.
+/// - `FerrayError::IoError` on read failure or short data.
+/// - `FerrayError::ShapeMismatch` if `D` is fixed-rank and the
+///   file's shape rank disagrees.
+pub fn load_record<T: FerrayRecord + Element, D: Dimension, P: AsRef<Path>>(
+    path: P,
+) -> FerrayResult<Array<T, D>> {
+    let file = File::open(path.as_ref()).map_err(|e| {
+        FerrayError::io_error(format!(
+            "failed to open file '{}': {e}",
+            path.as_ref().display()
+        ))
+    })?;
+    let mut reader = BufReader::new(file);
+    load_record_from_reader(&mut reader)
+}
+
+/// Load a structured-dtype array from a reader into a
+/// `FerrayRecord`-typed array.
+///
+/// # Errors
+/// Same as [`load_record`].
+pub fn load_record_from_reader<T: FerrayRecord + Element, D: Dimension, R: Read>(
+    reader: &mut R,
+) -> FerrayResult<Array<T, D>> {
+    let hdr = header::read_header(reader)?;
+    let DType::Struct(file_fields) = hdr.dtype else {
+        return Err(FerrayError::invalid_dtype(format!(
+            "load_record: file has dtype {:?}, expected a structured dtype",
+            hdr.dtype
+        )));
+    };
+    let target_fields = T::field_descriptors();
+    if file_fields.len() != target_fields.len() {
+        return Err(FerrayError::invalid_dtype(format!(
+            "load_record: file has {} fields, target type {} has {}",
+            file_fields.len(),
+            std::any::type_name::<T>(),
+            target_fields.len()
+        )));
+    }
+    for (i, (a, b)) in file_fields.iter().zip(target_fields.iter()).enumerate() {
+        if a.name != b.name || a.dtype != b.dtype || a.offset != b.offset || a.size != b.size {
+            return Err(FerrayError::invalid_dtype(format!(
+                "load_record: field {i} mismatch — file {:?} vs target {:?}",
+                a, b
+            )));
+        }
+    }
+    let record_size = T::record_size();
+    if let Some(ndim) = D::NDIM
+        && ndim != hdr.shape.len()
+    {
+        return Err(FerrayError::shape_mismatch(format!(
+            "expected {} dimensions, but file has {} (shape {:?})",
+            ndim,
+            hdr.shape.len(),
+            hdr.shape,
+        )));
+    }
+    let total = checked_total_elements(&hdr.shape)?;
+    let byte_len = total
+        .checked_mul(record_size)
+        .ok_or_else(|| FerrayError::io_error("structured payload size overflows usize"))?;
+    let mut bytes = vec![0u8; byte_len];
+    reader
+        .read_exact(&mut bytes)
+        .map_err(|e| FerrayError::io_error(format!("failed to read structured data: {e}")))?;
+    // Reinterpret the byte buffer as Vec<T>. SAFETY: validated
+    // above that the file's structured layout matches T's field
+    // descriptors; T: FerrayRecord asserts #[repr(C)] with the
+    // exact field offsets / sizes / dtypes that produced the bytes.
+    debug_assert_eq!(bytes.len(), total * record_size);
+    let mut bytes = std::mem::ManuallyDrop::new(bytes);
+    let data = unsafe { Vec::<T>::from_raw_parts(bytes.as_mut_ptr().cast::<T>(), total, total) };
+    let dim = build_dimension::<D>(&hdr.shape)?;
+    if hdr.fortran_order {
+        Array::from_vec_f(dim, data)
+    } else {
+        Array::from_vec(dim, data)
+    }
+}
+
+/// Save a `FerrayRecord`-typed array to a structured-dtype `.npy`
+/// file (#742). The structured descriptor is built from
+/// `T::field_descriptors()`; the raw record bytes are written
+/// straight from the array's contiguous slice.
+///
+/// # Errors
+/// `FerrayError::IoError` on file create / write failure.
+pub fn save_record<T: FerrayRecord + Element, D: Dimension, P: AsRef<Path>>(
+    path: P,
+    array: &Array<T, D>,
+) -> FerrayResult<()> {
+    let file = File::create(path.as_ref()).map_err(|e| {
+        FerrayError::io_error(format!(
+            "failed to create file '{}': {e}",
+            path.as_ref().display()
+        ))
+    })?;
+    let mut writer = BufWriter::new(file);
+    save_record_to_writer(&mut writer, array)?;
+    writer
+        .flush()
+        .map_err(|e| FerrayError::io_error(e.to_string()))?;
+    Ok(())
+}
+
+/// Save a `FerrayRecord` array to a writer. See [`save_record`].
+///
+/// # Errors
+/// Same as [`save_record`].
+pub fn save_record_to_writer<T: FerrayRecord + Element, D: Dimension, W: Write>(
+    writer: &mut W,
+    array: &Array<T, D>,
+) -> FerrayResult<()> {
+    let dtype = DType::Struct(T::field_descriptors());
+    header::write_header(writer, dtype, array.shape(), false)?;
+    let slice = array.as_slice().ok_or_else(|| {
+        FerrayError::io_error("save_record requires a contiguous array")
+    })?;
+    let byte_len = slice.len() * T::record_size();
+    let bytes = unsafe { std::slice::from_raw_parts(slice.as_ptr().cast::<u8>(), byte_len) };
+    writer
+        .write_all(bytes)
+        .map_err(|e| FerrayError::io_error(e.to_string()))?;
+    Ok(())
 }
 
 /// Load a `.npy` file with runtime type dispatch.
@@ -685,6 +837,99 @@ mod tests {
         let dir = tempfile::TempDir::new().expect("failed to create test TempDir");
         let path = dir.path().join(name);
         (dir, path)
+    }
+
+    // ---- structured-dtype round-trips (#742) ---------------------------
+
+    #[repr(C)]
+    #[derive(Clone, Debug, PartialEq)]
+    struct Point {
+        x: f64,
+        y: f64,
+        label: i32,
+    }
+
+    unsafe impl ferray_core::record::FerrayRecord for Point {
+        fn field_descriptors() -> &'static [ferray_core::record::FieldDescriptor] {
+            static FIELDS: [ferray_core::record::FieldDescriptor; 3] = [
+                ferray_core::record::FieldDescriptor {
+                    name: "x",
+                    dtype: DType::F64,
+                    offset: 0,
+                    size: 8,
+                },
+                ferray_core::record::FieldDescriptor {
+                    name: "y",
+                    dtype: DType::F64,
+                    offset: 8,
+                    size: 8,
+                },
+                ferray_core::record::FieldDescriptor {
+                    name: "label",
+                    dtype: DType::I32,
+                    offset: 16,
+                    size: 4,
+                },
+            ];
+            &FIELDS
+        }
+
+        fn record_size() -> usize {
+            std::mem::size_of::<Self>()
+        }
+    }
+
+    impl std::fmt::Display for Point {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Point({}, {}, {})", self.x, self.y, self.label)
+        }
+    }
+    // Element is now provided automatically via the blanket impl
+    // for `T: FerrayRecord` in ferray-core (#742).
+
+    #[test]
+    fn save_record_then_load_record_roundtrip_1d() {
+        let pts = vec![
+            Point {
+                x: 1.0,
+                y: 2.0,
+                label: 10,
+            },
+            Point {
+                x: -3.5,
+                y: 4.25,
+                label: -1,
+            },
+            Point {
+                x: 0.0,
+                y: 0.0,
+                label: 0,
+            },
+        ];
+        let arr = Array::<Point, Ix1>::from_vec(Ix1::new([3]), pts.clone()).unwrap();
+        let (_dir, path) = temp_path("rt_record_1d.npy");
+        save_record(&path, &arr).unwrap();
+        let loaded: Array<Point, Ix1> = load_record(&path).unwrap();
+        assert_eq!(loaded.shape(), &[3]);
+        let s = loaded.as_slice().unwrap();
+        for (a, b) in s.iter().zip(pts.iter()) {
+            assert_eq!(a, b);
+        }
+    }
+
+    #[test]
+    fn load_record_rejects_wrong_dtype_file() {
+        // Save a regular f64 array, then try to load it as Point.
+        let arr =
+            Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let (_dir, path) = temp_path("wrong_dtype_file.npy");
+        save(&path, &arr).unwrap();
+        let res: Result<Array<Point, Ix1>, _> = load_record(&path);
+        let err = res.unwrap_err();
+        assert!(
+            err.to_string().contains("expected a structured dtype"),
+            "got: {err}"
+        );
     }
 
     // ---- typed Complex round-trips (#498) ------------------------------

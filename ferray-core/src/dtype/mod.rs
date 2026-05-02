@@ -377,6 +377,42 @@ mod private {
     pub trait Sealed {}
 }
 
+// Blanket impl: any FerrayRecord type seals into Element so npy
+// load_record / save_record can produce Array<T, D> for structured
+// dtypes (#742). This is sound because FerrayRecord is a separate
+// `unsafe` trait that no primitive type implements; the orphan +
+// coherence checks treat this as non-overlapping with the concrete
+// primitive impls below.
+impl<T: crate::record::FerrayRecord> private::Sealed for T {}
+
+impl<T: crate::record::FerrayRecord + Clone + fmt::Debug + fmt::Display + Send + Sync + PartialEq>
+    Element for T
+{
+    fn dtype() -> DType {
+        DType::Struct(<T as crate::record::FerrayRecord>::field_descriptors())
+    }
+    fn zero() -> Self {
+        // Records have no canonical zero — callers that need
+        // zero-initialised storage should construct it explicitly.
+        // This panic is unreachable in practice because the only
+        // codepath that calls Element::zero on a record is
+        // Array::zeros, which we already reject for FerrayRecord
+        // types higher up the stack.
+        panic!(
+            "FerrayRecord type {} has no canonical Element::zero; \
+             construct records explicitly",
+            std::any::type_name::<T>()
+        )
+    }
+    fn one() -> Self {
+        panic!(
+            "FerrayRecord type {} has no canonical Element::one; \
+             construct records explicitly",
+            std::any::type_name::<T>()
+        )
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Element implementations
 // ---------------------------------------------------------------------------
