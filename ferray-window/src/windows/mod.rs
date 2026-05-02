@@ -43,6 +43,55 @@ fn gen_window<F: FnMut(usize) -> f64>(m: usize, mut f: F) -> FerrayResult<Array<
     Array::from_vec(Ix1::new([m]), data)
 }
 
+/// Internal helper: cast a length-`m` f64 window into an f32 array.
+/// We compute in f64 (ferray-window's native precision) and then
+/// down-cast — the windows are smooth, so this preserves all useful
+/// precision.
+fn cast_to_f32(arr: &Array<f64, Ix1>) -> FerrayResult<Array<f32, Ix1>> {
+    let data: Vec<f32> = arr.iter().map(|&x| x as f32).collect();
+    Array::<f32, Ix1>::from_vec(Ix1::new([data.len()]), data)
+}
+
+/// `f32` version of [`bartlett`] (#529).
+///
+/// # Errors
+/// Same as `bartlett`.
+pub fn bartlett_f32(m: usize) -> FerrayResult<Array<f32, Ix1>> {
+    cast_to_f32(&bartlett(m)?)
+}
+
+/// `f32` version of [`blackman`] (#529).
+///
+/// # Errors
+/// Same as `blackman`.
+pub fn blackman_f32(m: usize) -> FerrayResult<Array<f32, Ix1>> {
+    cast_to_f32(&blackman(m)?)
+}
+
+/// `f32` version of [`hamming`] (#529).
+///
+/// # Errors
+/// Same as `hamming`.
+pub fn hamming_f32(m: usize) -> FerrayResult<Array<f32, Ix1>> {
+    cast_to_f32(&hamming(m)?)
+}
+
+/// `f32` version of [`hanning`] (#529).
+///
+/// # Errors
+/// Same as `hanning`.
+pub fn hanning_f32(m: usize) -> FerrayResult<Array<f32, Ix1>> {
+    cast_to_f32(&hanning(m)?)
+}
+
+/// `f32` version of [`kaiser`] (#529).
+///
+/// # Errors
+/// Same as `kaiser`.
+pub fn kaiser_f32(m: usize, beta: f64) -> FerrayResult<Array<f32, Ix1>> {
+    cast_to_f32(&kaiser(m, beta)?)
+}
+
 /// Return the Bartlett (triangular) window of length `m`.
 ///
 /// The Bartlett window is defined as:
@@ -433,6 +482,42 @@ pub fn tukey(m: usize, alpha: f64) -> FerrayResult<Array<f64, Ix1>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- f32 sibling functions (#529) ----------------------------------
+
+    #[test]
+    fn f32_windows_match_f64_within_f32_eps() {
+        for m in [1usize, 5, 16, 64] {
+            for (name, got, want) in [
+                ("bartlett", bartlett_f32(m).unwrap(), bartlett(m).unwrap()),
+                ("blackman", blackman_f32(m).unwrap(), blackman(m).unwrap()),
+                ("hamming", hamming_f32(m).unwrap(), hamming(m).unwrap()),
+                ("hanning", hanning_f32(m).unwrap(), hanning(m).unwrap()),
+            ] {
+                assert_eq!(got.shape(), want.shape(), "{name} m={m} shape");
+                let g = got.as_slice().unwrap();
+                let w = want.as_slice().unwrap();
+                for (i, (&a, &b)) in g.iter().zip(w.iter()).enumerate() {
+                    let bf = b as f32;
+                    assert!(
+                        (a - bf).abs() < 1e-6,
+                        "{name} m={m} idx={i}: f32 {a} vs f64 {b}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn kaiser_f32_matches_kaiser() {
+        let m = 20;
+        let beta = 8.6;
+        let f32_arr = kaiser_f32(m, beta).unwrap();
+        let f64_arr = kaiser(m, beta).unwrap();
+        for (a, b) in f32_arr.iter().zip(f64_arr.iter()) {
+            assert!((a - *b as f32).abs() < 1e-5);
+        }
+    }
 
     // Helper: compare two slices within tolerance
     fn assert_close(actual: &[f64], expected: &[f64], tol: f64) {
