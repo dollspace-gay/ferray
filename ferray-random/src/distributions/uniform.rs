@@ -186,9 +186,143 @@ impl<B: BitGenerator> Generator<B> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Typed integer generators (#456) — `integers` only returns i64. NumPy's
+// `Generator.integers(low, high, size, dtype=...)` lets callers pick from
+// u8 / i8 / u16 / i16 / u32 / i32 / u64. Each typed entry below mirrors
+// `integers`'s contract but in the requested concrete type.
+// ---------------------------------------------------------------------------
+
+macro_rules! typed_integers {
+    (
+        $name:ident, $ty:ty, $doc:literal
+    ) => {
+        impl<B: BitGenerator> Generator<B> {
+            #[doc = $doc]
+            ///
+            /// # Errors
+            /// `FerrayError::InvalidValue` if `low >= high` or `shape` is invalid.
+            pub fn $name(
+                &mut self,
+                low: $ty,
+                high: $ty,
+                size: impl IntoShape,
+            ) -> Result<Array<$ty, IxDyn>, FerrayError> {
+                if low >= high {
+                    return Err(FerrayError::invalid_value(format!(
+                        "low ({low}) must be less than high ({high})"
+                    )));
+                }
+                let shape = size.into_shape()?;
+                let n = shape_size(&shape);
+                // Range is `high - low` evaluated as u64 to handle full
+                // i*::MIN..i*::MAX spans without overflow.
+                let range = (i128::from(high) - i128::from(low)) as u64;
+                let mut data = Vec::with_capacity(n);
+                for _ in 0..n {
+                    let raw = self.bg.next_u64_bounded(range);
+                    let v = (i128::from(low) + raw as i128) as $ty;
+                    data.push(v);
+                }
+                Array::<$ty, IxDyn>::from_vec(IxDyn::new(&shape), data)
+            }
+        }
+    };
+}
+
+typed_integers!(
+    integers_u8,
+    u8,
+    "Generate u8 integers in [low, high), matching `numpy.random.Generator.integers(..., dtype=np.uint8)`."
+);
+typed_integers!(
+    integers_i8,
+    i8,
+    "Generate i8 integers in [low, high), matching `numpy.random.Generator.integers(..., dtype=np.int8)`."
+);
+typed_integers!(
+    integers_u16,
+    u16,
+    "Generate u16 integers in [low, high), matching `numpy.random.Generator.integers(..., dtype=np.uint16)`."
+);
+typed_integers!(
+    integers_i16,
+    i16,
+    "Generate i16 integers in [low, high), matching `numpy.random.Generator.integers(..., dtype=np.int16)`."
+);
+typed_integers!(
+    integers_u32,
+    u32,
+    "Generate u32 integers in [low, high), matching `numpy.random.Generator.integers(..., dtype=np.uint32)`."
+);
+typed_integers!(
+    integers_i32,
+    i32,
+    "Generate i32 integers in [low, high), matching `numpy.random.Generator.integers(..., dtype=np.int32)`."
+);
+typed_integers!(
+    integers_u64,
+    u64,
+    "Generate u64 integers in [low, high), matching `numpy.random.Generator.integers(..., dtype=np.uint64)`."
+);
+
 #[cfg(test)]
 mod tests {
     use crate::default_rng_seeded;
+
+    // ---- typed integers (#456) -----------------------------------------
+
+    #[test]
+    fn integers_u8_in_range() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.integers_u8(0, 200, 10_000).unwrap();
+        for &v in arr.as_slice().unwrap() {
+            assert!(v < 200);
+        }
+    }
+
+    #[test]
+    fn integers_i8_in_range_with_negatives() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.integers_i8(-50, 50, 10_000).unwrap();
+        for &v in arr.as_slice().unwrap() {
+            assert!((-50..50).contains(&v));
+        }
+    }
+
+    #[test]
+    fn integers_u16_in_range() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.integers_u16(1000, 5000, 5_000).unwrap();
+        for &v in arr.as_slice().unwrap() {
+            assert!((1000..5000).contains(&v));
+        }
+    }
+
+    #[test]
+    fn integers_i32_in_range_full_span() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.integers_i32(i32::MIN, i32::MAX, 1_000).unwrap();
+        for &v in arr.as_slice().unwrap() {
+            assert!(v < i32::MAX);
+        }
+    }
+
+    #[test]
+    fn integers_u64_full_range() {
+        let mut rng = default_rng_seeded(42);
+        let arr = rng.integers_u64(0, u64::MAX, 100).unwrap();
+        // Just confirms no overflow / panic — values are by construction in bounds.
+        assert_eq!(arr.shape(), &[100]);
+    }
+
+    #[test]
+    fn integers_typed_low_ge_high_errors() {
+        let mut rng = default_rng_seeded(0);
+        assert!(rng.integers_u8(10, 5, 5).is_err());
+        assert!(rng.integers_i16(0, 0, 5).is_err());
+        assert!(rng.integers_u32(7, 7, 5).is_err());
+    }
 
     // ---- _into variants (#454) -----------------------------------------
 
