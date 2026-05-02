@@ -1,0 +1,10 @@
+{
+  "uuid": "d0f80a54-1e94-40c1-b03b-463a913011db",
+  "issue_uuid": "0aae4fa7-92f8-49ae-a308-9f1f29ef128a",
+  "author": "doll-agent",
+  "content": "Add Poly::with_mapping(self, domain, window) trait method (each basis impls via with_domain.then.with_window). Add ConvertBasis::convert_with_mapping<T: FromPowerBasis>(domain, window) default that converts coefficients via power-basis pivot and applies the mapping (source's by default, or explicit overrides). 2 new tests for Chebyshev. Mirrors numpy's convert(domain, kind, window).",
+  "created_at": "2026-05-02T01:05:14.336005639Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAHcumfczblOKi/Jw+6e0KW5Hl3KHbdmmFUc+APRLYDVonOBaOkn8zZwALku1zk79KFWVQjZYoyCGb4YFMEeZ7Cw=="
+}
