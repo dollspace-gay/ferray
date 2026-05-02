@@ -1,0 +1,10 @@
+{
+  "uuid": "bc567111-74a9-4968-8cb5-5af8049348e0",
+  "issue_uuid": "10ec8219-40bb-4acd-97c3-0060b911b7c4",
+  "author": "doll-agent",
+  "content": "Security note added to npy::load doc-comment.",
+  "created_at": "2026-05-02T01:19:10.561387546Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAcN+fC/UGvmqN7ZAHaMCg8oOlADIASgwHzbO1gptVNTamZYreu3JGdDT9V6yQ5dAYOqGznR7nMXQ7/BOfnhFXBQ=="
+}
