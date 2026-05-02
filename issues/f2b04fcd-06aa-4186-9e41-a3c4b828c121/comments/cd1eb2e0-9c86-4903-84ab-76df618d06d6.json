@@ -1,0 +1,10 @@
+{
+  "uuid": "cd1eb2e0-9c86-4903-84ab-76df618d06d6",
+  "issue_uuid": "f2b04fcd-06aa-4186-9e41-a3c4b828c121",
+  "author": "doll-agent",
+  "content": "Bundling #725-#729 into one ferray-polynomial/src/f32_wrappers.rs module via an impl_f32_wrapper! macro. Each wrapper holds the f64 type and converts on the public boundary. Lightweight surface (eval/deriv/integ/add/sub/mul/to_f64/from_f64); full surface accessible via .as_f64() escape hatch.",
+  "created_at": "2026-05-02T02:06:45.899225676Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA+asqtA+sl4WJ5eypmlY3YT6pF1Vz65HKYqACcjmRAxbAs/e59W7QEQyCcaYrp6yWzoSuwJhAaZ0yq3LD6cQ8BA=="
+}
