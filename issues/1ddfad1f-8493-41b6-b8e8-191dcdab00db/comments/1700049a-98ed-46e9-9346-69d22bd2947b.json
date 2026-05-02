@@ -1,0 +1,10 @@
+{
+  "uuid": "1700049a-98ed-46e9-9346-69d22bd2947b",
+  "issue_uuid": "1ddfad1f-8493-41b6-b8e8-191dcdab00db",
+  "author": "doll-agent",
+  "content": "Add unique_axis(a, axis) to ferray-stats/src/searching.rs. Gathers each hyperslice along axis into a Vec<T> in canonical (outer, inner) order, sorts axis-indices via lex partial_cmp, dedupes consecutive-equal slices, scatters the kept slices back into a contiguous output array. Output shape is the input shape with axis-dim replaced by the unique-slice count. 6 new tests cover row dedup (axis=0), column dedup (axis=1), all-distinct sort behavior, all-same collapse, deeper-rank example with row-equality, and axis-out-of-bounds. Re-exported from ferray-stats crate root.",
+  "created_at": "2026-05-02T00:35:17.177076919Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAOmQQ0st/mT1arTeYvM2uwFtNJ7LdX9y4s8odivUHJhV7Hv0N8akj4lYuXThRFLB0kJBkGBRc0vCaSMbfQgTsAQ=="
+}
