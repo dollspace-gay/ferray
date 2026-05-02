@@ -3,11 +3,12 @@
   "display_id": 732,
   "title": "ferray-polynomial: integ_with_bounds for non-power bases",
   "description": "Follow-up from #482. Polynomial (power basis) ships integ_with_bounds(m, k, lbnd, scl). Extend to Chebyshev / Hermite / HermiteE / Legendre / Laguerre. The recurrence-based step needs the basis-specific evaluate-at-lbnd routine to compute the integration-constant offset. Match numpy's <basis>polyint signatures.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-02T00:59:58.997426312Z",
-  "updated_at": "2026-05-02T01:00:00.249340255Z",
+  "updated_at": "2026-05-02T02:13:11.083043223Z",
+  "closed_at": "2026-05-02T02:13:11.083043223Z",
   "labels": [
     "ferray-polynomial,feature,follow-up,numpy-parity"
   ]
