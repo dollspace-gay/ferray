@@ -9,12 +9,37 @@ use num_traits::Float;
 // ---------------------------------------------------------------------------
 
 /// How to specify bins for histogram functions.
+///
+/// In addition to an explicit `Count` or `Edges`, the rule-based
+/// variants mirror `numpy.histogram(bins=...)` strings:
+/// `'sturges'`, `'sqrt'`, `'rice'`, `'scott'`, `'fd'`, `'doane'`,
+/// and `'auto'` (max of `'sturges'` and `'fd'`, numpy's default).
+/// Added for #472.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum Bins<T> {
     /// Number of equal-width bins.
     Count(usize),
     /// Explicit bin edges (must be sorted, length = nbins + 1).
     Edges(Vec<T>),
+    /// Sturges' rule: `ceil(log2(n)) + 1`. Conservative default for
+    /// near-Gaussian data; underestimates for heavy-tailed inputs.
+    Sturges,
+    /// Square-root rule: `ceil(sqrt(n))`. Used by Excel.
+    Sqrt,
+    /// Rice's rule: `ceil(2 * n^(1/3))`.
+    Rice,
+    /// Scott's rule: bin width = `3.5 * std / n^(1/3)`. Optimal for
+    /// Gaussian data.
+    Scott,
+    /// Freedman–Diaconis rule: bin width = `2 * IQR / n^(1/3)`.
+    /// Robust to outliers.
+    Fd,
+    /// Doane's rule (Sturges + skewness correction).
+    Doane,
+    /// numpy default — `max(sturges, fd)`. Falls back to Sturges if
+    /// FD is degenerate (IQR == 0).
+    Auto,
 }
 
 // ---------------------------------------------------------------------------
@@ -72,18 +97,7 @@ where
 
     // Build bin edges
     let edges = match bins {
-        Bins::Count(n) => {
-            if n == 0 {
-                return Err(FerrayError::invalid_value("number of bins must be > 0"));
-            }
-            let step = (hi - lo) / T::from(n).unwrap();
-            let mut edges = Vec::with_capacity(n + 1);
-            for i in 0..n {
-                edges.push(lo + step * T::from(i).unwrap());
-            }
-            edges.push(hi);
-            edges
-        }
+        Bins::Count(n) => build_uniform_edges(lo, hi, n)?,
         Bins::Edges(e) => {
             if e.len() < 2 {
                 return Err(FerrayError::invalid_value(
@@ -91,6 +105,10 @@ where
                 ));
             }
             e
+        }
+        rule => {
+            let n = bins_from_rule(&rule, &data, lo, hi)?;
+            build_uniform_edges(lo, hi, n)?
         }
     };
 
@@ -163,46 +181,6 @@ where
     T: Element + Float,
 {
     let edges = match bins {
-        Bins::Count(n) => {
-            if n == 0 {
-                return Err(FerrayError::invalid_value("number of bins must be > 0"));
-            }
-            let data: Vec<T> = a.iter().copied().collect();
-            let (lo, hi) = if let Some((l, h)) = range {
-                if l >= h {
-                    return Err(FerrayError::invalid_value(
-                        "range lower bound must be less than upper",
-                    ));
-                }
-                (l, h)
-            } else {
-                if data.is_empty() {
-                    return Err(FerrayError::invalid_value(
-                        "cannot compute histogram_bin_edges of empty array without range",
-                    ));
-                }
-                let lo = data
-                    .iter()
-                    .copied()
-                    .fold(T::infinity(), num_traits::Float::min);
-                let hi = data
-                    .iter()
-                    .copied()
-                    .fold(T::neg_infinity(), num_traits::Float::max);
-                if lo == hi {
-                    (lo - <T as Element>::one(), hi + <T as Element>::one())
-                } else {
-                    (lo, hi)
-                }
-            };
-            let step = (hi - lo) / T::from(n).unwrap();
-            let mut edges = Vec::with_capacity(n + 1);
-            for i in 0..n {
-                edges.push(lo + step * T::from(i).unwrap());
-            }
-            edges.push(hi);
-            edges
-        }
         Bins::Edges(e) => {
             if e.len() < 2 {
                 return Err(FerrayError::invalid_value(
@@ -211,9 +189,186 @@ where
             }
             e
         }
+        other => {
+            let data: Vec<T> = a.iter().copied().collect();
+            let (lo, hi) = resolve_hist_range(&data, range, "histogram_bin_edges")?;
+            match other {
+                Bins::Count(n) => build_uniform_edges(lo, hi, n)?,
+                Bins::Edges(_) => unreachable!("handled above"),
+                rule => {
+                    let n = bins_from_rule(&rule, &data, lo, hi)?;
+                    build_uniform_edges(lo, hi, n)?
+                }
+            }
+        }
     };
 
     Array::from_vec(Ix1::new([edges.len()]), edges)
+}
+
+// ---------------------------------------------------------------------------
+// Bins-rule helpers (#472)
+// ---------------------------------------------------------------------------
+
+/// Compute the (lo, hi) range from `range` or the data extrema, mirroring
+/// the existing inline logic in `histogram` / `histogram_bin_edges`.
+fn resolve_hist_range<T>(
+    data: &[T],
+    range: Option<(T, T)>,
+    fn_name: &str,
+) -> FerrayResult<(T, T)>
+where
+    T: Element + Float,
+{
+    if let Some((l, h)) = range {
+        if l >= h {
+            return Err(FerrayError::invalid_value(
+                "range lower bound must be less than upper",
+            ));
+        }
+        return Ok((l, h));
+    }
+    if data.is_empty() {
+        return Err(FerrayError::invalid_value(format!(
+            "cannot compute {fn_name} of empty array without range"
+        )));
+    }
+    let lo = data
+        .iter()
+        .copied()
+        .fold(T::infinity(), num_traits::Float::min);
+    let hi = data
+        .iter()
+        .copied()
+        .fold(T::neg_infinity(), num_traits::Float::max);
+    if lo == hi {
+        Ok((lo - <T as Element>::one(), hi + <T as Element>::one()))
+    } else {
+        Ok((lo, hi))
+    }
+}
+
+/// Build `n + 1` uniform edges from `lo` to `hi`. The last edge is
+/// pinned to `hi` exactly to avoid floating-point drift.
+fn build_uniform_edges<T>(lo: T, hi: T, n: usize) -> FerrayResult<Vec<T>>
+where
+    T: Element + Float,
+{
+    if n == 0 {
+        return Err(FerrayError::invalid_value("number of bins must be > 0"));
+    }
+    let step = (hi - lo) / T::from(n).unwrap();
+    let mut edges = Vec::with_capacity(n + 1);
+    for i in 0..n {
+        edges.push(lo + step * T::from(i).unwrap());
+    }
+    edges.push(hi);
+    Ok(edges)
+}
+
+/// Resolve a rule-based [`Bins`] variant to a concrete bin count from
+/// the data + range. Falls back to Sturges when a rule's denominator
+/// is zero (e.g. FD with IQR == 0), matching numpy.
+fn bins_from_rule<T>(rule: &Bins<T>, data: &[T], lo: T, hi: T) -> FerrayResult<usize>
+where
+    T: Element + Float,
+{
+    let n = data.len();
+    if n == 0 {
+        return Err(FerrayError::invalid_value(
+            "rule-based bins require at least 1 data point",
+        ));
+    }
+    let nf = n as f64;
+    let span = (hi - lo).to_f64().unwrap_or(0.0);
+    let sturges = || ((nf.log2()).ceil() as usize) + 1;
+
+    Ok(match rule {
+        Bins::Sturges => sturges(),
+        Bins::Sqrt => (nf.sqrt().ceil() as usize).max(1),
+        Bins::Rice => ((2.0 * nf.cbrt()).ceil() as usize).max(1),
+        Bins::Scott => {
+            // bin width = 3.5 * std / n^(1/3)
+            let mean: f64 = data
+                .iter()
+                .map(|x| x.to_f64().unwrap_or(0.0))
+                .sum::<f64>()
+                / nf;
+            let var: f64 = data
+                .iter()
+                .map(|x| {
+                    let d = x.to_f64().unwrap_or(0.0) - mean;
+                    d * d
+                })
+                .sum::<f64>()
+                / nf;
+            let std = var.sqrt();
+            let bin_w = 3.5 * std / nf.cbrt();
+            if bin_w <= 0.0 || span <= 0.0 {
+                sturges()
+            } else {
+                ((span / bin_w).ceil() as usize).max(1)
+            }
+        }
+        Bins::Fd => {
+            let mut s: Vec<f64> = data.iter().map(|x| x.to_f64().unwrap_or(0.0)).collect();
+            s.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let q = |p: f64| -> f64 {
+                if s.len() == 1 {
+                    return s[0];
+                }
+                let h = p * (s.len() as f64 - 1.0);
+                let lo_i = h.floor() as usize;
+                let hi_i = (lo_i + 1).min(s.len() - 1);
+                let frac = h - lo_i as f64;
+                s[lo_i] * (1.0 - frac) + s[hi_i] * frac
+            };
+            let iqr = q(0.75) - q(0.25);
+            let bin_w = 2.0 * iqr / nf.cbrt();
+            if bin_w <= 0.0 || span <= 0.0 {
+                sturges()
+            } else {
+                ((span / bin_w).ceil() as usize).max(1)
+            }
+        }
+        Bins::Doane => {
+            // 1 + log2(n) + log2(1 + |g1| / sigma_g1)
+            if n < 3 {
+                return Ok(sturges());
+            }
+            let mean: f64 = data
+                .iter()
+                .map(|x| x.to_f64().unwrap_or(0.0))
+                .sum::<f64>()
+                / nf;
+            let m2: f64 = data
+                .iter()
+                .map(|x| (x.to_f64().unwrap_or(0.0) - mean).powi(2))
+                .sum::<f64>()
+                / nf;
+            let m3: f64 = data
+                .iter()
+                .map(|x| (x.to_f64().unwrap_or(0.0) - mean).powi(3))
+                .sum::<f64>()
+                / nf;
+            if m2 <= 0.0 {
+                return Ok(sturges());
+            }
+            let g1 = m3 / m2.powf(1.5);
+            let sigma_g1 =
+                ((6.0 * (nf - 2.0)) / ((nf + 1.0) * (nf + 3.0))).sqrt();
+            (1.0 + nf.log2() + (1.0 + g1.abs() / sigma_g1).log2()).ceil() as usize
+        }
+        Bins::Auto => {
+            // max(sturges, fd) — fd may degenerate, sturges always works.
+            let s = sturges();
+            let f = bins_from_rule(&Bins::Fd, data, lo, hi)?;
+            s.max(f)
+        }
+        Bins::Count(_) | Bins::Edges(_) => unreachable!(
+            "bins_from_rule called with explicit Count/Edges variant"
+        ),
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -577,6 +732,99 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- Rule-based Bins variants (#472) ------------------------------
+
+    #[test]
+    fn rule_sturges_count() {
+        // Sturges for n=8: ceil(log2(8))+1 = 3+1 = 4
+        let a = Array::<f64, Ix1>::from_vec(
+            Ix1::new([8]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        )
+        .unwrap();
+        let (counts, edges) = histogram(&a, Bins::Sturges, None, false).unwrap();
+        assert_eq!(counts.shape(), &[4]);
+        assert_eq!(edges.shape(), &[5]);
+        // All 8 values must land in the bins.
+        let total: f64 = counts.iter().sum();
+        assert!((total - 8.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn rule_sqrt_count() {
+        // sqrt(16) = 4 → ceil = 4
+        let a = Array::<f64, Ix1>::from_vec(
+            Ix1::new([16]),
+            (0..16).map(|i| i as f64).collect(),
+        )
+        .unwrap();
+        let edges = histogram_bin_edges(&a, Bins::Sqrt, None).unwrap();
+        assert_eq!(edges.shape(), &[5]); // 4 bins → 5 edges
+    }
+
+    #[test]
+    fn rule_rice_count() {
+        // Rice: ceil(2 * 27^(1/3)) = ceil(2*3) = 6
+        let a = Array::<f64, Ix1>::from_vec(
+            Ix1::new([27]),
+            (0..27).map(|i| i as f64).collect(),
+        )
+        .unwrap();
+        let edges = histogram_bin_edges(&a, Bins::Rice, None).unwrap();
+        assert_eq!(edges.shape(), &[7]); // 6 bins → 7 edges
+    }
+
+    #[test]
+    fn rule_auto_uses_max_of_sturges_and_fd() {
+        let a = Array::<f64, Ix1>::from_vec(
+            Ix1::new([100]),
+            (0..100).map(|i| i as f64).collect(),
+        )
+        .unwrap();
+        let (counts_auto, _) = histogram(&a, Bins::Auto, None, false).unwrap();
+        let (counts_sturges, _) = histogram(&a, Bins::Sturges, None, false).unwrap();
+        // auto >= sturges by definition.
+        assert!(counts_auto.shape()[0] >= counts_sturges.shape()[0]);
+    }
+
+    #[test]
+    fn rule_auto_falls_back_to_sturges_when_fd_degenerate() {
+        // All-equal data → IQR = 0 → FD degenerate → auto must still
+        // produce a valid histogram via Sturges.
+        let a =
+            Array::<f64, Ix1>::from_vec(Ix1::new([20]), vec![3.0; 20]).unwrap();
+        let (counts, _) = histogram(&a, Bins::Auto, None, false).unwrap();
+        let total: f64 = counts.iter().sum();
+        assert!((total - 20.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn rule_doane_handles_skewed_data() {
+        let a = Array::<f64, Ix1>::from_vec(
+            Ix1::new([10]),
+            vec![1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 3.0, 4.0, 5.0, 50.0],
+        )
+        .unwrap();
+        let (counts, _) = histogram(&a, Bins::Doane, None, false).unwrap();
+        let total: f64 = counts.iter().sum();
+        assert!((total - 10.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn rule_scott_finite_bins() {
+        // Spread Gaussian-like data — Scott should produce a finite
+        // bin count.
+        let a = Array::<f64, Ix1>::from_vec(
+            Ix1::new([50]),
+            (0..50).map(|i| (i as f64) * 0.1).collect(),
+        )
+        .unwrap();
+        let (counts, _) = histogram(&a, Bins::Scott, None, false).unwrap();
+        assert!(counts.shape()[0] >= 2);
+        let total: f64 = counts.iter().sum();
+        assert!((total - 50.0).abs() < 1e-12);
+    }
 
     #[test]
     fn test_histogram_basic() {
