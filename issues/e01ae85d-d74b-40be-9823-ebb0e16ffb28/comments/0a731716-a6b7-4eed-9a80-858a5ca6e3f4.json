@@ -1,0 +1,10 @@
+{
+  "uuid": "0a731716-a6b7-4eed-9a80-858a5ca6e3f4",
+  "issue_uuid": "e01ae85d-d74b-40be-9823-ebb0e16ffb28",
+  "author": "doll-agent",
+  "content": "ndarray 0.17's RawArrayView::from_shape_ptr also rejects negative strides via debug_assert. The bypass constructors are pub(crate). Blocked on upstream ndarray exposing a checked-strides-bypass API.",
+  "created_at": "2026-05-02T02:34:24.812935909Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAphIHRSJIAqWGlHIvisjlrrzvVxY1dqBg9SFTJ30sOgnG9trmpHp6onoT7fPCJxnbRlx+fWzMSCreA/vCXNN9DA=="
+}
