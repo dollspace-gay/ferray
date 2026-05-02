@@ -1,0 +1,10 @@
+{
+  "uuid": "72996355-32e4-4af2-a242-3605e550ebd0",
+  "issue_uuid": "5e05cd52-8c4a-462e-be50-67f076b84bde",
+  "author": "doll-agent",
+  "content": "Add Polynomial::from_roots(&[f64]) -> Self in power.rs that builds (x - r0)*(x - r1)*... by repeated convolve-with-[-r,1] (linear-time per root, quadratic overall). Add a default from_roots method on the FromPowerBasis trait that delegates: build power coeffs, then call Self::from_power_basis. This gives Chebyshev / Hermite / HermiteE / Legendre / Laguerre the same constructor for free. Tests: empty roots → constant 1, single root, quadratic expansion, repeated root, zero root, eval-at-each-root-is-zero, plus a Chebyshev cross-basis test that confirms the trait default works through the FromPowerBasis path.",
+  "created_at": "2026-05-02T00:48:29.217660841Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAatRTkexnBh/4j9eQOrDqlCAzRNHg2cyqlpBfn/RHUzrzy6PvGIhLoJTTctSpjpyAoSVO4F0Z9iJabDwr/PsZDA=="
+}
