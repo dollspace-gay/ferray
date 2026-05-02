@@ -18,20 +18,34 @@ use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
 use crate::helpers::{
-    binary_broadcast_op, binary_elementwise_op, binary_elementwise_op_into, unary_float_op,
-    unary_float_op_compute, unary_float_op_into,
+    binary_broadcast_op, binary_elementwise_op, binary_elementwise_op_into,
+    try_simd_f32_binary, try_simd_f64_binary, unary_float_op, unary_float_op_compute,
+    unary_float_op_into,
 };
+use crate::kernels::simd_f32::{add_f32, div_f32, mul_f32, sub_f32};
+use crate::kernels::simd_f64::{add_f64, div_f64, mul_f64, sub_f64};
 
 // ---------------------------------------------------------------------------
 // Basic arithmetic (binary, same-shape)
 // ---------------------------------------------------------------------------
 
 /// Elementwise addition with `NumPy` broadcasting.
+///
+/// Same-shape f64 / f32 inputs go through the explicit SIMD slice
+/// kernel (`add_f64` / `add_f32` via `pulp::Arch` runtime dispatch).
+/// Other dtypes and broadcasting paths fall through to the generic
+/// auto-vectorised loop in `binary_elementwise_op`. (#88)
 pub fn add<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Add<Output = T> + Copy,
     D: Dimension,
 {
+    if let Some(r) = try_simd_f64_binary(a, b, add_f64) {
+        return r;
+    }
+    if let Some(r) = try_simd_f32_binary(a, b, add_f32) {
+        return r;
+    }
     binary_elementwise_op(a, b, |x, y| x + y)
 }
 
@@ -52,12 +66,19 @@ where
     binary_elementwise_op_into(a, b, out, "add", |x, y| x + y)
 }
 
-/// Elementwise subtraction with `NumPy` broadcasting.
+/// Elementwise subtraction with `NumPy` broadcasting. SIMD-dispatched
+/// for same-shape f64/f32 inputs (#88).
 pub fn subtract<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Sub<Output = T> + Copy,
     D: Dimension,
 {
+    if let Some(r) = try_simd_f64_binary(a, b, sub_f64) {
+        return r;
+    }
+    if let Some(r) = try_simd_f32_binary(a, b, sub_f32) {
+        return r;
+    }
     binary_elementwise_op(a, b, |x, y| x - y)
 }
 
@@ -74,12 +95,19 @@ where
     binary_elementwise_op_into(a, b, out, "subtract", |x, y| x - y)
 }
 
-/// Elementwise multiplication with `NumPy` broadcasting.
+/// Elementwise multiplication with `NumPy` broadcasting. SIMD-dispatched
+/// for same-shape f64/f32 inputs (#88).
 pub fn multiply<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Mul<Output = T> + Copy,
     D: Dimension,
 {
+    if let Some(r) = try_simd_f64_binary(a, b, mul_f64) {
+        return r;
+    }
+    if let Some(r) = try_simd_f32_binary(a, b, mul_f32) {
+        return r;
+    }
     binary_elementwise_op(a, b, |x, y| x * y)
 }
 
@@ -96,12 +124,19 @@ where
     binary_elementwise_op_into(a, b, out, "multiply", |x, y| x * y)
 }
 
-/// Elementwise division with `NumPy` broadcasting.
+/// Elementwise division with `NumPy` broadcasting. SIMD-dispatched
+/// for same-shape f64/f32 inputs (#88).
 pub fn divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + std::ops::Div<Output = T> + Copy,
     D: Dimension,
 {
+    if let Some(r) = try_simd_f64_binary(a, b, div_f64) {
+        return r;
+    }
+    if let Some(r) = try_simd_f32_binary(a, b, div_f32) {
+        return r;
+    }
     binary_elementwise_op(a, b, |x, y| x / y)
 }
 
@@ -1388,6 +1423,137 @@ mod tests {
     fn arr1_i32(data: Vec<i32>) -> Array<i32, Ix1> {
         let n = data.len();
         Array::from_vec(Ix1::new([n]), data).unwrap()
+    }
+
+    fn arr1_f32(data: Vec<f32>) -> Array<f32, Ix1> {
+        let n = data.len();
+        Array::from_vec(Ix1::new([n]), data).unwrap()
+    }
+
+    // ---- f32 coverage (#721) -------------------------------------------
+    //
+    // Existing arithmetic tests run against f64 only; the f32 SIMD
+    // dispatch (try_simd_f32_binary / try_simd_f32_unary) is exercised
+    // here. Arrays are sized at 32 elements so the SIMD path engages
+    // (the threshold is >= a small multiple of the lane width).
+
+    #[test]
+    fn add_f32_simd_path() {
+        let n = 32;
+        let a = arr1_f32((0..n).map(|i| i as f32).collect());
+        let b = arr1_f32((0..n).map(|i| i as f32 * 2.0).collect());
+        let r = add(&a, &b).unwrap();
+        for (i, &v) in r.as_slice().unwrap().iter().enumerate() {
+            assert!((v - (i as f32 * 3.0)).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn sub_f32_simd_path() {
+        let n = 32;
+        let a = arr1_f32((0..n).map(|i| i as f32 * 5.0).collect());
+        let b = arr1_f32((0..n).map(|i| i as f32 * 2.0).collect());
+        let r = subtract(&a, &b).unwrap();
+        for (i, &v) in r.as_slice().unwrap().iter().enumerate() {
+            assert!((v - (i as f32 * 3.0)).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn mul_f32_simd_path() {
+        let n = 32;
+        let a = arr1_f32((0..n).map(|i| i as f32).collect());
+        let b = arr1_f32(vec![3.0_f32; n]);
+        let r = multiply(&a, &b).unwrap();
+        for (i, &v) in r.as_slice().unwrap().iter().enumerate() {
+            assert!((v - (i as f32 * 3.0)).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn div_f32_simd_path() {
+        let n = 32;
+        let a = arr1_f32((0..n).map(|i| (i as f32 + 1.0) * 4.0).collect());
+        let b = arr1_f32(vec![2.0_f32; n]);
+        let r = divide(&a, &b).unwrap();
+        for (i, &v) in r.as_slice().unwrap().iter().enumerate() {
+            assert!((v - (i as f32 + 1.0) * 2.0).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn abs_f32_simd_path() {
+        let n = 32;
+        let a = arr1_f32(
+            (0..n)
+                .map(|i| if i % 2 == 0 { -(i as f32) } else { i as f32 })
+                .collect(),
+        );
+        let r = absolute(&a).unwrap();
+        for (i, &v) in r.as_slice().unwrap().iter().enumerate() {
+            assert!((v - (i as f32)).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn neg_f32_simd_path() {
+        let n = 32;
+        let a = arr1_f32((0..n).map(|i| i as f32).collect());
+        let r = negative(&a).unwrap();
+        for (i, &v) in r.as_slice().unwrap().iter().enumerate() {
+            assert!((v - (-(i as f32))).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn reciprocal_f32_simd_path() {
+        let n = 32;
+        let a = arr1_f32((1..=n).map(|i| i as f32).collect());
+        let r = reciprocal(&a).unwrap();
+        for (i, &v) in r.as_slice().unwrap().iter().enumerate() {
+            let want = 1.0_f32 / ((i + 1) as f32);
+            assert!((v - want).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn square_f32_simd_path() {
+        let n = 32;
+        let a = arr1_f32((0..n).map(|i| i as f32).collect());
+        let r = square(&a).unwrap();
+        for (i, &v) in r.as_slice().unwrap().iter().enumerate() {
+            let want = (i as f32) * (i as f32);
+            assert!((v - want).abs() < 1e-4);
+        }
+    }
+
+    #[test]
+    fn add_f32_below_simd_threshold_scalar_path() {
+        // Tiny array — SIMD dispatch typically falls back to scalar.
+        let a = arr1_f32(vec![1.5, 2.5, 3.5]);
+        let b = arr1_f32(vec![0.5, 0.5, 0.5]);
+        let r = add(&a, &b).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn add_f32_force_scalar_env_var() {
+        // FERRAY_FORCE_SCALAR=1 should bypass SIMD; result must still
+        // be correct.
+        // SAFETY: This test is single-threaded by default per cargo
+        // test runner; we set then unset the env var around the call.
+        unsafe {
+            std::env::set_var("FERRAY_FORCE_SCALAR", "1");
+        }
+        let a = arr1_f32((0..32).map(|i| i as f32).collect());
+        let b = arr1_f32(vec![1.0_f32; 32]);
+        let r = add(&a, &b).unwrap();
+        unsafe {
+            std::env::remove_var("FERRAY_FORCE_SCALAR");
+        }
+        for (i, &v) in r.as_slice().unwrap().iter().enumerate() {
+            assert!((v - (i as f32 + 1.0)).abs() < 1e-6);
+        }
     }
 
     #[test]
