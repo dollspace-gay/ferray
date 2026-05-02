@@ -45,7 +45,7 @@ pub mod sliding_window;
 
 pub use as_strided::{StridedSource, as_strided, as_strided_unchecked};
 pub use broadcast::{broadcast_arrays, broadcast_shapes, broadcast_to};
-pub use sliding_window::sliding_window_view;
+pub use sliding_window::{sliding_window_view, sliding_window_view_axis};
 
 #[cfg(test)]
 mod integration_tests {

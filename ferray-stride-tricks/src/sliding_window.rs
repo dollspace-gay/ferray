@@ -110,10 +110,141 @@ pub fn sliding_window_view<'a, T: Element, D: Dimension>(
     Ok(view)
 }
 
+/// Sliding-window view restricted to a subset of axes (#523).
+///
+/// `axes` selects which axes of `array` to slide over. `window_shape`
+/// must have the same length as `axes`. Other axes are kept at their
+/// full size in the output.
+///
+/// Output shape: `[outer_dims..., window_shape...]` where each `outer_dim`
+/// is `src_shape[i] - window_shape[axes.position(i)] + 1` for windowed
+/// axes and `src_shape[i]` for non-windowed axes. Window axes appear at
+/// the end in the order given by `axes`. This matches numpy's
+/// `sliding_window_view(x, window_shape, axis=axes)`.
+///
+/// # Errors
+/// - `FerrayError::InvalidValue` if `axes.len() != window_shape.len()`,
+///   any axis is out of bounds, any window dimension is 0, or any
+///   window exceeds its axis size.
+pub fn sliding_window_view_axis<'a, T: Element, D: Dimension>(
+    array: &'a Array<T, D>,
+    window_shape: &[usize],
+    axes: &[usize],
+) -> FerrayResult<ArrayView<'a, T, IxDyn>> {
+    let src_shape = array.shape();
+    let src_strides = array.strides();
+    let ndim = src_shape.len();
+
+    if window_shape.len() != axes.len() {
+        return Err(FerrayError::invalid_value(format!(
+            "window_shape length ({}) must match axes length ({})",
+            window_shape.len(),
+            axes.len(),
+        )));
+    }
+    for &ax in axes {
+        if ax >= ndim {
+            return Err(FerrayError::invalid_value(format!(
+                "axis {ax} out of bounds for array with {ndim} dimensions"
+            )));
+        }
+    }
+    for (slot, (&ax, &w)) in axes.iter().zip(window_shape.iter()).enumerate() {
+        if w == 0 {
+            return Err(FerrayError::invalid_value(format!(
+                "window_shape[{slot}] must be >= 1, got 0"
+            )));
+        }
+        if w > src_shape[ax] {
+            return Err(FerrayError::invalid_value(format!(
+                "window_shape[{slot}] ({w}) exceeds array axis {ax} (size {})",
+                src_shape[ax],
+            )));
+        }
+    }
+
+    // Outer (per-input-axis) shape: replace windowed axes with
+    // src - w + 1, leave others as src.
+    let mut out_shape = Vec::with_capacity(ndim + axes.len());
+    for (i, &n) in src_shape.iter().enumerate() {
+        if let Some(slot) = axes.iter().position(|&a| a == i) {
+            out_shape.push(n - window_shape[slot] + 1);
+        } else {
+            out_shape.push(n);
+        }
+    }
+    // Window axes (in axes order).
+    for &w in window_shape {
+        out_shape.push(w);
+    }
+
+    // Strides: outer = original src_strides, window = src_strides for
+    // each axis in axes (preserves the within-window step).
+    let mut out_strides = Vec::with_capacity(ndim + axes.len());
+    for &s in src_strides {
+        debug_assert!(s >= 0);
+        out_strides.push(s as usize);
+    }
+    for &ax in axes {
+        debug_assert!(src_strides[ax] >= 0);
+        out_strides.push(src_strides[ax] as usize);
+    }
+
+    let ptr = array.as_ptr();
+    let view = unsafe { ArrayView::from_shape_ptr(ptr, &out_shape, &out_strides) };
+    Ok(view)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use ferray_core::dimension::{Ix1, Ix2};
+
+    // ---- sliding_window_view_axis (#523) -------------------------------
+
+    #[test]
+    fn axis_partial_window_on_2d_axis0() {
+        // 4x3 array, window of length 2 on axis 0 only.
+        // Output shape: (3, 3, 2). For each row i in 0..3, the row pair
+        // (i, i+1) is preserved as the trailing window axis.
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([4, 3]), (1..=12).collect()).unwrap();
+        let v = sliding_window_view_axis(&a, &[2], &[0]).unwrap();
+        assert_eq!(v.shape(), &[3, 3, 2]);
+        // First "outer" position [0, 0] — should hold rows 0 and 1 col 0:
+        // 1 (row 0 col 0) and 4 (row 1 col 0).
+        let data: Vec<i32> = v.iter().copied().collect();
+        // Verify first window at [0, 0, 0..2] is [1, 4].
+        assert_eq!(data[0], 1);
+        assert_eq!(data[1], 4);
+    }
+
+    #[test]
+    fn axis_window_on_axis1_only() {
+        // 2x5, window of length 3 on axis 1.
+        let a =
+            Array::<i32, Ix2>::from_vec(Ix2::new([2, 5]), (1..=10).collect()).unwrap();
+        let v = sliding_window_view_axis(&a, &[3], &[1]).unwrap();
+        assert_eq!(v.shape(), &[2, 3, 3]);
+    }
+
+    #[test]
+    fn axis_mismatch_lengths_errors() {
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([3, 3]), (1..=9).collect()).unwrap();
+        // 2 windows but 1 axis
+        assert!(sliding_window_view_axis(&a, &[2, 2], &[0]).is_err());
+    }
+
+    #[test]
+    fn axis_out_of_bounds_errors() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), (1..=5).collect()).unwrap();
+        assert!(sliding_window_view_axis(&a, &[3], &[5]).is_err());
+    }
+
+    #[test]
+    fn axis_window_too_big_errors() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        assert!(sliding_window_view_axis(&a, &[5], &[0]).is_err());
+    }
 
     #[test]
     fn sliding_window_1d_size3() {
