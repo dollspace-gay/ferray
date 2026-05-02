@@ -129,6 +129,131 @@ impl<B: BitGenerator> Generator<B> {
         Ok(())
     }
 
+    /// Sample N-D hyperslices from `arr` along `axis` (#448).
+    ///
+    /// For each of `size` draws, picks an index along `axis`
+    /// (uniformly or weighted by `p`, with or without replacement)
+    /// and copies the corresponding (N-1)-D slice into the output.
+    /// The output has the same shape as `arr` with the `axis`-th
+    /// dimension replaced by `size`.
+    ///
+    /// Equivalent to `numpy.random.Generator.choice(arr, size, replace, p, axis)`
+    /// for N-D `arr`. The `shuffle` parameter (numpy 1.24+) controls
+    /// whether the indices are returned in selection order
+    /// (`shuffle = true`, default) or sorted (`shuffle = false`,
+    /// only meaningful when `replace = false`).
+    ///
+    /// # Errors
+    /// - `FerrayError::AxisOutOfBounds` if `axis >= arr.ndim()`.
+    /// - `FerrayError::InvalidValue` if the axis dimension is empty,
+    ///   `size > axis_len` with `replace = false`, `arr` is non-contiguous,
+    ///   or `p` is malformed.
+    pub fn choice_dyn<T>(
+        &mut self,
+        arr: &Array<T, IxDyn>,
+        size: usize,
+        replace: bool,
+        p: Option<&[f64]>,
+        axis: usize,
+        shuffle: bool,
+    ) -> Result<Array<T, IxDyn>, FerrayError>
+    where
+        T: ferray_core::Element,
+    {
+        let shape = arr.shape().to_vec();
+        let ndim = shape.len();
+        if axis >= ndim {
+            return Err(FerrayError::axis_out_of_bounds(axis, ndim));
+        }
+        let axis_len = shape[axis];
+        if size == 0 {
+            // numpy: empty sample → output shape with axis dimension = 0
+            let mut out_shape = shape;
+            out_shape[axis] = 0;
+            return Array::<T, IxDyn>::from_vec(IxDyn::new(&out_shape), Vec::new());
+        }
+        if axis_len == 0 {
+            return Err(FerrayError::invalid_value(
+                "choice_dyn: source array has zero length along axis",
+            ));
+        }
+        if !replace && size > axis_len {
+            return Err(FerrayError::invalid_value(format!(
+                "cannot choose {size} elements without replacement from axis of size {axis_len}"
+            )));
+        }
+        if let Some(probs) = p {
+            if probs.len() != axis_len {
+                return Err(FerrayError::invalid_value(format!(
+                    "p must have length {axis_len} (size of axis {axis}), got {}",
+                    probs.len()
+                )));
+            }
+            let psum: f64 = probs.iter().sum();
+            if (psum - 1.0).abs() > 1e-6 {
+                return Err(FerrayError::invalid_value(format!(
+                    "p must sum to 1.0, got {psum}"
+                )));
+            }
+            for (i, &pi) in probs.iter().enumerate() {
+                if pi < 0.0 {
+                    return Err(FerrayError::invalid_value(format!(
+                        "p[{i}] = {pi} is negative"
+                    )));
+                }
+            }
+        }
+
+        let src = arr
+            .as_slice()
+            .ok_or_else(|| FerrayError::invalid_value("array must be contiguous for choice_dyn"))?;
+
+        let mut indices = if let Some(probs) = p {
+            if replace {
+                weighted_sample_with_replacement(&mut self.bg, probs, size)
+            } else {
+                weighted_sample_without_replacement(&mut self.bg, probs, size)?
+            }
+        } else if replace {
+            (0..size)
+                .map(|_| self.bg.next_u64_bounded(axis_len as u64) as usize)
+                .collect()
+        } else {
+            sample_without_replacement(&mut self.bg, axis_len, size)
+        };
+        if !shuffle && !replace {
+            indices.sort_unstable();
+        }
+
+        let inner_stride: usize = shape[axis + 1..].iter().product();
+        let outer_size: usize = shape[..axis].iter().product();
+        let src_block = axis_len * inner_stride;
+        let out_block = size * inner_stride;
+        let total_out = outer_size * out_block;
+
+        let mut out_data: Vec<T> = Vec::with_capacity(total_out);
+        // Pre-fill with clones from index 0 so we can address slots by
+        // index. SAFETY: this avoids unsafe; the trait bound `Element`
+        // requires `Clone`. Cost is one clone per element which is what
+        // numpy does too.
+        let filler = src[0].clone();
+        out_data.resize(total_out, filler);
+        for o in 0..outer_size {
+            let src_base = o * src_block;
+            let out_base = o * out_block;
+            for (i, &idx) in indices.iter().enumerate() {
+                let src_off = src_base + idx * inner_stride;
+                let out_off = out_base + i * inner_stride;
+                out_data[out_off..out_off + inner_stride]
+                    .clone_from_slice(&src[src_off..src_off + inner_stride]);
+            }
+        }
+
+        let mut out_shape = shape;
+        out_shape[axis] = size;
+        Array::<T, IxDyn>::from_vec(IxDyn::new(&out_shape), out_data)
+    }
+
     /// Independently permute the entries along `axis` of `arr`.
     ///
     /// Returns a new array. For each combination of "other" indices
@@ -532,6 +657,140 @@ mod tests {
                 p[i]
             );
         }
+    }
+
+    // ---- choice_dyn (#448) ---------------------------------------------
+
+    #[test]
+    fn choice_dyn_axis0_picks_whole_rows() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(42);
+        let data: Vec<i64> = (0..5)
+            .flat_map(|i| (0..3).map(move |j| i * 100 + j))
+            .collect();
+        let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[5, 3]), data).unwrap();
+        let chosen = rng.choice_dyn(&arr, 4, true, None, 0, true).unwrap();
+        assert_eq!(chosen.shape(), &[4, 3]);
+        let slice = chosen.as_slice().unwrap();
+        for row in 0..4 {
+            let v0 = slice[row * 3];
+            let id = v0 / 100;
+            assert!((0..5).contains(&id));
+            assert_eq!(slice[row * 3 + 1], id * 100 + 1);
+            assert_eq!(slice[row * 3 + 2], id * 100 + 2);
+        }
+    }
+
+    #[test]
+    fn choice_dyn_axis1_picks_whole_columns() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(7);
+        let data: Vec<i64> = (0..3)
+            .flat_map(|i| (0..6).map(move |j| i * 10 + j))
+            .collect();
+        let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[3, 6]), data).unwrap();
+        let chosen = rng.choice_dyn(&arr, 2, false, None, 1, true).unwrap();
+        assert_eq!(chosen.shape(), &[3, 2]);
+        let slice = chosen.as_slice().unwrap();
+        // Each column in the output must equal one of the original columns
+        // (which all have the form [j, 10+j, 20+j]).
+        for col in 0..2 {
+            let v0 = slice[col];
+            let v1 = slice[2 + col];
+            let v2 = slice[4 + col];
+            assert!((0..6).contains(&v0));
+            assert_eq!(v1, v0 + 10);
+            assert_eq!(v2, v0 + 20);
+        }
+    }
+
+    #[test]
+    fn choice_dyn_without_replacement_no_duplicate_rows() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(1);
+        let data: Vec<i64> = (0..10)
+            .flat_map(|i| (0..2).map(move |j| i * 100 + j))
+            .collect();
+        let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[10, 2]), data).unwrap();
+        let chosen = rng.choice_dyn(&arr, 5, false, None, 0, true).unwrap();
+        let slice = chosen.as_slice().unwrap();
+        let mut ids = std::collections::HashSet::new();
+        for row in 0..5 {
+            let id = slice[row * 2] / 100;
+            assert!(ids.insert(id), "row id {id} repeated under replace=false");
+        }
+    }
+
+    #[test]
+    fn choice_dyn_shuffle_false_returns_sorted_indices() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(3);
+        // Tag each row with its original axis index in column 0; with
+        // shuffle=false + replace=false, the chosen rows must appear
+        // in ascending index order.
+        let data: Vec<i64> = (0..12)
+            .flat_map(|i| (0..2).map(move |j| if j == 0 { i as i64 } else { i as i64 * 10 }))
+            .collect();
+        let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[12, 2]), data).unwrap();
+        let chosen = rng.choice_dyn(&arr, 6, false, None, 0, false).unwrap();
+        let slice = chosen.as_slice().unwrap();
+        let mut last = -1i64;
+        for row in 0..6 {
+            let id = slice[row * 2];
+            assert!(id > last, "shuffle=false output not ascending: {id} after {last}");
+            last = id;
+        }
+    }
+
+    #[test]
+    fn choice_dyn_weighted_concentrates_on_high_p() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(0);
+        let data: Vec<i64> = (0..4)
+            .flat_map(|i| (0..2).map(move |j| i * 100 + j))
+            .collect();
+        let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[4, 2]), data).unwrap();
+        // All probability on row 2.
+        let p = [0.0, 0.0, 1.0, 0.0];
+        let chosen = rng.choice_dyn(&arr, 20, true, Some(&p), 0, true).unwrap();
+        let slice = chosen.as_slice().unwrap();
+        for row in 0..20 {
+            assert_eq!(slice[row * 2], 200, "weighted choice strayed from row 2");
+        }
+    }
+
+    #[test]
+    fn choice_dyn_size_zero_returns_empty_axis() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(11);
+        let arr = Array::<i64, IxDyn>::from_vec(
+            IxDyn::new(&[3, 4]),
+            (0..12).collect(),
+        )
+        .unwrap();
+        let chosen = rng.choice_dyn(&arr, 0, true, None, 0, true).unwrap();
+        assert_eq!(chosen.shape(), &[0, 4]);
+    }
+
+    #[test]
+    fn choice_dyn_bad_axis() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(0);
+        let arr =
+            Array::<i64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), (0..6).collect()).unwrap();
+        assert!(rng.choice_dyn(&arr, 1, true, None, 5, true).is_err());
+    }
+
+    #[test]
+    fn choice_dyn_too_many_no_replace_errors() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(0);
+        let arr = Array::<i64, IxDyn>::from_vec(
+            IxDyn::new(&[3, 2]),
+            (0..6).collect(),
+        )
+        .unwrap();
+        assert!(rng.choice_dyn(&arr, 5, false, None, 0, true).is_err());
     }
 
     // ---- shuffle_dyn / permuted_dyn (#447) -----------------------------
