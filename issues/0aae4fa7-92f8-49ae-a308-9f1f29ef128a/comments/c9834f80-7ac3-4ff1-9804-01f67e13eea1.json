@@ -1,0 +1,10 @@
+{
+  "uuid": "c9834f80-7ac3-4ff1-9804-01f67e13eea1",
+  "issue_uuid": "0aae4fa7-92f8-49ae-a308-9f1f29ef128a",
+  "author": "doll-agent",
+  "content": "ConvertBasis::convert_with_mapping<T>(domain, window) ships as a trait default; Poly::with_mapping landed on all 6 basis types as 1-liner builders. Carries source domain/window or explicit overrides through the power-basis pivot. 2 tests pass; cargo test green; clippy clean.",
+  "created_at": "2026-05-02T01:05:33.082533220Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAw+RT3k1YMt8F7Jpa83m2l9GDH6xjZHy3rhjoMm/7WS2Bnrl+kTPtgEtYYKfOFFGRVCpghLnbMccWtAgfcihQDw=="
+}
