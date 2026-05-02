@@ -2,11 +2,12 @@
   "uuid": "d3978ca6-3cac-4fba-a09a-34163e65eea4",
   "display_id": 723,
   "title": "ferray-stats: corrcoef returns 0.0 for constant-variable rows (numpy returns NaN)",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-01T20:02:23.132877379Z",
-  "updated_at": "2026-05-01T20:02:24.857168338Z",
+  "updated_at": "2026-05-02T01:49:03.813204560Z",
+  "closed_at": "2026-05-02T01:49:03.813204560Z",
   "labels": [
     "bug"
   ]
