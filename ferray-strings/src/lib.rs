@@ -43,6 +43,8 @@
 pub mod align;
 pub mod case;
 pub mod classify;
+#[cfg(feature = "compact-storage")]
+pub mod compact;
 pub mod concat;
 pub mod extras;
 pub mod regex_ops;
@@ -55,6 +57,10 @@ pub mod strip;
 
 // Re-export types
 pub use string_array::{StringArray, StringArray1, StringArray2, array};
+
+// Compact (Arrow-style) backend prototype (#736).
+#[cfg(feature = "compact-storage")]
+pub use compact::{CompactStringArray, CompactStringIter, estimated_string_array_bytes};
 
 // Re-export operations for flat namespace (like numpy.strings.upper etc.)
 pub use align::{center, ljust, ljust_with, rjust, rjust_with, zfill};

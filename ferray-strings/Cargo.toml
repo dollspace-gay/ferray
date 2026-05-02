@@ -16,6 +16,12 @@ ferray-core = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 
+[features]
+default = []
+# Compact-storage backend prototype (Arrow-style offsets+values
+# layout for memory-dense / cache-friendly string arrays). #736.
+compact-storage = []
+
 [dev-dependencies]
 proptest = { workspace = true }
 ferray-test-oracle = { path = "../ferray-test-oracle" }
