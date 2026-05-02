@@ -136,6 +136,91 @@ impl<B: BitGenerator> Generator<B> {
         Array::<f64, Ix2>::from_vec(Ix2::new([size, d]), data)
     }
 
+    /// Generate samples from the multivariate hypergeometric distribution.
+    ///
+    /// Models drawing `nsample` items without replacement from a population
+    /// partitioned into `K` colors with `colors[k]` items of color `k`.
+    /// Each row of the output is one such draw — a vector of `K` non-negative
+    /// counts summing to `nsample`.
+    ///
+    /// Uses the marginals algorithm: a sequence of `K-1` univariate
+    /// hypergeometric draws, each picking the count of one color from the
+    /// remainder of the population. The final color is what's left. This
+    /// matches `numpy.random.Generator.multivariate_hypergeometric` (#445).
+    ///
+    /// # Arguments
+    /// * `colors` - Number of items of each color (length K, all non-negative).
+    /// * `nsample` - Number of items drawn per sample (must be ≤ sum of `colors`).
+    /// * `size` - Number of multivariate draws (rows in output).
+    ///
+    /// # Returns
+    /// An `Array<i64, Ix2>` with shape `[size, K]`.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `colors` is empty, `size` is 0,
+    /// or `nsample` exceeds the population total.
+    pub fn multivariate_hypergeometric(
+        &mut self,
+        colors: &[u64],
+        nsample: u64,
+        size: usize,
+    ) -> Result<Array<i64, Ix2>, FerrayError> {
+        if size == 0 {
+            return Err(FerrayError::invalid_value("size must be > 0"));
+        }
+        if colors.is_empty() {
+            return Err(FerrayError::invalid_value(
+                "colors must have at least one element",
+            ));
+        }
+        let total: u64 = colors.iter().try_fold(0_u64, |acc, &c| {
+            acc.checked_add(c).ok_or_else(|| {
+                FerrayError::invalid_value("multivariate_hypergeometric: colors sum overflows u64")
+            })
+        })?;
+        if nsample > total {
+            return Err(FerrayError::invalid_value(format!(
+                "nsample ({nsample}) > sum of colors ({total})"
+            )));
+        }
+
+        let k = colors.len();
+        let mut data = Vec::with_capacity(size * k);
+
+        for _ in 0..size {
+            // For each color j in 0..k-1, draw a univariate hypergeometric
+            // from (ngood = colors[j], nbad = remaining_total - colors[j]).
+            // Subtract the draw and proceed; the last color gets whatever
+            // is left of `nsample`.
+            let mut remaining_pop: u64 = total;
+            let mut remaining_sample: u64 = nsample;
+
+            for &ngood in &colors[..k - 1] {
+                let nbad = remaining_pop - ngood;
+                let draw = if remaining_sample == 0 || ngood == 0 {
+                    0
+                } else if remaining_sample >= remaining_pop {
+                    // Take everything that's left of this color.
+                    ngood as i64
+                } else {
+                    hypergeometric_for_multivariate(
+                        &mut self.bg,
+                        ngood,
+                        nbad,
+                        remaining_sample,
+                    )
+                };
+                data.push(draw);
+                remaining_pop -= ngood;
+                remaining_sample -= draw as u64;
+            }
+            // Final color absorbs the remainder of the sample.
+            data.push(remaining_sample as i64);
+        }
+
+        Array::<i64, Ix2>::from_vec(Ix2::new([size, k]), data)
+    }
+
     /// Generate Dirichlet-distributed samples.
     ///
     /// Each row is a sample from the Dirichlet distribution parameterized
@@ -198,6 +283,35 @@ impl<B: BitGenerator> Generator<B> {
 
         Array::<f64, Ix2>::from_vec(Ix2::new([size, k]), data)
     }
+}
+
+/// Univariate hypergeometric draw used by `multivariate_hypergeometric`.
+/// Direct simulation: draw `nsample` items from a population of
+/// `ngood + nbad` and count successes. Equivalent to the helper in
+/// `discrete.rs::hypergeometric_single` — kept private here to avoid
+/// the cross-module visibility wiring that would otherwise pull in
+/// generator internals.
+fn hypergeometric_for_multivariate<B: BitGenerator>(
+    bg: &mut B,
+    ngood: u64,
+    nbad: u64,
+    nsample: u64,
+) -> i64 {
+    let mut good_remaining = ngood;
+    let mut total_remaining = ngood + nbad;
+    let mut successes: i64 = 0;
+    for _ in 0..nsample {
+        if total_remaining == 0 {
+            break;
+        }
+        let u = bg.next_f64();
+        if u < (good_remaining as f64) / (total_remaining as f64) {
+            successes += 1;
+            good_remaining -= 1;
+        }
+        total_remaining -= 1;
+    }
+    successes
 }
 
 /// Simple binomial sampling for multinomial (avoids circular dependency).
@@ -409,5 +523,113 @@ mod tests {
         assert!(rng.dirichlet(&[], 10).is_err());
         assert!(rng.dirichlet(&[1.0, 0.0], 10).is_err());
         assert!(rng.dirichlet(&[1.0, -1.0], 10).is_err());
+    }
+
+    // ---- multivariate_hypergeometric (#445) ----------------------------
+
+    #[test]
+    fn mvhg_shape_and_row_sum() {
+        let mut rng = default_rng_seeded(42);
+        let colors = [10u64, 20, 30];
+        let nsample = 15u64;
+        let arr = rng
+            .multivariate_hypergeometric(&colors, nsample, 50)
+            .unwrap();
+        assert_eq!(arr.shape(), &[50, 3]);
+        let slice = arr.as_slice().unwrap();
+        for row in 0..50 {
+            let row_sum: i64 = (0..3).map(|j| slice[row * 3 + j]).sum();
+            assert_eq!(row_sum, nsample as i64);
+        }
+    }
+
+    #[test]
+    fn mvhg_per_color_within_population() {
+        let mut rng = default_rng_seeded(123);
+        let colors = [5u64, 5, 5];
+        let arr = rng.multivariate_hypergeometric(&colors, 10, 200).unwrap();
+        let slice = arr.as_slice().unwrap();
+        for row in 0..200 {
+            for j in 0..3 {
+                let v = slice[row * 3 + j];
+                assert!(
+                    v >= 0 && v <= colors[j] as i64,
+                    "row {row} col {j}: count {v} out of [0, {}]",
+                    colors[j]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn mvhg_marginal_means_match_theory() {
+        // E[X_j] = nsample * colors[j] / sum(colors)
+        let mut rng = default_rng_seeded(7);
+        let colors = [10u64, 20, 30, 40];
+        let total: f64 = colors.iter().sum::<u64>() as f64;
+        let nsample = 25u64;
+        let n_draws = 10_000;
+        let arr = rng
+            .multivariate_hypergeometric(&colors, nsample, n_draws)
+            .unwrap();
+        let slice = arr.as_slice().unwrap();
+        let k = colors.len();
+        for j in 0..k {
+            let observed: f64 =
+                (0..n_draws).map(|i| slice[i * k + j] as f64).sum::<f64>() / n_draws as f64;
+            let expected = nsample as f64 * colors[j] as f64 / total;
+            // Marginal variance: nsample * (Kj/N) * (N-Kj)/N * (N-nsample)/(N-1)
+            let kj = colors[j] as f64;
+            let var = nsample as f64
+                * (kj / total)
+                * ((total - kj) / total)
+                * ((total - nsample as f64) / (total - 1.0));
+            let se = (var / n_draws as f64).sqrt();
+            assert!(
+                (observed - expected).abs() < 4.0 * se,
+                "color {j}: observed mean {observed}, expected {expected} ± {se}"
+            );
+        }
+    }
+
+    #[test]
+    fn mvhg_take_all() {
+        // nsample == total: result is exactly the colors vector.
+        let mut rng = default_rng_seeded(0);
+        let colors = [3u64, 7, 0, 5];
+        let total: u64 = colors.iter().sum();
+        let arr = rng
+            .multivariate_hypergeometric(&colors, total, 5)
+            .unwrap();
+        let slice = arr.as_slice().unwrap();
+        for row in 0..5 {
+            for j in 0..colors.len() {
+                assert_eq!(slice[row * colors.len() + j], colors[j] as i64);
+            }
+        }
+    }
+
+    #[test]
+    fn mvhg_seed_reproducible() {
+        let mut a = default_rng_seeded(99);
+        let mut b = default_rng_seeded(99);
+        let xa = a
+            .multivariate_hypergeometric(&[5, 10, 15], 8, 30)
+            .unwrap();
+        let xb = b
+            .multivariate_hypergeometric(&[5, 10, 15], 8, 30)
+            .unwrap();
+        assert_eq!(xa.as_slice().unwrap(), xb.as_slice().unwrap());
+    }
+
+    #[test]
+    fn mvhg_bad_params() {
+        let mut rng = default_rng_seeded(0);
+        // size = 0
+        assert!(rng.multivariate_hypergeometric(&[1, 2], 1, 0).is_err());
+        // empty colors
+        assert!(rng.multivariate_hypergeometric(&[], 0, 5).is_err());
+        // nsample > total
+        assert!(rng.multivariate_hypergeometric(&[3, 4], 10, 5).is_err());
     }
 }
