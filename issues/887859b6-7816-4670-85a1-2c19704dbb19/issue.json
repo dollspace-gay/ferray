@@ -1,0 +1,11 @@
+{
+  "uuid": "887859b6-7816-4670-85a1-2c19704dbb19",
+  "display_id": 737,
+  "title": "ferray-stride-tricks: as_strided_signed with isize strides + base offset",
+  "description": "Follow-up from #524. Negative-stride support needs a new API that takes (source, shape, strides_isize, start_offset) — flipping &[usize] to &[isize] alone isn't enough because the underlying ArrayView::from_shape_ptr expects strides relative to source[0], and negative strides need the base pointer near the end of the buffer.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-02T01:31:39.633985899Z",
+  "updated_at": "2026-05-02T01:31:39.633985899Z"
+}
