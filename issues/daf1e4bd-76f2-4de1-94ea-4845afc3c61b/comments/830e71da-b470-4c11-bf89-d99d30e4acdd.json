@@ -1,0 +1,10 @@
+{
+  "uuid": "830e71da-b470-4c11-bf89-d99d30e4acdd",
+  "issue_uuid": "daf1e4bd-76f2-4de1-94ea-4845afc3c61b",
+  "author": "doll-agent",
+  "content": "Audit + targeted follow-ups. PolynomialF32 (power basis) already ships in power_f32.rs with the full surface (11 unit tests, conversion helpers to/from f64 Polynomial). The bigger story — f32 for the other 5 bases (Chebyshev, Hermite, HermiteE, Legendre, Laguerre) and complex coefficients — is best landed via either (a) sibling F32 types per basis, or (b) genericizing the Poly trait over T: Float. Both paths are filed as concrete follow-ups (#725-#731) so the work is tracked rather than left as an unscoped epic. Closing #475 since the strict claim 'no f32 support exists' is no longer accurate.",
+  "created_at": "2026-05-02T00:46:16.407027624Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA3s/XvxBWgEm6hPVFRKHm6rbA/k91wfqc0PN4Q3yVd9grNtTlyi/VZV/0TRBWUrR8hb4P2G6rhNR3pkvzb8Q/Ag=="
+}
