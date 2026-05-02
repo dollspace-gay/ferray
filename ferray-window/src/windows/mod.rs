@@ -348,6 +348,125 @@ pub fn parzen(m: usize) -> FerrayResult<Array<f64, Ix1>> {
     })
 }
 
+/// Dolph–Chebyshev window with sidelobe attenuation `at` dB (#740).
+///
+/// Mirrors `scipy.signal.windows.chebwin`. The window is the
+/// inverse Fourier transform of the (M-1)-th Chebyshev polynomial
+/// of the first kind evaluated on a cosine sweep, producing an
+/// equiripple sidelobe response at `at` dB below the main lobe.
+///
+/// Implemented via direct DFT (sufficient for typical M ≤ 1024;
+/// the inner loop is O(M²) but allocation-free). Result is
+/// normalised so the centre value is 1.
+///
+/// # Errors
+/// `FerrayError::InvalidValue` if `at` is non-finite or
+/// `at <= 0.0`. `m == 0` returns the empty window; `m == 1`
+/// returns `[1.0]`.
+pub fn chebwin(m: usize, at: f64) -> FerrayResult<Array<f64, Ix1>> {
+    if !at.is_finite() || at <= 0.0 {
+        return Err(FerrayError::invalid_value(format!(
+            "chebwin: at must be a positive finite dB attenuation, got {at}"
+        )));
+    }
+    if m == 0 {
+        return Array::from_vec(Ix1::new([0]), vec![]);
+    }
+    if m == 1 {
+        return Array::from_vec(Ix1::new([1]), vec![1.0]);
+    }
+
+    let order = (m - 1) as f64;
+    let r = 10.0_f64.powf(at / 20.0);
+    let beta = (r.acosh() / order).cosh();
+
+    // Build spectrum P[k] = T_{m-1}(β cos(πk/m)).
+    let mut spectrum = Vec::with_capacity(m);
+    for k in 0..m {
+        let x = beta * (PI * k as f64 / m as f64).cos();
+        spectrum.push(chebyshev_t_extended(x, order));
+    }
+
+    // Direct DFT to time domain. For odd M the spectrum is even-
+    // symmetric about M/2 and the IDFT is purely real; for even M
+    // the (M-1)-th Chebyshev polynomial is odd, so we apply a
+    // half-bin phase shift before transforming. Matches scipy's
+    // FFT-based pipeline up to the trailing peak normalisation.
+    // Forward DFT of the spectrum (matches scipy's fft(p) call).
+    // For odd M the spectrum is even-symmetric so fft is real;
+    // for even M scipy multiplies by exp(iπk/M) phase first to
+    // recover symmetry. After the DFT we keep the first half,
+    // normalise by w[0] so the eventual centre lands at 1, and
+    // mirror to recover the full symmetric window.
+    let mf = m as f64;
+    let half_dft = |idx: usize| -> f64 {
+        if m % 2 == 1 {
+            spectrum
+                .iter()
+                .enumerate()
+                .map(|(k, &pk)| pk * (-2.0 * PI * k as f64 * idx as f64 / mf).cos())
+                .sum()
+        } else {
+            // Forward DFT with the additional exp(iπk/M) phase
+            // shift baked in: p[k] * exp(iπk/M) * exp(-i2πkn/M)
+            //              = p[k] * cos(πk(1 - 2n)/M).
+            spectrum
+                .iter()
+                .enumerate()
+                .map(|(k, &pk)| {
+                    let phase = PI * k as f64 * (1.0 - 2.0 * idx as f64) / mf;
+                    pk * phase.cos()
+                })
+                .sum()
+        }
+    };
+
+    let half_len = m / 2 + 1;
+    let mut half: Vec<f64> = (0..half_len).map(half_dft).collect();
+    let denom = if m % 2 == 1 { half[0] } else { half[1] };
+    if denom != 0.0 {
+        for v in &mut half {
+            *v /= denom;
+        }
+    }
+
+    let mut w = Vec::with_capacity(m);
+    if m % 2 == 1 {
+        // Mirror: reverse(half[1..]) ++ half
+        for &v in half.iter().skip(1).rev() {
+            w.push(v);
+        }
+        w.extend_from_slice(&half);
+    } else {
+        // Even: scipy's `concatenate((w[n-1:0:-1], w[1:n]))` where
+        // n = M/2 + 1; reverse of half[1..n], then half[1..n].
+        let n = m / 2 + 1;
+        for &v in half[1..n].iter().rev() {
+            w.push(v);
+        }
+        w.extend_from_slice(&half[1..n]);
+    }
+
+    Array::from_vec(Ix1::new([m]), w)
+}
+
+/// Chebyshev polynomial of the first kind T_n(x) extended to all
+/// real x via cosh — `T_n(cos θ) = cos(nθ)` for `|x| ≤ 1`,
+/// `T_n(cosh θ) = cosh(nθ)` for `x > 1`. Sign handling on the
+/// negative branch uses `(-1)^n`.
+fn chebyshev_t_extended(x: f64, n: f64) -> f64 {
+    if x.abs() <= 1.0 {
+        (n * x.acos()).cos()
+    } else {
+        let mag = (n * x.abs().acosh()).cosh();
+        if x < 0.0 && (n as i64) % 2 != 0 {
+            -mag
+        } else {
+            mag
+        }
+    }
+}
+
 /// Boxcar (rectangular) window of length `m` (#738).
 ///
 /// All-ones window. Equivalent to `scipy.signal.windows.boxcar`.
@@ -608,6 +727,91 @@ pub fn tukey(m: usize, alpha: f64) -> FerrayResult<Array<f64, Ix1>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- chebwin (#740) ------------------------------------------------
+
+    #[test]
+    fn chebwin_centre_is_one_and_symmetric() {
+        let w = chebwin(11, 50.0).unwrap();
+        let s = w.as_slice().unwrap();
+        let mid = s.len() / 2;
+        assert!((s[mid] - 1.0).abs() < 1e-6, "centre = {}", s[mid]);
+        for i in 0..s.len() / 2 {
+            assert!(
+                (s[i] - s[s.len() - 1 - i]).abs() < 1e-9,
+                "asymmetric at i={i}: {} vs {}",
+                s[i],
+                s[s.len() - 1 - i]
+            );
+        }
+    }
+
+    #[test]
+    fn chebwin_even_length_symmetric() {
+        let w = chebwin(8, 40.0).unwrap();
+        let s = w.as_slice().unwrap();
+        for i in 0..s.len() / 2 {
+            assert!(
+                (s[i] - s[s.len() - 1 - i]).abs() < 1e-9,
+                "asymmetric at i={i}"
+            );
+        }
+        // No element should exceed the centre by more than 1e-9.
+        let max = s.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        assert!((max - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn chebwin_endpoints_smaller_than_centre() {
+        // High attenuation → endpoints should be very small.
+        let w = chebwin(31, 80.0).unwrap();
+        let s = w.as_slice().unwrap();
+        let mid = s.len() / 2;
+        assert!(s[mid] > s[0]);
+        assert!(s[mid] > s[s.len() - 1]);
+    }
+
+    #[test]
+    fn chebwin_rejects_invalid_attenuation() {
+        assert!(chebwin(16, -10.0).is_err());
+        assert!(chebwin(16, 0.0).is_err());
+        assert!(chebwin(16, f64::NAN).is_err());
+    }
+
+    #[test]
+    fn chebwin_matches_scipy_known_values() {
+        // scipy.signal.windows.chebwin(11, 50) reference values.
+        let want = [
+            0.06228583, 0.20113857, 0.42847525, 0.69573494, 0.91497506, 1.0, 0.91497506,
+            0.69573494, 0.42847525, 0.20113857, 0.06228583,
+        ];
+        let got = chebwin(11, 50.0).unwrap();
+        let s = got.as_slice().unwrap();
+        for (i, (&g, &w)) in s.iter().zip(want.iter()).enumerate() {
+            assert!((g - w).abs() < 1e-6, "i={i}: got={g}, want={w}");
+        }
+    }
+
+    #[test]
+    fn chebwin_matches_scipy_even_length() {
+        // scipy.signal.windows.chebwin(8, 40) reference values.
+        let want = [
+            0.14609713, 0.41790422, 0.75944595, 1.0, 1.0, 0.75944595, 0.41790422, 0.14609713,
+        ];
+        let got = chebwin(8, 40.0).unwrap();
+        let s = got.as_slice().unwrap();
+        for (i, (&g, &w)) in s.iter().zip(want.iter()).enumerate() {
+            assert!((g - w).abs() < 1e-6, "i={i}: got={g}, want={w}");
+        }
+    }
+
+    #[test]
+    fn chebwin_m0_m1_edge_cases() {
+        let z = chebwin(0, 50.0).unwrap();
+        assert_eq!(z.shape(), &[0]);
+        let one = chebwin(1, 50.0).unwrap();
+        assert_eq!(one.as_slice().unwrap(), &[1.0]);
+    }
 
     // ---- additional scipy.signal windows (#738) ------------------------
 
@@ -1310,4 +1514,10 @@ mod tests {
         assert!(tukey(8, 1.1).is_err());
         assert!(tukey(8, f64::NAN).is_err());
     }
+}
+
+#[cfg(test)]
+mod debug_test_removed {
+    // Debug test scaffolding for #740 chebwin development;
+    // removed once the closed-form output matched scipy.
 }
