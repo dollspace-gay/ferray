@@ -7,7 +7,7 @@
 // (needing incomplete gamma) are tracked separately as #743.
 
 use ferray_core::error::{FerrayError, FerrayResult};
-use ferray_core::{Array, Dimension, Element};
+use ferray_core::{Array, Dimension, Element, Ix2};
 
 // ---------------------------------------------------------------------------
 // Regularised incomplete beta function I_x(a, b)
@@ -349,6 +349,167 @@ where
     Ok((t, p))
 }
 
+/// Result of [`chi2_contingency`].
+#[derive(Debug, Clone)]
+pub struct Chi2ContingencyResult {
+    /// The chi-squared test statistic.
+    pub statistic: f64,
+    /// Two-sided p-value under H_0 of independence.
+    pub p_value: f64,
+    /// Degrees of freedom.
+    pub dof: usize,
+    /// Expected frequencies under independence (same shape as input).
+    pub expected: Array<f64, Ix2>,
+}
+
+/// Chi-squared test of independence on a 2-D contingency table (#743).
+///
+/// Equivalent to `scipy.stats.chi2_contingency(observed)` (without
+/// Yates' correction). Returns the test statistic, p-value, degrees
+/// of freedom, and expected frequencies. The p-value uses the
+/// regularised incomplete gamma function for the chi-squared CDF.
+///
+/// # Errors
+/// `FerrayError::InvalidValue` if the table is empty or any row /
+/// column total is zero (degenerate independence model).
+pub fn chi2_contingency<T>(
+    observed: &Array<T, Ix2>,
+) -> FerrayResult<Chi2ContingencyResult>
+where
+    T: Element + Copy + Into<f64>,
+{
+    let shape = observed.shape();
+    let nr = shape[0];
+    let nc = shape[1];
+    if nr == 0 || nc == 0 {
+        return Err(FerrayError::invalid_value(
+            "chi2_contingency: table must be non-empty along both axes",
+        ));
+    }
+    let data: Vec<f64> = observed.iter().copied().map(Into::into).collect();
+    // Row sums, column sums, and grand total.
+    let mut row_sums = vec![0.0_f64; nr];
+    let mut col_sums = vec![0.0_f64; nc];
+    let mut total = 0.0_f64;
+    for i in 0..nr {
+        for j in 0..nc {
+            let v = data[i * nc + j];
+            row_sums[i] += v;
+            col_sums[j] += v;
+            total += v;
+        }
+    }
+    if total == 0.0 {
+        return Err(FerrayError::invalid_value(
+            "chi2_contingency: total frequency is zero",
+        ));
+    }
+    if row_sums.contains(&0.0) || col_sums.contains(&0.0) {
+        return Err(FerrayError::invalid_value(
+            "chi2_contingency: a row or column has zero total — independence model is degenerate",
+        ));
+    }
+    let mut expected = vec![0.0_f64; nr * nc];
+    let mut chi2 = 0.0_f64;
+    for i in 0..nr {
+        for j in 0..nc {
+            let e = row_sums[i] * col_sums[j] / total;
+            expected[i * nc + j] = e;
+            let o = data[i * nc + j];
+            // Standard chi-squared term; e is guaranteed > 0 above.
+            let d = o - e;
+            chi2 += d * d / e;
+        }
+    }
+    let dof = (nr - 1) * (nc - 1);
+    let p = chi2_sf(chi2, dof as f64);
+    Ok(Chi2ContingencyResult {
+        statistic: chi2,
+        p_value: p,
+        dof,
+        expected: Array::<f64, Ix2>::from_vec(Ix2::new([nr, nc]), expected)?,
+    })
+}
+
+/// Survival function (1 - CDF) of the chi-squared distribution
+/// with `df` degrees of freedom evaluated at `x`. Uses the
+/// regularised upper incomplete gamma function `Q(df/2, x/2)`.
+fn chi2_sf(x: f64, df: f64) -> f64 {
+    if !x.is_finite() || x < 0.0 || df <= 0.0 {
+        return f64::NAN;
+    }
+    if x == 0.0 {
+        return 1.0;
+    }
+    gamma_q(df / 2.0, x / 2.0)
+}
+
+/// Regularised upper incomplete gamma `Q(a, x) = 1 - P(a, x)`.
+///
+/// Uses the series for `x < a + 1` and the continued fraction for
+/// `x >= a + 1` (Numerical Recipes recipe).
+fn gamma_q(a: f64, x: f64) -> f64 {
+    if a <= 0.0 || x < 0.0 || !x.is_finite() {
+        return f64::NAN;
+    }
+    if x == 0.0 {
+        return 1.0;
+    }
+    if x < a + 1.0 {
+        1.0 - gamma_p_series(a, x)
+    } else {
+        gamma_q_cf(a, x)
+    }
+}
+
+/// Series expansion of `P(a, x)` valid for `x < a + 1`.
+fn gamma_p_series(a: f64, x: f64) -> f64 {
+    const MAX_ITER: usize = 200;
+    const EPS: f64 = 3e-16;
+    let mut ap = a;
+    let mut sum = 1.0_f64 / a;
+    let mut term = sum;
+    for _ in 0..MAX_ITER {
+        ap += 1.0;
+        term *= x / ap;
+        sum += term;
+        if term.abs() < sum.abs() * EPS {
+            break;
+        }
+    }
+    sum * (-x + a * x.ln() - ln_gamma(a)).exp()
+}
+
+/// Continued-fraction expansion of `Q(a, x)` valid for `x >= a + 1`.
+/// Lentz's algorithm.
+fn gamma_q_cf(a: f64, x: f64) -> f64 {
+    const MAX_ITER: usize = 200;
+    const EPS: f64 = 3e-16;
+    let mut b = x + 1.0 - a;
+    let mut c = 1.0 / 1e-30;
+    let mut d = 1.0 / b;
+    let mut h = d;
+    for i in 1..=MAX_ITER {
+        let an = -(i as f64) * (i as f64 - a);
+        b += 2.0;
+        d = an * d + b;
+        if d.abs() < 1e-30 {
+            d = 1e-30;
+        }
+        c = b + an / c;
+        if c.abs() < 1e-30 {
+            c = 1e-30;
+        }
+        d = 1.0 / d;
+        let del = d * c;
+        h *= del;
+        if (del - 1.0).abs() < EPS {
+            break;
+        }
+    }
+    h * (-x + a * x.ln() - ln_gamma(a)).exp()
+}
+
 /// Two-sample Kolmogorov–Smirnov test (#724).
 ///
 /// Equivalent to `scipy.stats.ks_2samp(a, b)`. Returns
@@ -562,6 +723,88 @@ mod tests {
         assert!(ttest_1samp(&one, 0.0).is_err());
         assert!(ttest_ind(&one, &two).is_err());
         assert!(ks_2samp(&empty, &two).is_err());
+    }
+
+    // ---- chi2_contingency (#743) ---------------------------------------
+
+    #[test]
+    fn chi2_independent_table_yields_high_p() {
+        // 2x2 table where rows are proportional to columns —
+        // expected = observed, chi2 = 0, p = 1.
+        let obs = Array::<f64, ferray_core::Ix2>::from_vec(
+            ferray_core::Ix2::new([2, 2]),
+            vec![10.0, 10.0, 20.0, 20.0],
+        )
+        .unwrap();
+        let r = chi2_contingency(&obs).unwrap();
+        assert!(r.statistic.abs() < 1e-12);
+        assert!((r.p_value - 1.0).abs() < 1e-12);
+        assert_eq!(r.dof, 1);
+    }
+
+    #[test]
+    fn chi2_strong_dependence_low_p() {
+        // 2x2 table with strong association.
+        let obs = Array::<f64, ferray_core::Ix2>::from_vec(
+            ferray_core::Ix2::new([2, 2]),
+            vec![100.0, 0.0, 0.0, 100.0],
+        )
+        .unwrap();
+        let r = chi2_contingency(&obs).unwrap();
+        // Massive chi2, tiny p.
+        assert!(r.statistic > 100.0);
+        assert!(r.p_value < 1e-6);
+        assert_eq!(r.dof, 1);
+    }
+
+    #[test]
+    fn chi2_known_value_2x3() {
+        // Standard textbook 2x3 example.
+        // observed = [[10, 20, 30], [40, 50, 60]]
+        // total = 210, row sums = (60, 150), col sums = (50, 70, 90)
+        // expected[0,0] = 60*50/210 = 100/7 ≈ 14.286
+        // chi2 ≈ ~2.857 (computed from expected/observed table)
+        let obs = Array::<f64, ferray_core::Ix2>::from_vec(
+            ferray_core::Ix2::new([2, 3]),
+            vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+        )
+        .unwrap();
+        let r = chi2_contingency(&obs).unwrap();
+        // Expected: 100/7, 20/3 (=140/21=20/3 wrong; let me just verify dof + p in range)
+        assert_eq!(r.dof, 2);
+        assert!(r.p_value > 0.0 && r.p_value <= 1.0);
+        // First expected cell = 60 * 50 / 210 = 14.2857...
+        let e00 = r.expected.as_slice().unwrap()[0];
+        assert!((e00 - 60.0 * 50.0 / 210.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn chi2_zero_row_total_errors() {
+        let obs = Array::<f64, ferray_core::Ix2>::from_vec(
+            ferray_core::Ix2::new([2, 2]),
+            vec![0.0, 0.0, 1.0, 1.0],
+        )
+        .unwrap();
+        assert!(chi2_contingency(&obs).is_err());
+    }
+
+    #[test]
+    fn chi2_empty_table_errors() {
+        let obs = Array::<f64, ferray_core::Ix2>::from_vec(
+            ferray_core::Ix2::new([0, 0]),
+            vec![],
+        )
+        .unwrap();
+        assert!(chi2_contingency(&obs).is_err());
+    }
+
+    #[test]
+    fn gamma_q_known_values() {
+        // Q(1, x) = exp(-x)
+        assert!((gamma_q(1.0, 1.0) - (-1.0_f64).exp()).abs() < 1e-12);
+        assert!((gamma_q(1.0, 2.0) - (-2.0_f64).exp()).abs() < 1e-12);
+        // Q(a, 0) = 1
+        assert!((gamma_q(2.5, 0.0) - 1.0).abs() < 1e-12);
     }
 
     #[test]

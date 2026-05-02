@@ -97,5 +97,7 @@ pub use set_ops::{in1d, intersect1d, isin, setdiff1d, setxor1d, union1d};
 // Descriptive statistics — scipy.stats parity (#470)
 pub use descriptive::{ModeResult, gmean, hmean, iqr, kurtosis, mode, sem, skew, zscore};
 
-// Statistical-test functions — scipy.stats parity (#724)
-pub use hypothesis::{ks_2samp, pearsonr, spearmanr, ttest_1samp, ttest_ind};
+// Statistical-test functions — scipy.stats parity (#724, #743)
+pub use hypothesis::{
+    Chi2ContingencyResult, chi2_contingency, ks_2samp, pearsonr, spearmanr, ttest_1samp, ttest_ind,
+};
