@@ -549,6 +549,14 @@ impl Poly for Chebyshev {
     fn window(&self) -> [f64; 2] {
         self.window
     }
+
+    fn with_mapping(
+        self,
+        domain: [f64; 2],
+        window: [f64; 2],
+    ) -> Result<Self, FerrayError> {
+        self.with_domain(domain)?.with_window(window)
+    }
 }
 
 impl ToPowerBasis for Chebyshev {
@@ -566,6 +574,35 @@ impl FromPowerBasis for Chebyshev {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- convert_with_mapping (#483) -----------------------------------
+
+    #[test]
+    fn chebyshev_convert_with_mapping_carries_source_domain() {
+        use crate::power::Polynomial;
+        use crate::traits::ConvertBasis;
+        // Source: power-basis polynomial with domain [0, 10] and
+        // window [-1, 1] — non-trivial mapping. Convert to Chebyshev
+        // and check that the target picks up the source's domain.
+        let p = Polynomial::new(&[1.0, 2.0])
+            .with_domain([0.0, 10.0])
+            .unwrap();
+        let cheb: Chebyshev = p.convert_with_mapping(None, None).unwrap();
+        assert_eq!(cheb.domain(), [0.0, 10.0]);
+        assert_eq!(cheb.window(), p.window());
+    }
+
+    #[test]
+    fn chebyshev_convert_with_explicit_overrides() {
+        use crate::power::Polynomial;
+        use crate::traits::ConvertBasis;
+        let p = Polynomial::new(&[1.0, 2.0]);
+        let cheb: Chebyshev = p
+            .convert_with_mapping(Some([-2.0, 5.0]), Some([-1.0, 1.0]))
+            .unwrap();
+        assert_eq!(cheb.domain(), [-2.0, 5.0]);
+        assert_eq!(cheb.window(), [-1.0, 1.0]);
+    }
 
     // ---- basis / identity / linspace (#477, #478) ----------------------
 

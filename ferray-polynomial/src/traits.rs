@@ -145,6 +145,23 @@ pub trait Poly: Clone + Sized {
         mapparms(self.domain(), self.window())
     }
 
+    /// Replace this polynomial's `(domain, window)` mapping in one
+    /// shot, returning a new polynomial with the new mapping (#483).
+    ///
+    /// Each basis impl typically forwards to its inherent
+    /// `with_domain` / `with_window` methods. The trait method exists
+    /// so generic code (notably [`ConvertBasis::convert_with_mapping`])
+    /// can carry mapping context across basis conversion.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `domain` or `window` is
+    /// degenerate.
+    fn with_mapping(
+        self,
+        domain: [f64; 2],
+        window: [f64; 2],
+    ) -> Result<Self, FerrayError>;
+
     /// Build the `deg`-th basis polynomial in this type's basis
     /// (#478).
     ///
@@ -256,11 +273,43 @@ pub trait FromPowerBasis: Poly {
 pub trait ConvertBasis: ToPowerBasis {
     /// Convert this polynomial to a different basis type.
     ///
+    /// The target inherits its basis's default domain/window. Use
+    /// [`convert_with_mapping`](Self::convert_with_mapping) to carry
+    /// the source's mapping (or supply explicit overrides) to the
+    /// target — the equivalent of numpy's
+    /// `convert(domain, kind, window)`.
+    ///
     /// # Errors
     /// Returns an error if conversion fails.
     fn convert<T: FromPowerBasis>(&self) -> Result<T, FerrayError> {
         let power_coeffs = self.to_power_basis()?;
         T::from_power_basis(&power_coeffs)
+    }
+
+    /// Convert to a different basis type, propagating domain/window
+    /// (#483).
+    ///
+    /// `domain` and `window` default to the source polynomial's
+    /// values when `None`. The target's coefficients are computed via
+    /// the power-basis pivot just like [`convert`](Self::convert),
+    /// then `with_mapping` applies the chosen domain/window.
+    ///
+    /// Equivalent to numpy's
+    /// `numpy.polynomial.<basis>.<basis>.convert(domain, kind, window)`.
+    ///
+    /// # Errors
+    /// Returns an error if conversion or mapping application fails
+    /// (e.g. degenerate domain/window).
+    fn convert_with_mapping<T: FromPowerBasis>(
+        &self,
+        domain: Option<[f64; 2]>,
+        window: Option<[f64; 2]>,
+    ) -> Result<T, FerrayError> {
+        let power_coeffs = self.to_power_basis()?;
+        let target = T::from_power_basis(&power_coeffs)?;
+        let d = domain.unwrap_or_else(|| self.domain());
+        let w = window.unwrap_or_else(|| self.window());
+        target.with_mapping(d, w)
     }
 }
 
