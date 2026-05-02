@@ -1,8 +1,8 @@
 // ferray-polynomial: Least-squares fitting via Vandermonde matrices (REQ-9)
 //
-// Implements polynomial fitting using the normal equations approach.
-// For a Vandermonde-like matrix V, solves V^T W V c = V^T W y
-// where W is a diagonal weight matrix.
+// Builds Vandermonde-like matrices for each polynomial basis and delegates
+// the SVD-based least-squares solve to `ferray_linalg::lstsq`. Two
+// iterative-refinement passes follow to recover full f64 precision (#480).
 
 use ferray_core::Array;
 use ferray_core::dimension::{Ix2, IxDyn};
