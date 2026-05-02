@@ -86,7 +86,7 @@ pub use sorting::{
 // Searching
 pub use searching::{
     UniqueResult, count_nonzero, nonzero, unique, unique_all, unique_axis, unique_counts,
-    unique_inverse, unique_values, where_, where_condition,
+    unique_inverse, unique_values, where_, where_broadcast, where_condition,
 };
 
 // Set operations

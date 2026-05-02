@@ -1,5 +1,6 @@
 // ferray-stats: Searching — unique, nonzero, where_, count_nonzero (REQ-14, REQ-15, REQ-16, REQ-17)
 
+use ferray_core::dimension::broadcast::broadcast_shapes;
 use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, Ix1, IxDyn};
 
@@ -318,6 +319,39 @@ where
     Array::from_vec(condition.dim().clone(), result)
 }
 
+/// Broadcast-aware ternary `where`: pick from `x` where `condition` is
+/// true, else from `y`. Each of `condition`, `x`, `y` may have its
+/// own shape; they are NumPy-broadcast against each other to produce
+/// the output shape (#468).
+///
+/// For the same-shape fast path use [`where_`] — it skips the
+/// broadcast view setup and is lower overhead.
+///
+/// # Errors
+/// `FerrayError::ShapeMismatch` if any pair of shapes is not
+/// broadcast-compatible.
+pub fn where_broadcast<T>(
+    condition: &Array<bool, IxDyn>,
+    x: &Array<T, IxDyn>,
+    y: &Array<T, IxDyn>,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Copy,
+{
+    let cx = broadcast_shapes(condition.shape(), x.shape())?;
+    let target = broadcast_shapes(&cx, y.shape())?;
+    let cv = condition.broadcast_to(&target)?;
+    let xv = x.broadcast_to(&target)?;
+    let yv = y.broadcast_to(&target)?;
+    let result: Vec<T> = cv
+        .iter()
+        .zip(xv.iter())
+        .zip(yv.iter())
+        .map(|((&c, &xv), &yv)| if c { xv } else { yv })
+        .collect();
+    Array::<T, IxDyn>::from_vec(IxDyn::new(&target), result)
+}
+
 /// One-argument form of `where`: return the indices where `condition`
 /// is true, as a vector of 1-D index arrays (one per dimension).
 ///
@@ -459,6 +493,64 @@ where
 mod tests {
     use super::*;
     use ferray_core::{Ix1, Ix2};
+
+    // ---- where_broadcast (#468) ----------------------------------------
+
+    #[test]
+    fn where_broadcast_scalar_else() {
+        // condition: (3,), x: (3,), y: (1,) → pick from y for false slots.
+        let c = Array::<bool, IxDyn>::from_vec(
+            IxDyn::new(&[3]),
+            vec![true, false, true],
+        )
+        .unwrap();
+        let x =
+            Array::<i32, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1, 2, 3]).unwrap();
+        let y = Array::<i32, IxDyn>::from_vec(IxDyn::new(&[1]), vec![99]).unwrap();
+        let r = where_broadcast(&c, &x, &y).unwrap();
+        assert_eq!(r.shape(), &[3]);
+        assert_eq!(r.as_slice().unwrap(), &[1, 99, 3]);
+    }
+
+    #[test]
+    fn where_broadcast_2d_outer() {
+        // condition: (3, 1), x: (1, 4), y: scalar (1,1) → output (3, 4).
+        let c = Array::<bool, IxDyn>::from_vec(
+            IxDyn::new(&[3, 1]),
+            vec![true, false, true],
+        )
+        .unwrap();
+        let x = Array::<i32, IxDyn>::from_vec(
+            IxDyn::new(&[1, 4]),
+            vec![10, 20, 30, 40],
+        )
+        .unwrap();
+        let y =
+            Array::<i32, IxDyn>::from_vec(IxDyn::new(&[1, 1]), vec![-1]).unwrap();
+        let r = where_broadcast(&c, &x, &y).unwrap();
+        assert_eq!(r.shape(), &[3, 4]);
+        let s = r.as_slice().unwrap();
+        // Row 0: condition=true → row from x.
+        assert_eq!(&s[0..4], &[10, 20, 30, 40]);
+        // Row 1: condition=false → all -1.
+        assert_eq!(&s[4..8], &[-1, -1, -1, -1]);
+        // Row 2: condition=true → row from x.
+        assert_eq!(&s[8..12], &[10, 20, 30, 40]);
+    }
+
+    #[test]
+    fn where_broadcast_shape_mismatch() {
+        let c = Array::<bool, IxDyn>::from_vec(
+            IxDyn::new(&[3]),
+            vec![true, false, true],
+        )
+        .unwrap();
+        let x =
+            Array::<i32, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1, 2]).unwrap();
+        let y =
+            Array::<i32, IxDyn>::from_vec(IxDyn::new(&[1]), vec![0]).unwrap();
+        assert!(where_broadcast(&c, &x, &y).is_err());
+    }
 
     // ---- unique_axis (#464) --------------------------------------------
 
