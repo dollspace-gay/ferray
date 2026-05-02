@@ -1,0 +1,11 @@
+{
+  "uuid": "a87d0c17-6ef1-49bd-85a4-a1d87f0e7080",
+  "display_id": 730,
+  "title": "ferray-polynomial: complex-coefficient polynomials",
+  "description": "Follow-up from #475. NumPy's polynomial classes accept complex-coefficient polynomials for signal-processing use cases (z-transform, transfer functions). ferray-polynomial only supports real f64 (and f32 for the power basis via #725). Either add ComplexPolynomial / ComplexChebyshev / etc. types parameterized over Complex<f64>, or use the trait-genericization refactor to handle real and complex via the same Poly<T> generic.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-02T00:46:02.270345544Z",
+  "updated_at": "2026-05-02T00:46:02.270345544Z"
+}
