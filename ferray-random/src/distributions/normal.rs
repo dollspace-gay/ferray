@@ -70,6 +70,30 @@ impl<B: BitGenerator> Generator<B> {
         vec_to_array_f64(data, &shape)
     }
 
+    /// Fill a pre-allocated `out` buffer with standard normal
+    /// (mean=0, std=1) variates (#454).
+    ///
+    /// Equivalent to `numpy.random.Generator.standard_normal(out=buffer)`.
+    /// Each slot is overwritten with a fresh Ziggurat draw — no heap
+    /// allocation.
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` if `out` is non-contiguous.
+    pub fn standard_normal_into(
+        &mut self,
+        out: &mut Array<f64, IxDyn>,
+    ) -> Result<(), FerrayError> {
+        let slice = out.as_slice_mut().ok_or_else(|| {
+            FerrayError::invalid_value(
+                "standard_normal_into requires a contiguous out buffer",
+            )
+        })?;
+        for v in slice.iter_mut() {
+            *v = standard_normal_single(&mut self.bg);
+        }
+        Ok(())
+    }
+
     /// Generate an array of normal variates with broadcast array
     /// parameters (#449).
     ///
@@ -252,6 +276,18 @@ mod tests {
         let mut rng = default_rng_seeded(42);
         assert!(rng.normal(0.0, 0.0, 100).is_err());
         assert!(rng.normal(0.0, -1.0, 100).is_err());
+    }
+
+    #[test]
+    fn standard_normal_into_matches_allocating_version() {
+        use ferray_core::{Array, IxDyn};
+        let mut a = default_rng_seeded(42);
+        let mut b = default_rng_seeded(42);
+        let allocated = a.standard_normal([4, 5]).unwrap();
+        let mut buf =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[4, 5]), vec![0.0; 20]).unwrap();
+        b.standard_normal_into(&mut buf).unwrap();
+        assert_eq!(allocated.as_slice().unwrap(), buf.as_slice().unwrap());
     }
 
     #[test]

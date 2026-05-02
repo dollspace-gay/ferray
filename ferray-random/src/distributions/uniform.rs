@@ -35,6 +35,28 @@ impl<B: BitGenerator> Generator<B> {
         vec_to_array_f64(data, &shape)
     }
 
+    /// Fill a pre-allocated `out` buffer with uniform [0, 1) variates (#454).
+    ///
+    /// Equivalent to `numpy.random.Generator.random(out=buffer)` — the
+    /// allocation is the caller's, so hot loops that produce many
+    /// equal-shaped batches reuse a single buffer instead of churning
+    /// the heap.
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` if `out` is non-contiguous.
+    pub fn random_into(
+        &mut self,
+        out: &mut Array<f64, IxDyn>,
+    ) -> Result<(), FerrayError> {
+        let slice = out.as_slice_mut().ok_or_else(|| {
+            FerrayError::invalid_value("random_into requires a contiguous out buffer")
+        })?;
+        for v in slice.iter_mut() {
+            *v = self.bg.next_f64();
+        }
+        Ok(())
+    }
+
     /// Generate an array of uniformly distributed `f64` values in [low, high).
     ///
     /// Equivalent to `NumPy`'s `Generator.uniform(low, high, size)`.
@@ -167,6 +189,33 @@ impl<B: BitGenerator> Generator<B> {
 #[cfg(test)]
 mod tests {
     use crate::default_rng_seeded;
+
+    // ---- _into variants (#454) -----------------------------------------
+
+    #[test]
+    fn random_into_fills_buffer_in_place() {
+        use ferray_core::{Array, IxDyn};
+        let mut rng = default_rng_seeded(42);
+        let mut buf =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[8]), vec![-1.0; 8]).unwrap();
+        rng.random_into(&mut buf).unwrap();
+        let s = buf.as_slice().unwrap();
+        for &v in s {
+            assert!((0.0..1.0).contains(&v));
+        }
+    }
+
+    #[test]
+    fn random_into_matches_random_for_same_seed() {
+        use ferray_core::{Array, IxDyn};
+        let mut a = default_rng_seeded(7);
+        let mut b = default_rng_seeded(7);
+        let allocated = a.random([3, 4]).unwrap();
+        let mut buf =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 4]), vec![0.0; 12]).unwrap();
+        b.random_into(&mut buf).unwrap();
+        assert_eq!(allocated.as_slice().unwrap(), buf.as_slice().unwrap());
+    }
 
     // ---- broadcast variants (#449) ------------------------------------
 

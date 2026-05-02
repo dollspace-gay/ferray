@@ -64,6 +64,28 @@ impl<B: BitGenerator> Generator<B> {
         vec_to_array_f64(data, &shape)
     }
 
+    /// Fill a pre-allocated `out` buffer with standard exponential
+    /// (rate=1) variates (#454).
+    ///
+    /// Equivalent to `numpy.random.Generator.standard_exponential(out=buffer)`.
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` if `out` is non-contiguous.
+    pub fn standard_exponential_into(
+        &mut self,
+        out: &mut Array<f64, IxDyn>,
+    ) -> Result<(), FerrayError> {
+        let slice = out.as_slice_mut().ok_or_else(|| {
+            FerrayError::invalid_value(
+                "standard_exponential_into requires a contiguous out buffer",
+            )
+        })?;
+        for v in slice.iter_mut() {
+            *v = standard_exponential_single(&mut self.bg);
+        }
+        Ok(())
+    }
+
     /// Generate an array of exponential variates with a broadcast
     /// scale parameter (#449).
     ///
@@ -132,6 +154,32 @@ impl<B: BitGenerator> Generator<B> {
 #[cfg(test)]
 mod tests {
     use crate::default_rng_seeded;
+
+    // ---- standard_exponential_into (#454) ------------------------------
+
+    #[test]
+    fn standard_exponential_into_matches_allocating_version() {
+        use ferray_core::{Array, IxDyn};
+        let mut a = default_rng_seeded(42);
+        let mut b = default_rng_seeded(42);
+        let allocated = a.standard_exponential([7, 3]).unwrap();
+        let mut buf =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[7, 3]), vec![0.0; 21]).unwrap();
+        b.standard_exponential_into(&mut buf).unwrap();
+        assert_eq!(allocated.as_slice().unwrap(), buf.as_slice().unwrap());
+    }
+
+    #[test]
+    fn standard_exponential_into_values_positive() {
+        use ferray_core::{Array, IxDyn};
+        let mut rng = default_rng_seeded(123);
+        let mut buf =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1000]), vec![-1.0; 1000]).unwrap();
+        rng.standard_exponential_into(&mut buf).unwrap();
+        for &v in buf.as_slice().unwrap() {
+            assert!(v > 0.0);
+        }
+    }
 
     // ---- exponential_array (#449) --------------------------------------
 
