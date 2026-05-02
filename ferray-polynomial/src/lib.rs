@@ -54,6 +54,7 @@
 pub mod chebyshev;
 pub mod companion;
 pub mod extras;
+pub mod f32_wrappers;
 pub mod fitting;
 mod formatting;
 pub mod hermite;
@@ -75,6 +76,10 @@ pub use laguerre::Laguerre;
 pub use legendre::Legendre;
 pub use power::Polynomial;
 pub use power_f32::PolynomialF32;
+
+// f32 sibling types for the non-power bases (#725-#729).
+pub use f32_wrappers::{ChebyshevF32, HermiteEF32, HermiteF32, LaguerreF32, LegendreF32};
+
 pub use traits::{ConvertBasis, FromPowerBasis, Poly, ToPowerBasis};
 
 // Re-export the numpy.polynomial extras at the crate root.
