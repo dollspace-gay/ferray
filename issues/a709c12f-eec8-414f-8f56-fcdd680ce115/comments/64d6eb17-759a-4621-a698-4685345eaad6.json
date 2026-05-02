@@ -1,0 +1,10 @@
+{
+  "uuid": "64d6eb17-759a-4621-a698-4685345eaad6",
+  "issue_uuid": "a709c12f-eec8-414f-8f56-fcdd680ce115",
+  "author": "doll-agent",
+  "content": "find_roots_from_power_coeffs's high-degree path now wraps the companion matrix in Array<f64, Ix2> and calls ferray_linalg::eigvals (faer Schur). Newton polishing afterwards still drives roots to full f64 precision. The internal balance_matrix / qr_eigenvalues / reduce_to_hessenberg / qr_step_hessenberg / eigenvalues_2x2 helpers (~275 lines) are removed since faer subsumes them.",
+  "created_at": "2026-05-02T00:54:40.212950776Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAtvot4Qo1rAIzynInIB1KTz1MLCkv+gLqDYI2K/RgDLHJytP6GqQ9I0SkvAQKHq/S15vjfpka5YTXIMIVgLqoCw=="
+}
