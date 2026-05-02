@@ -1,0 +1,10 @@
+{
+  "uuid": "c1355470-6a0f-4560-a94f-ee3ba0ffb65f",
+  "issue_uuid": "3a6b3370-37dd-40aa-a0d5-c698f60b7711",
+  "author": "doll-agent",
+  "content": "1-arg form: where_condition already matches nonzero behavior — emits per-dim u64 index arrays. No change needed there. 3-arg form: existing where_ requires identical shapes for condition/x/y. Add where_broadcast(condition, x, y) that takes Array<_, IxDyn> for all three and uses broadcast_shapes / broadcast_to to compute the target shape and stride-tricked views, then runs the same ternary select. 3 new tests cover scalar fallback, 2D outer-product broadcast, and shape-mismatch error.",
+  "created_at": "2026-05-02T00:37:07.054067621Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAU7EazBf8B3zJ24UI2FjdibSJS/a1o0OoICsM3+ZMAYCtOQGsdn0YEsZVEVgyYTA2mHMjSi/dUE5mXBVIY1AWBQ=="
+}
