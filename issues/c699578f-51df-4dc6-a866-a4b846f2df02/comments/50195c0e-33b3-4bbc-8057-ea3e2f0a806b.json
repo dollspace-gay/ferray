@@ -1,0 +1,10 @@
+{
+  "uuid": "50195c0e-33b3-4bbc-8057-ea3e2f0a806b",
+  "issue_uuid": "c699578f-51df-4dc6-a866-a4b846f2df02",
+  "author": "doll-agent",
+  "content": "Audit. FromArrow already provides to_ferray(&self) with into_ferray(self) kept as deprecated alias. Same pattern across FromArrowBool / Polars siblings. Issue is stale.",
+  "created_at": "2026-05-02T01:38:53.935407650Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAgNQijyACVLf+8+iFLbu2ifw7Mde4Ly6zG6fbuDhUmxxDvHomd9GA5tqcgxJFIIC50pvlObzJO3/4taqpg4NrCw=="
+}
