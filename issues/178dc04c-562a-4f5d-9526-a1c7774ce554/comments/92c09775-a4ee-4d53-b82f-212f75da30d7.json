@@ -1,0 +1,10 @@
+{
+  "uuid": "92c09775-a4ee-4d53-b82f-212f75da30d7",
+  "issue_uuid": "178dc04c-562a-4f5d-9526-a1c7774ce554",
+  "author": "doll-agent",
+  "content": "Add multivariate_normal_array(mean: &Array<f64, Ix1>, cov: &Array<f64, Ix2>, size) on Generator<B>. Internally delegates to ferray_linalg::cholesky (closes #452 in the same shot) and uses contiguous slice access for the per-sample (Lz + mean) loop. Existing slice-based multivariate_normal stays for backward compat. ferray-random gains ferray-linalg as a dependency. 5 new tests cover shape, marginal means, non-square cov rejection, non-PD cov rejection, and recovery of an off-diagonal correlation.",
+  "created_at": "2026-05-02T00:21:26.532924833Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAbf7y/dt2lFM2QKDR4TpS7uaTa1ptxbcGCl3iW8ySxNocl1CId1kQMG9AkdeDnWOfnBZe7n+UDVruiOSXdUvlDQ=="
+}
