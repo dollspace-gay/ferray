@@ -1,0 +1,10 @@
+{
+  "uuid": "ee636cfb-4a1d-4138-b361-577c7f8cad7a",
+  "issue_uuid": "afd034d2-07ee-4110-a2e8-a25e0ca6ae24",
+  "author": "doll-agent",
+  "content": "Add ferray-stats/src/hypothesis.rs with: pearsonr (cov/(std·std) + t-distribution p), spearmanr (rank-based pearsonr with average ranks for ties), ttest_1samp (one-sample t-test + p), ttest_ind (Welch's two-sample t-test + p), ks_2samp (KS statistic via union-of-points + Kolmogorov asymptotic survival series). p-values backed by a compact regularised incomplete beta (Lentz CF) + Lanczos lnΓ implementation. chi2_contingency needs incomplete gamma; filed as #743. 15 new tests cover known closed-form values, perfect ±1 correlation, strong/weak signals, and degenerate cases (constant input, length mismatch, empty).",
+  "created_at": "2026-05-02T02:26:07.903518899Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA1rvbVyCk4bYmhI2hnH9eCu1vJxgs5e9/24uZiCEy6u+gvsfexXUcnN28rr+yhG1FAy9mCeT2qiPGZ7m+i1BlAQ=="
+}
