@@ -1,0 +1,10 @@
+{
+  "uuid": "a0f71f73-b85d-4bf6-b09e-c2ad17d9b43e",
+  "issue_uuid": "7bdfbe33-cb33-4036-ace4-0b6228516a8c",
+  "author": "doll-agent",
+  "content": "Already shipped. ferray-random/src/bitgen/sfc64.rs has a full Sfc64 BitGenerator (NumPy-compatible 4-state init + 12-step warmup, Sebastian Vigna reference implementation), it's wired through bitgen/mod.rs, re-exported from the crate root in lib.rs:72, and has 3 unit tests (deterministic_output, different_seeds_differ, full_range). The issue body is stale — ferray-random ships 6 BitGenerators (Xoshiro256**, PCG64, PCG64DXSM, Philox, MT19937, SFC64), not 3. Closing.",
+  "created_at": "2026-05-02T00:02:43.151748974Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAVJmkOXvQZ73z1sofvLasS3NzWZr8QZonkF/yx49/0mJQvci81lxi3UCKnC3EkJHus0O2DExzHL1TdiM0msG9CQ=="
+}
