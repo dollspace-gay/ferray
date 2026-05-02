@@ -1,0 +1,10 @@
+{
+  "uuid": "343e6484-12c5-41bd-8d7d-843bfc41b075",
+  "issue_uuid": "94378898-cc22-4e05-8c3e-b4c60589b9b8",
+  "author": "doll-agent",
+  "content": "12/14 already shipped; rsplit + splitlines added.",
+  "created_at": "2026-05-02T01:24:21.754007381Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAdlZFmV82qwcFzFzHMUpup91cDAPIWEVg0l6V6nXay/kbtBVadbcTiJBAqHHGPxRxUDNtY42vj/Q4QdmeR3BRAg=="
+}
