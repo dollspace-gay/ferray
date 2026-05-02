@@ -1,0 +1,10 @@
+{
+  "uuid": "8e927ed5-a735-45b6-bf88-f9dde43672b2",
+  "issue_uuid": "e01ae85d-d74b-40be-9823-ebb0e16ffb28",
+  "author": "doll-agent",
+  "content": "Blocked on ndarray 0.17 API.",
+  "created_at": "2026-05-02T02:34:35.778036034Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABADWsxf6pIMG2KXabAk6HXHXJuSVRfUmBEukawDB9pawBsYr3hJWoWwExJB9bAD0lhiOp25NNMA+dsjeTgmqIdCw=="
+}
