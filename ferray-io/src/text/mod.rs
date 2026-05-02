@@ -13,7 +13,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use ferray_core::Array;
-use ferray_core::dimension::Ix2;
+use ferray_core::dimension::{Ix1, Ix2};
 use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 
@@ -145,6 +145,93 @@ pub fn savetxt<T: Element + Display, P: AsRef<Path>>(
     })?;
 
     savetxt_to_writer(&mut file, array, opts)
+}
+
+/// 1-D variant of [`savetxt`] (#494).
+///
+/// Equivalent to `numpy.savetxt(path, array)` for a 1-D input —
+/// each element is written on its own line. Mirrors numpy's
+/// behavior of treating a 1-D array as a single-column 2-D array.
+///
+/// # Errors
+/// Same as [`savetxt`]; additionally if the array is non-contiguous.
+pub fn savetxt_1d<T: Element + Display, P: AsRef<Path>>(
+    path: P,
+    array: &Array<T, Ix1>,
+    opts: &SaveTxtOptions,
+) -> FerrayResult<()> {
+    let mut file = std::fs::File::create(path.as_ref()).map_err(|e| {
+        FerrayError::io_error(format!(
+            "failed to create file '{}': {e}",
+            path.as_ref().display()
+        ))
+    })?;
+    savetxt_1d_to_writer(&mut file, array, opts)
+}
+
+/// 1-D variant of [`savetxt_to_writer`].
+pub fn savetxt_1d_to_writer<T: Element + Display, W: Write>(
+    writer: &mut W,
+    array: &Array<T, Ix1>,
+    opts: &SaveTxtOptions,
+) -> FerrayResult<()> {
+    if let Some(ref header) = opts.header {
+        write!(writer, "{header}").map_err(|e| FerrayError::io_error(e.to_string()))?;
+        writer
+            .write_all(opts.newline.as_bytes())
+            .map_err(|e| FerrayError::io_error(e.to_string()))?;
+    }
+    let slice = array
+        .as_slice()
+        .ok_or_else(|| FerrayError::io_error("cannot save non-contiguous array as text"))?;
+    for val in slice {
+        let formatted = if let Some(ref fmt_str) = opts.fmt {
+            format_value(val, fmt_str)
+        } else {
+            format!("{val}")
+        };
+        writer
+            .write_all(formatted.as_bytes())
+            .map_err(|e| FerrayError::io_error(e.to_string()))?;
+        writer
+            .write_all(opts.newline.as_bytes())
+            .map_err(|e| FerrayError::io_error(e.to_string()))?;
+    }
+    if let Some(ref footer) = opts.footer {
+        write!(writer, "{footer}").map_err(|e| FerrayError::io_error(e.to_string()))?;
+        writer
+            .write_all(opts.newline.as_bytes())
+            .map_err(|e| FerrayError::io_error(e.to_string()))?;
+    }
+    writer
+        .flush()
+        .map_err(|e| FerrayError::io_error(e.to_string()))?;
+    Ok(())
+}
+
+/// 1-D counterpart of [`loadtxt`] (#494).
+///
+/// Reads a single-column delimited text file (one value per line)
+/// into an `Array<T, Ix1>`. Equivalent to NumPy's
+/// `numpy.loadtxt(path, ndmin=1)` when the file has one column.
+///
+/// # Errors
+/// Same as [`loadtxt`].
+pub fn loadtxt_1d<T, P>(
+    path: P,
+    delimiter: char,
+    skiprows: usize,
+) -> FerrayResult<Array<T, Ix1>>
+where
+    T: Element + FromStr,
+    T::Err: Display,
+    P: AsRef<Path>,
+{
+    let arr2 = loadtxt::<T, _>(path, delimiter, skiprows)?;
+    let shape = arr2.shape();
+    let n = shape[0] * shape[1];
+    let data: Vec<T> = arr2.iter().cloned().collect();
+    Array::<T, Ix1>::from_vec(Ix1::new([n]), data)
 }
 
 /// Save a 2D array as delimited text to a writer.
@@ -429,6 +516,42 @@ where
 #[allow(clippy::float_cmp)] // Roundtrip tests assert exact equality on hand-picked text values.
 mod tests {
     use super::*;
+
+    // ---- 1-D variants (#494) -------------------------------------------
+
+    #[test]
+    fn savetxt_1d_writes_one_value_per_line() {
+        let arr =
+            Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.5, 2.5, 3.0, 4.0]).unwrap();
+        let mut buf: Vec<u8> = Vec::new();
+        let opts = SaveTxtOptions::default();
+        savetxt_1d_to_writer(&mut buf, &arr, &opts).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert_eq!(s, "1.5\n2.5\n3\n4\n");
+    }
+
+    #[test]
+    fn savetxt_1d_then_loadtxt_1d_roundtrip() {
+        let arr =
+            Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, -2.5, 3.5, 0.0, 7.25]).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("vec.txt");
+        let opts = SaveTxtOptions::default();
+        savetxt_1d(&p, &arr, &opts).unwrap();
+        let back: Array<f64, Ix1> = loadtxt_1d(&p, ',', 0).unwrap();
+        assert_eq!(back.shape(), &[5]);
+        assert_eq!(back.as_slice().unwrap(), arr.as_slice().unwrap());
+    }
+
+    #[test]
+    fn loadtxt_1d_flattens_multicolumn_input() {
+        // Two-column file: loadtxt_1d should flatten in row-major order.
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("rect.txt");
+        std::fs::write(&p, "1,2\n3,4\n5,6\n").unwrap();
+        let v: Array<i64, Ix1> = loadtxt_1d(&p, ',', 0).unwrap();
+        assert_eq!(v.as_slice().unwrap(), &[1, 2, 3, 4, 5, 6]);
+    }
 
     #[test]
     fn loadtxt_simple_csv() {

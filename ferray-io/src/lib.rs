@@ -42,4 +42,7 @@ pub use format::{
 };
 pub use npy::{NpyElement, load, load_dynamic, save};
 pub use npz::{NpzFile, savez, savez_compressed};
-pub use text::{SaveTxtOptions, fromregex, fromregex_from_file, genfromtxt, loadtxt, savetxt};
+pub use text::{
+    SaveTxtOptions, fromregex, fromregex_from_file, genfromtxt, loadtxt, loadtxt_1d, savetxt,
+    savetxt_1d,
+};
