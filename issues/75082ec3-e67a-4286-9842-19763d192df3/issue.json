@@ -3,11 +3,12 @@
   "display_id": 731,
   "title": "ferray-polynomial: genericize Poly trait over coefficient type T: Float",
   "description": "Follow-up from #475. The Poly trait is hardwired to f64 (eval(x: f64) -> f64, coeffs() -> &[f64], etc.). Each basis (Power, Chebyshev, Hermite, HermiteE, Legendre, Laguerre) currently has an f64 implementation; PolynomialF32 ships as a near-duplicate mirror in power_f32.rs. The right long-term answer is to make Poly<T: Float> generic so a single set of impls handles f32, f64, and (with bound relaxation) complex. This is the alternative to landing five more sibling types from #725-#729; pick one path or the other.",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-05-02T00:46:06.119894716Z",
-  "updated_at": "2026-05-02T00:46:07.252091695Z",
+  "updated_at": "2026-05-02T02:41:23.711068943Z",
+  "closed_at": "2026-05-02T02:41:23.711068943Z",
   "labels": [
     "ferray-polynomial,refactor,follow-up,numpy-parity"
   ]
