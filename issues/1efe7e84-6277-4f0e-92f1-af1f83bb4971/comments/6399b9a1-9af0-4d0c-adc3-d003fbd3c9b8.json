@@ -1,0 +1,10 @@
+{
+  "uuid": "6399b9a1-9af0-4d0c-adc3-d003fbd3c9b8",
+  "issue_uuid": "1efe7e84-6277-4f0e-92f1-af1f83bb4971",
+  "author": "doll-agent",
+  "content": "Three of the four named distributions are already implemented (zipf in distributions/discrete.rs, noncentral_chisquare and noncentral_f in distributions/gamma.rs). Add the missing multivariate_hypergeometric to distributions/multivariate.rs using the marginals algorithm: K-1 sequential univariate hypergeometric draws followed by absorbing the remainder into the last color. Output shape [size, K] matching numpy. Add tests for shape/row-sum, per-color bounds, marginal means matching theory, take-all edge case, seed reproducibility, and bad-params error paths.",
+  "created_at": "2026-05-02T00:04:37.748725504Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAWDtJ34h8/w9vEKy6304blYy3EFWpwYWljfoGY05xa0JPVa80d9eJ8PdKqe+elU0+QSRYrH8Uv//iUzBwEyYXDQ=="
+}
