@@ -348,6 +348,132 @@ pub fn parzen(m: usize) -> FerrayResult<Array<f64, Ix1>> {
     })
 }
 
+/// Boxcar (rectangular) window of length `m` (#738).
+///
+/// All-ones window. Equivalent to `scipy.signal.windows.boxcar`.
+///
+/// # Errors
+/// Only on internal array construction failure.
+pub fn boxcar(m: usize) -> FerrayResult<Array<f64, Ix1>> {
+    gen_window(m, |_| 1.0)
+}
+
+/// Triangular window of length `m` (#738).
+///
+/// Centre = 1, linearly decreasing to (1/m) at the edges (slightly
+/// different from Bartlett, which decays to 0 at the edges).
+/// Equivalent to `scipy.signal.windows.triang`.
+///
+/// # Errors
+/// Only on internal array construction failure.
+pub fn triang(m: usize) -> FerrayResult<Array<f64, Ix1>> {
+    if m == 0 {
+        return Array::from_vec(Ix1::new([0]), vec![]);
+    }
+    if m == 1 {
+        return Array::from_vec(Ix1::new([1]), vec![1.0]);
+    }
+    let mf = m as f64;
+    let centre = (mf - 1.0) / 2.0;
+    if m % 2 == 0 {
+        // Even-m formula: w[n] = 1 - |2n - (m-1)| / m
+        gen_window(m, |n| 1.0 - (2.0 * n as f64 - centre - centre).abs() / mf)
+    } else {
+        // Odd-m formula: w[n] = 1 - |2n - (m-1)| / (m + 1)
+        gen_window(m, |n| {
+            1.0 - (2.0 * n as f64 - centre - centre).abs() / (mf + 1.0)
+        })
+    }
+}
+
+/// Bohman window of length `m` (#738).
+///
+/// w(n) = (1 - |r|) cos(π|r|) + (1/π) sin(π|r|), where r is the
+/// normalised position in [-1, 1]. Equivalent to
+/// `scipy.signal.windows.bohman`.
+///
+/// # Errors
+/// Only on internal array construction failure.
+pub fn bohman(m: usize) -> FerrayResult<Array<f64, Ix1>> {
+    if m == 0 {
+        return Array::from_vec(Ix1::new([0]), vec![]);
+    }
+    if m == 1 {
+        return Array::from_vec(Ix1::new([1]), vec![1.0]);
+    }
+    // scipy: linspace(-1, 1, m)[1:-1] core, with explicit zeros at endpoints.
+    let mf = (m - 1) as f64;
+    let mut data = Vec::with_capacity(m);
+    for n in 0..m {
+        if n == 0 || n == m - 1 {
+            data.push(0.0);
+            continue;
+        }
+        let r = (2.0 * n as f64 / mf - 1.0).abs();
+        let v = (1.0 - r) * (PI * r).cos() + (PI * r).sin() / PI;
+        data.push(v);
+    }
+    Array::from_vec(Ix1::new([m]), data)
+}
+
+/// Flat-top window of length `m` (#738).
+///
+/// 5-term cosine window with coefficients chosen for minimum
+/// passband ripple (used for amplitude calibration). Equivalent to
+/// `scipy.signal.windows.flattop`.
+///
+/// # Errors
+/// Only on internal array construction failure.
+pub fn flattop(m: usize) -> FerrayResult<Array<f64, Ix1>> {
+    // scipy's coefficients (a0..a4):
+    const COEFFS: [f64; 5] = [
+        0.215_578_95,
+        0.416_631_58,
+        0.277_263_158,
+        0.083_578_95,
+        0.006_947_368,
+    ];
+    if m == 0 {
+        return Array::from_vec(Ix1::new([0]), vec![]);
+    }
+    let denom = (m - 1).max(1) as f64;
+    gen_window(m, |n| {
+        let phase = 2.0 * PI * n as f64 / denom;
+        let mut acc = COEFFS[0];
+        for (k, &c) in COEFFS.iter().enumerate().skip(1) {
+            let sign = if k % 2 == 0 { 1.0 } else { -1.0 };
+            acc += sign * c * (k as f64 * phase).cos();
+        }
+        acc
+    })
+}
+
+/// Lanczos (sinc) window of length `m` (#738).
+///
+/// w(n) = sinc(2 n / (m-1) - 1). Equivalent to
+/// `scipy.signal.windows.lanczos`.
+///
+/// # Errors
+/// Only on internal array construction failure.
+pub fn lanczos(m: usize) -> FerrayResult<Array<f64, Ix1>> {
+    if m == 0 {
+        return Array::from_vec(Ix1::new([0]), vec![]);
+    }
+    if m == 1 {
+        return Array::from_vec(Ix1::new([1]), vec![1.0]);
+    }
+    let denom = (m - 1) as f64;
+    gen_window(m, |n| {
+        let x = 2.0 * n as f64 / denom - 1.0;
+        if x.abs() < f64::EPSILON {
+            1.0
+        } else {
+            let pi_x = PI * x;
+            pi_x.sin() / pi_x
+        }
+    })
+}
+
 /// Taylor window with `nbar` near-side lobes and a sidelobe level of `sll`
 /// dB below the main lobe.
 ///
@@ -482,6 +608,85 @@ pub fn tukey(m: usize, alpha: f64) -> FerrayResult<Array<f64, Ix1>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- additional scipy.signal windows (#738) ------------------------
+
+    #[test]
+    fn boxcar_all_ones() {
+        let w = boxcar(8).unwrap();
+        let s = w.as_slice().unwrap();
+        for &v in s {
+            assert!((v - 1.0).abs() < 1e-15);
+        }
+    }
+
+    #[test]
+    fn triang_centre_is_max_and_endpoints_smaller() {
+        let w = triang(7).unwrap();
+        let s = w.as_slice().unwrap();
+        // Symmetry: w[n] == w[m-1-n].
+        for i in 0..s.len() / 2 {
+            assert!((s[i] - s[s.len() - 1 - i]).abs() < 1e-12);
+        }
+        // Centre is the peak.
+        let mid = s.len() / 2;
+        for i in 0..s.len() {
+            if i != mid {
+                assert!(s[i] <= s[mid] + 1e-12);
+            }
+        }
+    }
+
+    #[test]
+    fn bohman_zero_at_endpoints_and_one_at_centre() {
+        let w = bohman(5).unwrap();
+        let s = w.as_slice().unwrap();
+        assert!(s[0].abs() < 1e-12);
+        assert!(s[s.len() - 1].abs() < 1e-12);
+        // Centre value is the maximum and very close to 1.
+        let mid = s.len() / 2;
+        assert!((s[mid] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn flattop_centre_around_one_and_negative_lobes_present() {
+        // flattop is designed for amplitude flatness — centre ≈ 1
+        // with the canonical scaling, and side regions go negative.
+        let w = flattop(11).unwrap();
+        let s = w.as_slice().unwrap();
+        let mid = s.len() / 2;
+        assert!((s[mid] - 1.0).abs() < 0.01);
+        // Some side samples must go below zero (window has negative
+        // side lobes by design).
+        let any_negative = s.iter().any(|&v| v < -0.001);
+        assert!(any_negative, "flattop should have negative side lobes");
+    }
+
+    #[test]
+    fn lanczos_centre_is_one_and_endpoints_zero() {
+        let w = lanczos(9).unwrap();
+        let s = w.as_slice().unwrap();
+        let mid = s.len() / 2;
+        assert!((s[mid] - 1.0).abs() < 1e-12);
+        assert!(s[0].abs() < 1e-12);
+        assert!(s[s.len() - 1].abs() < 1e-12);
+    }
+
+    #[test]
+    fn small_m_edge_cases_handled() {
+        // m = 0 returns empty, m = 1 returns [1.0] for symmetric windows.
+        for f in [
+            triang as fn(usize) -> _,
+            bohman,
+            lanczos,
+        ] {
+            let z = f(0).unwrap();
+            assert_eq!(z.shape(), &[0]);
+            let one = f(1).unwrap();
+            assert_eq!(one.shape(), &[1]);
+            assert_eq!(one.as_slice().unwrap(), &[1.0]);
+        }
+    }
 
     // ---- f32 sibling functions (#529) ----------------------------------
 
