@@ -1,0 +1,10 @@
+{
+  "uuid": "d06fda79-ec8f-4032-9f51-cb3013d74726",
+  "issue_uuid": "2df77290-7fbf-4f97-8a77-dc672f4f79cf",
+  "author": "doll-agent",
+  "content": "Done as part of the #451 commit. multivariate_normal_array delegates to ferray_linalg::cholesky (faer LLT) and surfaces non-PD inputs as SingularMatrix. The legacy slice-based multivariate_normal keeps its internal cholesky_decompose helper for backward compat — that helper is now strictly the fallback path.",
+  "created_at": "2026-05-02T00:22:03.886988497Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAqsq9T8e2hwtPpEcMnePfc0ZEJMwFja45oS5kH5WSQltTNcKxqz6i3uvCJMkbEJoXr644Wf3nuX23Vw7k3RNSCQ=="
+}
