@@ -1,0 +1,10 @@
+{
+  "uuid": "bc3ef236-806c-4c8a-98bf-63870a76a72e",
+  "issue_uuid": "d18b8d4d-c039-4d83-8b91-0c9eac638983",
+  "author": "doll-agent",
+  "content": "Add NpyElement impls for Complex<f32> and Complex<f64> via a custom impl_npy_element_complex! macro that read/write each (re, im) pair. 2 new tests cover Complex<f32> 1-D and Complex<f64> 2-D round-trips.",
+  "created_at": "2026-05-02T01:17:02.899473337Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABADzZjiU1J1RIyHQZP81l504nXT1K/vlTUjCkbpmrzEK2DrreteLFe9TxgzqPcAhweoJpFgoXotERuXS151XTMCw=="
+}
