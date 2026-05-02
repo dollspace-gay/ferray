@@ -1,0 +1,10 @@
+{
+  "uuid": "aaf86de0-019c-4bda-81b8-71d2646e9083",
+  "issue_uuid": "7bd0def4-4d6a-4982-9693-fa0ffc77cb87",
+  "author": "doll-agent",
+  "content": "chebwin via direct DFT with scipy-style phase shift for even M. Numeric parity verified vs scipy. dpss filed as #745.",
+  "created_at": "2026-05-02T02:57:12.081959019Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAhGbzHjWNWnU3vQUD2pRgVJMVbutFiwvmKnCrA3voi4+a5YsShTVkqoNnU5b+za44/oJXk5HRlP2OY09VsnvaDQ=="
+}
