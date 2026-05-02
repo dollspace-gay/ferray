@@ -1,0 +1,10 @@
+{
+  "uuid": "d7a10f67-e5f6-41a6-89e2-6957e0c93b5f",
+  "issue_uuid": "605a3e4c-82cc-4eb5-aa68-41b07279730b",
+  "author": "doll-agent",
+  "content": "Add 11 f32-specific tests covering SIMD dispatch paths in arithmetic.rs: add/sub/mul/div + abs/neg/reciprocal/square + small-array scalar + FERRAY_FORCE_SCALAR.",
+  "created_at": "2026-05-02T02:03:38.430178692Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABABlbyzug3vqg8MGBjK/J9uqg2DJnJTnGyM8+jYebAS8fGCWujV4VmT2HeurYd03EhPwbGt6WdRIlrEGXPU72sCQ=="
+}
