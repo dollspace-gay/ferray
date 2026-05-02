@@ -1,0 +1,10 @@
+{
+  "uuid": "1dff6162-d5ec-4301-aa21-2bd62664ab92",
+  "issue_uuid": "d18b8d4d-c039-4d83-8b91-0c9eac638983",
+  "author": "doll-agent",
+  "content": "NpyElement now ships for Complex<f32> and Complex<f64> — typed save/load works end-to-end. 2 round-trip tests pass.",
+  "created_at": "2026-05-02T01:17:19.291070336Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAweR+iX1C1mQgrOWYCx1WA2936NESrlS3rlS7nLPz2XwuwhrIT3X7YCkUJ2q2PGoE0jOo4ljy9s979RXjSw3dAQ=="
+}
