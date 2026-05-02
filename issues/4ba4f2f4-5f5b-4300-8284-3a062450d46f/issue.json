@@ -3,11 +3,12 @@
   "display_id": 727,
   "title": "ferray-polynomial: HermiteEF32 type",
   "description": "Follow-up from #475. Add HermiteEF32 sibling of HermiteE mirroring the PolynomialF32 pattern.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-02T00:45:54.603607365Z",
-  "updated_at": "2026-05-02T00:45:55.852482989Z",
+  "updated_at": "2026-05-02T02:07:20.447090243Z",
+  "closed_at": "2026-05-02T02:07:20.447090243Z",
   "labels": [
     "ferray-polynomial,feature,follow-up,numpy-parity"
   ]
