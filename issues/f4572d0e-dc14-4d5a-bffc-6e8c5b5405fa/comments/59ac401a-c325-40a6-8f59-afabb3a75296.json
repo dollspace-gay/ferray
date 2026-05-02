@@ -1,0 +1,10 @@
+{
+  "uuid": "59ac401a-c325-40a6-8f59-afabb3a75296",
+  "issue_uuid": "f4572d0e-dc14-4d5a-bffc-6e8c5b5405fa",
+  "author": "doll-agent",
+  "content": "Add Poly::linspace(n, domain) as a default trait method. Builds n evenly-spaced xs from lo..=hi using the polynomial's domain (or the supplied override), then calls eval_many. All six basis types pick this up automatically. Tests cover normal usage, n<2 error, and explicit-domain override. Equivalent to numpy.polynomial.<basis>.<basis>.linspace.",
+  "created_at": "2026-05-02T00:51:22.464284481Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAdrnI58b/reYLjbaBv6zGc5y32QlCtXMIRb6FrGIFe6YsgSKAsxRw0sMnCmq1D9//hNR1Hrgrwe7MVGOH1Vo+Cg=="
+}
