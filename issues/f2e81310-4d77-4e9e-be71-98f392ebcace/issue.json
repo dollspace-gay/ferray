@@ -1,0 +1,11 @@
+{
+  "uuid": "f2e81310-4d77-4e9e-be71-98f392ebcace",
+  "display_id": 741,
+  "title": "ferray-core: backing DType variants for fixed-width strings (FixedAscii, FixedUnicode, RawBytes)",
+  "description": "Follow-up from #734. The npy dtype parser now recognises numpy S20 / U10 / V8 descriptors and rejects load with a specific diagnostic, but ferray-core has no DType variants to actually hold the values. Add DType::FixedAscii(usize), DType::FixedUnicode(usize) (codepoint count → 4*n bytes UCS-4), DType::RawBytes(usize); update size_of, alignment, Display, and the Element-trait machinery. Then wire ferray-io to load these into Vec<u8>/Vec<u32>/Vec<u8> arrays.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-02T02:17:07.184186629Z",
+  "updated_at": "2026-05-02T02:17:07.184186629Z"
+}
