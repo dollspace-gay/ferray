@@ -55,6 +55,7 @@ pub mod chebyshev;
 pub mod companion;
 pub mod extras;
 pub mod fitting;
+mod formatting;
 pub mod hermite;
 pub mod hermite_e;
 pub mod laguerre;
