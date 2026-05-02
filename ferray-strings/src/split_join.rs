@@ -46,6 +46,109 @@ pub fn split<D: Dimension>(a: &StringArray<D>, sep: &str) -> FerrayResult<String
     StringArray2::from_vec(Ix2::new([n_inputs, max_parts]), flat)
 }
 
+/// Right-to-left counterpart of [`split`] (#515).
+///
+/// Splits each element on `sep` starting from the right. With the
+/// optional `maxsplit` cap, only the rightmost `maxsplit` separators
+/// produce splits — leading remainder is kept as one piece. Mirrors
+/// `numpy.strings.rsplit`.
+///
+/// # Errors
+/// Returns an error if `sep` is empty or array construction fails.
+pub fn rsplit<D: Dimension>(
+    a: &StringArray<D>,
+    sep: &str,
+    maxsplit: Option<usize>,
+) -> FerrayResult<StringArray2> {
+    validate_separator(sep)?;
+    let parts: Vec<Vec<String>> = a
+        .iter()
+        .map(|s| match maxsplit {
+            None => s.rsplit(sep).map(String::from).collect::<Vec<_>>(),
+            Some(n) => s.rsplitn(n + 1, sep).map(String::from).collect::<Vec<_>>(),
+        })
+        .map(|mut v| {
+            v.reverse();
+            v
+        })
+        .collect();
+    let n_inputs = parts.len();
+    let max_parts = parts.iter().map(Vec::len).max().unwrap_or(0);
+    let mut flat: Vec<String> = Vec::with_capacity(n_inputs * max_parts);
+    for row in &parts {
+        for j in 0..max_parts {
+            flat.push(row.get(j).cloned().unwrap_or_default());
+        }
+    }
+    StringArray2::from_vec(Ix2::new([n_inputs, max_parts]), flat)
+}
+
+/// Split each element on universal newlines (`\n`, `\r\n`, `\r`)
+/// (#515). Equivalent to `numpy.strings.splitlines`.
+///
+/// Returns a 2-D `StringArray` shaped `(n_inputs, max_lines)` with
+/// trailing empty padding when the per-element line count differs.
+/// `keepends = true` retains the line terminator on each kept line,
+/// matching Python/NumPy behavior.
+///
+/// # Errors
+/// Returns an error if array construction fails.
+pub fn splitlines<D: Dimension>(
+    a: &StringArray<D>,
+    keepends: bool,
+) -> FerrayResult<StringArray2> {
+    let parts: Vec<Vec<String>> = a
+        .iter()
+        .map(|s| split_universal_newlines(s, keepends))
+        .collect();
+    let n_inputs = parts.len();
+    let max_lines = parts.iter().map(Vec::len).max().unwrap_or(0);
+    let mut flat: Vec<String> = Vec::with_capacity(n_inputs * max_lines);
+    for row in &parts {
+        for j in 0..max_lines {
+            flat.push(row.get(j).cloned().unwrap_or_default());
+        }
+    }
+    StringArray2::from_vec(Ix2::new([n_inputs, max_lines]), flat)
+}
+
+/// Universal-newline split: `\r\n` is a single split, then any
+/// remaining `\n` or `\r` independently. The result mirrors
+/// Python's `str.splitlines`.
+fn split_universal_newlines(s: &str, keepends: bool) -> Vec<String> {
+    let mut out = Vec::new();
+    let bytes = s.as_bytes();
+    let mut start = 0;
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b == b'\n' || b == b'\r' {
+            // Identify the EOL run length.
+            let eol_len = if b == b'\r' && i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
+                2
+            } else {
+                1
+            };
+            let line_end = if keepends { i + eol_len } else { i };
+            let line = std::str::from_utf8(&bytes[start..line_end])
+                .expect("input was &str so all slices are valid UTF-8")
+                .to_string();
+            out.push(line);
+            i += eol_len;
+            start = i;
+        } else {
+            i += 1;
+        }
+    }
+    if start < bytes.len() {
+        let trailing = std::str::from_utf8(&bytes[start..])
+            .expect("input was &str so all slices are valid UTF-8")
+            .to_string();
+        out.push(trailing);
+    }
+    out
+}
+
 /// Ragged-result variant of [`split`]: returns a `Vec<Vec<String>>` so
 /// callers that need the unpadded splits per element don't have to
 /// strip empty padding from the 2-D result (#277).
@@ -106,6 +209,55 @@ mod tests {
         assert_eq!(result.shape(), &[2, 2]);
         let s = result.as_slice();
         assert_eq!(s, &["a", "b", "c", "d"]);
+    }
+
+    // ---- rsplit / splitlines (#515) ------------------------------------
+
+    #[test]
+    fn rsplit_basic_no_limit() {
+        let a = array(&["a-b-c", "x-y"]).unwrap();
+        let r = rsplit(&a, "-", None).unwrap();
+        assert_eq!(r.shape(), &[2, 3]);
+        let s = r.as_slice();
+        // Trailing empty pads (matches `split`'s padding convention).
+        // Row 0: ["a","b","c"], Row 1: ["x","y",""]
+        assert_eq!(s, &["a", "b", "c", "x", "y", ""]);
+    }
+
+    #[test]
+    fn rsplit_with_maxsplit_one() {
+        // maxsplit=1: only the rightmost separator splits.
+        let a = array(&["a-b-c-d"]).unwrap();
+        let r = rsplit(&a, "-", Some(1)).unwrap();
+        assert_eq!(r.shape(), &[1, 2]);
+        let s = r.as_slice();
+        assert_eq!(s, &["a-b-c", "d"]);
+    }
+
+    #[test]
+    fn splitlines_with_lf_and_crlf() {
+        let a = array(&["one\ntwo\r\nthree", "single"]).unwrap();
+        let r = splitlines(&a, false).unwrap();
+        // Row 0 has 3 lines, row 1 has 1 line. Padding to 3.
+        assert_eq!(r.shape(), &[2, 3]);
+        let s = r.as_slice();
+        assert_eq!(s, &["one", "two", "three", "single", "", ""]);
+    }
+
+    #[test]
+    fn splitlines_keepends_retains_terminator() {
+        let a = array(&["x\ny\r\nz"]).unwrap();
+        let r = splitlines(&a, true).unwrap();
+        let s = r.as_slice();
+        assert_eq!(s, &["x\n", "y\r\n", "z"]);
+    }
+
+    #[test]
+    fn splitlines_handles_solo_carriage_return() {
+        let a = array(&["a\rb"]).unwrap();
+        let r = splitlines(&a, false).unwrap();
+        let s = r.as_slice();
+        assert_eq!(s, &["a", "b"]);
     }
 
     #[test]

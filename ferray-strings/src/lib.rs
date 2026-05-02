@@ -69,7 +69,7 @@ pub use regex_ops::{extract, extract_compiled, match_, match_compiled};
 // don't have to add a direct `regex` dependency to construct one.
 pub use regex::Regex;
 pub use search::{count, endswith, find, index, replace, rfind, rindex, startswith};
-pub use split_join::{join, join_array, split, split_ragged};
+pub use split_join::{join, join_array, rsplit, split, split_ragged, splitlines};
 pub use str_ops::{equal, greater, greater_equal, less, less_equal, not_equal, str_len, swapcase};
 pub use strip::{lstrip, rstrip, strip};
 
