@@ -1,0 +1,10 @@
+{
+  "uuid": "30861309-15dd-4ede-954a-41dced669ba5",
+  "issue_uuid": "f2e81310-4d77-4e9e-be71-98f392ebcace",
+  "author": "doll-agent",
+  "content": "Add DType::FixedAscii(n) / FixedUnicode(n) / RawBytes(n). size_of = n, 4n, n; alignment = 1, 4, 1. Display = S{n}/U{n}/V{n} matching numpy. Atomic in promotion / casting (same architecture as Struct). DynArray cast targets + zeros surface 'not yet supported' diagnostic since no DynArray byte-buffer variant. ferray-io's parser now returns these variants directly; #734 tests updated to assert variants instead of rejection.",
+  "created_at": "2026-05-02T03:02:42.183083530Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAE6eHDEe+GSpHc6+WKYD/8Cm/HvjudUBW1ufQKl+upILSIp4f7cLR2uTMsCncDZ85YZuXtA/yKudyehLqhGX9DQ=="
+}
