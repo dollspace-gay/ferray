@@ -1,0 +1,11 @@
+{
+  "uuid": "afd034d2-07ee-4110-a2e8-a25e0ca6ae24",
+  "display_id": 724,
+  "title": "ferray-stats: add scipy.stats statistical-test functions (ttest, ks_2samp, chi2, pearsonr)",
+  "description": "Follow-up from #470 (scipy.stats descriptive helpers). Add the statistical-test surface: ttest_1samp, ttest_ind, ks_2samp, chi2_contingency, pearsonr, spearmanr. These need normal/chi2/t-distribution CDFs which ferray doesn't currently have. Either build the CDFs in ferray-stats or pull in libm + a minimal scientific-functions module.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-02T00:40:23.251765513Z",
+  "updated_at": "2026-05-02T00:40:23.251765513Z"
+}
