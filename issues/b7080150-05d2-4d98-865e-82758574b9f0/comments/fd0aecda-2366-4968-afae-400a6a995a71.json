@@ -1,0 +1,10 @@
+{
+  "uuid": "fd0aecda-2366-4968-afae-400a6a995a71",
+  "issue_uuid": "b7080150-05d2-4d98-865e-82758574b9f0",
+  "author": "doll-agent",
+  "content": "Polynomial::integ_with_bounds ships in power.rs with full numpy-parity (m, k, lbnd, scl). 5 tests pass. Extending to other bases filed as #732. cargo test green; clippy clean.",
+  "created_at": "2026-05-02T01:00:11.245335619Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABABOLuF6sxGtJhg6frFADuDAoEnfj4hI6ziy0bH9VvlohkJ90DEqsK+6uGSbaRcn1bmKT/wDiNHZyA0KiC4HbxCg=="
+}
