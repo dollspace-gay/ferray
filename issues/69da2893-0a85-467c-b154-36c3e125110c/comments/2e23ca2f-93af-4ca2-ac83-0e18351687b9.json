@@ -1,0 +1,10 @@
+{
+  "uuid": "2e23ca2f-93af-4ca2-ac83-0e18351687b9",
+  "issue_uuid": "69da2893-0a85-467c-b154-36c3e125110c",
+  "author": "doll-agent",
+  "content": "All 6 concrete BitGenerators (Xoshiro256**, Sfc64, Pcg64, Pcg64Dxsm, Philox, MT19937) implement state_bytes / set_state_bytes with full structural-invariant validation on restore. Generator::state_bytes/set_state_bytes are the forwarding entry points. 12 new tests pass. cargo test -p ferray-random green; clippy -- -D warnings clean. Bytes-first format keeps the API serde-agnostic — callers can pickle however they like.",
+  "created_at": "2026-05-02T00:25:53.521397207Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAVt1dFEqiNf98Ab+XLlLFR7KA3ROSzIpmeEN4nfABUseBDt9M1EZLoM/Cu7C3JgckPOxqMR4mBsVwO/kY7JDFAA=="
+}
