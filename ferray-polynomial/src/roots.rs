@@ -1,11 +1,12 @@
 // ferray-polynomial: Root finding via companion matrix eigenvalues (REQ-12)
 //
 // Computes polynomial roots by constructing a companion matrix and finding
-// its eigenvalues. Uses a built-in QR iteration since ferray-linalg may not
-// yet be available. When ferray-linalg::eigvals is ready, this can delegate
-// to it for improved performance.
+// its eigenvalues. The high-degree path delegates to ferray-linalg::eigvals
+// (faer-backed) for the eigendecomposition. Newton's method then polishes
+// each eigenvalue to full f64 precision (#479).
 
 use ferray_core::error::FerrayError;
+use ferray_core::{Array, Ix2};
 use num_complex::Complex;
 
 use crate::companion::companion_matrix;
@@ -78,12 +79,15 @@ pub fn find_roots_from_power_coeffs(coeffs: &[f64]) -> Result<Vec<Complex<f64>>,
             }
         }
         _ => {
-            // Use companion matrix eigenvalues via QR iteration.
-            let mut mat = companion_matrix(&coeffs[..n])?;
-            // Balance the companion matrix to improve eigenvalue accuracy
-            balance_matrix(&mut mat, deg);
-            let mut eigenvalues = qr_eigenvalues(&mat, deg)?;
-            // Polish each root with Newton's method for full f64 precision
+            // Companion matrix eigenvalues via ferray-linalg (faer LU
+            // + Schur). Faer's eigvals is more numerically robust than
+            // the in-tree QR for ill-conditioned companion matrices.
+            // Newton polishing afterwards still drives roots to full
+            // f64 precision.
+            let mat_vec = companion_matrix(&coeffs[..n])?;
+            let mat_arr = Array::<f64, Ix2>::from_vec(Ix2::new([deg, deg]), mat_vec)?;
+            let eig_arr = ferray_linalg::eigvals(&mat_arr)?;
+            let mut eigenvalues: Vec<Complex<f64>> = eig_arr.iter().copied().collect();
             for root in &mut eigenvalues {
                 newton_polish(&coeffs[..n], root);
             }
@@ -171,282 +175,6 @@ fn newton_polish(coeffs: &[f64], z: &mut Complex<f64>) {
     *z = best_z;
 }
 
-/// Balance a matrix by diagonal similarity transformations to equalise row
-/// and column norms.  This is a simplified version of LAPACK's DGEBAL that
-/// improves eigenvalue accuracy by reducing the spread of matrix entries.
-fn balance_matrix(a: &mut [f64], n: usize) {
-    let radix: f64 = 2.0;
-    let base_sq = radix * radix;
-    let mut converged = false;
-
-    while !converged {
-        converged = true;
-        for i in 0..n {
-            // Compute row and column norms (excluding diagonal)
-            let mut row_norm = 0.0;
-            let mut col_norm = 0.0;
-            for j in 0..n {
-                if i == j {
-                    continue;
-                }
-                col_norm += a[j * n + i].abs();
-                row_norm += a[i * n + j].abs();
-            }
-
-            if col_norm < f64::EPSILON * 1e-100 || row_norm < f64::EPSILON * 1e-100 {
-                continue;
-            }
-
-            // Find the power-of-two scaling factor
-            let s = col_norm + row_norm;
-            let mut f = 1.0;
-            let mut c = col_norm;
-
-            while c < s / base_sq {
-                c *= base_sq;
-                f *= radix;
-            }
-            while c >= s * base_sq {
-                c /= base_sq;
-                f /= radix;
-            }
-
-            // Only apply if the scaling makes a significant improvement
-            if (c + row_norm) / f < 0.95 * s {
-                converged = false;
-                let g = 1.0 / f;
-                // Scale row i by 1/f and column i by f
-                for j in 0..n {
-                    a[i * n + j] *= g;
-                }
-                for j in 0..n {
-                    a[j * n + i] *= f;
-                }
-            }
-        }
-    }
-}
-
-/// Compute eigenvalues of an n x n real matrix using the implicit QR algorithm
-/// with shifts (Francis double-shift for real matrices).
-///
-/// This is a simplified but functional implementation suitable for companion matrices.
-/// Returns all eigenvalues as Complex<f64>.
-fn qr_eigenvalues(mat: &[f64], n: usize) -> Result<Vec<Complex<f64>>, FerrayError> {
-    if n == 0 {
-        return Ok(Vec::new());
-    }
-    if n == 1 {
-        return Ok(vec![Complex::new(mat[0], 0.0)]);
-    }
-
-    // First reduce to upper Hessenberg form
-    let mut h = mat.to_vec();
-    reduce_to_hessenberg(&mut h, n);
-
-    // QR iteration on Hessenberg matrix
-    let mut eigenvalues = Vec::with_capacity(n);
-    let max_iter = 1000 * n;
-    let mut p = n; // Active matrix size
-
-    let mut iter_count = 0;
-
-    while p > 2 {
-        if iter_count > max_iter {
-            return Err(FerrayError::ConvergenceFailure {
-                iterations: max_iter,
-                message: "QR iteration did not converge".to_string(),
-            });
-        }
-
-        // Check for deflation: if h[p-1, p-2] is small, deflate
-        let sub = h[(p - 1) * n + (p - 2)].abs();
-        let diag_sum = h[(p - 1) * n + (p - 1)].abs() + h[(p - 2) * n + (p - 2)].abs();
-        let tol = f64::EPSILON * diag_sum.max(1e-300);
-
-        if sub <= tol {
-            eigenvalues.push(Complex::new(h[(p - 1) * n + (p - 1)], 0.0));
-            p -= 1;
-            continue;
-        }
-
-        // Check for 2x2 block deflation
-        if p >= 3 {
-            let sub2 = h[(p - 2) * n + (p - 3)].abs();
-            let diag_sum2 = h[(p - 2) * n + (p - 2)].abs() + h[(p - 3) * n + (p - 3)].abs();
-            let tol2 = f64::EPSILON * diag_sum2.max(1e-300);
-            if sub2 <= tol2 {
-                // Deflate 2x2 block
-                let eigs = eigenvalues_2x2(
-                    h[(p - 2) * n + (p - 2)],
-                    h[(p - 2) * n + (p - 1)],
-                    h[(p - 1) * n + (p - 2)],
-                    h[(p - 1) * n + (p - 1)],
-                );
-                eigenvalues.push(eigs.0);
-                eigenvalues.push(eigs.1);
-                p -= 2;
-                continue;
-            }
-        }
-
-        // Wilkinson shift
-        let a11 = h[(p - 2) * n + (p - 2)];
-        let a12 = h[(p - 2) * n + (p - 1)];
-        let a21 = h[(p - 1) * n + (p - 2)];
-        let a22 = h[(p - 1) * n + (p - 1)];
-        let trace = a11 + a22;
-        let det = a11.mul_add(a22, -(a12 * a21));
-        let disc = trace.mul_add(trace, -(4.0 * det));
-
-        let shift = if disc >= 0.0 {
-            let s1 = f64::midpoint(trace, disc.sqrt());
-            let s2 = (trace - disc.sqrt()) / 2.0;
-            // Pick the shift closest to a22
-            if (s1 - a22).abs() < (s2 - a22).abs() {
-                s1
-            } else {
-                s2
-            }
-        } else {
-            // Complex shift: use the real part
-            trace / 2.0
-        };
-
-        // Single-shift QR step on the active Hessenberg matrix [0..p, 0..p]
-        qr_step_hessenberg(&mut h, n, p, shift);
-        iter_count += 1;
-    }
-
-    if p == 2 {
-        let eigs = eigenvalues_2x2(h[0], h[1], h[n], h[n + 1]);
-        eigenvalues.push(eigs.0);
-        eigenvalues.push(eigs.1);
-    } else if p == 1 {
-        eigenvalues.push(Complex::new(h[0], 0.0));
-    }
-
-    Ok(eigenvalues)
-}
-
-/// Reduce a general matrix to upper Hessenberg form using Householder reflections.
-fn reduce_to_hessenberg(h: &mut [f64], n: usize) {
-    for k in 0..(n.saturating_sub(2)) {
-        // Compute Householder vector for column k, rows k+1..n
-        let m = n - k - 1;
-        if m == 0 {
-            continue;
-        }
-
-        let mut v = vec![0.0; m];
-        for i in 0..m {
-            v[i] = h[(k + 1 + i) * n + k];
-        }
-
-        let norm = v.iter().map(|x| x * x).sum::<f64>().sqrt();
-        if norm < f64::EPSILON * 1e6 {
-            continue;
-        }
-
-        let sign = if v[0] >= 0.0 { 1.0 } else { -1.0 };
-        v[0] += sign * norm;
-        let v_norm = v.iter().map(|x| x * x).sum::<f64>().sqrt();
-        if v_norm < f64::EPSILON * 1e6 {
-            continue;
-        }
-        for vi in &mut v {
-            *vi /= v_norm;
-        }
-
-        // Apply H = I - 2*v*v^T from the left: H * A
-        // Affects rows k+1..n, all columns
-        for j in 0..n {
-            let mut dot = 0.0;
-            for i in 0..m {
-                dot += v[i] * h[(k + 1 + i) * n + j];
-            }
-            for i in 0..m {
-                h[(k + 1 + i) * n + j] -= 2.0 * v[i] * dot;
-            }
-        }
-
-        // Apply from the right: A * H
-        // Affects all rows, columns k+1..n
-        for i in 0..n {
-            let mut dot = 0.0;
-            for j in 0..m {
-                dot += h[i * n + (k + 1 + j)] * v[j];
-            }
-            for j in 0..m {
-                h[i * n + (k + 1 + j)] -= 2.0 * dot * v[j];
-            }
-        }
-    }
-}
-
-/// Perform one implicit single-shift QR step on an upper Hessenberg matrix.
-fn qr_step_hessenberg(h: &mut [f64], n: usize, p: usize, shift: f64) {
-    // Bulge chase
-    let mut x = h[0] - shift;
-    let mut z = h[n]; // h[1, 0]
-
-    for k in 0..(p - 1) {
-        // Givens rotation to zero out z
-        let r = x.hypot(z);
-        if r < f64::EPSILON * 1e-100 {
-            x = h[(k + 1) * n + k];
-            if k + 2 < p {
-                z = h[(k + 2) * n + k];
-            }
-            continue;
-        }
-        let c = x / r;
-        let s = z / r;
-
-        // Apply rotation from left: rows k and k+1
-        for j in (if k > 0 { k - 1 } else { 0 })..p {
-            let h1 = h[k * n + j];
-            let h2 = h[(k + 1) * n + j];
-            h[k * n + j] = c.mul_add(h1, s * h2);
-            h[(k + 1) * n + j] = (-s).mul_add(h1, c * h2);
-        }
-
-        // Apply rotation from right: columns k and k+1
-        let row_limit = (k + 3).min(p);
-        for i in 0..row_limit {
-            let h1 = h[i * n + k];
-            let h2 = h[i * n + (k + 1)];
-            h[i * n + k] = c.mul_add(h1, s * h2);
-            h[i * n + (k + 1)] = (-s).mul_add(h1, c * h2);
-        }
-
-        if k + 2 < p {
-            x = h[(k + 1) * n + k];
-            z = h[(k + 2) * n + k];
-        }
-    }
-}
-
-/// Compute eigenvalues of a 2x2 matrix.
-fn eigenvalues_2x2(a: f64, b: f64, c: f64, d: f64) -> (Complex<f64>, Complex<f64>) {
-    let trace = a + d;
-    let det = a.mul_add(d, -(b * c));
-    let disc = trace.mul_add(trace, -(4.0 * det));
-
-    if disc >= 0.0 {
-        let sqrt_disc = disc.sqrt();
-        (
-            Complex::new(f64::midpoint(trace, sqrt_disc), 0.0),
-            Complex::new((trace - sqrt_disc) / 2.0, 0.0),
-        )
-    } else {
-        let sqrt_disc = (-disc).sqrt();
-        (
-            Complex::new(trace / 2.0, sqrt_disc / 2.0),
-            Complex::new(trace / 2.0, -sqrt_disc / 2.0),
-        )
-    }
-}
 
 #[cfg(test)]
 mod tests {
