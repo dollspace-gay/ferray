@@ -1,0 +1,10 @@
+{
+  "uuid": "924a01fe-6340-47fc-9387-1cbf95a908e7",
+  "issue_uuid": "12bcece8-c2bb-42f2-9266-9550a1ec9ed3",
+  "author": "doll-agent",
+  "content": "fft_along_axes now skips the upfront data.to_vec()—first pass reads the caller's slice directly, subsequent passes feed each output into the next. ferray-fft cargo test green; clippy -- -D warnings clean. Sequential per-axis flow stays (matches pocketfft); the inter-axis dependency makes parallelism a non-starter at this layer.",
+  "created_at": "2026-05-02T00:01:55.049145913Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAyyw2v/itDHtC0Oszqa6VuGjJy+hXiP/2YkuGEg+UwVZLRiBey2+X2seyFLGY7denGBzuD8qzlqiD8YAtXwvpAw=="
+}
