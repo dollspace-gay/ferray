@@ -1,0 +1,10 @@
+{
+  "uuid": "d9fa2d53-ab7d-4feb-81dc-e26eef693ab6",
+  "issue_uuid": "cb37a305-61ab-4abc-a0d5-bbffe6f6c965",
+  "author": "doll-agent",
+  "content": "Polynomial::compose ships in power.rs. 5 tests pass. Non-power bases filed as #733.",
+  "created_at": "2026-05-02T01:07:16.540419989Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAugXioWWmRZ+1UY3n2+ZZfHXzq5XYN0NRlFfpxw0XK2JDw6UFWSakZ/emtNvuErb36/U5419iqn3tJX4j5ejvCQ=="
+}
