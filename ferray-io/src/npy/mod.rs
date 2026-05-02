@@ -545,6 +545,58 @@ impl_npy_element!(i128, 16);
 impl_npy_element!(f32, 4);
 impl_npy_element!(f64, 8);
 
+// Complex<f32> / Complex<f64> — typed npy I/O (#498). The default
+// macro can't be reused because num_complex::Complex<T> doesn't expose
+// `from_ne_bytes`; we read/write the two halves explicitly.
+macro_rules! impl_npy_element_complex {
+    ($float:ty, $size:expr) => {
+        impl private::NpySealed for num_complex::Complex<$float> {}
+
+        impl NpyElement for num_complex::Complex<$float> {
+            fn write_slice<W: Write>(
+                data: &[num_complex::Complex<$float>],
+                writer: &mut W,
+            ) -> FerrayResult<()> {
+                // Re/Im share the same alignment as a Complex<T>, so the
+                // raw byte view round-trips on every supported target.
+                let byte_len = data.len() * $size * 2;
+                let bytes =
+                    unsafe { std::slice::from_raw_parts(data.as_ptr().cast::<u8>(), byte_len) };
+                writer.write_all(bytes)?;
+                Ok(())
+            }
+
+            fn read_vec<R: Read>(
+                reader: &mut R,
+                count: usize,
+                endian: Endianness,
+            ) -> FerrayResult<Vec<num_complex::Complex<$float>>> {
+                let byte_len = count * $size * 2;
+                let mut raw = vec![0u8; byte_len];
+                reader.read_exact(&mut raw)?;
+                let mut result = Vec::with_capacity(count);
+                for chunk in raw.chunks_exact_mut($size * 2) {
+                    let (re_bytes, im_bytes) = chunk.split_at_mut($size);
+                    if endian.needs_swap() {
+                        re_bytes.reverse();
+                        im_bytes.reverse();
+                    }
+                    let re_arr: [u8; $size] = re_bytes.try_into().unwrap();
+                    let im_arr: [u8; $size] = im_bytes.try_into().unwrap();
+                    result.push(num_complex::Complex::new(
+                        <$float>::from_ne_bytes(re_arr),
+                        <$float>::from_ne_bytes(im_arr),
+                    ));
+                }
+                Ok(result)
+            }
+        }
+    };
+}
+
+impl_npy_element_complex!(f32, 4);
+impl_npy_element_complex!(f64, 8);
+
 #[cfg(feature = "f16")]
 impl_npy_element!(half::f16, 2);
 #[cfg(feature = "bf16")]
@@ -621,6 +673,41 @@ mod tests {
         let dir = tempfile::TempDir::new().expect("failed to create test TempDir");
         let path = dir.path().join(name);
         (dir, path)
+    }
+
+    // ---- typed Complex round-trips (#498) ------------------------------
+
+    #[test]
+    fn roundtrip_complex64_1d() {
+        use num_complex::Complex;
+        let data: Vec<Complex<f32>> = vec![
+            Complex::new(1.0, 2.0),
+            Complex::new(-3.0, 0.5),
+            Complex::new(0.0, -7.25),
+            Complex::new(1e6, -1e6),
+        ];
+        let arr =
+            Array::<Complex<f32>, Ix1>::from_vec(Ix1::new([4]), data.clone()).unwrap();
+        let (_dir, path) = temp_path("rt_c64_1d.npy");
+        save(&path, &arr).unwrap();
+        let loaded: Array<Complex<f32>, Ix1> = load(&path).unwrap();
+        assert_eq!(loaded.shape(), &[4]);
+        assert_eq!(loaded.as_slice().unwrap(), data.as_slice());
+    }
+
+    #[test]
+    fn roundtrip_complex128_2d() {
+        use num_complex::Complex;
+        let data: Vec<Complex<f64>> = (0..6)
+            .map(|i| Complex::new(i as f64, -(i as f64)))
+            .collect();
+        let arr =
+            Array::<Complex<f64>, Ix2>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
+        let (_dir, path) = temp_path("rt_c128_2d.npy");
+        save(&path, &arr).unwrap();
+        let loaded: Array<Complex<f64>, Ix2> = load(&path).unwrap();
+        assert_eq!(loaded.shape(), &[2, 3]);
+        assert_eq!(loaded.as_slice().unwrap(), data.as_slice());
     }
 
     #[test]
