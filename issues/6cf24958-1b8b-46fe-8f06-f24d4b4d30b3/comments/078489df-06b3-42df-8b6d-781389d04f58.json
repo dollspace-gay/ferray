@@ -1,0 +1,10 @@
+{
+  "uuid": "078489df-06b3-42df-8b6d-781389d04f58",
+  "issue_uuid": "6cf24958-1b8b-46fe-8f06-f24d4b4d30b3",
+  "author": "doll-agent",
+  "content": "Add typed sibling methods of integers: integers_u8, integers_i8, integers_u16, integers_i16, integers_u32, integers_i32, integers_u64. Each via a typed_integers! macro that validates low < high, computes the range as i128 (fits any signed/unsigned 8/16/32/64 span), draws via next_u64_bounded, casts back. Existing integers (i64) is unchanged. 6 new tests cover u8 range, i8 with negatives, u16 mid-range, i32 over the full span, u64 over the full u64 range (no panic / overflow), and bad-range error paths.",
+  "created_at": "2026-05-02T00:28:54.558760362Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAYN9DcRUtPP8e9qzs/E+zuru3pddHcv6CRZqO9Jiohbm5SFzwBZCxEGpdxOV77O4VHwhK2ks8ko4ZheigJ6n1CQ=="
+}
