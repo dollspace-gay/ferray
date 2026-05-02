@@ -38,6 +38,7 @@
 )]
 
 pub mod correlation;
+pub mod descriptive;
 pub mod histogram;
 pub mod parallel;
 pub mod reductions;
@@ -91,3 +92,6 @@ pub use searching::{
 
 // Set operations
 pub use set_ops::{in1d, intersect1d, isin, setdiff1d, setxor1d, union1d};
+
+// Descriptive statistics — scipy.stats parity (#470)
+pub use descriptive::{ModeResult, gmean, hmean, iqr, kurtosis, mode, sem, skew, zscore};
