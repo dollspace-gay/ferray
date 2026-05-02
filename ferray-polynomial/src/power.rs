@@ -106,6 +106,38 @@ impl Polynomial {
         Ok(self.with_same_mapping(coeffs))
     }
 
+    /// Polynomial composition: returns a polynomial `r` such that
+    /// `r(x) == self(q(x))` (#485).
+    ///
+    /// Computed via Horner-on-coefficients: `r = self[deg]; for each
+    /// remaining coefficient c in descending order, r = r*q + c`.
+    /// Equivalent to `numpy.polynomial.polynomial.polyval(q.coeffs, p.coeffs)`
+    /// when `p` and `q` are power-basis polynomials.
+    ///
+    /// `self` and `q` must share the same domain/window (matching the
+    /// add/sub/mul convention).
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if domain/window don't
+    /// match.
+    pub fn compose(&self, q: &Self) -> Result<Self, FerrayError> {
+        self.check_same_mapping(q)?;
+        // Horner from the top coefficient down.
+        let mut r: Vec<f64> = vec![*self.coeffs.last().unwrap_or(&0.0)];
+        for &c in self.coeffs.iter().rev().skip(1) {
+            // r = r * q + c
+            let mut next = vec![0.0_f64; r.len() + q.coeffs.len() - 1];
+            for (i, &ri) in r.iter().enumerate() {
+                for (j, &qj) in q.coeffs.iter().enumerate() {
+                    next[i + j] += ri * qj;
+                }
+            }
+            next[0] += c;
+            r = next;
+        }
+        Ok(self.with_same_mapping(r))
+    }
+
     /// Identity polynomial `p(x) = x` with the given domain/window
     /// (#478).
     ///
@@ -541,6 +573,59 @@ impl FromPowerBasis for Polynomial {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- compose (#485) ------------------------------------------------
+
+    #[test]
+    fn compose_with_identity_returns_self() {
+        let p = Polynomial::new(&[1.0, 2.0, 3.0]); // 1 + 2x + 3x^2
+        let q = Polynomial::new(&[0.0, 1.0]); // q(x) = x
+        let r = p.compose(&q).unwrap();
+        assert_eq!(r.coeffs(), p.coeffs());
+    }
+
+    #[test]
+    fn compose_p_x_squared_into_p_y() {
+        // p(y) = 1 + y, q(x) = x^2  =>  r(x) = p(q(x)) = 1 + x^2
+        let p = Polynomial::new(&[1.0, 1.0]);
+        let q = Polynomial::new(&[0.0, 0.0, 1.0]);
+        let r = p.compose(&q).unwrap();
+        assert_eq!(r.coeffs(), &[1.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn compose_quadratics_eval_consistency() {
+        // p(y) = 2 + 3y + y^2, q(x) = 1 + 2x
+        // r(x) = p(q(x)) = 2 + 3(1+2x) + (1+2x)^2 = 6 + 10x + 4x^2
+        let p = Polynomial::new(&[2.0, 3.0, 1.0]);
+        let q = Polynomial::new(&[1.0, 2.0]);
+        let r = p.compose(&q).unwrap();
+        assert_eq!(r.coeffs(), &[6.0, 10.0, 4.0]);
+        // eval consistency: r(x) should equal p(q(x)) for any x.
+        for x in [-1.5_f64, 0.0, 0.7, 2.3] {
+            let expected = p.eval(q.eval(x).unwrap()).unwrap();
+            let got = r.eval(x).unwrap();
+            assert!((expected - got).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn compose_constant_p_yields_constant() {
+        // p = 5, q = anything → r = 5.
+        let p = Polynomial::new(&[5.0]);
+        let q = Polynomial::new(&[1.0, 2.0, 3.0]);
+        let r = p.compose(&q).unwrap();
+        assert_eq!(r.coeffs(), &[5.0]);
+    }
+
+    #[test]
+    fn compose_domain_mismatch_errors() {
+        let p = Polynomial::new(&[1.0, 1.0]);
+        let q = Polynomial::new(&[1.0, 2.0])
+            .with_domain([-2.0, 2.0])
+            .unwrap();
+        assert!(p.compose(&q).is_err());
+    }
 
     // ---- integ_with_bounds (#482) --------------------------------------
 
