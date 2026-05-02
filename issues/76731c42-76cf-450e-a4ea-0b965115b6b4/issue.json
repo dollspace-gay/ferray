@@ -3,11 +3,12 @@
   "display_id": 733,
   "title": "ferray-polynomial: compose for non-power bases",
   "description": "Follow-up from #485. Polynomial::compose ships in the power basis. Extend to other bases via convert-to-power → compose → convert-back, or implement directly using Clenshaw-style recurrence.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-02T01:07:09.630183829Z",
-  "updated_at": "2026-05-02T01:07:11.019196385Z",
+  "updated_at": "2026-05-02T02:15:13.072579306Z",
+  "closed_at": "2026-05-02T02:15:13.072579306Z",
   "labels": [
     "ferray-polynomial,feature,follow-up,numpy-parity"
   ]
