@@ -1,0 +1,10 @@
+{
+  "uuid": "3372d5da-758d-4775-a619-28bfbf76e56d",
+  "issue_uuid": "a048adbb-5ed6-47e0-99f8-d387778688bd",
+  "author": "doll-agent",
+  "content": "Three pieces. (1) ferray-core blanket Element impl for T: FerrayRecord (paired Sealed impl, sound because no primitive impls FerrayRecord). (2) Parser resolves structured descrs into DType::Struct via Box::leak'd FieldDescriptor slices. (3) Header writer emits the unquoted Python list-literal form for structured descrs; reader's extract_string_value walks bracket depth instead of stopping at the next apostrophe. New load_record / save_record entries. dtype_to_descr extended for Struct + S/U/V from #741.",
+  "created_at": "2026-05-02T03:12:18.447042203Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAjs2uCfR7ysYBVYJ8MNLZT72iiPna0wPjvkgLqQ9FISFIgHVbpX81/zQIe9++gIvsPmMobPKcYLVgKTbEmnALCw=="
+}
