@@ -3,11 +3,12 @@
   "display_id": 744,
   "title": "ferray-core: expose RawArrayView for negative-stride view construction",
   "description": "Follow-up from #737. ArrayView::from_shape_ptr in ferray-core/src/array/view.rs uses ndarray::ArrayView::from_shape_ptr which validates strides as non-negative. Negative-stride views (numpy a[::-1]-style) need the RawArrayView path: ndarray::RawArrayView::from_shape_ptr (no stride validation) followed by .deref_into_view() inside an unsafe block. Add a new ferray-core constructor (e.g. ArrayView::from_shape_ptr_signed) that wraps that path. Once this lands, ferray-stride-tricks::as_strided_signed can drop its negative-stride rejection and properly support reversed views.",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-05-02T02:30:51.931311312Z",
-  "updated_at": "2026-05-02T02:30:53.147846444Z",
+  "updated_at": "2026-05-02T02:34:42.344141011Z",
+  "closed_at": "2026-05-02T02:34:42.344141011Z",
   "labels": [
     "ferray-core,feature,follow-up,numpy-parity"
   ]
