@@ -51,6 +51,13 @@ macro_rules! impl_np_element {
 
 impl_np_element!(bool, f32, f64, i8, i16, i32, i64, u8, u16, u32, u64);
 
+// f16 / bf16 — ferray-core supports both behind feature flags;
+// pyo3-numpy supports half::f16 (Float16Type) but not bf16 in
+// the underlying NumPy ABI. Implement only what numpy-rs has
+// `NumpyElement` for. Tracked in #739.
+#[cfg(feature = "f16")]
+impl NpElement for half::f16 {}
+
 // ---------------------------------------------------------------------------
 // NumPy -> ferray  (REQ-1)
 // ---------------------------------------------------------------------------
