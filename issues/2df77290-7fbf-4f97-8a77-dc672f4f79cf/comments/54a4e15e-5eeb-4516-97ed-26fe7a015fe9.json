@@ -1,0 +1,10 @@
+{
+  "uuid": "54a4e15e-5eeb-4516-97ed-26fe7a015fe9",
+  "issue_uuid": "2df77290-7fbf-4f97-8a77-dc672f4f79cf",
+  "author": "doll-agent",
+  "content": "Routed via #451's commit: multivariate_normal_array uses ferray_linalg::cholesky (faer-backed). The legacy slice-based multivariate_normal still uses its internal cholesky_decompose helper for backward compat. The new path is the recommended entry going forward — non-PD covariance now surfaces as FerrayError::SingularMatrix instead of silently producing degenerate samples.",
+  "created_at": "2026-05-02T00:21:58.237742593Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABANEYuLAOJGJZ+9bE3pU8Z8iXzqQJCfrqANW5xXdiof4AA1F/f0b8wAOEt7v1REEZL4e0NAjrtjL/zPPSSp7ORBA=="
+}
