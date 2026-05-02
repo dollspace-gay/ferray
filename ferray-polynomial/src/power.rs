@@ -52,6 +52,60 @@ impl Polynomial {
         }
     }
 
+    /// Integrate `m` times with full numpy-parity knobs (#482).
+    ///
+    /// In addition to the integration constants `k`, this accepts:
+    /// - `lbnd`: lower bound of integration. Each integration step
+    ///   adjusts the constant so that the integrated polynomial
+    ///   evaluates to `k[step]` (or 0 if `step >= k.len()`) at `lbnd`.
+    /// - `scl`: per-step divisor applied after each integration.
+    ///   Matches `numpy.polynomial.polynomial.polyint(c, m, k, lbnd, scl)`.
+    ///
+    /// For `lbnd = 0` and `scl = 1` this is identical to [`Poly::integ`].
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` if `scl` is zero.
+    pub fn integ_with_bounds(
+        &self,
+        m: usize,
+        k: &[f64],
+        lbnd: f64,
+        scl: f64,
+    ) -> Result<Self, FerrayError> {
+        if scl == 0.0 {
+            return Err(FerrayError::invalid_value(
+                "integ_with_bounds: scl must be non-zero",
+            ));
+        }
+        if m == 0 {
+            return Ok(self.clone());
+        }
+        let mut coeffs = self.coeffs.clone();
+        for step in 0..m {
+            // 1. Integrate one step with constant = 0.
+            let mut new_coeffs = Vec::with_capacity(coeffs.len() + 1);
+            new_coeffs.push(0.0);
+            for (i, &c) in coeffs.iter().enumerate() {
+                new_coeffs.push(c / (i + 1) as f64);
+            }
+            // 2. Apply scl.
+            if scl != 1.0 {
+                for c in &mut new_coeffs {
+                    *c /= scl;
+                }
+            }
+            // 3. Set the integration constant so eval(lbnd) = k[step].
+            let target = if step < k.len() { k[step] } else { 0.0 };
+            let mut value_at_lbnd = 0.0_f64;
+            for &c in new_coeffs.iter().rev() {
+                value_at_lbnd = value_at_lbnd * lbnd + c;
+            }
+            new_coeffs[0] += target - value_at_lbnd;
+            coeffs = new_coeffs;
+        }
+        Ok(self.with_same_mapping(coeffs))
+    }
+
     /// Identity polynomial `p(x) = x` with the given domain/window
     /// (#478).
     ///
@@ -479,6 +533,61 @@ impl FromPowerBasis for Polynomial {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- integ_with_bounds (#482) --------------------------------------
+
+    #[test]
+    fn integ_with_bounds_default_args_match_integ() {
+        let p = Polynomial::new(&[1.0, 2.0, 3.0]);
+        let from_default = p.integ(2, &[5.0, 7.0]).unwrap();
+        // lbnd=0, scl=1 should match integ when k entries are seeded at 0.
+        // integ_with_bounds at lbnd=0 sets coeffs[0] = k - eval(0) = k - 0 = k,
+        // matching the existing integ semantics where the constant is just k.
+        let from_bounds = p.integ_with_bounds(2, &[5.0, 7.0], 0.0, 1.0).unwrap();
+        assert_eq!(from_default.coeffs(), from_bounds.coeffs());
+    }
+
+    #[test]
+    fn integ_with_lbnd_value_is_zero_at_lbnd() {
+        // For p(x) = 2x, integral is x^2 + C. Setting C such that
+        // P(lbnd=3) = 0 gives C = -9.
+        let p = Polynomial::new(&[0.0, 2.0]);
+        let q = p.integ_with_bounds(1, &[0.0], 3.0, 1.0).unwrap();
+        let v = q.eval(3.0).unwrap();
+        assert!(v.abs() < 1e-12, "P(3) = {v}, expected 0");
+    }
+
+    #[test]
+    fn integ_with_lbnd_and_k_value_equals_k_at_lbnd() {
+        // P(lbnd) must equal k[0] after one integration with lbnd shift.
+        let p = Polynomial::new(&[1.0, 4.0, 6.0]); // p(x) = 1 + 4x + 6x^2
+        let lbnd = 2.0;
+        let k0 = 7.5;
+        let q = p.integ_with_bounds(1, &[k0], lbnd, 1.0).unwrap();
+        let v = q.eval(lbnd).unwrap();
+        assert!(
+            (v - k0).abs() < 1e-10,
+            "P(lbnd) = {v}, expected k[0] = {k0}"
+        );
+    }
+
+    #[test]
+    fn integ_with_scl_divides_coefficients() {
+        // scl=2 → integrated coefficients are halved relative to scl=1.
+        // For p(x)=1, integ once with k=0, scl=1 gives [0, 1] → x.
+        // Same with scl=2 gives [0, 0.5].
+        let p = Polynomial::new(&[1.0]);
+        let q1 = p.integ_with_bounds(1, &[0.0], 0.0, 1.0).unwrap();
+        let q2 = p.integ_with_bounds(1, &[0.0], 0.0, 2.0).unwrap();
+        assert!((q1.coeffs()[1] - 1.0).abs() < 1e-12);
+        assert!((q2.coeffs()[1] - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn integ_with_zero_scl_errors() {
+        let p = Polynomial::new(&[1.0]);
+        assert!(p.integ_with_bounds(1, &[], 0.0, 0.0).is_err());
+    }
 
     // ---- linspace (#477) -----------------------------------------------
 
