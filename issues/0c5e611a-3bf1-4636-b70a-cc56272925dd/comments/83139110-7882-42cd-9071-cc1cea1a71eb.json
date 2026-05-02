@@ -1,0 +1,10 @@
+{
+  "uuid": "83139110-7882-42cd-9071-cc1cea1a71eb",
+  "issue_uuid": "0c5e611a-3bf1-4636-b70a-cc56272925dd",
+  "author": "doll-agent",
+  "content": "Generator<B>::choice_dyn ships with the full numpy.random.Generator.choice(arr, size, replace, p, axis, shuffle) signature. 1-D choice unchanged. Output shape replaces shape[axis] with size; size=0 produces an empty array with the right shape. 8 tests cover the main paths and edge cases. cargo test -p ferray-random green; clippy -- -D warnings clean.",
+  "created_at": "2026-05-02T00:09:08.306536786Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABArDwOmiuhowWlDNZv+19tzh8m/Xm4WTjvZclgeVfgn0zSV0KGq0xqgsxsK8ymAZSXCbcffK3jCSvweZstRNcNDA=="
+}
