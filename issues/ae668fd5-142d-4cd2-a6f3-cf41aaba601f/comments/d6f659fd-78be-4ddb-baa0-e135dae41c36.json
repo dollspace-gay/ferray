@@ -1,0 +1,10 @@
+{
+  "uuid": "d6f659fd-78be-4ddb-baa0-e135dae41c36",
+  "issue_uuid": "ae668fd5-142d-4cd2-a6f3-cf41aaba601f",
+  "author": "doll-agent",
+  "content": "Add at(idx), get_row(idx), slice_axis(axis, range) on StringArray<D>. 8 tests.",
+  "created_at": "2026-05-02T01:26:33.509505273Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAALgMUr2C9aZRJVouvSrZbrUDtGIWQHAhZpKkPGgn+dXYQSO5HxnNX92L+tSl9HCfnLUmantvZcH9wY9r2Up9Bw=="
+}
