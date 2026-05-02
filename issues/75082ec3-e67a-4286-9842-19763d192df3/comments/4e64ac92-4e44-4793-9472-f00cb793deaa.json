@@ -1,0 +1,10 @@
+{
+  "uuid": "4e64ac92-4e44-4793-9472-f00cb793deaa",
+  "issue_uuid": "75082ec3-e67a-4286-9842-19763d192df3",
+  "author": "doll-agent",
+  "content": "Obsoleted by F32 wrappers.",
+  "created_at": "2026-05-02T02:41:14.030617091Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAc2aOkvk6yF0xyAWLDNzd69sJEDwqW/154EruiF++oVp6OPnCvGJ1avJnf7WrUbbybgZmCWMb4TzQI3Gq/GxYCA=="
+}
