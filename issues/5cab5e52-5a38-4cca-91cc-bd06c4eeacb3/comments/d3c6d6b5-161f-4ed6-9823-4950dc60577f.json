@@ -1,0 +1,10 @@
+{
+  "uuid": "d3c6d6b5-161f-4ed6-9823-4950dc60577f",
+  "issue_uuid": "5cab5e52-5a38-4cca-91cc-bd06c4eeacb3",
+  "author": "doll-agent",
+  "content": "Add four broadcast-aware distribution methods on Generator that take array parameters and use ferray-core's broadcast_shapes / broadcast_to helpers to determine output shape and walk inputs without copying: normal_array(loc, scale) -> f64, uniform_array(low, high) -> f64, exponential_array(scale) -> f64, poisson_array(lam) -> i64. The 4 functions cover the most common broadcast use cases (location/scale shifts, per-feature variance, varying rate Poisson processes) and establish the pattern so additional distributions can be added in follow-ups. Tests cover broadcast shape derivation, per-element parameter behavior, and per-parameter validation errors.",
+  "created_at": "2026-05-02T00:12:12.598256656Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAV7HHri4gwhkRH8DkOUubyVtpnwLGaz+Y6uZaDz6srZoi3G3PikSJiTSHK4ARwb1EJNOt/Aj125twjOflQn8UDg=="
+}
