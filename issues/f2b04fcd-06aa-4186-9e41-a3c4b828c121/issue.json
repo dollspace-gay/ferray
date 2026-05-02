@@ -1,0 +1,11 @@
+{
+  "uuid": "f2b04fcd-06aa-4186-9e41-a3c4b828c121",
+  "display_id": 725,
+  "title": "ferray-polynomial: ChebyshevF32 type (f32 sibling of Chebyshev)",
+  "description": "Follow-up from #475. PolynomialF32 (power basis) already ships in ferray-polynomial/src/power_f32.rs with the full inherent surface (eval, deriv, integ, add/sub/mul, fit, roots, to_f64, from_f64, with_domain, with_window). Add the parallel ChebyshevF32 sibling for the Chebyshev basis. Same shape: thin f32 type with conversion helpers to/from the f64 Chebyshev. Test parity with the existing Chebyshev tests.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-02T00:45:49.279097015Z",
+  "updated_at": "2026-05-02T00:45:49.279097015Z"
+}
