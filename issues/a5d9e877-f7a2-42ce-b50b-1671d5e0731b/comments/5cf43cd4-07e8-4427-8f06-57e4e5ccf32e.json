@@ -1,0 +1,10 @@
+{
+  "uuid": "5cf43cd4-07e8-4427-8f06-57e4e5ccf32e",
+  "issue_uuid": "a5d9e877-f7a2-42ce-b50b-1671d5e0731b",
+  "author": "doll-agent",
+  "content": "Display ships for all 6 basis types via formatting.rs. 12 tests pass.",
+  "created_at": "2026-05-02T01:09:55.036150737Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA6oQzNUmEp08QqBVoTa8HLPo+Muozzv1TO2h6hBC6pnd8MMlMMsVdV8W0bpqzoCLO3R6qQQzSqH7D0tIE983cCA=="
+}
