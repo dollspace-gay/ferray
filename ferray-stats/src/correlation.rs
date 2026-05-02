@@ -192,17 +192,15 @@ where
         diag.push(cov_data[i * n + i].sqrt());
     }
 
-    // Normalize: corrcoef[i,j] = cov[i,j] / (std[i] * std[j])
+    // Normalize: corrcoef[i,j] = cov[i,j] / (std[i] * std[j]).
+    // If either variable has zero deviation the correlation is
+    // undefined (0/0); numpy returns NaN, so we do too (#723).
     let mut corr_data = vec![<T as Element>::zero(); n * n];
     for i in 0..n {
         for j in 0..n {
             let d = diag[i] * diag[j];
             if d == <T as Element>::zero() {
-                corr_data[i * n + j] = if i == j {
-                    <T as Element>::one()
-                } else {
-                    <T as Element>::zero()
-                };
+                corr_data[i * n + j] = T::nan();
             } else {
                 let val = cov_data[i * n + j] / d;
                 // Clamp to [-1, 1] for numerical stability
@@ -312,6 +310,24 @@ mod tests {
     }
 
     #[test]
+    fn corrcoef_constant_row_returns_nan() {
+        // #723: row with zero variance has undefined correlation;
+        // numpy returns NaN. Pre-fix this returned 0.0 / 1.0.
+        let m = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 1.0, 1.0, 1.0, 2.0, 3.0],
+        )
+        .unwrap();
+        let c = corrcoef(&m, true).unwrap();
+        let s: Vec<f64> = c.iter().copied().collect();
+        // [[nan, nan], [nan, 1.0]]
+        assert!(s[0].is_nan(), "[0,0] = {}", s[0]);
+        assert!(s[1].is_nan(), "[0,1] = {}", s[1]);
+        assert!(s[2].is_nan(), "[1,0] = {}", s[2]);
+        assert!((s[3] - 1.0).abs() < 1e-12, "[1,1] = {}", s[3]);
+    }
+
+    #[test]
     fn test_corrcoef_negative() {
         let m = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 6.0, 5.0, 4.0])
             .unwrap();
@@ -342,23 +358,18 @@ mod tests {
     }
 
     #[test]
-    fn corrcoef_constant_variable_off_diagonal_is_zero() {
-        // A variable with zero variance has undefined correlation with
-        // anything. NumPy returns NaN; ferray currently returns 0.0
-        // (defensive: detects zero variance and clamps the normalisation
-        // ratio to 0 instead of letting it fall through to 0/0). This
-        // test pins ferray's actual behaviour and notes the deviation.
+    fn corrcoef_constant_variable_off_diagonal_is_nan() {
+        // A variable with zero variance has undefined correlation
+        // with anything. ferray now returns NaN to match numpy
+        // (#723); previously returned 0.0.
         // Row 0: constant [5, 5, 5]. Row 1: varying [1, 2, 3].
         let m = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![5.0, 5.0, 5.0, 1.0, 2.0, 3.0])
             .unwrap();
         let c = corrcoef(&m, true).unwrap();
         let data: Vec<f64> = c.iter().copied().collect();
-        // 2x2 result: [c(0,0), c(0,1), c(1,0), c(1,1)]
-        // Off-diagonal entries involving the constant variable: 0.0
-        // (would be NaN in numpy).
-        assert_eq!(data[1], 0.0);
-        assert_eq!(data[2], 0.0);
-        // Varying-variable diagonal: 1.0
+        assert!(data[0].is_nan());
+        assert!(data[1].is_nan());
+        assert!(data[2].is_nan());
         assert!((data[3] - 1.0).abs() < 1e-12);
     }
 
