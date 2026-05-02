@@ -1,0 +1,10 @@
+{
+  "uuid": "b7c5bf47-bd2e-49cc-8cf4-ae99e24105ed",
+  "issue_uuid": "3fa29547-82e6-4ae9-85a4-378b26461dda",
+  "author": "doll-agent",
+  "content": "Extend Bins<T> with seven rule-based variants: Sturges, Sqrt, Rice, Scott, Fd, Doane, Auto. Mark the enum #[non_exhaustive] for future additions. histogram and histogram_bin_edges share helpers (resolve_hist_range, build_uniform_edges, bins_from_rule). bins_from_rule computes the count from data + range with proper degenerate-case fallbacks (Scott/FD with zero variance/IQR, Doane for n<3, Auto = max(Sturges, FD)). 7 new tests verify per-rule counts and the Auto fallback when FD degenerates on constant data.",
+  "created_at": "2026-05-02T00:43:12.718065757Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAphePW+33W4qcEtXW/gCt+m3i3vf0ZWMKczNSgPH+pDLlQ9TFrOYUlykZnX1mxgsXncQDN5fwdtApg6gdmHk3BQ=="
+}
