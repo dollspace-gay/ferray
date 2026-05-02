@@ -165,6 +165,9 @@ pub const fn min_scalar_type(dt: DType) -> DType {
         // structured arrays are atomic in this layer (#342). Return
         // the input dtype unchanged.
         DType::Struct(_) => dt,
+        // Fixed-width string / void dtypes are byte-payload types
+        // (#741) — they don't promote to anything narrower.
+        DType::FixedAscii(_) | DType::FixedUnicode(_) | DType::RawBytes(_) => dt,
     }
 }
 

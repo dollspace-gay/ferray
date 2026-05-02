@@ -111,6 +111,22 @@ pub enum DType {
     /// `&'static [FieldDescriptor]` (e.g. via `Box::leak`); ferray-core
     /// does not allocate field descriptors at runtime.
     Struct(&'static [crate::record::FieldDescriptor]),
+
+    /// Fixed-width ASCII string with `n` bytes per element. Mirrors
+    /// numpy's `'S{n}'` dtype family. Backed by `[u8; n]` rows in a
+    /// flat byte buffer; trailing zeros pad short strings (#741).
+    FixedAscii(usize),
+
+    /// Fixed-width Unicode string with `n` codepoints per element
+    /// stored as UCS-4 (`4 * n` bytes per element). Mirrors numpy's
+    /// `'U{n}'` dtype family (#741).
+    FixedUnicode(usize),
+
+    /// Fixed-width raw byte / void dtype with `n` bytes per
+    /// element. Mirrors numpy's `'V{n}'` dtype family — opaque
+    /// fixed-size byte payloads with no UTF-8 / ASCII assumption
+    /// (#741).
+    RawBytes(usize),
 }
 
 impl DType {
@@ -160,6 +176,10 @@ impl DType {
                 }
                 max_end
             }
+            // String / void dtypes: fixed bytes per element.
+            // FixedUnicode is UCS-4 (4 bytes per codepoint).
+            Self::FixedAscii(n) | Self::RawBytes(n) => n,
+            Self::FixedUnicode(n) => 4 * n,
         }
     }
 
@@ -206,6 +226,10 @@ impl DType {
                 }
                 max_align
             }
+            // FixedAscii / RawBytes are byte-aligned arrays;
+            // FixedUnicode is naturally u32-aligned (UCS-4).
+            Self::FixedAscii(_) | Self::RawBytes(_) => 1,
+            Self::FixedUnicode(_) => core::mem::align_of::<u32>(),
         }
     }
 
@@ -318,6 +342,11 @@ impl fmt::Display for DType {
                 }
                 f.write_str("]")
             }
+            // Match numpy's '|S{n}' / '<U{n}' / '|V{n}' descriptors
+            // with the canonical type tag.
+            Self::FixedAscii(n) => write!(f, "S{n}"),
+            Self::FixedUnicode(n) => write!(f, "U{n}"),
+            Self::RawBytes(n) => write!(f, "V{n}"),
         }
     }
 }

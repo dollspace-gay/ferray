@@ -343,6 +343,14 @@ impl DynArray {
                     "DynArray cannot represent structured dtype targets yet",
                 ));
             }
+            // Fixed-width string / void dtypes (#741) need a
+            // byte-buffer-backed DynArray variant; currently
+            // rejected with a clear diagnostic.
+            DType::FixedAscii(_) | DType::FixedUnicode(_) | DType::RawBytes(_) => {
+                return Err(FerrayError::invalid_dtype(
+                    "DynArray cannot represent fixed-width string / void dtype targets yet (#741)",
+                ));
+            }
         })
     }
 
@@ -381,6 +389,14 @@ impl DynArray {
             DType::Struct(_) => {
                 return Err(FerrayError::invalid_dtype(
                     "DynArray::zeros doesn't support structured dtypes yet",
+                ));
+            }
+            // #741: fixed-width string / void zero-construction not
+            // yet wired into DynArray (would need a byte-buffer-backed
+            // variant).
+            DType::FixedAscii(_) | DType::FixedUnicode(_) | DType::RawBytes(_) => {
+                return Err(FerrayError::invalid_dtype(
+                    "DynArray::zeros doesn't support fixed-width string / void dtypes yet (#741)",
                 ));
             }
         })

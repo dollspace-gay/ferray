@@ -481,6 +481,14 @@ const fn dtype_ord(dt: DType) -> u32 {
         // numeric ordering range; promote_dtypes returns None when
         // either side is structured (atomic dtype).
         DType::Struct(_) => 200,
+        // Fixed-width string / void dtypes (#741) are atomic byte-
+        // payload types and don't promote with numerics. Each
+        // family gets its own out-of-range ordering bucket so
+        // identical (FixedAscii, FixedAscii) etc. stay
+        // self-equivalent without promoting to any other side.
+        DType::FixedAscii(_) => 300,
+        DType::FixedUnicode(_) => 301,
+        DType::RawBytes(_) => 302,
     }
 }
 
