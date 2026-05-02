@@ -3,11 +3,12 @@
   "display_id": 736,
   "title": "ferray-strings: alternative compact storage backend (fixed-width or Arrow-style)",
   "description": "Follow-up from #522. Prototype an alternative storage layout for StringArray: either fixed-width [u8; N] elements (matching numpy U10/S20 chararrays) or Apache Arrow's offsets-plus-values pattern. Goal: 3-5x memory reduction and better cache locality vs the current Vec<String> per-element layout. Make the backend selectable via a feature flag; preserve the public iter()-based API.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-02T01:27:29.152813547Z",
-  "updated_at": "2026-05-02T01:27:30.364085710Z",
+  "updated_at": "2026-05-02T02:51:05.329195493Z",
+  "closed_at": "2026-05-02T02:51:05.329195493Z",
   "labels": [
     "ferray-strings,research,follow-up,numpy-parity"
   ]
