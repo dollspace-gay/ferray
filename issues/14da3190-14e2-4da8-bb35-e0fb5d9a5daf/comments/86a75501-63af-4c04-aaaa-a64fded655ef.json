@@ -1,0 +1,10 @@
+{
+  "uuid": "86a75501-63af-4c04-aaaa-a64fded655ef",
+  "issue_uuid": "14da3190-14e2-4da8-bb35-e0fb5d9a5daf",
+  "author": "doll-agent",
+  "content": "Add ferray-stats/src/descriptive.rs with the scipy.stats descriptive set the issue calls out as expected: skew (third standardized moment), kurtosis (fourth, with Fisher/Pearson toggle), zscore (per-element standardized array), mode (most-frequent value with smallest-wins tiebreak), iqr (Q75 − Q25 via the existing quantile helper), sem (std/sqrt(n) with ddof=1), gmean (log-space geometric mean with positivity check), hmean (harmonic mean with positivity check). Re-exported from the crate root. Statistical *tests* (ttest, ks_2samp, chi2_contingency, pearsonr, spearmanr) need CDF infrastructure and are filed as a follow-up.",
+  "created_at": "2026-05-02T00:40:04.368195701Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAggUBRRNckavmi+Mwj5HPzoxYwWgtY4kqVc5/YseyK6RXTKT2uRfdFp+3hjev2gONcz8Yh9s1zyzcSIuiNmzPDw=="
+}
