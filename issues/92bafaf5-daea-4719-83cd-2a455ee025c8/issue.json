@@ -2,11 +2,12 @@
   "uuid": "92bafaf5-daea-4719-83cd-2a455ee025c8",
   "display_id": 746,
   "title": "Release prep: bump to 0.3.5 + clippy strict + fmt + README refresh",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "doll-agent",
   "created_at": "2026-05-02T03:23:27.894548634Z",
-  "updated_at": "2026-05-02T03:23:29.153745908Z",
+  "updated_at": "2026-05-02T03:32:20.098777601Z",
+  "closed_at": "2026-05-02T03:32:20.098777601Z",
   "labels": [
     "release"
   ]
