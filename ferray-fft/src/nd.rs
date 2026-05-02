@@ -211,10 +211,20 @@ pub fn fft_along_axes<T: FftFloat>(
 where
     Complex<T>: ferray_core::Element,
 {
-    let mut current_data = data.to_vec();
-    let mut current_shape = shape.to_vec();
+    // No axes specified — fall back to a copy of the input.
+    if axes_and_sizes.is_empty() {
+        return Ok((shape.to_vec(), data.to_vec()));
+    }
 
-    for &(axis, n) in axes_and_sizes {
+    // The first pass reads from the caller-owned `data` slice (no
+    // upfront copy needed — `fft_along_axis` allocates its own output).
+    // Subsequent passes feed the owned `current_data` from one pass to
+    // the next so we never re-copy the full array between axes (#439).
+    let (first_axis, first_n) = axes_and_sizes[0];
+    let (mut current_shape, mut current_data) =
+        fft_along_axis(data, shape, first_axis, first_n, inverse, norm)?;
+
+    for &(axis, n) in &axes_and_sizes[1..] {
         let (new_shape, new_data) =
             fft_along_axis(&current_data, &current_shape, axis, n, inverse, norm)?;
         current_shape = new_shape;
