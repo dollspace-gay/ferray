@@ -1,6 +1,6 @@
 // ferray-random: Permutations and sampling — shuffle, permutation, permuted, choice
 
-use ferray_core::{Array, FerrayError, Ix1};
+use ferray_core::{Array, FerrayError, Ix1, IxDyn};
 
 use crate::bitgen::BitGenerator;
 use crate::generator::Generator;
@@ -78,6 +78,104 @@ impl<B: BitGenerator> Generator<B> {
         T: ferray_core::Element,
     {
         self.permutation(arr)
+    }
+
+    /// Shuffle an N-D array in place along `axis`, swapping whole
+    /// hyperslices (rows when `axis == 0` for a 2-D array).
+    ///
+    /// Equivalent to `numpy.random.Generator.shuffle(x, axis=axis)`.
+    /// Each pair `(i, j)` selected by Fisher-Yates exchanges *all*
+    /// elements with axis-coordinate `i` and `j` simultaneously, so
+    /// rows / columns / N-D slices keep their internal structure (#447).
+    ///
+    /// # Errors
+    /// - `FerrayError::AxisOutOfBounds` if `axis >= arr.ndim()`.
+    /// - `FerrayError::InvalidValue` if `arr` is non-contiguous.
+    pub fn shuffle_dyn<T>(
+        &mut self,
+        arr: &mut Array<T, IxDyn>,
+        axis: usize,
+    ) -> Result<(), FerrayError>
+    where
+        T: ferray_core::Element,
+    {
+        let shape = arr.shape().to_vec();
+        let ndim = shape.len();
+        if axis >= ndim {
+            return Err(FerrayError::axis_out_of_bounds(axis, ndim));
+        }
+        let n = shape[axis];
+        if n <= 1 {
+            return Ok(());
+        }
+        let inner_stride: usize = shape[axis + 1..].iter().product();
+        let block = n * inner_stride;
+        let outer_size: usize = shape[..axis].iter().product();
+        let slice = arr
+            .as_slice_mut()
+            .ok_or_else(|| FerrayError::invalid_value("array must be contiguous for shuffle"))?;
+        for i in (1..n).rev() {
+            let j = self.bg.next_u64_bounded((i + 1) as u64) as usize;
+            if i == j {
+                continue;
+            }
+            for o in 0..outer_size {
+                let base = o * block;
+                for k in 0..inner_stride {
+                    slice.swap(base + i * inner_stride + k, base + j * inner_stride + k);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Independently permute the entries along `axis` of `arr`.
+    ///
+    /// Returns a new array. For each combination of "other" indices
+    /// (everything except `axis`) the values along `axis` are
+    /// shuffled with their own Fisher-Yates pass — so columns of a
+    /// 2-D array get independent permutations when `axis = 0`.
+    /// Equivalent to `numpy.random.Generator.permuted(x, axis=axis)`.
+    ///
+    /// # Errors
+    /// - `FerrayError::AxisOutOfBounds` if `axis >= arr.ndim()`.
+    /// - `FerrayError::InvalidValue` if `arr` is non-contiguous.
+    pub fn permuted_dyn<T>(
+        &mut self,
+        arr: &Array<T, IxDyn>,
+        axis: usize,
+    ) -> Result<Array<T, IxDyn>, FerrayError>
+    where
+        T: ferray_core::Element,
+    {
+        let shape = arr.shape().to_vec();
+        let ndim = shape.len();
+        if axis >= ndim {
+            return Err(FerrayError::axis_out_of_bounds(axis, ndim));
+        }
+        let mut out = arr.clone();
+        let n = shape[axis];
+        if n <= 1 {
+            return Ok(out);
+        }
+        let inner_stride: usize = shape[axis + 1..].iter().product();
+        let block = n * inner_stride;
+        let outer_size: usize = shape[..axis].iter().product();
+        let slice = out.as_slice_mut().ok_or_else(|| {
+            FerrayError::invalid_value("array must be contiguous for permuted")
+        })?;
+        for o in 0..outer_size {
+            let base = o * block;
+            for k in 0..inner_stride {
+                // Independent Fisher-Yates over the n axis positions
+                // at this (outer, inner) coordinate.
+                for i in (1..n).rev() {
+                    let j = self.bg.next_u64_bounded((i + 1) as u64) as usize;
+                    slice.swap(base + i * inner_stride + k, base + j * inner_stride + k);
+                }
+            }
+        }
+        Ok(out)
     }
 
     /// Randomly select elements from an array, with or without replacement.
@@ -434,6 +532,135 @@ mod tests {
                 p[i]
             );
         }
+    }
+
+    // ---- shuffle_dyn / permuted_dyn (#447) -----------------------------
+
+    #[test]
+    fn shuffle_dyn_axis0_swaps_whole_rows() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(42);
+        // 4×3: rows are [0,1,2], [10,11,12], [20,21,22], [30,31,32]
+        let data: Vec<i64> = (0..4)
+            .flat_map(|i| (0..3).map(move |j| i * 10 + j))
+            .collect();
+        let mut arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[4, 3]), data).unwrap();
+        rng.shuffle_dyn(&mut arr, 0).unwrap();
+        let slice = arr.as_slice().unwrap();
+        // Each row must still be one of the originals — internal layout preserved.
+        let mut seen = std::collections::HashSet::new();
+        for row in 0..4 {
+            let row_first = slice[row * 3];
+            let id = row_first / 10;
+            assert!(
+                (0..4).contains(&id),
+                "row {row} starts with unexpected value {row_first}"
+            );
+            assert_eq!(slice[row * 3 + 1], id * 10 + 1);
+            assert_eq!(slice[row * 3 + 2], id * 10 + 2);
+            assert!(seen.insert(id), "row id {id} duplicated — shuffle broke a row");
+        }
+    }
+
+    #[test]
+    fn shuffle_dyn_axis1_swaps_whole_columns() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(7);
+        // 3×4: column j is [j, 10+j, 20+j].
+        let data: Vec<i64> = (0..3)
+            .flat_map(|i| (0..4).map(move |j| i * 10 + j))
+            .collect();
+        let mut arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[3, 4]), data).unwrap();
+        rng.shuffle_dyn(&mut arr, 1).unwrap();
+        let slice = arr.as_slice().unwrap();
+        // Each column must still equal one of the original column patterns.
+        let mut col_ids = Vec::new();
+        for col in 0..4 {
+            let v0 = slice[col];
+            let v1 = slice[4 + col];
+            let v2 = slice[8 + col];
+            assert!((0..4).contains(&v0));
+            assert_eq!(v1, v0 + 10);
+            assert_eq!(v2, v0 + 20);
+            col_ids.push(v0);
+        }
+        col_ids.sort_unstable();
+        assert_eq!(col_ids, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn shuffle_dyn_axis_out_of_bounds() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(0);
+        let mut arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![0; 6]).unwrap();
+        assert!(rng.shuffle_dyn(&mut arr, 2).is_err());
+    }
+
+    #[test]
+    fn permuted_dyn_axis0_each_column_independent() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(99);
+        // 5×4 array; permuted along axis=0 → each column is independently
+        // shuffled, so a row is a *re-mix* of column-wise positions, not a
+        // whole-row swap.
+        let n_rows = 5;
+        let n_cols = 4;
+        let data: Vec<i64> = (0..n_rows * n_cols).map(|x| x as i64).collect();
+        let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[n_rows, n_cols]), data.clone())
+            .unwrap();
+        let result = rng.permuted_dyn(&arr, 0).unwrap();
+        let slice = result.as_slice().unwrap();
+        // Each column must be a permutation of the original column values.
+        for col in 0..n_cols {
+            let original_col: Vec<i64> = (0..n_rows).map(|r| (r * n_cols + col) as i64).collect();
+            let mut got_col: Vec<i64> = (0..n_rows).map(|r| slice[r * n_cols + col]).collect();
+            got_col.sort_unstable();
+            let mut want = original_col.clone();
+            want.sort_unstable();
+            assert_eq!(got_col, want, "col {col} lost values during permute");
+        }
+    }
+
+    #[test]
+    fn permuted_dyn_columns_can_diverge() {
+        use ferray_core::IxDyn;
+        // Permuted should produce different per-column orderings — across
+        // many trials the probability that all columns still match each
+        // other for a 5-row 4-column array is (1/120)^3 ≈ 1e-6.
+        let mut rng = default_rng_seeded(1234);
+        let n_rows = 5;
+        let n_cols = 4;
+        let data: Vec<i64> = (0..n_rows * n_cols).map(|x| x as i64 % n_rows as i64).collect();
+        let arr =
+            Array::<i64, IxDyn>::from_vec(IxDyn::new(&[n_rows, n_cols]), data.clone()).unwrap();
+        let result = rng.permuted_dyn(&arr, 0).unwrap();
+        let slice = result.as_slice().unwrap();
+        // Reference column 0 against each other column. At least one must differ.
+        let col0: Vec<i64> = (0..n_rows).map(|r| slice[r * n_cols]).collect();
+        let mut any_diff = false;
+        for col in 1..n_cols {
+            let coln: Vec<i64> = (0..n_rows).map(|r| slice[r * n_cols + col]).collect();
+            if col0 != coln {
+                any_diff = true;
+                break;
+            }
+        }
+        assert!(any_diff, "all columns matched — permuted didn't independently shuffle");
+    }
+
+    #[test]
+    fn permuted_dyn_seed_reproducible() {
+        use ferray_core::IxDyn;
+        let mut a = default_rng_seeded(31);
+        let mut b = default_rng_seeded(31);
+        let arr = Array::<i64, IxDyn>::from_vec(
+            IxDyn::new(&[3, 3]),
+            (0..9).collect(),
+        )
+        .unwrap();
+        let xa = a.permuted_dyn(&arr, 1).unwrap();
+        let xb = b.permuted_dyn(&arr, 1).unwrap();
+        assert_eq!(xa.as_slice().unwrap(), xb.as_slice().unwrap());
     }
 
     #[test]
