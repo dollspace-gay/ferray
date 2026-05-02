@@ -118,6 +118,154 @@ where
     Ok(view)
 }
 
+/// Signed-stride sibling of [`as_strided`] (#737).
+///
+/// Accepts `strides: &[isize]` so callers can construct reversed
+/// views, transposed views with reversed axes, etc. `start_offset`
+/// shifts the base pointer (in element units) before strides are
+/// applied — necessary so negative strides land inside the buffer.
+///
+/// Bounds check: `start_offset + min_reachable_offset` must be in
+/// `[0, buf_len)` and `start_offset + max_reachable_offset` must be
+/// in `[0, buf_len)`. Overlap check rejects layouts where two
+/// distinct multi-indices map to the same memory location.
+///
+/// # Errors
+/// `FerrayError::InvalidValue` if dimensions don't match,
+/// the stride pattern produces out-of-bounds offsets, or different
+/// indices alias the same element.
+pub fn as_strided_signed<'a, T, S>(
+    source: &'a S,
+    shape: &[usize],
+    strides: &[isize],
+    start_offset: usize,
+) -> FerrayResult<ArrayView<'a, T, IxDyn>>
+where
+    T: Element,
+    S: StridedSource<T>,
+{
+    validate_signed_bounds(source, shape, strides, start_offset, "as_strided_signed")?;
+    let n_elements: usize = shape.iter().product();
+    if n_elements > 0 && crate::overlap_check::has_overlapping_strides(shape, strides) {
+        return Err(FerrayError::invalid_value(format!(
+            "as_strided_signed: strides {strides:?} with shape {shape:?} produce \
+             overlapping memory accesses; use as_strided_signed_unchecked for \
+             overlapping views",
+        )));
+    }
+    // Re-interpret each isize stride as usize via the bit pattern;
+    // ndarray internally treats stride bytes as isize, so this
+    // preserves the negative-stride semantics through the
+    // ArrayView constructor.
+    let strides_usize: Vec<usize> = strides.iter().map(|&s| s as usize).collect();
+    // SAFETY: bounds + overlap checks passed. start_offset shifts
+    // the base pointer to the location from which negative strides
+    // reach into the source buffer.
+    let base = source.strided_as_ptr();
+    let ptr = unsafe { base.add(start_offset) };
+    let view = unsafe { ArrayView::from_shape_ptr(ptr, shape, &strides_usize) };
+    Ok(view)
+}
+
+/// Unchecked sibling of [`as_strided_signed`].
+///
+/// Same as `as_strided_signed` but skips the overlap check;
+/// callers must uphold the no-mutation / logical-correctness
+/// contract documented on [`as_strided_unchecked`].
+///
+/// # Safety
+/// See [`as_strided_unchecked`] — same invariants apply.
+///
+/// # Errors
+/// `FerrayError::InvalidValue` if dimensions don't match or the
+/// stride pattern produces out-of-bounds offsets.
+pub unsafe fn as_strided_signed_unchecked<'a, T, S>(
+    source: &'a S,
+    shape: &[usize],
+    strides: &[isize],
+    start_offset: usize,
+) -> FerrayResult<ArrayView<'a, T, IxDyn>>
+where
+    T: Element,
+    S: StridedSource<T>,
+{
+    validate_signed_bounds(
+        source,
+        shape,
+        strides,
+        start_offset,
+        "as_strided_signed_unchecked",
+    )?;
+    let strides_usize: Vec<usize> = strides.iter().map(|&s| s as usize).collect();
+    let base = source.strided_as_ptr();
+    // SAFETY: caller's contract.
+    let ptr = unsafe { base.add(start_offset) };
+    let view = unsafe { ArrayView::from_shape_ptr(ptr, shape, &strides_usize) };
+    Ok(view)
+}
+
+fn validate_signed_bounds<T, S>(
+    source: &S,
+    shape: &[usize],
+    strides: &[isize],
+    start_offset: usize,
+    fn_name: &str,
+) -> FerrayResult<()>
+where
+    T: Element,
+    S: StridedSource<T>,
+{
+    if shape.len() != strides.len() {
+        return Err(FerrayError::invalid_value(format!(
+            "{fn_name}: shape length ({}) must equal strides length ({})",
+            shape.len(),
+            strides.len(),
+        )));
+    }
+    let n_elements: usize = shape.iter().product();
+    if n_elements == 0 {
+        return Ok(());
+    }
+
+    // Negative strides aren't yet supported through ferray-core's
+    // safe `ArrayView::from_shape_ptr`; ndarray's raw-view path
+    // would accept them but ferray-core doesn't yet expose that
+    // constructor (#744). Reject with a clear diagnostic so users
+    // see what's missing rather than a deep ndarray error.
+    if strides.iter().any(|&s| s < 0) {
+        return Err(FerrayError::invalid_value(format!(
+            "{fn_name}: negative strides aren't supported yet — ferray-core needs \
+             RawArrayView wiring (tracked in #744). strides={strides:?}"
+        )));
+    }
+
+    // Compute min and max offsets reachable.
+    let mut min_offset: isize = 0;
+    let mut max_offset: isize = 0;
+    for (i, &s) in strides.iter().enumerate() {
+        if shape[i] == 0 {
+            continue;
+        }
+        let extent = (shape[i] as isize - 1) * s;
+        if extent > 0 {
+            max_offset += extent;
+        } else {
+            min_offset += extent;
+        }
+    }
+    let buf_len = source.strided_size() as isize;
+    let lo = start_offset as isize + min_offset;
+    let hi = start_offset as isize + max_offset;
+    if lo < 0 || hi >= buf_len {
+        return Err(FerrayError::invalid_value(format!(
+            "{fn_name}: strides {strides:?} with shape {shape:?} and start_offset \
+             {start_offset} would access elements outside the source buffer of length \
+             {buf_len} (reachable range [{lo}, {hi}])"
+        )));
+    }
+    Ok(())
+}
+
 /// Shared validation + bounds-check between [`as_strided`] and
 /// [`as_strided_unchecked`]. Returns the signed stride vector on
 /// success so the caller can feed it back into
@@ -237,6 +385,69 @@ where
 mod tests {
     use super::*;
     use ferray_core::dimension::Ix1;
+
+    // ---- as_strided_signed (#737) --------------------------------------
+
+    #[test]
+    fn signed_with_positive_strides_works_like_as_strided() {
+        let a =
+            Array::<i32, Ix1>::from_vec(Ix1::new([6]), vec![1, 2, 3, 4, 5, 6]).unwrap();
+        let v = as_strided_signed(&a, &[2, 3], &[3, 1], 0).unwrap();
+        let data: Vec<i32> = v.iter().copied().collect();
+        assert_eq!(data, vec![1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn signed_with_start_offset_advances_base() {
+        // Take elements [2, 3, 4] from [1, 2, 3, 4, 5] using
+        // start_offset=1 and stride=1.
+        let a =
+            Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let v = as_strided_signed(&a, &[3], &[1], 1).unwrap();
+        let data: Vec<i32> = v.iter().copied().collect();
+        assert_eq!(data, vec![2, 3, 4]);
+    }
+
+    #[test]
+    fn signed_zero_stride_overlap_rejected_by_default() {
+        // Stride 0 == every index aliases — checked variant rejects.
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![10, 20, 30]).unwrap();
+        let err = as_strided_signed(&a, &[5], &[0], 0).unwrap_err();
+        assert!(err.to_string().contains("overlapping"));
+    }
+
+    #[test]
+    fn signed_unchecked_allows_zero_stride_broadcast() {
+        // Stride 0 with the unchecked variant: broadcast over a
+        // length-N shape yields N copies of the base element.
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![10, 20, 30]).unwrap();
+        let v = unsafe { as_strided_signed_unchecked(&a, &[5], &[0], 0) }.unwrap();
+        let data: Vec<i32> = v.iter().copied().collect();
+        assert_eq!(data, vec![10, 10, 10, 10, 10]);
+    }
+
+    #[test]
+    fn signed_negative_stride_currently_rejected_with_diagnostic() {
+        // Negative strides need ferray-core RawArrayView wiring
+        // (tracked in #744). The signed entry rejects them with a
+        // pointer to that issue so callers know what's blocked.
+        let a =
+            Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let err = as_strided_signed(&a, &[5], &[-1], 4).unwrap_err();
+        assert!(err.to_string().contains("#744"), "got: {err}");
+    }
+
+    #[test]
+    fn signed_offset_beyond_buffer_errors() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([3]), vec![1, 2, 3]).unwrap();
+        assert!(as_strided_signed(&a, &[2], &[1], 5).is_err());
+    }
+
+    #[test]
+    fn signed_dimension_mismatch_errors() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        assert!(as_strided_signed(&a, &[2, 3], &[1], 0).is_err());
+    }
 
     #[test]
     fn as_strided_contiguous_reshape() {

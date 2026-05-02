@@ -43,7 +43,9 @@ pub mod sliding_window;
 
 // Re-export primary public functions at crate root for ergonomics.
 
-pub use as_strided::{StridedSource, as_strided, as_strided_unchecked};
+pub use as_strided::{
+    StridedSource, as_strided, as_strided_signed, as_strided_signed_unchecked, as_strided_unchecked,
+};
 pub use broadcast::{broadcast_arrays, broadcast_shapes, broadcast_to};
 pub use sliding_window::{sliding_window_view, sliding_window_view_axis};
 
