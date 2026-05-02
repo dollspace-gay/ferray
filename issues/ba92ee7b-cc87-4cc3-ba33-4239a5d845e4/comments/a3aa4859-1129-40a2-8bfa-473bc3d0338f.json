@@ -1,0 +1,10 @@
+{
+  "uuid": "a3aa4859-1129-40a2-8bfa-473bc3d0338f",
+  "issue_uuid": "ba92ee7b-cc87-4cc3-ba33-4239a5d845e4",
+  "author": "doll-agent",
+  "content": "Add chi2_contingency on Array<T, Ix2>. Computes statistic + expected table from row/col sums; p-value via regularised upper incomplete gamma Q(df/2, x/2). gamma_q split: series for x<a+1, Lentz CF for x>=a+1. Reuses existing Lanczos ln_gamma. Returns Chi2ContingencyResult with statistic/p_value/dof/expected. 6 tests cover independent-table (p=1), strong-diagonal (p tiny), known 2x3 expected value, zero-row + empty errors, gamma_q closed-form values.",
+  "created_at": "2026-05-02T02:36:46.032269773Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAl4HvFGAo7ACWpRZRgiSsvEQ0KIceqGbMxAg43qFRAa94XZM/Vh40TDG3V89wiOZ3P/rfqtSL8cS+96bNScvlCA=="
+}
