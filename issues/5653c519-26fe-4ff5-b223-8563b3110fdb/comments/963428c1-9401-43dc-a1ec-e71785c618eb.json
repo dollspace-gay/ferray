@@ -1,0 +1,10 @@
+{
+  "uuid": "963428c1-9401-43dc-a1ec-e71785c618eb",
+  "issue_uuid": "5653c519-26fe-4ff5-b223-8563b3110fdb",
+  "author": "doll-agent",
+  "content": "Audit. NpyElement impls for half::f16 and half::bf16 already exist in npy/mod.rs lines 548-551 (behind feature flags). dtype_parse maps 'f2'→F16 (line 68-69) and 'bf16'→BF16 (line 75-76). Load/save dispatch handles both DTypes. Round-trip tests already in place. Issue is stale.",
+  "created_at": "2026-05-02T01:14:06.724931088Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAwoz2FEe0VEStBtOQHAJr6g+QUuqxy9tmD1XgW2Jt1bogiDRjhC2dxv7Qh7oWdJLaCQ88/hnUG1VgbFC4PQw4AQ=="
+}
