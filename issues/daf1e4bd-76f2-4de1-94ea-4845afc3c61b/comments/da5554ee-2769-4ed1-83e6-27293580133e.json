@@ -1,0 +1,10 @@
+{
+  "uuid": "da5554ee-2769-4ed1-83e6-27293580133e",
+  "issue_uuid": "daf1e4bd-76f2-4de1-94ea-4845afc3c61b",
+  "author": "doll-agent",
+  "content": "Audit complete. PolynomialF32 (power basis) already ships in power_f32.rs — issue body's 'no f32 support exists' was stale. Filed five concrete sibling-type follow-ups (#725 ChebyshevF32, #726 HermiteF32, #727 HermiteEF32, #728 LegendreF32, #729 LaguerreF32) plus #730 (complex coefficients) and #731 (Poly<T> genericization as the alternative path). Closing #475 — work is tracked in concrete follow-ups.",
+  "created_at": "2026-05-02T00:46:32.445737255Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA4Te2ZxQNsgZ2r5ywqguxVa+WVAtGhpfC4XNv3rF9ytlrEss+9iGSgNfZh8ggeH1YgWIQpD/Kc2j9k5DMWJ2lAA=="
+}
