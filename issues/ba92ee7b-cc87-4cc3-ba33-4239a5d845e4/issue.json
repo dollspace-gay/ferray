@@ -3,11 +3,12 @@
   "display_id": 743,
   "title": "ferray-stats: chi2_contingency (needs incomplete gamma)",
   "description": "Follow-up from #724. The chi2 test statistic on contingency tables is straightforward; the p-value needs the regularised incomplete gamma function for the chi-squared CDF. Implement Q(a, x) via the standard series + continued-fraction split (a ≈ x boundary), then expose chi2_contingency(observed) -> (chi2, dof, p, expected).",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-02T02:25:54.918307640Z",
-  "updated_at": "2026-05-02T02:25:56.177032347Z",
+  "updated_at": "2026-05-02T02:37:23.287735536Z",
+  "closed_at": "2026-05-02T02:37:23.287735536Z",
   "labels": [
     "ferray-stats,feature,follow-up,numpy-parity"
   ]
