@@ -1,0 +1,10 @@
+{
+  "uuid": "c61fe1c9-651d-4f79-9cc3-5221c9aa40a9",
+  "issue_uuid": "1efe7e84-6277-4f0e-92f1-af1f83bb4971",
+  "author": "doll-agent",
+  "content": "multivariate_hypergeometric landed via marginals algorithm with 6 unit tests (shape/row-sum, per-color bounds, marginal-means against closed-form expectation/variance, take-all, seed-reproducible, bad-params). zipf was already in distributions/discrete.rs:436; noncentral_chisquare and noncentral_f were already in distributions/gamma.rs:251 and :304. cargo test -p ferray-random green; clippy clean.",
+  "created_at": "2026-05-02T00:04:56.190747696Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAIIY2YHSl7I2dMMpervbstxvm5LlpHfDcdY2/IxaRQn+4tZJ8yZ3ETZjdrZaZ0wHyFn5cVL8M25kh8SbnjZ1HAw=="
+}
