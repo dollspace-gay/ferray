@@ -43,6 +43,24 @@ pub fn parse_dtype_str(s: &str) -> FerrayResult<(DType, Endianness)> {
         )));
     }
 
+    // Structured (record) dtype descriptor — numpy serialises these
+    // as a Python list literal, e.g. "[('x', '<f4'), ('y', '<f4')]".
+    // ferray-io recognises the form for a clearer diagnostic but
+    // doesn't yet load into a FerrayRecord array; tracked in #735.
+    if s.starts_with('[') && s.ends_with(']') {
+        let fields = parse_structured_descr(s)?;
+        let pretty: Vec<String> = fields
+            .iter()
+            .map(|(name, dt)| format!("('{name}', '{dt}')"))
+            .collect();
+        return Err(FerrayError::invalid_dtype(format!(
+            "structured dtype '[{}]' (fields: {}) is recognised but loading \
+             into FerrayRecord arrays is tracked in issue #735",
+            pretty.join(", "),
+            fields.len()
+        )));
+    }
+
     let (endian, type_str) = match s.as_bytes()[0] {
         b'<' => (Endianness::Little, &s[1..]),
         b'>' => (Endianness::Big, &s[1..]),
@@ -197,6 +215,75 @@ pub fn dtype_to_descr(dtype: DType, endian: Endianness) -> FerrayResult<String> 
     };
 
     Ok(format!("{actual_prefix}{type_str}"))
+}
+
+/// Parse a numpy structured-dtype descriptor like
+/// `[('x', '<f4'), ('y', '<f4'), ('label', '|S10')]` into a list of
+/// `(field_name, field_dtype_descr)` pairs. Used for diagnostic
+/// messaging only — actual loading into FerrayRecord arrays is
+/// tracked in #735.
+fn parse_structured_descr(s: &str) -> FerrayResult<Vec<(String, String)>> {
+    let inner = s
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .ok_or_else(|| {
+            FerrayError::invalid_dtype(format!("malformed structured descriptor: '{s}'"))
+        })?;
+    let mut out = Vec::new();
+    // Split top-level on `),` boundaries — each field is a tuple.
+    let mut depth = 0_i32;
+    let mut cur = String::new();
+    for c in inner.chars() {
+        match c {
+            '(' => {
+                depth += 1;
+                cur.push(c);
+            }
+            ')' => {
+                depth -= 1;
+                cur.push(c);
+                if depth == 0 {
+                    let trimmed = cur.trim().trim_start_matches(',').trim();
+                    if !trimmed.is_empty() {
+                        let pair = parse_structured_field(trimmed)?;
+                        out.push(pair);
+                    }
+                    cur.clear();
+                }
+            }
+            _ => cur.push(c),
+        }
+    }
+    if depth != 0 {
+        return Err(FerrayError::invalid_dtype(format!(
+            "structured descriptor has unbalanced parentheses: '{s}'"
+        )));
+    }
+    Ok(out)
+}
+
+/// Parse one `('name', 'dtype')` tuple into the unquoted strings.
+fn parse_structured_field(field: &str) -> FerrayResult<(String, String)> {
+    let inside = field
+        .trim()
+        .strip_prefix('(')
+        .and_then(|s| s.strip_suffix(')'))
+        .ok_or_else(|| {
+            FerrayError::invalid_dtype(format!("structured field must be a tuple: '{field}'"))
+        })?;
+    let parts: Vec<&str> = inside.splitn(2, ',').map(str::trim).collect();
+    if parts.len() != 2 {
+        return Err(FerrayError::invalid_dtype(format!(
+            "structured field '{field}' must have exactly two parts (name, dtype)"
+        )));
+    }
+    let name = parts[0]
+        .trim_matches(|c| c == '\'' || c == '"')
+        .to_string();
+    let dtype = parts[1]
+        .trim_matches(|c| c == '\'' || c == '"')
+        .to_string();
+    Ok((name, dtype))
 }
 
 /// Return the native-endian dtype descriptor for a given `DType`.
@@ -425,6 +512,43 @@ mod tests {
     #[test]
     fn unknown_datetime_unit_errors() {
         assert!(parse_dtype_str("<M8[foobar]").is_err());
+    }
+
+    // ---- structured dtype descriptors (#735) ---------------------------
+
+    #[test]
+    fn parse_structured_two_fields_recognised() {
+        let err = parse_dtype_str("[('x', '<f4'), ('y', '<f4')]").unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("'x'") && s.contains("'y'"), "got: {s}");
+        assert!(s.contains("fields: 2"));
+        assert!(s.contains("#735"));
+    }
+
+    #[test]
+    fn parse_structured_three_mixed_fields_recognised() {
+        let err =
+            parse_dtype_str("[('a', '<i4'), ('b', '<f8'), ('c', '|S10')]").unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("fields: 3"), "got: {s}");
+        assert!(s.contains("#735"));
+    }
+
+    #[test]
+    fn parse_structured_single_field() {
+        let err = parse_dtype_str("[('only', '<f8')]").unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("'only'"));
+        assert!(s.contains("fields: 1"));
+    }
+
+    #[test]
+    fn structured_descr_helper_extracts_pairs() {
+        let pairs =
+            parse_structured_descr("[('x', '<f4'), ('y', '<i8')]").unwrap();
+        assert_eq!(pairs.len(), 2);
+        assert_eq!(pairs[0], ("x".into(), "<f4".into()));
+        assert_eq!(pairs[1], ("y".into(), "<i8".into()));
     }
 
     // ---- fixed-width string / unicode / void parser (#734) -------------
