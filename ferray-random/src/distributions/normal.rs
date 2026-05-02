@@ -1,5 +1,6 @@
 // ferray-random: Normal distribution sampling — standard_normal, normal, lognormal
 
+use ferray_core::dimension::broadcast::broadcast_shapes;
 use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
@@ -67,6 +68,43 @@ impl<B: BitGenerator> Generator<B> {
         let n = shape_size(&shape);
         let data = generate_vec(self, n, |bg| scale.mul_add(standard_normal_single(bg), loc));
         vec_to_array_f64(data, &shape)
+    }
+
+    /// Generate an array of normal variates with broadcast array
+    /// parameters (#449).
+    ///
+    /// `loc` and `scale` are arrays that NumPy-broadcast against each
+    /// other to produce the output shape. Each output element is
+    /// `loc[i] + scale[i] * Z` where `Z` is a fresh standard-normal
+    /// draw. Equivalent to `numpy.random.Generator.normal(loc, scale)`
+    /// when both are arrays.
+    ///
+    /// For scalar parameters, prefer [`normal`](Self::normal) — it
+    /// avoids the broadcast view and is faster.
+    ///
+    /// # Errors
+    /// - `FerrayError::ShapeMismatch` if the two shapes are not
+    ///   broadcast-compatible.
+    /// - `FerrayError::InvalidValue` if any `scale` element is `<= 0`.
+    pub fn normal_array(
+        &mut self,
+        loc: &Array<f64, IxDyn>,
+        scale: &Array<f64, IxDyn>,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
+        let target = broadcast_shapes(loc.shape(), scale.shape())?;
+        let loc_v = loc.broadcast_to(&target)?;
+        let scale_v = scale.broadcast_to(&target)?;
+        let total: usize = target.iter().product();
+        let mut out: Vec<f64> = Vec::with_capacity(total);
+        for (&l, &s) in loc_v.iter().zip(scale_v.iter()) {
+            if s <= 0.0 {
+                return Err(FerrayError::invalid_value(format!(
+                    "scale must be positive, got {s}"
+                )));
+            }
+            out.push(s.mul_add(standard_normal_single(&mut self.bg), l));
+        }
+        Array::<f64, IxDyn>::from_vec(IxDyn::new(&target), out)
     }
 
     /// Generate an array of standard normal (mean=0, std=1) `f32` variates.
@@ -214,6 +252,99 @@ mod tests {
         let mut rng = default_rng_seeded(42);
         assert!(rng.normal(0.0, 0.0, 100).is_err());
         assert!(rng.normal(0.0, -1.0, 100).is_err());
+    }
+
+    #[test]
+    fn normal_array_broadcast_scalar_x_vector() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(42);
+        // loc shape (3,), scale shape (1,) — broadcast to (3,).
+        let loc = ferray_core::Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[3]),
+            vec![0.0, 10.0, -5.0],
+        )
+        .unwrap();
+        let scale =
+            ferray_core::Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1]), vec![1.0]).unwrap();
+        let out = rng.normal_array(&loc, &scale).unwrap();
+        assert_eq!(out.shape(), &[3]);
+    }
+
+    #[test]
+    fn normal_array_2d_broadcast_means_match_loc() {
+        use ferray_core::IxDyn;
+        // loc shape (3, 1), scale shape (1, 4) → output (3, 4) where
+        // every row j shares loc[j] and every column shares scale.
+        // With many draws per element the per-row mean → loc[j].
+        let mut rng = default_rng_seeded(7);
+        let loc = ferray_core::Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[3, 1]),
+            vec![0.0, 5.0, -3.0],
+        )
+        .unwrap();
+        let scale = ferray_core::Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[1, 4]),
+            vec![1.0, 0.5, 2.0, 0.1],
+        )
+        .unwrap();
+
+        let n_trials = 5_000;
+        let mut row_sums = [0.0_f64; 3];
+        for _ in 0..n_trials {
+            let out = rng.normal_array(&loc, &scale).unwrap();
+            assert_eq!(out.shape(), &[3, 4]);
+            let s = out.as_slice().unwrap();
+            for r in 0..3 {
+                for c in 0..4 {
+                    row_sums[r] += s[r * 4 + c];
+                }
+            }
+        }
+        // Row r averages over 4 columns × n_trials draws with mean loc[r].
+        let denom = (n_trials * 4) as f64;
+        let expected = [0.0, 5.0, -3.0];
+        for r in 0..3 {
+            let m = row_sums[r] / denom;
+            assert!(
+                (m - expected[r]).abs() < 0.05,
+                "row {r} mean {m} too far from {}",
+                expected[r]
+            );
+        }
+    }
+
+    #[test]
+    fn normal_array_bad_scale_errors() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(0);
+        let loc = ferray_core::Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2]),
+            vec![0.0, 0.0],
+        )
+        .unwrap();
+        let scale = ferray_core::Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2]),
+            vec![1.0, -0.5],
+        )
+        .unwrap();
+        assert!(rng.normal_array(&loc, &scale).is_err());
+    }
+
+    #[test]
+    fn normal_array_shape_mismatch_errors() {
+        use ferray_core::IxDyn;
+        let mut rng = default_rng_seeded(0);
+        let loc = ferray_core::Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[3]),
+            vec![0.0; 3],
+        )
+        .unwrap();
+        let scale = ferray_core::Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2]),
+            vec![1.0; 2],
+        )
+        .unwrap();
+        assert!(rng.normal_array(&loc, &scale).is_err());
     }
 
     #[test]

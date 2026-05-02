@@ -64,6 +64,33 @@ impl<B: BitGenerator> Generator<B> {
         vec_to_array_f64(data, &shape)
     }
 
+    /// Generate an array of exponential variates with a broadcast
+    /// scale parameter (#449).
+    ///
+    /// `scale` is an array; each output element is sampled from
+    /// `Exp(rate = 1/scale[i])`. The output shape equals
+    /// `scale.shape()`.
+    ///
+    /// # Errors
+    /// - `FerrayError::InvalidValue` if any `scale` element is `<= 0`.
+    pub fn exponential_array(
+        &mut self,
+        scale: &Array<f64, IxDyn>,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
+        let shape = scale.shape().to_vec();
+        let total: usize = shape.iter().product();
+        let mut out: Vec<f64> = Vec::with_capacity(total);
+        for &s in scale.iter() {
+            if s <= 0.0 {
+                return Err(FerrayError::invalid_value(format!(
+                    "scale must be positive, got {s}"
+                )));
+            }
+            out.push(s * standard_exponential_single(&mut self.bg));
+        }
+        Array::<f64, IxDyn>::from_vec(IxDyn::new(&shape), out)
+    }
+
     /// Generate an array of standard exponential `f32` variates.
     ///
     /// The f32 analogue of [`standard_exponential`](Self::standard_exponential).
@@ -105,6 +132,64 @@ impl<B: BitGenerator> Generator<B> {
 #[cfg(test)]
 mod tests {
     use crate::default_rng_seeded;
+
+    // ---- exponential_array (#449) --------------------------------------
+
+    #[test]
+    fn exponential_array_shape_matches_scale() {
+        use ferray_core::{Array, IxDyn};
+        let mut rng = default_rng_seeded(42);
+        let scale = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 3]),
+            vec![1.0, 2.0, 0.5, 4.0, 1.5, 3.0],
+        )
+        .unwrap();
+        let out = rng.exponential_array(&scale).unwrap();
+        assert_eq!(out.shape(), &[2, 3]);
+        for &v in out.as_slice().unwrap() {
+            assert!(v >= 0.0);
+        }
+    }
+
+    #[test]
+    fn exponential_array_per_element_mean() {
+        use ferray_core::{Array, IxDyn};
+        // Generate many trials with the same per-element scale and
+        // confirm the per-element empirical mean ≈ scale[i].
+        let mut rng = default_rng_seeded(7);
+        let scales = [0.5_f64, 2.0, 5.0];
+        let scale =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), scales.to_vec()).unwrap();
+        let n_trials = 20_000;
+        let mut sums = [0.0_f64; 3];
+        for _ in 0..n_trials {
+            let out = rng.exponential_array(&scale).unwrap();
+            let s = out.as_slice().unwrap();
+            for j in 0..3 {
+                sums[j] += s[j];
+            }
+        }
+        for j in 0..3 {
+            let m = sums[j] / n_trials as f64;
+            // Exp(scale) has variance scale^2; SE for n_trials draws is scale / sqrt(n).
+            let se = scales[j] / (n_trials as f64).sqrt();
+            assert!(
+                (m - scales[j]).abs() < 4.0 * se,
+                "element {j}: mean {m} too far from {}",
+                scales[j]
+            );
+        }
+    }
+
+    #[test]
+    fn exponential_array_bad_scale_errors() {
+        use ferray_core::{Array, IxDyn};
+        let mut rng = default_rng_seeded(0);
+        let scale =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0, -1.0])
+                .unwrap();
+        assert!(rng.exponential_array(&scale).is_err());
+    }
 
     #[test]
     fn standard_exponential_positive() {

@@ -303,6 +303,37 @@ impl<B: BitGenerator> Generator<B> {
         vec_to_array_i64(data, &shape_vec)
     }
 
+    /// Generate an array of Poisson variates with a broadcast `lam`
+    /// parameter (#449).
+    ///
+    /// `lam` is an array of expected counts; each output element is
+    /// sampled from `Poisson(lam[i])`. Output shape equals
+    /// `lam.shape()`.
+    ///
+    /// # Errors
+    /// - `FerrayError::InvalidValue` if any `lam` element is negative.
+    pub fn poisson_array(
+        &mut self,
+        lam: &Array<f64, IxDyn>,
+    ) -> Result<Array<i64, IxDyn>, FerrayError> {
+        let shape = lam.shape().to_vec();
+        let total: usize = shape.iter().product();
+        let mut out: Vec<i64> = Vec::with_capacity(total);
+        for &l in lam.iter() {
+            if l < 0.0 {
+                return Err(FerrayError::invalid_value(format!(
+                    "lam must be non-negative, got {l}"
+                )));
+            }
+            if l == 0.0 {
+                out.push(0);
+            } else {
+                out.push(poisson_single(&mut self.bg, l));
+            }
+        }
+        Array::<i64, IxDyn>::from_vec(IxDyn::new(&shape), out)
+    }
+
     /// Generate an array of geometric-distributed variates.
     ///
     /// The number of trials until the first success (1-based).
@@ -490,6 +521,70 @@ fn hypergeometric_single<B: BitGenerator>(bg: &mut B, ngood: u64, nbad: u64, nsa
 #[cfg(test)]
 mod tests {
     use crate::default_rng_seeded;
+
+    // ---- poisson_array (#449) ------------------------------------------
+
+    #[test]
+    fn poisson_array_shape_matches_lam() {
+        use ferray_core::{Array, IxDyn};
+        use crate::default_rng_seeded;
+        let mut rng = default_rng_seeded(42);
+        let lam = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 2]),
+            vec![1.0, 5.0, 50.0, 0.0],
+        )
+        .unwrap();
+        let out = rng.poisson_array(&lam).unwrap();
+        assert_eq!(out.shape(), &[2, 2]);
+        // Last element is lam=0 → must be exactly 0.
+        let s = out.as_slice().unwrap();
+        assert_eq!(s[3], 0);
+        for &v in s {
+            assert!(v >= 0);
+        }
+    }
+
+    #[test]
+    fn poisson_array_per_element_mean() {
+        use ferray_core::{Array, IxDyn};
+        use crate::default_rng_seeded;
+        let mut rng = default_rng_seeded(11);
+        let lams = [3.0_f64, 50.0];
+        let lam =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), lams.to_vec()).unwrap();
+        let n_trials = 5_000;
+        let mut sums = [0.0_f64; 2];
+        for _ in 0..n_trials {
+            let out = rng.poisson_array(&lam).unwrap();
+            let s = out.as_slice().unwrap();
+            for j in 0..2 {
+                sums[j] += s[j] as f64;
+            }
+        }
+        for j in 0..2 {
+            let mean = sums[j] / n_trials as f64;
+            // Poisson(λ) variance = λ; SE for n_trials draws = sqrt(λ/n).
+            let se = (lams[j] / n_trials as f64).sqrt();
+            assert!(
+                (mean - lams[j]).abs() < 4.0 * se,
+                "elt {j}: mean {mean} too far from {}",
+                lams[j]
+            );
+        }
+    }
+
+    #[test]
+    fn poisson_array_negative_lam_errors() {
+        use ferray_core::{Array, IxDyn};
+        use crate::default_rng_seeded;
+        let mut rng = default_rng_seeded(0);
+        let lam = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2]),
+            vec![1.0, -2.0],
+        )
+        .unwrap();
+        assert!(rng.poisson_array(&lam).is_err());
+    }
 
     #[test]
     fn poisson_mean() {

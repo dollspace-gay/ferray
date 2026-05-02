@@ -1,5 +1,6 @@
 // ferray-random: Uniform distribution sampling — random, uniform, integers
 
+use ferray_core::dimension::broadcast::broadcast_shapes;
 use ferray_core::{Array, FerrayError, IxDyn};
 
 use crate::bitgen::BitGenerator;
@@ -56,6 +57,38 @@ impl<B: BitGenerator> Generator<B> {
         let range = high - low;
         let data = generate_vec(self, n, |bg| bg.next_f64().mul_add(range, low));
         vec_to_array_f64(data, &shape)
+    }
+
+    /// Generate an array of uniform variates with broadcast array
+    /// parameters (#449).
+    ///
+    /// `low` and `high` are arrays that NumPy-broadcast to determine
+    /// the output shape. Each element is drawn from
+    /// `Uniform([low[i], high[i]))`. Equivalent to
+    /// `numpy.random.Generator.uniform(low, high)` when both are arrays.
+    ///
+    /// # Errors
+    /// - `FerrayError::ShapeMismatch` if shapes don't broadcast.
+    /// - `FerrayError::InvalidValue` if any element has `low >= high`.
+    pub fn uniform_array(
+        &mut self,
+        low: &Array<f64, IxDyn>,
+        high: &Array<f64, IxDyn>,
+    ) -> Result<Array<f64, IxDyn>, FerrayError> {
+        let target = broadcast_shapes(low.shape(), high.shape())?;
+        let lo_v = low.broadcast_to(&target)?;
+        let hi_v = high.broadcast_to(&target)?;
+        let total: usize = target.iter().product();
+        let mut out: Vec<f64> = Vec::with_capacity(total);
+        for (&l, &h) in lo_v.iter().zip(hi_v.iter()) {
+            if l >= h {
+                return Err(FerrayError::invalid_value(format!(
+                    "low ({l}) must be less than high ({h})"
+                )));
+            }
+            out.push(self.bg.next_f64().mul_add(h - l, l));
+        }
+        Array::<f64, IxDyn>::from_vec(IxDyn::new(&target), out)
     }
 
     /// Generate an array of uniformly distributed `f32` values in [0, 1).
@@ -134,6 +167,67 @@ impl<B: BitGenerator> Generator<B> {
 #[cfg(test)]
 mod tests {
     use crate::default_rng_seeded;
+
+    // ---- broadcast variants (#449) ------------------------------------
+
+    #[test]
+    fn uniform_array_per_element_bounds() {
+        use ferray_core::{Array, IxDyn};
+        let mut rng = default_rng_seeded(42);
+        let low = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[3]),
+            vec![0.0, 100.0, -10.0],
+        )
+        .unwrap();
+        let high = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[3]),
+            vec![1.0, 200.0, 0.0],
+        )
+        .unwrap();
+        let out = rng.uniform_array(&low, &high).unwrap();
+        let s = out.as_slice().unwrap();
+        assert!((0.0..1.0).contains(&s[0]));
+        assert!((100.0..200.0).contains(&s[1]));
+        assert!((-10.0..0.0).contains(&s[2]));
+    }
+
+    #[test]
+    fn uniform_array_broadcast() {
+        use ferray_core::{Array, IxDyn};
+        let mut rng = default_rng_seeded(42);
+        let low =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1]), vec![0.0]).unwrap();
+        let high = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2, 3]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        )
+        .unwrap();
+        let out = rng.uniform_array(&low, &high).unwrap();
+        assert_eq!(out.shape(), &[2, 3]);
+        // Each element must be in [0, high[i,j]).
+        let s = out.as_slice().unwrap();
+        let highs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        for (i, &v) in s.iter().enumerate() {
+            assert!(v >= 0.0 && v < highs[i]);
+        }
+    }
+
+    #[test]
+    fn uniform_array_low_ge_high_errors() {
+        use ferray_core::{Array, IxDyn};
+        let mut rng = default_rng_seeded(0);
+        let low = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2]),
+            vec![0.0, 5.0],
+        )
+        .unwrap();
+        let high = Array::<f64, IxDyn>::from_vec(
+            IxDyn::new(&[2]),
+            vec![1.0, 5.0], // second pair has low == high
+        )
+        .unwrap();
+        assert!(rng.uniform_array(&low, &high).is_err());
+    }
 
     #[test]
     fn random_in_range() {
