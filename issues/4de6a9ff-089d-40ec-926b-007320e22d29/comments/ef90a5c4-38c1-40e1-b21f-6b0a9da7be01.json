@@ -1,0 +1,10 @@
+{
+  "uuid": "ef90a5c4-38c1-40e1-b21f-6b0a9da7be01",
+  "issue_uuid": "4de6a9ff-089d-40ec-926b-007320e22d29",
+  "author": "doll-agent",
+  "content": "Split into #734 (string S20/U10/V8 parser) and #735 (structured dtype). Both need non-trivial dtype_parse work; tracking independently.",
+  "created_at": "2026-05-02T01:20:19.433210478Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAc0VhnCIXw5DJZ0VbtgJR172HLfEtVpKWu19bFWHWRH3u1rgQO9JJj982aQEOF8aVm7JQzYkd/66xziBUqmEpDw=="
+}
