@@ -1,0 +1,10 @@
+{
+  "uuid": "55efa6dc-fe7d-4821-a800-b149af262b55",
+  "issue_uuid": "b7080150-05d2-4d98-865e-82758574b9f0",
+  "author": "doll-agent",
+  "content": "Add Polynomial::integ_with_bounds(m, k, lbnd, scl) on the power basis. Each integration step: integrate-with-zero-constant, divide all coeffs by scl, then set coeffs[0] so eval(lbnd) == k[step]. lbnd=0, scl=1 matches the existing integ. Power basis only for now — Chebyshev/Hermite/etc filed as follow-up since the value-at-lbnd computation needs basis-specific eval. 5 tests cover scl-default parity, lbnd-zero behavior, lbnd-with-k value, scl divider, and zero-scl error.",
+  "created_at": "2026-05-02T00:59:44.099513490Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAEwrtjiFjEOI3ppa+vfTP0TCknqDCEr5JwhHXbC8Br3heHbXf0Zzc3zzDqFfX6YUZ0YJEICzTC/v0Kzl+vt9gAg=="
+}
