@@ -1,0 +1,10 @@
+{
+  "uuid": "83160c19-49e8-4edf-8135-8aafe1bb8123",
+  "issue_uuid": "887859b6-7816-4670-85a1-2c19704dbb19",
+  "author": "doll-agent",
+  "content": "Add as_strided_signed / as_strided_signed_unchecked taking &[isize] strides + start_offset. Negative strides need ferray-core RawArrayView wiring (#744); for now they emit a clear diagnostic. 7 tests cover positive-stride parity, start_offset, zero-stride overlap (checked rejects, unchecked accepts), negative-stride diagnostic, and bounds error paths.",
+  "created_at": "2026-05-02T02:31:22.900881005Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAIvmFEdLJBliR9uPrjwAYKAzCPFaVZRyA6YqMamQCNYg4Pkf9eIu8ACrk1D8a2WqcNv1yW/t1H7AdE9Fk8Pr+BQ=="
+}
