@@ -575,6 +575,48 @@ impl FromPowerBasis for Chebyshev {
 mod tests {
     use super::*;
 
+    // ---- compose via trait default (#733) ------------------------------
+
+    #[test]
+    fn chebyshev_compose_with_identity_returns_self() {
+        let p = Chebyshev::new(&[1.0, 2.0, 3.0]);
+        let q = <Chebyshev as FromPowerBasis>::identity().unwrap();
+        let r = <Chebyshev as Poly>::compose(&p, &q).unwrap();
+        // p ∘ identity = p (after round-trip through power basis;
+        // tolerate small floating-point drift from the conversion).
+        let pc = p.coeffs();
+        let rc = r.coeffs();
+        let n = pc.len().max(rc.len());
+        for i in 0..n {
+            let pa = pc.get(i).copied().unwrap_or(0.0);
+            let ra = rc.get(i).copied().unwrap_or(0.0);
+            assert!((pa - ra).abs() < 1e-10, "i={i}: {pa} vs {ra}");
+        }
+    }
+
+    #[test]
+    fn chebyshev_compose_eval_consistency() {
+        // compose(p, q) evaluated at x must equal p evaluated at q(x).
+        let p = Chebyshev::new(&[2.0, 3.0, 1.0]);
+        let q = Chebyshev::new(&[1.0, 2.0]);
+        let r = <Chebyshev as Poly>::compose(&p, &q).unwrap();
+        for x in [-0.7_f64, 0.0, 0.3, 0.6] {
+            let qx = q.eval(x).unwrap();
+            let want = p.eval(qx).unwrap();
+            let got = r.eval(x).unwrap();
+            assert!((want - got).abs() < 1e-10, "x={x}: {want} vs {got}");
+        }
+    }
+
+    #[test]
+    fn chebyshev_compose_domain_mismatch_errors() {
+        let p = Chebyshev::new(&[1.0, 1.0]);
+        let q = Chebyshev::new(&[1.0, 2.0])
+            .with_domain([-2.0, 2.0])
+            .unwrap();
+        assert!(<Chebyshev as Poly>::compose(&p, &q).is_err());
+    }
+
     // ---- integ_with_bounds via trait default (#732) --------------------
 
     #[test]

@@ -162,6 +162,50 @@ pub trait Poly: Clone + Sized {
         window: [f64; 2],
     ) -> Result<Self, FerrayError>;
 
+    /// Polynomial composition: returns `r` such that
+    /// `r(x) == self(q(x))` (#485, #733).
+    ///
+    /// Generic default that routes through the power basis: convert
+    /// both `self` and `q` to power coefficients, run Horner-style
+    /// composition there, then convert back to this basis. The
+    /// inherent `Polynomial::compose` shipped earlier (#485) is more
+    /// efficient for the power basis itself; this default covers
+    /// Chebyshev / Hermite / HermiteE / Legendre / Laguerre.
+    ///
+    /// `self` and `q` must share the same domain/window mapping.
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` on mapping mismatch, plus any
+    /// error propagated from basis conversions.
+    fn compose(&self, q: &Self) -> Result<Self, FerrayError>
+    where
+        Self: ToPowerBasis + FromPowerBasis,
+    {
+        if self.domain() != q.domain() || self.window() != q.window() {
+            return Err(FerrayError::invalid_value(
+                "compose: polynomials must share the same domain and window",
+            ));
+        }
+        let p_power = self.to_power_basis()?;
+        let q_power = q.to_power_basis()?;
+        if p_power.is_empty() {
+            return Self::from_power_basis(&[]);
+        }
+        let mut r = vec![*p_power.last().unwrap()];
+        for &c in p_power.iter().rev().skip(1) {
+            let mut next = vec![0.0_f64; r.len() + q_power.len() - 1];
+            for (i, &ri) in r.iter().enumerate() {
+                for (j, &qj) in q_power.iter().enumerate() {
+                    next[i + j] += ri * qj;
+                }
+            }
+            next[0] += c;
+            r = next;
+        }
+        let target = Self::from_power_basis(&r)?;
+        target.with_mapping(self.domain(), self.window())
+    }
+
     /// Integrate `m` times with full numpy-parity knobs (#482, #732).
     ///
     /// Generalises [`integ`](Self::integ) by also accepting:
