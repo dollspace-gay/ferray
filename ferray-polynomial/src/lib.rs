@@ -64,6 +64,7 @@ pub mod legendre;
 pub mod mapping;
 pub mod ops;
 pub mod power;
+pub mod power_complex;
 pub mod power_f32;
 pub mod roots;
 pub mod traits;
@@ -75,6 +76,7 @@ pub use hermite_e::HermiteE;
 pub use laguerre::Laguerre;
 pub use legendre::Legendre;
 pub use power::Polynomial;
+pub use power_complex::ComplexPolynomial;
 pub use power_f32::PolynomialF32;
 
 // f32 sibling types for the non-power bases (#725-#729).
