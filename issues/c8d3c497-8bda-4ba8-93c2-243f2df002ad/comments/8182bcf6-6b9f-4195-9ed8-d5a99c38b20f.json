@@ -1,0 +1,10 @@
+{
+  "uuid": "8182bcf6-6b9f-4195-9ed8-d5a99c38b20f",
+  "issue_uuid": "c8d3c497-8bda-4ba8-93c2-243f2df002ad",
+  "author": "doll-agent",
+  "content": "Audit: Poly trait already exposes both fit and fit_weighted (traits.rs lines 103, 109) and all six basis types implement both. Issue body's plumbing check: weighted fitting is fully exposed. Closing as already-done.",
+  "created_at": "2026-05-02T01:02:00.316552454Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAmbgIVA0ibd9druv2XX9G+8gKDq64vbu1Vsh+t6jQqljxGMIDdgqbH7+KwKG4jE+5j8FTrn02FWbikdJ5J8xfBw=="
+}
