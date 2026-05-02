@@ -69,6 +69,33 @@ impl<B: BitGenerator> Generator<B> {
         self.bg.next_u64_bounded(bound)
     }
 
+    /// Serialize the underlying [`BitGenerator`]'s full internal state
+    /// to a byte vector — pair with [`set_state_bytes`](Self::set_state_bytes)
+    /// to restore. Used to checkpoint reproducible experiments (#453).
+    ///
+    /// The format is the LE-byte serialization of the bit generator's
+    /// state words; it is stable per-generator-type but **not**
+    /// portable across different `BitGenerator` implementations
+    /// (Pcg64 state cannot be loaded into Xoshiro256**).
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` if the underlying generator does
+    /// not implement state serialization.
+    pub fn state_bytes(&self) -> Result<Vec<u8>, FerrayError> {
+        self.bg.state_bytes()
+    }
+
+    /// Restore the underlying [`BitGenerator`]'s state from previously
+    /// captured bytes.
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` if the byte length is wrong for
+    /// this generator type or the embedded state is invalid (e.g.
+    /// all-zero state for Xoshiro256**, even `inc` for Pcg64).
+    pub fn set_state_bytes(&mut self, bytes: &[u8]) -> Result<(), FerrayError> {
+        self.bg.set_state_bytes(bytes)
+    }
+
     /// Generate `n` random bytes as a `Vec<u8>`.
     ///
     /// Equivalent to `numpy.random.Generator.bytes(n)`. Each byte is
@@ -271,6 +298,31 @@ pub(crate) fn vec_to_array_i64(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn state_bytes_roundtrip_via_generator() {
+        // #453: Generator::state_bytes / set_state_bytes round-trip
+        // — capture state, draw a chunk, restore, draw the same chunk
+        // again and verify byte-equality.
+        let mut a = default_rng_seeded(2026);
+        // Burn a few values so we are not at the seed boundary.
+        for _ in 0..11 {
+            a.next_u64();
+        }
+        let snap = a.state_bytes().unwrap();
+        let from_a: Vec<u64> = (0..32).map(|_| a.next_u64()).collect();
+
+        let mut b = default_rng_seeded(0); // wrong seed on purpose
+        b.set_state_bytes(&snap).unwrap();
+        let from_b: Vec<u64> = (0..32).map(|_| b.next_u64()).collect();
+        assert_eq!(from_a, from_b);
+    }
+
+    #[test]
+    fn set_state_bytes_rejects_wrong_size() {
+        let mut a = default_rng_seeded(0);
+        assert!(a.set_state_bytes(&[0u8; 4]).is_err());
+    }
 
     #[test]
     fn default_rng_seeded_deterministic() {

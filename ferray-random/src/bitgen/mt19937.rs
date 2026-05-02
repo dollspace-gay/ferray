@@ -44,6 +44,43 @@ impl MT19937 {
 }
 
 impl BitGenerator for MT19937 {
+    fn state_bytes(&self) -> Result<Vec<u8>, ferray_core::FerrayError> {
+        // Layout: NN × u64 followed by index as u64. Total
+        // 312 × 8 + 8 = 2504 bytes.
+        let mut out = Vec::with_capacity(NN * 8 + 8);
+        for &w in &self.mt {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        out.extend_from_slice(&(self.index as u64).to_le_bytes());
+        Ok(out)
+    }
+
+    fn set_state_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<(), ferray_core::FerrayError> {
+        let expected = NN * 8 + 8;
+        if bytes.len() != expected {
+            return Err(ferray_core::FerrayError::invalid_value(format!(
+                "MT19937 state must be {expected} bytes, got {}",
+                bytes.len()
+            )));
+        }
+        let mut mt = [0u64; NN];
+        for (i, chunk) in bytes[..NN * 8].chunks_exact(8).enumerate() {
+            mt[i] = u64::from_le_bytes(chunk.try_into().unwrap());
+        }
+        let index = u64::from_le_bytes(bytes[NN * 8..].try_into().unwrap());
+        if index > NN as u64 {
+            return Err(ferray_core::FerrayError::invalid_value(format!(
+                "MT19937 index must be in [0, {NN}], got {index}"
+            )));
+        }
+        self.mt = mt;
+        self.index = index as usize;
+        Ok(())
+    }
+
     fn next_u64(&mut self) -> u64 {
         if self.index >= NN {
             self.fill_state();

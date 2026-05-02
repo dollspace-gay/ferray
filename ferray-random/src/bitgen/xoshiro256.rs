@@ -40,6 +40,37 @@ impl Xoshiro256StarStar {
 }
 
 impl BitGenerator for Xoshiro256StarStar {
+    fn state_bytes(&self) -> Result<Vec<u8>, ferray_core::FerrayError> {
+        let mut out = Vec::with_capacity(32);
+        for &w in &self.s {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        Ok(out)
+    }
+
+    fn set_state_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<(), ferray_core::FerrayError> {
+        if bytes.len() != 32 {
+            return Err(ferray_core::FerrayError::invalid_value(format!(
+                "Xoshiro256** state must be 32 bytes, got {}",
+                bytes.len()
+            )));
+        }
+        let mut s = [0u64; 4];
+        for (i, chunk) in bytes.chunks_exact(8).enumerate() {
+            s[i] = u64::from_le_bytes(chunk.try_into().unwrap());
+        }
+        if s == [0, 0, 0, 0] {
+            return Err(ferray_core::FerrayError::invalid_value(
+                "Xoshiro256** state must not be all zeros",
+            ));
+        }
+        self.s = s;
+        Ok(())
+    }
+
     fn next_u64(&mut self) -> u64 {
         let result = (self.s[1].wrapping_mul(5)).rotate_left(7).wrapping_mul(9);
         let t = self.s[1] << 17;

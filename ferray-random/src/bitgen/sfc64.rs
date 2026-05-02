@@ -33,6 +33,32 @@ impl Sfc64 {
 }
 
 impl BitGenerator for Sfc64 {
+    fn state_bytes(&self) -> Result<Vec<u8>, ferray_core::FerrayError> {
+        let mut out = Vec::with_capacity(32);
+        out.extend_from_slice(&self.a.to_le_bytes());
+        out.extend_from_slice(&self.b.to_le_bytes());
+        out.extend_from_slice(&self.c.to_le_bytes());
+        out.extend_from_slice(&self.counter.to_le_bytes());
+        Ok(out)
+    }
+
+    fn set_state_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<(), ferray_core::FerrayError> {
+        if bytes.len() != 32 {
+            return Err(ferray_core::FerrayError::invalid_value(format!(
+                "Sfc64 state must be 32 bytes, got {}",
+                bytes.len()
+            )));
+        }
+        self.a = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
+        self.b = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
+        self.c = u64::from_le_bytes(bytes[16..24].try_into().unwrap());
+        self.counter = u64::from_le_bytes(bytes[24..32].try_into().unwrap());
+        Ok(())
+    }
+
     fn next_u64(&mut self) -> u64 {
         self.advance()
     }

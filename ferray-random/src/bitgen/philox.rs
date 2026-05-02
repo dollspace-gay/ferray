@@ -130,6 +130,61 @@ impl Philox {
 }
 
 impl BitGenerator for Philox {
+    fn state_bytes(&self) -> Result<Vec<u8>, ferray_core::FerrayError> {
+        // Layout (little-endian, 44 bytes total):
+        //   counter:  4 × u32 = 16 bytes
+        //   key:      2 × u32 =  8 bytes
+        //   buffer:   4 × u32 = 16 bytes
+        //   buf_idx:      u32 =  4 bytes
+        let mut out = Vec::with_capacity(44);
+        for &w in &self.counter {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        for &w in &self.key {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        for &w in &self.buffer {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        out.extend_from_slice(&(self.buf_idx as u32).to_le_bytes());
+        Ok(out)
+    }
+
+    fn set_state_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<(), ferray_core::FerrayError> {
+        if bytes.len() != 44 {
+            return Err(ferray_core::FerrayError::invalid_value(format!(
+                "Philox state must be 44 bytes, got {}",
+                bytes.len()
+            )));
+        }
+        let mut counter = [0u32; 4];
+        let mut key = [0u32; 2];
+        let mut buffer = [0u32; 4];
+        for (i, chunk) in bytes[0..16].chunks_exact(4).enumerate() {
+            counter[i] = u32::from_le_bytes(chunk.try_into().unwrap());
+        }
+        for (i, chunk) in bytes[16..24].chunks_exact(4).enumerate() {
+            key[i] = u32::from_le_bytes(chunk.try_into().unwrap());
+        }
+        for (i, chunk) in bytes[24..40].chunks_exact(4).enumerate() {
+            buffer[i] = u32::from_le_bytes(chunk.try_into().unwrap());
+        }
+        let buf_idx = u32::from_le_bytes(bytes[40..44].try_into().unwrap());
+        if buf_idx > 4 {
+            return Err(ferray_core::FerrayError::invalid_value(format!(
+                "Philox buf_idx must be in [0, 4], got {buf_idx}"
+            )));
+        }
+        self.counter = counter;
+        self.key = key;
+        self.buffer = buffer;
+        self.buf_idx = buf_idx as usize;
+        Ok(())
+    }
+
     fn next_u64(&mut self) -> u64 {
         if self.buf_idx >= 4 {
             self.generate_block();

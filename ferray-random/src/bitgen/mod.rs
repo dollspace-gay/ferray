@@ -1,5 +1,7 @@
 // ferray-random: BitGenerator trait and implementations
 
+use ferray_core::FerrayError;
+
 mod mt19937;
 mod pcg64;
 mod pcg64dxsm;
@@ -88,6 +90,39 @@ pub trait BitGenerator: Send {
         }
     }
 
+    /// Serialize the full internal state of this generator to a
+    /// little-endian byte vector. Pair with [`set_state_bytes`] to
+    /// restore.
+    ///
+    /// Default impl returns an error — concrete generators that
+    /// support serialization override both methods. Used to checkpoint
+    /// reproducible experiments (#453), the rough Rust equivalent of
+    /// numpy's `Generator.bit_generator.state` / `__getstate__` /
+    /// `__setstate__`.
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` if the generator does not implement
+    /// state serialization.
+    fn state_bytes(&self) -> Result<Vec<u8>, FerrayError> {
+        Err(FerrayError::invalid_value(
+            "this BitGenerator does not implement state_bytes",
+        ))
+    }
+
+    /// Restore the generator's state from previously-serialized bytes
+    /// produced by [`state_bytes`].
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` if the byte length doesn't match
+    /// the expected state size, or if the embedded state is invalid
+    /// (e.g. all-zero state for Xoshiro256**).
+    fn set_state_bytes(&mut self, bytes: &[u8]) -> Result<(), FerrayError> {
+        let _ = bytes;
+        Err(FerrayError::invalid_value(
+            "this BitGenerator does not implement set_state_bytes",
+        ))
+    }
+
     /// Generate a `u64` in the range `[0, bound)` using rejection sampling.
     fn next_u64_bounded(&mut self, bound: u64) -> u64 {
         if bound == 0 {
@@ -106,5 +141,104 @@ pub trait BitGenerator: Send {
             }
         }
         (m >> 64) as u64
+    }
+}
+
+#[cfg(test)]
+mod state_tests {
+    //! Round-trip tests for `state_bytes` / `set_state_bytes` (#453).
+    //!
+    //! For each concrete BitGenerator: capture state, draw N values,
+    //! roll back to the captured state, draw N more — outputs must
+    //! match exactly.
+
+    use super::*;
+
+    fn roundtrip<B: BitGenerator + Sized>(make: impl Fn() -> B, expected_size: usize) {
+        let mut a = make();
+        // Burn a few values so we're not at the seeded initial state.
+        for _ in 0..7 {
+            a.next_u64();
+        }
+        let snapshot = a.state_bytes().unwrap();
+        assert_eq!(
+            snapshot.len(),
+            expected_size,
+            "{} expected state size {expected_size}, got {}",
+            std::any::type_name::<B>(),
+            snapshot.len()
+        );
+
+        let mut from_a: Vec<u64> = Vec::with_capacity(64);
+        for _ in 0..64 {
+            from_a.push(a.next_u64());
+        }
+
+        let mut b = make();
+        b.set_state_bytes(&snapshot).unwrap();
+        let mut from_b: Vec<u64> = Vec::with_capacity(64);
+        for _ in 0..64 {
+            from_b.push(b.next_u64());
+        }
+        assert_eq!(from_a, from_b, "round-trip diverged for {}", std::any::type_name::<B>());
+    }
+
+    #[test]
+    fn roundtrip_xoshiro256() {
+        roundtrip(|| Xoshiro256StarStar::seed_from_u64(42), 32);
+    }
+
+    #[test]
+    fn roundtrip_sfc64() {
+        roundtrip(|| Sfc64::seed_from_u64(0xc0ffee), 32);
+    }
+
+    #[test]
+    fn roundtrip_pcg64() {
+        roundtrip(|| Pcg64::seed_from_u64(7), 32);
+    }
+
+    #[test]
+    fn roundtrip_pcg64dxsm() {
+        roundtrip(|| Pcg64Dxsm::seed_from_u64(7), 32);
+    }
+
+    #[test]
+    fn roundtrip_philox() {
+        roundtrip(|| Philox::seed_from_u64(123), 44);
+    }
+
+    #[test]
+    fn roundtrip_mt19937() {
+        roundtrip(|| MT19937::seed_from_u64(2026), 312 * 8 + 8);
+    }
+
+    #[test]
+    fn xoshiro_rejects_all_zero_state() {
+        let mut g = Xoshiro256StarStar::seed_from_u64(0);
+        let zeros = vec![0u8; 32];
+        assert!(g.set_state_bytes(&zeros).is_err());
+    }
+
+    #[test]
+    fn pcg64_rejects_even_inc() {
+        let mut g = Pcg64::seed_from_u64(0);
+        let mut bad = vec![0u8; 32];
+        bad[16] = 2; // inc low byte even
+        assert!(g.set_state_bytes(&bad).is_err());
+    }
+
+    #[test]
+    fn philox_rejects_oversize_buf_idx() {
+        let mut g = Philox::seed_from_u64(0);
+        let mut bad = vec![0u8; 44];
+        bad[40] = 5; // buf_idx > 4
+        assert!(g.set_state_bytes(&bad).is_err());
+    }
+
+    #[test]
+    fn wrong_length_returns_error() {
+        let mut g = Xoshiro256StarStar::seed_from_u64(0);
+        assert!(g.set_state_bytes(&[0u8; 16]).is_err());
     }
 }

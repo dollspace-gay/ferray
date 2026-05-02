@@ -51,6 +51,34 @@ impl Pcg64 {
 }
 
 impl BitGenerator for Pcg64 {
+    fn state_bytes(&self) -> Result<Vec<u8>, ferray_core::FerrayError> {
+        let mut out = Vec::with_capacity(32);
+        out.extend_from_slice(&self.state.to_le_bytes());
+        out.extend_from_slice(&self.inc.to_le_bytes());
+        Ok(out)
+    }
+
+    fn set_state_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<(), ferray_core::FerrayError> {
+        if bytes.len() != 32 {
+            return Err(ferray_core::FerrayError::invalid_value(format!(
+                "Pcg64 state must be 32 bytes, got {}",
+                bytes.len()
+            )));
+        }
+        self.state = u128::from_le_bytes(bytes[0..16].try_into().unwrap());
+        let inc = u128::from_le_bytes(bytes[16..32].try_into().unwrap());
+        if inc & 1 == 0 {
+            return Err(ferray_core::FerrayError::invalid_value(
+                "Pcg64 inc must be odd",
+            ));
+        }
+        self.inc = inc;
+        Ok(())
+    }
+
     fn next_u64(&mut self) -> u64 {
         let old_state = self.state;
         self.step();
