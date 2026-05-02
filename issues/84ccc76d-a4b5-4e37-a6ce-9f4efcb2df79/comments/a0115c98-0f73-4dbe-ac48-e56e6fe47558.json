@@ -1,0 +1,10 @@
+{
+  "uuid": "a0115c98-0f73-4dbe-ac48-e56e6fe47558",
+  "issue_uuid": "84ccc76d-a4b5-4e37-a6ce-9f4efcb2df79",
+  "author": "doll-agent",
+  "content": "Audit. ferray-polynomial/src/ops.rs already implements std::ops::Add/Sub/Mul/Neg for all six polynomial bases (Polynomial, Chebyshev, Legendre, Hermite, HermiteE, Laguerre), in both borrowed (&T op &T) and owned (T op T) forms via the impl_poly_ops! macro. Operator forms panic on domain/window mismatch (matching ndarray's shape-error convention); code that wants recovery uses Poly::add/sub/mul. Issue body is stale.",
+  "created_at": "2026-05-02T00:57:29.891131276Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAq3CGDk+QTUxbx0Ztz8onYNbHnAmE2DBQ9FrWi/huuYT5KA4gT36HSP6vopJXddMWz0aoLMEP3CoDfFE5BJyMAQ=="
+}
