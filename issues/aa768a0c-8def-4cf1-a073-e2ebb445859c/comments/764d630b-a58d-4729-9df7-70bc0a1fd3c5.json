@@ -1,0 +1,10 @@
+{
+  "uuid": "764d630b-a58d-4729-9df7-70bc0a1fd3c5",
+  "issue_uuid": "aa768a0c-8def-4cf1-a073-e2ebb445859c",
+  "author": "doll-agent",
+  "content": "Recognition shipped.",
+  "created_at": "2026-05-02T02:20:33.240427716Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAn5LyiE06FBy21I444zN76mtlcCyZYMZZG/Q+8aQa2OZ5JE8VkMCHqrnqE9cWF3ql4PK7/xxfNeu4538RC2sjCw=="
+}
