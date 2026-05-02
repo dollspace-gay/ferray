@@ -1,0 +1,10 @@
+{
+  "uuid": "a4d16f2d-a6bd-4f7d-8021-c8160f306fc0",
+  "issue_uuid": "58000d52-7944-44fe-b209-69a36581b559",
+  "author": "doll-agent",
+  "content": "Parser-level recognition with specific diagnostic. Backing DType variants in #741. 5 tests.",
+  "created_at": "2026-05-02T02:17:31.355976579Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAtze8y2fUdBcZa9vfwelb8WUl3y1a4EgJ7oezn+DGvcf8UAgb7ObWPIdpFSt+oOeHYroy1ctQzT1yxyIWCvZtDw=="
+}
