@@ -1,0 +1,10 @@
+{
+  "uuid": "26557bd0-11c5-4c55-b34f-d9f1dbdc8c80",
+  "issue_uuid": "7cf5bf22-3d00-4b24-934e-9577f73180e7",
+  "author": "doll-agent",
+  "content": "Audit. Independent feature, real work needed. Redirected to consolidated interop expansion epic #739 so the related f16/bf16/complex/DynArray/null/DataFrame/RecordBatch work is tracked together.",
+  "created_at": "2026-05-02T01:41:27.992004217Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAeg0PcpYkR4ZeilaQd05Vs6X5omrMVK2aCZ8vutax2BkZnhfO1MVZI17KuVtdjgyzDN78DiJ8SSxonFMb6GW8Dg=="
+}
