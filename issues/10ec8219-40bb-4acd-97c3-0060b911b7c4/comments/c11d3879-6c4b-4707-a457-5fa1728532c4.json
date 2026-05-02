@@ -1,0 +1,10 @@
+{
+  "uuid": "c11d3879-6c4b-4707-a457-5fa1728532c4",
+  "issue_uuid": "10ec8219-40bb-4acd-97c3-0060b911b7c4",
+  "author": "doll-agent",
+  "content": "Add a security note to the npy load entry point clarifying that ferray-io does not support pickle at all (object dtype rejected at dtype-parse). This forecloses the AOL execution vector behind numpy's allow_pickle=False default. No code change needed; doc-only update on load().",
+  "created_at": "2026-05-02T01:18:44.387285482Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABACHzxkPIAGSU3rwdLYCPEGXIvN/AIwyJlCSTwhNqpYafgOo1N65XQAOZ+T4N41PPfcmgKRsMCl3nnmZkXS3e/Dg=="
+}
