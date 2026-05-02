@@ -1,0 +1,10 @@
+{
+  "uuid": "5abf5902-0f29-40cf-b765-9f17105c5429",
+  "issue_uuid": "1ddfad1f-8493-41b6-b8e8-191dcdab00db",
+  "author": "doll-agent",
+  "content": "unique_axis(a, axis) ships in ferray-stats/src/searching.rs and is re-exported from the crate root. Returns hyperslice-deduped Array<T, IxDyn> with sorted slice order. 6 unit tests pass; cargo test green; clippy clean.",
+  "created_at": "2026-05-02T00:35:33.967863092Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA4G7AE2mXwb6CueL3DL6UfcFR0U/1ljDgPu59H3eFoCUaA9QRHPo8813zdGxkNB+dXOxz/T+B/hZe+7lpwKS+AA=="
+}
