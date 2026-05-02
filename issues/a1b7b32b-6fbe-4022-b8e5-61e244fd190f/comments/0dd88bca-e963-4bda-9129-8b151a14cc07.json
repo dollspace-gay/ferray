@@ -1,0 +1,10 @@
+{
+  "uuid": "0dd88bca-e963-4bda-9129-8b151a14cc07",
+  "issue_uuid": "a1b7b32b-6fbe-4022-b8e5-61e244fd190f",
+  "author": "doll-agent",
+  "content": "Add f32 siblings for the numpy 5 (bartlett_f32 / blackman_f32 / hamming_f32 / hanning_f32 / kaiser_f32). Each computes in f64 then casts to f32. All re-exported. 2 tests.",
+  "created_at": "2026-05-02T01:37:08.472277342Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAa42ac2lAk/EGECYE8u7lK/Cezka6IGQUuHOSlZko0bV5UshlGNSPIHfERVrzRaSnx0Clf7lSUSdW2g1Xe6soBQ=="
+}
