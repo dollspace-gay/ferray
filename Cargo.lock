@@ -1220,6 +1220,7 @@ name = "ferray-random"
 version = "0.3.2"
 dependencies = [
  "ferray-core",
+ "ferray-linalg",
  "getrandom 0.4.2",
  "proptest",
  "rayon",

@@ -1,6 +1,6 @@
 // ferray-random: Multivariate distributions — multinomial, multivariate_normal, dirichlet
 
-use ferray_core::{Array, FerrayError, Ix2};
+use ferray_core::{Array, FerrayError, Ix1, Ix2};
 
 use crate::bitgen::BitGenerator;
 use crate::distributions::gamma::standard_gamma_single;
@@ -219,6 +219,68 @@ impl<B: BitGenerator> Generator<B> {
         }
 
         Array::<i64, Ix2>::from_vec(Ix2::new([size, k]), data)
+    }
+
+    /// Generate multivariate normal samples taking `Array` parameters.
+    ///
+    /// Ergonomic counterpart to [`multivariate_normal`] (#451): accepts
+    /// the mean as `Array<f64, Ix1>` and the covariance as
+    /// `Array<f64, Ix2>` directly, no manual flattening required.
+    ///
+    /// Cholesky decomposition is delegated to `ferray_linalg::cholesky`
+    /// (#452) which is faer-backed and surfaces non-positive-definite
+    /// inputs as `FerrayError::SingularMatrix` instead of the
+    /// home-grown `cholesky_decompose` helper.
+    ///
+    /// # Errors
+    /// - `FerrayError::ShapeMismatch` if `cov` is not square or its
+    ///   side does not match `mean.len()`.
+    /// - `FerrayError::SingularMatrix` if `cov` is not positive
+    ///   definite (propagated from `ferray-linalg`).
+    /// - `FerrayError::InvalidValue` for size = 0 or empty mean.
+    pub fn multivariate_normal_array(
+        &mut self,
+        mean: &Array<f64, Ix1>,
+        cov: &Array<f64, Ix2>,
+        size: usize,
+    ) -> Result<Array<f64, Ix2>, FerrayError> {
+        if size == 0 {
+            return Err(FerrayError::invalid_value("size must be > 0"));
+        }
+        let d = mean.shape()[0];
+        if d == 0 {
+            return Err(FerrayError::invalid_value("mean must be non-empty"));
+        }
+        let cov_shape = cov.shape();
+        if cov_shape[0] != d || cov_shape[1] != d {
+            return Err(FerrayError::shape_mismatch(format!(
+                "cov shape {cov_shape:?} does not match mean of length {d}"
+            )));
+        }
+
+        let l_arr = ferray_linalg::cholesky(cov)?;
+        let l_slice = l_arr
+            .as_slice()
+            .ok_or_else(|| FerrayError::invalid_value("cholesky returned non-contiguous L"))?;
+        let mean_slice = mean
+            .as_slice()
+            .ok_or_else(|| FerrayError::invalid_value("mean must be contiguous"))?;
+
+        let mut data = Vec::with_capacity(size * d);
+        let mut z = vec![0.0_f64; d];
+        for _ in 0..size {
+            for v in z.iter_mut() {
+                *v = standard_normal_single(&mut self.bg);
+            }
+            for i in 0..d {
+                let mut val = mean_slice[i];
+                for j in 0..=i {
+                    val += l_slice[i * d + j] * z[j];
+                }
+                data.push(val);
+            }
+        }
+        Array::<f64, Ix2>::from_vec(Ix2::new([size, d]), data)
     }
 
     /// Generate Dirichlet-distributed samples.
@@ -523,6 +585,86 @@ mod tests {
         assert!(rng.dirichlet(&[], 10).is_err());
         assert!(rng.dirichlet(&[1.0, 0.0], 10).is_err());
         assert!(rng.dirichlet(&[1.0, -1.0], 10).is_err());
+    }
+
+    // ---- multivariate_normal_array (#451, #452) ------------------------
+
+    #[test]
+    fn mvn_array_shape() {
+        use ferray_core::{Array, Ix1, Ix2};
+        let mut rng = default_rng_seeded(42);
+        let mean = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let cov = Array::<f64, Ix2>::from_vec(
+            Ix2::new([3, 3]),
+            vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        )
+        .unwrap();
+        let arr = rng.multivariate_normal_array(&mean, &cov, 100).unwrap();
+        assert_eq!(arr.shape(), &[100, 3]);
+    }
+
+    #[test]
+    fn mvn_array_means_match() {
+        use ferray_core::{Array, Ix1, Ix2};
+        let mut rng = default_rng_seeded(42);
+        let mean = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![5.0, -3.0]).unwrap();
+        let cov =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 0.0, 0.0, 1.0]).unwrap();
+        let n = 100_000;
+        let arr = rng.multivariate_normal_array(&mean, &cov, n).unwrap();
+        let slice = arr.as_slice().unwrap();
+        for j in 0..2 {
+            let m: f64 = (0..n).map(|i| slice[i * 2 + j]).sum::<f64>() / n as f64;
+            let se = (1.0 / n as f64).sqrt();
+            let want = mean.as_slice().unwrap()[j];
+            assert!((m - want).abs() < 4.0 * se, "col {j} mean {m} ≠ {want}");
+        }
+    }
+
+    #[test]
+    fn mvn_array_rejects_non_square_cov() {
+        use ferray_core::{Array, Ix1, Ix2};
+        let mut rng = default_rng_seeded(0);
+        let mean = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.0, 0.0]).unwrap();
+        // 2×3 cov — neither square nor matching mean length.
+        let cov = Array::<f64, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        )
+        .unwrap();
+        assert!(rng.multivariate_normal_array(&mean, &cov, 5).is_err());
+    }
+
+    #[test]
+    fn mvn_array_rejects_non_pd_cov() {
+        use ferray_core::{Array, Ix1, Ix2};
+        let mut rng = default_rng_seeded(0);
+        let mean = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.0, 0.0]).unwrap();
+        // Indefinite (eigenvalues ±1).
+        let cov =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![0.0, 1.0, 1.0, 0.0]).unwrap();
+        let err = rng.multivariate_normal_array(&mean, &cov, 5).unwrap_err();
+        assert!(matches!(err, ferray_core::FerrayError::SingularMatrix { .. }));
+    }
+
+    #[test]
+    fn mvn_array_correlated_recovers_cov() {
+        use ferray_core::{Array, Ix1, Ix2};
+        // Strongly correlated covariance — sample covariance should
+        // approximate the input cov to within sampling error.
+        let mut rng = default_rng_seeded(11);
+        let mean = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.0, 0.0]).unwrap();
+        let cov =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 0.7, 0.7, 1.0]).unwrap();
+        let n = 50_000;
+        let arr = rng.multivariate_normal_array(&mean, &cov, n).unwrap();
+        let s = arr.as_slice().unwrap();
+        let mean0: f64 = (0..n).map(|i| s[i * 2]).sum::<f64>() / n as f64;
+        let mean1: f64 = (0..n).map(|i| s[i * 2 + 1]).sum::<f64>() / n as f64;
+        let cov01: f64 =
+            (0..n).map(|i| (s[i * 2] - mean0) * (s[i * 2 + 1] - mean1)).sum::<f64>()
+                / n as f64;
+        assert!((cov01 - 0.7).abs() < 0.05, "sample cov01 {cov01} ≠ 0.7");
     }
 
     // ---- multivariate_hypergeometric (#445) ----------------------------

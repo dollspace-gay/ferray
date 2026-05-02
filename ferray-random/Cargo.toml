@@ -13,6 +13,7 @@ description = "Random number generation and distributions for ferray"
 
 [dependencies]
 ferray-core = { workspace = true }
+ferray-linalg = { workspace = true }
 rayon = { workspace = true }
 # rand_core was listed but never imported (#260); removed.
 getrandom = { workspace = true }
