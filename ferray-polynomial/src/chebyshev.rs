@@ -575,6 +575,52 @@ impl FromPowerBasis for Chebyshev {
 mod tests {
     use super::*;
 
+    // ---- integ_with_bounds via trait default (#732) --------------------
+
+    #[test]
+    fn chebyshev_integ_with_bounds_default_args_match_integ() {
+        let p = Chebyshev::new(&[1.0, 2.0, 3.0]);
+        let from_default = p.integ(2, &[0.0, 0.0]).unwrap();
+        let from_bounds =
+            <Chebyshev as Poly>::integ_with_bounds(&p, 2, &[0.0, 0.0], 0.0, 1.0).unwrap();
+        let a = from_default.coeffs();
+        let b = from_bounds.coeffs();
+        assert_eq!(a.len(), b.len());
+        for (x, y) in a.iter().zip(b.iter()) {
+            assert!((x - y).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn chebyshev_integ_with_lbnd_value_equals_target() {
+        let p = Chebyshev::new(&[1.0, 4.0, 6.0]);
+        let lbnd = 0.3;
+        let target = 2.5;
+        let q =
+            <Chebyshev as Poly>::integ_with_bounds(&p, 1, &[target], lbnd, 1.0).unwrap();
+        let v = q.eval(lbnd).unwrap();
+        assert!((v - target).abs() < 1e-9, "eval(lbnd)={v}, target={target}");
+    }
+
+    #[test]
+    fn chebyshev_integ_with_scl_halves_coefficients() {
+        let p = Chebyshev::new(&[1.0]);
+        let q1 = <Chebyshev as Poly>::integ_with_bounds(&p, 1, &[0.0], 0.0, 1.0).unwrap();
+        let q2 = <Chebyshev as Poly>::integ_with_bounds(&p, 1, &[0.0], 0.0, 2.0).unwrap();
+        let c1 = q1.coeffs();
+        let c2 = q2.coeffs();
+        assert_eq!(c1.len(), c2.len());
+        for (a, b) in c1.iter().zip(c2.iter()) {
+            assert!((a - 2.0 * b).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn chebyshev_integ_with_zero_scl_errors() {
+        let p = Chebyshev::new(&[1.0]);
+        assert!(<Chebyshev as Poly>::integ_with_bounds(&p, 1, &[], 0.0, 0.0).is_err());
+    }
+
     // ---- convert_with_mapping (#483) -----------------------------------
 
     #[test]

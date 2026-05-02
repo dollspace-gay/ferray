@@ -162,6 +162,57 @@ pub trait Poly: Clone + Sized {
         window: [f64; 2],
     ) -> Result<Self, FerrayError>;
 
+    /// Integrate `m` times with full numpy-parity knobs (#482, #732).
+    ///
+    /// Generalises [`integ`](Self::integ) by also accepting:
+    /// - `lbnd`: lower bound. Each step adjusts the integration
+    ///   constant so the integrated polynomial evaluates to
+    ///   `k[step]` at `lbnd` (or 0 if `step >= k.len()`).
+    /// - `scl`: per-step divisor applied after each integration
+    ///   (matches numpy's coefficient-scaling semantic, not a true
+    ///   variable change).
+    ///
+    /// For `lbnd = 0` and `scl = 1` the result is identical to
+    /// [`integ`](Self::integ). The default impl works for every
+    /// basis whose 0-degree polynomial evaluates to 1 — Power,
+    /// Chebyshev, Hermite, HermiteE, Legendre, Laguerre. Mirrors
+    /// `numpy.polynomial.<basis>.<basis>int(c, m, k, lbnd, scl)`.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::InvalidValue` if `scl` is zero, plus
+    /// any error propagated from `integ`, `eval`, or
+    /// `with_mapping`.
+    fn integ_with_bounds(
+        &self,
+        m: usize,
+        k: &[f64],
+        lbnd: f64,
+        scl: f64,
+    ) -> Result<Self, FerrayError> {
+        if scl == 0.0 {
+            return Err(FerrayError::invalid_value(
+                "integ_with_bounds: scl must be non-zero",
+            ));
+        }
+        if m == 0 {
+            return Ok(self.clone());
+        }
+        let domain = self.domain();
+        let window = self.window();
+        let mut current = self.clone();
+        for step in 0..m {
+            let integrated = current.integ(1, &[0.0])?;
+            let scaled: Vec<f64> = integrated.coeffs().iter().map(|c| c / scl).collect();
+            let probe = Self::from_coeffs(&scaled).with_mapping(domain, window)?;
+            let target = if step < k.len() { k[step] } else { 0.0 };
+            let value_at_lbnd = probe.eval(lbnd)?;
+            let mut next = scaled;
+            next[0] += target - value_at_lbnd;
+            current = Self::from_coeffs(&next).with_mapping(domain, window)?;
+        }
+        Ok(current)
+    }
+
     /// Build the `deg`-th basis polynomial in this type's basis
     /// (#478).
     ///
