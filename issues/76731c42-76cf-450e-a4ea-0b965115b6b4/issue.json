@@ -1,0 +1,11 @@
+{
+  "uuid": "76731c42-76cf-450e-a4ea-0b965115b6b4",
+  "display_id": 733,
+  "title": "ferray-polynomial: compose for non-power bases",
+  "description": "Follow-up from #485. Polynomial::compose ships in the power basis. Extend to other bases via convert-to-power → compose → convert-back, or implement directly using Clenshaw-style recurrence.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-02T01:07:09.630183829Z",
+  "updated_at": "2026-05-02T01:07:09.630183829Z"
+}
