@@ -1,0 +1,10 @@
+{
+  "uuid": "09ffad29-036f-42b6-8827-e84b7537c98f",
+  "issue_uuid": "f4572d0e-dc14-4d5a-bffc-6e8c5b5405fa",
+  "author": "doll-agent",
+  "content": "Poly::linspace ships as a default trait method, so all 6 basis types get it for free. 4 tests pass. cargo test green; clippy clean.",
+  "created_at": "2026-05-02T00:51:51.327979058Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAMy1Xptx9Kau5NrMbEeCokOyxhXONddFD4m0mGwoDiTVvy9U6WhCSy1yhgZAKeMErzVyAE3xuFQYeXkA1z2A9Bg=="
+}
