@@ -3,11 +3,12 @@
   "display_id": 729,
   "title": "ferray-polynomial: LaguerreF32 type",
   "description": "Follow-up from #475. Add LaguerreF32 sibling of Laguerre mirroring the PolynomialF32 pattern.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-02T00:45:59.844582120Z",
-  "updated_at": "2026-05-02T00:46:01.034535362Z",
+  "updated_at": "2026-05-02T02:07:37.766114250Z",
+  "closed_at": "2026-05-02T02:07:37.766114250Z",
   "labels": [
     "ferray-polynomial,feature,follow-up,numpy-parity"
   ]
