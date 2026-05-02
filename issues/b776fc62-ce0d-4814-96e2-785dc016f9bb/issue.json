@@ -1,0 +1,11 @@
+{
+  "uuid": "b776fc62-ce0d-4814-96e2-785dc016f9bb",
+  "display_id": 738,
+  "title": "ferray-window: remaining scipy.signal windows (flattop, bohman, boxcar, triang, lanczos, dpss, chebwin)",
+  "description": "Follow-up from #531. ferray-window ships ~14 scipy windows already. Add: flattop, bohman, boxcar, triang, lanczos (simple closed-form coefficients), and dpss / chebwin (need numerical solvers, separate larger task).",
+  "status": "open",
+  "priority": "low",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-02T01:33:34.013456862Z",
+  "updated_at": "2026-05-02T01:33:34.013456862Z"
+}
