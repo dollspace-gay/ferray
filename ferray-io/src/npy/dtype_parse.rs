@@ -96,6 +96,35 @@ pub fn parse_dtype_str(s: &str) -> FerrayResult<(DType, Endianness)> {
                 })?;
             DType::Timedelta64(unit)
         }
+        // Fixed-width string / unicode / void descriptors (numpy
+        // S20 / U10 / V8 family). We parse and recognise the
+        // family + width but DType doesn't yet have backing
+        // variants for them — load is rejected with a specific
+        // diagnostic so callers see "string dtype not yet
+        // supported" instead of the generic "unsupported
+        // descriptor" (#734). Saving from ferray side never
+        // produces these, so parse-only is enough for the rejection
+        // diagnostic.
+        other if (other.starts_with('S') || other.starts_with('U') || other.starts_with('V'))
+            && other.len() > 1
+            && other[1..].chars().all(|c| c.is_ascii_digit()) =>
+        {
+            let kind = match other.as_bytes()[0] {
+                b'S' => "fixed-width ASCII string",
+                b'U' => "fixed-width Unicode string",
+                _ => "fixed-width raw void",
+            };
+            let width: usize = other[1..].parse().map_err(|_| {
+                FerrayError::invalid_dtype(format!(
+                    "{kind} width is not a valid integer: '{}'",
+                    &other[1..]
+                ))
+            })?;
+            return Err(FerrayError::invalid_dtype(format!(
+                "{kind} dtype '{s}' (width {width}) is recognised but not yet \
+                 supported in ferray; tracked in issue #734"
+            )));
+        }
         _ => {
             return Err(FerrayError::invalid_dtype(format!(
                 "unsupported dtype descriptor: '{s}'"
@@ -396,5 +425,54 @@ mod tests {
     #[test]
     fn unknown_datetime_unit_errors() {
         assert!(parse_dtype_str("<M8[foobar]").is_err());
+    }
+
+    // ---- fixed-width string / unicode / void parser (#734) -------------
+
+    #[test]
+    fn parse_fixed_ascii_string_descriptor_recognised_but_unsupported() {
+        let err = parse_dtype_str("|S20").unwrap_err();
+        let s = err.to_string();
+        assert!(
+            s.contains("ASCII string") && s.contains("20"),
+            "expected recognition diagnostic, got: {s}"
+        );
+        assert!(s.contains("#734"));
+    }
+
+    #[test]
+    fn parse_fixed_unicode_descriptor_recognised_but_unsupported() {
+        let err = parse_dtype_str("<U10").unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("Unicode string") && s.contains("10"));
+        assert!(s.contains("#734"));
+    }
+
+    #[test]
+    fn parse_void_descriptor_recognised_but_unsupported() {
+        let err = parse_dtype_str("|V8").unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("raw void") && s.contains("8"));
+        assert!(s.contains("#734"));
+    }
+
+    #[test]
+    fn parse_string_dtype_with_zero_width() {
+        // S0 / U0 / V0 are valid descriptors per numpy (degenerate)
+        // and should hit the recognised-but-unsupported path.
+        for d in ["|S0", "<U0", "|V0"] {
+            let err = parse_dtype_str(d).unwrap_err();
+            let s = err.to_string();
+            assert!(s.contains("#734"), "{d}: {s}");
+        }
+    }
+
+    #[test]
+    fn non_string_descriptors_unaffected() {
+        // Make sure the new branch doesn't false-match common dtypes
+        // that happen to start with characters near 'S/U/V'.
+        assert!(parse_dtype_str("<u4").is_ok());
+        assert!(parse_dtype_str("<u8").is_ok());
+        assert!(parse_dtype_str("<i4").is_ok());
     }
 }
