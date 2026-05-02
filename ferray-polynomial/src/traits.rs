@@ -144,6 +144,48 @@ pub trait Poly: Clone + Sized {
     fn mapparms(&self) -> Result<(f64, f64), FerrayError> {
         mapparms(self.domain(), self.window())
     }
+
+    /// Build the `deg`-th basis polynomial in this type's basis
+    /// (#478).
+    ///
+    /// For every basis, this is the polynomial whose coefficients are
+    /// `[0, 0, ..., 0, 1]` with the `1` at position `deg`. In the
+    /// power basis that's `x^deg`; in Chebyshev it's `T_deg(x)`;
+    /// in Hermite it's `H_deg(x)`; etc.
+    ///
+    /// The result uses the type's default domain/window. Chain
+    /// `with_domain` / `with_window` to override.
+    fn basis(deg: usize) -> Self {
+        let mut coeffs = vec![0.0_f64; deg + 1];
+        coeffs[deg] = 1.0;
+        Self::from_coeffs(&coeffs)
+    }
+
+    /// Sample the polynomial at `n` evenly-spaced x-values across its
+    /// domain (or the supplied `domain` override) and return both the
+    /// x-values and the y-values (#477).
+    ///
+    /// Equivalent to `numpy.polynomial.<basis>.<basis>.linspace(n, domain)`,
+    /// commonly used for plotting.
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` if `n < 2` or evaluation fails.
+    fn linspace(
+        &self,
+        n: usize,
+        domain: Option<[f64; 2]>,
+    ) -> Result<(Vec<f64>, Vec<f64>), FerrayError> {
+        if n < 2 {
+            return Err(FerrayError::invalid_value(
+                "linspace requires n >= 2",
+            ));
+        }
+        let [lo, hi] = domain.unwrap_or_else(|| self.domain());
+        let step = (hi - lo) / (n as f64 - 1.0);
+        let xs: Vec<f64> = (0..n).map(|i| lo + step * i as f64).collect();
+        let ys = self.eval_many(&xs)?;
+        Ok((xs, ys))
+    }
 }
 
 /// Trait for converting a polynomial to its power basis representation.
@@ -162,6 +204,24 @@ pub trait FromPowerBasis: Poly {
     /// # Errors
     /// Returns an error if conversion fails.
     fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrayError>;
+
+    /// Identity polynomial: `p(x) = x` represented in this basis
+    /// (#478).
+    ///
+    /// Built by converting the power-basis polynomial `[0, 1]` to the
+    /// target basis. For Power / Chebyshev / Legendre / HermiteE this
+    /// is just `[0, 1]`; for Hermite (physicist) it becomes `[0, 0.5]`
+    /// because `H_1(x) = 2x`; for Laguerre it becomes `[1, -1]`
+    /// because `L_1(x) = 1 - x`.
+    ///
+    /// The result uses the type's default domain/window. Chain
+    /// `with_domain` / `with_window` to override.
+    ///
+    /// # Errors
+    /// Returns an error if power-basis conversion fails.
+    fn identity() -> Result<Self, FerrayError> {
+        Self::from_power_basis(&[0.0, 1.0])
+    }
 
     /// Construct this polynomial type from a list of roots (#476).
     ///

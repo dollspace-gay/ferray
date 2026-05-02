@@ -567,6 +567,36 @@ impl FromPowerBasis for Chebyshev {
 mod tests {
     use super::*;
 
+    // ---- basis / identity / linspace (#477, #478) ----------------------
+
+    #[test]
+    fn chebyshev_basis_n_is_unit_in_own_basis() {
+        let t3 = <Chebyshev as Poly>::basis(3);
+        assert_eq!(t3.coeffs(), &[0.0, 0.0, 0.0, 1.0]);
+        // T_3(0.5) = 4*0.125 - 3*0.5 = 0.5 - 1.5 = -1.0
+        assert!((t3.eval(0.5).unwrap() - (-1.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn chebyshev_identity_evaluates_as_x() {
+        let p = <Chebyshev as FromPowerBasis>::identity().unwrap();
+        // identity must satisfy p(x) == x for x in window.
+        for x in [-0.9_f64, -0.3, 0.0, 0.4, 0.8] {
+            assert!((p.eval(x).unwrap() - x).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn chebyshev_linspace_3_points_on_default_domain() {
+        let p = <Chebyshev as FromPowerBasis>::identity().unwrap();
+        let (xs, ys) = p.linspace(3, None).unwrap();
+        assert_eq!(xs, vec![-1.0, 0.0, 1.0]);
+        // identity → ys == xs
+        for (x, y) in xs.iter().zip(ys.iter()) {
+            assert!((x - y).abs() < 1e-12);
+        }
+    }
+
     // ---- from_roots via FromPowerBasis default (#476) -----------------
 
     #[test]

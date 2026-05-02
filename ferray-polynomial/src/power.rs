@@ -52,6 +52,50 @@ impl Polynomial {
         }
     }
 
+    /// Identity polynomial `p(x) = x` with the given domain/window
+    /// (#478).
+    ///
+    /// Equivalent to `numpy.polynomial.Polynomial.identity(domain, window)`.
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` if `domain` or `window` is degenerate.
+    pub fn identity(
+        domain: Option<[f64; 2]>,
+        window: Option<[f64; 2]>,
+    ) -> Result<Self, FerrayError> {
+        let mut p = Self::new(&[0.0, 1.0]);
+        if let Some(d) = domain {
+            p = p.with_domain(d)?;
+        }
+        if let Some(w) = window {
+            p = p.with_window(w)?;
+        }
+        Ok(p)
+    }
+
+    /// The `deg`-th power-basis polynomial `x^deg` (#478).
+    ///
+    /// Equivalent to `numpy.polynomial.Polynomial.basis(deg)`.
+    ///
+    /// # Errors
+    /// `FerrayError::InvalidValue` if `domain` or `window` is degenerate.
+    pub fn basis(
+        deg: usize,
+        domain: Option<[f64; 2]>,
+        window: Option<[f64; 2]>,
+    ) -> Result<Self, FerrayError> {
+        let mut coeffs = vec![0.0_f64; deg + 1];
+        coeffs[deg] = 1.0;
+        let mut p = Self::new(&coeffs);
+        if let Some(d) = domain {
+            p = p.with_domain(d)?;
+        }
+        if let Some(w) = window {
+            p = p.with_window(w)?;
+        }
+        Ok(p)
+    }
+
     /// Construct a polynomial whose roots are exactly `roots`.
     ///
     /// Returns the monic power-basis polynomial
@@ -435,6 +479,60 @@ impl FromPowerBasis for Polynomial {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- linspace (#477) -----------------------------------------------
+
+    #[test]
+    fn linspace_returns_n_evenly_spaced_xs() {
+        // p(x) = 2x + 1 on [0, 4]
+        let p = Polynomial::new(&[1.0, 2.0])
+            .with_domain([0.0, 4.0])
+            .unwrap()
+            .with_window([0.0, 4.0])
+            .unwrap();
+        let (xs, ys) = p.linspace(5, None).unwrap();
+        assert_eq!(xs, vec![0.0, 1.0, 2.0, 3.0, 4.0]);
+        // y_i = 2*x_i + 1
+        assert_eq!(ys, vec![1.0, 3.0, 5.0, 7.0, 9.0]);
+    }
+
+    #[test]
+    fn linspace_too_few_points_errors() {
+        let p = Polynomial::new(&[1.0]);
+        assert!(p.linspace(1, None).is_err());
+    }
+
+    #[test]
+    fn linspace_explicit_domain_overrides_self() {
+        let p = Polynomial::new(&[0.0, 1.0]); // p(x) = x
+        let (xs, _) = p.linspace(3, Some([10.0, 20.0])).unwrap();
+        assert_eq!(xs, vec![10.0, 15.0, 20.0]);
+    }
+
+    // ---- identity / basis (#478) ---------------------------------------
+
+    #[test]
+    fn power_identity_is_x() {
+        let p = Polynomial::identity(None, None).unwrap();
+        assert_eq!(p.coeffs(), &[0.0, 1.0]);
+        // p(7) == 7
+        assert!((p.eval(7.0).unwrap() - 7.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn power_basis_x_to_the_3() {
+        let p = Polynomial::basis(3, None, None).unwrap();
+        assert_eq!(p.coeffs(), &[0.0, 0.0, 0.0, 1.0]);
+        // p(2) = 2^3 = 8
+        assert!((p.eval(2.0).unwrap() - 8.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn power_identity_with_domain() {
+        let p = Polynomial::identity(Some([-5.0, 5.0]), Some([-1.0, 1.0])).unwrap();
+        assert_eq!(p.domain(), [-5.0, 5.0]);
+        assert_eq!(p.window(), [-1.0, 1.0]);
+    }
 
     // ---- from_roots (#476) ---------------------------------------------
 
