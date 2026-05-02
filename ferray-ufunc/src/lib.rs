@@ -149,9 +149,9 @@ pub use ops::logical::{
 pub use ops::special::{i0, sinc};
 
 // Convolution
-pub use ops::convolution::{ConvolveMode, convolve};
 #[cfg(feature = "fft-convolve")]
 pub use ops::convolution::fftconvolve;
+pub use ops::convolution::{ConvolveMode, convolve};
 
 // Interpolation
 pub use ops::interpolation::{interp, interp_one};

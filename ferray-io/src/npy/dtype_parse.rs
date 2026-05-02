@@ -127,9 +127,10 @@ pub fn parse_dtype_str(s: &str) -> FerrayResult<(DType, Endianness)> {
         }
         // Fixed-width string / unicode / void descriptors (numpy
         // S20 / U10 / V8 family). DType variants land via #741.
-        other if (other.starts_with('S') || other.starts_with('U') || other.starts_with('V'))
-            && other.len() > 1
-            && other[1..].chars().all(|c| c.is_ascii_digit()) =>
+        other
+            if (other.starts_with('S') || other.starts_with('U') || other.starts_with('V'))
+                && other.len() > 1
+                && other[1..].chars().all(|c| c.is_ascii_digit()) =>
         {
             let width: usize = other[1..].parse().map_err(|_| {
                 FerrayError::invalid_dtype(format!(
@@ -303,12 +304,8 @@ fn parse_structured_field(field: &str) -> FerrayResult<(String, String)> {
             "structured field '{field}' must have exactly two parts (name, dtype)"
         )));
     }
-    let name = parts[0]
-        .trim_matches(|c| c == '\'' || c == '"')
-        .to_string();
-    let dtype = parts[1]
-        .trim_matches(|c| c == '\'' || c == '"')
-        .to_string();
+    let name = parts[0].trim_matches(|c| c == '\'' || c == '"').to_string();
+    let dtype = parts[1].trim_matches(|c| c == '\'' || c == '"').to_string();
     Ok((name, dtype))
 }
 
@@ -563,8 +560,7 @@ mod tests {
 
     #[test]
     fn parse_structured_three_mixed_fields_returns_struct() {
-        let (dt, _) =
-            parse_dtype_str("[('a', '<i4'), ('b', '<f8'), ('c', '|S10')]").unwrap();
+        let (dt, _) = parse_dtype_str("[('a', '<i4'), ('b', '<f8'), ('c', '|S10')]").unwrap();
         match dt {
             DType::Struct(fields) => {
                 assert_eq!(fields.len(), 3);
@@ -595,8 +591,7 @@ mod tests {
 
     #[test]
     fn structured_descr_helper_extracts_pairs() {
-        let pairs =
-            parse_structured_descr("[('x', '<f4'), ('y', '<i8')]").unwrap();
+        let pairs = parse_structured_descr("[('x', '<f4'), ('y', '<i8')]").unwrap();
         assert_eq!(pairs.len(), 2);
         assert_eq!(pairs[0], ("x".into(), "<f4".into()));
         assert_eq!(pairs[1], ("y".into(), "<i8".into()));

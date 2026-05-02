@@ -640,11 +640,7 @@ mod tests {
     fn plan_nd_default_axes_match_fftn() {
         use ferray_core::dimension::Ix2;
         let data: Vec<Complex<f64>> = (0..16).map(|i| Complex::new(f64::from(i), 0.0)).collect();
-        let a = Array::<Complex<f64>, Ix2>::from_vec(
-            ferray_core::Ix2::new([4, 4]),
-            data,
-        )
-        .unwrap();
+        let a = Array::<Complex<f64>, Ix2>::from_vec(ferray_core::Ix2::new([4, 4]), data).unwrap();
 
         let plan = FftPlanND::new(&[4, 4], None).unwrap();
         let from_plan = plan.execute(&a, FftNorm::Backward).unwrap();
@@ -658,13 +654,12 @@ mod tests {
     #[test]
     fn plan_nd_roundtrip() {
         use ferray_core::dimension::Ix2;
-        let original: Vec<Complex<f64>> =
-            (0..12).map(|i| Complex::new(f64::from(i), -f64::from(i))).collect();
-        let a = Array::<Complex<f64>, Ix2>::from_vec(
-            ferray_core::Ix2::new([3, 4]),
-            original.clone(),
-        )
-        .unwrap();
+        let original: Vec<Complex<f64>> = (0..12)
+            .map(|i| Complex::new(f64::from(i), -f64::from(i)))
+            .collect();
+        let a =
+            Array::<Complex<f64>, Ix2>::from_vec(ferray_core::Ix2::new([3, 4]), original.clone())
+                .unwrap();
 
         let plan = FftPlanND::new(&[3, 4], None).unwrap();
         let spectrum = plan.execute(&a, FftNorm::Backward).unwrap();
@@ -681,11 +676,9 @@ mod tests {
         // Transform only the last axis of a 3-D array; the plan should
         // pre-compute exactly one per-axis 1-D plan.
         let data: Vec<Complex<f64>> = (0..24).map(|i| Complex::new(f64::from(i), 0.0)).collect();
-        let a = Array::<Complex<f64>, Ix3>::from_vec(
-            ferray_core::dimension::Ix3::new([2, 3, 4]),
-            data,
-        )
-        .unwrap();
+        let a =
+            Array::<Complex<f64>, Ix3>::from_vec(ferray_core::dimension::Ix3::new([2, 3, 4]), data)
+                .unwrap();
 
         let plan = FftPlanND::new(&[2, 3, 4], Some(&[-1])).unwrap();
         assert_eq!(plan.axes(), &[2]);

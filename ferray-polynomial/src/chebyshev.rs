@@ -550,11 +550,7 @@ impl Poly for Chebyshev {
         self.window
     }
 
-    fn with_mapping(
-        self,
-        domain: [f64; 2],
-        window: [f64; 2],
-    ) -> Result<Self, FerrayError> {
+    fn with_mapping(self, domain: [f64; 2], window: [f64; 2]) -> Result<Self, FerrayError> {
         self.with_domain(domain)?.with_window(window)
     }
 }
@@ -638,8 +634,7 @@ mod tests {
         let p = Chebyshev::new(&[1.0, 4.0, 6.0]);
         let lbnd = 0.3;
         let target = 2.5;
-        let q =
-            <Chebyshev as Poly>::integ_with_bounds(&p, 1, &[target], lbnd, 1.0).unwrap();
+        let q = <Chebyshev as Poly>::integ_with_bounds(&p, 1, &[target], lbnd, 1.0).unwrap();
         let v = q.eval(lbnd).unwrap();
         assert!((v - target).abs() < 1e-9, "eval(lbnd)={v}, target={target}");
     }
@@ -907,7 +902,11 @@ mod tests {
         let c1 = 2.0_f64;
         let ii = p.integ(2, &[c2, c1]).unwrap();
         let back = ii.deriv(2).unwrap();
-        assert!((back.coeffs[0] - 1.0).abs() < 1e-10, "c0 = {}", back.coeffs[0]);
+        assert!(
+            (back.coeffs[0] - 1.0).abs() < 1e-10,
+            "c0 = {}",
+            back.coeffs[0]
+        );
     }
 
     #[test]

@@ -148,10 +148,7 @@ where
 ///
 /// # Errors
 /// - `FerrayError::AxisOutOfBounds` if `axis >= a.ndim()`.
-pub fn unique_axis<T, D>(
-    a: &Array<T, D>,
-    axis: usize,
-) -> FerrayResult<Array<T, IxDyn>>
+pub fn unique_axis<T, D>(a: &Array<T, D>, axis: usize) -> FerrayResult<Array<T, IxDyn>>
 where
     T: Element + PartialOrd + Copy,
     D: Dimension,
@@ -499,13 +496,8 @@ mod tests {
     #[test]
     fn where_broadcast_scalar_else() {
         // condition: (3,), x: (3,), y: (1,) → pick from y for false slots.
-        let c = Array::<bool, IxDyn>::from_vec(
-            IxDyn::new(&[3]),
-            vec![true, false, true],
-        )
-        .unwrap();
-        let x =
-            Array::<i32, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1, 2, 3]).unwrap();
+        let c = Array::<bool, IxDyn>::from_vec(IxDyn::new(&[3]), vec![true, false, true]).unwrap();
+        let x = Array::<i32, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1, 2, 3]).unwrap();
         let y = Array::<i32, IxDyn>::from_vec(IxDyn::new(&[1]), vec![99]).unwrap();
         let r = where_broadcast(&c, &x, &y).unwrap();
         assert_eq!(r.shape(), &[3]);
@@ -515,18 +507,10 @@ mod tests {
     #[test]
     fn where_broadcast_2d_outer() {
         // condition: (3, 1), x: (1, 4), y: scalar (1,1) → output (3, 4).
-        let c = Array::<bool, IxDyn>::from_vec(
-            IxDyn::new(&[3, 1]),
-            vec![true, false, true],
-        )
-        .unwrap();
-        let x = Array::<i32, IxDyn>::from_vec(
-            IxDyn::new(&[1, 4]),
-            vec![10, 20, 30, 40],
-        )
-        .unwrap();
-        let y =
-            Array::<i32, IxDyn>::from_vec(IxDyn::new(&[1, 1]), vec![-1]).unwrap();
+        let c =
+            Array::<bool, IxDyn>::from_vec(IxDyn::new(&[3, 1]), vec![true, false, true]).unwrap();
+        let x = Array::<i32, IxDyn>::from_vec(IxDyn::new(&[1, 4]), vec![10, 20, 30, 40]).unwrap();
+        let y = Array::<i32, IxDyn>::from_vec(IxDyn::new(&[1, 1]), vec![-1]).unwrap();
         let r = where_broadcast(&c, &x, &y).unwrap();
         assert_eq!(r.shape(), &[3, 4]);
         let s = r.as_slice().unwrap();
@@ -540,15 +524,9 @@ mod tests {
 
     #[test]
     fn where_broadcast_shape_mismatch() {
-        let c = Array::<bool, IxDyn>::from_vec(
-            IxDyn::new(&[3]),
-            vec![true, false, true],
-        )
-        .unwrap();
-        let x =
-            Array::<i32, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1, 2]).unwrap();
-        let y =
-            Array::<i32, IxDyn>::from_vec(IxDyn::new(&[1]), vec![0]).unwrap();
+        let c = Array::<bool, IxDyn>::from_vec(IxDyn::new(&[3]), vec![true, false, true]).unwrap();
+        let x = Array::<i32, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1, 2]).unwrap();
+        let y = Array::<i32, IxDyn>::from_vec(IxDyn::new(&[1]), vec![0]).unwrap();
         assert!(where_broadcast(&c, &x, &y).is_err());
     }
 
@@ -557,11 +535,9 @@ mod tests {
     #[test]
     fn unique_axis_rows_dedup() {
         // axis=0 on a 2D array dedupes rows.
-        let a = Array::<i32, Ix2>::from_vec(
-            Ix2::new([4, 3]),
-            vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 7, 8, 9],
-        )
-        .unwrap();
+        let a =
+            Array::<i32, Ix2>::from_vec(Ix2::new([4, 3]), vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 7, 8, 9])
+                .unwrap();
         let u = unique_axis(&a, 0).unwrap();
         // Three unique rows: [1,2,3], [4,5,6], [7,8,9] in sorted order.
         assert_eq!(u.shape(), &[3, 3]);
@@ -573,11 +549,9 @@ mod tests {
     fn unique_axis_columns_dedup() {
         // axis=1 dedupes columns. Construct a matrix where columns 0 and 2
         // are identical.
-        let a = Array::<i32, Ix2>::from_vec(
-            Ix2::new([3, 4]),
-            vec![1, 2, 1, 3, 4, 5, 4, 6, 7, 8, 7, 9],
-        )
-        .unwrap();
+        let a =
+            Array::<i32, Ix2>::from_vec(Ix2::new([3, 4]), vec![1, 2, 1, 3, 4, 5, 4, 6, 7, 8, 7, 9])
+                .unwrap();
         let u = unique_axis(&a, 1).unwrap();
         // 3 unique columns: [1,4,7], [2,5,8], [3,6,9] sorted lex.
         assert_eq!(u.shape(), &[3, 3]);
@@ -587,11 +561,7 @@ mod tests {
 
     #[test]
     fn unique_axis_all_distinct_keeps_count_but_sorts() {
-        let a = Array::<i32, Ix2>::from_vec(
-            Ix2::new([3, 2]),
-            vec![3, 4, 1, 2, 5, 6],
-        )
-        .unwrap();
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([3, 2]), vec![3, 4, 1, 2, 5, 6]).unwrap();
         let u = unique_axis(&a, 0).unwrap();
         assert_eq!(u.shape(), &[3, 2]);
         let s = u.as_slice().unwrap();
@@ -600,11 +570,8 @@ mod tests {
 
     #[test]
     fn unique_axis_all_same_collapses() {
-        let a = Array::<i32, Ix2>::from_vec(
-            Ix2::new([4, 2]),
-            vec![1, 2, 1, 2, 1, 2, 1, 2],
-        )
-        .unwrap();
+        let a =
+            Array::<i32, Ix2>::from_vec(Ix2::new([4, 2]), vec![1, 2, 1, 2, 1, 2, 1, 2]).unwrap();
         let u = unique_axis(&a, 0).unwrap();
         assert_eq!(u.shape(), &[1, 2]);
         let s = u.as_slice().unwrap();
@@ -630,8 +597,7 @@ mod tests {
 
     #[test]
     fn unique_axis_out_of_bounds() {
-        let a =
-            Array::<i32, Ix2>::from_vec(Ix2::new([2, 2]), vec![1, 2, 3, 4]).unwrap();
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 2]), vec![1, 2, 3, 4]).unwrap();
         assert!(unique_axis(&a, 5).is_err());
     }
 

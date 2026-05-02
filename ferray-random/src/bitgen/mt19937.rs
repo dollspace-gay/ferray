@@ -55,10 +55,7 @@ impl BitGenerator for MT19937 {
         Ok(out)
     }
 
-    fn set_state_bytes(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<(), ferray_core::FerrayError> {
+    fn set_state_bytes(&mut self, bytes: &[u8]) -> Result<(), ferray_core::FerrayError> {
         let expected = NN * 8 + 8;
         if bytes.len() != expected {
             return Err(ferray_core::FerrayError::invalid_value(format!(

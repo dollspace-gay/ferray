@@ -175,7 +175,6 @@ fn newton_polish(coeffs: &[f64], z: &mut Complex<f64>) {
     *z = best_z;
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -362,11 +361,7 @@ mod tests {
                 "root {i} re = {} far from 1.0",
                 r.re
             );
-            assert!(
-                r.im.abs() < 1e-3,
-                "root {i} im = {} expected ~0",
-                r.im
-            );
+            assert!(r.im.abs() < 1e-3, "root {i} im = {} expected ~0", r.im);
         }
     }
 
@@ -412,10 +407,7 @@ mod tests {
             real_roots[0]
         );
         for r in &real_roots[1..] {
-            assert!(
-                (r - 2.0).abs() < 1e-3,
-                "double root: got {r} expected 2.0"
-            );
+            assert!((r - 2.0).abs() < 1e-3, "double root: got {r} expected 2.0");
         }
         // Imaginary parts should all be small.
         for r in &roots {

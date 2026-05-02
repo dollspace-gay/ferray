@@ -773,7 +773,10 @@ mod tests {
         let vals = eigvals(&a).unwrap();
         let vs = vals.as_slice().unwrap();
         let im_sum: f64 = vs.iter().map(|c| c.im).sum();
-        assert!(im_sum.abs() < 1e-10, "complex eigenvalues should be conjugate pairs");
+        assert!(
+            im_sum.abs() < 1e-10,
+            "complex eigenvalues should be conjugate pairs"
+        );
         for c in vs {
             assert!(c.re.abs() < 1e-10);
             assert!((c.im.abs() - 1.0).abs() < 1e-10);

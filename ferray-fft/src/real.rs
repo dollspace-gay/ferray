@@ -179,8 +179,7 @@ where
         ));
     }
     let complex_data: Vec<Complex<T>> = a.iter().copied().collect();
-    let (out_shape, out_data) =
-        irfft_along_axis::<T>(&complex_data, &shape, ax, output_len, norm)?;
+    let (out_shape, out_data) = irfft_along_axis::<T>(&complex_data, &shape, ax, output_len, norm)?;
     if out.shape() != out_shape.as_slice() {
         return Err(FerrayError::shape_mismatch(format!(
             "irfft_into: out shape {:?} does not match irfft output shape {:?}",

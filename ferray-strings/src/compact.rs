@@ -153,10 +153,7 @@ impl CompactStringArray {
 
     /// Iterate over `&str` slices.
     pub fn iter(&self) -> CompactStringIter<'_> {
-        CompactStringIter {
-            arr: self,
-            pos: 0,
-        }
+        CompactStringIter { arr: self, pos: 0 }
     }
 
     /// Borrow the underlying byte buffer.

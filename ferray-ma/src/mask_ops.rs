@@ -79,9 +79,7 @@ pub fn is_masked<T: Element, D: Dimension>(ma: &MaskedArray<T, D>) -> FerrayResu
 /// # Errors
 /// This function does not currently error but returns `Result` for API
 /// consistency.
-pub fn count_masked<T: Element, D: Dimension>(
-    ma: &MaskedArray<T, D>,
-) -> FerrayResult<usize> {
+pub fn count_masked<T: Element, D: Dimension>(ma: &MaskedArray<T, D>) -> FerrayResult<usize> {
     let count = ma.mask().iter().filter(|m| **m).count();
     Ok(count)
 }

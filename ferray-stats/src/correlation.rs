@@ -264,11 +264,7 @@ mod tests {
         //   k=1: 2*0.5 + 3*1.0 = 4.0
         //   k=2: 3*0.5 + 4*1.0 = 5.5
         //   k=3: 4*0.5 + 5*1.0 = 7.0
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
         let v = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.5, 1.0]).unwrap();
         let r = correlate(&a, &v, CorrelateMode::Valid).unwrap();
         let s: Vec<f64> = r.iter().copied().collect();
@@ -313,11 +309,8 @@ mod tests {
     fn corrcoef_constant_row_returns_nan() {
         // #723: row with zero variance has undefined correlation;
         // numpy returns NaN. Pre-fix this returned 0.0 / 1.0.
-        let m = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 1.0, 1.0, 1.0, 2.0, 3.0],
-        )
-        .unwrap();
+        let m = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 1.0, 1.0, 1.0, 2.0, 3.0])
+            .unwrap();
         let c = corrcoef(&m, true).unwrap();
         let s: Vec<f64> = c.iter().copied().collect();
         // [[nan, nan], [nan, 1.0]]

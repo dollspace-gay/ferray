@@ -159,6 +159,38 @@ Default builds stay on workspace MSRV 1.85 with no extra runtime deps.
 - **Edition 2024**, MSRV 1.85 (default features)
 - All contiguous inner loops have SIMD paths for f32, f64, i32, i64
 
+## What's new in 0.3.5
+
+The `[0.3.5]` release sweeps the open numpy-parity backlog to zero. Curated
+highlights — see `CHANGELOG.md` for the full per-crate breakdown:
+
+- **Statistics**: `unique_axis`, broadcast-aware `where`, scipy descriptive
+  helpers (skew/kurtosis/zscore/mode/iqr/sem/gmean/hmean), seven rule-based
+  histogram bin variants, five hypothesis tests (`pearsonr`, `spearmanr`,
+  `ttest_1samp`, `ttest_ind`, `ks_2samp`, `chi2_contingency`).
+- **Polynomial**: `from_roots` / `linspace` / `identity` / `basis` / `compose`
+  / `Display` across all six bases; `ComplexPolynomial`; F32 sibling types
+  for the five non-power bases.
+- **FFT**: pre-allocated `_into` variants and `FftPlanND` for fixed-shape
+  multi-dim transforms.
+- **Random**: broadcast-aware distributions, full state serialization for
+  every BitGenerator, typed integer generators (u8/i8/…/u64), N-D
+  shuffle/permuted/choice, `multivariate_hypergeometric` and
+  `multivariate_normal_array`.
+- **Window**: `chebwin` (byte-exact scipy parity), `dpss` Slepian taper,
+  closed-form `boxcar`/`triang`/`bohman`/`flattop`/`lanczos`, plus f32
+  siblings of the numpy 5.
+- **Strings**: `rsplit`, `splitlines`, N-D StringArray indexing,
+  `CompactStringArray` Arrow-style backend behind `compact-storage`.
+- **Stride tricks**: `sliding_window_view_axis`, `as_strided_signed`.
+- **I/O**: 1-D `savetxt` / `loadtxt`, `Complex` round-trip in `.npy`,
+  structured-dtype load/save into `FerrayRecord` arrays.
+- **Core**: `DType::FixedAscii` / `FixedUnicode` / `RawBytes` for numpy's
+  `S{n}` / `U{n}` / `V{n}` families.
+
+Bug fixes: `correlate` was computing convolution; `corrcoef` now returns
+NaN for zero-variance rows (matches numpy).
+
 ## Beyond NumPy
 
 Features that go beyond NumPy's capabilities:

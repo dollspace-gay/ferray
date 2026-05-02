@@ -100,15 +100,10 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// # Errors
     /// - `AxisOutOfBounds` if `axis >= ndim`
     /// - `IndexOutOfBounds` if `index` is out of range (supports negative)
-    pub fn index_axis(
-        &self,
-        axis: Axis,
-        index: isize,
-    ) -> FerrayResult<ArrayView<'_, T, D::Smaller>>
+    pub fn index_axis(&self, axis: Axis, index: isize) -> FerrayResult<ArrayView<'_, T, D::Smaller>>
     where
-        D::NdarrayDim: ndarray::RemoveAxis<
-                Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim,
-            >,
+        D::NdarrayDim:
+            ndarray::RemoveAxis<Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim>,
     {
         // #349: return type now preserves rank — Array<T, Ix2>::index_axis
         // produces ArrayView<T, Ix1> instead of the old IxDyn fallback.
@@ -234,9 +229,8 @@ impl<T: Element, D: Dimension> Array<T, D> {
     /// - `InvalidValue` if the axis has size != 1
     pub fn remove_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'_, T, D::Smaller>>
     where
-        D::NdarrayDim: ndarray::RemoveAxis<
-                Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim,
-            >,
+        D::NdarrayDim:
+            ndarray::RemoveAxis<Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim>,
     {
         let ndim = self.ndim();
         let ax = axis.index();
@@ -358,15 +352,10 @@ impl<T: Element, D: Dimension> Array<T, D> {
 impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
     /// Index into the view along a given axis, removing that axis.
     /// Returns a view with rank one less than `Self` (#349).
-    pub fn index_axis(
-        &self,
-        axis: Axis,
-        index: isize,
-    ) -> FerrayResult<ArrayView<'a, T, D::Smaller>>
+    pub fn index_axis(&self, axis: Axis, index: isize) -> FerrayResult<ArrayView<'a, T, D::Smaller>>
     where
-        D::NdarrayDim: ndarray::RemoveAxis<
-                Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim,
-            >,
+        D::NdarrayDim:
+            ndarray::RemoveAxis<Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim>,
     {
         let ndim = self.ndim();
         let ax = axis.index();
@@ -419,9 +408,8 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
     /// Returns a view with rank one less than `Self` (#349).
     pub fn remove_axis(&self, axis: Axis) -> FerrayResult<ArrayView<'a, T, D::Smaller>>
     where
-        D::NdarrayDim: ndarray::RemoveAxis<
-                Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim,
-            >,
+        D::NdarrayDim:
+            ndarray::RemoveAxis<Smaller = <D::Smaller as crate::dimension::Dimension>::NdarrayDim>,
     {
         let ndim = self.ndim();
         let ax = axis.index();
@@ -858,16 +846,14 @@ mod tests {
         )
         .unwrap();
         // The variable's type is explicit — must compile to Ix1, not IxDyn.
-        let row: ArrayView<'_, f64, crate::dimension::Ix1> =
-            arr.index_axis(Axis(0), 1).unwrap();
+        let row: ArrayView<'_, f64, crate::dimension::Ix1> = arr.index_axis(Axis(0), 1).unwrap();
         assert_eq!(row.shape(), &[4]);
     }
 
     #[test]
     fn index_axis_3d_returns_ix2() {
         let arr = Array::<i32, Ix3>::from_vec(Ix3::new([2, 3, 4]), (0..24).collect()).unwrap();
-        let plane: ArrayView<'_, i32, crate::dimension::Ix2> =
-            arr.index_axis(Axis(0), 0).unwrap();
+        let plane: ArrayView<'_, i32, crate::dimension::Ix2> = arr.index_axis(Axis(0), 0).unwrap();
         assert_eq!(plane.shape(), &[3, 4]);
     }
 
@@ -884,13 +870,10 @@ mod tests {
 
     #[test]
     fn remove_axis_ix3_returns_ix2() {
-        let arr = Array::<f64, Ix3>::from_vec(
-            Ix3::new([1, 3, 4]),
-            (0..12).map(|i| i as f64).collect(),
-        )
-        .unwrap();
-        let squeezed: ArrayView<'_, f64, crate::dimension::Ix2> =
-            arr.remove_axis(Axis(0)).unwrap();
+        let arr =
+            Array::<f64, Ix3>::from_vec(Ix3::new([1, 3, 4]), (0..12).map(|i| i as f64).collect())
+                .unwrap();
+        let squeezed: ArrayView<'_, f64, crate::dimension::Ix2> = arr.remove_axis(Axis(0)).unwrap();
         assert_eq!(squeezed.shape(), &[3, 4]);
     }
 
@@ -898,12 +881,9 @@ mod tests {
     fn index_axis_chains_preserve_rank_at_each_step() {
         // Ix3 → Ix2 → Ix1 → Ix0 chain.
         let arr = Array::<i32, Ix3>::from_vec(Ix3::new([2, 3, 4]), (0..24).collect()).unwrap();
-        let plane: ArrayView<'_, i32, crate::dimension::Ix2> =
-            arr.index_axis(Axis(0), 1).unwrap();
-        let row: ArrayView<'_, i32, crate::dimension::Ix1> =
-            plane.index_axis(Axis(0), 1).unwrap();
-        let scalar: ArrayView<'_, i32, crate::dimension::Ix0> =
-            row.index_axis(Axis(0), 2).unwrap();
+        let plane: ArrayView<'_, i32, crate::dimension::Ix2> = arr.index_axis(Axis(0), 1).unwrap();
+        let row: ArrayView<'_, i32, crate::dimension::Ix1> = plane.index_axis(Axis(0), 1).unwrap();
+        let scalar: ArrayView<'_, i32, crate::dimension::Ix0> = row.index_axis(Axis(0), 2).unwrap();
         assert_eq!(scalar.shape(), &[] as &[usize]);
     }
 }

@@ -20,7 +20,17 @@ pub enum ConvolveMode {
 
 /// Discrete, linear convolution of two 1-D arrays.
 ///
-/// Computes `convolve(a, v, mode)` following `NumPy` semantics.
+/// Computes `convolve(a, v, mode)` following `NumPy` semantics — direct
+/// O(n·m) algorithm, matching `numpy.convolve`. For large floating-point
+/// inputs prefer [`fftconvolve`] (behind the `fft-convolve` feature),
+/// which is O((n+m) · log(n+m)) via FFT.
+///
+/// The inner loop is restructured to iterate over output positions
+/// rather than input pairs (#89). The previous form
+/// `full[i+j] += a[i] * v[j]` had a strided write pattern that
+/// confused auto-vectorisation; iterating over `k = i+j` and
+/// accumulating a dot product `Σ a[i] * v[k-i]` gives the auto-
+/// vectoriser a clean inner loop with linear writes.
 pub fn convolve<T>(
     a: &Array<T, Ix1>,
     v: &Array<T, Ix1>,
@@ -40,14 +50,24 @@ where
         ));
     }
 
-    // Full convolution
+    // Full convolution — output position k = i + j, inner loop is a
+    // dot product with linear indexing into both inputs.
     let full_len = n + m - 1;
     let mut full = vec![<T as Element>::zero(); full_len];
 
-    for i in 0..n {
-        for j in 0..m {
-            full[i + j] = full[i + j] + a_data[i] * v_data[j];
+    for k in 0..full_len {
+        // Range of valid i: max(0, k+1-m) <= i < min(n, k+1).
+        let i_lo = (k + 1).saturating_sub(m);
+        let i_hi = (k + 1).min(n);
+        let mut acc = <T as Element>::zero();
+        for i in i_lo..i_hi {
+            // SAFETY-style bounds rationale: the i_lo/i_hi math
+            // guarantees i < n and (k - i) < m. The compiler usually
+            // proves this and eliminates bounds checks; if it can't,
+            // the panics still produce correct (slightly slower) code.
+            acc = acc + a_data[i] * v_data[k - i];
         }
+        full[k] = acc;
     }
 
     match mode {
@@ -63,6 +83,81 @@ where
             let start = m.min(n) - 1;
             let result = full[start..start + out_len].to_vec();
             Array::from_vec(Ix1::new([out_len]), result)
+        }
+    }
+}
+
+/// FFT-based convolution of two 1-D f64 arrays — O((n+m) · log(n+m))
+/// via real-to-complex FFT.
+///
+/// Matches `scipy.signal.fftconvolve(a, v, mode)` for the supported
+/// modes. Numerically equivalent to [`convolve`] up to float roundoff
+/// (typically a few ULPs at the magnitude of the result; for inputs
+/// that span many orders of magnitude the FFT path may diverge more
+/// because FFT accumulates O(log N) ULPs of error per butterfly).
+///
+/// Available only with the `fft-convolve` feature enabled (pulls in
+/// `ferray-fft` / `realfft`). For inputs where n·m < ~50_000 the
+/// direct path in [`convolve`] is faster; the cross-over depends on
+/// hardware but is typically around (n+m) > 1024.
+#[cfg(feature = "fft-convolve")]
+pub fn fftconvolve(
+    a: &Array<f64, Ix1>,
+    v: &Array<f64, Ix1>,
+    mode: ConvolveMode,
+) -> FerrayResult<Array<f64, Ix1>> {
+    use ferray_fft::{FftNorm, irfft, rfft};
+
+    let n = a.size();
+    let m = v.size();
+    if n == 0 || m == 0 {
+        return Err(FerrayError::invalid_value(
+            "fftconvolve: input arrays must be non-empty",
+        ));
+    }
+
+    // Zero-pad both inputs to the full convolution length.
+    let full_len = n + m - 1;
+    let mut a_pad = vec![0.0f64; full_len];
+    let mut v_pad = vec![0.0f64; full_len];
+    for (dst, &src) in a_pad.iter_mut().zip(a.iter()) {
+        *dst = src;
+    }
+    for (dst, &src) in v_pad.iter_mut().zip(v.iter()) {
+        *dst = src;
+    }
+    let a_padded = Array::<f64, Ix1>::from_vec(Ix1::new([full_len]), a_pad)?;
+    let v_padded = Array::<f64, Ix1>::from_vec(Ix1::new([full_len]), v_pad)?;
+
+    // Forward real FFT on both, multiply elementwise, inverse real FFT.
+    let a_fft = rfft(&a_padded, None, None, FftNorm::Backward)?;
+    let v_fft = rfft(&v_padded, None, None, FftNorm::Backward)?;
+
+    let a_spec: Vec<num_complex::Complex<f64>> = a_fft.iter().copied().collect();
+    let v_spec: Vec<num_complex::Complex<f64>> = v_fft.iter().copied().collect();
+    let prod: Vec<num_complex::Complex<f64>> = a_spec
+        .iter()
+        .zip(v_spec.iter())
+        .map(|(a, b)| a * b)
+        .collect();
+    let prod_arr = Array::<num_complex::Complex<f64>, Ix1>::from_vec(Ix1::new([prod.len()]), prod)?;
+
+    let inv = irfft(&prod_arr, Some(full_len), None, FftNorm::Backward)?;
+    let inv_data: Vec<f64> = inv.iter().copied().collect();
+
+    match mode {
+        ConvolveMode::Full => Array::from_vec(Ix1::new([full_len]), inv_data),
+        ConvolveMode::Same => {
+            let out_len = n.max(m);
+            let start = (full_len - out_len) / 2;
+            let slice = inv_data[start..start + out_len].to_vec();
+            Array::from_vec(Ix1::new([out_len]), slice)
+        }
+        ConvolveMode::Valid => {
+            let out_len = if n >= m { n - m + 1 } else { m - n + 1 };
+            let start = m.min(n) - 1;
+            let slice = inv_data[start..start + out_len].to_vec();
+            Array::from_vec(Ix1::new([out_len]), slice)
         }
     }
 }

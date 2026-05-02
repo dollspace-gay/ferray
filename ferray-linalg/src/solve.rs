@@ -1326,11 +1326,8 @@ mod tests {
     #[test]
     fn solve_dyn_2d_a_works() {
         // [[2, 1], [1, 3]] * x = [4, 7] → x = [1, 2].
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![2.0, 1.0, 1.0, 3.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![2.0, 1.0, 1.0, 3.0]).unwrap();
         let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![4.0, 7.0]).unwrap();
         let x = solve_dyn(&a, &b).unwrap();
         assert_eq!(x.shape(), &[2]);

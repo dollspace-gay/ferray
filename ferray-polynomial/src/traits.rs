@@ -156,11 +156,7 @@ pub trait Poly: Clone + Sized {
     /// # Errors
     /// Returns `FerrayError::InvalidValue` if `domain` or `window` is
     /// degenerate.
-    fn with_mapping(
-        self,
-        domain: [f64; 2],
-        window: [f64; 2],
-    ) -> Result<Self, FerrayError>;
+    fn with_mapping(self, domain: [f64; 2], window: [f64; 2]) -> Result<Self, FerrayError>;
 
     /// Polynomial composition: returns `r` such that
     /// `r(x) == self(q(x))` (#485, #733).
@@ -288,9 +284,7 @@ pub trait Poly: Clone + Sized {
         domain: Option<[f64; 2]>,
     ) -> Result<(Vec<f64>, Vec<f64>), FerrayError> {
         if n < 2 {
-            return Err(FerrayError::invalid_value(
-                "linspace requires n >= 2",
-            ));
+            return Err(FerrayError::invalid_value("linspace requires n >= 2"));
         }
         let [lo, hi] = domain.unwrap_or_else(|| self.domain());
         let step = (hi - lo) / (n as f64 - 1.0);

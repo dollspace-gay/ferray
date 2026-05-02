@@ -44,10 +44,7 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// `FerrayError::InvalidValue` if `out` is non-contiguous.
-    pub fn random_into(
-        &mut self,
-        out: &mut Array<f64, IxDyn>,
-    ) -> Result<(), FerrayError> {
+    pub fn random_into(&mut self, out: &mut Array<f64, IxDyn>) -> Result<(), FerrayError> {
         let slice = out.as_slice_mut().ok_or_else(|| {
             FerrayError::invalid_value("random_into requires a contiguous out buffer")
         })?;
@@ -330,8 +327,7 @@ mod tests {
     fn random_into_fills_buffer_in_place() {
         use ferray_core::{Array, IxDyn};
         let mut rng = default_rng_seeded(42);
-        let mut buf =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[8]), vec![-1.0; 8]).unwrap();
+        let mut buf = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[8]), vec![-1.0; 8]).unwrap();
         rng.random_into(&mut buf).unwrap();
         let s = buf.as_slice().unwrap();
         for &v in s {
@@ -345,8 +341,7 @@ mod tests {
         let mut a = default_rng_seeded(7);
         let mut b = default_rng_seeded(7);
         let allocated = a.random([3, 4]).unwrap();
-        let mut buf =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 4]), vec![0.0; 12]).unwrap();
+        let mut buf = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 4]), vec![0.0; 12]).unwrap();
         b.random_into(&mut buf).unwrap();
         assert_eq!(allocated.as_slice().unwrap(), buf.as_slice().unwrap());
     }
@@ -357,16 +352,8 @@ mod tests {
     fn uniform_array_per_element_bounds() {
         use ferray_core::{Array, IxDyn};
         let mut rng = default_rng_seeded(42);
-        let low = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[3]),
-            vec![0.0, 100.0, -10.0],
-        )
-        .unwrap();
-        let high = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[3]),
-            vec![1.0, 200.0, 0.0],
-        )
-        .unwrap();
+        let low = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![0.0, 100.0, -10.0]).unwrap();
+        let high = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1.0, 200.0, 0.0]).unwrap();
         let out = rng.uniform_array(&low, &high).unwrap();
         let s = out.as_slice().unwrap();
         assert!((0.0..1.0).contains(&s[0]));
@@ -378,13 +365,10 @@ mod tests {
     fn uniform_array_broadcast() {
         use ferray_core::{Array, IxDyn};
         let mut rng = default_rng_seeded(42);
-        let low =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1]), vec![0.0]).unwrap();
-        let high = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let low = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1]), vec![0.0]).unwrap();
+        let high =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
         let out = rng.uniform_array(&low, &high).unwrap();
         assert_eq!(out.shape(), &[2, 3]);
         // Each element must be in [0, high[i,j]).
@@ -399,11 +383,7 @@ mod tests {
     fn uniform_array_low_ge_high_errors() {
         use ferray_core::{Array, IxDyn};
         let mut rng = default_rng_seeded(0);
-        let low = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2]),
-            vec![0.0, 5.0],
-        )
-        .unwrap();
+        let low = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0, 5.0]).unwrap();
         let high = Array::<f64, IxDyn>::from_vec(
             IxDyn::new(&[2]),
             vec![1.0, 5.0], // second pair has low == high

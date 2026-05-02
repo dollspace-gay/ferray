@@ -18,9 +18,8 @@ use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
 use crate::helpers::{
-    binary_broadcast_op, binary_elementwise_op, binary_elementwise_op_into,
-    try_simd_f32_binary, try_simd_f64_binary, unary_float_op, unary_float_op_compute,
-    unary_float_op_into,
+    binary_broadcast_op, binary_elementwise_op, binary_elementwise_op_into, try_simd_f32_binary,
+    try_simd_f64_binary, unary_float_op, unary_float_op_compute, unary_float_op_into,
 };
 use crate::kernels::simd_f32::{add_f32, div_f32, mul_f32, sub_f32};
 use crate::kernels::simd_f64::{add_f64, div_f64, mul_f64, sub_f64};

@@ -30,10 +30,7 @@ fn betainc(a: f64, b: f64, x: f64) -> f64 {
     }
     // Numerical-Recipes recipe: choose the side of the symmetry
     // identity that gives faster CF convergence.
-    let bt = (ln_gamma(a + b) - ln_gamma(a) - ln_gamma(b)
-        + a * x.ln()
-        + b * (1.0 - x).ln())
-    .exp();
+    let bt = (ln_gamma(a + b) - ln_gamma(a) - ln_gamma(b) + a * x.ln() + b * (1.0 - x).ln()).exp();
     if x < (a + 1.0) / (a + b + 2.0) {
         bt * betacf(a, b, x) / a
     } else {
@@ -59,8 +56,7 @@ fn ln_gamma(x: f64) -> f64 {
         sum += c / (x + i as f64);
     }
     let half_log_2pi = 0.918_938_533_204_672_8;
-    half_log_2pi + (x + 0.5) * (x + G + 0.5).ln() - (x + G + 0.5)
-        + (sum / x).ln()
+    half_log_2pi + (x + 0.5) * (x + G + 0.5).ln() - (x + G + 0.5) + (sum / x).ln()
 }
 
 /// Continued-fraction tail used by `betainc`. Lentz's algorithm.
@@ -372,9 +368,7 @@ pub struct Chi2ContingencyResult {
 /// # Errors
 /// `FerrayError::InvalidValue` if the table is empty or any row /
 /// column total is zero (degenerate independence model).
-pub fn chi2_contingency<T>(
-    observed: &Array<T, Ix2>,
-) -> FerrayResult<Chi2ContingencyResult>
+pub fn chi2_contingency<T>(observed: &Array<T, Ix2>) -> FerrayResult<Chi2ContingencyResult>
 where
     T: Element + Copy + Into<f64>,
 {
@@ -697,7 +691,9 @@ mod tests {
     #[test]
     fn ks_2samp_clearly_different_distributions() {
         let a = arr1(vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]);
-        let b = arr1(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]);
+        let b = arr1(vec![
+            10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0,
+        ]);
         let (d, p) = ks_2samp(&a, &b).unwrap();
         // No overlap → D = 1.0.
         assert!((d - 1.0).abs() < 1e-12);
@@ -790,11 +786,8 @@ mod tests {
 
     #[test]
     fn chi2_empty_table_errors() {
-        let obs = Array::<f64, ferray_core::Ix2>::from_vec(
-            ferray_core::Ix2::new([0, 0]),
-            vec![],
-        )
-        .unwrap();
+        let obs = Array::<f64, ferray_core::Ix2>::from_vec(ferray_core::Ix2::new([0, 0]), vec![])
+            .unwrap();
         assert!(chi2_contingency(&obs).is_err());
     }
 

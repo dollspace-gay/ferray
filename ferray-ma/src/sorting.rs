@@ -173,9 +173,7 @@ where
                     unmasked.push((v, flat));
                 }
             }
-            unmasked.sort_by(|a, b| {
-                a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
-            });
+            unmasked.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
             // Write back: lane position k gets the k-th value, with
             // mask=false for unmasked positions and mask=true after.
             for (k, (v, _flat)) in unmasked.iter().chain(masked.iter()).enumerate() {

@@ -44,6 +44,18 @@ pub fn mul_f64(a: &[f64], b: &[f64], output: &mut [f64]) {
     dispatch_binary_f64(a, b, output, |x, y| x * y);
 }
 
+/// SIMD-dispatched f64 sub.
+#[inline]
+pub fn sub_f64(a: &[f64], b: &[f64], output: &mut [f64]) {
+    dispatch_binary_f64(a, b, output, |x, y| x - y);
+}
+
+/// SIMD-dispatched f64 div.
+#[inline]
+pub fn div_f64(a: &[f64], b: &[f64], output: &mut [f64]) {
+    dispatch_binary_f64(a, b, output, |x, y| x / y);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -221,8 +221,7 @@ mod tests {
     #[test]
     fn axis_window_on_axis1_only() {
         // 2x5, window of length 3 on axis 1.
-        let a =
-            Array::<i32, Ix2>::from_vec(Ix2::new([2, 5]), (1..=10).collect()).unwrap();
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 5]), (1..=10).collect()).unwrap();
         let v = sliding_window_view_axis(&a, &[3], &[1]).unwrap();
         assert_eq!(v.shape(), &[2, 3, 3]);
     }

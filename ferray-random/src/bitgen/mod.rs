@@ -180,7 +180,12 @@ mod state_tests {
         for _ in 0..64 {
             from_b.push(b.next_u64());
         }
-        assert_eq!(from_a, from_b, "round-trip diverged for {}", std::any::type_name::<B>());
+        assert_eq!(
+            from_a,
+            from_b,
+            "round-trip diverged for {}",
+            std::any::type_name::<B>()
+        );
     }
 
     #[test]

@@ -217,11 +217,7 @@ pub fn savetxt_1d_to_writer<T: Element + Display, W: Write>(
 ///
 /// # Errors
 /// Same as [`loadtxt`].
-pub fn loadtxt_1d<T, P>(
-    path: P,
-    delimiter: char,
-    skiprows: usize,
-) -> FerrayResult<Array<T, Ix1>>
+pub fn loadtxt_1d<T, P>(path: P, delimiter: char, skiprows: usize) -> FerrayResult<Array<T, Ix1>>
 where
     T: Element + FromStr,
     T::Err: Display,
@@ -521,8 +517,7 @@ mod tests {
 
     #[test]
     fn savetxt_1d_writes_one_value_per_line() {
-        let arr =
-            Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.5, 2.5, 3.0, 4.0]).unwrap();
+        let arr = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.5, 2.5, 3.0, 4.0]).unwrap();
         let mut buf: Vec<u8> = Vec::new();
         let opts = SaveTxtOptions::default();
         savetxt_1d_to_writer(&mut buf, &arr, &opts).unwrap();

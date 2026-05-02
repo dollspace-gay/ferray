@@ -289,9 +289,9 @@ pub fn save_record_to_writer<T: FerrayRecord + Element, D: Dimension, W: Write>(
 ) -> FerrayResult<()> {
     let dtype = DType::Struct(T::field_descriptors());
     header::write_header(writer, dtype, array.shape(), false)?;
-    let slice = array.as_slice().ok_or_else(|| {
-        FerrayError::io_error("save_record requires a contiguous array")
-    })?;
+    let slice = array
+        .as_slice()
+        .ok_or_else(|| FerrayError::io_error("save_record requires a contiguous array"))?;
     let byte_len = slice.len() * T::record_size();
     let bytes = unsafe { std::slice::from_raw_parts(slice.as_ptr().cast::<u8>(), byte_len) };
     writer
@@ -583,9 +583,7 @@ fn build_dimension<D: Dimension>(shape: &[usize]) -> FerrayResult<D> {
         }
     }
     D::from_dim_slice(shape).ok_or_else(|| {
-        FerrayError::shape_mismatch(format!(
-            "shape {shape:?} does not match dimension type"
-        ))
+        FerrayError::shape_mismatch(format!("shape {shape:?} does not match dimension type"))
     })
 }
 
@@ -785,10 +783,7 @@ macro_rules! impl_npy_time_element {
                 // SAFETY: Self is repr(transparent) over i64, contiguous
                 // and properly aligned for u8 reinterpretation.
                 let bytes = unsafe {
-                    std::slice::from_raw_parts(
-                        data.as_ptr().cast::<u8>(),
-                        data.len() * 8,
-                    )
+                    std::slice::from_raw_parts(data.as_ptr().cast::<u8>(), data.len() * 8)
                 };
                 writer.write_all(bytes)?;
                 Ok(())
@@ -920,8 +915,7 @@ mod tests {
     #[test]
     fn load_record_rejects_wrong_dtype_file() {
         // Save a regular f64 array, then try to load it as Point.
-        let arr =
-            Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let arr = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let (_dir, path) = temp_path("wrong_dtype_file.npy");
         save(&path, &arr).unwrap();
         let res: Result<Array<Point, Ix1>, _> = load_record(&path);
@@ -943,8 +937,7 @@ mod tests {
             Complex::new(0.0, -7.25),
             Complex::new(1e6, -1e6),
         ];
-        let arr =
-            Array::<Complex<f32>, Ix1>::from_vec(Ix1::new([4]), data.clone()).unwrap();
+        let arr = Array::<Complex<f32>, Ix1>::from_vec(Ix1::new([4]), data.clone()).unwrap();
         let (_dir, path) = temp_path("rt_c64_1d.npy");
         save(&path, &arr).unwrap();
         let loaded: Array<Complex<f32>, Ix1> = load(&path).unwrap();
@@ -958,8 +951,7 @@ mod tests {
         let data: Vec<Complex<f64>> = (0..6)
             .map(|i| Complex::new(i as f64, -(i as f64)))
             .collect();
-        let arr =
-            Array::<Complex<f64>, Ix2>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
+        let arr = Array::<Complex<f64>, Ix2>::from_vec(Ix2::new([2, 3]), data.clone()).unwrap();
         let (_dir, path) = temp_path("rt_c128_2d.npy");
         save(&path, &arr).unwrap();
         let loaded: Array<Complex<f64>, Ix2> = load(&path).unwrap();
@@ -1538,8 +1530,7 @@ mod tests {
             Complex::new(0.0, -7.0),
             Complex::new(f32::INFINITY, f32::NEG_INFINITY),
         ];
-        let arr =
-            Array::<Complex<f32>, IxDyn>::from_vec(IxDyn::new(&[4]), data.clone()).unwrap();
+        let arr = Array::<Complex<f32>, IxDyn>::from_vec(IxDyn::new(&[4]), data.clone()).unwrap();
         let dyn_in = DynArray::Complex32(arr);
 
         let mut buf = Vec::new();
@@ -1660,8 +1651,7 @@ mod tests {
             Complex::new(f64::INFINITY, f64::NEG_INFINITY),
             Complex::new(0.0, -0.0),
         ];
-        let arr =
-            Array::<Complex<f64>, IxDyn>::from_vec(IxDyn::new(&[4]), data.clone()).unwrap();
+        let arr = Array::<Complex<f64>, IxDyn>::from_vec(IxDyn::new(&[4]), data.clone()).unwrap();
         let dyn_in = DynArray::Complex64(arr);
 
         let mut buf = Vec::new();

@@ -126,8 +126,7 @@ pub fn write_header<W: std::io::Write>(
     } else {
         format!("'descr': '{descr}'")
     };
-    let dict =
-        format!("{{{descr_field}, 'fortran_order': {fortran_str}, 'shape': {shape_str}, }}");
+    let dict = format!("{{{descr_field}, 'fortran_order': {fortran_str}, 'shape': {shape_str}, }}");
 
     // Try version 1.0 first (header length fits in u16)
     // Preamble: magic(6) + version(2) + header_len(2) = 10 for v1
@@ -471,7 +470,11 @@ mod tests {
         let pad = {
             let total = preamble_v2 + body_with_newline;
             let r = total % format::HEADER_ALIGNMENT;
-            if r == 0 { 0 } else { format::HEADER_ALIGNMENT - r }
+            if r == 0 {
+                0
+            } else {
+                format::HEADER_ALIGNMENT - r
+            }
         };
         let header_len = dict.len() + pad + 1;
 
@@ -519,7 +522,11 @@ mod tests {
         let pad = {
             let total = preamble + body_with_newline;
             let r = total % format::HEADER_ALIGNMENT;
-            if r == 0 { 0 } else { format::HEADER_ALIGNMENT - r }
+            if r == 0 {
+                0
+            } else {
+                format::HEADER_ALIGNMENT - r
+            }
         };
         let header_len = dict.len() + pad + 1;
 

@@ -282,10 +282,7 @@ mod tests {
         let a = ComplexPolynomial::new(&[c(1.0, 0.0), c(0.0, 1.0)]);
         let b = ComplexPolynomial::new(&[c(1.0, 0.0), c(0.0, -1.0)]);
         let p = a.mul(&b);
-        assert_eq!(
-            p.coeffs(),
-            &[c(1.0, 0.0), c(0.0, 0.0), c(1.0, 0.0)]
-        );
+        assert_eq!(p.coeffs(), &[c(1.0, 0.0), c(0.0, 0.0), c(1.0, 0.0)]);
     }
 
     #[test]

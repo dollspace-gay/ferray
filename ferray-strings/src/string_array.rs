@@ -229,7 +229,9 @@ impl<D: Dimension> StringArray<D> {
         let shape = self.dim.as_slice().to_vec();
         let ndim = shape.len();
         if axis >= ndim {
-            return Err(ferray_core::error::FerrayError::axis_out_of_bounds(axis, ndim));
+            return Err(ferray_core::error::FerrayError::axis_out_of_bounds(
+                axis, ndim,
+            ));
         }
         let axis_len = shape[axis];
         if range.end > axis_len || range.start > range.end {
@@ -280,10 +282,7 @@ impl<D: Dimension> StringArray<D> {
             ));
         }
         let row: Vec<String> = self.data[idx * ncols..(idx + 1) * ncols].to_vec();
-        crate::string_array::StringArray1::from_vec(
-            ferray_core::dimension::Ix1::new([ncols]),
-            row,
-        )
+        crate::string_array::StringArray1::from_vec(ferray_core::dimension::Ix1::new([ncols]), row)
     }
 }
 
@@ -570,11 +569,7 @@ mod tests {
 
     #[test]
     fn get_row_index_out_of_bounds_errors() {
-        let a = StringArray::<Ix2>::from_vec(
-            Ix2::new([2, 2]),
-            vec!["x".into(); 4],
-        )
-        .unwrap();
+        let a = StringArray::<Ix2>::from_vec(Ix2::new([2, 2]), vec!["x".into(); 4]).unwrap();
         assert!(a.get_row(5).is_err());
     }
 

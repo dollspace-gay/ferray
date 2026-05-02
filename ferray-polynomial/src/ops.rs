@@ -24,10 +24,7 @@ macro_rules! impl_poly_ops {
             type Output = crate::$modname::$ty;
             fn add(self, rhs: &crate::$modname::$ty) -> Self::Output {
                 <crate::$modname::$ty as Poly>::add(self, rhs)
-                    .expect(concat!(
-                        stringify!($ty),
-                        ": domain/window mismatch in `+`",
-                    ))
+                    .expect(concat!(stringify!($ty), ": domain/window mismatch in `+`",))
             }
         }
 
@@ -35,10 +32,7 @@ macro_rules! impl_poly_ops {
             type Output = crate::$modname::$ty;
             fn add(self, rhs: crate::$modname::$ty) -> Self::Output {
                 <crate::$modname::$ty as Poly>::add(&self, &rhs)
-                    .expect(concat!(
-                        stringify!($ty),
-                        ": domain/window mismatch in `+`",
-                    ))
+                    .expect(concat!(stringify!($ty), ": domain/window mismatch in `+`",))
             }
         }
 
@@ -47,10 +41,7 @@ macro_rules! impl_poly_ops {
             type Output = crate::$modname::$ty;
             fn sub(self, rhs: &crate::$modname::$ty) -> Self::Output {
                 <crate::$modname::$ty as Poly>::sub(self, rhs)
-                    .expect(concat!(
-                        stringify!($ty),
-                        ": domain/window mismatch in `-`",
-                    ))
+                    .expect(concat!(stringify!($ty), ": domain/window mismatch in `-`",))
             }
         }
 
@@ -58,10 +49,7 @@ macro_rules! impl_poly_ops {
             type Output = crate::$modname::$ty;
             fn sub(self, rhs: crate::$modname::$ty) -> Self::Output {
                 <crate::$modname::$ty as Poly>::sub(&self, &rhs)
-                    .expect(concat!(
-                        stringify!($ty),
-                        ": domain/window mismatch in `-`",
-                    ))
+                    .expect(concat!(stringify!($ty), ": domain/window mismatch in `-`",))
             }
         }
 
@@ -70,10 +58,7 @@ macro_rules! impl_poly_ops {
             type Output = crate::$modname::$ty;
             fn mul(self, rhs: &crate::$modname::$ty) -> Self::Output {
                 <crate::$modname::$ty as Poly>::mul(self, rhs)
-                    .expect(concat!(
-                        stringify!($ty),
-                        ": domain/window mismatch in `*`",
-                    ))
+                    .expect(concat!(stringify!($ty), ": domain/window mismatch in `*`",))
             }
         }
 
@@ -81,10 +66,7 @@ macro_rules! impl_poly_ops {
             type Output = crate::$modname::$ty;
             fn mul(self, rhs: crate::$modname::$ty) -> Self::Output {
                 <crate::$modname::$ty as Poly>::mul(&self, &rhs)
-                    .expect(concat!(
-                        stringify!($ty),
-                        ": domain/window mismatch in `*`",
-                    ))
+                    .expect(concat!(stringify!($ty), ": domain/window mismatch in `*`",))
             }
         }
 
@@ -92,8 +74,10 @@ macro_rules! impl_poly_ops {
         impl ::core::ops::Neg for &crate::$modname::$ty {
             type Output = crate::$modname::$ty;
             fn neg(self) -> Self::Output {
-                let coeffs: Vec<f64> =
-                    <Self::Output as Poly>::coeffs(self).iter().map(|c| -c).collect();
+                let coeffs: Vec<f64> = <Self::Output as Poly>::coeffs(self)
+                    .iter()
+                    .map(|c| -c)
+                    .collect();
                 self.with_same_mapping(coeffs)
             }
         }
@@ -101,8 +85,10 @@ macro_rules! impl_poly_ops {
         impl ::core::ops::Neg for crate::$modname::$ty {
             type Output = crate::$modname::$ty;
             fn neg(self) -> Self::Output {
-                let coeffs: Vec<f64> =
-                    <Self::Output as Poly>::coeffs(&self).iter().map(|c| -c).collect();
+                let coeffs: Vec<f64> = <Self::Output as Poly>::coeffs(&self)
+                    .iter()
+                    .map(|c| -c)
+                    .collect();
                 self.with_same_mapping(coeffs)
             }
         }

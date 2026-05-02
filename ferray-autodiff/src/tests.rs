@@ -528,10 +528,7 @@ mod unit_tests {
     #[test]
     fn test_powi_zero_base_negative_exponent_is_singular() {
         // 0^-2 is undefined; derivative also singular.
-        let d = derivative(
-            |x: super::super::dual::DualNumber<f64>| x.powi(-2),
-            0.0_f64,
-        );
+        let d = derivative(|x: super::super::dual::DualNumber<f64>| x.powi(-2), 0.0_f64);
         assert!(d.is_infinite() || d.is_nan());
     }
 
@@ -540,10 +537,7 @@ mod unit_tests {
         // d/dx 1/x = -1/x^2 → -inf as x→0 from either side, but a
         // floating-point 0.0 has no sign distinction in the derivative
         // formula. Pin no-panic + non-finite result.
-        let d = derivative(
-            super::super::dual::DualNumber::recip,
-            -0.0_f64,
-        );
+        let d = derivative(super::super::dual::DualNumber::recip, -0.0_f64);
         assert!(d.is_infinite() || d.is_nan());
     }
 

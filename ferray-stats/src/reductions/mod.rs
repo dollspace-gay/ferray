@@ -15,7 +15,7 @@ use num_traits::Float;
 
 use crate::parallel;
 
-/// Try SIMD-accelerated fused sum of squared differences if T is f64.
+/// Try SIMD-accelerated fused sum of squared differences for f64 or f32 (#173).
 /// Returns sum((x - mean)²) without allocating an intermediate Vec.
 #[inline]
 fn try_simd_sum_sq_diff<T: Element + Copy + 'static>(data: &[T], mean: T) -> Option<T> {
@@ -26,13 +26,20 @@ fn try_simd_sum_sq_diff<T: Element + Copy + 'static>(data: &[T], mean: T) -> Opt
         let mean_f64: f64 = unsafe { std::mem::transmute_copy(&mean) };
         let result = parallel::simd_sum_sq_diff_f64(f64_slice, mean_f64);
         Some(unsafe { std::mem::transmute_copy(&result) })
+    } else if TypeId::of::<T>() == TypeId::of::<f32>() {
+        // SAFETY: TypeId check guarantees T is f32. size_of::<T>() == size_of::<f32>().
+        let f32_slice =
+            unsafe { std::slice::from_raw_parts(data.as_ptr().cast::<f32>(), data.len()) };
+        let mean_f32: f32 = unsafe { std::mem::transmute_copy(&mean) };
+        let result = parallel::simd_sum_sq_diff_f32(f32_slice, mean_f32);
+        Some(unsafe { std::mem::transmute_copy(&result) })
     } else {
         None
     }
 }
 
-/// Try SIMD-accelerated pairwise sum if T is f64.
-/// Returns the sum transmuted back to T, or None if T is not f64.
+/// Try SIMD-accelerated pairwise sum for f64 or f32 (#173).
+/// Returns the sum transmuted back to T, or None if T is not f64/f32.
 #[inline]
 fn try_simd_pairwise_sum<T: Element + Copy + 'static>(data: &[T]) -> Option<T> {
     if TypeId::of::<T>() == TypeId::of::<f64>() {
@@ -40,6 +47,12 @@ fn try_simd_pairwise_sum<T: Element + Copy + 'static>(data: &[T]) -> Option<T> {
         let f64_slice =
             unsafe { std::slice::from_raw_parts(data.as_ptr().cast::<f64>(), data.len()) };
         let result = parallel::pairwise_sum_f64(f64_slice);
+        Some(unsafe { std::mem::transmute_copy(&result) })
+    } else if TypeId::of::<T>() == TypeId::of::<f32>() {
+        // SAFETY: TypeId check guarantees T is f32. size_of::<T>() == size_of::<f32>().
+        let f32_slice =
+            unsafe { std::slice::from_raw_parts(data.as_ptr().cast::<f32>(), data.len()) };
+        let result = parallel::pairwise_sum_f32(f32_slice);
         Some(unsafe { std::mem::transmute_copy(&result) })
     } else {
         None
@@ -1056,6 +1069,58 @@ where
 {
     let v = var(a, axis, ddof)?;
     let data: Vec<T> = v.iter().map(|x| x.sqrt()).collect();
+    make_result(v.shape(), data)
+}
+
+/// Variance with integer-to-float64 promotion.
+///
+/// Sibling of [`mean_as_f64`] — accepts any `T: ToPrimitive` (including
+/// `i64`/`i32`/`u64`/etc.) and returns an `Array<f64, IxDyn>`. Matches
+/// `NumPy`'s behaviour of promoting integer variance to f64 (#170).
+///
+/// `ddof` is the delta degrees of freedom (0 for population, 1 for sample).
+pub fn var_as_f64<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    ddof: usize,
+) -> FerrayResult<Array<f64, IxDyn>>
+where
+    T: Element + Copy + Send + Sync + num_traits::ToPrimitive,
+    D: Dimension,
+{
+    if a.is_empty() {
+        return Err(FerrayError::invalid_value(
+            "cannot compute variance of empty array",
+        ));
+    }
+    // Promote each element to f64 once, then run the standard
+    // float-typed `var` on the promoted array.
+    let promoted: Vec<f64> = a
+        .iter()
+        .map(|v| {
+            v.to_f64()
+                .expect("ToPrimitive failed during var_as_f64 promotion")
+        })
+        .collect();
+    let promoted_arr = Array::<f64, _>::from_vec(a.dim().clone(), promoted)?;
+    var(&promoted_arr, axis, ddof)
+}
+
+/// Standard deviation with integer-to-float64 promotion (#170).
+///
+/// Sibling of [`mean_as_f64`] / [`var_as_f64`]; sqrt of the float-promoted
+/// variance.
+pub fn std_as_f64<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+    ddof: usize,
+) -> FerrayResult<Array<f64, IxDyn>>
+where
+    T: Element + Copy + Send + Sync + num_traits::ToPrimitive,
+    D: Dimension,
+{
+    let v = var_as_f64(a, axis, ddof)?;
+    let data: Vec<f64> = v.iter().map(|x| x.sqrt()).collect();
     make_result(v.shape(), data)
 }
 
@@ -2750,6 +2815,77 @@ mod tests {
         assert_eq!(m.iter().next().copied().unwrap(), f64::INFINITY);
     }
 
+    #[test]
+    fn prod_with_zero_and_infinity_is_nan() {
+        // 0 * INF = NaN per IEEE 754
+        let a = arr1d(vec![0.0, f64::INFINITY, 1.0]);
+        let p = prod(&a, None).unwrap();
+        assert!(p.iter().next().copied().unwrap().is_nan());
+    }
+
+    #[test]
+    fn prod_with_infinity_propagates() {
+        let a = arr1d(vec![2.0, f64::INFINITY, 3.0]);
+        let p = prod(&a, None).unwrap();
+        assert_eq!(p.iter().next().copied().unwrap(), f64::INFINITY);
+    }
+
+    #[test]
+    fn var_with_infinity_is_nan() {
+        // var includes (x - mean)^2 where mean is INF; (INF - INF)^2 = NaN.
+        let a = arr1d(vec![1.0, f64::INFINITY, 3.0]);
+        let v = var(&a, None, 0).unwrap();
+        assert!(v.iter().next().copied().unwrap().is_nan());
+    }
+
+    #[test]
+    fn std_with_infinity_is_nan() {
+        let a = arr1d(vec![1.0, f64::INFINITY, 3.0]);
+        let s = std_(&a, None, 0).unwrap();
+        assert!(s.iter().next().copied().unwrap().is_nan());
+    }
+
+    #[test]
+    fn argmin_finds_neg_infinity() {
+        let a = arr1d(vec![1.0, f64::NEG_INFINITY, 3.0, -100.0]);
+        let i = crate::reductions::argmin(&a, None).unwrap();
+        assert_eq!(i.iter().next().copied().unwrap(), 1);
+    }
+
+    #[test]
+    fn argmax_finds_infinity() {
+        let a = arr1d(vec![1.0, f64::INFINITY, 1e300, 5.0]);
+        let i = crate::reductions::argmax(&a, None).unwrap();
+        assert_eq!(i.iter().next().copied().unwrap(), 1);
+    }
+
+    #[test]
+    fn cumsum_propagates_infinity() {
+        let a = arr1d(vec![1.0, f64::INFINITY, 3.0]);
+        let c = cumsum(&a, None).unwrap();
+        let v: Vec<f64> = c.iter().copied().collect();
+        assert_eq!(v[0], 1.0);
+        assert!(v[1].is_infinite());
+        assert!(v[2].is_infinite());
+    }
+
+    #[test]
+    fn cumprod_inf_then_zero_yields_nan() {
+        let a = arr1d(vec![2.0, f64::INFINITY, 0.0]);
+        let c = cumprod(&a, None).unwrap();
+        let v: Vec<f64> = c.iter().copied().collect();
+        assert_eq!(v[0], 2.0);
+        assert!(v[1].is_infinite());
+        assert!(v[2].is_nan()); // INF * 0 = NaN
+    }
+
+    #[test]
+    fn ptp_with_infinity_is_inf() {
+        let a = arr1d(vec![1.0, f64::INFINITY, 3.0]);
+        let p = ptp(&a, None).unwrap();
+        assert!(p.iter().next().copied().unwrap().is_infinite());
+    }
+
     // ----- Single-element var/std with ddof (#178) -----
 
     #[test]
@@ -2772,6 +2908,47 @@ mod tests {
         let a = arr1d(vec![5.0]);
         let s = std_(&a, None, 0).unwrap();
         assert_eq!(s.iter().next().copied().unwrap(), 0.0);
+    }
+
+    #[test]
+    fn std_single_element_ddof1_errors() {
+        // Same shape as var: ddof=1 with N=1 hits the same ddof >= N
+        // guard (std_ delegates to var internally). Confirms the
+        // error path is plumbed through.
+        let a = arr1d(vec![5.0]);
+        assert!(std_(&a, None, 1).is_err());
+    }
+
+    #[test]
+    fn var_two_elements_ddof1_population_to_sample() {
+        // Sanity: ddof=0 vs ddof=1 on the same input — Bessel's correction
+        // should give a 2x bigger variance for N=2.
+        let a = arr1d(vec![1.0, 3.0]);
+        let v0 = var(&a, None, 0).unwrap();
+        let v1 = var(&a, None, 1).unwrap();
+        let v0_val = v0.iter().next().copied().unwrap();
+        let v1_val = v1.iter().next().copied().unwrap();
+        assert!((v0_val - 1.0).abs() < 1e-12); // ((1-2)^2 + (3-2)^2) / 2 = 1.0
+        assert!((v1_val - 2.0).abs() < 1e-12); // ((1-2)^2 + (3-2)^2) / 1 = 2.0
+        // Sample variance (ddof=1) should be 2x population (ddof=0) for N=2.
+        assert!((v1_val / v0_val - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn var_single_element_2d_ddof0() {
+        // 1×1 array — single element along every axis
+        use ferray_core::dimension::Ix2;
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([1, 1]), vec![5.0]).unwrap();
+        let v = var(&a, None, 0).unwrap();
+        assert_eq!(v.iter().next().copied().unwrap(), 0.0);
+    }
+
+    #[test]
+    fn var_single_element_axis_ddof_too_large_errors() {
+        // 1×3 array with ddof=1 reduced along axis 0 (length 1) should error
+        use ferray_core::dimension::Ix2;
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
+        assert!(var(&a, Some(0), 1).is_err());
     }
 
     // ---- *_into reductions (#467) ----
@@ -3444,5 +3621,140 @@ mod tests {
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let w = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0; 4]).unwrap();
         assert!(average(&a, Some(&w), None).is_err());
+    }
+
+    // ----------------------------------------------------------------------
+    // var_as_f64 / std_as_f64 integer promotion (#170)
+    // ----------------------------------------------------------------------
+
+    #[test]
+    fn var_as_f64_promotes_int_input() {
+        let a = Array::<i64, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let v = var_as_f64(&a, None, 0).unwrap();
+        // var([1,2,3,4,5]) with ddof=0 = 2.0
+        assert!((v.iter().next().unwrap() - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn var_as_f64_ddof_1() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let v = var_as_f64(&a, None, 1).unwrap();
+        // var([1,2,3,4,5]) with ddof=1 = 2.5
+        assert!((v.iter().next().unwrap() - 2.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn std_as_f64_promotes_int_input() {
+        let a = Array::<u32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let s = std_as_f64(&a, None, 0).unwrap();
+        // std([1,2,3,4,5]) with ddof=0 = sqrt(2.0)
+        assert!((s.iter().next().unwrap() - 2.0_f64.sqrt()).abs() < 1e-12);
+    }
+
+    #[test]
+    fn var_as_f64_axis_2d() {
+        use ferray_core::dimension::Ix2;
+        let a = Array::<i64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 5, 6]).unwrap();
+        // var along axis 0 of [[1,2,3],[4,5,6]] is [2.25, 2.25, 2.25]
+        let v = var_as_f64(&a, Some(0), 0).unwrap();
+        for x in v.iter() {
+            assert!((x - 2.25).abs() < 1e-12);
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // f32 sibling tests (#185) — exercises the f32 SIMD path added in #173
+    // and the generic Float-bound reduction paths.
+    // ----------------------------------------------------------------------
+
+    fn arr1d_f32(data: Vec<f32>) -> Array<f32, Ix1> {
+        Array::<f32, Ix1>::from_vec(Ix1::new([data.len()]), data).unwrap()
+    }
+
+    #[test]
+    fn sum_f32_basic() {
+        let a = arr1d_f32(vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+        let s = sum(&a, None).unwrap();
+        assert!((s.iter().next().copied().unwrap() - 15.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sum_f32_large_for_simd() {
+        // Big enough to actually exercise the SIMD pairwise sum kernel.
+        let n = 4096;
+        let data: Vec<f32> = (0..n).map(|i| (i as f32) * 0.1).collect();
+        let a = arr1d_f32(data);
+        let s = sum(&a, None).unwrap();
+        let expected = 0.1 * (n as f32) * ((n - 1) as f32) / 2.0;
+        let got = s.iter().copied().next().unwrap();
+        assert!((got - expected).abs() / expected < 1e-4);
+    }
+
+    #[test]
+    fn mean_f32_basic() {
+        let a = arr1d_f32(vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+        let m = mean(&a, None).unwrap();
+        assert!((m.iter().next().copied().unwrap() - 3.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn var_f32_basic() {
+        let a = arr1d_f32(vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+        let v = var(&a, None, 0).unwrap();
+        assert!((v.iter().next().copied().unwrap() - 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn var_f32_large_for_simd() {
+        // Exercises the simd_sum_sq_diff_f32 kernel.
+        let n = 4096;
+        let data: Vec<f32> = (0..n).map(|i| (i as f32) * 0.5).collect();
+        let a = arr1d_f32(data);
+        let v = var(&a, None, 0).unwrap();
+        let expected = 0.25 * ((n * n - 1) as f32) / 12.0;
+        let got = v.iter().copied().next().unwrap();
+        assert!((got - expected).abs() / expected < 1e-3);
+    }
+
+    #[test]
+    fn std_f32_basic() {
+        let a = arr1d_f32(vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+        let s = std_(&a, None, 0).unwrap();
+        assert!((s.iter().next().copied().unwrap() - 2.0_f32.sqrt()).abs() < 1e-6);
+    }
+
+    #[test]
+    fn min_max_f32_basic() {
+        let a = arr1d_f32(vec![3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0, 6.0]);
+        let mn = min(&a, None).unwrap();
+        let mx = max(&a, None).unwrap();
+        assert_eq!(mn.iter().next().copied().unwrap(), 1.0);
+        assert_eq!(mx.iter().next().copied().unwrap(), 9.0);
+    }
+
+    #[test]
+    fn prod_f32_basic() {
+        let a = arr1d_f32(vec![1.0, 2.0, 3.0, 4.0]);
+        let p = prod(&a, None).unwrap();
+        assert!((p.iter().next().copied().unwrap() - 24.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn argmin_argmax_f32_basic() {
+        let a = arr1d_f32(vec![3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0, 6.0]);
+        let amin = argmin(&a, None).unwrap();
+        let amax = argmax(&a, None).unwrap();
+        assert_eq!(amin.iter().next().copied().unwrap(), 1);
+        assert_eq!(amax.iter().next().copied().unwrap(), 5);
+    }
+
+    #[test]
+    fn cumsum_f32_basic() {
+        let a = arr1d_f32(vec![1.0, 2.0, 3.0, 4.0]);
+        let c = cumsum(&a, None).unwrap();
+        let v: Vec<f32> = c.iter().copied().collect();
+        for (got, expected) in v.iter().zip(&[1.0_f32, 3.0, 6.0, 10.0]) {
+            assert!((got - expected).abs() < 1e-6);
+        }
     }
 }

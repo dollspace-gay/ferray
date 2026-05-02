@@ -31,7 +31,10 @@ fn to_ix2_f32(a: &Array<f32, IxDyn>) -> Array<f32, Ix2> {
 }
 
 fn cast_expected(values: &serde_json::Value) -> Vec<f32> {
-    parse_f64_data(values).into_iter().map(|v| v as f32).collect()
+    parse_f64_data(values)
+        .into_iter()
+        .map(|v| v as f32)
+        .collect()
 }
 
 /// f32 ULP budget. f32 has ~7 decimal digits vs f64's ~15, so a fixture

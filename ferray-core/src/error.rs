@@ -237,19 +237,25 @@ mod tests {
 
     #[test]
     fn is_linalg_error_returns_true_for_linalg_variants() {
-        assert!(FerrayError::SingularMatrix {
-            message: "test".into()
-        }
-        .is_linalg_error());
-        assert!(FerrayError::ConvergenceFailure {
-            iterations: 100,
-            message: "test".into()
-        }
-        .is_linalg_error());
-        assert!(FerrayError::NumericalInstability {
-            message: "test".into()
-        }
-        .is_linalg_error());
+        assert!(
+            FerrayError::SingularMatrix {
+                message: "test".into()
+            }
+            .is_linalg_error()
+        );
+        assert!(
+            FerrayError::ConvergenceFailure {
+                iterations: 100,
+                message: "test".into()
+            }
+            .is_linalg_error()
+        );
+        assert!(
+            FerrayError::NumericalInstability {
+                message: "test".into()
+            }
+            .is_linalg_error()
+        );
     }
 
     #[test]
@@ -258,8 +264,6 @@ mod tests {
         assert!(!FerrayError::invalid_dtype("test").is_linalg_error());
         assert!(!FerrayError::invalid_value("test").is_linalg_error());
         assert!(!FerrayError::io_error("test").is_linalg_error());
-        assert!(
-            !FerrayError::axis_out_of_bounds(2, 1).is_linalg_error()
-        );
+        assert!(!FerrayError::axis_out_of_bounds(2, 1).is_linalg_error());
     }
 }

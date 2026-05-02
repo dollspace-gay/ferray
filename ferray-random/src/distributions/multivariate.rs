@@ -203,12 +203,7 @@ impl<B: BitGenerator> Generator<B> {
                     // Take everything that's left of this color.
                     ngood as i64
                 } else {
-                    hypergeometric_for_multivariate(
-                        &mut self.bg,
-                        ngood,
-                        nbad,
-                        remaining_sample,
-                    )
+                    hypergeometric_for_multivariate(&mut self.bg, ngood, nbad, remaining_sample)
                 };
                 data.push(draw);
                 remaining_pop -= ngood;
@@ -608,8 +603,7 @@ mod tests {
         use ferray_core::{Array, Ix1, Ix2};
         let mut rng = default_rng_seeded(42);
         let mean = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![5.0, -3.0]).unwrap();
-        let cov =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 0.0, 0.0, 1.0]).unwrap();
+        let cov = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 0.0, 0.0, 1.0]).unwrap();
         let n = 100_000;
         let arr = rng.multivariate_normal_array(&mean, &cov, n).unwrap();
         let slice = arr.as_slice().unwrap();
@@ -627,11 +621,8 @@ mod tests {
         let mut rng = default_rng_seeded(0);
         let mean = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.0, 0.0]).unwrap();
         // 2×3 cov — neither square nor matching mean length.
-        let cov = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-        )
-        .unwrap();
+        let cov = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0])
+            .unwrap();
         assert!(rng.multivariate_normal_array(&mean, &cov, 5).is_err());
     }
 
@@ -641,10 +632,12 @@ mod tests {
         let mut rng = default_rng_seeded(0);
         let mean = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.0, 0.0]).unwrap();
         // Indefinite (eigenvalues ±1).
-        let cov =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![0.0, 1.0, 1.0, 0.0]).unwrap();
+        let cov = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![0.0, 1.0, 1.0, 0.0]).unwrap();
         let err = rng.multivariate_normal_array(&mean, &cov, 5).unwrap_err();
-        assert!(matches!(err, ferray_core::FerrayError::SingularMatrix { .. }));
+        assert!(matches!(
+            err,
+            ferray_core::FerrayError::SingularMatrix { .. }
+        ));
     }
 
     #[test]
@@ -654,16 +647,16 @@ mod tests {
         // approximate the input cov to within sampling error.
         let mut rng = default_rng_seeded(11);
         let mean = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.0, 0.0]).unwrap();
-        let cov =
-            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 0.7, 0.7, 1.0]).unwrap();
+        let cov = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 0.7, 0.7, 1.0]).unwrap();
         let n = 50_000;
         let arr = rng.multivariate_normal_array(&mean, &cov, n).unwrap();
         let s = arr.as_slice().unwrap();
         let mean0: f64 = (0..n).map(|i| s[i * 2]).sum::<f64>() / n as f64;
         let mean1: f64 = (0..n).map(|i| s[i * 2 + 1]).sum::<f64>() / n as f64;
-        let cov01: f64 =
-            (0..n).map(|i| (s[i * 2] - mean0) * (s[i * 2 + 1] - mean1)).sum::<f64>()
-                / n as f64;
+        let cov01: f64 = (0..n)
+            .map(|i| (s[i * 2] - mean0) * (s[i * 2 + 1] - mean1))
+            .sum::<f64>()
+            / n as f64;
         assert!((cov01 - 0.7).abs() < 0.05, "sample cov01 {cov01} ≠ 0.7");
     }
 
@@ -740,9 +733,7 @@ mod tests {
         let mut rng = default_rng_seeded(0);
         let colors = [3u64, 7, 0, 5];
         let total: u64 = colors.iter().sum();
-        let arr = rng
-            .multivariate_hypergeometric(&colors, total, 5)
-            .unwrap();
+        let arr = rng.multivariate_hypergeometric(&colors, total, 5).unwrap();
         let slice = arr.as_slice().unwrap();
         for row in 0..5 {
             for j in 0..colors.len() {
@@ -755,12 +746,8 @@ mod tests {
     fn mvhg_seed_reproducible() {
         let mut a = default_rng_seeded(99);
         let mut b = default_rng_seeded(99);
-        let xa = a
-            .multivariate_hypergeometric(&[5, 10, 15], 8, 30)
-            .unwrap();
-        let xb = b
-            .multivariate_hypergeometric(&[5, 10, 15], 8, 30)
-            .unwrap();
+        let xa = a.multivariate_hypergeometric(&[5, 10, 15], 8, 30).unwrap();
+        let xb = b.multivariate_hypergeometric(&[5, 10, 15], 8, 30).unwrap();
         assert_eq!(xa.as_slice().unwrap(), xb.as_slice().unwrap());
     }
 

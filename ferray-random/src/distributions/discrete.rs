@@ -526,14 +526,11 @@ mod tests {
 
     #[test]
     fn poisson_array_shape_matches_lam() {
-        use ferray_core::{Array, IxDyn};
         use crate::default_rng_seeded;
+        use ferray_core::{Array, IxDyn};
         let mut rng = default_rng_seeded(42);
-        let lam = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 5.0, 50.0, 0.0],
-        )
-        .unwrap();
+        let lam =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 5.0, 50.0, 0.0]).unwrap();
         let out = rng.poisson_array(&lam).unwrap();
         assert_eq!(out.shape(), &[2, 2]);
         // Last element is lam=0 → must be exactly 0.
@@ -546,12 +543,11 @@ mod tests {
 
     #[test]
     fn poisson_array_per_element_mean() {
-        use ferray_core::{Array, IxDyn};
         use crate::default_rng_seeded;
+        use ferray_core::{Array, IxDyn};
         let mut rng = default_rng_seeded(11);
         let lams = [3.0_f64, 50.0];
-        let lam =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), lams.to_vec()).unwrap();
+        let lam = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), lams.to_vec()).unwrap();
         let n_trials = 5_000;
         let mut sums = [0.0_f64; 2];
         for _ in 0..n_trials {
@@ -575,14 +571,10 @@ mod tests {
 
     #[test]
     fn poisson_array_negative_lam_errors() {
-        use ferray_core::{Array, IxDyn};
         use crate::default_rng_seeded;
+        use ferray_core::{Array, IxDyn};
         let mut rng = default_rng_seeded(0);
-        let lam = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2]),
-            vec![1.0, -2.0],
-        )
-        .unwrap();
+        let lam = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0, -2.0]).unwrap();
         assert!(rng.poisson_array(&lam).is_err());
     }
 

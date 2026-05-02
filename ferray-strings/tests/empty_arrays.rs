@@ -8,9 +8,8 @@
 
 use ferray_core::dimension::{Ix1, Ix2};
 use ferray_strings::{
-    StringArray1, StringArray2,
-    add, capitalize, classify, count, endswith, find, lower, multiply, replace, rfind, search,
-    startswith, title, upper,
+    StringArray1, StringArray2, add, capitalize, classify, count, endswith, find, lower, multiply,
+    replace, rfind, search, startswith, title, upper,
 };
 
 fn empty_1d() -> StringArray1 {

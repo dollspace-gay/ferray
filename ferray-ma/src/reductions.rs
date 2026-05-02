@@ -378,9 +378,7 @@ where
             }
             count += 1;
             let n_t = T::from(count).ok_or_else(|| {
-                FerrayError::invalid_value(format!(
-                    "cannot convert count {count} to element type"
-                ))
+                FerrayError::invalid_value(format!("cannot convert count {count} to element type"))
             })?;
             let delta = *v - mean;
             mean = mean + delta / n_t;
@@ -540,11 +538,7 @@ where
     /// `ddof = 1` matches numpy's sample variance (Bessel's correction).
     /// Lanes with `count <= ddof` produce a masked output position
     /// holding `fill_value`.
-    pub fn var_axis_ddof(
-        &self,
-        axis: usize,
-        ddof: usize,
-    ) -> FerrayResult<MaskedArray<T, IxDyn>> {
+    pub fn var_axis_ddof(&self, axis: usize, ddof: usize) -> FerrayResult<MaskedArray<T, IxDyn>> {
         // Single-pass Welford accumulator per lane (#274).
         let zero = num_traits::zero::<T>();
         let fill = self.fill_value();
@@ -577,11 +571,7 @@ where
     }
 
     /// Standard deviation with `ddof` adjustment along `axis` (#270).
-    pub fn std_axis_ddof(
-        &self,
-        axis: usize,
-        ddof: usize,
-    ) -> FerrayResult<MaskedArray<T, IxDyn>> {
+    pub fn std_axis_ddof(&self, axis: usize, ddof: usize) -> FerrayResult<MaskedArray<T, IxDyn>> {
         let result = self.var_axis_ddof(axis, ddof)?;
         let fill = self.fill_value();
         let mask = result.mask().clone();
@@ -893,11 +883,8 @@ mod tests {
 
     #[test]
     fn var_ddof_zero_matches_default_var() {
-        let data = Array::<f64, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0],
-        )
-        .unwrap();
+        let data =
+            Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
         let mask = Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![false; 5]).unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
         let v0 = ma.var().unwrap();
@@ -910,11 +897,8 @@ mod tests {
         // [1,2,3,4,5] mean = 3; squared deviations sum = 10.
         // ddof=0: 10/5 = 2.0
         // ddof=1: 10/4 = 2.5 (Bessel)
-        let data = Array::<f64, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0],
-        )
-        .unwrap();
+        let data =
+            Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
         let mask = Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![false; 5]).unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
         let v0 = ma.var_ddof(0).unwrap();
@@ -927,16 +911,11 @@ mod tests {
     fn var_ddof_skips_masked_elements() {
         // [1,2,_,4,5] with index 2 masked: mean = 3, sq deviations = 10, count = 4.
         // ddof=0: 10/4 = 2.5; ddof=1: 10/3.
-        let data = Array::<f64, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![1.0, 2.0, 99.0, 4.0, 5.0],
-        )
-        .unwrap();
-        let mask = Array::<bool, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![false, false, true, false, false],
-        )
-        .unwrap();
+        let data =
+            Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 2.0, 99.0, 4.0, 5.0]).unwrap();
+        let mask =
+            Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![false, false, true, false, false])
+                .unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
         let v0 = ma.var_ddof(0).unwrap();
         let v1 = ma.var_ddof(1).unwrap();
@@ -948,10 +927,8 @@ mod tests {
     fn var_ddof_returns_nan_when_count_le_ddof() {
         // 1 unmasked element + ddof=1 → division by zero would occur;
         // numpy returns NaN.
-        let data =
-            Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
-        let mask =
-            Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, false, true]).unwrap();
+        let data = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let mask = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, false, true]).unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
         let v = ma.var_ddof(1).unwrap();
         assert!(v.is_nan(), "expected NaN, got {v}");
@@ -959,11 +936,8 @@ mod tests {
 
     #[test]
     fn std_ddof_is_sqrt_of_var_ddof() {
-        let data = Array::<f64, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0],
-        )
-        .unwrap();
+        let data =
+            Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
         let mask = Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![false; 5]).unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
         let s1 = ma.std_ddof(1).unwrap();
@@ -997,11 +971,9 @@ mod tests {
         // Two rows: [1,2,3] and [10,20,30]; both unmasked.
         // Row 0: mean=2, sum_sq = 1+0+1 = 2; ddof=1 → 2.
         // Row 1: mean=20, sum_sq = 100+0+100 = 200; ddof=1 → 100.
-        let data = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 10.0, 20.0, 30.0],
-        )
-        .unwrap();
+        let data =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 10.0, 20.0, 30.0])
+                .unwrap();
         let mask = Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![false; 6]).unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
         let v = ma.var_axis_ddof(1, 1).unwrap();

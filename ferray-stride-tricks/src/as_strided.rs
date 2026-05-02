@@ -390,8 +390,7 @@ mod tests {
 
     #[test]
     fn signed_with_positive_strides_works_like_as_strided() {
-        let a =
-            Array::<i32, Ix1>::from_vec(Ix1::new([6]), vec![1, 2, 3, 4, 5, 6]).unwrap();
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([6]), vec![1, 2, 3, 4, 5, 6]).unwrap();
         let v = as_strided_signed(&a, &[2, 3], &[3, 1], 0).unwrap();
         let data: Vec<i32> = v.iter().copied().collect();
         assert_eq!(data, vec![1, 2, 3, 4, 5, 6]);
@@ -401,8 +400,7 @@ mod tests {
     fn signed_with_start_offset_advances_base() {
         // Take elements [2, 3, 4] from [1, 2, 3, 4, 5] using
         // start_offset=1 and stride=1.
-        let a =
-            Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
         let v = as_strided_signed(&a, &[3], &[1], 1).unwrap();
         let data: Vec<i32> = v.iter().copied().collect();
         assert_eq!(data, vec![2, 3, 4]);
@@ -431,8 +429,7 @@ mod tests {
         // Negative strides need ferray-core RawArrayView wiring
         // (tracked in #744). The signed entry rejects them with a
         // pointer to that issue so callers know what's blocked.
-        let a =
-            Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
         let err = as_strided_signed(&a, &[5], &[-1], 4).unwrap_err();
         assert!(err.to_string().contains("#744"), "got: {err}");
     }

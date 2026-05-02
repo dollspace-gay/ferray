@@ -48,6 +48,18 @@ pub fn mul_f32(a: &[f32], b: &[f32], output: &mut [f32]) {
     dispatch_binary_f32(a, b, output, |x, y| x * y);
 }
 
+/// SIMD-dispatched f32 sub.
+#[inline]
+pub fn sub_f32(a: &[f32], b: &[f32], output: &mut [f32]) {
+    dispatch_binary_f32(a, b, output, |x, y| x - y);
+}
+
+/// SIMD-dispatched f32 div.
+#[inline]
+pub fn div_f32(a: &[f32], b: &[f32], output: &mut [f32]) {
+    dispatch_binary_f32(a, b, output, |x, y| x / y);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -108,8 +108,7 @@ pub fn svd_hermitian<T: LinalgFloat>(
     order.sort_by(|&i, &j| {
         let ai = num_traits::Float::abs(evals[i]);
         let aj = num_traits::Float::abs(evals[j]);
-        aj.partial_cmp(&ai)
-            .unwrap_or(core::cmp::Ordering::Equal)
+        aj.partial_cmp(&ai).unwrap_or(core::cmp::Ordering::Equal)
     });
 
     let evec_data: Vec<T> = eigenvectors.iter().copied().collect();

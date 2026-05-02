@@ -93,10 +93,7 @@ pub fn rsplit<D: Dimension>(
 ///
 /// # Errors
 /// Returns an error if array construction fails.
-pub fn splitlines<D: Dimension>(
-    a: &StringArray<D>,
-    keepends: bool,
-) -> FerrayResult<StringArray2> {
+pub fn splitlines<D: Dimension>(a: &StringArray<D>, keepends: bool) -> FerrayResult<StringArray2> {
     let parts: Vec<Vec<String>> = a
         .iter()
         .map(|s| split_universal_newlines(s, keepends))
@@ -155,10 +152,7 @@ fn split_universal_newlines(s: &str, keepends: bool) -> Vec<String> {
 ///
 /// # Errors
 /// Returns an error only for internal failures.
-pub fn split_ragged<D: Dimension>(
-    a: &StringArray<D>,
-    sep: &str,
-) -> FerrayResult<Vec<Vec<String>>> {
+pub fn split_ragged<D: Dimension>(a: &StringArray<D>, sep: &str) -> FerrayResult<Vec<Vec<String>>> {
     validate_separator(sep)?;
     let result: Vec<Vec<String>> = a
         .iter()
@@ -291,10 +285,13 @@ mod tests {
         // #277: split_ragged keeps the per-element variable length.
         let a = array(&["a-b", "x-y-z"]).unwrap();
         let result = split_ragged(&a, "-").unwrap();
-        assert_eq!(result, vec![
-            vec!["a".to_string(), "b".to_string()],
-            vec!["x".to_string(), "y".to_string(), "z".to_string()],
-        ]);
+        assert_eq!(
+            result,
+            vec![
+                vec!["a".to_string(), "b".to_string()],
+                vec!["x".to_string(), "y".to_string(), "z".to_string()],
+            ]
+        );
     }
 
     #[test]

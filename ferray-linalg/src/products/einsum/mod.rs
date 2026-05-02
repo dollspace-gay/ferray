@@ -91,15 +91,13 @@ fn einsum_pairwise<T: LinalgFloat>(
 
     // Working copies of the operand list and their input labels. After
     // each contraction step we replace [0..2] with the result.
-    let mut current_ops: Vec<Array<T, IxDyn>> =
-        operands.iter().map(|o| (*o).clone()).collect();
+    let mut current_ops: Vec<Array<T, IxDyn>> = operands.iter().map(|o| (*o).clone()).collect();
     let mut current_inputs: Vec<Vec<Label>> = expr.inputs.clone();
     let final_output = expr.output.clone();
 
     // Build a label-size map from the original operands. We need this
     // for the greedy contraction-order heuristic. (#418)
-    let mut label_size: std::collections::HashMap<Label, usize> =
-        std::collections::HashMap::new();
+    let mut label_size: std::collections::HashMap<Label, usize> = std::collections::HashMap::new();
     for (op_idx, op) in operands.iter().enumerate() {
         let labels = &expr.inputs[op_idx];
         let shape = op.shape();
@@ -114,8 +112,7 @@ fn einsum_pairwise<T: LinalgFloat>(
         // Reorders current_ops/current_inputs so the chosen pair is at
         // positions [0..2], then proceeds as the original L-to-R path.
         if current_ops.len() > 2 {
-            let (best_i, best_j) =
-                pick_greedy_pair(&current_inputs, &final_output, &label_size);
+            let (best_i, best_j) = pick_greedy_pair(&current_inputs, &final_output, &label_size);
             // Move the chosen pair to positions 0 and 1.
             // Swap operates in-place to avoid extra allocation.
             // Use 0 first to avoid index invalidation.
@@ -147,9 +144,7 @@ fn einsum_pairwise<T: LinalgFloat>(
                 if kept.contains(&lab) {
                     continue;
                 }
-                let needed_downstream = current_inputs[2..]
-                    .iter()
-                    .any(|inp| inp.contains(&lab));
+                let needed_downstream = current_inputs[2..].iter().any(|inp| inp.contains(&lab));
                 let needed_in_output = final_output.contains(&lab);
                 if needed_downstream || needed_in_output {
                     kept.push(lab);
@@ -220,9 +215,8 @@ fn pick_greedy_pair(
                     .any(|(k, inp)| k != i && k != j && inp.contains(&lab));
                 let needed_in_output = output.contains(&lab);
                 if needed_downstream || needed_in_output {
-                    intermediate_size = intermediate_size.saturating_mul(
-                        *label_size.get(&lab).unwrap_or(&1),
-                    );
+                    intermediate_size =
+                        intermediate_size.saturating_mul(*label_size.get(&lab).unwrap_or(&1));
                 }
             }
             match best {
@@ -374,16 +368,12 @@ mod tests {
         // 'ij,jk,kl->il' — chain matmul. Pairwise contraction should
         // produce the same result as generic_contraction. (#102)
         // Concrete test: A (2x3) @ B (3x4) @ C (4x2) = result (2x2).
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+                .unwrap();
         let b = Array::<f64, IxDyn>::from_vec(
             IxDyn::new(&[3, 4]),
-            vec![
-                1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0,
-            ],
+            vec![1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0],
         )
         .unwrap();
         let c = Array::<f64, IxDyn>::from_vec(
@@ -411,11 +401,9 @@ mod tests {
     fn einsum_three_operand_inner_chain() {
         // 'i,ij,j->' — full reduction through three operands.
         let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0, 2.0]).unwrap();
-        let m = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 3]),
-            vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-        )
-        .unwrap();
+        let m =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0])
+                .unwrap();
         let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![1.0, 1.0, 0.0]).unwrap();
         // a^T M b = [1,2] · [[1,0,0],[0,1,0]] · [1,1,0] = [1,2] · [1,1] = 1+2 = 3
         let r = einsum::<f64>("i,ij,j->", &[&a, &m, &b]).unwrap();
@@ -429,26 +417,14 @@ mod tests {
         // picker may choose a different contraction order than
         // left-to-right. Verify the result matches the analytical
         // matrix-product expectation regardless of order picked.
-        let a = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 2.0, 3.0, 4.0],
-        )
-        .unwrap();
-        let b = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 0.0, 0.0, 1.0],
-        )
-        .unwrap();
-        let c = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![2.0, 0.0, 0.0, 2.0],
-        )
-        .unwrap();
-        let d = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 2]),
-            vec![1.0, 1.0, 1.0, 1.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let b =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 0.0, 0.0, 1.0]).unwrap();
+        let c =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![2.0, 0.0, 0.0, 2.0]).unwrap();
+        let d =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2]), vec![1.0, 1.0, 1.0, 1.0]).unwrap();
         // a * b = a (b is identity), * c = 2a, * d:
         //   [[1,2],[3,4]] * 2 = [[2,4],[6,8]]
         //   [[2,4],[6,8]] * [[1,1],[1,1]] = [[6,6],[14,14]]

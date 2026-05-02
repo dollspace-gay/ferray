@@ -23,7 +23,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.2"
+version = "0.3.5"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -34,22 +34,22 @@ categories = ["science", "mathematics"]
 
 [workspace.dependencies]
 # Internal crates
-ferray = { path = "ferray", version = "0.3.1" }
-ferray-core = { path = "ferray-core", version = "0.3.1" }
-ferray-core-macros = { path = "ferray-core-macros", version = "0.3.1" }
-ferray-ufunc = { path = "ferray-ufunc", version = "0.3.1" }
-ferray-stats = { path = "ferray-stats", version = "0.3.1" }
-ferray-io = { path = "ferray-io", version = "0.3.1" }
-ferray-linalg = { path = "ferray-linalg", version = "0.3.1" }
-ferray-fft = { path = "ferray-fft", version = "0.3.1" }
-ferray-random = { path = "ferray-random", version = "0.3.1" }
-ferray-polynomial = { path = "ferray-polynomial", version = "0.3.1" }
-ferray-window = { path = "ferray-window", version = "0.3.1" }
-ferray-strings = { path = "ferray-strings", version = "0.3.1" }
-ferray-ma = { path = "ferray-ma", version = "0.3.1" }
-ferray-stride-tricks = { path = "ferray-stride-tricks", version = "0.3.1" }
-ferray-numpy-interop = { path = "ferray-numpy-interop", version = "0.3.1" }
-ferray-autodiff = { path = "ferray-autodiff", version = "0.3.1" }
+ferray = { path = "ferray", version = "0.3.5" }
+ferray-core = { path = "ferray-core", version = "0.3.5" }
+ferray-core-macros = { path = "ferray-core-macros", version = "0.3.5" }
+ferray-ufunc = { path = "ferray-ufunc", version = "0.3.5" }
+ferray-stats = { path = "ferray-stats", version = "0.3.5" }
+ferray-io = { path = "ferray-io", version = "0.3.5" }
+ferray-linalg = { path = "ferray-linalg", version = "0.3.5" }
+ferray-fft = { path = "ferray-fft", version = "0.3.5" }
+ferray-random = { path = "ferray-random", version = "0.3.5" }
+ferray-polynomial = { path = "ferray-polynomial", version = "0.3.5" }
+ferray-window = { path = "ferray-window", version = "0.3.5" }
+ferray-strings = { path = "ferray-strings", version = "0.3.5" }
+ferray-ma = { path = "ferray-ma", version = "0.3.5" }
+ferray-stride-tricks = { path = "ferray-stride-tricks", version = "0.3.5" }
+ferray-numpy-interop = { path = "ferray-numpy-interop", version = "0.3.5" }
+ferray-autodiff = { path = "ferray-autodiff", version = "0.3.5" }
 
 # External dependencies (pinned versions per design spec)
 ndarray = "0.17"

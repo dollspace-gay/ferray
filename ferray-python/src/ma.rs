@@ -186,11 +186,7 @@ impl PyMaskedArray {
     /// Replace masked entries with `fill_value`, return as a regular
     /// `numpy.ndarray`.
     #[pyo3(signature = (fill_value = None))]
-    fn filled<'py>(
-        &self,
-        py: Python<'py>,
-        fill_value: Option<f64>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn filled<'py>(&self, py: Python<'py>, fill_value: Option<f64>) -> PyResult<Bound<'py, PyAny>> {
         let arr: ArrayD<f64> = match fill_value {
             Some(v) => self.inner.filled(v).map_err(ferr_to_pyerr)?,
             None => self.inner.filled_default().map_err(ferr_to_pyerr)?,
@@ -233,19 +229,13 @@ impl PyMaskedArray {
 // Free constructors (numpy.ma.* free functions)
 // ---------------------------------------------------------------------------
 
-fn extract_data<'py>(
-    py: Python<'py>,
-    obj: &Bound<'py, PyAny>,
-) -> PyResult<ArrayD<f64>> {
+fn extract_data<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<ArrayD<f64>> {
     let arr = coerce_dtype(py, obj, "float64")?;
     let view: PyReadonlyArrayDyn<f64> = arr.extract()?;
     view.as_ferray().map_err(ferr_to_pyerr)
 }
 
-fn extract_bool_array<'py>(
-    py: Python<'py>,
-    obj: &Bound<'py, PyAny>,
-) -> PyResult<ArrayD<bool>> {
+fn extract_bool_array<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<ArrayD<bool>> {
     let arr = coerce_dtype(py, obj, "bool")?;
     let view: PyReadonlyArrayDyn<bool> = arr.extract()?;
     view.as_ferray().map_err(ferr_to_pyerr)
@@ -288,10 +278,7 @@ pub fn masked_where<'py>(
 
 /// `numpy.ma.masked_invalid(data)` — mask NaN and inf values.
 #[pyfunction]
-pub fn masked_invalid<'py>(
-    py: Python<'py>,
-    data: &Bound<'py, PyAny>,
-) -> PyResult<PyMaskedArray> {
+pub fn masked_invalid<'py>(py: Python<'py>, data: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
     let data_fa = extract_data(py, data)?;
     let inner = fma::masked_invalid(&data_fa).map_err(ferr_to_pyerr)?;
     Ok(PyMaskedArray::from_inner(inner))
@@ -312,12 +299,12 @@ macro_rules! bind_masked_compare {
     };
 }
 
-bind_masked_compare!(masked_equal,         fma::masked_equal);
-bind_masked_compare!(masked_not_equal,     fma::masked_not_equal);
-bind_masked_compare!(masked_greater,       fma::masked_greater);
+bind_masked_compare!(masked_equal, fma::masked_equal);
+bind_masked_compare!(masked_not_equal, fma::masked_not_equal);
+bind_masked_compare!(masked_greater, fma::masked_greater);
 bind_masked_compare!(masked_greater_equal, fma::masked_greater_equal);
-bind_masked_compare!(masked_less,          fma::masked_less);
-bind_masked_compare!(masked_less_equal,    fma::masked_less_equal);
+bind_masked_compare!(masked_less, fma::masked_less);
+bind_masked_compare!(masked_less_equal, fma::masked_less_equal);
 
 /// `numpy.ma.masked_inside(x, low, high)`.
 #[pyfunction]

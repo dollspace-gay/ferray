@@ -483,11 +483,7 @@ impl Poly for Legendre {
         self.window
     }
 
-    fn with_mapping(
-        self,
-        domain: [f64; 2],
-        window: [f64; 2],
-    ) -> Result<Self, FerrayError> {
+    fn with_mapping(self, domain: [f64; 2], window: [f64; 2]) -> Result<Self, FerrayError> {
         self.with_domain(domain)?.with_window(window)
     }
 }

@@ -316,6 +316,192 @@ impl pulp::WithSimd for SumSqDiffF64Op<'_> {
 }
 
 // ---------------------------------------------------------------------------
+// SIMD-accelerated pairwise sum / sum-of-squared-differences for f32 (#173)
+//
+// Mirrors the f64 versions above with pulp's f32s SIMD type. Twice as
+// many lanes per register (e.g. AVX-512 f32 = 16 lanes vs f64 = 8), so
+// the constants for max-temp-buffer below need to match the widest f32
+// lane count. The base case and stack-based pairwise tree are
+// structurally identical.
+// ---------------------------------------------------------------------------
+
+/// SIMD-accelerated pairwise summation for f32 slices (#173).
+#[must_use]
+pub fn pairwise_sum_f32(data: &[f32]) -> f32 {
+    Arch::new().dispatch(PairwiseSumF32Op { data })
+}
+
+struct PairwiseSumF32Op<'a> {
+    data: &'a [f32],
+}
+
+impl pulp::WithSimd for PairwiseSumF32Op<'_> {
+    type Output = f32;
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, simd: S) -> f32 {
+        simd_pairwise_f32(simd, self.data)
+    }
+}
+
+#[inline(always)]
+fn simd_base_sum_f32<S: pulp::Simd>(simd: S, data: &[f32]) -> f32 {
+    let n = data.len();
+    let lane_count = size_of::<S::f32s>() / size_of::<f32>();
+    let simd_end = n - (n % lane_count);
+
+    let zero = simd.splat_f32s(0.0);
+    let mut acc0 = zero;
+    let mut acc1 = zero;
+    let mut acc2 = zero;
+    let mut acc3 = zero;
+
+    let stride = lane_count * 4;
+    let unrolled_end = n - (n % stride);
+    let mut i = 0;
+    while i < unrolled_end {
+        let v0 = simd.partial_load_f32s(&data[i..i + lane_count]);
+        let v1 = simd.partial_load_f32s(&data[i + lane_count..i + lane_count * 2]);
+        let v2 = simd.partial_load_f32s(&data[i + lane_count * 2..i + lane_count * 3]);
+        let v3 = simd.partial_load_f32s(&data[i + lane_count * 3..i + stride]);
+        acc0 = simd.add_f32s(acc0, v0);
+        acc1 = simd.add_f32s(acc1, v1);
+        acc2 = simd.add_f32s(acc2, v2);
+        acc3 = simd.add_f32s(acc3, v3);
+        i += stride;
+    }
+    while i + lane_count <= simd_end {
+        let v = simd.partial_load_f32s(&data[i..i + lane_count]);
+        acc0 = simd.add_f32s(acc0, v);
+        i += lane_count;
+    }
+    acc0 = simd.add_f32s(acc0, acc1);
+    acc2 = simd.add_f32s(acc2, acc3);
+    acc0 = simd.add_f32s(acc0, acc2);
+
+    // Horizontal sum: store SIMD register to temp array. AVX-512 f32
+    // is 16 lanes wide, so size the temp accordingly.
+    let mut temp = [0.0f32; 16];
+    simd.partial_store_f32s(&mut temp[..lane_count], acc0);
+    let mut sum = 0.0f32;
+    for t in temp.iter().take(lane_count) {
+        sum += t;
+    }
+    for &val in &data[simd_end..n] {
+        sum += val;
+    }
+    sum
+}
+
+#[inline(always)]
+fn simd_pairwise_f32<S: pulp::Simd>(simd: S, data: &[f32]) -> f32 {
+    let n = data.len();
+    if n == 0 {
+        return 0.0;
+    }
+    if n <= PAIRWISE_BASE {
+        return simd_base_sum_f32(simd, data);
+    }
+
+    let mut stack_val = [0.0f32; 24];
+    let mut stack_lvl = [0usize; 24];
+    let mut depth = 0usize;
+
+    let mut offset = 0;
+    while offset < n {
+        let end = (offset + PAIRWISE_BASE).min(n);
+        let mut current = simd_base_sum_f32(simd, &data[offset..end]);
+        offset = end;
+
+        let mut level = 1usize;
+        while depth > 0 && stack_lvl[depth - 1] == level {
+            depth -= 1;
+            current += stack_val[depth];
+            level += 1;
+        }
+        stack_val[depth] = current;
+        stack_lvl[depth] = level;
+        depth += 1;
+    }
+
+    let mut result = stack_val[depth - 1];
+    for i in (0..depth - 1).rev() {
+        result += stack_val[i];
+    }
+    result
+}
+
+/// SIMD-accelerated computation of sum((x - mean)²) for f32 slices (#173).
+#[must_use]
+pub fn simd_sum_sq_diff_f32(data: &[f32], mean: f32) -> f32 {
+    Arch::new().dispatch(SumSqDiffF32Op { data, mean })
+}
+
+struct SumSqDiffF32Op<'a> {
+    data: &'a [f32],
+    mean: f32,
+}
+
+impl pulp::WithSimd for SumSqDiffF32Op<'_> {
+    type Output = f32;
+
+    #[inline(always)]
+    fn with_simd<S: pulp::Simd>(self, simd: S) -> f32 {
+        let data = self.data;
+        let n = data.len();
+        let lane_count = size_of::<S::f32s>() / size_of::<f32>();
+        let simd_end = n - (n % lane_count);
+
+        let zero = simd.splat_f32s(0.0);
+        let mean_v = simd.splat_f32s(self.mean);
+        let mut acc0 = zero;
+        let mut acc1 = zero;
+        let mut acc2 = zero;
+        let mut acc3 = zero;
+
+        let stride = lane_count * 4;
+        let unrolled_end = n - (n % stride);
+        let mut i = 0;
+        while i < unrolled_end {
+            let v0 = simd.partial_load_f32s(&data[i..i + lane_count]);
+            let v1 = simd.partial_load_f32s(&data[i + lane_count..i + lane_count * 2]);
+            let v2 = simd.partial_load_f32s(&data[i + lane_count * 2..i + lane_count * 3]);
+            let v3 = simd.partial_load_f32s(&data[i + lane_count * 3..i + stride]);
+            let d0 = simd.sub_f32s(v0, mean_v);
+            let d1 = simd.sub_f32s(v1, mean_v);
+            let d2 = simd.sub_f32s(v2, mean_v);
+            let d3 = simd.sub_f32s(v3, mean_v);
+            acc0 = simd.mul_add_f32s(d0, d0, acc0);
+            acc1 = simd.mul_add_f32s(d1, d1, acc1);
+            acc2 = simd.mul_add_f32s(d2, d2, acc2);
+            acc3 = simd.mul_add_f32s(d3, d3, acc3);
+            i += stride;
+        }
+        while i + lane_count <= simd_end {
+            let v = simd.partial_load_f32s(&data[i..i + lane_count]);
+            let d = simd.sub_f32s(v, mean_v);
+            acc0 = simd.mul_add_f32s(d, d, acc0);
+            i += lane_count;
+        }
+        acc0 = simd.add_f32s(acc0, acc1);
+        acc2 = simd.add_f32s(acc2, acc3);
+        acc0 = simd.add_f32s(acc0, acc2);
+
+        let mut temp = [0.0f32; 16];
+        simd.partial_store_f32s(&mut temp[..lane_count], acc0);
+        let mut sum = 0.0f32;
+        for t in temp.iter().take(lane_count) {
+            sum += t;
+        }
+        for &val in &data[simd_end..n] {
+            let d = val - self.mean;
+            sum += d * d;
+        }
+        sum
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Parallel dispatch
 // ---------------------------------------------------------------------------
 

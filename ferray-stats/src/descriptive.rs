@@ -289,18 +289,14 @@ mod tests {
     #[test]
     fn skew_symmetric_zero() {
         let a =
-            Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![-2.0, -1.0, 0.0, 1.0, 2.0])
-                .unwrap();
+            Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![-2.0, -1.0, 0.0, 1.0, 2.0]).unwrap();
         assert!(skew(&a).unwrap().abs() < 1e-12);
     }
 
     #[test]
     fn skew_right_skewed_positive() {
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([6]),
-            vec![1.0, 1.0, 1.0, 1.0, 1.0, 10.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([6]), vec![1.0, 1.0, 1.0, 1.0, 1.0, 10.0])
+            .unwrap();
         assert!(skew(&a).unwrap() > 0.0);
     }
 
@@ -310,22 +306,16 @@ mod tests {
         // is too strong a guarantee for n=5, but Fisher version of an
         // arithmetic progression around 0 is a fixed value (-1.3) so
         // we check for the known answer.
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![-2.0, -1.0, 0.0, 1.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![-2.0, -1.0, 0.0, 1.0, 2.0]).unwrap();
         let k = kurtosis(&a, true).unwrap();
         assert!((k - (-1.3)).abs() < 1e-12, "Fisher kurtosis = {k}");
     }
 
     #[test]
     fn kurtosis_pearson_is_fisher_plus_3() {
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![-2.0, -1.0, 0.0, 1.0, 2.0],
-        )
-        .unwrap();
+        let a =
+            Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![-2.0, -1.0, 0.0, 1.0, 2.0]).unwrap();
         let f = kurtosis(&a, true).unwrap();
         let p = kurtosis(&a, false).unwrap();
         assert!((p - (f + 3.0)).abs() < 1e-12);
@@ -333,11 +323,7 @@ mod tests {
 
     #[test]
     fn zscore_has_mean_zero_std_one() {
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
         let z = zscore(&a).unwrap();
         let s = z.as_slice().unwrap();
         let n = s.len() as f64;
@@ -349,29 +335,21 @@ mod tests {
 
     #[test]
     fn zscore_constant_errors() {
-        let a =
-            Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![3.0; 4]).unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![3.0; 4]).unwrap();
         assert!(zscore(&a).is_err());
     }
 
     #[test]
     fn zscore_2d_preserves_shape() {
-        let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
         let z = zscore(&a).unwrap();
         assert_eq!(z.shape(), &[2, 3]);
     }
 
     #[test]
     fn mode_picks_most_frequent() {
-        let a = Array::<i32, Ix1>::from_vec(
-            Ix1::new([7]),
-            vec![1, 2, 2, 3, 3, 3, 4],
-        )
-        .unwrap();
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([7]), vec![1, 2, 2, 3, 3, 3, 4]).unwrap();
         let m = mode(&a).unwrap();
         assert_eq!(m.value, 3);
         assert_eq!(m.count, 3);
@@ -379,11 +357,7 @@ mod tests {
 
     #[test]
     fn mode_tiebreak_smallest_wins() {
-        let a = Array::<i32, Ix1>::from_vec(
-            Ix1::new([6]),
-            vec![5, 5, 7, 7, 1, 1],
-        )
-        .unwrap();
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([6]), vec![5, 5, 7, 7, 1, 1]).unwrap();
         let m = mode(&a).unwrap();
         assert_eq!(m.value, 1);
         assert_eq!(m.count, 2);
@@ -403,8 +377,7 @@ mod tests {
 
     #[test]
     fn sem_constant_data_is_zero() {
-        let a =
-            Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![3.0; 5]).unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![3.0; 5]).unwrap();
         assert!(sem(&a).unwrap().abs() < 1e-12);
     }
 
@@ -412,11 +385,7 @@ mod tests {
     fn sem_known_value() {
         // [1, 2, 3, 4, 5]: mean=3, ddof=1 var = 10/4 = 2.5,
         // std = sqrt(2.5), sem = std / sqrt(5) ≈ 0.7071...
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([5]),
-            vec![1.0, 2.0, 3.0, 4.0, 5.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
         let s = sem(&a).unwrap();
         let want = (2.5_f64 / 5.0).sqrt();
         assert!((s - want).abs() < 1e-12, "sem = {s}, want {want}");
@@ -425,11 +394,7 @@ mod tests {
     #[test]
     fn gmean_known_value() {
         // gmean(1, 2, 4, 8) = (1*2*4*8)^(1/4) = 64^0.25 = 2*sqrt(2)
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([4]),
-            vec![1.0, 2.0, 4.0, 8.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 4.0, 8.0]).unwrap();
         let g = gmean(&a).unwrap();
         let want = 2.0_f64.sqrt() * 2.0;
         assert!((g - want).abs() < 1e-12, "gmean = {g}, want {want}");
@@ -437,40 +402,27 @@ mod tests {
 
     #[test]
     fn gmean_rejects_nonpositive() {
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![1.0, 0.0, 4.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 0.0, 4.0]).unwrap();
         assert!(gmean(&a).is_err());
     }
 
     #[test]
     fn hmean_known_value() {
         // hmean(1, 2, 4) = 3 / (1 + 0.5 + 0.25) = 3 / 1.75 = 12/7
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![1.0, 2.0, 4.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 4.0]).unwrap();
         let h = hmean(&a).unwrap();
         assert!((h - 12.0 / 7.0).abs() < 1e-12, "hmean = {h}");
     }
 
     #[test]
     fn hmean_rejects_nonpositive() {
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([3]),
-            vec![1.0, -1.0, 2.0],
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, -1.0, 2.0]).unwrap();
         assert!(hmean(&a).is_err());
     }
 
     #[test]
     fn empty_array_errors_across_helpers() {
-        let a =
-            Array::<f64, Ix1>::from_vec(Ix1::new([0]), Vec::new()).unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([0]), Vec::new()).unwrap();
         assert!(skew(&a).is_err());
         assert!(kurtosis(&a, true).is_err());
         assert!(zscore(&a).is_err());

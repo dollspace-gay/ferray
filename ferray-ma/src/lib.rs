@@ -523,11 +523,9 @@ mod tests {
         // ascending [1, 3] then masked → [1, 3, _].
         // Row 1: [_, 4, 2] (mask 0) → [2, 4, _].
         use ferray_core::dimension::Ix2;
-        let data = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![3.0, 1.0, 99.0, 99.0, 4.0, 2.0],
-        )
-        .unwrap();
+        let data =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![3.0, 1.0, 99.0, 99.0, 4.0, 2.0])
+                .unwrap();
         let mask = Array::<bool, Ix2>::from_vec(
             Ix2::new([2, 3]),
             vec![false, false, true, true, false, false],
@@ -553,16 +551,10 @@ mod tests {
         // axis=0 sorts each column. Column 0: [3, 1] both unmasked →
         // [1, 3]. Column 1: [2, _] (row 1 masked) → [2, _].
         use ferray_core::dimension::Ix2;
-        let data = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 2]),
-            vec![3.0, 2.0, 1.0, 99.0],
-        )
-        .unwrap();
-        let mask = Array::<bool, Ix2>::from_vec(
-            Ix2::new([2, 2]),
-            vec![false, false, false, true],
-        )
-        .unwrap();
+        let data =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![3.0, 2.0, 1.0, 99.0]).unwrap();
+        let mask = Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![false, false, false, true])
+            .unwrap();
         let ma = MaskedArray::new(data, mask).unwrap();
         let sorted = ma.sort_axis(0).unwrap();
         let d: Vec<f64> = sorted.data().iter().copied().collect();

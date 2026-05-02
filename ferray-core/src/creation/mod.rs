@@ -897,12 +897,19 @@ pub fn ascontiguousarray<T: Element, D: Dimension>(a: &Array<T, D>) -> Array<T, 
 /// memory layout differs (the element traversal order in `iter()` will
 /// follow C-order regardless after this round-trip).
 ///
-/// Analogous to `numpy.asfortranarray`. Note: ferray's iterator/view API
-/// always reflects C-order, so the returned array will appear identical
-/// in element ordering — the underlying memory layout is the only
-/// distinction with NumPy. Provided for API parity.
+/// Analogous to `numpy.asfortranarray` — return a copy in F-contiguous
+/// (column-major) memory layout. The element-iteration order
+/// (logical/row-major) is preserved, but `flags().f_contiguous` is
+/// true on the result.
+///
+/// Implementation: transpose → C-contiguous standard layout → transpose
+/// back. The double-transpose preserves logical values while producing
+/// physical column-major memory.
 pub fn asfortranarray<T: Element, D: Dimension>(a: &Array<T, D>) -> Array<T, D> {
-    a.clone()
+    let transposed = a.inner.view().reversed_axes();
+    let c_contig = transposed.as_standard_layout().into_owned();
+    let f_contig = c_contig.reversed_axes();
+    Array::<T, D>::from_ndarray(f_contig)
 }
 
 /// Convert input to an array. Accepts an existing array (no-op clone).

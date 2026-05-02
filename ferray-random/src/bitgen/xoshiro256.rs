@@ -48,10 +48,7 @@ impl BitGenerator for Xoshiro256StarStar {
         Ok(out)
     }
 
-    fn set_state_bytes(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<(), ferray_core::FerrayError> {
+    fn set_state_bytes(&mut self, bytes: &[u8]) -> Result<(), ferray_core::FerrayError> {
         if bytes.len() != 32 {
             return Err(ferray_core::FerrayError::invalid_value(format!(
                 "Xoshiro256** state must be 32 bytes, got {}",

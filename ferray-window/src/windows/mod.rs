@@ -741,12 +741,7 @@ pub fn lanczos(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 /// gives equiripple sidelobes ~30 dB down — the usual default.
 ///
 /// Mirrors `scipy.signal.windows.taylor` / `torch.signal.windows.taylor`.
-pub fn taylor(
-    m: usize,
-    nbar: usize,
-    sll: f64,
-    norm: bool,
-) -> FerrayResult<Array<f64, Ix1>> {
+pub fn taylor(m: usize, nbar: usize, sll: f64, norm: bool) -> FerrayResult<Array<f64, Ix1>> {
     if m == 0 {
         return Array::from_vec(Ix1::new([0]), vec![]);
     }
@@ -937,10 +932,7 @@ mod tests {
             // convergence accuracy. 5% relative covers all
             // samples; the larger central values stay within 0.1%.
             let tol = 0.05 * w.abs().max(1e-3);
-            assert!(
-                (g - w).abs() <= tol,
-                "i={i}: got={g}, want={w}, tol={tol}"
-            );
+            assert!((g - w).abs() <= tol, "i={i}: got={g}, want={w}, tol={tol}");
         }
     }
 
@@ -1103,11 +1095,7 @@ mod tests {
     #[test]
     fn small_m_edge_cases_handled() {
         // m = 0 returns empty, m = 1 returns [1.0] for symmetric windows.
-        for f in [
-            triang as fn(usize) -> _,
-            bohman,
-            lanczos,
-        ] {
+        for f in [triang as fn(usize) -> _, bohman, lanczos] {
             let z = f(0).unwrap();
             assert_eq!(z.shape(), &[0]);
             let one = f(1).unwrap();

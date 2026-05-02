@@ -79,14 +79,9 @@ impl<B: BitGenerator> Generator<B> {
     ///
     /// # Errors
     /// `FerrayError::InvalidValue` if `out` is non-contiguous.
-    pub fn standard_normal_into(
-        &mut self,
-        out: &mut Array<f64, IxDyn>,
-    ) -> Result<(), FerrayError> {
+    pub fn standard_normal_into(&mut self, out: &mut Array<f64, IxDyn>) -> Result<(), FerrayError> {
         let slice = out.as_slice_mut().ok_or_else(|| {
-            FerrayError::invalid_value(
-                "standard_normal_into requires a contiguous out buffer",
-            )
+            FerrayError::invalid_value("standard_normal_into requires a contiguous out buffer")
         })?;
         for v in slice.iter_mut() {
             *v = standard_normal_single(&mut self.bg);
@@ -284,8 +279,7 @@ mod tests {
         let mut a = default_rng_seeded(42);
         let mut b = default_rng_seeded(42);
         let allocated = a.standard_normal([4, 5]).unwrap();
-        let mut buf =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[4, 5]), vec![0.0; 20]).unwrap();
+        let mut buf = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[4, 5]), vec![0.0; 20]).unwrap();
         b.standard_normal_into(&mut buf).unwrap();
         assert_eq!(allocated.as_slice().unwrap(), buf.as_slice().unwrap());
     }
@@ -295,11 +289,9 @@ mod tests {
         use ferray_core::IxDyn;
         let mut rng = default_rng_seeded(42);
         // loc shape (3,), scale shape (1,) — broadcast to (3,).
-        let loc = ferray_core::Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[3]),
-            vec![0.0, 10.0, -5.0],
-        )
-        .unwrap();
+        let loc =
+            ferray_core::Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![0.0, 10.0, -5.0])
+                .unwrap();
         let scale =
             ferray_core::Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1]), vec![1.0]).unwrap();
         let out = rng.normal_array(&loc, &scale).unwrap();
@@ -313,11 +305,9 @@ mod tests {
         // every row j shares loc[j] and every column shares scale.
         // With many draws per element the per-row mean → loc[j].
         let mut rng = default_rng_seeded(7);
-        let loc = ferray_core::Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[3, 1]),
-            vec![0.0, 5.0, -3.0],
-        )
-        .unwrap();
+        let loc =
+            ferray_core::Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 1]), vec![0.0, 5.0, -3.0])
+                .unwrap();
         let scale = ferray_core::Array::<f64, IxDyn>::from_vec(
             IxDyn::new(&[1, 4]),
             vec![1.0, 0.5, 2.0, 0.1],
@@ -353,16 +343,10 @@ mod tests {
     fn normal_array_bad_scale_errors() {
         use ferray_core::IxDyn;
         let mut rng = default_rng_seeded(0);
-        let loc = ferray_core::Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2]),
-            vec![0.0, 0.0],
-        )
-        .unwrap();
-        let scale = ferray_core::Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2]),
-            vec![1.0, -0.5],
-        )
-        .unwrap();
+        let loc =
+            ferray_core::Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![0.0, 0.0]).unwrap();
+        let scale =
+            ferray_core::Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0, -0.5]).unwrap();
         assert!(rng.normal_array(&loc, &scale).is_err());
     }
 
@@ -370,16 +354,10 @@ mod tests {
     fn normal_array_shape_mismatch_errors() {
         use ferray_core::IxDyn;
         let mut rng = default_rng_seeded(0);
-        let loc = ferray_core::Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[3]),
-            vec![0.0; 3],
-        )
-        .unwrap();
-        let scale = ferray_core::Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2]),
-            vec![1.0; 2],
-        )
-        .unwrap();
+        let loc =
+            ferray_core::Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), vec![0.0; 3]).unwrap();
+        let scale =
+            ferray_core::Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0; 2]).unwrap();
         assert!(rng.normal_array(&loc, &scale).is_err());
     }
 

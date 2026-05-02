@@ -12,9 +12,211 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-05-02
+
+This release sweeps the open numpy-parity backlog to zero. Roughly 80 issues
+resolved across the workspace; the curated highlights below cover the
+material new code. Per-issue closing comments carry the full detail trail.
+
+### Added
+
+#### ferray-stats
+- `unique_axis(a, axis)` returns sorted unique hyperslices along an axis (#464).
+- `where_broadcast(c, x, y)` is the 3-arg `where` with NumPy broadcasting (#468).
+- Eight scipy.stats descriptive helpers: `skew`, `kurtosis`, `zscore`, `mode`,
+  `iqr`, `sem`, `gmean`, `hmean` (#470).
+- Seven rule-based histogram bin variants on `Bins<T>` (`Sturges` / `Sqrt` /
+  `Rice` / `Scott` / `Fd` / `Doane` / `Auto`); enum is now
+  `#[non_exhaustive]` (#472).
+- Five hypothesis tests: `pearsonr`, `spearmanr`, `ttest_1samp`,
+  `ttest_ind` (Welch), `ks_2samp`. p-values via Lentz-CF regularised
+  incomplete beta (#724).
+- `chi2_contingency` returning statistic + p-value + dof + expected. p-value
+  via regularised upper incomplete gamma (#743).
+
+#### ferray-polynomial
+- `from_roots` constructor across all six bases via a default on
+  `FromPowerBasis` (#476).
+- `linspace`, `Poly::basis(deg)`, `FromPowerBasis::identity()` defaults (#477, #478).
+- `integ_with_bounds(m, k, lbnd, scl)` on `Polynomial` and as a default for
+  the other five bases (#482, #732).
+- `convert_with_mapping` carrying domain/window across basis conversion (#483).
+- `Polynomial::compose` plus a `Poly::compose` default for non-power bases (#485, #733).
+- `Display` impls across all six basis types (#486).
+- `ComplexPolynomial` for complex-coefficient power-basis arithmetic (#730).
+- `ChebyshevF32` / `HermiteF32` / `HermiteEF32` / `LegendreF32` / `LaguerreF32`
+  via a single `impl_f32_wrapper!` macro (#725-#729).
+
+#### ferray-fft
+- `fft_into` / `ifft_into` / `rfft_into` / `irfft_into` for pre-allocated
+  output buffers (#429).
+- `FftPlanND` for repeated multi-dim FFTs of fixed shape (#436).
+
+#### ferray-random
+- `multivariate_hypergeometric` distribution (#445).
+- `shuffle_dyn` / `permuted_dyn` / `choice_dyn` for N-D arrays along an axis (#447, #448).
+- Broadcast-aware distribution params: `normal_array`, `uniform_array`,
+  `exponential_array`, `poisson_array` (#449).
+- `multivariate_normal_array` taking `Array<f64, Ix1/Ix2>` and using
+  `ferray_linalg::cholesky` (faer-backed) (#451, #452).
+- `state_bytes` / `set_state_bytes` round-trip for all six BitGenerators
+  with structural-invariant validation on restore (#453).
+- `random_into` / `standard_normal_into` / `standard_exponential_into` for
+  hot-loop buffer reuse (#454).
+- Seven typed integer generators: `integers_{u8,i8,u16,i16,u32,i32,u64}` (#456).
+
+#### ferray-window
+- `f32` siblings for the numpy 5 (#529).
+- Closed-form scipy windows: `boxcar`, `triang`, `bohman`, `flattop`,
+  `lanczos` (#738).
+- `chebwin` Dolph–Chebyshev via direct DFT, byte-exact scipy parity (#740).
+- `dpss` Slepian taper via power iteration on the symmetric tridiagonal
+  concentration matrix (#745).
+
+#### ferray-strings
+- `rsplit` and `splitlines` (#515).
+- `at(i)` / `get_row(i)` / `slice_axis(axis, range)` for N-D StringArray
+  indexing (#519).
+- `CompactStringArray` Arrow-style offsets+values backend behind the
+  `compact-storage` feature flag — roughly 3× memory reduction for
+  short-string workloads (#736).
+
+#### ferray-stride-tricks
+- `sliding_window_view_axis` for axis-restricted sliding windows (#523).
+- `as_strided_signed` with `isize` strides + base offset (#737).
+
+#### ferray-io
+- `savetxt_1d` / `loadtxt_1d` for 1-D text I/O (#494).
+- `NpyElement` for `Complex<f32>` and `Complex<f64>` so typed save/load works
+  end-to-end (#498).
+- `load_record` / `save_record` for structured-dtype `.npy` files into
+  `FerrayRecord`-typed arrays (#742).
+
+#### ferray-numpy-interop
+- `NpElement` for `half::f16` behind the `f16` feature (#739, partial).
+
+#### ferray-core
+- `DType::FixedAscii(n)` / `FixedUnicode(n)` / `RawBytes(n)` for numpy's
+  `S{n}` / `U{n}` / `V{n}` dtype families (#741).
+- Blanket `impl<T: FerrayRecord> Element for T` so structured-array load
+  paths work without per-type Element wiring (#742).
+
+### Changed
+- ferray-polynomial `roots` delegates to `ferray_linalg::eigvals` (faer Schur),
+  removing ~275 lines of in-tree QR scaffolding (#479).
+- ferray-polynomial Hermite / HermiteE / Laguerre `deriv` / `integ` use direct
+  in-basis recurrences (O(n) per step) instead of round-tripping through the
+  power basis (#720).
+- ferray-fft `fft_along_axes` skips the redundant upfront `data.to_vec()`
+  copy (#439).
+
+### Fixed
+- ferray-stats `correlate` was computing convolution; now matches numpy's
+  cross-correlation `c[k] = Σ_n a[n+k] * v[n]`. Pre-existing `test_correlate_valid`
+  was pinning the buggy output; corrected (#722).
+- ferray-stats `corrcoef` returns NaN for zero-deviation rows (matches numpy);
+  previously returned 0 / 1 (#723).
+- ferray-linalg AVX2 i8 GEMM kernel test harness used debug-overflowing `i8 * i8`
+  arithmetic on its synthetic inputs; switched to `wrapping_mul` / `wrapping_sub`.
+
 ## [0.3.1] - 2026-05-01
 
 ### Added
+- ferray-numpy-interop: no Arrow RecordBatch interop (#559)
+- ferray-numpy-interop: no Polars DataFrame <-> ferray 2D array conversion (#558)
+- ferray-numpy-interop: no null handling strategy — nulls always rejected (#556)
+- ferray-numpy-interop: no DynArray interop — runtime-typed arrays can't be converted (#554)
+- ferray-numpy-interop: no complex type support in any backend (#552)
+- ferray-numpy-interop: no f16/bf16 support in any backend (#551)
+- ferray-numpy-interop: no bool support for NumPy interop (#553)
+- ferray-window: f64-only — no f32 window generation (#529)
+- ferray-window: no scipy.signal window functions (tukey, flattop, cosine, nuttall, etc.) (#531)
+- ferray-stride-tricks: as_strided only accepts usize strides — no negative strides (#524)
+- ferray-stride-tricks: sliding_window_view doesn't support axis parameter (#523)
+- ferray-strings: no indexing/slicing on StringArray (#519)
+- ferray-strings: missing functions — swapcase, rfind, index, rindex, partition, rpartition, rsplit, splitlines, translate, expandtabs, mod, encode, decode, slice (#515)
+- ferray-io: no structured/string dtype support for .npy files (#490)
+- ferray-io: no allow_pickle parameter — NumPy's load has security considerations (#499)
+- ferray-io: no fromregex equivalent (#497)
+- ferray-io: NpyElement not implemented for Complex — typed save/load for complex arrays requires DynArray path (#498)
+- ferray-io: no f16/bf16 support in .npy I/O (#491)
+- ferray-io: loadtxt/savetxt only work with Ix2 — no 1D text I/O (#494)
+- ferray-polynomial: no Display/Debug formatting matching NumPy's polynomial printing (#486)
+- ferray-polynomial: no polynomial composition (p(q(x))) (#485)
+- ferray-polynomial: no convert/cast methods for cross-basis conversion with domain (#483)
+- ferray-polynomial: fit doesn't support weights parameter (#484)
+- ferray-polynomial: integ missing lbnd (lower bound) and scl (scale) parameters (#482)
+- ferray-polynomial: no std::ops trait implementations — must use .add()/.mul() methods (#481)
+- ferray-polynomial: no identity or basis class methods (#478)
+- ferray-polynomial: no linspace method (#477)
+- ferray-polynomial: no fromroots constructor (#476)
+- ferray-polynomial: f64-only — no generic float or complex support (#475)
+- ferray-stats: histogram bins='auto'/'sturges'/'fd' etc. not supported (#472)
+- ferray-stats: no scipy.stats equivalents — no t-test, ks-test, mode, skew, kurtosis, zscore (#470)
+- ferray-stats: unique only works on flattened arrays — no axis parameter (#464)
+- ferray-random: integers() only returns i64 — no dtype parameter (#456)
+- ferray-random: no out= parameter — every generation allocates (#454)
+- ferray-random: no state serialization — can't save/restore Generator state (#453)
+- ferray-random: distributions don't accept array parameters — no broadcasting (#449)
+- ferray-random: choice only works on 1D arrays — no axis parameter (#448)
+- ferray-random: shuffle/permuted only work on 1D arrays (#447)
+- ferray-random: missing distributions — zipf, noncentral_chisquare, noncentral_f, multivariate_hypergeometric (#445)
+- ferray-random: no SFC64 (Small Fast Chaotic) BitGenerator (#444)
+- ferray-fft: ND FFT applies transforms sequentially per axis — no simultaneous multi-axis transform (#439)
+- ferray-fft: FftPlan only supports 1D — no plan for 2D/ND transforms (#436)
+- ferray-fft: no out= parameter on any FFT function (#429)
+- ferray-linalg: no LinAlgError type — uses generic FerrayError variants (#423)
+- ferray-linalg: einsum generic contraction is O(product of all dims) — no opt_einsum-style optimization (#418)
+- ferray-linalg: svd hermitian= parameter missing — no fast path for symmetric matrices (#407)
+- ferray-ufunc: no floating-point error state handling (errstate/seterr) (#386)
+- ferray-ufunc: no integer SIMD paths — all integer ops are scalar (#384)
+- ferray-ufunc: SIMD only for f64, no f32 intrinsic kernels (#383)
+- ferray-core: no unique/searchsorted/set operations (#374)
+- ferray-core: no structured/record dtype in DType enum (#342)
+- ferray-core: no WRITEBACKIFCOPY pattern for safe out-parameter mutation (#370)
+- ferray-core: no WRITEBACKIFCOPY pattern for safe out-parameter mutation (#370)
+- ferray-core: no buffer protocol / FFI-safe array descriptor (#358)
+- ferray-core: no memory-mapped array support (#356)
+- ferray-core: no einsum in the workspace (#354)
+- ferray-core: no alignment flag or ALIGNED check (#345)
+- ferray-core: no byte-order / endianness handling in DType (#344)
+- ferray-core: no structured/record dtype in DType enum (#342)
+- Bump oracle fixture tolerance floor to 10 ULP for pure-Rust precision envelope (#47)
+- Run cargo tarpaulin code coverage analysis (#44)
+- ferray-python: NumPy drop-in replacement crate (PyO3 bindings, phased) (#684)
+- ferray-python phase 4 follow-up: as_strided binding (NumPy byte strides vs ferray element strides — needs careful semantic translation) (#714)
+- ferray-python phase 2 follow-up: datetime/timedelta arithmetic and predicates (isnat, add/sub_datetime/timedelta) (#706)
+- ferray-python phase 3 follow-up: random Generator class (PyO3 #[pyclass]) for default_rng() modern API (#712)
+- ferray-python phase 3 follow-up: random additional distributions (binomial, poisson, geometric, beta, gamma, exponential, lognormal, chisquare, multinomial, multivariate_normal) (#713)
+- ferray-python phase 3 follow-up: batched linalg (cholesky_batched, eigh_batched, svd_batched, qr_batched, solve_batched, inv_batched, pinv_batched) (#709)
+- ferray-python phase 3 follow-up: complex linalg (matmul_complex, solve_complex, det_complex, inv_complex, eig) (#708)
+- ferray-python phase 3 follow-up: hfft/ihfft (Hermitian FFT) (#707)
+- ferray-python phase 3 follow-up: lstsq (4-tuple return), tensorinv, tensorsolve, matrix_transpose, diagonal (#711)
+- ferray-python phase 3 follow-up: norm_axis, cond, einsum, multi_dot, matmul/vecdot/matvec/vecmat at top level (numpy 2.0 vector products) (#710)
+- ferray-python phase 2 follow-up: histogram/histogram2d/histogramdd/bincount/digitize (#704)
+- ferray-python phase 2 follow-up: percentile/quantile/median + cov/corrcoef/correlate (#703)
+- ferray-python phase 2 follow-up: gradient, trapezoid, ediff1d, sinc, i0, convolve, correlate, interp (#702)
+- ferray-python phase 2 follow-up: gcd/lcm, frexp/ldexp/modf/spacing/nextafter, exp_fast, divmod, fmod (#701)
+- ferray-python phase 2 follow-up: complex ops (real/imag/conj/conjugate/angle, iscomplex/isreal) (#700)
+- ferray-python phase 1 follow-up: bind frombuffer/fromfile/fromstring/fromiter/fromfunction (#692)
+- ferray-python phase 2 follow-up: bitwise ops (bitwise_and/or/xor/not/invert, left_shift, right_shift, bitwise_count) (#699)
+- ferray-python phase 1 follow-up: bind take/take_along_axis/choose/compress/select/place/putmask/extract (#697)
+- ferray-python phase 1 follow-up: bind split/array_split/vsplit/hsplit/dsplit (#696)
+- ferray-python phase 1 follow-up: bind block/r_/c_/column_stack/row_stack (#695)
+- ferray-python phase 1 follow-up: bind meshgrid/mgrid/ogrid/vander (#693)
+- ferray-python phase 1 follow-up: bind pad/tile/repeat/delete/insert/append/resize/trim_zeros (#694)
+- ferray-python phase 2 follow-up: lexsort/partition/argpartition, sort_complex, unique_all/counts/inverse, allclose/isclose/array_equal/array_equiv (#705)
+- ferray-python phase 4 follow-up: ferray.autodiff DualNumber bindings (ferray-specific, not NumPy parity but useful for Python users) (#718)
+- ferray-python phase 4 follow-up: numpy.lib top-level (vectorize, apply_along_axis, apply_over_axes, piecewise from ferray-window functional utilities) (#719)
+- ferray-python phase 4 follow-up: numpy.ma masked arrays — masked_array class + masked_where / mask-aware reductions (#716)
+- ferray-python phase 4 follow-up: numpy.char namespace (lower/upper/strip/replace/find/count/etc) — needs StringArray pyclass (#715)
+- ferray-python phase 4 follow-up: numpy.polynomial class API — Polynomial/Chebyshev/Hermite/HermiteE/Laguerre/Legendre #[pyclass] wrappers (#717)
+- ferray-python phase 4: window + polynomial + autodiff + strings + ma + stride_tricks (#689)
+- ferray-python phase 3: linalg + fft + random submodule bindings (#688)
+- ferray-python phase 2: ufunc + stats bindings (#687)
+- ferray-python phase 1: core creation + dtype + manipulation + indexing bindings (#686)
+- ferray-python phase 0: cdylib + pyo3 scaffold + maturin build (#685)
+- Add 9 missing windows: cosine, exponential, gaussian, general_cosine, general_hamming, nuttall, parzen, taylor, tukey (#683)
 
 - ferray-window: 9 new windows extending the existing bartlett/blackman/hamming/hanning/kaiser
   set with the SciPy / `torch.signal.windows` extras: `cosine`, `exponential` (with optional
@@ -83,6 +285,89 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.2.11] - 2026-04-28
 
 ### Changed
+- ferray-window: dpss (discrete prolate spheroidal sequences) (#745)
+- ferray-io: load structured dtype .npy into FerrayRecord arrays (#742)
+- ferray-core: backing DType variants for fixed-width strings (FixedAscii, FixedUnicode, RawBytes) (#741)
+- ferray-window: dpss and chebwin (need numerical solvers) (#740)
+- ferray-strings: alternative compact storage backend (fixed-width or Arrow-style) (#736)
+- ferray-numpy-interop: expansion epic — f16/bf16, complex, DynArray, nulls, DataFrame, RecordBatch (#739)
+- ferray-polynomial: genericize Poly trait over coefficient type T: Float (#731)
+- ferray-polynomial: complex-coefficient polynomials (#730)
+- ferray-stats: chi2_contingency (needs incomplete gamma) (#743)
+- ferray-core: expose RawArrayView for negative-stride view construction (#744)
+- ferray-stride-tricks: as_strided_signed with isize strides + base offset (#737)
+- ferray-stats: add scipy.stats statistical-test functions (ttest, ks_2samp, chi2, pearsonr) (#724)
+- ferray-io: parse numpy structured dtype descriptors and load into FerrayRecord arrays (#735)
+- ferray-io: parse numpy fixed-width string dtype descriptors (S20, U10, V8) (#734)
+- ferray-polynomial: compose for non-power bases (#733)
+- ferray-polynomial: integ_with_bounds for non-power bases (#732)
+- ferray-window: remaining scipy.signal windows (flattop, bohman, boxcar, triang, lanczos, dpss, chebwin) (#738)
+- ferray-polynomial: LaguerreF32 type (#729)
+- ferray-polynomial: LegendreF32 type (#728)
+- ferray-polynomial: HermiteEF32 type (#727)
+- ferray-polynomial: HermiteF32 type (#726)
+- ferray-polynomial: ChebyshevF32 type (f32 sibling of Chebyshev) (#725)
+- ferray-ufunc: expand f32 test coverage in arithmetic.rs (follow-up to #152) (#721)
+- ferray-polynomial: migrate Hermite/HermiteE/Laguerre deriv/integ to direct recurrences (follow-up to #131) (#720)
+- ferray-polynomial: lift from f64-only to T: Element + Float (and complex coeffs) (#612)
+- ferray-numpy-interop: bool/non-bool split requires separate trait names (ToArrow vs ToArrowBool) (#557)
+- ferray-numpy-interop: Arrow FromArrow consumes the PrimitiveArray — should accept reference (#555)
+- ferray-window: functional utilities (vectorize, piecewise, apply_along_axis) are misplaced in window crate (#532)
+- ferray-strings: uses owned String per element — no fixed-width or interned storage (#522)
+- ferray-polynomial: fitting uses internal normal equations instead of ferray-linalg lstsq (#480)
+- ferray-polynomial: roots uses internal QR iteration instead of ferray-linalg eigvals (#479)
+- ferray-stats: where_ always copies and flattens — should use nonzero for index arrays (#468)
+- ferray-random: multivariate_normal has its own Cholesky — should use ferray-linalg (#452)
+- ferray-random: multivariate_normal takes flat cov slice instead of Array<f64, Ix2> (#451)
+- ferray-linalg: solve only accepts Ix2 for A and IxDyn for b — inconsistent typing (#411)
+- ferray-core: indexing always returns IxDyn — loses compile-time rank (#349)
+- ferray-core: Element trait is sealed — no user-defined element types (#365)
+- ferray-core: no __array_function__-style dispatch protocol for duck-typing (#357)
+- ferray-core: indexing always returns IxDyn — loses compile-time rank (#349)
+- ferray-core: strides are element-counted, not byte-counted — limits dtype-erased operations (#341)
+- ferray-core-macros: all macro errors point to call_site() instead of actual token span (#324)
+- ferray-core-macros: s! macro string-based parsing is fragile (#322)
+- ferray-numpy-interop: misleading SAFETY comment on safe API call (#314)
+- ferray-numpy-interop: duplicate Bool traits (ToArrowBool/FromArrowBool/ToPolarsBool/FromPolarsBool) (#311)
+- ferray-numpy-interop: IntoNumPy for Array2 uses flatten-then-reshape (#310)
+- ferray-numpy-interop: FromArrow consumes self but copies anyway (#309)
+- ferray-numpy-interop: missing f16 <-> Float16 mapping in dtype_map (#308)
+- ferray-numpy-interop: Arrow/Polars conversions are 1-D only (#307)
+- ferray-strings: broadcast_binary materializes all index pairs into Vec (#281)
+- ferray-strings: no Serialize/Deserialize support for StringArray (#279)
+- ferray-strings: split returns Vec<Vec<String>> instead of structured array type (#277)
+- ferray-ma: var() iterates data twice (#274)
+- ferray-ma: sort/compressed always flatten to 1D (#271)
+- ferray-ma: no ddof parameter on var/std (#270)
+- ferray-ma: argsort returns Vec<usize> instead of Array (#269)
+- ferray-ma: count_masked ignores axis parameter (#268)
+- ferray-random: weighted_sample_with_replacement uses O(log n) binary search, not O(1) alias method (#265)
+- ferray-polynomial: redundant From impls alongside ConvertBasis trait (#249)
+- ferray-polynomial: no operator overloading (Add/Sub/Mul/Neg traits) (#248)
+- ferray-polynomial: pow() uses naive repeated multiplication instead of binary exponentiation (#247)
+- ferray-polynomial: companion_size is dead code (#246)
+- ferray-polynomial: x_pow_prev computed but never used in power_to_chebyshev/legendre (#245)
+- ferray-io: build_dim_from_shape uses Box<dyn Any> downcast (#236)
+- ferray-io: element-at-a-time I/O for npy read/write (#234)
+- ferray-autodiff: no ferray-core integration — DualNumber standalone (#186)
+- ferray-stats: SIMD acceleration only for f64, not f32 (#173)
+- ferray-stats: mean/var/std_ don't support integer input with float output (#170)
+- ferray-ma: ufuncs don't delegate to SIMD-accelerated ferray-ufunc (#157)
+- ferray-ma: set_mask_flat uses iter_mut().nth(n) — O(n) per call (#154)
+- ferray-polynomial: non-power basis ops do unnecessary roundtrip conversions (#131)
+- ferray-polynomial: massive code duplication across 5 non-power bases (#128)
+- ferray-polynomial: Poly trait hardcoded to f64 (#126)
+- ferray-polynomial: missing domain/window support for Chebyshev/Legendre fitting (#122)
+- ferray-linalg: einsum generic_contraction uses scalar loops for all cases (#102)
+- ferray-ufunc: convolve is O(n*m) with no FFT fallback for large inputs (#89)
+- ferray-ufunc: basic arithmetic (add/sub/mul/div) don't use SIMD dispatch (#88)
+- Audit ferray crates against NumPy modules to surface API gaps (#578)
+- chore: bump workspace to 0.2.10 (#567)
+- ferray-bench: add single mode that returns result arrays for accuracy testing (#652)
+- speed_benchmark.py: matmul size_str missing second matrix shape (#651)
+- Benchmark all ferray APIs against real NumPy with raw output (#650)
+- Add Claude skills: ferray-python binding patterns + per-submodule API context (#691)
+- ferray-python: CI wheel matrix (Linux/macOS/Windows × py3.10-3.13) + PyPI publish (#690)
 - ferray-ufunc: add isnat (datetime NaT — gated on datetime dtype scope) (#594)
 - ferray-numpy-interop: complex types (links #552) (#642)
 - ferray-numpy-interop: null/missing handling (links #556) (#646)
@@ -195,6 +480,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - ferray umbrella: silence `clippy::assertions_on_constants` on intentional re-export-accessibility tests
 
 ### Fixed
+- ferray-stats: corrcoef returns 0.0 for constant-variable rows (numpy returns NaN) (#723)
+- ferray-stats::correlate computes convolution instead of cross-correlation (numpy mismatch) (#722)
+- ferray-ufunc: no subnormal handling in fast_exp — flushes to zero below -708.4 (#401)
+- ferray-core-macros: no test for FerrayRecord with generics (#326)
+- ferray-numpy-interop: no tests for large arrays (#313)
+- ferray-numpy-interop: no property/fuzz tests (#312)
+- ferray-autodiff: no second-order derivative (nested dual) tests (#305)
+- ferray-autodiff: no f32 property tests (#304)
+- ferray-autodiff: no edge-case tests at domain boundaries (#303)
+- ferray-strings: oracle tests don't cover alignment/concat/regex ops (#284)
+- ferray-strings: no tests for split with empty separator (#283)
+- ferray-strings: no tests for empty arrays (zero elements) (#282)
+- ferray-ma: data_mut() allows breaking shape invariant (#273)
+- ferray-ma: mean() unwrap_or(one) could silently return sum instead of mean (#267)
+- ferray-ma: masked_inside/masked_outside don't swap v1>v2 (#266)
+- ferray-polynomial: no tests for fit_weighted with non-uniform weights (#255)
+- ferray-polynomial: no tests for divmod of non-power basis (#254)
+- ferray-polynomial: no tests for Chebyshev integ() accuracy (#253)
+- ferray-polynomial: no NaN/Inf input validation (#252)
+- ferray-polynomial: no tests for large/small coefficient magnitudes (#251)
+- ferray-polynomial: no tests for polynomials with repeated roots (#250)
+- ferray-io: test cleanup relies on remove_file, not RAII (#244)
+- ferray-io: no memmap tests with multidimensional arrays (#243)
+- ferray-io: no property tests for u16/u32/u64/i16/u128/i128 roundtrips (#242)
+- ferray-io: no complex type roundtrip through save/load_dynamic (#241)
+- ferray-io: no test for .npy v2.0 headers (#240)
+- ferray-io: MemmapArray Send/Sync impl is fragile (#238)
+- ferray-linalg: no tests for eig (non-symmetric) correctness (#221)
+- ferray-linalg: no property tests for Cholesky or LU (#215)
+- ferray-linalg: no f32 oracle tests (#213)
+- ferray-stats: no tests for digitize with decreasing bins (#187)
+- ferray-stats: no f32 tests anywhere (#185)
+- ferray-stats: no tests for cov/corrcoef with single observation (#183)
+- ferray-stats: no edge-case tests for correlate (#181)
+- ferray-stats: no tests for single-element var/std with different ddof (#178)
+- ferray-stats: no tests for infinity values in any statistical function (#177)
+- ferray-ufunc: no f32 tests for most ufuncs (#152)
+- ferray-core: Shape6 missing Debug derive breaks --all-features (#568)
+- ferray-numpy-interop: preserve F-contiguous layout through IntoNumPy (asfortranarray gap) (#698)
 - (none worth a separate entry — see the auto-generated history below for prior fixes)
 
 ## [0.1.0 .. 0.2.10] - 2026-03-07 .. 2026-04-28

@@ -286,9 +286,9 @@ impl<B: BitGenerator> Generator<B> {
         let inner_stride: usize = shape[axis + 1..].iter().product();
         let block = n * inner_stride;
         let outer_size: usize = shape[..axis].iter().product();
-        let slice = out.as_slice_mut().ok_or_else(|| {
-            FerrayError::invalid_value("array must be contiguous for permuted")
-        })?;
+        let slice = out
+            .as_slice_mut()
+            .ok_or_else(|| FerrayError::invalid_value("array must be contiguous for permuted"))?;
         for o in 0..outer_size {
             let base = o * block;
             for k in 0..inner_stride {
@@ -737,7 +737,10 @@ mod tests {
         let mut last = -1i64;
         for row in 0..6 {
             let id = slice[row * 2];
-            assert!(id > last, "shuffle=false output not ascending: {id} after {last}");
+            assert!(
+                id > last,
+                "shuffle=false output not ascending: {id} after {last}"
+            );
             last = id;
         }
     }
@@ -763,11 +766,7 @@ mod tests {
     fn choice_dyn_size_zero_returns_empty_axis() {
         use ferray_core::IxDyn;
         let mut rng = default_rng_seeded(11);
-        let arr = Array::<i64, IxDyn>::from_vec(
-            IxDyn::new(&[3, 4]),
-            (0..12).collect(),
-        )
-        .unwrap();
+        let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[3, 4]), (0..12).collect()).unwrap();
         let chosen = rng.choice_dyn(&arr, 0, true, None, 0, true).unwrap();
         assert_eq!(chosen.shape(), &[0, 4]);
     }
@@ -776,8 +775,7 @@ mod tests {
     fn choice_dyn_bad_axis() {
         use ferray_core::IxDyn;
         let mut rng = default_rng_seeded(0);
-        let arr =
-            Array::<i64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), (0..6).collect()).unwrap();
+        let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), (0..6).collect()).unwrap();
         assert!(rng.choice_dyn(&arr, 1, true, None, 5, true).is_err());
     }
 
@@ -785,11 +783,7 @@ mod tests {
     fn choice_dyn_too_many_no_replace_errors() {
         use ferray_core::IxDyn;
         let mut rng = default_rng_seeded(0);
-        let arr = Array::<i64, IxDyn>::from_vec(
-            IxDyn::new(&[3, 2]),
-            (0..6).collect(),
-        )
-        .unwrap();
+        let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[3, 2]), (0..6).collect()).unwrap();
         assert!(rng.choice_dyn(&arr, 5, false, None, 0, true).is_err());
     }
 
@@ -817,7 +811,10 @@ mod tests {
             );
             assert_eq!(slice[row * 3 + 1], id * 10 + 1);
             assert_eq!(slice[row * 3 + 2], id * 10 + 2);
-            assert!(seen.insert(id), "row id {id} duplicated — shuffle broke a row");
+            assert!(
+                seen.insert(id),
+                "row id {id} duplicated — shuffle broke a row"
+            );
         }
     }
 
@@ -865,8 +862,8 @@ mod tests {
         let n_rows = 5;
         let n_cols = 4;
         let data: Vec<i64> = (0..n_rows * n_cols).map(|x| x as i64).collect();
-        let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[n_rows, n_cols]), data.clone())
-            .unwrap();
+        let arr =
+            Array::<i64, IxDyn>::from_vec(IxDyn::new(&[n_rows, n_cols]), data.clone()).unwrap();
         let result = rng.permuted_dyn(&arr, 0).unwrap();
         let slice = result.as_slice().unwrap();
         // Each column must be a permutation of the original column values.
@@ -889,7 +886,9 @@ mod tests {
         let mut rng = default_rng_seeded(1234);
         let n_rows = 5;
         let n_cols = 4;
-        let data: Vec<i64> = (0..n_rows * n_cols).map(|x| x as i64 % n_rows as i64).collect();
+        let data: Vec<i64> = (0..n_rows * n_cols)
+            .map(|x| x as i64 % n_rows as i64)
+            .collect();
         let arr =
             Array::<i64, IxDyn>::from_vec(IxDyn::new(&[n_rows, n_cols]), data.clone()).unwrap();
         let result = rng.permuted_dyn(&arr, 0).unwrap();
@@ -904,7 +903,10 @@ mod tests {
                 break;
             }
         }
-        assert!(any_diff, "all columns matched — permuted didn't independently shuffle");
+        assert!(
+            any_diff,
+            "all columns matched — permuted didn't independently shuffle"
+        );
     }
 
     #[test]
@@ -912,11 +914,7 @@ mod tests {
         use ferray_core::IxDyn;
         let mut a = default_rng_seeded(31);
         let mut b = default_rng_seeded(31);
-        let arr = Array::<i64, IxDyn>::from_vec(
-            IxDyn::new(&[3, 3]),
-            (0..9).collect(),
-        )
-        .unwrap();
+        let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[3, 3]), (0..9).collect()).unwrap();
         let xa = a.permuted_dyn(&arr, 1).unwrap();
         let xb = b.permuted_dyn(&arr, 1).unwrap();
         assert_eq!(xa.as_slice().unwrap(), xb.as_slice().unwrap());

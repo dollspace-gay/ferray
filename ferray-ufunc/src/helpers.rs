@@ -360,6 +360,147 @@ where
     Some(Array::from_vec(input.dim().clone(), t_vec))
 }
 
+/// Run a SIMD-dispatched binary kernel on two contiguous f64 slices.
+///
+/// Same scheduling shape as [`run_slice_kernel_f64`]: parallel via rayon
+/// when `n >= THRESHOLD_COMPUTE_BOUND`, single-threaded otherwise.
+#[inline]
+fn run_slice_kernel_binary_f64(
+    a: &[f64],
+    b: &[f64],
+    out: &mut [f64],
+    kernel: fn(&[f64], &[f64], &mut [f64]),
+) {
+    let n = a.len();
+    debug_assert_eq!(b.len(), n);
+    debug_assert_eq!(out.len(), n);
+    if n >= THRESHOLD_COMPUTE_BOUND {
+        out.par_chunks_mut(PARALLEL_CHUNK)
+            .zip(a.par_chunks(PARALLEL_CHUNK))
+            .zip(b.par_chunks(PARALLEL_CHUNK))
+            .for_each(|((out_chunk, a_chunk), b_chunk)| {
+                kernel(a_chunk, b_chunk, out_chunk);
+            });
+    } else {
+        kernel(a, b, out);
+    }
+}
+
+#[inline]
+fn run_slice_kernel_binary_f32(
+    a: &[f32],
+    b: &[f32],
+    out: &mut [f32],
+    kernel: fn(&[f32], &[f32], &mut [f32]),
+) {
+    let n = a.len();
+    debug_assert_eq!(b.len(), n);
+    debug_assert_eq!(out.len(), n);
+    if n >= THRESHOLD_COMPUTE_BOUND {
+        out.par_chunks_mut(PARALLEL_CHUNK)
+            .zip(a.par_chunks(PARALLEL_CHUNK))
+            .zip(b.par_chunks(PARALLEL_CHUNK))
+            .for_each(|((out_chunk, a_chunk), b_chunk)| {
+                kernel(a_chunk, b_chunk, out_chunk);
+            });
+    } else {
+        kernel(a, b, out);
+    }
+}
+
+/// Binary sibling of [`try_simd_f64_unary`].
+///
+/// Returns `None` if `T` is not `f64` or shapes differ (broadcasting
+/// must be handled by the caller). Otherwise materialises both inputs
+/// via `contig_input`, runs the SIMD slice kernel, and returns the
+/// result wrapped in `Some`.
+#[inline]
+pub fn try_simd_f64_binary<T, D>(
+    a: &Array<T, D>,
+    b: &Array<T, D>,
+    kernel: fn(&[f64], &[f64], &mut [f64]),
+) -> Option<FerrayResult<Array<T, D>>>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    use std::any::TypeId;
+
+    if TypeId::of::<T>() != TypeId::of::<f64>() {
+        return None;
+    }
+    if a.shape() != b.shape() {
+        // Broadcasting needs the generic helper. Returning None lets
+        // the caller fall through to it.
+        return None;
+    }
+
+    let n = a.size();
+    let a_src = contig_input(a);
+    let b_src = contig_input(b);
+    // SAFETY: T is f64, verified by TypeId check above.
+    let a_f64: &[f64] = unsafe { std::slice::from_raw_parts(a_src.as_ptr().cast::<f64>(), n) };
+    let b_f64: &[f64] = unsafe { std::slice::from_raw_parts(b_src.as_ptr().cast::<f64>(), n) };
+
+    let mut output = Vec::with_capacity(n);
+    #[allow(clippy::uninit_vec)]
+    unsafe {
+        output.set_len(n);
+    }
+    run_slice_kernel_binary_f64(a_f64, b_f64, &mut output, kernel);
+
+    let cap = output.capacity();
+    // SAFETY: T is f64. Reinterpret Vec<f64> as Vec<T>.
+    let t_vec: Vec<T> = unsafe {
+        let mut md = std::mem::ManuallyDrop::new(output);
+        Vec::from_raw_parts(md.as_mut_ptr().cast::<T>(), n, cap)
+    };
+    Some(Array::from_vec(a.dim().clone(), t_vec))
+}
+
+/// f32 sibling of [`try_simd_f64_binary`].
+#[inline]
+pub fn try_simd_f32_binary<T, D>(
+    a: &Array<T, D>,
+    b: &Array<T, D>,
+    kernel: fn(&[f32], &[f32], &mut [f32]),
+) -> Option<FerrayResult<Array<T, D>>>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    use std::any::TypeId;
+
+    if TypeId::of::<T>() != TypeId::of::<f32>() {
+        return None;
+    }
+    if a.shape() != b.shape() {
+        return None;
+    }
+
+    let n = a.size();
+    let a_src = contig_input(a);
+    let b_src = contig_input(b);
+    // SAFETY: T is f32, verified by TypeId check above.
+    let a_f32: &[f32] = unsafe { std::slice::from_raw_parts(a_src.as_ptr().cast::<f32>(), n) };
+    let b_f32: &[f32] = unsafe { std::slice::from_raw_parts(b_src.as_ptr().cast::<f32>(), n) };
+
+    let mut output = Vec::with_capacity(n);
+    #[allow(clippy::uninit_vec)]
+    unsafe {
+        output.set_len(n);
+    }
+    run_slice_kernel_binary_f32(a_f32, b_f32, &mut output, kernel);
+
+    let cap = output.capacity();
+    // SAFETY: T is f32.
+    let t_vec: Vec<T> = unsafe {
+        let mut md = std::mem::ManuallyDrop::new(output);
+        Vec::from_raw_parts(md.as_mut_ptr().cast::<T>(), n, cap)
+    };
+    Some(Array::from_vec(a.dim().clone(), t_vec))
+}
+
 /// Apply a unary function that maps T -> U, preserving dimension.
 #[inline]
 pub fn unary_map_op<T, U, D>(input: &Array<T, D>, f: impl Fn(T) -> U) -> FerrayResult<Array<U, D>>

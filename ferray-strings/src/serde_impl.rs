@@ -98,7 +98,9 @@ where
         }
     }
     let dim = D::from_dim_slice(&shape).ok_or_else(|| {
-        de::Error::custom(format!("shape {shape:?} is not valid for the dimension type"))
+        de::Error::custom(format!(
+            "shape {shape:?} is not valid for the dimension type"
+        ))
     })?;
     StringArray::from_vec(dim, data).map_err(|e| de::Error::custom(e.to_string()))
 }

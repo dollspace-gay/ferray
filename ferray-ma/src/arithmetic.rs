@@ -122,13 +122,26 @@ where
         return Ok(out);
     }
 
-    // Slow path: a real mask is present; apply f only at unmasked
-    // positions and carry fill_value through masked positions.
-    let data: Vec<T> = ma
-        .data()
-        .iter()
+    // Mask present: split the work into two passes so the hot path
+    // (applying `f` to the data) can auto-vectorise without a mask
+    // branch in the inner loop (#157). NumPy's masked ufuncs take
+    // the same shape — apply elementwise across the full data, then
+    // patch masked positions with fill_value. This wastes compute on
+    // masked elements (typically a small fraction of the array) but
+    // unlocks SIMD on the dominant unmasked bulk.
+    //
+    // Trade-off: `f` is applied to the underlying data even at
+    // masked positions. For partial-domain ops (log, sqrt, …) that
+    // would otherwise panic or NaN on masked-but-invalid data, the
+    // *_domain helpers in ufunc_support.rs handle the validation
+    // separately before this point, and masked positions get
+    // overwritten with fill_value below regardless of what `f`
+    // produced for them.
+    let data_vec: Vec<T> = ma.data().iter().map(|&v| f(v)).collect();
+    let data: Vec<T> = data_vec
+        .into_iter()
         .zip(ma.mask().iter())
-        .map(|(v, m)| if *m { fill } else { f(*v) })
+        .map(|(v, m)| if *m { fill } else { v })
         .collect();
     let result_data = Array::from_vec(ma.dim().clone(), data)?;
     let mut out = MaskedArray::new(result_data, ma.mask().clone())?;

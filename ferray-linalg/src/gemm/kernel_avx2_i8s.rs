@@ -392,8 +392,16 @@ mod tests {
         let kc = 6;
         let m = 3;
         let n = 5;
-        let a: Vec<i8> = (0..MR_I8S * kc).map(|i| (i as i8) * 3 - 20).collect();
-        let b: Vec<i8> = (0..kc * NR_I8S).map(|i| (i as i8) * 5 - 40).collect();
+        // Build varied i8 inputs without tripping debug overflow:
+        // (i * mult) wraps mod 256, then we subtract a fixed offset
+        // and re-cast. The naive reference kernel sees the same
+        // bit pattern, so the comparison stays valid.
+        let a: Vec<i8> = (0..MR_I8S * kc)
+            .map(|i| (i as i8).wrapping_mul(3).wrapping_sub(20))
+            .collect();
+        let b: Vec<i8> = (0..kc * NR_I8S)
+            .map(|i| (i as i8).wrapping_mul(5).wrapping_sub(40))
+            .collect();
         let mut c_ours = vec![0_i32; m * n];
         let mut c_ref = vec![0_i32; m * n];
 

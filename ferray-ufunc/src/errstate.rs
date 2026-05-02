@@ -142,10 +142,7 @@ pub fn geterr(class: FpErrorClass) -> FpErrorState {
 /// policies on return (even if `f` panics).
 ///
 /// Mirrors numpy's `with errstate(divide='raise', invalid='ignore'): ...`.
-pub fn with_errstate<F, R>(
-    overrides: &[(FpErrorClass, FpErrorState)],
-    f: F,
-) -> R
+pub fn with_errstate<F, R>(overrides: &[(FpErrorClass, FpErrorState)], f: F) -> R
 where
     F: FnOnce() -> R,
 {
@@ -264,13 +261,11 @@ mod tests {
     fn with_errstate_scopes_overrides() {
         let _ = take_fp_events();
         seterr(FpErrorClass::DivideByZero, FpErrorState::Ignore);
-        let inner_state = with_errstate(
-            &[(FpErrorClass::DivideByZero, FpErrorState::Warn)],
-            || {
+        let inner_state =
+            with_errstate(&[(FpErrorClass::DivideByZero, FpErrorState::Warn)], || {
                 record_fp_event(FpErrorClass::DivideByZero);
                 geterr(FpErrorClass::DivideByZero)
-            },
-        );
+            });
         assert_eq!(inner_state, FpErrorState::Warn);
         // After the scope, the policy is restored.
         assert_eq!(geterr(FpErrorClass::DivideByZero), FpErrorState::Ignore);
@@ -283,10 +278,9 @@ mod tests {
     fn with_errstate_restores_on_panic() {
         seterr(FpErrorClass::Overflow, FpErrorState::Ignore);
         let result = std::panic::catch_unwind(|| {
-            with_errstate(
-                &[(FpErrorClass::Overflow, FpErrorState::Raise)],
-                || panic!("forced panic"),
-            )
+            with_errstate(&[(FpErrorClass::Overflow, FpErrorState::Raise)], || {
+                panic!("forced panic")
+            })
         });
         assert!(result.is_err());
         // Drop ran during unwind; policy restored.

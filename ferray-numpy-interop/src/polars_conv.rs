@@ -570,9 +570,8 @@ mod tests {
     fn to_polars_series_from_arrayd_flattens() {
         use ferray_core::dimension::IxDyn;
         let data: Vec<i64> = (0..24).collect();
-        let arr =
-            ferray_core::Array::<i64, IxDyn>::from_vec(IxDyn::new(&[2, 3, 4]), data.clone())
-                .unwrap();
+        let arr = ferray_core::Array::<i64, IxDyn>::from_vec(IxDyn::new(&[2, 3, 4]), data.clone())
+            .unwrap();
         let series = arr.to_polars_series("flat3d").unwrap();
         assert_eq!(series.len(), 24);
         let ca = series.i64().unwrap();

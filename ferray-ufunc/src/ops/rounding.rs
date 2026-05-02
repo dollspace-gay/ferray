@@ -232,4 +232,98 @@ mod tests {
         assert_eq!(s[0], 0.0);
         assert_eq!(s[1], 2.0);
     }
+
+    // ----------------------------------------------------------------------
+    // f32 sibling tests (#152) — every rounding op exercised on f32 to
+    // verify the SIMD f32 path and confirm bit-exact rounding behaviour
+    // matches the f64 path on values both representable.
+    // ----------------------------------------------------------------------
+
+    use ferray_core::Array;
+    use ferray_core::dimension::Ix1;
+
+    fn arr1_f32(data: Vec<f32>) -> Array<f32, Ix1> {
+        Array::<f32, Ix1>::from_vec(Ix1::new([data.len()]), data).unwrap()
+    }
+
+    #[test]
+    fn test_bankers_round_half_to_even_f32() {
+        let a = arr1_f32(vec![0.5, 1.5, 2.5, 3.5, -0.5, -1.5]);
+        let r = round(&a).unwrap();
+        let s = r.as_slice().unwrap();
+        assert_eq!(s[0], 0.0);
+        assert_eq!(s[1], 2.0);
+        assert_eq!(s[2], 2.0);
+        assert_eq!(s[3], 4.0);
+        assert_eq!(s[4], 0.0);
+        assert_eq!(s[5], -2.0);
+    }
+
+    #[test]
+    fn test_round_normal_f32() {
+        let a = arr1_f32(vec![1.2, 2.7, -1.3, -2.8]);
+        let r = round(&a).unwrap();
+        let s = r.as_slice().unwrap();
+        assert_eq!(s[0], 1.0);
+        assert_eq!(s[1], 3.0);
+        assert_eq!(s[2], -1.0);
+        assert_eq!(s[3], -3.0);
+    }
+
+    #[test]
+    fn test_floor_f32() {
+        let a = arr1_f32(vec![1.7, -1.7, 0.0]);
+        let r = floor(&a).unwrap();
+        let s = r.as_slice().unwrap();
+        assert_eq!(s[0], 1.0);
+        assert_eq!(s[1], -2.0);
+        assert_eq!(s[2], 0.0);
+    }
+
+    #[test]
+    fn test_ceil_f32() {
+        let a = arr1_f32(vec![1.2, -1.2, 0.0]);
+        let r = ceil(&a).unwrap();
+        let s = r.as_slice().unwrap();
+        assert_eq!(s[0], 2.0);
+        assert_eq!(s[1], -1.0);
+        assert_eq!(s[2], 0.0);
+    }
+
+    #[test]
+    fn test_trunc_f32() {
+        let a = arr1_f32(vec![1.9, -1.9, 0.0]);
+        let r = trunc(&a).unwrap();
+        let s = r.as_slice().unwrap();
+        assert_eq!(s[0], 1.0);
+        assert_eq!(s[1], -1.0);
+        assert_eq!(s[2], 0.0);
+    }
+
+    #[test]
+    fn test_fix_f32() {
+        let a = arr1_f32(vec![2.9, -2.9]);
+        let r = fix(&a).unwrap();
+        let s = r.as_slice().unwrap();
+        assert_eq!(s[0], 2.0);
+        assert_eq!(s[1], -2.0);
+    }
+
+    #[test]
+    fn test_around_alias_f32() {
+        let a = arr1_f32(vec![0.5, 1.5]);
+        let r = around(&a).unwrap();
+        let s = r.as_slice().unwrap();
+        assert_eq!(s[0], 0.0);
+        assert_eq!(s[1], 2.0);
+    }
+
+    #[test]
+    fn test_rint_alias_f32() {
+        let a = arr1_f32(vec![0.5, 1.5]);
+        let r = rint(&a).unwrap();
+        let s = r.as_slice().unwrap();
+        assert_eq!(s[0], 0.0);
+        assert_eq!(s[1], 2.0);
+    }
 }

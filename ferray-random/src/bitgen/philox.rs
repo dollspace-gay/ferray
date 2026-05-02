@@ -150,10 +150,7 @@ impl BitGenerator for Philox {
         Ok(out)
     }
 
-    fn set_state_bytes(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<(), ferray_core::FerrayError> {
+    fn set_state_bytes(&mut self, bytes: &[u8]) -> Result<(), ferray_core::FerrayError> {
         if bytes.len() != 44 {
             return Err(ferray_core::FerrayError::invalid_value(format!(
                 "Philox state must be 44 bytes, got {}",

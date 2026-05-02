@@ -24,12 +24,12 @@ use crate::traits::Poly;
 macro_rules! impl_f32_wrapper {
     ($wrapper:ident, $f64ty:ty) => {
         #[doc = concat!(
-            "f32 sibling of [`",
-            stringify!($f64ty),
-            "`]. Wraps the f64 type and promotes/demotes on the \
+                    "f32 sibling of [`",
+                    stringify!($f64ty),
+                    "`]. Wraps the f64 type and promotes/demotes on the \
              public boundary. See module-level docs for the \
              tradeoffs vs. the planned generic path (#731)."
-        )]
+                )]
         #[derive(Debug, Clone)]
         pub struct $wrapper {
             inner: $f64ty,

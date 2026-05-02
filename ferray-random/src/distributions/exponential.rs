@@ -76,9 +76,7 @@ impl<B: BitGenerator> Generator<B> {
         out: &mut Array<f64, IxDyn>,
     ) -> Result<(), FerrayError> {
         let slice = out.as_slice_mut().ok_or_else(|| {
-            FerrayError::invalid_value(
-                "standard_exponential_into requires a contiguous out buffer",
-            )
+            FerrayError::invalid_value("standard_exponential_into requires a contiguous out buffer")
         })?;
         for v in slice.iter_mut() {
             *v = standard_exponential_single(&mut self.bg);
@@ -163,8 +161,7 @@ mod tests {
         let mut a = default_rng_seeded(42);
         let mut b = default_rng_seeded(42);
         let allocated = a.standard_exponential([7, 3]).unwrap();
-        let mut buf =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[7, 3]), vec![0.0; 21]).unwrap();
+        let mut buf = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[7, 3]), vec![0.0; 21]).unwrap();
         b.standard_exponential_into(&mut buf).unwrap();
         assert_eq!(allocated.as_slice().unwrap(), buf.as_slice().unwrap());
     }
@@ -173,8 +170,7 @@ mod tests {
     fn standard_exponential_into_values_positive() {
         use ferray_core::{Array, IxDyn};
         let mut rng = default_rng_seeded(123);
-        let mut buf =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1000]), vec![-1.0; 1000]).unwrap();
+        let mut buf = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1000]), vec![-1.0; 1000]).unwrap();
         rng.standard_exponential_into(&mut buf).unwrap();
         for &v in buf.as_slice().unwrap() {
             assert!(v > 0.0);
@@ -187,11 +183,9 @@ mod tests {
     fn exponential_array_shape_matches_scale() {
         use ferray_core::{Array, IxDyn};
         let mut rng = default_rng_seeded(42);
-        let scale = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(&[2, 3]),
-            vec![1.0, 2.0, 0.5, 4.0, 1.5, 3.0],
-        )
-        .unwrap();
+        let scale =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0, 2.0, 0.5, 4.0, 1.5, 3.0])
+                .unwrap();
         let out = rng.exponential_array(&scale).unwrap();
         assert_eq!(out.shape(), &[2, 3]);
         for &v in out.as_slice().unwrap() {
@@ -206,8 +200,7 @@ mod tests {
         // confirm the per-element empirical mean ≈ scale[i].
         let mut rng = default_rng_seeded(7);
         let scales = [0.5_f64, 2.0, 5.0];
-        let scale =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), scales.to_vec()).unwrap();
+        let scale = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3]), scales.to_vec()).unwrap();
         let n_trials = 20_000;
         let mut sums = [0.0_f64; 3];
         for _ in 0..n_trials {
@@ -233,9 +226,7 @@ mod tests {
     fn exponential_array_bad_scale_errors() {
         use ferray_core::{Array, IxDyn};
         let mut rng = default_rng_seeded(0);
-        let scale =
-            Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0, -1.0])
-                .unwrap();
+        let scale = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2]), vec![1.0, -1.0]).unwrap();
         assert!(rng.exponential_array(&scale).is_err());
     }
 

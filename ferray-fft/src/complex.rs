@@ -147,9 +147,7 @@ where
         )));
     }
     let out_slice = out.as_slice_mut().ok_or_else(|| {
-        ferray_core::error::FerrayError::invalid_value(
-            "fft_into requires a contiguous out buffer",
-        )
+        ferray_core::error::FerrayError::invalid_value("fft_into requires a contiguous out buffer")
     })?;
     out_slice.copy_from_slice(&result);
     Ok(())
@@ -218,9 +216,7 @@ where
         )));
     }
     let out_slice = out.as_slice_mut().ok_or_else(|| {
-        ferray_core::error::FerrayError::invalid_value(
-            "ifft_into requires a contiguous out buffer",
-        )
+        ferray_core::error::FerrayError::invalid_value("ifft_into requires a contiguous out buffer")
     })?;
     out_slice.copy_from_slice(&result);
     Ok(())

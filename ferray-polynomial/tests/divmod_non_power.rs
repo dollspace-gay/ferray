@@ -96,7 +96,10 @@ fn chebyshev_divmod_higher_degree_divisor() {
         assert!(qv.abs() < 1e-12, "q at x={x} = {qv}, expected 0");
         let rv = r.eval(x).unwrap();
         let av = a.eval(x).unwrap();
-        assert!((rv - av).abs() < 1e-10, "r at x={x} = {rv}, expected a={av}");
+        assert!(
+            (rv - av).abs() < 1e-10,
+            "r at x={x} = {rv}, expected a={av}"
+        );
     }
 }
 

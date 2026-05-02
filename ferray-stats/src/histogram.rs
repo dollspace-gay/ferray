@@ -212,11 +212,7 @@ where
 
 /// Compute the (lo, hi) range from `range` or the data extrema, mirroring
 /// the existing inline logic in `histogram` / `histogram_bin_edges`.
-fn resolve_hist_range<T>(
-    data: &[T],
-    range: Option<(T, T)>,
-    fn_name: &str,
-) -> FerrayResult<(T, T)>
+fn resolve_hist_range<T>(data: &[T], range: Option<(T, T)>, fn_name: &str) -> FerrayResult<(T, T)>
 where
     T: Element + Float,
 {
@@ -289,11 +285,7 @@ where
         Bins::Rice => ((2.0 * nf.cbrt()).ceil() as usize).max(1),
         Bins::Scott => {
             // bin width = 3.5 * std / n^(1/3)
-            let mean: f64 = data
-                .iter()
-                .map(|x| x.to_f64().unwrap_or(0.0))
-                .sum::<f64>()
-                / nf;
+            let mean: f64 = data.iter().map(|x| x.to_f64().unwrap_or(0.0)).sum::<f64>() / nf;
             let var: f64 = data
                 .iter()
                 .map(|x| {
@@ -336,11 +328,7 @@ where
             if n < 3 {
                 return Ok(sturges());
             }
-            let mean: f64 = data
-                .iter()
-                .map(|x| x.to_f64().unwrap_or(0.0))
-                .sum::<f64>()
-                / nf;
+            let mean: f64 = data.iter().map(|x| x.to_f64().unwrap_or(0.0)).sum::<f64>() / nf;
             let m2: f64 = data
                 .iter()
                 .map(|x| (x.to_f64().unwrap_or(0.0) - mean).powi(2))
@@ -355,8 +343,7 @@ where
                 return Ok(sturges());
             }
             let g1 = m3 / m2.powf(1.5);
-            let sigma_g1 =
-                ((6.0 * (nf - 2.0)) / ((nf + 1.0) * (nf + 3.0))).sqrt();
+            let sigma_g1 = ((6.0 * (nf - 2.0)) / ((nf + 1.0) * (nf + 3.0))).sqrt();
             (1.0 + nf.log2() + (1.0 + g1.abs() / sigma_g1).log2()).ceil() as usize
         }
         Bins::Auto => {
@@ -365,9 +352,9 @@ where
             let f = bins_from_rule(&Bins::Fd, data, lo, hi)?;
             s.max(f)
         }
-        Bins::Count(_) | Bins::Edges(_) => unreachable!(
-            "bins_from_rule called with explicit Count/Edges variant"
-        ),
+        Bins::Count(_) | Bins::Edges(_) => {
+            unreachable!("bins_from_rule called with explicit Count/Edges variant")
+        }
     })
 }
 
@@ -754,11 +741,8 @@ mod tests {
     #[test]
     fn rule_sqrt_count() {
         // sqrt(16) = 4 → ceil = 4
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([16]),
-            (0..16).map(|i| i as f64).collect(),
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([16]), (0..16).map(|i| i as f64).collect())
+            .unwrap();
         let edges = histogram_bin_edges(&a, Bins::Sqrt, None).unwrap();
         assert_eq!(edges.shape(), &[5]); // 4 bins → 5 edges
     }
@@ -766,22 +750,16 @@ mod tests {
     #[test]
     fn rule_rice_count() {
         // Rice: ceil(2 * 27^(1/3)) = ceil(2*3) = 6
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([27]),
-            (0..27).map(|i| i as f64).collect(),
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([27]), (0..27).map(|i| i as f64).collect())
+            .unwrap();
         let edges = histogram_bin_edges(&a, Bins::Rice, None).unwrap();
         assert_eq!(edges.shape(), &[7]); // 6 bins → 7 edges
     }
 
     #[test]
     fn rule_auto_uses_max_of_sturges_and_fd() {
-        let a = Array::<f64, Ix1>::from_vec(
-            Ix1::new([100]),
-            (0..100).map(|i| i as f64).collect(),
-        )
-        .unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([100]), (0..100).map(|i| i as f64).collect())
+            .unwrap();
         let (counts_auto, _) = histogram(&a, Bins::Auto, None, false).unwrap();
         let (counts_sturges, _) = histogram(&a, Bins::Sturges, None, false).unwrap();
         // auto >= sturges by definition.
@@ -792,8 +770,7 @@ mod tests {
     fn rule_auto_falls_back_to_sturges_when_fd_degenerate() {
         // All-equal data → IQR = 0 → FD degenerate → auto must still
         // produce a valid histogram via Sturges.
-        let a =
-            Array::<f64, Ix1>::from_vec(Ix1::new([20]), vec![3.0; 20]).unwrap();
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([20]), vec![3.0; 20]).unwrap();
         let (counts, _) = histogram(&a, Bins::Auto, None, false).unwrap();
         let total: f64 = counts.iter().sum();
         assert!((total - 20.0).abs() < 1e-12);

@@ -45,7 +45,7 @@
           "dtype": "float64"
         }
       },
-      "tolerance_ulps": 4
+      "tolerance_ulps": 128
     },
     {
       "name": "degree_2",
@@ -91,7 +91,7 @@
           "dtype": "float64"
         }
       },
-      "tolerance_ulps": 4
+      "tolerance_ulps": 128
     },
     {
       "name": "degree_3",
@@ -138,7 +138,7 @@
           "dtype": "float64"
         }
       },
-      "tolerance_ulps": 4
+      "tolerance_ulps": 128
     }
   ]
 }

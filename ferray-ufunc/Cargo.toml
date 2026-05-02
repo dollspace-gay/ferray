@@ -23,9 +23,17 @@ core-math = { workspace = true }
 workspace = true
 optional = true
 
+[dependencies.ferray-fft]
+workspace = true
+optional = true
+
 [features]
 default = []
 f16 = ["dep:half", "ferray-core/f16"]
+# Enables an O(n log n) FFT-based fast path inside `fftconvolve` for
+# large f32/f64 inputs. The default `convolve` function stays direct
+# (matching NumPy's contract) regardless of this feature.
+fft-convolve = ["dep:ferray-fft"]
 
 [dev-dependencies]
 proptest = { workspace = true }
