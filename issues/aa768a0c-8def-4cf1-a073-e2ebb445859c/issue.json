@@ -1,0 +1,11 @@
+{
+  "uuid": "aa768a0c-8def-4cf1-a073-e2ebb445859c",
+  "display_id": 735,
+  "title": "ferray-io: parse numpy structured dtype descriptors and load into FerrayRecord arrays",
+  "description": "Follow-up split out from #490. Extend ferray-io/src/npy/dtype_parse.rs to parse numpy structured dtype descriptors like [('x','<f4'),('y','<f4')] and either map to an existing DType::Struct via runtime FieldDescriptor lookup, or surface as a typed FerrayRecord load path.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-02T01:19:56.437824731Z",
+  "updated_at": "2026-05-02T01:19:56.437824731Z"
+}
