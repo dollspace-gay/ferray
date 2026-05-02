@@ -1,0 +1,11 @@
+{
+  "uuid": "7984836c-c64b-4ff1-b82b-8f2bd01f8070",
+  "display_id": 728,
+  "title": "ferray-polynomial: LegendreF32 type",
+  "description": "Follow-up from #475. Add LegendreF32 sibling of Legendre mirroring the PolynomialF32 pattern.",
+  "status": "open",
+  "priority": "low",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-02T00:45:57.184792010Z",
+  "updated_at": "2026-05-02T00:45:57.184792010Z"
+}
