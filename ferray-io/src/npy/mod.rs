@@ -79,8 +79,20 @@ pub fn save_to_writer<T: Element + NpyElement, D: Dimension, W: Write>(
 
 /// Load an array from a `.npy` file with compile-time type and dimension.
 ///
+/// # Security note (#499)
+/// Unlike numpy's `np.load`, ferray-io does **not** support pickle.
+/// The `.npy` v1/v2/v3 binary format with primitive dtypes is the
+/// only payload type understood; pickled object arrays
+/// (`dtype=object`) are rejected at the dtype-parse stage with an
+/// `InvalidDtype` error. This rules out the arbitrary-code-execution
+/// vector that motivates numpy's `allow_pickle=False` default —
+/// loading an untrusted `.npy` file with ferray-io can fail or
+/// surface non-finite numbers, but cannot execute attacker-supplied
+/// code.
+///
 /// # Errors
-/// - Returns `FerrayError::InvalidDtype` if the file's dtype doesn't match `T`.
+/// - Returns `FerrayError::InvalidDtype` if the file's dtype doesn't match `T`,
+///   or if the file's dtype is unsupported (including `object`/pickle).
 /// - Returns `FerrayError::ShapeMismatch` if the file's shape doesn't match `D`.
 /// - Returns `FerrayError::IoError` on file read failures.
 pub fn load<T: Element + NpyElement, D: Dimension, P: AsRef<Path>>(
