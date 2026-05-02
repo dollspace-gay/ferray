@@ -136,6 +136,101 @@ where
     })
 }
 
+/// Find unique hyperslices along an axis.
+///
+/// Equivalent to `numpy.unique(a, axis=axis)`: returns an array of the
+/// same dimensionality as `a` with the `axis` dimension reduced to the
+/// number of unique slices. Slices are compared element-wise (lex order)
+/// and returned in sorted order, matching numpy's behavior (#464).
+///
+/// For axis-less unique-on-flattened, see [`unique`].
+///
+/// # Errors
+/// - `FerrayError::AxisOutOfBounds` if `axis >= a.ndim()`.
+pub fn unique_axis<T, D>(
+    a: &Array<T, D>,
+    axis: usize,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + PartialOrd + Copy,
+    D: Dimension,
+{
+    let shape = a.shape().to_vec();
+    let ndim = shape.len();
+    if axis >= ndim {
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
+    }
+    let n = shape[axis];
+    let inner_stride: usize = shape[axis + 1..].iter().product();
+    let outer_size: usize = shape[..axis].iter().product();
+    let block = n * inner_stride;
+    let slice_len = outer_size * inner_stride;
+
+    let data: Vec<T> = a.iter().copied().collect();
+
+    // Empty axis: return the input unchanged.
+    if n == 0 {
+        return Array::<T, IxDyn>::from_vec(IxDyn::new(&shape), data);
+    }
+
+    // Gather each axis-slice in canonical (outer, inner) order.
+    let mut slices: Vec<Vec<T>> = Vec::with_capacity(n);
+    for i in 0..n {
+        let mut s = Vec::with_capacity(slice_len);
+        for o in 0..outer_size {
+            let base = o * block + i * inner_stride;
+            s.extend_from_slice(&data[base..base + inner_stride]);
+        }
+        slices.push(s);
+    }
+
+    // Sort axis indices by lex comparison of their slices. Use
+    // partial_cmp so floating-point T (NaN-tolerating) works the same
+    // way it does in `unique`.
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&i, &j| {
+        slices[i]
+            .iter()
+            .zip(slices[j].iter())
+            .find_map(|(a, b)| match a.partial_cmp(b) {
+                None | Some(std::cmp::Ordering::Equal) => None,
+                Some(c) => Some(c),
+            })
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Dedupe consecutive equal slices.
+    let mut kept: Vec<usize> = Vec::with_capacity(n);
+    for &idx in &order {
+        if let Some(&prev) = kept.last() {
+            let equal = slices[idx]
+                .iter()
+                .zip(slices[prev].iter())
+                .all(|(a, b)| a.partial_cmp(b) == Some(std::cmp::Ordering::Equal));
+            if equal {
+                continue;
+            }
+        }
+        kept.push(idx);
+    }
+
+    let new_n = kept.len();
+    let mut out_shape = shape.clone();
+    out_shape[axis] = new_n;
+    let new_block = new_n * inner_stride;
+    let total: usize = out_shape.iter().product();
+    let mut out_data: Vec<T> = vec![data[0]; total];
+    for (out_i, &src_i) in kept.iter().enumerate() {
+        for o in 0..outer_size {
+            let src_base = o * block + src_i * inner_stride;
+            let dst_base = o * new_block + out_i * inner_stride;
+            out_data[dst_base..dst_base + inner_stride]
+                .copy_from_slice(&data[src_base..src_base + inner_stride]);
+        }
+    }
+    Array::<T, IxDyn>::from_vec(IxDyn::new(&out_shape), out_data)
+}
+
 // ---------------------------------------------------------------------------
 // nonzero
 // ---------------------------------------------------------------------------
@@ -364,6 +459,89 @@ where
 mod tests {
     use super::*;
     use ferray_core::{Ix1, Ix2};
+
+    // ---- unique_axis (#464) --------------------------------------------
+
+    #[test]
+    fn unique_axis_rows_dedup() {
+        // axis=0 on a 2D array dedupes rows.
+        let a = Array::<i32, Ix2>::from_vec(
+            Ix2::new([4, 3]),
+            vec![1, 2, 3, 4, 5, 6, 1, 2, 3, 7, 8, 9],
+        )
+        .unwrap();
+        let u = unique_axis(&a, 0).unwrap();
+        // Three unique rows: [1,2,3], [4,5,6], [7,8,9] in sorted order.
+        assert_eq!(u.shape(), &[3, 3]);
+        let s = u.as_slice().unwrap();
+        assert_eq!(s, &[1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    }
+
+    #[test]
+    fn unique_axis_columns_dedup() {
+        // axis=1 dedupes columns. Construct a matrix where columns 0 and 2
+        // are identical.
+        let a = Array::<i32, Ix2>::from_vec(
+            Ix2::new([3, 4]),
+            vec![1, 2, 1, 3, 4, 5, 4, 6, 7, 8, 7, 9],
+        )
+        .unwrap();
+        let u = unique_axis(&a, 1).unwrap();
+        // 3 unique columns: [1,4,7], [2,5,8], [3,6,9] sorted lex.
+        assert_eq!(u.shape(), &[3, 3]);
+        let s = u.as_slice().unwrap();
+        assert_eq!(s, &[1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    }
+
+    #[test]
+    fn unique_axis_all_distinct_keeps_count_but_sorts() {
+        let a = Array::<i32, Ix2>::from_vec(
+            Ix2::new([3, 2]),
+            vec![3, 4, 1, 2, 5, 6],
+        )
+        .unwrap();
+        let u = unique_axis(&a, 0).unwrap();
+        assert_eq!(u.shape(), &[3, 2]);
+        let s = u.as_slice().unwrap();
+        assert_eq!(s, &[1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn unique_axis_all_same_collapses() {
+        let a = Array::<i32, Ix2>::from_vec(
+            Ix2::new([4, 2]),
+            vec![1, 2, 1, 2, 1, 2, 1, 2],
+        )
+        .unwrap();
+        let u = unique_axis(&a, 0).unwrap();
+        assert_eq!(u.shape(), &[1, 2]);
+        let s = u.as_slice().unwrap();
+        assert_eq!(s, &[1, 2]);
+    }
+
+    #[test]
+    fn unique_axis_3d_axis0() {
+        // Shape (4, 2, 2) with rows 0 and 2 the same hyperslice.
+        let a = Array::<i32, Ix2>::from_vec(
+            Ix2::new([4, 4]),
+            vec![
+                1, 2, 3, 4, // row 0
+                5, 6, 7, 8, // row 1
+                1, 2, 3, 4, // row 2 (== row 0)
+                9, 0, 1, 2, // row 3
+            ],
+        )
+        .unwrap();
+        let u = unique_axis(&a, 0).unwrap();
+        assert_eq!(u.shape(), &[3, 4]);
+    }
+
+    #[test]
+    fn unique_axis_out_of_bounds() {
+        let a =
+            Array::<i32, Ix2>::from_vec(Ix2::new([2, 2]), vec![1, 2, 3, 4]).unwrap();
+        assert!(unique_axis(&a, 5).is_err());
+    }
 
     #[test]
     fn test_unique_basic() {
