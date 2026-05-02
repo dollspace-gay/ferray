@@ -3,11 +3,12 @@
   "display_id": 740,
   "title": "ferray-window: dpss and chebwin (need numerical solvers)",
   "description": "Follow-up from #738. boxcar / triang / bohman / flattop / lanczos shipped as closed-form windows. dpss (discrete prolate spheroidal sequences) requires a tridiagonal eigensolver; chebwin (Chebyshev window) requires the inverse Chebyshev polynomial via the equiripple constraint. Both are heavier than the closed-form set; tracked separately so closed-form follow-up #738 can close cleanly.",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-02T02:09:44.443552845Z",
-  "updated_at": "2026-05-02T02:09:45.628045056Z",
+  "updated_at": "2026-05-02T02:57:49.582423814Z",
+  "closed_at": "2026-05-02T02:57:49.582423814Z",
   "labels": [
     "ferray-window,feature,follow-up,numpy-parity"
   ]
