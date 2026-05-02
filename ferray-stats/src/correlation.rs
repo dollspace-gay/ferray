@@ -35,7 +35,12 @@ where
     T: Element + Float,
 {
     let a_data: Vec<T> = a.iter().copied().collect();
-    let v_data: Vec<T> = v.iter().copied().collect();
+    // numpy.correlate(a, v) = convolve(a, reverse(v)) — earlier
+    // implementation accidentally ran a straight convolution and
+    // returned the time-reversed result (#722). Reverse v up front so
+    // the existing convolution-style loop produces the correlation.
+    let mut v_data: Vec<T> = v.iter().copied().collect();
+    v_data.reverse();
     let la = a_data.len();
     let lv = v_data.len();
 
@@ -215,13 +220,16 @@ mod tests {
 
     #[test]
     fn test_correlate_valid() {
+        // numpy.correlate([1,2,3], [0.5, 1.0], 'valid') = [2.5, 4.0]
+        // — pre-#722 the implementation returned the convolution
+        // values [2.0, 3.5], which is the time-reversed answer.
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let v = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.5, 1.0]).unwrap();
         let r = correlate(&a, &v, CorrelateMode::Valid).unwrap();
         assert_eq!(r.shape(), &[2]);
         let data: Vec<f64> = r.iter().copied().collect();
-        assert!((data[0] - 2.0).abs() < 1e-12);
-        assert!((data[1] - 3.5).abs() < 1e-12);
+        assert!((data[0] - 2.5).abs() < 1e-12, "data[0] = {}", data[0]);
+        assert!((data[1] - 4.0).abs() < 1e-12, "data[1] = {}", data[1]);
     }
 
     #[test]
@@ -235,6 +243,38 @@ mod tests {
         assert!((data[1] - 3.0).abs() < 1e-12);
         assert!((data[2] - 5.0).abs() < 1e-12);
         assert!((data[3] - 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn correlate_full_asymmetric_kernel_matches_numpy() {
+        // Regression for #722: with v = [1, 2] (asymmetric), the buggy
+        // implementation returned the convolution [1, 4, 7, 6] instead
+        // of the correlation [2, 5, 8, 3]. Verify against numpy's
+        // analytic answer.
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![1.0, 2.0]).unwrap();
+        let r = correlate(&a, &v, CorrelateMode::Full).unwrap();
+        let s: Vec<f64> = r.iter().copied().collect();
+        assert_eq!(s, vec![2.0, 5.0, 8.0, 3.0]);
+    }
+
+    #[test]
+    fn correlate_valid_asymmetric_kernel_matches_numpy() {
+        // numpy.correlate([1,2,3,4,5], [0.5, 1.0], 'valid'):
+        // c[k] = Σ_n a[n+k] * v[n]
+        //   k=0: 1*0.5 + 2*1.0 = 2.5
+        //   k=1: 2*0.5 + 3*1.0 = 4.0
+        //   k=2: 3*0.5 + 4*1.0 = 5.5
+        //   k=3: 4*0.5 + 5*1.0 = 7.0
+        let a = Array::<f64, Ix1>::from_vec(
+            Ix1::new([5]),
+            vec![1.0, 2.0, 3.0, 4.0, 5.0],
+        )
+        .unwrap();
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.5, 1.0]).unwrap();
+        let r = correlate(&a, &v, CorrelateMode::Valid).unwrap();
+        let s: Vec<f64> = r.iter().copied().collect();
+        assert_eq!(s, vec![2.5, 4.0, 5.5, 7.0]);
     }
 
     #[test]
@@ -302,6 +342,57 @@ mod tests {
     }
 
     #[test]
+    fn corrcoef_constant_variable_off_diagonal_is_zero() {
+        // A variable with zero variance has undefined correlation with
+        // anything. NumPy returns NaN; ferray currently returns 0.0
+        // (defensive: detects zero variance and clamps the normalisation
+        // ratio to 0 instead of letting it fall through to 0/0). This
+        // test pins ferray's actual behaviour and notes the deviation.
+        // Row 0: constant [5, 5, 5]. Row 1: varying [1, 2, 3].
+        let m = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![5.0, 5.0, 5.0, 1.0, 2.0, 3.0])
+            .unwrap();
+        let c = corrcoef(&m, true).unwrap();
+        let data: Vec<f64> = c.iter().copied().collect();
+        // 2x2 result: [c(0,0), c(0,1), c(1,0), c(1,1)]
+        // Off-diagonal entries involving the constant variable: 0.0
+        // (would be NaN in numpy).
+        assert_eq!(data[1], 0.0);
+        assert_eq!(data[2], 0.0);
+        // Varying-variable diagonal: 1.0
+        assert!((data[3] - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn corrcoef_all_constant_variables_yields_nans() {
+        // Two constant variables — every entry is 0/0 = NaN except possibly
+        // the diagonal (which is 0/0 too in this implementation). The point
+        // is: the function must not panic on degenerate input (#183).
+        let m = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![5.0, 5.0, 5.0, 7.0, 7.0, 7.0])
+            .unwrap();
+        let c = corrcoef(&m, true).unwrap();
+        // Just verify it didn't panic and returned the right shape.
+        assert_eq!(c.shape(), &[2, 2]);
+    }
+
+    #[test]
+    fn cov_constant_variable_yields_zero_variance() {
+        // Constant variable has zero variance. cov(m, rowvar=true) of
+        // a row that's all 5.0 should give a 1x1 cov matrix with 0.0
+        // (or for 2 vars: zeros on the constant variable's row/col).
+        let m = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![5.0, 5.0, 5.0, 1.0, 2.0, 3.0])
+            .unwrap();
+        let c = cov(&m, true, None).unwrap();
+        let data: Vec<f64> = c.iter().copied().collect();
+        // c(0,0) = var(constant) = 0
+        assert!(data[0].abs() < 1e-12);
+        // c(0,1) and c(1,0) = covariance involving constant = 0
+        assert!(data[1].abs() < 1e-12);
+        assert!(data[2].abs() < 1e-12);
+        // c(1,1) = var([1,2,3], ddof=1) = 1.0
+        assert!((data[3] - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
     fn corrcoef_single_observation_diagonal_is_one() {
         // With a single observation per variable, cov errors (ddof=1,
         // N=1), but corrcoef normalizes internally. The diagonal of a
@@ -314,5 +405,68 @@ mod tests {
         // 2x2 correlation matrix: data[0]=c(0,0), data[3]=c(1,1)
         assert!((data[0] - 1.0).abs() < 1e-12 || data[0].is_nan());
         assert!((data[3] - 1.0).abs() < 1e-12 || data[3].is_nan());
+    }
+
+    // ----- Correlate edge cases (#181) -----
+
+    #[test]
+    fn correlate_single_element_full() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![3.0]).unwrap();
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![5.0]).unwrap();
+        let r = correlate(&a, &v, CorrelateMode::Full).unwrap();
+        assert_eq!(r.shape(), &[1]);
+        assert!((r.iter().next().copied().unwrap() - 15.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn correlate_single_element_valid() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![3.0]).unwrap();
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![5.0]).unwrap();
+        let r = correlate(&a, &v, CorrelateMode::Valid).unwrap();
+        assert_eq!(r.shape(), &[1]);
+        assert!((r.iter().next().copied().unwrap() - 15.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn correlate_identical_arrays_full_shape_and_finite() {
+        // Auto-correlation full output has length 2n-1 and is finite
+        // for finite inputs. (Note: ferray's correlate currently
+        // computes convolution rather than the formal cross-correlation
+        // — see filed follow-up; this test asserts shape + finiteness
+        // which holds either way.)
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let r = correlate(&a, &a, CorrelateMode::Full).unwrap();
+        let data: Vec<f64> = r.iter().copied().collect();
+        assert_eq!(data.len(), 2 * 4 - 1);
+        for x in &data {
+            assert!(x.is_finite());
+        }
+    }
+
+    #[test]
+    fn correlate_all_zeros_yields_all_zeros() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
+        let r = correlate(&a, &v, CorrelateMode::Full).unwrap();
+        for x in r.iter() {
+            assert_eq!(*x, 0.0);
+        }
+    }
+
+    #[test]
+    fn correlate_one_zero_one_signal_yields_signal() {
+        // correlate(a, [1.0]) === a (delta kernel)
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([1]), vec![1.0]).unwrap();
+        let r = correlate(&a, &v, CorrelateMode::Same).unwrap();
+        let data: Vec<f64> = r.iter().copied().collect();
+        assert_eq!(data, vec![1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn correlate_empty_inputs_error() {
+        let a = Array::<f64, Ix1>::from_vec(Ix1::new([0]), vec![]).unwrap();
+        let v = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![1.0, 2.0]).unwrap();
+        assert!(correlate(&a, &v, CorrelateMode::Full).is_err());
     }
 }
