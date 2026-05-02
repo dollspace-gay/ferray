@@ -1,0 +1,10 @@
+{
+  "uuid": "2f44f35e-71d2-4789-9502-578d39e71323",
+  "issue_uuid": "f81bdead-33b1-42fb-887f-b901a44efe3d",
+  "author": "doll-agent",
+  "content": "FftPlanND landed in ferray-fft/src/plan.rs and is re-exported from the crate root alongside FftPlan. 7 new unit tests + 1 doctest cover construction, parity with fftn, round-trip, axis-subset, shape mismatch, validation rejection, and the Arc-eq check against the global cache. cargo test -p ferray-fft is green; clippy -- -D warnings is clean.",
+  "created_at": "2026-05-02T00:00:28.003179465Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABASHc0+So5hxw5vVbe7WKRPgpYRqpWlYKmAQj9SUAWUTzlyc6rfp/ybnk4Fop5B4Op5FFphRfwPVNUunhjew7xBw=="
+}
