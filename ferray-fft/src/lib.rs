@@ -78,7 +78,7 @@ pub mod shift;
 pub use norm::FftNorm;
 
 // Plan caching
-pub use plan::FftPlan;
+pub use plan::{FftPlan, FftPlanND};
 
 // Complex FFTs (REQ-1..REQ-4)
 pub use complex::{fft, fft2, fftn, ifft, ifft2, ifftn};
