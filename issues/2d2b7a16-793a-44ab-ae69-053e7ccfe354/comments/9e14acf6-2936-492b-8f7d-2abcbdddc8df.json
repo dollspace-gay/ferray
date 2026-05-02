@@ -1,0 +1,10 @@
+{
+  "uuid": "9e14acf6-2936-492b-8f7d-2abcbdddc8df",
+  "issue_uuid": "2d2b7a16-793a-44ab-ae69-053e7ccfe354",
+  "author": "doll-agent",
+  "content": "Refactor question. ferray-window's functional utilities are here because numpy groups them with windows (numpy.lib.function_base). Alternative homes would split the natural grouping. Closing as accepted-as-status-quo unless a downstream caller hits the awkwardness.",
+  "created_at": "2026-05-02T01:34:36.624067173Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAhUc3ROiW+Sexlsx7mklgO/NRjP2vtgU62OmcZ+i5acJD1DJBuv9QL1jem+n42KJAZzYobsu1x4gTjeMFCGwyBA=="
+}
