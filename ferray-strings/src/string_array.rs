@@ -199,6 +199,92 @@ impl<D: Dimension> StringArray<D> {
         }
         self.data.get(flat)
     }
+
+    /// Index by flat (row-major) offset (#519).
+    ///
+    /// Equivalent to `arr.iter().nth(idx)` but O(1) — returns `None`
+    /// when `idx >= len()`. Useful when the caller already has a
+    /// linearised position.
+    #[must_use]
+    pub fn at(&self, idx: usize) -> Option<&String> {
+        self.data.get(idx)
+    }
+
+    /// Take a contiguous range along `axis` and return a new
+    /// `StringArray<IxDyn>` (#519).
+    ///
+    /// `axis` must be a valid axis for this array; `range` is a
+    /// half-open `[start, end)` window into that axis. The other
+    /// axes are preserved at their full size.
+    ///
+    /// # Errors
+    /// `FerrayError::AxisOutOfBounds` if `axis >= ndim`. `FerrayError::InvalidValue`
+    /// if `range` exceeds the axis length or is empty in a way that
+    /// produces a zero-sized non-existent shape.
+    pub fn slice_axis(
+        &self,
+        axis: usize,
+        range: std::ops::Range<usize>,
+    ) -> FerrayResult<StringArray<IxDyn>> {
+        let shape = self.dim.as_slice().to_vec();
+        let ndim = shape.len();
+        if axis >= ndim {
+            return Err(ferray_core::error::FerrayError::axis_out_of_bounds(axis, ndim));
+        }
+        let axis_len = shape[axis];
+        if range.end > axis_len || range.start > range.end {
+            return Err(ferray_core::error::FerrayError::invalid_value(format!(
+                "slice_axis: range {:?} out of bounds for axis {axis} with size {axis_len}",
+                range
+            )));
+        }
+        let new_axis_len = range.end - range.start;
+        let inner_stride: usize = shape[axis + 1..].iter().product();
+        let block = axis_len * inner_stride;
+        let outer_size: usize = shape[..axis].iter().product();
+        let mut new_shape = shape.clone();
+        new_shape[axis] = new_axis_len;
+        let total: usize = new_shape.iter().product();
+        let mut out: Vec<String> = Vec::with_capacity(total);
+        for o in 0..outer_size {
+            let base = o * block;
+            for i in range.clone() {
+                let row_start = base + i * inner_stride;
+                out.extend_from_slice(&self.data[row_start..row_start + inner_stride]);
+            }
+        }
+        StringArray::<IxDyn>::from_vec(IxDyn::new(&new_shape), out)
+    }
+
+    /// Extract row `idx` from a 2-D `StringArray` as a 1-D
+    /// `StringArray` (#519).
+    ///
+    /// # Errors
+    /// `FerrayError::ShapeMismatch` if `self` is not 2-D, or
+    /// `FerrayError::IndexOutOfBounds` if `idx` exceeds the row count.
+    pub fn get_row(&self, idx: usize) -> FerrayResult<crate::string_array::StringArray1> {
+        let shape = self.dim.as_slice();
+        if shape.len() != 2 {
+            return Err(ferray_core::error::FerrayError::shape_mismatch(format!(
+                "get_row: expected a 2-D StringArray, got {}-D",
+                shape.len()
+            )));
+        }
+        let nrows = shape[0];
+        let ncols = shape[1];
+        if idx >= nrows {
+            return Err(ferray_core::error::FerrayError::index_out_of_bounds(
+                idx as isize,
+                0,
+                nrows,
+            ));
+        }
+        let row: Vec<String> = self.data[idx * ncols..(idx + 1) * ncols].to_vec();
+        crate::string_array::StringArray1::from_vec(
+            ferray_core::dimension::Ix1::new([ncols]),
+            row,
+        )
+    }
 }
 
 impl<D: Dimension> PartialEq for StringArray<D> {
@@ -445,6 +531,106 @@ fn multi_to_broadcast_linear(multi: &[usize], src_shape: &[usize], src_strides: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- at / get_row / slice_axis (#519) ------------------------------
+
+    #[test]
+    fn at_returns_flat_index() {
+        let a = array(&["a", "b", "c"]).unwrap();
+        assert_eq!(a.at(0).unwrap(), "a");
+        assert_eq!(a.at(2).unwrap(), "c");
+        assert!(a.at(3).is_none());
+    }
+
+    #[test]
+    fn get_row_returns_1d() {
+        // 2x3 array of strings.
+        let a = StringArray::<Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![
+                "a0".into(),
+                "a1".into(),
+                "a2".into(),
+                "b0".into(),
+                "b1".into(),
+                "b2".into(),
+            ],
+        )
+        .unwrap();
+        let row1 = a.get_row(1).unwrap();
+        assert_eq!(row1.shape(), &[3]);
+        assert_eq!(row1.as_slice(), &["b0", "b1", "b2"]);
+    }
+
+    #[test]
+    fn get_row_rejects_non_2d() {
+        let a = array(&["a", "b", "c"]).unwrap();
+        assert!(a.get_row(0).is_err());
+    }
+
+    #[test]
+    fn get_row_index_out_of_bounds_errors() {
+        let a = StringArray::<Ix2>::from_vec(
+            Ix2::new([2, 2]),
+            vec!["x".into(); 4],
+        )
+        .unwrap();
+        assert!(a.get_row(5).is_err());
+    }
+
+    #[test]
+    fn slice_axis_rows_2d() {
+        let a = StringArray::<Ix2>::from_vec(
+            Ix2::new([4, 2]),
+            vec![
+                "0,0".into(),
+                "0,1".into(),
+                "1,0".into(),
+                "1,1".into(),
+                "2,0".into(),
+                "2,1".into(),
+                "3,0".into(),
+                "3,1".into(),
+            ],
+        )
+        .unwrap();
+        let r = a.slice_axis(0, 1..3).unwrap();
+        assert_eq!(r.shape(), &[2, 2]);
+        assert_eq!(r.as_slice(), &["1,0", "1,1", "2,0", "2,1"]);
+    }
+
+    #[test]
+    fn slice_axis_columns_2d() {
+        let a = StringArray::<Ix2>::from_vec(
+            Ix2::new([2, 4]),
+            vec![
+                "0,0".into(),
+                "0,1".into(),
+                "0,2".into(),
+                "0,3".into(),
+                "1,0".into(),
+                "1,1".into(),
+                "1,2".into(),
+                "1,3".into(),
+            ],
+        )
+        .unwrap();
+        let r = a.slice_axis(1, 1..3).unwrap();
+        assert_eq!(r.shape(), &[2, 2]);
+        assert_eq!(r.as_slice(), &["0,1", "0,2", "1,1", "1,2"]);
+    }
+
+    #[test]
+    fn slice_axis_axis_out_of_bounds() {
+        let a = array(&["a", "b"]).unwrap();
+        assert!(a.slice_axis(5, 0..1).is_err());
+    }
+
+    #[test]
+    fn slice_axis_range_too_large_errors() {
+        let a = array(&["a", "b", "c"]).unwrap();
+        assert!(a.slice_axis(0, 0..10).is_err());
+    }
 
     #[test]
     fn create_from_slice() {
