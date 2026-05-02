@@ -262,39 +262,55 @@ impl Poly for Laguerre {
         if m == 0 {
             return Ok(self.clone());
         }
-        let mut power = laguerre_to_power(&self.coeffs);
+        // Direct recurrence (#720): L_n'(x) = -Σ_{j=0}^{n-1} L_j(x).
+        // For p = Σ c_j L_j, the derivative coefficients can be
+        // computed incrementally with a rolling sum from the high-
+        // degree end down: der[j-1] = -c[j], then add c[j] into
+        // c[j-1] so the next iteration sees the running tail sum.
+        // This matches numpy.polynomial.laguerre.lagder.
+        let mut coeffs = self.coeffs.clone();
         for _ in 0..m {
-            if power.len() <= 1 {
-                power = vec![0.0];
+            let n = coeffs.len();
+            if n <= 1 {
+                coeffs = vec![0.0];
                 break;
             }
-            let mut new_power = Vec::with_capacity(power.len() - 1);
-            for (i, &c) in power.iter().enumerate().skip(1) {
-                new_power.push(c * i as f64);
+            let mut der = vec![0.0_f64; n - 1];
+            for j in (1..n).rev() {
+                der[j - 1] = -coeffs[j];
+                let cj = coeffs[j];
+                coeffs[j - 1] += cj;
             }
-            power = new_power;
+            coeffs = der;
         }
-        if power.is_empty() {
-            power = vec![0.0];
+        if coeffs.is_empty() {
+            coeffs = vec![0.0];
         }
-        Ok(self.with_same_mapping(power_to_laguerre(&power)))
+        Ok(self.with_same_mapping(coeffs))
     }
 
     fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrayError> {
         if m == 0 {
             return Ok(self.clone());
         }
-        let mut power = laguerre_to_power(&self.coeffs);
+        // Direct recurrence (#720): ∫L_n(x) dx = L_n(x) - L_{n+1}(x).
+        // For p = Σ c_j L_j, an antiderivative is
+        // res[0] = c[0], res[j] = -c[j-1] + c[j] for j≥1, res[n+1] = -c[n].
+        // Integration constant is added on top of res[0].
+        let mut coeffs = self.coeffs.clone();
         for step in 0..m {
             let constant = if step < k.len() { k[step] } else { 0.0 };
-            let mut new_power = Vec::with_capacity(power.len() + 1);
-            new_power.push(constant);
-            for (i, &c) in power.iter().enumerate() {
-                new_power.push(c / (i + 1) as f64);
+            let n = coeffs.len();
+            let mut res = vec![0.0_f64; n + 1];
+            res[0] = coeffs[0];
+            for j in 1..n {
+                res[j] = -coeffs[j - 1] + coeffs[j];
             }
-            power = new_power;
+            res[n] = -coeffs[n - 1];
+            res[0] += constant;
+            coeffs = res;
         }
-        Ok(self.with_same_mapping(power_to_laguerre(&power)))
+        Ok(self.with_same_mapping(coeffs))
     }
 
     fn roots(&self) -> Result<Vec<Complex<f64>>, FerrayError> {

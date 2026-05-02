@@ -246,39 +246,45 @@ impl Poly for HermiteE {
         if m == 0 {
             return Ok(self.clone());
         }
-        let mut power = hermite_e_to_power(&self.coeffs);
+        // Direct recurrence (#720): d/dx He_n(x) = n * He_{n-1}(x).
+        // For p = Σ c_k He_k, p' = Σ_{k≥1} k c_k He_{k-1}, so
+        // new[j] = (j+1) * c[j+1].
+        let mut coeffs = self.coeffs.clone();
         for _ in 0..m {
-            if power.len() <= 1 {
-                power = vec![0.0];
+            if coeffs.len() <= 1 {
+                coeffs = vec![0.0];
                 break;
             }
-            let mut new_power = Vec::with_capacity(power.len() - 1);
-            for (i, &c) in power.iter().enumerate().skip(1) {
-                new_power.push(c * i as f64);
+            let mut new_coeffs = Vec::with_capacity(coeffs.len() - 1);
+            for (j, &c) in coeffs.iter().enumerate().skip(1) {
+                new_coeffs.push(j as f64 * c);
             }
-            power = new_power;
+            coeffs = new_coeffs;
         }
-        if power.is_empty() {
-            power = vec![0.0];
+        if coeffs.is_empty() {
+            coeffs = vec![0.0];
         }
-        Ok(self.with_same_mapping(power_to_hermite_e(&power)))
+        Ok(self.with_same_mapping(coeffs))
     }
 
     fn integ(&self, m: usize, k: &[f64]) -> Result<Self, FerrayError> {
         if m == 0 {
             return Ok(self.clone());
         }
-        let mut power = hermite_e_to_power(&self.coeffs);
+        // Direct recurrence (#720): ∫He_n(x) dx = He_{n+1}(x) / (n+1).
+        // new[k+1] = c[k] / (k+1), with the integration constant on
+        // index 0.
+        let mut coeffs = self.coeffs.clone();
         for step in 0..m {
             let constant = if step < k.len() { k[step] } else { 0.0 };
-            let mut new_power = Vec::with_capacity(power.len() + 1);
-            new_power.push(constant);
-            for (i, &c) in power.iter().enumerate() {
-                new_power.push(c / (i + 1) as f64);
+            let mut new_coeffs = vec![0.0_f64; coeffs.len() + 1];
+            new_coeffs[0] = constant;
+            for (j, &c) in coeffs.iter().enumerate() {
+                new_coeffs[j + 1] = c / (j + 1) as f64;
             }
-            power = new_power;
+            coeffs = new_coeffs;
         }
-        Ok(self.with_same_mapping(power_to_hermite_e(&power)))
+        Ok(self.with_same_mapping(coeffs))
     }
 
     fn roots(&self) -> Result<Vec<Complex<f64>>, FerrayError> {
