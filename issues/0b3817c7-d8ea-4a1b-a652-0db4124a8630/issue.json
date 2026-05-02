@@ -1,0 +1,11 @@
+{
+  "uuid": "0b3817c7-d8ea-4a1b-a652-0db4124a8630",
+  "display_id": 739,
+  "title": "ferray-numpy-interop: expansion epic — f16/bf16, complex, DynArray, nulls, DataFrame, RecordBatch",
+  "description": "Consolidates the remaining gaps after the #551-#559 audit:\n\n1. f16/bf16 ArrowElement / NpElement / PolarsElement (#551)\n2. Complex<f32>/Complex<f64> NpElement and Arrow round-trip via FixedSizeBinary or struct (#552)\n3. DynArray <-> Arrow / NumPy / Polars conversions dispatching on runtime dtype (#554)\n4. Null handling: from_arrow_with_fill, from_arrow_masked -> MaskedArray (#556)\n5. Polars DataFrame <-> 2D ferray Array (to_dataframe / from_dataframe) (#558)\n6. Arrow RecordBatch <-> Vec<DynArray> with name preservation (#559)\n\nEach item is independent and can ship separately; bundled here so the cluster has one umbrella to track scope and coordinate the trait/dtype additions that several share.",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "doll-agent",
+  "created_at": "2026-05-02T01:40:54.485887840Z",
+  "updated_at": "2026-05-02T01:40:54.485887840Z"
+}
