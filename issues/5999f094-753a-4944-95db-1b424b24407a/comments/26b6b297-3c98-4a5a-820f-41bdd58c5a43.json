@@ -1,0 +1,10 @@
+{
+  "uuid": "26b6b297-3c98-4a5a-820f-41bdd58c5a43",
+  "issue_uuid": "5999f094-753a-4944-95db-1b424b24407a",
+  "author": "doll-agent",
+  "content": "Audit. ferray-window already ships ~14 scipy windows. Remaining: flattop, bohman, boxcar, triang, lanczos, dpss, chebwin filed as #738.",
+  "created_at": "2026-05-02T01:33:43.829362026Z",
+  "kind": "plan",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAjdjug/GanvlYOoualnjgHEnYulKM9OelPj2SUjFaowx2YwmINBv5pacnbPUTlQd2LvzJvQfE1+Wi1++eZ1jdBg=="
+}
