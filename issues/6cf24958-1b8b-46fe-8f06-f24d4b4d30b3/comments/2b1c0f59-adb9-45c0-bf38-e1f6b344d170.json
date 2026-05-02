@@ -1,0 +1,10 @@
+{
+  "uuid": "2b1c0f59-adb9-45c0-bf38-e1f6b344d170",
+  "issue_uuid": "6cf24958-1b8b-46fe-8f06-f24d4b4d30b3",
+  "author": "doll-agent",
+  "content": "Seven typed siblings ship: integers_u8/i8/u16/i16/u32/i32/u64. Macro-generated, share the same validation + i128-range path. Existing i64 integers unchanged. cargo test green; clippy clean. ML preprocessing / image (u8) / quantization callers can now generate in the target dtype directly.",
+  "created_at": "2026-05-02T00:29:12.325213344Z",
+  "kind": "result",
+  "signed_by": "SHA256:2EP9kn5/J+YydoBr/9tg7IFmaoaddN8e03IJZp6xLuU",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg5zmc1Pp0P01jij597W7nx7F9sXV8AiSXwdRqjprbQtoAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAoZGx7ucjYXPt/TBGkgmgo/wzvQRRdLTjxT6kFdRTpiIlYRskoczyjTtLBqAIpSYzPEMMaTxibQs/66zGAQ82Dg=="
+}
