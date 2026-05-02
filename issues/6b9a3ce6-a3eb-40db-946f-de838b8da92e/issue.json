@@ -7,5 +7,8 @@
   "priority": "low",
   "created_by": "doll-agent",
   "created_at": "2026-05-02T00:45:59.844582120Z",
-  "updated_at": "2026-05-02T00:45:59.844582120Z"
+  "updated_at": "2026-05-02T00:46:01.034535362Z",
+  "labels": [
+    "ferray-polynomial,feature,follow-up,numpy-parity"
+  ]
 }
