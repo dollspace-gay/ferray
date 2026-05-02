@@ -567,6 +567,20 @@ impl FromPowerBasis for Chebyshev {
 mod tests {
     use super::*;
 
+    // ---- from_roots via FromPowerBasis default (#476) -----------------
+
+    #[test]
+    fn chebyshev_from_roots_evaluates_to_zero_at_roots() {
+        let roots = [-1.0_f64, 0.0, 0.5, 1.5];
+        let cheb = Chebyshev::from_roots(&roots).unwrap();
+        for &r in &roots {
+            assert!(
+                cheb.eval(r).unwrap().abs() < 1e-9,
+                "Chebyshev::from_roots: eval({r}) was non-zero"
+            );
+        }
+    }
+
     #[test]
     fn eval_t0() {
         let p = Chebyshev::new(&[1.0]); // T_0 = 1

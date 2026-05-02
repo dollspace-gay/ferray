@@ -52,6 +52,34 @@ impl Polynomial {
         }
     }
 
+    /// Construct a polynomial whose roots are exactly `roots`.
+    ///
+    /// Returns the monic power-basis polynomial
+    /// `(x - roots[0]) * (x - roots[1]) * ... * (x - roots[n-1])`,
+    /// expanded by repeated convolution. Equivalent to
+    /// `numpy.polynomial.polynomial.polyfromroots` (#476).
+    ///
+    /// An empty `roots` slice yields the constant polynomial `[1.0]`,
+    /// matching numpy.
+    #[must_use]
+    pub fn from_roots(roots: &[f64]) -> Self {
+        // Start with constant 1; for each root r multiply by (x - r),
+        // i.e. convolve current coeffs with [-r, 1].
+        let mut coeffs = vec![1.0_f64];
+        for &r in roots {
+            let n = coeffs.len();
+            let mut next = vec![0.0_f64; n + 1];
+            for i in 0..n {
+                // coeffs[i] * (x - r) contributes -r*coeffs[i] to next[i]
+                // and +coeffs[i] to next[i + 1].
+                next[i] -= r * coeffs[i];
+                next[i + 1] += coeffs[i];
+            }
+            coeffs = next;
+        }
+        Self::new(&coeffs)
+    }
+
     /// Set the input domain, returning a new polynomial.
     ///
     /// # Errors
@@ -407,6 +435,60 @@ impl FromPowerBasis for Polynomial {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- from_roots (#476) ---------------------------------------------
+
+    #[test]
+    fn from_roots_empty_is_constant_one() {
+        let p = Polynomial::from_roots(&[]);
+        assert_eq!(p.coeffs(), &[1.0]);
+    }
+
+    #[test]
+    fn from_roots_single_root() {
+        // (x - 3) → coeffs [-3, 1] in ascending order.
+        let p = Polynomial::from_roots(&[3.0]);
+        assert_eq!(p.coeffs(), &[-3.0, 1.0]);
+    }
+
+    #[test]
+    fn from_roots_quadratic_matches_expansion() {
+        // (x - 2)(x - 5) = x^2 - 7x + 10 → [10, -7, 1]
+        let p = Polynomial::from_roots(&[2.0, 5.0]);
+        let c = p.coeffs();
+        assert_eq!(c, &[10.0, -7.0, 1.0]);
+        // Sanity: evaluate at the roots.
+        assert!(p.eval(2.0).unwrap().abs() < 1e-12);
+        assert!(p.eval(5.0).unwrap().abs() < 1e-12);
+    }
+
+    #[test]
+    fn from_roots_repeated_root() {
+        // (x - 1)^3 = x^3 - 3x^2 + 3x - 1 → [-1, 3, -3, 1]
+        let p = Polynomial::from_roots(&[1.0, 1.0, 1.0]);
+        let c = p.coeffs();
+        assert_eq!(c.len(), 4);
+        assert!((c[0] - (-1.0)).abs() < 1e-12);
+        assert!((c[1] - 3.0).abs() < 1e-12);
+        assert!((c[2] - (-3.0)).abs() < 1e-12);
+        assert!((c[3] - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn from_roots_zero_root_handled() {
+        // (x)(x - 4) = x^2 - 4x → [0, -4, 1]
+        let p = Polynomial::from_roots(&[0.0, 4.0]);
+        assert_eq!(p.coeffs(), &[0.0, -4.0, 1.0]);
+    }
+
+    #[test]
+    fn from_roots_eval_at_each_root_is_zero() {
+        let roots = [-2.0_f64, 0.5, 1.0, 3.7];
+        let p = Polynomial::from_roots(&roots);
+        for &r in &roots {
+            assert!(p.eval(r).unwrap().abs() < 1e-10, "p({r}) was non-zero");
+        }
+    }
 
     #[test]
     fn eval_constant() {

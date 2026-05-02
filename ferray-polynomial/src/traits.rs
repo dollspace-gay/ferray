@@ -162,6 +162,30 @@ pub trait FromPowerBasis: Poly {
     /// # Errors
     /// Returns an error if conversion fails.
     fn from_power_basis(coeffs: &[f64]) -> Result<Self, FerrayError>;
+
+    /// Construct this polynomial type from a list of roots (#476).
+    ///
+    /// Builds `(x - r0)*(x - r1)*...*(x - r_{n-1})` in the power
+    /// basis, then converts to this basis. An empty `roots` slice
+    /// yields the constant polynomial `1`, matching
+    /// `numpy.polynomial.<basis>.<basis>fromroots`.
+    ///
+    /// # Errors
+    /// Returns an error if power-basis conversion fails for the
+    /// computed coefficients.
+    fn from_roots(roots: &[f64]) -> Result<Self, FerrayError> {
+        let mut coeffs = vec![1.0_f64];
+        for &r in roots {
+            let n = coeffs.len();
+            let mut next = vec![0.0_f64; n + 1];
+            for i in 0..n {
+                next[i] -= r * coeffs[i];
+                next[i + 1] += coeffs[i];
+            }
+            coeffs = next;
+        }
+        Self::from_power_basis(&coeffs)
+    }
 }
 
 /// Extension trait providing `.convert::<TargetType>()` for basis conversion.
