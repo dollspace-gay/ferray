@@ -1193,29 +1193,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferray-python"
-version = "0.3.5"
-dependencies = [
- "ferray",
- "ferray-autodiff",
- "ferray-core",
- "ferray-fft",
- "ferray-linalg",
- "ferray-ma",
- "ferray-numpy-interop",
- "ferray-polynomial",
- "ferray-random",
- "ferray-stats",
- "ferray-stride-tricks",
- "ferray-strings",
- "ferray-ufunc",
- "ferray-window",
- "num-complex",
- "numpy",
- "pyo3",
-]
-
-[[package]]
 name = "ferray-random"
 version = "0.3.5"
 dependencies = [

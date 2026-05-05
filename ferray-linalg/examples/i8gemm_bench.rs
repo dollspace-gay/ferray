@@ -17,6 +17,12 @@ fn naive_i8gemm(m: usize, n: usize, k: usize, a: &[u8], b: &[i8], c: &mut [i32])
     }
 }
 
+#[cfg(not(target_arch = "x86_64"))]
+fn main() {
+    eprintln!("i8gemm_bench is x86_64-only; skipping.");
+}
+
+#[cfg(target_arch = "x86_64")]
 fn main() {
     if !is_x86_feature_detected!("avx2") {
         eprintln!("AVX2 required");

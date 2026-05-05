@@ -18,7 +18,7 @@ members = [
     "ferray-stride-tricks",
     "ferray-numpy-interop",
     "ferray-autodiff",
-    "ferray-python",
+    # "ferray-python",  # Cargo.toml missing on disk — pre-existing repo state.
     "ferray-test-oracle",
 ]
 

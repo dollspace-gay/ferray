@@ -35,34 +35,79 @@
 // clippy can't see across cfg branches and flags it as needless.
 #![cfg_attr(feature = "openblas", allow(clippy::needless_return))]
 
-#[cfg(test)]
+// integer_tests uses `is_x86_feature_detected!` which is x86-only.
+// On aarch64 the equivalent coverage comes from neon_tests::gemm_i*.
+#[cfg(all(test, target_arch = "x86_64"))]
 mod integer_tests;
 
+#[cfg(test)]
+mod neon_tests;
+
+// x86_64-only kernel modules. These use `#[target_feature(enable = "avx2")]`
+// etc., which rustc rejects on non-x86 even when the symbols are never
+// reached. Gating at the `mod` declaration confines the x86 surface to
+// x86 builds. (#34: NEON port for aarch64.)
+#[cfg(target_arch = "x86_64")]
 mod kernel_avx2;
+#[cfg(target_arch = "x86_64")]
 mod kernel_avx2_complex_f32;
+#[cfg(target_arch = "x86_64")]
 mod kernel_avx2_complex_f64;
+#[cfg(target_arch = "x86_64")]
 mod kernel_avx2_f32;
+#[cfg(target_arch = "x86_64")]
 mod kernel_avx2_i16;
+#[cfg(target_arch = "x86_64")]
 mod kernel_avx2_i8;
+#[cfg(target_arch = "x86_64")]
 mod kernel_avx2_i8s;
-#[cfg(feature = "avx512")]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 mod kernel_avx512;
-#[cfg(feature = "avx512")]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 mod kernel_avx512_complex_f32;
-#[cfg(feature = "avx512")]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 mod kernel_avx512_complex_f64;
-#[cfg(feature = "avx512")]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 mod kernel_avx512_f32;
-#[cfg(feature = "avx512")]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 mod kernel_avx512_i16;
-#[cfg(feature = "avx512")]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
 mod kernel_avx512_vnni_i8;
-#[cfg(feature = "avxvnni")]
+#[cfg(all(target_arch = "x86_64", feature = "avxvnni"))]
 mod kernel_avxvnni_i8;
 #[cfg(feature = "openblas")]
 mod openblas_backend;
+#[cfg(target_arch = "x86_64")]
 mod outer;
+#[cfg(target_arch = "x86_64")]
 mod pack;
+
+// aarch64 NEON kernel modules. NEON is mandatory on ARMv8 so no runtime
+// feature detection is needed.
+#[cfg(target_arch = "aarch64")]
+mod kernel_neon_complex_f32;
+#[cfg(target_arch = "aarch64")]
+mod kernel_neon_complex_f64;
+#[cfg(target_arch = "aarch64")]
+mod kernel_neon_f32;
+#[cfg(target_arch = "aarch64")]
+mod kernel_neon_f64;
+#[cfg(target_arch = "aarch64")]
+mod kernel_neon_i16;
+#[cfg(target_arch = "aarch64")]
+mod kernel_neon_i8;
+#[cfg(target_arch = "aarch64")]
+mod kernel_neon_i8s;
+#[cfg(target_arch = "aarch64")]
+mod outer_neon;
+#[cfg(target_arch = "aarch64")]
+mod pack_neon;
+
+// faer-backed correctness fallback for any architecture that has
+// neither x86_64 hand-tuned kernels nor aarch64 NEON. Earns universal
+// numpy parity (RISC-V, WASM, big-endian, etc.).
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+mod faer_fallback;
 
 /// Returns true iff the running CPU supports our hand-tuned kernel.
 #[inline]
@@ -127,6 +172,17 @@ pub fn cpu_supports_avx512_bw() -> bool {
     }
 }
 
+/// Returns true iff the running CPU supports NEON.
+///
+/// NEON is mandatory in the ARMv8 (aarch64) architecture, so this is
+/// `true` for all aarch64 builds. The function exists for symmetry with
+/// `cpu_supports_avx2_fma()` and to expose a uniform CPU-feature query
+/// surface to callers.
+#[inline]
+pub fn cpu_supports_neon() -> bool {
+    cfg!(target_arch = "aarch64")
+}
+
 /// Compute C += alpha * A @ B (row-major, leading dim = k for A, n for B/C),
 /// using the hand-tuned AVX2 kernel. Caller must verify CPU support via
 /// `cpu_supports_avx2_fma()`. Returns `false` and does nothing if the
@@ -168,7 +224,7 @@ pub fn gemm_f64(
         return true;
     }
 
-    #[cfg(not(feature = "openblas"))]
+    #[cfg(all(not(feature = "openblas"), target_arch = "x86_64"))]
     {
         if !cpu_supports_avx2_fma() {
             return false;
@@ -218,6 +274,53 @@ pub fn gemm_f64(
         }
         true
     }
+
+    #[cfg(all(not(feature = "openblas"), target_arch = "aarch64"))]
+    {
+        // SAFETY: NEON is mandatory in ARMv8 / aarch64.
+        unsafe {
+            outer_neon::gemm_neon_f64(
+                m,
+                n,
+                k,
+                alpha,
+                a.as_ptr(),
+                k,
+                b.as_ptr(),
+                n,
+                beta,
+                c.as_mut_ptr(),
+                n,
+            );
+        }
+        true
+    }
+
+    #[cfg(all(
+        not(feature = "openblas"),
+        not(target_arch = "x86_64"),
+        not(target_arch = "aarch64")
+    ))]
+    {
+        // SAFETY: faer is a safe-Rust matmul; we only use raw pointers
+        // here to copy data into faer's owned buffers and back.
+        unsafe {
+            faer_fallback::gemm_fallback_f64(
+                m,
+                n,
+                k,
+                alpha,
+                a.as_ptr(),
+                k,
+                b.as_ptr(),
+                n,
+                beta,
+                c.as_mut_ptr(),
+                n,
+            );
+        }
+        true
+    }
 }
 
 /// i16 quantized GEMM: C = A @ B + (optional accumulator) for row-major
@@ -247,23 +350,41 @@ pub unsafe fn gemm_i16(
     c: *mut i32,
     accumulate: bool,
 ) -> bool {
-    if !cpu_supports_avx2_fma() {
-        return false;
-    }
-    // Prefer AVX-512BW i16 path when feature is on AND host advertises it.
-    #[cfg(feature = "avx512")]
-    if cpu_supports_avx512_bw() {
-        // SAFETY: AVX-512F + AVX-512BW detected at runtime.
-        unsafe {
-            outer::gemm_avx512_i16(m, n, k, a, k, b, n, c, n, accumulate);
+    #[cfg(target_arch = "x86_64")]
+    {
+        if !cpu_supports_avx2_fma() {
+            return false;
         }
-        return true;
+        // Prefer AVX-512BW i16 path when feature is on AND host advertises it.
+        #[cfg(feature = "avx512")]
+        if cpu_supports_avx512_bw() {
+            // SAFETY: AVX-512F + AVX-512BW detected at runtime.
+            unsafe {
+                outer::gemm_avx512_i16(m, n, k, a, k, b, n, c, n, accumulate);
+            }
+            return true;
+        }
+        // SAFETY: cpu check passed.
+        unsafe {
+            outer::gemm_avx2_i16(m, n, k, a, k, b, n, c, n, accumulate);
+        }
+        true
     }
-    // SAFETY: cpu check passed.
-    unsafe {
-        outer::gemm_avx2_i16(m, n, k, a, k, b, n, c, n, accumulate);
+    #[cfg(target_arch = "aarch64")]
+    {
+        // SAFETY: NEON is mandatory in ARMv8.
+        unsafe {
+            outer_neon::gemm_neon_i16(m, n, k, a, k, b, n, c, n, accumulate);
+        }
+        true
     }
-    true
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        unsafe {
+            faer_fallback::gemm_fallback_i16(m, n, k, a, k, b, n, c, n, accumulate);
+        }
+        true
+    }
 }
 
 /// i8 (signed-signed) GEMM: C = A @ B + (optional accumulator) for
@@ -295,14 +416,31 @@ pub unsafe fn gemm_i8_signed(
     c: *mut i32,
     accumulate: bool,
 ) -> bool {
-    if !cpu_supports_avx2_fma() {
-        return false;
+    #[cfg(target_arch = "x86_64")]
+    {
+        if !cpu_supports_avx2_fma() {
+            return false;
+        }
+        // SAFETY: cpu check passed; caller upholds the buffer-length contract.
+        unsafe {
+            outer::gemm_avx2_i8s(m, n, k, a, k, b, n, c, n, accumulate);
+        }
+        true
     }
-    // SAFETY: cpu check passed; caller upholds the buffer-length contract.
-    unsafe {
-        outer::gemm_avx2_i8s(m, n, k, a, k, b, n, c, n, accumulate);
+    #[cfg(target_arch = "aarch64")]
+    {
+        unsafe {
+            outer_neon::gemm_neon_i8s(m, n, k, a, k, b, n, c, n, accumulate);
+        }
+        true
     }
-    true
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        unsafe {
+            faer_fallback::gemm_fallback_i8s(m, n, k, a, k, b, n, c, n, accumulate);
+        }
+        true
+    }
 }
 
 /// Quantized matmul with zero-points and scales — implements the full
@@ -352,6 +490,9 @@ pub unsafe fn quantized_matmul(
     c: *mut f32,
     accumulate: bool,
 ) -> bool {
+    // On x86_64 we require AVX2+FMA; on aarch64 NEON is mandatory; on
+    // other arches we proceed via the fallback (gemm_i8 will route).
+    #[cfg(target_arch = "x86_64")]
     if !cpu_supports_avx2_fma() {
         return false;
     }
@@ -462,30 +603,47 @@ pub unsafe fn gemm_i8(
     c: *mut i32,
     accumulate: bool,
 ) -> bool {
-    if !cpu_supports_avx2_fma() {
-        return false;
-    }
-    // Prefer AVX-512 VNNI when the `avx512` feature is on AND the host
-    // CPU advertises both AVX-512F and AVX-512 VNNI. The kernel uses
-    // zmm-wide vpdpbusd: 64 (u8, i8) products per FMA vs 32 for AVX-VNNI.
-    #[cfg(feature = "avx512")]
-    if cpu_supports_avx512_vnni() {
-        // SAFETY: AVX-512F + AVX-512 VNNI detected at runtime.
-        unsafe {
-            outer::gemm_avx512_vnni_i8(m, n, k, a, k, b, n, c, n, accumulate);
+    #[cfg(target_arch = "x86_64")]
+    {
+        if !cpu_supports_avx2_fma() {
+            return false;
         }
-        return true;
+        // Prefer AVX-512 VNNI when the `avx512` feature is on AND the host
+        // CPU advertises both AVX-512F and AVX-512 VNNI. The kernel uses
+        // zmm-wide vpdpbusd: 64 (u8, i8) products per FMA vs 32 for AVX-VNNI.
+        #[cfg(feature = "avx512")]
+        if cpu_supports_avx512_vnni() {
+            // SAFETY: AVX-512F + AVX-512 VNNI detected at runtime.
+            unsafe {
+                outer::gemm_avx512_vnni_i8(m, n, k, a, k, b, n, c, n, accumulate);
+            }
+            return true;
+        }
+        // SAFETY: cpu check passed; caller upholds the buffer-length invariants.
+        unsafe {
+            outer::gemm_avx2_i8(
+                m, n, k, a, k, // lda = k for tightly packed row-major
+                b, n, // ldb = n
+                c, n, // ldc = n
+                accumulate,
+            );
+        }
+        true
     }
-    // SAFETY: cpu check passed; caller upholds the buffer-length invariants.
-    unsafe {
-        outer::gemm_avx2_i8(
-            m, n, k, a, k, // lda = k for tightly packed row-major
-            b, n, // ldb = n
-            c, n, // ldc = n
-            accumulate,
-        );
+    #[cfg(target_arch = "aarch64")]
+    {
+        unsafe {
+            outer_neon::gemm_neon_i8(m, n, k, a, k, b, n, c, n, accumulate);
+        }
+        true
     }
-    true
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        unsafe {
+            faer_fallback::gemm_fallback_i8(m, n, k, a, k, b, n, c, n, accumulate);
+        }
+        true
+    }
 }
 
 /// CGEMM (Complex<f32>) entry — computes C = alpha * A @ B + beta * C
@@ -525,7 +683,7 @@ pub unsafe fn gemm_c32(
         }
         return true;
     }
-    #[cfg(not(feature = "openblas"))]
+    #[cfg(all(not(feature = "openblas"), target_arch = "x86_64"))]
     {
         if !cpu_supports_avx2_fma() {
             return false;
@@ -544,6 +702,28 @@ pub unsafe fn gemm_c32(
         // SAFETY: cpu check passed; caller upholds buffer-length invariants.
         unsafe {
             outer::gemm_avx2_c32(
+                m, n, k, alpha_re, alpha_im, a, k, b, n, beta_re, beta_im, c, n,
+            );
+        }
+        true
+    }
+    #[cfg(all(not(feature = "openblas"), target_arch = "aarch64"))]
+    {
+        unsafe {
+            outer_neon::gemm_neon_c32(
+                m, n, k, alpha_re, alpha_im, a, k, b, n, beta_re, beta_im, c, n,
+            );
+        }
+        true
+    }
+    #[cfg(all(
+        not(feature = "openblas"),
+        not(target_arch = "x86_64"),
+        not(target_arch = "aarch64")
+    ))]
+    {
+        unsafe {
+            faer_fallback::gemm_fallback_c32(
                 m, n, k, alpha_re, alpha_im, a, k, b, n, beta_re, beta_im, c, n,
             );
         }
@@ -591,7 +771,7 @@ pub unsafe fn gemm_c64(
         }
         return true;
     }
-    #[cfg(not(feature = "openblas"))]
+    #[cfg(all(not(feature = "openblas"), target_arch = "x86_64"))]
     {
         if !cpu_supports_avx2_fma() {
             return false;
@@ -613,6 +793,28 @@ pub unsafe fn gemm_c64(
                 m, n, k, alpha_re, alpha_im, a, k, // lda = k for tightly packed row-major
                 b, n, // ldb = n
                 beta_re, beta_im, c, n, // ldc = n
+            );
+        }
+        true
+    }
+    #[cfg(all(not(feature = "openblas"), target_arch = "aarch64"))]
+    {
+        unsafe {
+            outer_neon::gemm_neon_c64(
+                m, n, k, alpha_re, alpha_im, a, k, b, n, beta_re, beta_im, c, n,
+            );
+        }
+        true
+    }
+    #[cfg(all(
+        not(feature = "openblas"),
+        not(target_arch = "x86_64"),
+        not(target_arch = "aarch64")
+    ))]
+    {
+        unsafe {
+            faer_fallback::gemm_fallback_c64(
+                m, n, k, alpha_re, alpha_im, a, k, b, n, beta_re, beta_im, c, n,
             );
         }
         true
@@ -652,6 +854,9 @@ pub unsafe fn gemm_bf16_f32(
     accumulate: bool,
 ) -> bool {
     use half::slice::HalfFloatSliceExt;
+    // x86: require AVX2+FMA. aarch64: NEON is mandatory. Other arches:
+    // proceed via the f32 faer fallback.
+    #[cfg(target_arch = "x86_64")]
     if !cpu_supports_avx2_fma() {
         return false;
     }
@@ -704,6 +909,7 @@ pub unsafe fn gemm_f16_f32(
     accumulate: bool,
 ) -> bool {
     use half::slice::HalfFloatSliceExt;
+    #[cfg(target_arch = "x86_64")]
     if !cpu_supports_avx2_fma() {
         return false;
     }
@@ -759,7 +965,7 @@ pub fn gemm_f32(
         return true;
     }
 
-    #[cfg(not(feature = "openblas"))]
+    #[cfg(all(not(feature = "openblas"), target_arch = "x86_64"))]
     {
         if !cpu_supports_avx2_fma() {
             return false;
@@ -792,6 +998,48 @@ pub fn gemm_f32(
         // SAFETY: cpu_supports_avx2_fma() returned true, so AVX2+FMA are present.
         unsafe {
             outer::gemm_avx2_f32(
+                m,
+                n,
+                k,
+                alpha,
+                a.as_ptr(),
+                k,
+                b.as_ptr(),
+                n,
+                beta,
+                c.as_mut_ptr(),
+                n,
+            );
+        }
+        true
+    }
+    #[cfg(all(not(feature = "openblas"), target_arch = "aarch64"))]
+    {
+        unsafe {
+            outer_neon::gemm_neon_f32(
+                m,
+                n,
+                k,
+                alpha,
+                a.as_ptr(),
+                k,
+                b.as_ptr(),
+                n,
+                beta,
+                c.as_mut_ptr(),
+                n,
+            );
+        }
+        true
+    }
+    #[cfg(all(
+        not(feature = "openblas"),
+        not(target_arch = "x86_64"),
+        not(target_arch = "aarch64")
+    ))]
+    {
+        unsafe {
+            faer_fallback::gemm_fallback_f32(
                 m,
                 n,
                 k,

@@ -24,6 +24,12 @@ fn naive_zgemm(m: usize, n: usize, k: usize, a: &[f64], b: &[f64], c: &mut [f64]
     }
 }
 
+#[cfg(not(target_arch = "x86_64"))]
+fn main() {
+    eprintln!("zgemm_bench is x86_64-only; skipping.");
+}
+
+#[cfg(target_arch = "x86_64")]
 fn main() {
     if !is_x86_feature_detected!("avx2") || !is_x86_feature_detected!("fma") {
         eprintln!("AVX2+FMA required");

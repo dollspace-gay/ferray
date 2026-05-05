@@ -16,6 +16,12 @@ fn naive_sgemm(m: usize, n: usize, k: usize, a: &[f32], b: &[f32], c: &mut [f32]
     }
 }
 
+#[cfg(not(target_arch = "x86_64"))]
+fn main() {
+    eprintln!("sgemm_bench is x86_64-only (uses AVX2+FMA detection); skipping.");
+}
+
+#[cfg(target_arch = "x86_64")]
 fn main() {
     if !is_x86_feature_detected!("avx2") || !is_x86_feature_detected!("fma") {
         eprintln!("AVX2+FMA required");
