@@ -12,6 +12,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-05-05
+
+### Added
+
+#### ferray-linalg
+- aarch64 NEON GEMM kernels across all 7 dtypes — `f64`, `f32`, complex
+  `f64` / `f32`, `i16`, `i8`, signed `i8s`. Goto-style 5-loop driver in
+  `gemm/outer_neon.rs` with NEON-tuned register tiles (MR=4 NR=8 for
+  f64/i16, MR=4 NR=16 for f32, MR=4 NR=2 for c64, MR=4 NR=4 for c32 with
+  `vrev64q_f32` swap + `vfmsq_f32` sign-combine). Single-threaded
+  benchmarks on Grace–Blackwell aarch64 show 11–34× speedup over the
+  scalar reference at N∈{128, 256, 512}; SGEMM peaks at ~127 GFLOP/s
+  single-core, hitting NEON-FMA peak. Closes ferrotorch-paged's aarch64
+  build that was blocked by `target_feature(enable = "avx2,fma")`
+  attributes on the x86 kernels (issue #34).
+- Universal `gemm/faer_fallback.rs` dispatched on `cfg(not(any(
+  target_arch = "x86_64", target_arch = "aarch64")))` — wasm32, riscv64,
+  big-endian PowerPC, etc. now compile and produce correct results via
+  the workspace `faer` dep. f64 / f32 route to `faer::linalg::matmul`;
+  complex / integer route to portable scalar reference loops.
+- Public `cpu_supports_neon()` predicate paralleling
+  `cpu_supports_avx2_fma()`. Returns true on aarch64 (NEON is mandatory
+  in ARMv8), false elsewhere.
+
+### Changed
+
+#### ferray-linalg
+- `mod.rs` dispatcher now branches on `cfg(target_arch)` per public
+  `gemm_*` function: x86_64 → existing AVX2/AVX-512/VNNI hand-tuned
+  (unchanged bit-for-bit), aarch64 → NEON, other → faer fallback. The
+  x86 hand-tuned modules (`kernel_avx2*`, `kernel_avx512*`,
+  `kernel_avxvnni_i8`, `outer`, `pack`) now compile only on `x86_64`,
+  resolving the previous build break on aarch64 from x86-only
+  `target_feature` attributes.
+
+### Build / packaging
+- `ferray-python` member temporarily commented out of `[workspace]
+  members` — its `Cargo.toml` is missing on disk (pre-existing repo
+  state).
+
 ## [0.3.5] - 2026-05-02
 
 This release sweeps the open numpy-parity backlog to zero. Roughly 80 issues
