@@ -12,6 +12,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-05-06
+
+### Fixed
+
+#### ferray-fft
+- `irfft` / `irfftn` / `irfft2` / `hfft` / `hfftn` / `hfft2` now silently
+  project complex inputs onto the Hermitian subspace on the c2r axis,
+  matching scipy's `pfft.c2r` kernel (pocketfft) and PyTorch's
+  `aten::_fft_c2r` pre-pass. Previously these entry points surfaced
+  realfft's `FftError::InputValues` — the contract violation realfft
+  signals when the imaginary parts of the DC bin (and, for even output
+  length, the Nyquist bin) on the c2r axis are non-zero — as a hard
+  `FerrayError::invalid_value` (1-D fast path) or a per-rayon-worker
+  panic (multi-lane parallel path). Both reference implementations
+  silently project the input onto the Hermitian subspace before running
+  the inverse transform, producing a numerically correct result; ferray-
+  fft was the outlier.
+  The fix introduces a private `project_hermitian_lane_in_place` helper
+  in `nd.rs::irfft_along_axis` that zeros the imaginary parts of the DC
+  bin (always) and the Nyquist bin (only when the output length is even
+  and the bin index falls inside the input slice) on each lane before
+  invoking realfft. `irfft_along_axis` is the single c2r dispatch point
+  for every Hermitian-folded inverse entry in the API surface, so all
+  six public functions inherit the fix without touching `real.rs` or
+  `hermitian.rs`. Strict no-op for already-Hermitian inputs (zeroing zero
+  is zero), so no precision change for valid inputs; behaviour change
+  for previously-rejected inputs is `Err`/panic → `Ok(projected_output)`
+  matching scipy parity to ≤ 1e-10 on f64. Surfaced via ferrotorch's
+  W4/W5 cascade audit (#808 upstream from ferrotorch). Non-breaking.
+
 ## [0.3.7] - 2026-05-06
 
 ### Fixed

@@ -434,12 +434,18 @@ where
         let mut input_buf: Vec<Complex<T>> = vec![Complex::zero(); half_len];
         input_buf[..copy_len].copy_from_slice(&data[..copy_len]);
         // input_buf[copy_len..] already zero — pads with zero bins.
+        // Project onto the Hermitian subspace before calling realfft.
+        // This matches scipy/pocketfft's c2r kernel (which silently
+        // discards DC and Nyquist imaginary parts by construction) and
+        // PyTorch's `aten::_fft_c2r` pre-pass. Without this, realfft
+        // returns `FftError::InputValues` to signal "I had to project for
+        // you" — a soft error that we treat as fatal. By projecting
+        // ourselves first, the variant is unreachable.
+        project_hermitian_lane_in_place(&mut input_buf, output_len);
         let mut output_buf: Vec<T> = vec![t_zero; output_len];
         let mut scratch = plan.make_scratch_vec();
         plan.process_with_scratch(&mut input_buf, &mut output_buf, &mut scratch)
-            .map_err(|e| {
-                FerrayError::invalid_value(format!("inverse real FFT process failed: {e}"))
-            })?;
+            .expect("inverse real FFT process failed: buffer-size mismatch");
         if scale != one {
             for v in &mut output_buf {
                 *v = *v * scale;
@@ -472,8 +478,13 @@ where
                 for slot in input_buf.iter_mut().skip(copy_len) {
                     *slot = Complex::zero();
                 }
+                // Project this lane onto the Hermitian subspace (zero the
+                // imaginary parts of DC and, for even N, Nyquist) before
+                // calling realfft. See the matching comment in the 1-D
+                // fast path above.
+                project_hermitian_lane_in_place(input_buf, output_len);
                 plan.process_with_scratch(input_buf, out_chunk, scratch)
-                    .expect("inverse real FFT process failed");
+                    .expect("inverse real FFT process failed: buffer-size mismatch");
                 if scale != one {
                     for v in out_chunk.iter_mut() {
                         *v = *v * scale;
@@ -505,6 +516,42 @@ where
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/// Project a single c2r-axis lane onto the Hermitian subspace by zeroing
+/// the imaginary parts of the DC bin (index 0) and — when `output_len` is
+/// even and the bin exists — the Nyquist bin (index `output_len / 2`).
+///
+/// This mirrors the implicit projection performed by scipy's
+/// `pfft.c2r` kernel (which never reads those imaginary parts by
+/// construction) and PyTorch's explicit `aten::_fft_c2r` pre-pass. For
+/// inputs already on the Hermitian subspace the operation is a strict
+/// no-op (zeroing zero is zero); for inputs off the subspace it produces
+/// the canonical projected representation that realfft would otherwise
+/// flag via `FftError::InputValues`.
+///
+/// The buffer is one *lane* — a contiguous slice of `output_len/2 + 1`
+/// complex values — so this is O(1) per call (zero or two scalar writes).
+/// Multi-lane callers invoke it per lane.
+fn project_hermitian_lane_in_place<T: FftFloat>(input_buf: &mut [Complex<T>], output_len: usize)
+where
+    Complex<T>: ferray_core::Element,
+{
+    let zero = <T as Zero>::zero();
+    if input_buf.is_empty() {
+        return;
+    }
+    // DC bin — always projected.
+    input_buf[0].im = zero;
+    // Nyquist bin — only when `output_len` is even AND the bin exists in
+    // the input slice (it may be missing if the caller passed a truncated
+    // input via the `n` parameter).
+    if output_len % 2 == 0 {
+        let nyq = output_len / 2;
+        if nyq < input_buf.len() {
+            input_buf[nyq].im = zero;
+        }
+    }
+}
 
 /// Compute the flat offset for each lane's starting position.
 ///
