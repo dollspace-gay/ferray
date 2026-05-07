@@ -12,6 +12,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-05-06
+
+### Fixed
+
+#### ferray-window
+- `taylor(M, nbar, sll, norm=true)` for even M diverged from scipy's
+  `signal.windows.taylor` by ~1.5e-3. The centre-value normalization
+  averaged the two adjacent samples (the secant midpoint) rather than
+  evaluating the analytic peak `W((M-1)/2)` at the fractional midpoint.
+  The cosine sum is non-linear between samples, so secant ≠ analytic
+  peak, and the residual error scaled with `sll` and `nbar`.
+  Replaced with the closed-form `centre_val = 1 + 2·Σ F_m`, which
+  matches scipy's `scale = 1.0 / W((M-1)/2)` analytically (every
+  cosine collapses to 1 at xn = 0). Validates to machine precision
+  (max abs diff ≤ 5e-13) against scipy on M ∈ {4, 8, 16, 32},
+  nbar ∈ {2, 4, 6}, sll ∈ {30, 50, 100}. Surfaced via ferrotorch's
+  phase 2.7 conformance suite (#810 upstream from ferrotorch).
+
 ## [0.3.6] - 2026-05-05
 
 ### Added

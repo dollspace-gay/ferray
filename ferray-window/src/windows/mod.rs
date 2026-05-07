@@ -802,18 +802,22 @@ pub fn taylor(m: usize, nbar: usize, sll: f64, norm: bool) -> FerrayResult<Array
     if !norm {
         return Ok(arr);
     }
-    // Normalise so the centre value is 1.
-    let s = arr.as_slice().unwrap().to_vec();
-    let centre_val = if m % 2 == 1 {
-        s[m / 2]
-    } else {
-        // For even M, centre is between two samples — average.
-        0.5 * (s[m / 2 - 1] + s[m / 2])
-    };
+    // Analytic peak of the Taylor cosine sum at the fractional midpoint
+    // (m-1)/2. ferray's xn = n - (m-1)/2 means the midpoint is xn = 0,
+    // so every cosine collapses to 1 and the sum reduces to
+    // 1 + 2·Σ f_coeffs. This matches scipy's `scale = 1.0 / W((M-1)/2)`
+    // analytically, and avoids the sample-averaging error that affected
+    // even-M windows (#810 upstream from ferrotorch).
+    let centre_val: f64 = 1.0 + 2.0 * f_coeffs.iter().sum::<f64>();
     if centre_val == 0.0 {
         return Ok(arr); // pathological; leave un-normalised
     }
-    let normed: Vec<f64> = s.into_iter().map(|v| v / centre_val).collect();
+    let normed: Vec<f64> = arr
+        .as_slice()
+        .unwrap()
+        .iter()
+        .map(|&v| v / centre_val)
+        .collect();
     Array::from_vec(Ix1::new([m]), normed)
 }
 
@@ -1685,6 +1689,33 @@ mod tests {
     fn taylor_rejects_nbar_zero() {
         assert!(taylor(8, 0, 30.0, true).is_err());
         assert!(taylor(8, 4, f64::NAN, true).is_err());
+    }
+
+    #[test]
+    fn taylor_even_m_matches_scipy_analytic_peak() {
+        // Regression for #810 (upstream from ferrotorch). Pre-fix, even-M
+        // taylor windows diverged from scipy by ~1.5e-3 because the centre
+        // value was estimated by averaging the two adjacent samples
+        // (the secant midpoint) rather than evaluating the analytic peak
+        // W((M-1)/2) = 1 + 2·Σ F_m at the fractional midpoint.
+        //
+        // scipy.signal.windows.taylor(16, nbar=4, sll=30, norm=True, sym=True)[0]
+        //   = 0.252321041674507
+        let w = taylor(16, 4, 30.0, true).unwrap();
+        let s = w.as_slice().unwrap();
+        let expected_first = 0.252_321_041_674_507_f64;
+        assert!(
+            (s[0] - expected_first).abs() < 1e-13,
+            "taylor(16,4,30,true)[0] = {} expected {}",
+            s[0],
+            expected_first,
+        );
+        // The window is symmetric and even-length, so no sample sits
+        // exactly at the centre — but the analytic peak (the value the
+        // window would take at xn = 0) is, by construction, 1.0. The
+        // closest pair of samples should lie just below 1.
+        assert!(s[7] < 1.0 && s[8] < 1.0);
+        assert!(s[7] > 0.99 && s[8] > 0.99);
     }
 
     // ----- tukey -----
