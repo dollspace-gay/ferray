@@ -1,0 +1,331 @@
+{
+  "crate": "ferray-numpy-interop",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_numpy_interop::AsFerray",
+      "kind": "reexport",
+      "signature": "pub use numpy_conv :: { AsFerray , IntoNumPy }"
+    },
+    {
+      "path": "ferray_numpy_interop::FromArrow",
+      "kind": "reexport",
+      "signature": "pub use arrow_conv :: { FromArrow , FromArrowBool , ToArrow , ToArrowBool , array2_from_arrow_columns , array2_to_arrow_columns , arrayd_from_arrow_flat , arrayd_to_arrow_flat , }"
+    },
+    {
+      "path": "ferray_numpy_interop::FromArrowBool",
+      "kind": "reexport",
+      "signature": "pub use arrow_conv :: { FromArrow , FromArrowBool , ToArrow , ToArrowBool , array2_from_arrow_columns , array2_to_arrow_columns , arrayd_from_arrow_flat , arrayd_to_arrow_flat , }"
+    },
+    {
+      "path": "ferray_numpy_interop::FromPolars",
+      "kind": "reexport",
+      "signature": "pub use polars_conv :: { FromPolars , FromPolarsBool , ToPolars , ToPolarsBool , array2_from_polars_dataframe , array2_to_polars_dataframe , }"
+    },
+    {
+      "path": "ferray_numpy_interop::FromPolarsBool",
+      "kind": "reexport",
+      "signature": "pub use polars_conv :: { FromPolars , FromPolarsBool , ToPolars , ToPolarsBool , array2_from_polars_dataframe , array2_to_polars_dataframe , }"
+    },
+    {
+      "path": "ferray_numpy_interop::IntoNumPy",
+      "kind": "reexport",
+      "signature": "pub use numpy_conv :: { AsFerray , IntoNumPy }"
+    },
+    {
+      "path": "ferray_numpy_interop::ToArrow",
+      "kind": "reexport",
+      "signature": "pub use arrow_conv :: { FromArrow , FromArrowBool , ToArrow , ToArrowBool , array2_from_arrow_columns , array2_to_arrow_columns , arrayd_from_arrow_flat , arrayd_to_arrow_flat , }"
+    },
+    {
+      "path": "ferray_numpy_interop::ToArrowBool",
+      "kind": "reexport",
+      "signature": "pub use arrow_conv :: { FromArrow , FromArrowBool , ToArrow , ToArrowBool , array2_from_arrow_columns , array2_to_arrow_columns , arrayd_from_arrow_flat , arrayd_to_arrow_flat , }"
+    },
+    {
+      "path": "ferray_numpy_interop::ToPolars",
+      "kind": "reexport",
+      "signature": "pub use polars_conv :: { FromPolars , FromPolarsBool , ToPolars , ToPolarsBool , array2_from_polars_dataframe , array2_to_polars_dataframe , }"
+    },
+    {
+      "path": "ferray_numpy_interop::ToPolarsBool",
+      "kind": "reexport",
+      "signature": "pub use polars_conv :: { FromPolars , FromPolarsBool , ToPolars , ToPolarsBool , array2_from_polars_dataframe , array2_to_polars_dataframe , }"
+    },
+    {
+      "path": "ferray_numpy_interop::array1_to_arrow_with_mask",
+      "kind": "reexport",
+      "signature": "pub use extras :: { array1_to_arrow_with_mask , arrow_to_dynarray_with_mask , dynarray_to_arrow , dynarray_to_arrow_with_mask , record_batch_from_columns , record_batch_to_columns , }"
+    },
+    {
+      "path": "ferray_numpy_interop::array2_from_arrow_columns",
+      "kind": "reexport",
+      "signature": "pub use arrow_conv :: { FromArrow , FromArrowBool , ToArrow , ToArrowBool , array2_from_arrow_columns , array2_to_arrow_columns , arrayd_from_arrow_flat , arrayd_to_arrow_flat , }"
+    },
+    {
+      "path": "ferray_numpy_interop::array2_from_polars_dataframe",
+      "kind": "reexport",
+      "signature": "pub use polars_conv :: { FromPolars , FromPolarsBool , ToPolars , ToPolarsBool , array2_from_polars_dataframe , array2_to_polars_dataframe , }"
+    },
+    {
+      "path": "ferray_numpy_interop::array2_to_arrow_columns",
+      "kind": "reexport",
+      "signature": "pub use arrow_conv :: { FromArrow , FromArrowBool , ToArrow , ToArrowBool , array2_from_arrow_columns , array2_to_arrow_columns , arrayd_from_arrow_flat , arrayd_to_arrow_flat , }"
+    },
+    {
+      "path": "ferray_numpy_interop::array2_to_polars_dataframe",
+      "kind": "reexport",
+      "signature": "pub use polars_conv :: { FromPolars , FromPolarsBool , ToPolars , ToPolarsBool , array2_from_polars_dataframe , array2_to_polars_dataframe , }"
+    },
+    {
+      "path": "ferray_numpy_interop::arrayd_from_arrow_flat",
+      "kind": "reexport",
+      "signature": "pub use arrow_conv :: { FromArrow , FromArrowBool , ToArrow , ToArrowBool , array2_from_arrow_columns , array2_to_arrow_columns , arrayd_from_arrow_flat , arrayd_to_arrow_flat , }"
+    },
+    {
+      "path": "ferray_numpy_interop::arrayd_to_arrow_flat",
+      "kind": "reexport",
+      "signature": "pub use arrow_conv :: { FromArrow , FromArrowBool , ToArrow , ToArrowBool , array2_from_arrow_columns , array2_to_arrow_columns , arrayd_from_arrow_flat , arrayd_to_arrow_flat , }"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_conv::ArrowElement",
+      "kind": "trait",
+      "signature": "pub trait ArrowElement"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_conv::FromArrow",
+      "kind": "trait",
+      "signature": "pub trait FromArrow < T : Element >"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_conv::FromArrowBool",
+      "kind": "trait",
+      "signature": "pub trait FromArrowBool"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_conv::ToArrow",
+      "kind": "trait",
+      "signature": "pub trait ToArrow"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_conv::ToArrowBool",
+      "kind": "trait",
+      "signature": "pub trait ToArrowBool"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_conv::array2_from_arrow_columns",
+      "kind": "fn",
+      "signature": "pub fn array2_from_arrow_columns < T > (cols : & [PrimitiveArray < T :: ArrowType >] ,) -> Result < Array2 < T > , FerrayError > where T : ArrowElement , T :: ArrowType : ArrowPrimitiveType < Native = T > ,"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_conv::array2_to_arrow_columns",
+      "kind": "fn",
+      "signature": "pub fn array2_to_arrow_columns < T > (a : & Array2 < T > ,) -> Result < Vec < PrimitiveArray < T :: ArrowType > > , FerrayError > where T : ArrowElement , T :: ArrowType : ArrowPrimitiveType < Native = T > ,"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_conv::arrayd_from_arrow_flat",
+      "kind": "fn",
+      "signature": "pub fn arrayd_from_arrow_flat < T > (arr : & PrimitiveArray < T :: ArrowType > , shape : & [usize] ,) -> Result < ArrayD < T > , FerrayError > where T : ArrowElement , T :: ArrowType : ArrowPrimitiveType < Native = T > ,"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_conv::arrayd_to_arrow_flat",
+      "kind": "fn",
+      "signature": "pub fn arrayd_to_arrow_flat < T > (a : & ArrayD < T >) -> Result < PrimitiveArray < T :: ArrowType > , FerrayError > where T : ArrowElement , T :: ArrowType : ArrowPrimitiveType < Native = T > ,"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_to_complex32",
+      "kind": "reexport",
+      "signature": "pub use extras :: { arrow_to_complex32 , arrow_to_complex64 , complex32_to_arrow , complex64_to_arrow }"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_to_complex64",
+      "kind": "reexport",
+      "signature": "pub use extras :: { arrow_to_complex32 , arrow_to_complex64 , complex32_to_arrow , complex64_to_arrow }"
+    },
+    {
+      "path": "ferray_numpy_interop::arrow_to_dynarray_with_mask",
+      "kind": "reexport",
+      "signature": "pub use extras :: { array1_to_arrow_with_mask , arrow_to_dynarray_with_mask , dynarray_to_arrow , dynarray_to_arrow_with_mask , record_batch_from_columns , record_batch_to_columns , }"
+    },
+    {
+      "path": "ferray_numpy_interop::complex32_to_arrow",
+      "kind": "reexport",
+      "signature": "pub use extras :: { arrow_to_complex32 , arrow_to_complex64 , complex32_to_arrow , complex64_to_arrow }"
+    },
+    {
+      "path": "ferray_numpy_interop::complex64_to_arrow",
+      "kind": "reexport",
+      "signature": "pub use extras :: { arrow_to_complex32 , arrow_to_complex64 , complex32_to_arrow , complex64_to_arrow }"
+    },
+    {
+      "path": "ferray_numpy_interop::dataframe_from_columns",
+      "kind": "reexport",
+      "signature": "pub use extras :: dataframe_from_columns"
+    },
+    {
+      "path": "ferray_numpy_interop::dtype_map::arrow_to_dtype",
+      "kind": "fn",
+      "signature": "pub fn arrow_to_dtype (ad : & arrow :: datatypes :: DataType) -> Result < DType , FerrayError >"
+    },
+    {
+      "path": "ferray_numpy_interop::dtype_map::dtype_to_arrow",
+      "kind": "fn",
+      "signature": "pub fn dtype_to_arrow (dt : DType) -> Result < arrow :: datatypes :: DataType , FerrayError >"
+    },
+    {
+      "path": "ferray_numpy_interop::dtype_map::dtype_to_polars",
+      "kind": "fn",
+      "signature": "pub fn dtype_to_polars (dt : DType) -> Result < polars :: prelude :: DataType , FerrayError >"
+    },
+    {
+      "path": "ferray_numpy_interop::dtype_map::polars_to_dtype",
+      "kind": "fn",
+      "signature": "pub fn polars_to_dtype (pd : & polars :: prelude :: DataType) -> Result < DType , FerrayError >"
+    },
+    {
+      "path": "ferray_numpy_interop::dynarray_to_arrow",
+      "kind": "reexport",
+      "signature": "pub use extras :: { array1_to_arrow_with_mask , arrow_to_dynarray_with_mask , dynarray_to_arrow , dynarray_to_arrow_with_mask , record_batch_from_columns , record_batch_to_columns , }"
+    },
+    {
+      "path": "ferray_numpy_interop::dynarray_to_arrow_with_mask",
+      "kind": "reexport",
+      "signature": "pub use extras :: { array1_to_arrow_with_mask , arrow_to_dynarray_with_mask , dynarray_to_arrow , dynarray_to_arrow_with_mask , record_batch_from_columns , record_batch_to_columns , }"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::array1_to_arrow_with_mask",
+      "kind": "fn",
+      "signature": "pub fn array1_to_arrow_with_mask < T > (arr : & Array < T , Ix1 > , mask : & [bool] ,) -> FerrayResult < arrow :: array :: PrimitiveArray < < T as crate :: arrow_conv :: ArrowElement > :: ArrowType > > where T : crate :: arrow_conv :: ArrowElement , < T as crate :: arrow_conv :: ArrowElement > :: ArrowType : arrow :: array :: ArrowPrimitiveType < Native = T > ,"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::arrow_to_complex32",
+      "kind": "reexport",
+      "signature": "pub use complex_arrow :: { arrow_to_complex32 , arrow_to_complex64 , complex32_to_arrow , complex64_to_arrow , }"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::arrow_to_complex64",
+      "kind": "reexport",
+      "signature": "pub use complex_arrow :: { arrow_to_complex32 , arrow_to_complex64 , complex32_to_arrow , complex64_to_arrow , }"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::arrow_to_dynarray_with_mask",
+      "kind": "fn",
+      "signature": "pub fn arrow_to_dynarray_with_mask (arr : & arrow :: array :: ArrayRef ,) -> FerrayResult < (DynArray , Option < Vec < bool > >) >"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::complex32_to_arrow",
+      "kind": "reexport",
+      "signature": "pub use complex_arrow :: { arrow_to_complex32 , arrow_to_complex64 , complex32_to_arrow , complex64_to_arrow , }"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::complex64_to_arrow",
+      "kind": "reexport",
+      "signature": "pub use complex_arrow :: { arrow_to_complex32 , arrow_to_complex64 , complex32_to_arrow , complex64_to_arrow , }"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::complex_arrow::arrow_to_complex32",
+      "kind": "fn",
+      "signature": "pub fn arrow_to_complex32 (arr : & ArrayRef) -> FerrayResult < Array < Complex < f32 > , Ix1 > >"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::complex_arrow::arrow_to_complex64",
+      "kind": "fn",
+      "signature": "pub fn arrow_to_complex64 (arr : & ArrayRef) -> FerrayResult < Array < Complex < f64 > , Ix1 > >"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::complex_arrow::complex32_to_arrow",
+      "kind": "fn",
+      "signature": "pub fn complex32_to_arrow (arr : & Array < Complex < f32 > , Ix1 >) -> FerrayResult < ArrayRef >"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::complex_arrow::complex64_to_arrow",
+      "kind": "fn",
+      "signature": "pub fn complex64_to_arrow (arr : & Array < Complex < f64 > , Ix1 >) -> FerrayResult < ArrayRef >"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::dataframe_from_columns",
+      "kind": "fn",
+      "signature": "pub fn dataframe_from_columns (columns : & [(& str , & ferray_core :: DynArray)] ,) -> ferray_core :: FerrayResult < polars :: frame :: DataFrame >"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::dynarray_to_arrow",
+      "kind": "fn",
+      "signature": "pub fn dynarray_to_arrow (arr : & DynArray) -> FerrayResult < arrow :: array :: ArrayRef >"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::dynarray_to_arrow_with_mask",
+      "kind": "fn",
+      "signature": "pub fn dynarray_to_arrow_with_mask (arr : & DynArray , mask : Option < & [bool] > ,) -> FerrayResult < arrow :: array :: ArrayRef >"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::record_batch_from_columns",
+      "kind": "fn",
+      "signature": "pub fn record_batch_from_columns (columns : & [(& str , & DynArray)] ,) -> FerrayResult < arrow :: record_batch :: RecordBatch >"
+    },
+    {
+      "path": "ferray_numpy_interop::extras::record_batch_to_columns",
+      "kind": "fn",
+      "signature": "pub fn record_batch_to_columns (batch : & arrow :: record_batch :: RecordBatch ,) -> FerrayResult < Vec < (String , DynArray) > >"
+    },
+    {
+      "path": "ferray_numpy_interop::numpy_conv::AsFerray",
+      "kind": "trait",
+      "signature": "pub trait AsFerray < T : Element , D : ferray_core :: Dimension >"
+    },
+    {
+      "path": "ferray_numpy_interop::numpy_conv::IntoNumPy",
+      "kind": "trait",
+      "signature": "pub trait IntoNumPy < T : Element , D : ferray_core :: Dimension >"
+    },
+    {
+      "path": "ferray_numpy_interop::numpy_conv::NpElement",
+      "kind": "trait",
+      "signature": "pub trait NpElement"
+    },
+    {
+      "path": "ferray_numpy_interop::polars_conv::FromPolars",
+      "kind": "trait",
+      "signature": "pub trait FromPolars < T : Element >"
+    },
+    {
+      "path": "ferray_numpy_interop::polars_conv::FromPolarsBool",
+      "kind": "trait",
+      "signature": "pub trait FromPolarsBool"
+    },
+    {
+      "path": "ferray_numpy_interop::polars_conv::PolarsElement",
+      "kind": "trait",
+      "signature": "pub trait PolarsElement"
+    },
+    {
+      "path": "ferray_numpy_interop::polars_conv::ToPolars",
+      "kind": "trait",
+      "signature": "pub trait ToPolars"
+    },
+    {
+      "path": "ferray_numpy_interop::polars_conv::ToPolarsBool",
+      "kind": "trait",
+      "signature": "pub trait ToPolarsBool"
+    },
+    {
+      "path": "ferray_numpy_interop::polars_conv::array2_from_polars_dataframe",
+      "kind": "fn",
+      "signature": "pub fn array2_from_polars_dataframe < T > (df : & DataFrame) -> Result < Array2 < T > , FerrayError > where T : PolarsElement + Copy ,"
+    },
+    {
+      "path": "ferray_numpy_interop::polars_conv::array2_to_polars_dataframe",
+      "kind": "fn",
+      "signature": "pub fn array2_to_polars_dataframe < T > (a : & Array2 < T > , column_names : & [& str] ,) -> Result < DataFrame , FerrayError > where T : PolarsElement + Copy , ChunkedArray < T :: PolarsType > : IntoSeries ,"
+    },
+    {
+      "path": "ferray_numpy_interop::record_batch_from_columns",
+      "kind": "reexport",
+      "signature": "pub use extras :: { array1_to_arrow_with_mask , arrow_to_dynarray_with_mask , dynarray_to_arrow , dynarray_to_arrow_with_mask , record_batch_from_columns , record_batch_to_columns , }"
+    },
+    {
+      "path": "ferray_numpy_interop::record_batch_to_columns",
+      "kind": "reexport",
+      "signature": "pub use extras :: { array1_to_arrow_with_mask , arrow_to_dynarray_with_mask , dynarray_to_arrow , dynarray_to_arrow_with_mask , record_batch_from_columns , record_batch_to_columns , }"
+    }
+  ]
+}
