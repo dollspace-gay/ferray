@@ -295,11 +295,11 @@ def make_fixture(np_func_name, ferray_func_name, test_cases):
 
 Rust integration tests that load fixtures and assert. Tolerance is determined
 by the per-op-category table (see Tolerance Table below). Tests live at
-`<crate>/tests/conformance/<category>.rs`, mirroring the
+`<crate>/tests/conformance_<category>.rs`, mirroring the
 `fixtures/<crate>/<category>.json` organization.
 
 ```rust
-// ferray-window/tests/conformance/windows.rs
+// ferray-window/tests/conformance_windows.rs
 use ferray_test_oracle::{fixtures_dir, run_unary_f64_oracle};
 
 #[test]
@@ -383,10 +383,17 @@ directory structure under its `tests/` directory:
       _surface.json                  ← generated surface inventory (committed)
       _surface_exclusions.toml       ← manual exclusions with cited reasons
       _divergences.toml              ← documented divergences from numpy 2.4.4
-      <category>.rs                  ← per-op-category conformance tests
+    conformance_<category>.rs        ← per-op-category conformance tests
                                        (mirrors fixtures/<crate>/<category>.json)
     conformance_surface_coverage.rs  ← strict coverage gate
 ```
+
+Conformance test `.rs` files MUST be at the `tests/` root with the
+`conformance_` prefix (e.g., `tests/conformance_windows.rs`), NOT inside a
+`tests/conformance/` subdirectory — cargo does not auto-compile files in
+subdirectories of `tests/` as integration test binaries. Data files
+(`_surface.json`, `_surface_exclusions.toml`, `_divergences.toml`) DO live
+under `tests/conformance/` as a subdir; only the test binaries are flat.
 
 The `<category>` names mirror the existing fixture organization:
 `core`, `fft`, `linalg`, `io`, `ma`, `polynomial`, `random`, `stats`,
@@ -421,6 +428,8 @@ Generic reasons ("tested somewhere") are not acceptable.
 
 ### `_divergences.toml` format
 
+scipy.signal.windows.taylor is the actual reference for the seed divergence example; an earlier draft used "numpy_function" which was misleading for non-numpy references.
+
 ```toml
 # Each [[divergence]] block documents one case where ferray intentionally
 # returns a more mathematically correct value than numpy 2.4.4.
@@ -430,8 +439,9 @@ Generic reasons ("tested somewhere") are not acceptable.
 
 [[divergence]]
 ferray_path = "ferray_window::taylor"
-numpy_function = "scipy.signal.windows.taylor"
-numpy_version = "2.4.4"
+reference_function = "scipy.signal.windows.taylor"
+reference_library = "scipy.signal"
+reference_version = "1.13.0"
 ferray_version_introduced = "0.3.7"
 tracking_issue = 810
 
@@ -466,8 +476,9 @@ citation = "Carrara et al. 1995 ch.10; scipy/signal/windows.py confirmed scipy 1
 
 Each divergence entry requires:
 - `ferray_path` — the ferray function that diverges.
-- `numpy_function` — the numpy / scipy function being compared.
-- `numpy_version` — the numpy version under which the divergence was observed.
+- `reference_function` — the numpy / scipy function being compared.
+- `reference_library` — one of "numpy", "scipy.signal", "scipy.special", etc. — disambiguates which reference library the divergence is measured against.
+- `reference_version` — the reference library version under which the divergence was observed.
 - `ferray_version_introduced` — the ferray release where ferray took the
   more-correct path (not the release where the divergence was documented).
 - `tracking_issue` — the issue number where the divergence is recorded for

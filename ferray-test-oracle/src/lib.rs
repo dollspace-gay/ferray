@@ -58,6 +58,147 @@ pub use serde_json;
 /// inherent).
 pub const MIN_ULP_TOLERANCE: u64 = 10;
 
+// ---------------------------------------------------------------------------
+// Stage 1 tolerance table constants — one constant per row, matching the
+// table in docs/conformance-suites.md exactly.
+// ---------------------------------------------------------------------------
+
+/// Relative tolerance for elementwise transcendentals (sin/cos/exp/log) — f64.
+///
+/// Matches the "Elementwise transcendentals" row of the Stage 1 tolerance table.
+/// libm on x86-64/aarch64 guarantees < 1 ULP for most functions; 1e-12 rel
+/// gives a generous margin while still catching real bugs.
+pub const TOL_TRANSCENDENTAL_F64_REL: f64 = 1e-12;
+
+/// Relative tolerance for elementwise transcendentals — f32.
+///
+/// f32 libm approximations are looser; 1e-5 rel is the table value.
+pub const TOL_TRANSCENDENTAL_F32_REL: f32 = 1e-5;
+
+/// Absolute tolerance for reductions (sum/mean/std) — f64.
+///
+/// Tree-order summation can accumulate ~n*eps error; 1e-12 abs accommodates
+/// typical sizes while catching genuine bugs.
+pub const TOL_REDUCTION_F64_ABS: f64 = 1e-12;
+
+/// Relative tolerance for reductions — f64 (paired with the abs tolerance).
+pub const TOL_REDUCTION_F64_REL: f64 = 1e-12;
+
+/// Absolute tolerance for reductions — f32.
+pub const TOL_REDUCTION_F32_ABS: f32 = 1e-6;
+
+/// Relative tolerance for reductions — f32.
+pub const TOL_REDUCTION_F32_REL: f32 = 1e-6;
+
+/// Relative tolerance for matmul / linalg operations — f64.
+///
+/// O(n³) error amplification in GEMM; 1e-10 rel matches the table row.
+pub const TOL_LINALG_F64_REL: f64 = 1e-10;
+
+/// Relative tolerance for matmul / linalg — f32.
+pub const TOL_LINALG_F32_REL: f32 = 1e-4;
+
+/// Relative tolerance for FFT operations — f64.
+///
+/// Bit-reversal + butterfly accumulation; 1e-10 rel matches the table.
+pub const TOL_FFT_F64_REL: f64 = 1e-10;
+
+/// Relative tolerance for FFT — f32.
+pub const TOL_FFT_F32_REL: f32 = 1e-5;
+
+/// Relative tolerance for polynomial evaluation (Horner/Clenshaw) — f64.
+pub const TOL_POLYNOMIAL_F64_REL: f64 = 1e-10;
+
+/// Relative tolerance for polynomial evaluation — f32.
+pub const TOL_POLYNOMIAL_F32_REL: f32 = 1e-5;
+
+// ---------------------------------------------------------------------------
+// Relative+absolute tolerance assertion helpers (Stage 3 deliverable B)
+// ---------------------------------------------------------------------------
+
+/// Assert that two f64 values agree within relative+absolute tolerance.
+///
+/// Passes when `|actual - expected| <= max(tol_abs, tol_rel * |expected|)`.
+/// Panics with a diagnostic message on failure.
+///
+/// # Panics
+/// Panics when the values differ by more than the composite tolerance.
+pub fn assert_close_f64(actual: f64, expected: f64, tol_rel: f64, tol_abs: f64) {
+    let threshold = tol_abs.max(tol_rel * expected.abs());
+    let diff = (actual - expected).abs();
+    assert!(
+        diff <= threshold,
+        "assert_close_f64 failed: actual={actual}, expected={expected}, \
+         diff={diff}, threshold={threshold} (tol_rel={tol_rel}, tol_abs={tol_abs})"
+    );
+}
+
+/// Assert that two f32 values agree within relative+absolute tolerance.
+///
+/// Passes when `|actual - expected| <= max(tol_abs, tol_rel * |expected|)`.
+///
+/// # Panics
+/// Panics when the values differ by more than the composite tolerance.
+pub fn assert_close_f32(actual: f32, expected: f32, tol_rel: f32, tol_abs: f32) {
+    let threshold = tol_abs.max(tol_rel * expected.abs());
+    let diff = (actual - expected).abs();
+    assert!(
+        diff <= threshold,
+        "assert_close_f32 failed: actual={actual}, expected={expected}, \
+         diff={diff}, threshold={threshold} (tol_rel={tol_rel}, tol_abs={tol_abs})"
+    );
+}
+
+/// Assert that two f64 slices agree element-by-element within relative+absolute tolerance.
+///
+/// Reports the first failing index in the panic message.
+///
+/// # Panics
+/// Panics on length mismatch or when any element pair exceeds the tolerance.
+pub fn assert_close_f64_slice(actual: &[f64], expected: &[f64], tol_rel: f64, tol_abs: f64) {
+    assert_eq!(
+        actual.len(),
+        expected.len(),
+        "assert_close_f64_slice: length mismatch ({} vs {})",
+        actual.len(),
+        expected.len()
+    );
+    for (i, (&a, &e)) in actual.iter().zip(expected.iter()).enumerate() {
+        let threshold = tol_abs.max(tol_rel * e.abs());
+        let diff = (a - e).abs();
+        assert!(
+            diff <= threshold,
+            "assert_close_f64_slice [index {i}]: actual={a}, expected={e}, \
+             diff={diff}, threshold={threshold} (tol_rel={tol_rel}, tol_abs={tol_abs})"
+        );
+    }
+}
+
+/// Assert that two f32 slices agree element-by-element within relative+absolute tolerance.
+///
+/// Reports the first failing index in the panic message.
+///
+/// # Panics
+/// Panics on length mismatch or when any element pair exceeds the tolerance.
+pub fn assert_close_f32_slice(actual: &[f32], expected: &[f32], tol_rel: f32, tol_abs: f32) {
+    assert_eq!(
+        actual.len(),
+        expected.len(),
+        "assert_close_f32_slice: length mismatch ({} vs {})",
+        actual.len(),
+        expected.len()
+    );
+    for (i, (&a, &e)) in actual.iter().zip(expected.iter()).enumerate() {
+        let threshold = tol_abs.max(tol_rel * e.abs());
+        let diff = (a - e).abs();
+        assert!(
+            diff <= threshold,
+            "assert_close_f32_slice [index {i}]: actual={a}, expected={e}, \
+             diff={diff}, threshold={threshold} (tol_rel={tol_rel}, tol_abs={tol_abs})"
+        );
+    }
+}
+
 /// Near-zero absolute tolerance for f64 ULP comparisons.
 ///
 /// Values with magnitude below this are considered indistinguishable

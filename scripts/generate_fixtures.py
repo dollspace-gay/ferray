@@ -67,8 +67,15 @@ def save_fixture(subdir, filename, fixture):
     """Write a fixture dict to JSON."""
     path = FIXTURES_DIR / subdir / filename
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Inject schema v2 metadata at write time so all generators benefit.
+    # The two fields go to the FRONT of the dict (insertion-order preserved).
+    if "fixture_schema_version" not in fixture:
+        meta = {"numpy_version": np.__version__, "fixture_schema_version": 2}
+        meta.update(fixture)
+        fixture = meta
     with open(path, "w") as f:
         json.dump(fixture, f, indent=2)
+        f.write("\n")  # trailing newline matches retrofit script's normalized form
     print(f"  -> {path.relative_to(FIXTURES_DIR.parent)}")
 
 
@@ -1716,6 +1723,519 @@ def generate_ma_fixtures():
 
 
 # ---------------------------------------------------------------------------
+# Window fixtures (Stage 3 — ferray-window conformance suite)
+# ---------------------------------------------------------------------------
+
+def _make_window_fixture(scipy_func_name: str, ferray_func_name: str,
+                         test_cases: list, ref_lib: str = "scipy.signal") -> dict:
+    """Build a window fixture dict with the v2 schema + reference_library."""
+    import scipy
+    return {
+        "numpy_version": np.__version__,
+        "scipy_version": scipy.__version__,
+        "fixture_schema_version": 2,
+        "reference_library": ref_lib,
+        "function": scipy_func_name,
+        "ferray_function": ferray_func_name,
+        "test_cases": test_cases,
+    }
+
+
+def _window_case(name: str, inputs: dict, m: int,
+                 scipy_func, tolerance_ulps: int = 4) -> dict:
+    """Generate a single window test case by calling scipy_func(m, **inputs)."""
+    w = scipy_func(**inputs)
+    expected = {
+        "data": [float(x) for x in w.tolist()],
+        "shape": [m],
+        "dtype": "float64",
+    }
+    return {
+        "name": name,
+        "inputs": inputs,
+        "expected": expected,
+        "tolerance_ulps": tolerance_ulps,
+    }
+
+
+def generate_window_fixtures() -> None:
+    """Generate fixtures/window/<name>.json for each ferray-window public function.
+
+    All window functions are pure (no RNG), so output is fully deterministic.
+    The reference is scipy.signal.windows for scipy-origin windows, and
+    numpy for the handful that exist in numpy directly (hanning, hamming,
+    bartlett, blackman, kaiser).
+    """
+    from scipy.signal import windows as spwin
+    import scipy
+
+    print("Generating window fixtures...")
+    (FIXTURES_DIR / "window").mkdir(parents=True, exist_ok=True)
+
+    scipy_ver = scipy.__version__
+    numpy_ver = np.__version__
+
+    # ------------------------------------------------------------------
+    # Helper: build numpy-origin fixture (reference_library = "numpy")
+    # ------------------------------------------------------------------
+    def _np_window_fixture(np_func_name, ferray_func_name, test_cases):
+        return {
+            "numpy_version": numpy_ver,
+            "scipy_version": scipy_ver,
+            "fixture_schema_version": 2,
+            "reference_library": "numpy",
+            "function": np_func_name,
+            "ferray_function": ferray_func_name,
+            "test_cases": test_cases,
+        }
+
+    # ------------------------------------------------------------------
+    # Helper: build scipy-origin fixture (reference_library = "scipy.signal")
+    # ------------------------------------------------------------------
+    def _sp_window_fixture(sp_func_name, ferray_func_name, test_cases):
+        return {
+            "numpy_version": numpy_ver,
+            "scipy_version": scipy_ver,
+            "fixture_schema_version": 2,
+            "reference_library": "scipy.signal",
+            "function": sp_func_name,
+            "ferray_function": ferray_func_name,
+            "test_cases": test_cases,
+        }
+
+    # ------------------------------------------------------------------
+    # Shared helper: standard sizes to test per window
+    # Sizes: small (16), medium (64), minimum edge case (2)
+    # ------------------------------------------------------------------
+    SIZES = [2, 16, 64]
+
+    def _simple_cases(scipy_fn, fname_prefix):
+        """Cases for a window taking only M (no extra params)."""
+        cases = []
+        for m in SIZES:
+            w = scipy_fn(m)
+            cases.append({
+                "name": f"{fname_prefix}_m{m}",
+                "inputs": {"m": m},
+                "expected": {
+                    "data": [float(x) for x in w.tolist()],
+                    "shape": [m],
+                    "dtype": "float64",
+                },
+                "tolerance_ulps": 4,
+            })
+        # Edge: M=1
+        w1 = scipy_fn(1)
+        cases.append({
+            "name": f"{fname_prefix}_m1",
+            "inputs": {"m": 1},
+            "expected": {
+                "data": [float(x) for x in w1.tolist()],
+                "shape": [1],
+                "dtype": "float64",
+            },
+            "tolerance_ulps": 0,
+        })
+        # Edge: M=0
+        w0 = scipy_fn(0)
+        cases.append({
+            "name": f"{fname_prefix}_m0",
+            "inputs": {"m": 0},
+            "expected": {
+                "data": [],
+                "shape": [0],
+                "dtype": "float64",
+            },
+            "tolerance_ulps": 0,
+        })
+        return cases
+
+    # ------------------------------------------------------------------
+    # bartlett — numpy.bartlett (also in scipy as scipy.signal.windows.bartlett)
+    # ferray uses numpy naming; both agree for symmetric windows.
+    # ------------------------------------------------------------------
+    bartlett_cases = _simple_cases(np.bartlett, "bartlett")
+    save_fixture("window", "bartlett.json",
+                 _np_window_fixture("numpy.bartlett",
+                                    "ferray_window::bartlett",
+                                    bartlett_cases))
+
+    # ------------------------------------------------------------------
+    # blackman — numpy.blackman
+    # ------------------------------------------------------------------
+    blackman_cases = _simple_cases(np.blackman, "blackman")
+    save_fixture("window", "blackman.json",
+                 _np_window_fixture("numpy.blackman",
+                                    "ferray_window::blackman",
+                                    blackman_cases))
+
+    # ------------------------------------------------------------------
+    # hamming — numpy.hamming
+    # ------------------------------------------------------------------
+    hamming_cases = _simple_cases(np.hamming, "hamming")
+    save_fixture("window", "hamming.json",
+                 _np_window_fixture("numpy.hamming",
+                                    "ferray_window::hamming",
+                                    hamming_cases))
+
+    # ------------------------------------------------------------------
+    # hanning — numpy.hanning  (scipy calls it 'hann' but numpy uses 'hanning')
+    # ------------------------------------------------------------------
+    hanning_cases = _simple_cases(np.hanning, "hanning")
+    save_fixture("window", "hanning.json",
+                 _np_window_fixture("numpy.hanning",
+                                    "ferray_window::hanning",
+                                    hanning_cases))
+
+    # ------------------------------------------------------------------
+    # kaiser — numpy.kaiser (parametric: vary beta)
+    # ------------------------------------------------------------------
+    kaiser_cases = []
+    for m in SIZES:
+        for beta in [0.0, 5.0, 14.0]:
+            w = np.kaiser(m, beta)
+            kaiser_cases.append({
+                "name": f"kaiser_m{m}_beta{beta}",
+                "inputs": {"m": m, "beta": beta},
+                "expected": {
+                    "data": [float(x) for x in w.tolist()],
+                    "shape": [m],
+                    "dtype": "float64",
+                },
+                "tolerance_ulps": 4,
+            })
+    # Edge M=1
+    w1 = np.kaiser(1, 5.0)
+    kaiser_cases.append({
+        "name": "kaiser_m1_beta5",
+        "inputs": {"m": 1, "beta": 5.0},
+        "expected": {"data": [float(x) for x in w1.tolist()], "shape": [1], "dtype": "float64"},
+        "tolerance_ulps": 0,
+    })
+    save_fixture("window", "kaiser.json",
+                 _np_window_fixture("numpy.kaiser",
+                                    "ferray_window::kaiser",
+                                    kaiser_cases))
+
+    # ------------------------------------------------------------------
+    # cosine — scipy.signal.windows.cosine
+    # ------------------------------------------------------------------
+    cosine_cases = _simple_cases(spwin.cosine, "cosine")
+    save_fixture("window", "cosine.json",
+                 _sp_window_fixture("scipy.signal.windows.cosine",
+                                    "ferray_window::cosine",
+                                    cosine_cases))
+
+    # ------------------------------------------------------------------
+    # exponential — scipy.signal.windows.exponential(m, center=None, tau=tau)
+    # ------------------------------------------------------------------
+    exp_cases = []
+    for m in SIZES:
+        for tau in [1.0, 5.0, 10.0]:
+            w = spwin.exponential(m, tau=tau)
+            exp_cases.append({
+                "name": f"exponential_m{m}_tau{tau}",
+                "inputs": {"m": m, "tau": tau},
+                "expected": {
+                    "data": [float(x) for x in w.tolist()],
+                    "shape": [m],
+                    "dtype": "float64",
+                },
+                "tolerance_ulps": 4,
+            })
+    # With explicit center (sym=False required when center != default)
+    w_center = spwin.exponential(16, center=4.0, tau=5.0, sym=False)
+    exp_cases.append({
+        "name": "exponential_m16_center4_tau5_asymmetric",
+        "inputs": {"m": 16, "center": 4.0, "tau": 5.0},
+        "expected": {
+            "data": [float(x) for x in w_center.tolist()],
+            "shape": [16],
+            "dtype": "float64",
+        },
+        "tolerance_ulps": 4,
+    })
+    save_fixture("window", "exponential.json",
+                 _sp_window_fixture("scipy.signal.windows.exponential",
+                                    "ferray_window::exponential",
+                                    exp_cases))
+
+    # ------------------------------------------------------------------
+    # gaussian — scipy.signal.windows.gaussian(m, std)
+    # ------------------------------------------------------------------
+    gauss_cases = []
+    for m in SIZES:
+        for std in [1.0, 3.0, 7.0]:
+            w = spwin.gaussian(m, std=std)
+            gauss_cases.append({
+                "name": f"gaussian_m{m}_std{std}",
+                "inputs": {"m": m, "std": std},
+                "expected": {
+                    "data": [float(x) for x in w.tolist()],
+                    "shape": [m],
+                    "dtype": "float64",
+                },
+                "tolerance_ulps": 4,
+            })
+    save_fixture("window", "gaussian.json",
+                 _sp_window_fixture("scipy.signal.windows.gaussian",
+                                    "ferray_window::gaussian",
+                                    gauss_cases))
+
+    # ------------------------------------------------------------------
+    # general_cosine — scipy.signal.windows.general_cosine(m, a)
+    # ------------------------------------------------------------------
+    gc_cases = []
+    for m in SIZES:
+        for coeffs, cname in [
+            ([0.5, 0.5], "hann_coeffs"),
+            ([0.42, 0.5, 0.08], "blackman_coeffs"),
+            ([0.3635819, 0.4891775, 0.1365995, 0.0106411], "nuttall_coeffs"),
+        ]:
+            w = spwin.general_cosine(m, coeffs, sym=True)
+            gc_cases.append({
+                "name": f"general_cosine_m{m}_{cname}",
+                "inputs": {"m": m, "coeffs": coeffs},
+                "expected": {
+                    "data": [float(x) for x in w.tolist()],
+                    "shape": [m],
+                    "dtype": "float64",
+                },
+                "tolerance_ulps": 4,
+            })
+    save_fixture("window", "general_cosine.json",
+                 _sp_window_fixture("scipy.signal.windows.general_cosine",
+                                    "ferray_window::general_cosine",
+                                    gc_cases))
+
+    # ------------------------------------------------------------------
+    # general_hamming — scipy.signal.windows.general_hamming(m, alpha)
+    # ------------------------------------------------------------------
+    gh_cases = []
+    for m in SIZES:
+        for alpha in [0.5, 0.54, 25.0 / 46.0]:
+            w = spwin.general_hamming(m, alpha, sym=True)
+            gh_cases.append({
+                "name": f"general_hamming_m{m}_alpha{alpha:.4f}",
+                "inputs": {"m": m, "alpha": alpha},
+                "expected": {
+                    "data": [float(x) for x in w.tolist()],
+                    "shape": [m],
+                    "dtype": "float64",
+                },
+                "tolerance_ulps": 4,
+            })
+    save_fixture("window", "general_hamming.json",
+                 _sp_window_fixture("scipy.signal.windows.general_hamming",
+                                    "ferray_window::general_hamming",
+                                    gh_cases))
+
+    # ------------------------------------------------------------------
+    # nuttall — scipy.signal.windows.nuttall
+    # ------------------------------------------------------------------
+    nuttall_cases = _simple_cases(lambda m: spwin.nuttall(m, sym=True), "nuttall")
+    save_fixture("window", "nuttall.json",
+                 _sp_window_fixture("scipy.signal.windows.nuttall",
+                                    "ferray_window::nuttall",
+                                    nuttall_cases))
+
+    # ------------------------------------------------------------------
+    # parzen — scipy.signal.windows.parzen
+    # ------------------------------------------------------------------
+    parzen_cases = _simple_cases(lambda m: spwin.parzen(m, sym=True), "parzen")
+    save_fixture("window", "parzen.json",
+                 _sp_window_fixture("scipy.signal.windows.parzen",
+                                    "ferray_window::parzen",
+                                    parzen_cases))
+
+    # ------------------------------------------------------------------
+    # taylor — scipy.signal.windows.taylor — DIVERGENCE documented in
+    # _divergences.toml: ferray uses analytic peak normalisation,
+    # scipy uses secant midpoint for even M.
+    # Tests use scipy as the reference for the shape/magnitude, but
+    # the divergence entry documents why values differ for even M with norm=True.
+    # We generate cases with norm=False (no divergence) plus norm=True
+    # with odd M (no divergence) as the primary conformance fixtures.
+    # ------------------------------------------------------------------
+    taylor_cases = []
+    # norm=False cases: no normalisation divergence
+    for m in [8, 16, 64]:
+        for nbar, sll in [(4, 30.0), (6, 50.0)]:
+            w = spwin.taylor(m, nbar=nbar, sll=sll, norm=False)
+            taylor_cases.append({
+                "name": f"taylor_m{m}_nbar{nbar}_sll{sll}_nonorm",
+                "inputs": {"m": m, "nbar": nbar, "sll": sll, "norm": False},
+                "expected": {
+                    "data": [float(x) for x in w.tolist()],
+                    "shape": [m],
+                    "dtype": "float64",
+                },
+                "tolerance_ulps": 4,
+            })
+    # norm=True, odd M: no divergence (odd M has a sample exactly at centre)
+    for m in [15, 63]:
+        for nbar, sll in [(4, 30.0), (6, 50.0)]:
+            w = spwin.taylor(m, nbar=nbar, sll=sll, norm=True)
+            taylor_cases.append({
+                "name": f"taylor_m{m}_nbar{nbar}_sll{sll}_norm",
+                "inputs": {"m": m, "nbar": nbar, "sll": sll, "norm": True},
+                "expected": {
+                    "data": [float(x) for x in w.tolist()],
+                    "shape": [m],
+                    "dtype": "float64",
+                },
+                "tolerance_ulps": 4,
+            })
+    # Edge cases
+    taylor_cases.append({
+        "name": "taylor_m1",
+        "inputs": {"m": 1, "nbar": 4, "sll": 30.0, "norm": False},
+        "expected": {"data": [1.0], "shape": [1], "dtype": "float64"},
+        "tolerance_ulps": 0,
+    })
+    taylor_cases.append({
+        "name": "taylor_m0",
+        "inputs": {"m": 0, "nbar": 4, "sll": 30.0, "norm": False},
+        "expected": {"data": [], "shape": [0], "dtype": "float64"},
+        "tolerance_ulps": 0,
+    })
+    save_fixture("window", "taylor.json",
+                 _sp_window_fixture("scipy.signal.windows.taylor",
+                                    "ferray_window::taylor",
+                                    taylor_cases))
+
+    # ------------------------------------------------------------------
+    # tukey — scipy.signal.windows.tukey(m, alpha)
+    # ------------------------------------------------------------------
+    tukey_cases = []
+    for m in SIZES:
+        for alpha in [0.0, 0.5, 1.0]:
+            w = spwin.tukey(m, alpha=alpha, sym=True)
+            tukey_cases.append({
+                "name": f"tukey_m{m}_alpha{alpha}",
+                "inputs": {"m": m, "alpha": alpha},
+                "expected": {
+                    "data": [float(x) for x in w.tolist()],
+                    "shape": [m],
+                    "dtype": "float64",
+                },
+                "tolerance_ulps": 4,
+            })
+    save_fixture("window", "tukey.json",
+                 _sp_window_fixture("scipy.signal.windows.tukey",
+                                    "ferray_window::tukey",
+                                    tukey_cases))
+
+    # ------------------------------------------------------------------
+    # chebwin — scipy.signal.windows.chebwin(m, at)
+    # ------------------------------------------------------------------
+    cheb_cases = []
+    for m in [8, 16, 64]:
+        for at in [40.0, 60.0, 100.0]:
+            w = spwin.chebwin(m, at=at)
+            cheb_cases.append({
+                "name": f"chebwin_m{m}_at{at}",
+                "inputs": {"m": m, "at": at},
+                "expected": {
+                    "data": [float(x) for x in w.tolist()],
+                    "shape": [m],
+                    "dtype": "float64",
+                },
+                "tolerance_ulps": 100,  # DFT-based; some accumulation drift expected
+            })
+    save_fixture("window", "chebwin.json",
+                 _sp_window_fixture("scipy.signal.windows.chebwin",
+                                    "ferray_window::chebwin",
+                                    cheb_cases))
+
+    # ------------------------------------------------------------------
+    # dpss — scipy.signal.windows.dpss(m, NW) — single window (Kmax default)
+    # Wider tolerance: power iteration vs scipy's eig solver differ slightly.
+    # ------------------------------------------------------------------
+    dpss_cases = []
+    for m in [16, 64]:
+        for nw in [2.0, 3.0, 4.0]:
+            w_arr = spwin.dpss(m, NW=nw)
+            # scipy returns (windows, ratios) when Kmax is given explicitly,
+            # or a 1-D array when Kmax=1 (default). Normalise to 1-D.
+            w = w_arr if w_arr.ndim == 1 else w_arr[0]
+            # scipy default norm='approximate': max-normalise
+            peak = float(np.max(np.abs(w)))
+            if peak > 0:
+                w = w / peak
+            dpss_cases.append({
+                "name": f"dpss_m{m}_nw{nw}",
+                "inputs": {"m": m, "nw": nw},
+                "expected": {
+                    "data": [float(x) for x in w.tolist()],
+                    "shape": [m],
+                    "dtype": "float64",
+                },
+                "tolerance_ulps": 1000,  # power-iteration vs eig; wider envelope
+            })
+    save_fixture("window", "dpss.json",
+                 _sp_window_fixture("scipy.signal.windows.dpss",
+                                    "ferray_window::dpss",
+                                    dpss_cases))
+
+    # ------------------------------------------------------------------
+    # boxcar — scipy.signal.windows.boxcar
+    # ------------------------------------------------------------------
+    boxcar_cases = _simple_cases(lambda m: spwin.boxcar(m, sym=True), "boxcar")
+    save_fixture("window", "boxcar.json",
+                 _sp_window_fixture("scipy.signal.windows.boxcar",
+                                    "ferray_window::boxcar",
+                                    boxcar_cases))
+
+    # ------------------------------------------------------------------
+    # triang — scipy.signal.windows.triang
+    # ------------------------------------------------------------------
+    triang_cases = _simple_cases(lambda m: spwin.triang(m, sym=True), "triang")
+    save_fixture("window", "triang.json",
+                 _sp_window_fixture("scipy.signal.windows.triang",
+                                    "ferray_window::triang",
+                                    triang_cases))
+
+    # ------------------------------------------------------------------
+    # bohman — scipy.signal.windows.bohman
+    # ------------------------------------------------------------------
+    bohman_cases = _simple_cases(lambda m: spwin.bohman(m, sym=True), "bohman")
+    save_fixture("window", "bohman.json",
+                 _sp_window_fixture("scipy.signal.windows.bohman",
+                                    "ferray_window::bohman",
+                                    bohman_cases))
+
+    # ------------------------------------------------------------------
+    # flattop — scipy.signal.windows.flattop
+    # ------------------------------------------------------------------
+    flattop_cases = _simple_cases(lambda m: spwin.flattop(m, sym=True), "flattop")
+    save_fixture("window", "flattop.json",
+                 _sp_window_fixture("scipy.signal.windows.flattop",
+                                    "ferray_window::flattop",
+                                    flattop_cases))
+
+    # ------------------------------------------------------------------
+    # lanczos — scipy.signal.windows.lanczos
+    # ------------------------------------------------------------------
+    lanczos_cases = _simple_cases(lambda m: spwin.lanczos(m, sym=True), "lanczos")
+    save_fixture("window", "lanczos.json",
+                 _sp_window_fixture("scipy.signal.windows.lanczos",
+                                    "ferray_window::lanczos",
+                                    lanczos_cases))
+
+    # ------------------------------------------------------------------
+    # bohman already done; now add functional items.
+    # Functional items (apply_along_axis, apply_over_axes, piecewise,
+    # sum_axis_keepdims, vectorize) have NO scipy/numpy equivalent fixture
+    # — they are utility functions whose behaviour is tested by the Rust
+    # conformance tests directly against spec, not against scipy output.
+    # They are excluded in _surface_exclusions.toml with this reason.
+    # ------------------------------------------------------------------
+
+    print(f"  Window fixtures complete — {len(list((FIXTURES_DIR / 'window').glob('*.json')))} files.")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -1725,7 +2245,7 @@ def main():
     print()
 
     # Ensure directories exist
-    for subdir in ["core", "ufunc", "stats", "linalg", "fft", "random", "io", "polynomial", "strings", "ma"]:
+    for subdir in ["core", "ufunc", "stats", "linalg", "fft", "random", "io", "polynomial", "strings", "ma", "window"]:
         (FIXTURES_DIR / subdir).mkdir(parents=True, exist_ok=True)
 
     generators = [
@@ -1739,6 +2259,7 @@ def main():
         ("polynomial", generate_polynomial_fixtures),
         ("strings", generate_strings_fixtures),
         ("ma", generate_ma_fixtures),
+        ("window", generate_window_fixtures),
     ]
 
     errors = []

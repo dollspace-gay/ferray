@@ -1,0 +1,170 @@
+# Surface exclusions for ferray-window.
+#
+# Every entry covers a private inner-module path whose user-facing API is
+# the corresponding re-export at the crate root. The conformance test cited
+# in `covered_by` exercises the implementation through the re-export, which
+# binds to the same function symbol, so the inner path is implicitly
+# verified by the same test.
+
+# ---------------------------------------------------------------------------
+# Inner paths in `ferray_window::windows::*`
+# ---------------------------------------------------------------------------
+
+[[exclusion]]
+path = "ferray_window::windows::bartlett"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::bartlett, which has a conformance test against numpy.bartlett."
+covered_by = "tests/conformance_windows.rs::bartlett_matches_numpy"
+
+[[exclusion]]
+path = "ferray_window::windows::bartlett_f32"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::bartlett_f32, exercised in the same test that covers the f64 path."
+covered_by = "tests/conformance_windows.rs::bartlett_matches_numpy"
+
+[[exclusion]]
+path = "ferray_window::windows::blackman"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::blackman, which has a conformance test against numpy.blackman."
+covered_by = "tests/conformance_windows.rs::blackman_matches_numpy"
+
+[[exclusion]]
+path = "ferray_window::windows::blackman_f32"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::blackman_f32, exercised in the same test that covers the f64 path."
+covered_by = "tests/conformance_windows.rs::blackman_matches_numpy"
+
+[[exclusion]]
+path = "ferray_window::windows::bohman"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::bohman, which has a conformance test against scipy.signal.windows.bohman."
+covered_by = "tests/conformance_windows.rs::bohman_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::boxcar"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::boxcar, which has a conformance test against scipy.signal.windows.boxcar."
+covered_by = "tests/conformance_windows.rs::boxcar_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::chebwin"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::chebwin, which has a conformance test against scipy.signal.windows.chebwin."
+covered_by = "tests/conformance_windows.rs::chebwin_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::cosine"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::cosine, which has a conformance test against scipy.signal.windows.cosine."
+covered_by = "tests/conformance_windows.rs::cosine_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::dpss"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::dpss, which has a conformance test against scipy.signal.windows.dpss."
+covered_by = "tests/conformance_windows.rs::dpss_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::exponential"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::exponential, which has a conformance test against scipy.signal.windows.exponential."
+covered_by = "tests/conformance_windows.rs::exponential_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::flattop"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::flattop, which has a conformance test against scipy.signal.windows.flattop."
+covered_by = "tests/conformance_windows.rs::flattop_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::gaussian"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::gaussian, which has a conformance test against scipy.signal.windows.gaussian."
+covered_by = "tests/conformance_windows.rs::gaussian_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::general_cosine"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::general_cosine, which has a conformance test against scipy.signal.windows.general_cosine."
+covered_by = "tests/conformance_windows.rs::general_cosine_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::general_hamming"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::general_hamming, which has a conformance test against scipy.signal.windows.general_hamming."
+covered_by = "tests/conformance_windows.rs::general_hamming_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::hamming"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::hamming, which has a conformance test against numpy.hamming."
+covered_by = "tests/conformance_windows.rs::hamming_matches_numpy"
+
+[[exclusion]]
+path = "ferray_window::windows::hamming_f32"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::hamming_f32, exercised in the same test that covers the f64 path."
+covered_by = "tests/conformance_windows.rs::hamming_matches_numpy"
+
+[[exclusion]]
+path = "ferray_window::windows::hanning"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::hanning, which has a conformance test against numpy.hanning."
+covered_by = "tests/conformance_windows.rs::hanning_matches_numpy"
+
+[[exclusion]]
+path = "ferray_window::windows::hanning_f32"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::hanning_f32, exercised in the same test that covers the f64 path."
+covered_by = "tests/conformance_windows.rs::hanning_matches_numpy"
+
+[[exclusion]]
+path = "ferray_window::windows::kaiser"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::kaiser, which has a conformance test against numpy.kaiser."
+covered_by = "tests/conformance_windows.rs::kaiser_matches_numpy"
+
+[[exclusion]]
+path = "ferray_window::windows::kaiser_f32"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::kaiser_f32, exercised in the same test that covers the f64 path."
+covered_by = "tests/conformance_windows.rs::kaiser_matches_numpy"
+
+[[exclusion]]
+path = "ferray_window::windows::lanczos"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::lanczos, which has a conformance test against scipy.signal.windows.lanczos."
+covered_by = "tests/conformance_windows.rs::lanczos_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::nuttall"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::nuttall, which has a conformance test against scipy.signal.windows.nuttall."
+covered_by = "tests/conformance_windows.rs::nuttall_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::parzen"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::parzen, which has a conformance test against scipy.signal.windows.parzen."
+covered_by = "tests/conformance_windows.rs::parzen_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::taylor"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::taylor, which is documented in _divergences.toml as an intentional deviation from scipy's secant-midpoint normalisation (analytic peak)."
+covered_by = "tests/conformance/_divergences.toml::ferray_window::taylor"
+
+[[exclusion]]
+path = "ferray_window::windows::triang"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::triang, which has a conformance test against scipy.signal.windows.triang."
+covered_by = "tests/conformance_windows.rs::triang_matches_scipy"
+
+[[exclusion]]
+path = "ferray_window::windows::tukey"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::tukey, which has a conformance test against scipy.signal.windows.tukey."
+covered_by = "tests/conformance_windows.rs::tukey_matches_scipy"
+
+# ---------------------------------------------------------------------------
+# Inner paths in `ferray_window::functional::*`
+# ---------------------------------------------------------------------------
+
+[[exclusion]]
+path = "ferray_window::functional::apply_along_axis"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::apply_along_axis, whose conformance test asserts equivalence with numpy.apply_along_axis(numpy.sum, axis, x) on column and row sums."
+covered_by = "tests/conformance_functional.rs::apply_along_axis_matches_numpy_sum_axis"
+
+[[exclusion]]
+path = "ferray_window::functional::apply_over_axes"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::apply_over_axes, whose conformance test asserts equivalence with numpy.apply_over_axes(numpy.sum, x, [0,1]) reducing to the grand total."
+covered_by = "tests/conformance_functional.rs::apply_over_axes_matches_numpy_double_sum"
+
+[[exclusion]]
+path = "ferray_window::functional::piecewise"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::piecewise, whose conformance test asserts the documented semantics of numpy.piecewise (first-match-wins; default for no-match)."
+covered_by = "tests/conformance_functional.rs::piecewise_matches_documented_semantics"
+
+[[exclusion]]
+path = "ferray_window::functional::sum_axis_keepdims"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::sum_axis_keepdims, whose conformance test asserts equivalence with numpy.sum(a, axis=k, keepdims=True) on both axes of a 2-D array."
+covered_by = "tests/conformance_functional.rs::sum_axis_keepdims_matches_numpy_sum_with_keepdims"
+
+[[exclusion]]
+path = "ferray_window::functional::vectorize"
+reason = "Private inner path. The user-facing API is the re-export at ferray_window::vectorize, whose conformance test asserts the identity round-trip and mapv equivalence that define vectorize (numpy.vectorize itself is a thin for-loop wrapper with no oracle behaviour to compare against)."
+covered_by = "tests/conformance_functional.rs::vectorize_satisfies_identity_and_mapv_equivalence"

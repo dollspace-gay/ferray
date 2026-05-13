@@ -1,0 +1,22 @@
+# Documented cases where ferray-window intentionally returns a more
+# mathematically correct value than the reference library. Each entry
+# is a policy decision under ferray's correctness > parity contract.
+
+[[divergence]]
+ferray_path = "ferray_window::taylor"
+reference_function = "scipy.signal.windows.taylor"
+reference_library = "scipy.signal"
+reference_version = "1.13.0"
+ferray_version_introduced = "0.3.7"
+tracking_issue = 810
+
+example_input = "m=16, nbar=4, sll=30.0, norm=true"
+reference_output = "centre normalisation via secant midpoint of adjacent samples"
+ferray_output = "centre normalisation via analytic peak W((M-1)/2) = 1 + 2·Σ F_m"
+max_observed_delta = 1.5e-3
+
+justification = """
+For even M, scipy.signal.windows.taylor normalises the window by dividing by the average of the two centre samples w[M/2 - 1] and w[M/2]. These samples lie at ±0.5 / M in normalised frequency, not at the origin, so the average is the secant approximation to the window's peak value, not the peak itself. The Taylor window's cosine-sum formula W(xn) = 1 + 2·Σ_{m=1}^{nbar-1} F_m cos(π m xn) evaluates exactly to 1 + 2·Σ F_m at xn = 0 (every cosine term collapses to 1). ferray computes this closed-form analytic peak and divides by it, which is the mathematically correct normalisation. The secant midpoint is an O((Δxn)²) approximation that is exact only when the cosine sum is linear between samples, which it is not for nbar ≥ 2. The error is correlated with nbar and sll; for (M=16, nbar=4, sll=30) the residual is ~1.5e-3.
+"""
+
+citation = "Carrara et al. 1995 ch.10; scipy/signal/windows.py confirmed scipy 1.13.0"

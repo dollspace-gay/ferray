@@ -1,0 +1,167 @@
+{
+  "numpy_version": "2.4.4",
+  "scipy_version": "1.17.1",
+  "fixture_schema_version": 2,
+  "reference_library": "scipy.signal",
+  "function": "scipy.signal.windows.boxcar",
+  "ferray_function": "ferray_window::boxcar",
+  "test_cases": [
+    {
+      "name": "boxcar_m2",
+      "inputs": {
+        "m": 2
+      },
+      "expected": {
+        "data": [
+          1.0,
+          1.0
+        ],
+        "shape": [
+          2
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "boxcar_m16",
+      "inputs": {
+        "m": 16
+      },
+      "expected": {
+        "data": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "shape": [
+          16
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "boxcar_m64",
+      "inputs": {
+        "m": 64
+      },
+      "expected": {
+        "data": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "shape": [
+          64
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "boxcar_m1",
+      "inputs": {
+        "m": 1
+      },
+      "expected": {
+        "data": [
+          1.0
+        ],
+        "shape": [
+          1
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "boxcar_m0",
+      "inputs": {
+        "m": 0
+      },
+      "expected": {
+        "data": [],
+        "shape": [
+          0
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}
