@@ -32,3 +32,7 @@ bf16 = ["dep:half", "ferray-core/bf16"]
 [dev-dependencies]
 proptest = { workspace = true }
 tempfile = { workspace = true }
+ferray-test-oracle = { path = "../ferray-test-oracle" }
+serde = { workspace = true }
+serde_json = "1.0"
+toml = "0.8"

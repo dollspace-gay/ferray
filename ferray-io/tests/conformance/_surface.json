@@ -1,0 +1,506 @@
+{
+  "crate": "ferray-io",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_io::DataSource",
+      "kind": "reexport",
+      "signature": "pub use datasource :: { DataSource , DataSourceReader }"
+    },
+    {
+      "path": "ferray_io::DataSourceReader",
+      "kind": "reexport",
+      "signature": "pub use datasource :: { DataSource , DataSourceReader }"
+    },
+    {
+      "path": "ferray_io::HeaderData",
+      "kind": "reexport",
+      "signature": "pub use format :: { HeaderData , MemmapMode , descr_to_dtype , header_data_from_array_1_0 , read_array , write_array , }"
+    },
+    {
+      "path": "ferray_io::MemmapMode",
+      "kind": "reexport",
+      "signature": "pub use format :: { HeaderData , MemmapMode , descr_to_dtype , header_data_from_array_1_0 , read_array , write_array , }"
+    },
+    {
+      "path": "ferray_io::NpyElement",
+      "kind": "reexport",
+      "signature": "pub use npy :: { NpyElement , load , load_dynamic , load_record , save , save_record }"
+    },
+    {
+      "path": "ferray_io::NpzFile",
+      "kind": "reexport",
+      "signature": "pub use npz :: { NpzFile , savez , savez_compressed }"
+    },
+    {
+      "path": "ferray_io::SaveTxtOptions",
+      "kind": "reexport",
+      "signature": "pub use text :: { SaveTxtOptions , fromregex , fromregex_from_file , genfromtxt , loadtxt , loadtxt_1d , savetxt , savetxt_1d , }"
+    },
+    {
+      "path": "ferray_io::datasource::DataSource",
+      "kind": "struct",
+      "signature": "pub struct DataSource"
+    },
+    {
+      "path": "ferray_io::datasource::DataSource::abspath",
+      "kind": "method",
+      "signature": "pub fn abspath (& self , name : & str) -> FerrayResult < PathBuf >"
+    },
+    {
+      "path": "ferray_io::datasource::DataSource::exists",
+      "kind": "method",
+      "signature": "pub fn exists (& self , name : & str) -> bool"
+    },
+    {
+      "path": "ferray_io::datasource::DataSource::new",
+      "kind": "method",
+      "signature": "pub fn new (base : Option < PathBuf >) -> Self"
+    },
+    {
+      "path": "ferray_io::datasource::DataSource::open",
+      "kind": "method",
+      "signature": "pub fn open (& self , name : & str) -> FerrayResult < DataSourceReader >"
+    },
+    {
+      "path": "ferray_io::datasource::DataSource::open_path",
+      "kind": "method",
+      "signature": "pub fn open_path < P : AsRef < Path > > (path : P) -> FerrayResult < DataSourceReader >"
+    },
+    {
+      "path": "ferray_io::datasource::DataSourceReader",
+      "kind": "enum",
+      "signature": "pub enum DataSourceReader"
+    },
+    {
+      "path": "ferray_io::descr_to_dtype",
+      "kind": "reexport",
+      "signature": "pub use format :: { HeaderData , MemmapMode , descr_to_dtype , header_data_from_array_1_0 , read_array , write_array , }"
+    },
+    {
+      "path": "ferray_io::format::HeaderData",
+      "kind": "struct",
+      "signature": "pub struct HeaderData"
+    },
+    {
+      "path": "ferray_io::format::MemmapMode",
+      "kind": "enum",
+      "signature": "pub enum MemmapMode"
+    },
+    {
+      "path": "ferray_io::format::descr_to_dtype",
+      "kind": "fn",
+      "signature": "pub fn descr_to_dtype (descr : & str) -> FerrayResult < DType >"
+    },
+    {
+      "path": "ferray_io::format::header_data_from_array_1_0",
+      "kind": "fn",
+      "signature": "pub fn header_data_from_array_1_0 (array : & DynArray) -> FerrayResult < HeaderData >"
+    },
+    {
+      "path": "ferray_io::format::read_array",
+      "kind": "fn",
+      "signature": "pub fn read_array < R : std :: io :: Read > (reader : & mut R) -> FerrayResult < DynArray >"
+    },
+    {
+      "path": "ferray_io::format::write_array",
+      "kind": "fn",
+      "signature": "pub fn write_array < W : std :: io :: Write > (writer : & mut W , array : & DynArray) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::fromregex",
+      "kind": "reexport",
+      "signature": "pub use text :: { SaveTxtOptions , fromregex , fromregex_from_file , genfromtxt , loadtxt , loadtxt_1d , savetxt , savetxt_1d , }"
+    },
+    {
+      "path": "ferray_io::fromregex_from_file",
+      "kind": "reexport",
+      "signature": "pub use text :: { SaveTxtOptions , fromregex , fromregex_from_file , genfromtxt , loadtxt , loadtxt_1d , savetxt , savetxt_1d , }"
+    },
+    {
+      "path": "ferray_io::genfromtxt",
+      "kind": "reexport",
+      "signature": "pub use text :: { SaveTxtOptions , fromregex , fromregex_from_file , genfromtxt , loadtxt , loadtxt_1d , savetxt , savetxt_1d , }"
+    },
+    {
+      "path": "ferray_io::header_data_from_array_1_0",
+      "kind": "reexport",
+      "signature": "pub use format :: { HeaderData , MemmapMode , descr_to_dtype , header_data_from_array_1_0 , read_array , write_array , }"
+    },
+    {
+      "path": "ferray_io::load",
+      "kind": "reexport",
+      "signature": "pub use npy :: { NpyElement , load , load_dynamic , load_record , save , save_record }"
+    },
+    {
+      "path": "ferray_io::load_dynamic",
+      "kind": "reexport",
+      "signature": "pub use npy :: { NpyElement , load , load_dynamic , load_record , save , save_record }"
+    },
+    {
+      "path": "ferray_io::load_record",
+      "kind": "reexport",
+      "signature": "pub use npy :: { NpyElement , load , load_dynamic , load_record , save , save_record }"
+    },
+    {
+      "path": "ferray_io::loadtxt",
+      "kind": "reexport",
+      "signature": "pub use text :: { SaveTxtOptions , fromregex , fromregex_from_file , genfromtxt , loadtxt , loadtxt_1d , savetxt , savetxt_1d , }"
+    },
+    {
+      "path": "ferray_io::loadtxt_1d",
+      "kind": "reexport",
+      "signature": "pub use text :: { SaveTxtOptions , fromregex , fromregex_from_file , genfromtxt , loadtxt , loadtxt_1d , savetxt , savetxt_1d , }"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArray",
+      "kind": "struct",
+      "signature": "pub struct MemmapArray < T : Element >"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArray::as_slice",
+      "kind": "method",
+      "signature": "pub fn as_slice (& self) -> & [T]"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArray::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArray::to_array",
+      "kind": "method",
+      "signature": "pub fn to_array (& self) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArray::view",
+      "kind": "method",
+      "signature": "pub fn view (& self) -> ArrayView < '_ , T , IxDyn >"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArrayMut",
+      "kind": "struct",
+      "signature": "pub struct MemmapArrayMut < T : Element >"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArrayMut::as_slice",
+      "kind": "method",
+      "signature": "pub fn as_slice (& self) -> & [T]"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArrayMut::as_slice_mut",
+      "kind": "method",
+      "signature": "pub fn as_slice_mut (& mut self) -> & mut [T]"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArrayMut::flush",
+      "kind": "method",
+      "signature": "pub fn flush (& self) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArrayMut::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArrayMut::to_array",
+      "kind": "method",
+      "signature": "pub fn to_array (& self) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_io::memmap::MemmapArrayMut::view",
+      "kind": "method",
+      "signature": "pub fn view (& self) -> ArrayView < '_ , T , IxDyn >"
+    },
+    {
+      "path": "ferray_io::memmap::memmap_mut",
+      "kind": "fn",
+      "signature": "pub fn memmap_mut < T : Element + NpyElement , P : AsRef < Path > > (path : P , mode : MemmapMode ,) -> FerrayResult < MemmapArrayMut < T > >"
+    },
+    {
+      "path": "ferray_io::memmap::memmap_readonly",
+      "kind": "fn",
+      "signature": "pub fn memmap_readonly < T : Element + NpyElement , P : AsRef < Path > > (path : P ,) -> FerrayResult < MemmapArray < T > >"
+    },
+    {
+      "path": "ferray_io::memmap::open_memmap",
+      "kind": "fn",
+      "signature": "pub fn open_memmap < T : Element + NpyElement , P : AsRef < Path > > (path : P , mode : MemmapMode ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_io::npy::NpyElement",
+      "kind": "trait",
+      "signature": "pub trait NpyElement"
+    },
+    {
+      "path": "ferray_io::npy::dtype_parse::Endianness",
+      "kind": "enum",
+      "signature": "pub enum Endianness"
+    },
+    {
+      "path": "ferray_io::npy::dtype_parse::Endianness::needs_swap",
+      "kind": "method",
+      "signature": "pub const fn needs_swap (self) -> bool"
+    },
+    {
+      "path": "ferray_io::npy::dtype_parse::dtype_to_descr",
+      "kind": "fn",
+      "signature": "pub fn dtype_to_descr (dtype : DType , endian : Endianness) -> FerrayResult < String >"
+    },
+    {
+      "path": "ferray_io::npy::dtype_parse::dtype_to_native_descr",
+      "kind": "fn",
+      "signature": "pub fn dtype_to_native_descr (dtype : DType) -> FerrayResult < String >"
+    },
+    {
+      "path": "ferray_io::npy::dtype_parse::parse_dtype_str",
+      "kind": "fn",
+      "signature": "pub fn parse_dtype_str (s : & str) -> FerrayResult < (DType , Endianness) >"
+    },
+    {
+      "path": "ferray_io::npy::header::NpyHeader",
+      "kind": "struct",
+      "signature": "pub struct NpyHeader"
+    },
+    {
+      "path": "ferray_io::npy::header::compute_data_offset",
+      "kind": "fn",
+      "signature": "pub const fn compute_data_offset (version : (u8 , u8) , header_len : usize) -> usize"
+    },
+    {
+      "path": "ferray_io::npy::header::read_header",
+      "kind": "fn",
+      "signature": "pub fn read_header < R : std :: io :: Read > (reader : & mut R) -> FerrayResult < NpyHeader >"
+    },
+    {
+      "path": "ferray_io::npy::header::write_header",
+      "kind": "fn",
+      "signature": "pub fn write_header < W : std :: io :: Write > (writer : & mut W , dtype : DType , shape : & [usize] , fortran_order : bool ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::npy::load",
+      "kind": "fn",
+      "signature": "pub fn load < T : Element + NpyElement , D : Dimension , P : AsRef < Path > > (path : P ,) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_io::npy::load_dynamic",
+      "kind": "fn",
+      "signature": "pub fn load_dynamic < P : AsRef < Path > > (path : P) -> FerrayResult < DynArray >"
+    },
+    {
+      "path": "ferray_io::npy::load_dynamic_from_reader",
+      "kind": "fn",
+      "signature": "pub fn load_dynamic_from_reader < R : Read > (reader : & mut R) -> FerrayResult < DynArray >"
+    },
+    {
+      "path": "ferray_io::npy::load_from_reader",
+      "kind": "fn",
+      "signature": "pub fn load_from_reader < T : Element + NpyElement , D : Dimension , R : Read > (reader : & mut R ,) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_io::npy::load_record",
+      "kind": "fn",
+      "signature": "pub fn load_record < T : FerrayRecord + Element , D : Dimension , P : AsRef < Path > > (path : P ,) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_io::npy::load_record_from_reader",
+      "kind": "fn",
+      "signature": "pub fn load_record_from_reader < T : FerrayRecord + Element , D : Dimension , R : Read > (reader : & mut R ,) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_io::npy::private::NpySealed",
+      "kind": "trait",
+      "signature": "pub trait NpySealed"
+    },
+    {
+      "path": "ferray_io::npy::save",
+      "kind": "fn",
+      "signature": "pub fn save < T : Element + NpyElement , D : Dimension , P : AsRef < Path > > (path : P , array : & Array < T , D > ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::npy::save_dynamic",
+      "kind": "fn",
+      "signature": "pub fn save_dynamic < P : AsRef < Path > > (path : P , array : & DynArray) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::npy::save_dynamic_to_writer",
+      "kind": "fn",
+      "signature": "pub fn save_dynamic_to_writer < W : Write > (writer : & mut W , array : & DynArray) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::npy::save_record",
+      "kind": "fn",
+      "signature": "pub fn save_record < T : FerrayRecord + Element , D : Dimension , P : AsRef < Path > > (path : P , array : & Array < T , D > ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::npy::save_record_to_writer",
+      "kind": "fn",
+      "signature": "pub fn save_record_to_writer < T : FerrayRecord + Element , D : Dimension , W : Write > (writer : & mut W , array : & Array < T , D > ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::npy::save_to_writer",
+      "kind": "fn",
+      "signature": "pub fn save_to_writer < T : Element + NpyElement , D : Dimension , W : Write > (writer : & mut W , array : & Array < T , D > ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::npz::NpzFile",
+      "kind": "struct",
+      "signature": "pub struct NpzFile"
+    },
+    {
+      "path": "ferray_io::npz::NpzFile::from_reader",
+      "kind": "method",
+      "signature": "pub fn from_reader < R : Read + std :: io :: Seek + Send + 'static > (reader : R) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_io::npz::NpzFile::get",
+      "kind": "method",
+      "signature": "pub fn get (& mut self , name : & str) -> FerrayResult < DynArray >"
+    },
+    {
+      "path": "ferray_io::npz::NpzFile::is_empty",
+      "kind": "method",
+      "signature": "pub fn is_empty (& self) -> bool"
+    },
+    {
+      "path": "ferray_io::npz::NpzFile::len",
+      "kind": "method",
+      "signature": "pub fn len (& self) -> usize"
+    },
+    {
+      "path": "ferray_io::npz::NpzFile::names",
+      "kind": "method",
+      "signature": "pub fn names (& self) -> Vec < & str >"
+    },
+    {
+      "path": "ferray_io::npz::NpzFile::open",
+      "kind": "method",
+      "signature": "pub fn open < P : AsRef < Path > > (path : P) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_io::npz::savez",
+      "kind": "fn",
+      "signature": "pub fn savez < P : AsRef < Path > > (path : P , arrays : & [(& str , & DynArray)]) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::npz::savez_compressed",
+      "kind": "fn",
+      "signature": "pub fn savez_compressed < P : AsRef < Path > > (path : P , arrays : & [(& str , & DynArray)]) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::read_array",
+      "kind": "reexport",
+      "signature": "pub use format :: { HeaderData , MemmapMode , descr_to_dtype , header_data_from_array_1_0 , read_array , write_array , }"
+    },
+    {
+      "path": "ferray_io::save",
+      "kind": "reexport",
+      "signature": "pub use npy :: { NpyElement , load , load_dynamic , load_record , save , save_record }"
+    },
+    {
+      "path": "ferray_io::save_record",
+      "kind": "reexport",
+      "signature": "pub use npy :: { NpyElement , load , load_dynamic , load_record , save , save_record }"
+    },
+    {
+      "path": "ferray_io::savetxt",
+      "kind": "reexport",
+      "signature": "pub use text :: { SaveTxtOptions , fromregex , fromregex_from_file , genfromtxt , loadtxt , loadtxt_1d , savetxt , savetxt_1d , }"
+    },
+    {
+      "path": "ferray_io::savetxt_1d",
+      "kind": "reexport",
+      "signature": "pub use text :: { SaveTxtOptions , fromregex , fromregex_from_file , genfromtxt , loadtxt , loadtxt_1d , savetxt , savetxt_1d , }"
+    },
+    {
+      "path": "ferray_io::savez",
+      "kind": "reexport",
+      "signature": "pub use npz :: { NpzFile , savez , savez_compressed }"
+    },
+    {
+      "path": "ferray_io::savez_compressed",
+      "kind": "reexport",
+      "signature": "pub use npz :: { NpzFile , savez , savez_compressed }"
+    },
+    {
+      "path": "ferray_io::text::SaveTxtOptions",
+      "kind": "struct",
+      "signature": "pub struct SaveTxtOptions"
+    },
+    {
+      "path": "ferray_io::text::fromregex",
+      "kind": "fn",
+      "signature": "pub fn fromregex < T > (content : & str , regex : & str) -> FerrayResult < Array < T , Ix2 > > where T : Element + FromStr , T :: Err : Display ,"
+    },
+    {
+      "path": "ferray_io::text::fromregex_from_file",
+      "kind": "fn",
+      "signature": "pub fn fromregex_from_file < T , P > (path : P , regex : & str) -> FerrayResult < Array < T , Ix2 > > where T : Element + FromStr , T :: Err : Display , P : AsRef < Path > ,"
+    },
+    {
+      "path": "ferray_io::text::genfromtxt",
+      "kind": "fn",
+      "signature": "pub fn genfromtxt < P : AsRef < Path > > (path : P , delimiter : char , filling_value : f64 , skiprows : usize , missing_values : & [& str] ,) -> FerrayResult < Array < f64 , Ix2 > >"
+    },
+    {
+      "path": "ferray_io::text::genfromtxt_from_str",
+      "kind": "fn",
+      "signature": "pub fn genfromtxt_from_str (content : & str , delimiter : char , filling_value : f64 , skiprows : usize , missing_values : & [& str] ,) -> FerrayResult < Array < f64 , Ix2 > >"
+    },
+    {
+      "path": "ferray_io::text::loadtxt",
+      "kind": "fn",
+      "signature": "pub fn loadtxt < T , P > (path : P , delimiter : char , skiprows : usize) -> FerrayResult < Array < T , Ix2 > > where T : Element + FromStr , T :: Err : Display , P : AsRef < Path > ,"
+    },
+    {
+      "path": "ferray_io::text::loadtxt_1d",
+      "kind": "fn",
+      "signature": "pub fn loadtxt_1d < T , P > (path : P , delimiter : char , skiprows : usize) -> FerrayResult < Array < T , Ix1 > > where T : Element + FromStr , T :: Err : Display , P : AsRef < Path > ,"
+    },
+    {
+      "path": "ferray_io::text::loadtxt_from_str",
+      "kind": "fn",
+      "signature": "pub fn loadtxt_from_str < T > (content : & str , delimiter : char , skiprows : usize ,) -> FerrayResult < Array < T , Ix2 > > where T : Element + FromStr , T :: Err : Display ,"
+    },
+    {
+      "path": "ferray_io::text::parser::TextParseOptions",
+      "kind": "struct",
+      "signature": "pub struct TextParseOptions"
+    },
+    {
+      "path": "ferray_io::text::parser::parse_text_grid",
+      "kind": "fn",
+      "signature": "pub fn parse_text_grid (content : & str , opts : & TextParseOptions ,) -> FerrayResult < (Vec < String > , usize , usize) >"
+    },
+    {
+      "path": "ferray_io::text::parser::parse_text_grid_with_missing",
+      "kind": "fn",
+      "signature": "pub fn parse_text_grid_with_missing (content : & str , opts : & TextParseOptions , missing_values : & [& str] ,) -> FerrayResult < (Vec < Option < String > > , usize , usize) >"
+    },
+    {
+      "path": "ferray_io::text::savetxt",
+      "kind": "fn",
+      "signature": "pub fn savetxt < T : Element + Display , P : AsRef < Path > > (path : P , array : & Array < T , Ix2 > , opts : & SaveTxtOptions ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::text::savetxt_1d",
+      "kind": "fn",
+      "signature": "pub fn savetxt_1d < T : Element + Display , P : AsRef < Path > > (path : P , array : & Array < T , Ix1 > , opts : & SaveTxtOptions ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::text::savetxt_1d_to_writer",
+      "kind": "fn",
+      "signature": "pub fn savetxt_1d_to_writer < T : Element + Display , W : Write > (writer : & mut W , array : & Array < T , Ix1 > , opts : & SaveTxtOptions ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::text::savetxt_to_writer",
+      "kind": "fn",
+      "signature": "pub fn savetxt_to_writer < T : Element + Display , W : Write > (writer : & mut W , array : & Array < T , Ix2 > , opts : & SaveTxtOptions ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_io::write_array",
+      "kind": "reexport",
+      "signature": "pub use format :: { HeaderData , MemmapMode , descr_to_dtype , header_data_from_array_1_0 , read_array , write_array , }"
+    }
+  ]
+}

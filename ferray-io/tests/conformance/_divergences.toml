@@ -1,0 +1,7 @@
+# Documented cases where ferray-io returns a more mathematically
+# correct value than the reference. None currently documented for
+# ferray-io — the .npy/.npz/text/memmap operations covered by today's
+# fixtures and round-trip tests match NumPy byte-for-byte. New
+# divergences should be filed with reference_function +
+# reference_library + tracking_issue fields per
+# docs/conformance-suites.md.

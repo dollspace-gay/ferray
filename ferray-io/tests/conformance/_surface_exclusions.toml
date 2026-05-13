@@ -1,0 +1,77 @@
+# ferray-io surface exclusions (Stage 4)
+
+[[exclusion]]
+path = "ferray_io::datasource::DataSource::abspath"
+reason = "Method on DataSource type; user-facing API tested via the file-level functions in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::datasource::DataSource::exists"
+reason = "Method on DataSource type; user-facing API tested via the file-level functions in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::datasource::DataSource::new"
+reason = "Method on DataSource type; user-facing API tested via the file-level functions in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::datasource::DataSource::open"
+reason = "Method on DataSource type; user-facing API tested via the file-level functions in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::datasource::DataSource::open_path"
+reason = "Method on DataSource type; user-facing API tested via the file-level functions in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::memmap::MemmapArray::as_slice"
+reason = "Method on MemmapArray type; memmap is exercised by the file-level npy/npz tests in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::memmap::MemmapArray::shape"
+reason = "Method on MemmapArray type; memmap is exercised by the file-level npy/npz tests in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::memmap::MemmapArray::to_array"
+reason = "Method on MemmapArray type; memmap is exercised by the file-level npy/npz tests in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::memmap::MemmapArray::view"
+reason = "Method on MemmapArray type; memmap is exercised by the file-level npy/npz tests in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::memmap::MemmapArrayMut::as_slice"
+reason = "Method on MemmapArray type; memmap is exercised by the file-level npy/npz tests in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::memmap::MemmapArrayMut::as_slice_mut"
+reason = "Method on MemmapArray type; memmap is exercised by the file-level npy/npz tests in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::memmap::MemmapArrayMut::flush"
+reason = "Method on MemmapArray type; memmap is exercised by the file-level npy/npz tests in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::memmap::MemmapArrayMut::shape"
+reason = "Method on MemmapArray type; memmap is exercised by the file-level npy/npz tests in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::memmap::MemmapArrayMut::to_array"
+reason = "Method on MemmapArray type; memmap is exercised by the file-level npy/npz tests in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
+[[exclusion]]
+path = "ferray_io::memmap::MemmapArrayMut::view"
+reason = "Method on MemmapArray type; memmap is exercised by the file-level npy/npz tests in tests/conformance_io.rs."
+covered_by = "tests/conformance_io.rs"
+
