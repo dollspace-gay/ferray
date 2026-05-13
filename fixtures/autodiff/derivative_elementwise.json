@@ -1,0 +1,40 @@
+{
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
+  "reference_library": "numpy",
+  "function": "analytic.d_dx_elementwise",
+  "ferray_function": "ferray_autodiff::array_ops::derivative_elementwise",
+  "test_cases": [
+    {
+      "name": "x_squared_over_1d",
+      "inputs": {
+        "x": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "fn_id": "x_squared"
+      },
+      "expected": {
+        "data": [
+          0.0,
+          2.0,
+          4.0,
+          6.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

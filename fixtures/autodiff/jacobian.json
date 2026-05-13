@@ -1,0 +1,51 @@
+{
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
+  "reference_library": "numpy",
+  "function": "analytic.jacobian",
+  "ferray_function": "ferray_autodiff::api::jacobian",
+  "test_cases": [
+    {
+      "name": "linear_pair_at_3_4",
+      "inputs": {
+        "point": [
+          3.0,
+          4.0
+        ],
+        "fn_id": "linear_pair"
+      },
+      "expected": {
+        "jacobian": [
+          1.0,
+          1.0,
+          1.0,
+          -1.0
+        ],
+        "m": 2,
+        "n": 2
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "product_and_sum_at_3_4",
+      "inputs": {
+        "point": [
+          3.0,
+          4.0
+        ],
+        "fn_id": "product_and_sum"
+      },
+      "expected": {
+        "jacobian": [
+          4.0,
+          3.0,
+          1.0,
+          1.0
+        ],
+        "m": 2,
+        "n": 2
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

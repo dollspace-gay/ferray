@@ -1,0 +1,386 @@
+{
+  "crate": "ferray-autodiff",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_autodiff::DualNumber",
+      "kind": "reexport",
+      "signature": "pub use dual :: DualNumber"
+    },
+    {
+      "path": "ferray_autodiff::abs",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::acos",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::api::derivative",
+      "kind": "fn",
+      "signature": "pub fn derivative < T : Float > (f : impl Fn (DualNumber < T >) -> DualNumber < T > , x : T) -> T"
+    },
+    {
+      "path": "ferray_autodiff::api::gradient",
+      "kind": "fn",
+      "signature": "pub fn gradient < T : Float > (f : impl Fn (& [DualNumber < T >]) -> DualNumber < T > , point : & [T]) -> Vec < T >"
+    },
+    {
+      "path": "ferray_autodiff::api::jacobian",
+      "kind": "fn",
+      "signature": "pub fn jacobian < T : Float > (f : impl Fn (& [DualNumber < T >]) -> Vec < DualNumber < T > > , point : & [T] ,) -> (Vec < T > , usize)"
+    },
+    {
+      "path": "ferray_autodiff::array_ops::derivative_elementwise",
+      "kind": "fn",
+      "signature": "pub fn derivative_elementwise < T , D , F > (f : F , x : & Array < T , D >) -> FerrayResult < Array < T , D > > where T : Element + Float , D : Dimension , F : Fn (DualNumber < T >) -> DualNumber < T > ,"
+    },
+    {
+      "path": "ferray_autodiff::array_ops::gradient_vector",
+      "kind": "fn",
+      "signature": "pub fn gradient_vector < T , F > (f : F , x : & Array < T , Ix1 >) -> FerrayResult < Array < T , Ix1 > > where T : Element + Float , F : Fn (& [DualNumber < T >]) -> DualNumber < T > ,"
+    },
+    {
+      "path": "ferray_autodiff::array_ops::jacobian_array",
+      "kind": "fn",
+      "signature": "pub fn jacobian_array < T , F > (f : F , x : & Array < T , Ix1 >) -> FerrayResult < Array < T , Ix2 > > where T : Element + Float , F : Fn (& [DualNumber < T >]) -> Vec < DualNumber < T > > ,"
+    },
+    {
+      "path": "ferray_autodiff::array_ops::value_and_derivative_elementwise",
+      "kind": "fn",
+      "signature": "pub fn value_and_derivative_elementwise < T , D , F > (f : F , x : & Array < T , D > ,) -> FerrayResult < (Array < T , D > , Array < T , D >) > where T : Element + Float , D : Dimension , F : Fn (DualNumber < T >) -> DualNumber < T > ,"
+    },
+    {
+      "path": "ferray_autodiff::array_ops::value_and_gradient",
+      "kind": "fn",
+      "signature": "pub fn value_and_gradient < T , F > (f : F , x : & Array < T , Ix1 >) -> FerrayResult < (T , Array < T , Ix1 >) > where T : Element + Float , F : Fn (& [DualNumber < T >]) -> DualNumber < T > ,"
+    },
+    {
+      "path": "ferray_autodiff::asin",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::atan",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::atan2",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::cos",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::cosh",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::derivative",
+      "kind": "reexport",
+      "signature": "pub use api :: { derivative , gradient , jacobian }"
+    },
+    {
+      "path": "ferray_autodiff::derivative_elementwise",
+      "kind": "reexport",
+      "signature": "pub use array_ops :: { derivative_elementwise , gradient_vector , jacobian_array , value_and_derivative_elementwise , value_and_gradient , }"
+    },
+    {
+      "path": "ferray_autodiff::dual::DualNumber",
+      "kind": "struct",
+      "signature": "pub struct DualNumber < T >"
+    },
+    {
+      "path": "ferray_autodiff::dual::DualNumber::constant",
+      "kind": "method",
+      "signature": "pub fn constant (real : T) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::dual::DualNumber::new",
+      "kind": "method",
+      "signature": "pub const fn new (real : T , dual : T) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::dual::DualNumber::variable",
+      "kind": "method",
+      "signature": "pub fn variable (real : T) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::exp",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::abs",
+      "kind": "method",
+      "signature": "pub fn abs (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::acos",
+      "kind": "method",
+      "signature": "pub fn acos (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::acosh",
+      "kind": "method",
+      "signature": "pub fn acosh (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::asin",
+      "kind": "method",
+      "signature": "pub fn asin (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::asinh",
+      "kind": "method",
+      "signature": "pub fn asinh (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::atan",
+      "kind": "method",
+      "signature": "pub fn atan (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::atan2",
+      "kind": "method",
+      "signature": "pub fn atan2 (self , other : Self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::atanh",
+      "kind": "method",
+      "signature": "pub fn atanh (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::cbrt",
+      "kind": "method",
+      "signature": "pub fn cbrt (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::ceil",
+      "kind": "method",
+      "signature": "pub fn ceil (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::cos",
+      "kind": "method",
+      "signature": "pub fn cos (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::cosh",
+      "kind": "method",
+      "signature": "pub fn cosh (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::exp",
+      "kind": "method",
+      "signature": "pub fn exp (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::exp2",
+      "kind": "method",
+      "signature": "pub fn exp2 (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::exp_m1",
+      "kind": "method",
+      "signature": "pub fn exp_m1 (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::floor",
+      "kind": "method",
+      "signature": "pub fn floor (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::fract",
+      "kind": "method",
+      "signature": "pub fn fract (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::hypot",
+      "kind": "method",
+      "signature": "pub fn hypot (self , other : Self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::ln",
+      "kind": "method",
+      "signature": "pub fn ln (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::ln_1p",
+      "kind": "method",
+      "signature": "pub fn ln_1p (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::log",
+      "kind": "method",
+      "signature": "pub fn log (self , base : Self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::log10",
+      "kind": "method",
+      "signature": "pub fn log10 (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::log2",
+      "kind": "method",
+      "signature": "pub fn log2 (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::mul_add",
+      "kind": "method",
+      "signature": "pub fn mul_add (self , a : Self , b : Self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::powf",
+      "kind": "method",
+      "signature": "pub fn powf (self , p : Self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::powi",
+      "kind": "method",
+      "signature": "pub fn powi (self , n : i32) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::recip",
+      "kind": "method",
+      "signature": "pub fn recip (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::round",
+      "kind": "method",
+      "signature": "pub fn round (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::signum",
+      "kind": "method",
+      "signature": "pub fn signum (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::sin",
+      "kind": "method",
+      "signature": "pub fn sin (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::sin_cos",
+      "kind": "method",
+      "signature": "pub fn sin_cos (self) -> (Self , Self)"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::sinh",
+      "kind": "method",
+      "signature": "pub fn sinh (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::sqrt",
+      "kind": "method",
+      "signature": "pub fn sqrt (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::tan",
+      "kind": "method",
+      "signature": "pub fn tan (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::tanh",
+      "kind": "method",
+      "signature": "pub fn tanh (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::to_degrees",
+      "kind": "method",
+      "signature": "pub fn to_degrees (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::to_radians",
+      "kind": "method",
+      "signature": "pub fn to_radians (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::DualNumber::trunc",
+      "kind": "method",
+      "signature": "pub fn trunc (self) -> Self"
+    },
+    {
+      "path": "ferray_autodiff::functions::atan2",
+      "kind": "fn",
+      "signature": "pub fn atan2 < T : Float > (y : DualNumber < T > , x : DualNumber < T >) -> DualNumber < T >"
+    },
+    {
+      "path": "ferray_autodiff::gradient",
+      "kind": "reexport",
+      "signature": "pub use api :: { derivative , gradient , jacobian }"
+    },
+    {
+      "path": "ferray_autodiff::gradient_vector",
+      "kind": "reexport",
+      "signature": "pub use array_ops :: { derivative_elementwise , gradient_vector , jacobian_array , value_and_derivative_elementwise , value_and_gradient , }"
+    },
+    {
+      "path": "ferray_autodiff::jacobian",
+      "kind": "reexport",
+      "signature": "pub use api :: { derivative , gradient , jacobian }"
+    },
+    {
+      "path": "ferray_autodiff::jacobian_array",
+      "kind": "reexport",
+      "signature": "pub use array_ops :: { derivative_elementwise , gradient_vector , jacobian_array , value_and_derivative_elementwise , value_and_gradient , }"
+    },
+    {
+      "path": "ferray_autodiff::ln",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::log10",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::log2",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::sin",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::sinh",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::sqrt",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::tan",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::tanh",
+      "kind": "reexport",
+      "signature": "pub use functions :: { abs , acos , asin , atan , atan2 , cos , cosh , exp , ln , log2 , log10 , sin , sinh , sqrt , tan , tanh , }"
+    },
+    {
+      "path": "ferray_autodiff::value_and_derivative_elementwise",
+      "kind": "reexport",
+      "signature": "pub use array_ops :: { derivative_elementwise , gradient_vector , jacobian_array , value_and_derivative_elementwise , value_and_gradient , }"
+    },
+    {
+      "path": "ferray_autodiff::value_and_gradient",
+      "kind": "reexport",
+      "signature": "pub use array_ops :: { derivative_elementwise , gradient_vector , jacobian_array , value_and_derivative_elementwise , value_and_gradient , }"
+    }
+  ]
+}

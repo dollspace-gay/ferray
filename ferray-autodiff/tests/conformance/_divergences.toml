@@ -1,0 +1,2 @@
+# Documented cases where ferray-autodiff returns a more mathematically
+# correct value than the reference. None currently documented.

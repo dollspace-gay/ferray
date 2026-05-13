@@ -1,0 +1,45 @@
+{
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
+  "reference_library": "numpy",
+  "function": "analytic.grad",
+  "ferray_function": "ferray_autodiff::api::gradient",
+  "test_cases": [
+    {
+      "name": "sum_of_squares_at_3_4",
+      "inputs": {
+        "point": [
+          3.0,
+          4.0
+        ],
+        "fn_id": "sum_of_squares"
+      },
+      "expected": {
+        "gradient": [
+          6.0,
+          8.0
+        ]
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "product_of_three_at_1_2_3",
+      "inputs": {
+        "point": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "fn_id": "product_of_three"
+      },
+      "expected": {
+        "gradient": [
+          6.0,
+          3.0,
+          2.0
+        ]
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

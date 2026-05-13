@@ -2497,6 +2497,294 @@ def generate_stride_tricks_fixtures() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Autodiff
+# ---------------------------------------------------------------------------
+
+def generate_autodiff_fixtures() -> None:
+    """Generate fixtures/autodiff/<name>.json for each ferray-autodiff public
+    function (forward-mode dual-number AD).
+
+    The reference values are analytic derivatives computed by hand and
+    encoded as NumPy expressions. Each fixture tests value+derivative
+    (or gradient / jacobian) for a representative simple function. No
+    autograd backward lane: ferray-autodiff is forward-mode, so coverage
+    is over eval(f, x) and grad(f, x) only.
+    """
+    print("Generating autodiff fixtures...")
+    subdir = FIXTURES_DIR / "autodiff"
+    subdir.mkdir(parents=True, exist_ok=True)
+
+    numpy_ver = np.__version__
+
+    def _ad_fixture(np_func_name, ferray_func_name, test_cases, ref_lib="numpy"):
+        return {
+            "numpy_version": numpy_ver,
+            "fixture_schema_version": 2,
+            "reference_library": ref_lib,
+            "function": np_func_name,
+            "ferray_function": ferray_func_name,
+            "test_cases": test_cases,
+        }
+
+    # ------------------------------------------------------------------
+    # api::derivative — d/dx f(x) for a univariate f.
+    # Input: { x: scalar, fn_id: str (selects the closure on the Rust side) }
+    # Expected: { value: f(x), deriv: f'(x) }
+    # ------------------------------------------------------------------
+    derivative_cases = [
+        # f(x) = x^2 at x=3 → value=9, deriv=6
+        {
+            "name": "x_squared_at_3",
+            "inputs": {"x": 3.0, "fn_id": "x_squared"},
+            "expected": {"value": 9.0, "deriv": 6.0},
+            "tolerance_ulps": 4,
+        },
+        # f(x) = sin(x) at x=π/4 → value=sin(π/4), deriv=cos(π/4)
+        {
+            "name": "sin_at_pi_over_4",
+            "inputs": {"x": float(np.pi / 4.0), "fn_id": "sin"},
+            "expected": {
+                "value": float(np.sin(np.pi / 4.0)),
+                "deriv": float(np.cos(np.pi / 4.0)),
+            },
+            "tolerance_ulps": 4,
+        },
+        # f(x) = exp(x) at x=1 → value=e, deriv=e
+        {
+            "name": "exp_at_1",
+            "inputs": {"x": 1.0, "fn_id": "exp"},
+            "expected": {
+                "value": float(np.exp(1.0)),
+                "deriv": float(np.exp(1.0)),
+            },
+            "tolerance_ulps": 4,
+        },
+    ]
+    save_fixture("autodiff", "derivative.json",
+                 _ad_fixture("analytic.d_dx",
+                             "ferray_autodiff::api::derivative",
+                             derivative_cases))
+
+    # ------------------------------------------------------------------
+    # api::gradient — ∇f(x) for f: R^n → R.
+    # Input: { point: [f64], fn_id: str }
+    # Expected: { gradient: [f64] }
+    # ------------------------------------------------------------------
+    gradient_cases = [
+        # f(x,y) = x^2 + y^2 at (3,4) → ∇f = (2x, 2y) = (6, 8)
+        {
+            "name": "sum_of_squares_at_3_4",
+            "inputs": {"point": [3.0, 4.0], "fn_id": "sum_of_squares"},
+            "expected": {"gradient": [6.0, 8.0]},
+            "tolerance_ulps": 4,
+        },
+        # f(x,y,z) = x*y*z at (1,2,3) → ∇f = (yz, xz, xy) = (6, 3, 2)
+        {
+            "name": "product_of_three_at_1_2_3",
+            "inputs": {"point": [1.0, 2.0, 3.0], "fn_id": "product_of_three"},
+            "expected": {"gradient": [6.0, 3.0, 2.0]},
+            "tolerance_ulps": 4,
+        },
+    ]
+    save_fixture("autodiff", "gradient.json",
+                 _ad_fixture("analytic.grad",
+                             "ferray_autodiff::api::gradient",
+                             gradient_cases))
+
+    # ------------------------------------------------------------------
+    # api::jacobian — J of f: R^n → R^m.
+    # Input: { point: [f64], fn_id: str }
+    # Expected: { jacobian: [f64], m: usize, n: usize }
+    # ------------------------------------------------------------------
+    jacobian_cases = [
+        # f(x,y) = (x+y, x-y) at (3,4) → J = [[1,1],[1,-1]]
+        {
+            "name": "linear_pair_at_3_4",
+            "inputs": {"point": [3.0, 4.0], "fn_id": "linear_pair"},
+            "expected": {"jacobian": [1.0, 1.0, 1.0, -1.0], "m": 2, "n": 2},
+            "tolerance_ulps": 4,
+        },
+        # f(x,y) = (x*y, x+y) at (3,4) → J = [[y,x],[1,1]] = [[4,3],[1,1]]
+        {
+            "name": "product_and_sum_at_3_4",
+            "inputs": {"point": [3.0, 4.0], "fn_id": "product_and_sum"},
+            "expected": {"jacobian": [4.0, 3.0, 1.0, 1.0], "m": 2, "n": 2},
+            "tolerance_ulps": 4,
+        },
+    ]
+    save_fixture("autodiff", "jacobian.json",
+                 _ad_fixture("analytic.jacobian",
+                             "ferray_autodiff::api::jacobian",
+                             jacobian_cases))
+
+    # ------------------------------------------------------------------
+    # array_ops::derivative_elementwise — d/dx f(x) over an array.
+    # Input: { x: {data, shape}, fn_id: "x_squared" }
+    # Expected: { data, shape } of f'(x_i)
+    # ------------------------------------------------------------------
+    derivative_ew_cases = [
+        # f(x) = x^2 over [0,1,2,3] → f' = [0,2,4,6]
+        {
+            "name": "x_squared_over_1d",
+            "inputs": {
+                "x": array_to_dict(np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float64), "float64"),
+                "fn_id": "x_squared",
+            },
+            "expected": array_to_dict(
+                np.array([0.0, 2.0, 4.0, 6.0], dtype=np.float64), "float64"
+            ),
+            "tolerance_ulps": 4,
+        },
+    ]
+    save_fixture("autodiff", "derivative_elementwise.json",
+                 _ad_fixture("analytic.d_dx_elementwise",
+                             "ferray_autodiff::array_ops::derivative_elementwise",
+                             derivative_ew_cases))
+
+    # ------------------------------------------------------------------
+    # array_ops::value_and_derivative_elementwise — (f(x), f'(x))
+    # Input: { x: {data, shape}, fn_id }
+    # Expected: { values: {data, shape}, derivs: {data, shape} }
+    # ------------------------------------------------------------------
+    val_and_deriv_cases = [
+        # f(x) = x^2 over [1,2,3] → values=[1,4,9], derivs=[2,4,6]
+        {
+            "name": "x_squared_over_1d",
+            "inputs": {
+                "x": array_to_dict(np.array([1.0, 2.0, 3.0], dtype=np.float64), "float64"),
+                "fn_id": "x_squared",
+            },
+            "expected": {
+                "values": array_to_dict(
+                    np.array([1.0, 4.0, 9.0], dtype=np.float64), "float64"
+                ),
+                "derivs": array_to_dict(
+                    np.array([2.0, 4.0, 6.0], dtype=np.float64), "float64"
+                ),
+            },
+            "tolerance_ulps": 4,
+        },
+    ]
+    save_fixture("autodiff", "value_and_derivative_elementwise.json",
+                 _ad_fixture("analytic.value_and_d_dx",
+                             "ferray_autodiff::array_ops::value_and_derivative_elementwise",
+                             val_and_deriv_cases))
+
+    # ------------------------------------------------------------------
+    # array_ops::gradient_vector — ∇f as a ferray Array
+    # Same input/expected shape as api::gradient but using ferray arrays.
+    # ------------------------------------------------------------------
+    gradient_vector_cases = [
+        # f(x) = x[0]^2 + 2*x[1]^2 + 3*x[2]^2 at [1,2,3]
+        # ∇f = [2*x[0], 4*x[1], 6*x[2]] = [2,8,18]
+        {
+            "name": "weighted_squares_at_1_2_3",
+            "inputs": {
+                "point": array_to_dict(
+                    np.array([1.0, 2.0, 3.0], dtype=np.float64), "float64"
+                ),
+                "fn_id": "weighted_squares",
+            },
+            "expected": array_to_dict(
+                np.array([2.0, 8.0, 18.0], dtype=np.float64), "float64"
+            ),
+            "tolerance_ulps": 4,
+        },
+    ]
+    save_fixture("autodiff", "gradient_vector.json",
+                 _ad_fixture("analytic.grad_vector",
+                             "ferray_autodiff::array_ops::gradient_vector",
+                             gradient_vector_cases))
+
+    # ------------------------------------------------------------------
+    # array_ops::value_and_gradient — (f(x), ∇f(x)) in one pass
+    # ------------------------------------------------------------------
+    val_and_grad_cases = [
+        # f(x) = x[0] + x[1]*x[2] at [1,2,3] → value=7, ∇f=[1,3,2]
+        {
+            "name": "linear_plus_product_at_1_2_3",
+            "inputs": {
+                "point": array_to_dict(
+                    np.array([1.0, 2.0, 3.0], dtype=np.float64), "float64"
+                ),
+                "fn_id": "linear_plus_product",
+            },
+            "expected": {
+                "value": 7.0,
+                "gradient": array_to_dict(
+                    np.array([1.0, 3.0, 2.0], dtype=np.float64), "float64"
+                ),
+            },
+            "tolerance_ulps": 4,
+        },
+    ]
+    save_fixture("autodiff", "value_and_gradient.json",
+                 _ad_fixture("analytic.value_and_grad",
+                             "ferray_autodiff::array_ops::value_and_gradient",
+                             val_and_grad_cases))
+
+    # ------------------------------------------------------------------
+    # array_ops::jacobian_array — J as an (m,n) ferray Array
+    # ------------------------------------------------------------------
+    jacobian_array_cases = [
+        # f(x,y) = (x+y, x-y) at (3,4) → J = [[1,1],[1,-1]]
+        {
+            "name": "linear_pair_at_3_4",
+            "inputs": {
+                "point": array_to_dict(
+                    np.array([3.0, 4.0], dtype=np.float64), "float64"
+                ),
+                "fn_id": "linear_pair",
+            },
+            "expected": array_to_dict(
+                np.array([[1.0, 1.0], [1.0, -1.0]], dtype=np.float64), "float64"
+            ),
+            "tolerance_ulps": 4,
+        },
+    ]
+    save_fixture("autodiff", "jacobian_array.json",
+                 _ad_fixture("analytic.jacobian_array",
+                             "ferray_autodiff::array_ops::jacobian_array",
+                             jacobian_array_cases))
+
+    # ------------------------------------------------------------------
+    # functions::atan2 — free function (y, x) → atan2(y, x) with the
+    # joint partials (∂/∂y, ∂/∂x) seeded so the dual value of the
+    # output equals (∂atan2/∂y) * y_dual + (∂atan2/∂x) * x_dual.
+    #
+    # The fixture exercises the canonical case y_dual=1, x_dual=0 so
+    # the output dual part is the partial w.r.t. y:
+    #     ∂atan2(y, x)/∂y =  x / (x^2 + y^2)
+    # ------------------------------------------------------------------
+    atan2_cases = [
+        # (y=1, x=1) → atan2(1,1)=π/4 ; ∂/∂y = 1/(1+1) = 0.5
+        {
+            "name": "y1_x1_partial_y",
+            "inputs": {"y": 1.0, "x": 1.0, "y_dual": 1.0, "x_dual": 0.0},
+            "expected": {
+                "value": float(np.arctan2(1.0, 1.0)),
+                "deriv": 0.5,
+            },
+            "tolerance_ulps": 4,
+        },
+        # (y=1, x=1) → ∂/∂x = -y/(x^2+y^2) = -0.5
+        {
+            "name": "y1_x1_partial_x",
+            "inputs": {"y": 1.0, "x": 1.0, "y_dual": 0.0, "x_dual": 1.0},
+            "expected": {
+                "value": float(np.arctan2(1.0, 1.0)),
+                "deriv": -0.5,
+            },
+            "tolerance_ulps": 4,
+        },
+    ]
+    save_fixture("autodiff", "atan2.json",
+                 _ad_fixture("numpy.arctan2",
+                             "ferray_autodiff::functions::atan2",
+                             atan2_cases))
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -2506,7 +2794,7 @@ def main():
     print()
 
     # Ensure directories exist
-    for subdir in ["core", "ufunc", "stats", "linalg", "fft", "random", "io", "polynomial", "strings", "ma", "window", "stride_tricks"]:
+    for subdir in ["core", "ufunc", "stats", "linalg", "fft", "random", "io", "polynomial", "strings", "ma", "window", "stride_tricks", "autodiff"]:
         (FIXTURES_DIR / subdir).mkdir(parents=True, exist_ok=True)
 
     generators = [
@@ -2522,6 +2810,7 @@ def main():
         ("ma", generate_ma_fixtures),
         ("window", generate_window_fixtures),
         ("stride_tricks", generate_stride_tricks_fixtures),
+        ("autodiff", generate_autodiff_fixtures),
     ]
 
     errors = []

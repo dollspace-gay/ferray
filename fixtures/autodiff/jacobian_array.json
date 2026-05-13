@@ -1,0 +1,39 @@
+{
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
+  "reference_library": "numpy",
+  "function": "analytic.jacobian_array",
+  "ferray_function": "ferray_autodiff::array_ops::jacobian_array",
+  "test_cases": [
+    {
+      "name": "linear_pair_at_3_4",
+      "inputs": {
+        "point": {
+          "data": [
+            3.0,
+            4.0
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "fn_id": "linear_pair"
+      },
+      "expected": {
+        "data": [
+          1.0,
+          1.0,
+          1.0,
+          -1.0
+        ],
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
+  "reference_library": "numpy",
+  "function": "numpy.arctan2",
+  "ferray_function": "ferray_autodiff::functions::atan2",
+  "test_cases": [
+    {
+      "name": "y1_x1_partial_y",
+      "inputs": {
+        "y": 1.0,
+        "x": 1.0,
+        "y_dual": 1.0,
+        "x_dual": 0.0
+      },
+      "expected": {
+        "value": 0.7853981633974483,
+        "deriv": 0.5
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "y1_x1_partial_x",
+      "inputs": {
+        "y": 1.0,
+        "x": 1.0,
+        "y_dual": 0.0,
+        "x_dual": 1.0
+      },
+      "expected": {
+        "value": 0.7853981633974483,
+        "deriv": -0.5
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

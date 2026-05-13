@@ -1,0 +1,45 @@
+{
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
+  "reference_library": "numpy",
+  "function": "analytic.d_dx",
+  "ferray_function": "ferray_autodiff::api::derivative",
+  "test_cases": [
+    {
+      "name": "x_squared_at_3",
+      "inputs": {
+        "x": 3.0,
+        "fn_id": "x_squared"
+      },
+      "expected": {
+        "value": 9.0,
+        "deriv": 6.0
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "sin_at_pi_over_4",
+      "inputs": {
+        "x": 0.7853981633974483,
+        "fn_id": "sin"
+      },
+      "expected": {
+        "value": 0.7071067811865475,
+        "deriv": 0.7071067811865476
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "exp_at_1",
+      "inputs": {
+        "x": 1.0,
+        "fn_id": "exp"
+      },
+      "expected": {
+        "value": 2.718281828459045,
+        "deriv": 2.718281828459045
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

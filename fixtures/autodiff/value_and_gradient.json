@@ -1,0 +1,41 @@
+{
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
+  "reference_library": "numpy",
+  "function": "analytic.value_and_grad",
+  "ferray_function": "ferray_autodiff::array_ops::value_and_gradient",
+  "test_cases": [
+    {
+      "name": "linear_plus_product_at_1_2_3",
+      "inputs": {
+        "point": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "fn_id": "linear_plus_product"
+      },
+      "expected": {
+        "value": 7.0,
+        "gradient": {
+          "data": [
+            1.0,
+            3.0,
+            2.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}
