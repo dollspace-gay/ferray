@@ -1,0 +1,3111 @@
+{
+  "crate": "ferray-core",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_core::ArcArray",
+      "kind": "reexport",
+      "signature": "pub use array :: arc :: ArcArray"
+    },
+    {
+      "path": "ferray_core::Array",
+      "kind": "reexport",
+      "signature": "pub use array :: owned :: Array"
+    },
+    {
+      "path": "ferray_core::ArrayFlags",
+      "kind": "reexport",
+      "signature": "pub use array :: ArrayFlags"
+    },
+    {
+      "path": "ferray_core::ArrayView",
+      "kind": "reexport",
+      "signature": "pub use array :: view :: ArrayView"
+    },
+    {
+      "path": "ferray_core::ArrayViewMut",
+      "kind": "reexport",
+      "signature": "pub use array :: view_mut :: ArrayViewMut"
+    },
+    {
+      "path": "ferray_core::AsRawBuffer",
+      "kind": "reexport",
+      "signature": "pub use buffer :: AsRawBuffer"
+    },
+    {
+      "path": "ferray_core::Assert",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::Axis",
+      "kind": "reexport",
+      "signature": "pub use dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::CowArray",
+      "kind": "reexport",
+      "signature": "pub use array :: cow :: CowArray"
+    },
+    {
+      "path": "ferray_core::DType",
+      "kind": "reexport",
+      "signature": "pub use dtype :: { DType , Element , SliceInfoElem }"
+    },
+    {
+      "path": "ferray_core::DefaultNdarrayDim",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::Dimension",
+      "kind": "reexport",
+      "signature": "pub use dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::DynArray",
+      "kind": "reexport",
+      "signature": "pub use dynarray :: DynArray"
+    },
+    {
+      "path": "ferray_core::Element",
+      "kind": "reexport",
+      "signature": "pub use dtype :: { DType , Element , SliceInfoElem }"
+    },
+    {
+      "path": "ferray_core::FerrayError",
+      "kind": "reexport",
+      "signature": "pub use error :: { FerrayError , FerrayResult }"
+    },
+    {
+      "path": "ferray_core::FerrayRecord",
+      "kind": "reexport",
+      "signature": "pub use ferray_core_macros :: { FerrayRecord , promoted_type , s }"
+    },
+    {
+      "path": "ferray_core::FerrayResult",
+      "kind": "reexport",
+      "signature": "pub use error :: { FerrayError , FerrayResult }"
+    },
+    {
+      "path": "ferray_core::FieldDescriptor",
+      "kind": "reexport",
+      "signature": "pub use record :: FieldDescriptor"
+    },
+    {
+      "path": "ferray_core::IsTrue",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::Ix0",
+      "kind": "reexport",
+      "signature": "pub use dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::Ix1",
+      "kind": "reexport",
+      "signature": "pub use dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::Ix2",
+      "kind": "reexport",
+      "signature": "pub use dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::Ix3",
+      "kind": "reexport",
+      "signature": "pub use dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::Ix4",
+      "kind": "reexport",
+      "signature": "pub use dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::Ix5",
+      "kind": "reexport",
+      "signature": "pub use dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::Ix6",
+      "kind": "reexport",
+      "signature": "pub use dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::IxDyn",
+      "kind": "reexport",
+      "signature": "pub use dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::MemoryLayout",
+      "kind": "reexport",
+      "signature": "pub use layout :: MemoryLayout"
+    },
+    {
+      "path": "ferray_core::NdIter",
+      "kind": "reexport",
+      "signature": "pub use nditer :: NdIter"
+    },
+    {
+      "path": "ferray_core::Shape1",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::Shape2",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::Shape3",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::Shape4",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::Shape5",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::Shape6",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::SliceInfoElem",
+      "kind": "reexport",
+      "signature": "pub use dtype :: { DType , Element , SliceInfoElem }"
+    },
+    {
+      "path": "ferray_core::StaticBroadcast",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::StaticMatMul",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::StaticSize",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::aliases",
+      "kind": "reexport",
+      "signature": "pub use array :: aliases"
+    },
+    {
+      "path": "ferray_core::array::ArcArray",
+      "kind": "reexport",
+      "signature": "pub use self :: arc :: ArcArray"
+    },
+    {
+      "path": "ferray_core::array::Array",
+      "kind": "reexport",
+      "signature": "pub use self :: owned :: Array"
+    },
+    {
+      "path": "ferray_core::array::ArrayFlags",
+      "kind": "struct",
+      "signature": "pub struct ArrayFlags"
+    },
+    {
+      "path": "ferray_core::array::ArrayView",
+      "kind": "reexport",
+      "signature": "pub use self :: view :: ArrayView"
+    },
+    {
+      "path": "ferray_core::array::ArrayViewMut",
+      "kind": "reexport",
+      "signature": "pub use self :: view_mut :: ArrayViewMut"
+    },
+    {
+      "path": "ferray_core::array::CowArray",
+      "kind": "reexport",
+      "signature": "pub use self :: cow :: CowArray"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArcArray1",
+      "kind": "type",
+      "signature": "# [doc = \" 1-dimensional reference-counted array.\"] pub type ArcArray1 < T > = ArcArray < T , Ix1 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArcArray2",
+      "kind": "type",
+      "signature": "# [doc = \" 2-dimensional reference-counted array.\"] pub type ArcArray2 < T > = ArcArray < T , Ix2 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArcArrayD",
+      "kind": "type",
+      "signature": "# [doc = \" Dynamic-rank reference-counted array.\"] pub type ArcArrayD < T > = ArcArray < T , IxDyn > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::Array1",
+      "kind": "type",
+      "signature": "# [doc = \" 1-dimensional owned array.\"] pub type Array1 < T > = Array < T , Ix1 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::Array2",
+      "kind": "type",
+      "signature": "# [doc = \" 2-dimensional owned array.\"] pub type Array2 < T > = Array < T , Ix2 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::Array3",
+      "kind": "type",
+      "signature": "# [doc = \" 3-dimensional owned array.\"] pub type Array3 < T > = Array < T , Ix3 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::Array4",
+      "kind": "type",
+      "signature": "# [doc = \" 4-dimensional owned array.\"] pub type Array4 < T > = Array < T , Ix4 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::Array5",
+      "kind": "type",
+      "signature": "# [doc = \" 5-dimensional owned array.\"] pub type Array5 < T > = Array < T , Ix5 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::Array6",
+      "kind": "type",
+      "signature": "# [doc = \" 6-dimensional owned array.\"] pub type Array6 < T > = Array < T , Ix6 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArrayD",
+      "kind": "type",
+      "signature": "# [doc = \" Dynamic-rank owned array.\"] pub type ArrayD < T > = Array < T , IxDyn > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArrayView1",
+      "kind": "type",
+      "signature": "# [doc = \" 1-dimensional immutable view.\"] pub type ArrayView1 < 'a , T > = ArrayView < 'a , T , Ix1 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArrayView2",
+      "kind": "type",
+      "signature": "# [doc = \" 2-dimensional immutable view.\"] pub type ArrayView2 < 'a , T > = ArrayView < 'a , T , Ix2 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArrayView3",
+      "kind": "type",
+      "signature": "# [doc = \" 3-dimensional immutable view.\"] pub type ArrayView3 < 'a , T > = ArrayView < 'a , T , Ix3 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArrayViewD",
+      "kind": "type",
+      "signature": "# [doc = \" Dynamic-rank immutable view.\"] pub type ArrayViewD < 'a , T > = ArrayView < 'a , T , IxDyn > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArrayViewMut1",
+      "kind": "type",
+      "signature": "# [doc = \" 1-dimensional mutable view.\"] pub type ArrayViewMut1 < 'a , T > = ArrayViewMut < 'a , T , Ix1 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArrayViewMut2",
+      "kind": "type",
+      "signature": "# [doc = \" 2-dimensional mutable view.\"] pub type ArrayViewMut2 < 'a , T > = ArrayViewMut < 'a , T , Ix2 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArrayViewMut3",
+      "kind": "type",
+      "signature": "# [doc = \" 3-dimensional mutable view.\"] pub type ArrayViewMut3 < 'a , T > = ArrayViewMut < 'a , T , Ix3 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::ArrayViewMutD",
+      "kind": "type",
+      "signature": "# [doc = \" Dynamic-rank mutable view.\"] pub type ArrayViewMutD < 'a , T > = ArrayViewMut < 'a , T , IxDyn > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::BoolArray1",
+      "kind": "type",
+      "signature": "# [doc = \" `Array1<bool>`\"] pub type BoolArray1 = Array1 < bool > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::BoolArray2",
+      "kind": "type",
+      "signature": "# [doc = \" `Array2<bool>`\"] pub type BoolArray2 = Array2 < bool > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::BoolArrayD",
+      "kind": "type",
+      "signature": "# [doc = \" `ArrayD<bool>`\"] pub type BoolArrayD = ArrayD < bool > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::C32Array1",
+      "kind": "type",
+      "signature": "# [doc = \" `Array1<Complex<f32>>`\"] pub type C32Array1 = Array1 < Complex < f32 > > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::C32Array2",
+      "kind": "type",
+      "signature": "# [doc = \" `Array2<Complex<f32>>`\"] pub type C32Array2 = Array2 < Complex < f32 > > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::C64Array1",
+      "kind": "type",
+      "signature": "# [doc = \" `Array1<Complex<f64>>`\"] pub type C64Array1 = Array1 < Complex < f64 > > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::C64Array2",
+      "kind": "type",
+      "signature": "# [doc = \" `Array2<Complex<f64>>`\"] pub type C64Array2 = Array2 < Complex < f64 > > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::CowArray1",
+      "kind": "type",
+      "signature": "# [doc = \" 1-dimensional copy-on-write array.\"] pub type CowArray1 < 'a , T > = CowArray < 'a , T , Ix1 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::CowArray2",
+      "kind": "type",
+      "signature": "# [doc = \" 2-dimensional copy-on-write array.\"] pub type CowArray2 < 'a , T > = CowArray < 'a , T , Ix2 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::CowArrayD",
+      "kind": "type",
+      "signature": "# [doc = \" Dynamic-rank copy-on-write array.\"] pub type CowArrayD < 'a , T > = CowArray < 'a , T , IxDyn > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::F32Array1",
+      "kind": "type",
+      "signature": "# [doc = \" `Array1<f32>`\"] pub type F32Array1 = Array1 < f32 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::F32Array2",
+      "kind": "type",
+      "signature": "# [doc = \" `Array2<f32>`\"] pub type F32Array2 = Array2 < f32 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::F32Array3",
+      "kind": "type",
+      "signature": "# [doc = \" `Array3<f32>`\"] pub type F32Array3 = Array3 < f32 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::F32ArrayD",
+      "kind": "type",
+      "signature": "# [doc = \" `ArrayD<f32>`\"] pub type F32ArrayD = ArrayD < f32 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::F64Array1",
+      "kind": "type",
+      "signature": "# [doc = \" `Array1<f64>`\"] pub type F64Array1 = Array1 < f64 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::F64Array2",
+      "kind": "type",
+      "signature": "# [doc = \" `Array2<f64>`\"] pub type F64Array2 = Array2 < f64 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::F64Array3",
+      "kind": "type",
+      "signature": "# [doc = \" `Array3<f64>`\"] pub type F64Array3 = Array3 < f64 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::F64ArrayD",
+      "kind": "type",
+      "signature": "# [doc = \" `ArrayD<f64>`\"] pub type F64ArrayD = ArrayD < f64 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::I32Array1",
+      "kind": "type",
+      "signature": "# [doc = \" `Array1<i32>`\"] pub type I32Array1 = Array1 < i32 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::I32Array2",
+      "kind": "type",
+      "signature": "# [doc = \" `Array2<i32>`\"] pub type I32Array2 = Array2 < i32 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::I64Array1",
+      "kind": "type",
+      "signature": "# [doc = \" `Array1<i64>`\"] pub type I64Array1 = Array1 < i64 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::I64Array2",
+      "kind": "type",
+      "signature": "# [doc = \" `Array2<i64>`\"] pub type I64Array2 = Array2 < i64 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::U8Array1",
+      "kind": "type",
+      "signature": "# [doc = \" `Array1<u8>`\"] pub type U8Array1 = Array1 < u8 > ;"
+    },
+    {
+      "path": "ferray_core::array::aliases::U8Array2",
+      "kind": "type",
+      "signature": "# [doc = \" `Array2<u8>`\"] pub type U8Array2 = Array2 < u8 > ;"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray",
+      "kind": "struct",
+      "signature": "pub struct ArcArray < T : Element , D : Dimension >"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::as_ptr",
+      "kind": "method",
+      "signature": "pub fn as_ptr (& self) -> * const T"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::as_slice",
+      "kind": "method",
+      "signature": "pub fn as_slice (& self) -> & [T]"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::as_slice_mut",
+      "kind": "method",
+      "signature": "pub fn as_slice_mut (& mut self) -> & mut [T]"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::copy",
+      "kind": "method",
+      "signature": "pub fn copy (& self) -> Self"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::dim",
+      "kind": "method",
+      "signature": "pub const fn dim (& self) -> & D"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::flags",
+      "kind": "method",
+      "signature": "pub fn flags (& self) -> ArrayFlags"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::from_owned",
+      "kind": "method",
+      "signature": "pub fn from_owned (arr : Array < T , D >) -> Self"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::into_owned",
+      "kind": "method",
+      "signature": "pub fn into_owned (self) -> Array < T , D >"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::is_empty",
+      "kind": "method",
+      "signature": "pub fn is_empty (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::is_unique",
+      "kind": "method",
+      "signature": "pub fn is_unique (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::layout",
+      "kind": "method",
+      "signature": "pub fn layout (& self) -> MemoryLayout"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::mapv_inplace",
+      "kind": "method",
+      "signature": "pub fn mapv_inplace (& mut self , f : impl Fn (T) -> T)"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::ndim",
+      "kind": "method",
+      "signature": "pub fn ndim (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::ref_count",
+      "kind": "method",
+      "signature": "pub fn ref_count (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::size",
+      "kind": "method",
+      "signature": "pub fn size (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::strides",
+      "kind": "method",
+      "signature": "pub fn strides (& self) -> & [isize]"
+    },
+    {
+      "path": "ferray_core::array::arc::ArcArray::view",
+      "kind": "method",
+      "signature": "pub fn view (& self) -> ArrayView < '_ , T , D >"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray",
+      "kind": "enum",
+      "signature": "pub enum CowArray < 'a , T : Element , D : Dimension >"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::as_ptr",
+      "kind": "method",
+      "signature": "pub fn as_ptr (& self) -> * const T"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::flags",
+      "kind": "method",
+      "signature": "pub fn flags (& self) -> ArrayFlags"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::from_owned",
+      "kind": "method",
+      "signature": "pub const fn from_owned (arr : Array < T , D >) -> Self"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::from_view",
+      "kind": "method",
+      "signature": "pub const fn from_view (view : ArrayView < 'a , T , D >) -> Self"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::into_owned",
+      "kind": "method",
+      "signature": "pub fn into_owned (self) -> Array < T , D >"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::is_borrowed",
+      "kind": "method",
+      "signature": "pub const fn is_borrowed (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::is_empty",
+      "kind": "method",
+      "signature": "pub fn is_empty (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::is_owned",
+      "kind": "method",
+      "signature": "pub const fn is_owned (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::layout",
+      "kind": "method",
+      "signature": "pub fn layout (& self) -> MemoryLayout"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::ndim",
+      "kind": "method",
+      "signature": "pub fn ndim (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::size",
+      "kind": "method",
+      "signature": "pub fn size (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::to_mut",
+      "kind": "method",
+      "signature": "pub fn to_mut (& mut self) -> & mut Array < T , D >"
+    },
+    {
+      "path": "ferray_core::array::cow::CowArray::view",
+      "kind": "method",
+      "signature": "pub fn view (& self) -> ArrayView < '_ , T , D >"
+    },
+    {
+      "path": "ferray_core::array::display::get_print_options",
+      "kind": "fn",
+      "signature": "pub fn get_print_options () -> (usize , usize , usize , usize)"
+    },
+    {
+      "path": "ferray_core::array::display::set_print_options",
+      "kind": "fn",
+      "signature": "pub fn set_print_options (precision : usize , threshold : usize , linewidth : usize , edgeitems : usize)"
+    },
+    {
+      "path": "ferray_core::array::introspect::Array::copy",
+      "kind": "method",
+      "signature": "pub fn copy (& self) -> Self"
+    },
+    {
+      "path": "ferray_core::array::introspect::Array::dtype",
+      "kind": "method",
+      "signature": "pub fn dtype (& self) -> DType"
+    },
+    {
+      "path": "ferray_core::array::introspect::Array::flags",
+      "kind": "method",
+      "signature": "pub fn flags (& self) -> ArrayFlags"
+    },
+    {
+      "path": "ferray_core::array::introspect::Array::itemsize",
+      "kind": "method",
+      "signature": "pub const fn itemsize (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::introspect::Array::nbytes",
+      "kind": "method",
+      "signature": "pub fn nbytes (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::introspect::Array::t",
+      "kind": "method",
+      "signature": "pub fn t (& self) -> ArrayView < '_ , T , D >"
+    },
+    {
+      "path": "ferray_core::array::introspect::Array::to_bytes",
+      "kind": "method",
+      "signature": "pub fn to_bytes (& self) -> FerrayResult < & [u8] > where T : Copy ,"
+    },
+    {
+      "path": "ferray_core::array::introspect::Array::to_vec_flat",
+      "kind": "method",
+      "signature": "pub fn to_vec_flat (& self) -> Vec < T >"
+    },
+    {
+      "path": "ferray_core::array::introspect::ArrayView::dtype",
+      "kind": "method",
+      "signature": "pub fn dtype (& self) -> DType"
+    },
+    {
+      "path": "ferray_core::array::introspect::ArrayView::itemsize",
+      "kind": "method",
+      "signature": "pub const fn itemsize (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::introspect::ArrayView::nbytes",
+      "kind": "method",
+      "signature": "pub fn nbytes (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::introspect::ArrayView::t",
+      "kind": "method",
+      "signature": "pub fn t (& self) -> ArrayView < '_ , T , D >"
+    },
+    {
+      "path": "ferray_core::array::iter::Array::axis_iter",
+      "kind": "method",
+      "signature": "pub fn axis_iter (& self , axis : Axis ,) -> FerrayResult < impl Iterator < Item = ArrayView < '_ , T , IxDyn > > + '_ > where D :: NdarrayDim : ndarray :: RemoveAxis ,"
+    },
+    {
+      "path": "ferray_core::array::iter::Array::axis_iter_mut",
+      "kind": "method",
+      "signature": "pub fn axis_iter_mut (& mut self , axis : Axis ,) -> FerrayResult < impl Iterator < Item = ArrayViewMut < '_ , T , IxDyn > > + '_ > where D :: NdarrayDim : ndarray :: RemoveAxis ,"
+    },
+    {
+      "path": "ferray_core::array::iter::Array::flat",
+      "kind": "method",
+      "signature": "pub fn flat (& self) -> impl Iterator < Item = & T > + '_"
+    },
+    {
+      "path": "ferray_core::array::iter::Array::indexed_iter",
+      "kind": "method",
+      "signature": "pub fn indexed_iter (& self) -> impl Iterator < Item = (Vec < usize > , & T) > + '_"
+    },
+    {
+      "path": "ferray_core::array::iter::Array::iter",
+      "kind": "method",
+      "signature": "pub fn iter (& self) -> impl Iterator < Item = & T > + '_"
+    },
+    {
+      "path": "ferray_core::array::iter::Array::iter_mut",
+      "kind": "method",
+      "signature": "pub fn iter_mut (& mut self) -> impl Iterator < Item = & mut T > + '_"
+    },
+    {
+      "path": "ferray_core::array::iter::Array::lanes",
+      "kind": "method",
+      "signature": "pub fn lanes (& self , axis : Axis ,) -> FerrayResult < impl Iterator < Item = ArrayView < '_ , T , Ix1 > > + '_ >"
+    },
+    {
+      "path": "ferray_core::array::iter::ArrayView::flat",
+      "kind": "method",
+      "signature": "pub fn flat (& self) -> impl Iterator < Item = & T > + '_"
+    },
+    {
+      "path": "ferray_core::array::iter::ArrayView::indexed_iter",
+      "kind": "method",
+      "signature": "pub fn indexed_iter (& self) -> impl Iterator < Item = (Vec < usize > , & T) > + '_"
+    },
+    {
+      "path": "ferray_core::array::iter::ArrayView::iter",
+      "kind": "method",
+      "signature": "pub fn iter (& self) -> impl Iterator < Item = & T > + '_"
+    },
+    {
+      "path": "ferray_core::array::methods::Array::as_fortran_layout",
+      "kind": "method",
+      "signature": "pub fn as_fortran_layout (& self) -> CowArray < '_ , T , D >"
+    },
+    {
+      "path": "ferray_core::array::methods::Array::as_standard_layout",
+      "kind": "method",
+      "signature": "pub fn as_standard_layout (& self) -> CowArray < '_ , T , D >"
+    },
+    {
+      "path": "ferray_core::array::methods::Array::fold_axis",
+      "kind": "method",
+      "signature": "pub fn fold_axis (& self , axis : Axis , init : T , fold : impl FnMut (& T , & T) -> T ,) -> FerrayResult < Array < T , IxDyn > > where D :: NdarrayDim : ndarray :: RemoveAxis ,"
+    },
+    {
+      "path": "ferray_core::array::methods::Array::into_dyn",
+      "kind": "method",
+      "signature": "pub fn into_dyn (self) -> Array < T , IxDyn >"
+    },
+    {
+      "path": "ferray_core::array::methods::Array::map_to",
+      "kind": "method",
+      "signature": "pub fn map_to < U : Element > (& self , f : impl Fn (T) -> U) -> Array < U , D >"
+    },
+    {
+      "path": "ferray_core::array::methods::Array::mapv",
+      "kind": "method",
+      "signature": "pub fn mapv (& self , f : impl Fn (T) -> T) -> Self"
+    },
+    {
+      "path": "ferray_core::array::methods::Array::mapv_inplace",
+      "kind": "method",
+      "signature": "pub fn mapv_inplace (& mut self , f : impl Fn (T) -> T)"
+    },
+    {
+      "path": "ferray_core::array::methods::Array::to_dyn",
+      "kind": "method",
+      "signature": "pub fn to_dyn (& self) -> Array < T , IxDyn >"
+    },
+    {
+      "path": "ferray_core::array::methods::Array::zip_mut_with",
+      "kind": "method",
+      "signature": "pub fn zip_mut_with (& mut self , other : & Self , f : impl Fn (& mut T , & T)) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_core::array::methods::ArrayView::fold_axis",
+      "kind": "method",
+      "signature": "pub fn fold_axis (& self , axis : Axis , init : T , fold : impl FnMut (& T , & T) -> T ,) -> FerrayResult < Array < T , IxDyn > > where D :: NdarrayDim : ndarray :: RemoveAxis ,"
+    },
+    {
+      "path": "ferray_core::array::methods::ArrayView::mapv",
+      "kind": "method",
+      "signature": "pub fn mapv (& self , f : impl Fn (T) -> T) -> Array < T , D >"
+    },
+    {
+      "path": "ferray_core::array::owned::Array",
+      "kind": "struct",
+      "signature": "pub struct Array < T : Element , D : Dimension >"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::as_mut_ptr",
+      "kind": "method",
+      "signature": "pub fn as_mut_ptr (& mut self) -> * mut T"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::as_ptr",
+      "kind": "method",
+      "signature": "pub fn as_ptr (& self) -> * const T"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::as_slice",
+      "kind": "method",
+      "signature": "pub fn as_slice (& self) -> Option < & [T] >"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::as_slice_mut",
+      "kind": "method",
+      "signature": "pub fn as_slice_mut (& mut self) -> Option < & mut [T] >"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::dim",
+      "kind": "method",
+      "signature": "pub const fn dim (& self) -> & D"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::from_elem",
+      "kind": "method",
+      "signature": "pub fn from_elem (dim : D , elem : T) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::from_iter_1d",
+      "kind": "method",
+      "signature": "pub fn from_iter_1d (iter : impl IntoIterator < Item = T >) -> FerrayResult < Self > where D : Dimension < NdarrayDim = ndarray :: Ix1 > ,"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::from_vec",
+      "kind": "method",
+      "signature": "pub fn from_vec (dim : D , data : Vec < T >) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::from_vec_f",
+      "kind": "method",
+      "signature": "pub fn from_vec_f (dim : D , data : Vec < T >) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::into_ndarray",
+      "kind": "method",
+      "signature": "pub fn into_ndarray (self) -> ndarray :: Array < T , D :: NdarrayDim >"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::is_empty",
+      "kind": "method",
+      "signature": "pub fn is_empty (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::layout",
+      "kind": "method",
+      "signature": "pub fn layout (& self) -> MemoryLayout"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::ndim",
+      "kind": "method",
+      "signature": "pub fn ndim (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::ones",
+      "kind": "method",
+      "signature": "pub fn ones (dim : D) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::size",
+      "kind": "method",
+      "signature": "pub fn size (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::strides",
+      "kind": "method",
+      "signature": "pub fn strides (& self) -> & [isize]"
+    },
+    {
+      "path": "ferray_core::array::owned::Array::zeros",
+      "kind": "method",
+      "signature": "pub fn zeros (dim : D) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::all",
+      "kind": "method",
+      "signature": "pub fn all (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::any",
+      "kind": "method",
+      "signature": "pub fn any (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::max",
+      "kind": "method",
+      "signature": "pub fn max (& self) -> Option < T >"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::max_axis",
+      "kind": "method",
+      "signature": "pub fn max_axis (& self , axis : Axis) -> FerrayResult < Array < T , IxDyn > > where D :: NdarrayDim : ndarray :: RemoveAxis ,"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::mean",
+      "kind": "method",
+      "signature": "pub fn mean (& self) -> Option < T >"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::mean_axis",
+      "kind": "method",
+      "signature": "pub fn mean_axis (& self , axis : Axis) -> FerrayResult < Array < T , IxDyn > > where D :: NdarrayDim : ndarray :: RemoveAxis ,"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::min",
+      "kind": "method",
+      "signature": "pub fn min (& self) -> Option < T >"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::min_axis",
+      "kind": "method",
+      "signature": "pub fn min_axis (& self , axis : Axis) -> FerrayResult < Array < T , IxDyn > > where D :: NdarrayDim : ndarray :: RemoveAxis ,"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::prod",
+      "kind": "method",
+      "signature": "pub fn prod (& self) -> T where T : std :: ops :: Mul < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::prod_axis",
+      "kind": "method",
+      "signature": "pub fn prod_axis (& self , axis : Axis) -> FerrayResult < Array < T , IxDyn > > where T : std :: ops :: Mul < Output = T > , D :: NdarrayDim : ndarray :: RemoveAxis ,"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::std",
+      "kind": "method",
+      "signature": "pub fn std (& self , ddof : usize) -> Option < T >"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::sum",
+      "kind": "method",
+      "signature": "pub fn sum (& self) -> T where T : std :: ops :: Add < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::sum_axis",
+      "kind": "method",
+      "signature": "pub fn sum_axis (& self , axis : Axis) -> FerrayResult < Array < T , IxDyn > > where T : std :: ops :: Add < Output = T > , D :: NdarrayDim : ndarray :: RemoveAxis ,"
+    },
+    {
+      "path": "ferray_core::array::reductions::Array::var",
+      "kind": "method",
+      "signature": "pub fn var (& self , ddof : usize) -> Option < T >"
+    },
+    {
+      "path": "ferray_core::array::reductions::ArrayView::max",
+      "kind": "method",
+      "signature": "pub fn max (& self) -> Option < T >"
+    },
+    {
+      "path": "ferray_core::array::reductions::ArrayView::mean",
+      "kind": "method",
+      "signature": "pub fn mean (& self) -> Option < T >"
+    },
+    {
+      "path": "ferray_core::array::reductions::ArrayView::min",
+      "kind": "method",
+      "signature": "pub fn min (& self) -> Option < T >"
+    },
+    {
+      "path": "ferray_core::array::reductions::ArrayView::prod",
+      "kind": "method",
+      "signature": "pub fn prod (& self) -> T where T : std :: ops :: Mul < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::array::reductions::ArrayView::sum",
+      "kind": "method",
+      "signature": "pub fn sum (& self) -> T where T : std :: ops :: Add < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::array::sort::Array::argsort",
+      "kind": "method",
+      "signature": "pub fn argsort (& self) -> Array < u64 , Ix1 >"
+    },
+    {
+      "path": "ferray_core::array::sort::Array::sorted",
+      "kind": "method",
+      "signature": "pub fn sorted (& self) -> Array < T , Ix1 >"
+    },
+    {
+      "path": "ferray_core::array::view::Array::view",
+      "kind": "method",
+      "signature": "pub fn view (& self) -> ArrayView < '_ , T , D >"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView",
+      "kind": "struct",
+      "signature": "pub struct ArrayView < 'a , T : Element , D : Dimension >"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::as_ptr",
+      "kind": "method",
+      "signature": "pub fn as_ptr (& self) -> * const T"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::as_slice",
+      "kind": "method",
+      "signature": "pub fn as_slice (& self) -> Option < & [T] >"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::dim",
+      "kind": "method",
+      "signature": "pub const fn dim (& self) -> & D"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::flags",
+      "kind": "method",
+      "signature": "pub fn flags (& self) -> ArrayFlags"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::from_shape_ptr",
+      "kind": "method",
+      "signature": "pub unsafe fn from_shape_ptr (ptr : * const T , shape : & [usize] , strides : & [usize]) -> Self"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::is_empty",
+      "kind": "method",
+      "signature": "pub fn is_empty (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::layout",
+      "kind": "method",
+      "signature": "pub fn layout (& self) -> MemoryLayout"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::ndim",
+      "kind": "method",
+      "signature": "pub fn ndim (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::size",
+      "kind": "method",
+      "signature": "pub fn size (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::strides",
+      "kind": "method",
+      "signature": "pub fn strides (& self) -> & [isize]"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::to_owned",
+      "kind": "method",
+      "signature": "pub fn to_owned (& self) -> Array < T , D >"
+    },
+    {
+      "path": "ferray_core::array::view::ArrayView::to_vec_flat",
+      "kind": "method",
+      "signature": "pub fn to_vec_flat (& self) -> Vec < T >"
+    },
+    {
+      "path": "ferray_core::array::view_mut::Array::view_mut",
+      "kind": "method",
+      "signature": "pub fn view_mut (& mut self) -> ArrayViewMut < '_ , T , D >"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut",
+      "kind": "struct",
+      "signature": "pub struct ArrayViewMut < 'a , T : Element , D : Dimension >"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::as_mut_ptr",
+      "kind": "method",
+      "signature": "pub fn as_mut_ptr (& mut self) -> * mut T"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::as_ptr",
+      "kind": "method",
+      "signature": "pub fn as_ptr (& self) -> * const T"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::as_slice",
+      "kind": "method",
+      "signature": "pub fn as_slice (& self) -> Option < & [T] >"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::as_slice_mut",
+      "kind": "method",
+      "signature": "pub fn as_slice_mut (& mut self) -> Option < & mut [T] >"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::dim",
+      "kind": "method",
+      "signature": "pub const fn dim (& self) -> & D"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::flags",
+      "kind": "method",
+      "signature": "pub fn flags (& self) -> ArrayFlags"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::is_empty",
+      "kind": "method",
+      "signature": "pub fn is_empty (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::layout",
+      "kind": "method",
+      "signature": "pub fn layout (& self) -> MemoryLayout"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::ndim",
+      "kind": "method",
+      "signature": "pub fn ndim (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::size",
+      "kind": "method",
+      "signature": "pub fn size (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::strides",
+      "kind": "method",
+      "signature": "pub fn strides (& self) -> & [isize]"
+    },
+    {
+      "path": "ferray_core::array::view_mut::ArrayViewMut::to_vec_flat",
+      "kind": "method",
+      "signature": "pub fn to_vec_flat (& self) -> Vec < T >"
+    },
+    {
+      "path": "ferray_core::buffer::AsRawBuffer",
+      "kind": "trait",
+      "signature": "pub trait AsRawBuffer"
+    },
+    {
+      "path": "ferray_core::buffer::BufferDescriptor",
+      "kind": "struct",
+      "signature": "pub struct BufferDescriptor < 'a >"
+    },
+    {
+      "path": "ferray_core::creation::ArangeNum",
+      "kind": "trait",
+      "signature": "pub trait ArangeNum"
+    },
+    {
+      "path": "ferray_core::creation::LinspaceNum",
+      "kind": "trait",
+      "signature": "pub trait LinspaceNum"
+    },
+    {
+      "path": "ferray_core::creation::UninitArray",
+      "kind": "struct",
+      "signature": "pub struct UninitArray < T : Element , D : Dimension >"
+    },
+    {
+      "path": "ferray_core::creation::UninitArray::as_mut_ptr",
+      "kind": "method",
+      "signature": "pub fn as_mut_ptr (& mut self) -> * mut MaybeUninit < T >"
+    },
+    {
+      "path": "ferray_core::creation::UninitArray::assume_init",
+      "kind": "method",
+      "signature": "pub unsafe fn assume_init (self) -> Array < T , D >"
+    },
+    {
+      "path": "ferray_core::creation::UninitArray::ndim",
+      "kind": "method",
+      "signature": "pub fn ndim (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::creation::UninitArray::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_core::creation::UninitArray::size",
+      "kind": "method",
+      "signature": "pub fn size (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::creation::UninitArray::write_at",
+      "kind": "method",
+      "signature": "pub fn write_at (& mut self , flat_index : usize , value : T) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_core::creation::arange",
+      "kind": "fn",
+      "signature": "pub fn arange < T : ArangeNum > (start : T , stop : T , step : T) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::creation::array",
+      "kind": "fn",
+      "signature": "pub fn array < T : Element , D : Dimension > (dim : D , data : Vec < T >) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_core::creation::asanyarray",
+      "kind": "fn",
+      "signature": "pub fn asanyarray < T : Element , D : Dimension > (a : & Array < T , D >) -> Array < T , D >"
+    },
+    {
+      "path": "ferray_core::creation::asarray",
+      "kind": "fn",
+      "signature": "pub fn asarray < T : Element , D : Dimension > (dim : D , data : Vec < T >) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_core::creation::asarray_chkfinite",
+      "kind": "fn",
+      "signature": "pub fn asarray_chkfinite < T , D : Dimension > (a : & Array < T , D >) -> FerrayResult < Array < T , D > > where T : Element + num_traits :: Float ,"
+    },
+    {
+      "path": "ferray_core::creation::ascontiguousarray",
+      "kind": "fn",
+      "signature": "pub fn ascontiguousarray < T : Element , D : Dimension > (a : & Array < T , D >) -> Array < T , D >"
+    },
+    {
+      "path": "ferray_core::creation::asfortranarray",
+      "kind": "fn",
+      "signature": "pub fn asfortranarray < T : Element , D : Dimension > (a : & Array < T , D >) -> Array < T , D >"
+    },
+    {
+      "path": "ferray_core::creation::copy",
+      "kind": "fn",
+      "signature": "pub fn copy < T : Element , D : Dimension > (a : & Array < T , D >) -> Array < T , D >"
+    },
+    {
+      "path": "ferray_core::creation::diag",
+      "kind": "fn",
+      "signature": "pub fn diag < T : Element > (a : & Array < T , IxDyn > , k : isize) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::creation::diagflat",
+      "kind": "fn",
+      "signature": "pub fn diagflat < T : Element > (a : & Array < T , IxDyn > , k : isize) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::creation::empty",
+      "kind": "fn",
+      "signature": "pub fn empty < T : Element , D : Dimension > (dim : D) -> UninitArray < T , D >"
+    },
+    {
+      "path": "ferray_core::creation::empty_like",
+      "kind": "fn",
+      "signature": "pub fn empty_like < T : Element , D : Dimension > (other : & Array < T , D >) -> UninitArray < T , D >"
+    },
+    {
+      "path": "ferray_core::creation::eye",
+      "kind": "fn",
+      "signature": "pub fn eye < T : Element > (n : usize , m : usize , k : isize) -> FerrayResult < Array < T , Ix2 > >"
+    },
+    {
+      "path": "ferray_core::creation::frombuffer",
+      "kind": "fn",
+      "signature": "pub fn frombuffer < T : Element , D : Dimension > (dim : D , buf : & [u8]) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_core::creation::frombuffer_view",
+      "kind": "fn",
+      "signature": "pub fn frombuffer_view < T : Element , D : Dimension > (dim : D , buf : & [u8] ,) -> FerrayResult < ArrayView < '_ , T , D > >"
+    },
+    {
+      "path": "ferray_core::creation::fromfile",
+      "kind": "fn",
+      "signature": "pub fn fromfile < T , P : AsRef < std :: path :: Path > > (path : P , sep : & str) -> FerrayResult < Array < T , Ix1 > > where T : Element + std :: str :: FromStr , < T as std :: str :: FromStr > :: Err : std :: fmt :: Display ,"
+    },
+    {
+      "path": "ferray_core::creation::fromfunction",
+      "kind": "fn",
+      "signature": "pub fn fromfunction < T , D , F > (shape : D , mut f : F) -> FerrayResult < Array < T , D > > where T : Element , D : Dimension , F : FnMut (& [usize]) -> T ,"
+    },
+    {
+      "path": "ferray_core::creation::fromiter",
+      "kind": "fn",
+      "signature": "pub fn fromiter < T : Element > (iter : impl IntoIterator < Item = T >) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::creation::fromstring",
+      "kind": "fn",
+      "signature": "pub fn fromstring < T > (s : & str , sep : & str) -> FerrayResult < Array < T , Ix1 > > where T : Element + std :: str :: FromStr , < T as std :: str :: FromStr > :: Err : std :: fmt :: Display ,"
+    },
+    {
+      "path": "ferray_core::creation::full",
+      "kind": "fn",
+      "signature": "pub fn full < T : Element , D : Dimension > (dim : D , fill_value : T) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_core::creation::full_like",
+      "kind": "fn",
+      "signature": "pub fn full_like < T : Element , D : Dimension > (other : & Array < T , D > , fill_value : T ,) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_core::creation::geomspace",
+      "kind": "fn",
+      "signature": "pub fn geomspace < T : LinspaceNum > (start : T , stop : T , num : usize , endpoint : bool ,) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::creation::identity",
+      "kind": "fn",
+      "signature": "pub fn identity < T : Element > (n : usize) -> FerrayResult < Array < T , Ix2 > >"
+    },
+    {
+      "path": "ferray_core::creation::linspace",
+      "kind": "fn",
+      "signature": "pub fn linspace < T : LinspaceNum > (start : T , stop : T , num : usize , endpoint : bool ,) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::creation::logspace",
+      "kind": "fn",
+      "signature": "pub fn logspace < T : LinspaceNum > (start : T , stop : T , num : usize , endpoint : bool , base : f64 ,) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::creation::meshgrid",
+      "kind": "fn",
+      "signature": "pub fn meshgrid (arrays : & [Array < f64 , Ix1 >] , indexing : & str ,) -> FerrayResult < Vec < Array < f64 , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::creation::mgrid",
+      "kind": "fn",
+      "signature": "pub fn mgrid (ranges : & [(f64 , f64 , f64)]) -> FerrayResult < Vec < Array < f64 , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::creation::ogrid",
+      "kind": "fn",
+      "signature": "pub fn ogrid (ranges : & [(f64 , f64 , f64)]) -> FerrayResult < Vec < Array < f64 , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::creation::ones",
+      "kind": "fn",
+      "signature": "pub fn ones < T : Element , D : Dimension > (dim : D) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_core::creation::ones_like",
+      "kind": "fn",
+      "signature": "pub fn ones_like < T : Element , D : Dimension > (other : & Array < T , D >) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_core::creation::require",
+      "kind": "fn",
+      "signature": "pub fn require < T : Element , D : Dimension > (a : & Array < T , D > , _requirements : & str) -> Array < T , D >"
+    },
+    {
+      "path": "ferray_core::creation::tri",
+      "kind": "fn",
+      "signature": "pub fn tri < T : Element > (n : usize , m : usize , k : isize) -> FerrayResult < Array < T , Ix2 > >"
+    },
+    {
+      "path": "ferray_core::creation::tril",
+      "kind": "fn",
+      "signature": "pub fn tril < T : Element > (a : & Array < T , IxDyn > , k : isize) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::creation::triu",
+      "kind": "fn",
+      "signature": "pub fn triu < T : Element > (a : & Array < T , IxDyn > , k : isize) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::creation::vander",
+      "kind": "fn",
+      "signature": "pub fn vander < T > (x : & Array < T , Ix1 > , n : Option < usize > , increasing : bool ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + std :: ops :: Mul < Output = T > + Copy ,"
+    },
+    {
+      "path": "ferray_core::creation::zeros",
+      "kind": "fn",
+      "signature": "pub fn zeros < T : Element , D : Dimension > (dim : D) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_core::creation::zeros_like",
+      "kind": "fn",
+      "signature": "pub fn zeros_like < T : Element , D : Dimension > (other : & Array < T , D >) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_core::dimension::Axis",
+      "kind": "struct",
+      "signature": "pub struct Axis"
+    },
+    {
+      "path": "ferray_core::dimension::Axis::index",
+      "kind": "method",
+      "signature": "pub const fn index (self) -> usize"
+    },
+    {
+      "path": "ferray_core::dimension::Dimension",
+      "kind": "trait",
+      "signature": "pub trait Dimension"
+    },
+    {
+      "path": "ferray_core::dimension::Ix0",
+      "kind": "struct",
+      "signature": "pub struct Ix0"
+    },
+    {
+      "path": "ferray_core::dimension::IxDyn",
+      "kind": "struct",
+      "signature": "pub struct IxDyn"
+    },
+    {
+      "path": "ferray_core::dimension::IxDyn::new",
+      "kind": "method",
+      "signature": "pub fn new (shape : & [usize]) -> Self"
+    },
+    {
+      "path": "ferray_core::dimension::broadcast::Array::broadcast_to",
+      "kind": "method",
+      "signature": "pub fn broadcast_to (& self , target_shape : & [usize]) -> FerrayResult < ArrayView < '_ , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::dimension::broadcast::ArrayView::broadcast_to",
+      "kind": "method",
+      "signature": "pub fn broadcast_to (& self , target_shape : & [usize]) -> FerrayResult < ArrayView < 'a , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::dimension::broadcast::broadcast_arrays",
+      "kind": "fn",
+      "signature": "pub fn broadcast_arrays < T : Element , D : Dimension > (arrays : & [Array < T , D >] ,) -> FerrayResult < Vec < ArrayView < '_ , T , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::dimension::broadcast::broadcast_shapes",
+      "kind": "fn",
+      "signature": "pub fn broadcast_shapes (a : & [usize] , b : & [usize]) -> FerrayResult < Vec < usize > >"
+    },
+    {
+      "path": "ferray_core::dimension::broadcast::broadcast_shapes_multi",
+      "kind": "fn",
+      "signature": "pub fn broadcast_shapes_multi (shapes : & [& [usize]]) -> FerrayResult < Vec < usize > >"
+    },
+    {
+      "path": "ferray_core::dimension::broadcast::broadcast_strides",
+      "kind": "fn",
+      "signature": "pub fn broadcast_strides (src_shape : & [usize] , src_strides : & [isize] , target_shape : & [usize] ,) -> FerrayResult < Vec < isize > >"
+    },
+    {
+      "path": "ferray_core::dimension::broadcast::broadcast_to",
+      "kind": "fn",
+      "signature": "pub fn broadcast_to < 'a , T : Element , D : Dimension > (array : & 'a Array < T , D > , target_shape : & [usize] ,) -> FerrayResult < ArrayView < 'a , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::dimension::broadcast::broadcast_view_to",
+      "kind": "fn",
+      "signature": "pub fn broadcast_view_to < 'a , T : Element , D : Dimension > (view : & ArrayView < 'a , T , D > , target_shape : & [usize] ,) -> FerrayResult < ArrayView < 'a , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Array::into_dynamic_ix",
+      "kind": "method",
+      "signature": "pub fn into_dynamic_ix (self) -> Array < T , Ix1 >"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Array::static_reshape",
+      "kind": "method",
+      "signature": "pub fn static_reshape < NewD > (self) -> FerrayResult < Array < T , NewD > > where NewD : Dimension + StaticSize + DefaultNdarrayDim ,"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Assert",
+      "kind": "struct",
+      "signature": "pub struct Assert < const COND : bool >"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::DefaultNdarrayDim",
+      "kind": "trait",
+      "signature": "pub trait DefaultNdarrayDim"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::IsTrue",
+      "kind": "trait",
+      "signature": "pub trait IsTrue"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape1",
+      "kind": "struct",
+      "signature": "pub struct Shape1 < const N : usize >"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape1::new",
+      "kind": "method",
+      "signature": "pub const fn new () -> Self"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape2",
+      "kind": "struct",
+      "signature": "pub struct Shape2 < const M : usize , const N : usize >"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape2::new",
+      "kind": "method",
+      "signature": "pub const fn new () -> Self"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape3",
+      "kind": "struct",
+      "signature": "pub struct Shape3 < const A : usize , const B : usize , const C : usize >"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape3::new",
+      "kind": "method",
+      "signature": "pub const fn new () -> Self"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape4",
+      "kind": "struct",
+      "signature": "pub struct Shape4 < const A : usize , const B : usize , const C : usize , const D : usize >"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape4::new",
+      "kind": "method",
+      "signature": "pub const fn new () -> Self"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape5",
+      "kind": "struct",
+      "signature": "pub struct Shape5 < const A : usize , const B : usize , const C : usize , const D : usize , const E : usize >"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape5::new",
+      "kind": "method",
+      "signature": "pub const fn new () -> Self"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape6",
+      "kind": "struct",
+      "signature": "pub struct Shape6 < const A : usize , const B : usize , const C : usize , const D : usize , const E : usize , const F : usize , >"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::Shape6::new",
+      "kind": "method",
+      "signature": "pub const fn new () -> Self"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::StaticBroadcast",
+      "kind": "trait",
+      "signature": "pub trait StaticBroadcast < Rhs >"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::StaticMatMul",
+      "kind": "trait",
+      "signature": "pub trait StaticMatMul < Rhs >"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::StaticSize",
+      "kind": "trait",
+      "signature": "pub trait StaticSize"
+    },
+    {
+      "path": "ferray_core::dimension::static_shape::static_reshape_array",
+      "kind": "fn",
+      "signature": "pub fn static_reshape_array < T , OldD , NewD > (arr : Array < T , OldD >) -> FerrayResult < Array < T , NewD > > where T : Element , OldD : Dimension + StaticSize , NewD : Dimension + StaticSize + DefaultNdarrayDim ,"
+    },
+    {
+      "path": "ferray_core::dtype::DType",
+      "kind": "enum",
+      "signature": "pub enum DType"
+    },
+    {
+      "path": "ferray_core::dtype::DType::alignment",
+      "kind": "method",
+      "signature": "pub fn alignment (self) -> usize"
+    },
+    {
+      "path": "ferray_core::dtype::DType::is_complex",
+      "kind": "method",
+      "signature": "pub const fn is_complex (self) -> bool"
+    },
+    {
+      "path": "ferray_core::dtype::DType::is_float",
+      "kind": "method",
+      "signature": "pub const fn is_float (self) -> bool"
+    },
+    {
+      "path": "ferray_core::dtype::DType::is_integer",
+      "kind": "method",
+      "signature": "pub const fn is_integer (self) -> bool"
+    },
+    {
+      "path": "ferray_core::dtype::DType::is_signed",
+      "kind": "method",
+      "signature": "pub const fn is_signed (self) -> bool"
+    },
+    {
+      "path": "ferray_core::dtype::DType::size_of",
+      "kind": "method",
+      "signature": "pub fn size_of (self) -> usize"
+    },
+    {
+      "path": "ferray_core::dtype::DateTime64",
+      "kind": "reexport",
+      "signature": "pub use datetime :: { DateTime64 , NAT , TimeUnit , Timedelta64 }"
+    },
+    {
+      "path": "ferray_core::dtype::Element",
+      "kind": "trait",
+      "signature": "pub trait Element"
+    },
+    {
+      "path": "ferray_core::dtype::I256",
+      "kind": "reexport",
+      "signature": "pub use i256 :: I256"
+    },
+    {
+      "path": "ferray_core::dtype::NAT",
+      "kind": "reexport",
+      "signature": "pub use datetime :: { DateTime64 , NAT , TimeUnit , Timedelta64 }"
+    },
+    {
+      "path": "ferray_core::dtype::SliceInfoElem",
+      "kind": "enum",
+      "signature": "pub enum SliceInfoElem"
+    },
+    {
+      "path": "ferray_core::dtype::TimeUnit",
+      "kind": "reexport",
+      "signature": "pub use datetime :: { DateTime64 , NAT , TimeUnit , Timedelta64 }"
+    },
+    {
+      "path": "ferray_core::dtype::Timedelta64",
+      "kind": "reexport",
+      "signature": "pub use datetime :: { DateTime64 , NAT , TimeUnit , Timedelta64 }"
+    },
+    {
+      "path": "ferray_core::dtype::casting::Array::add_promoted",
+      "kind": "method",
+      "signature": "pub fn add_promoted < U > (& self , other : & crate :: array :: owned :: Array < U , D > ,) -> FerrayResult < crate :: array :: owned :: Array < < T as super :: promotion :: Promoted < U > > :: Output , D > > where U : Element + PromoteTo < < T as super :: promotion :: Promoted < U > > :: Output > , T : super :: promotion :: Promoted < U > + PromoteTo < < T as super :: promotion :: Promoted < U > > :: Output > , < T as super :: promotion :: Promoted < U > > :: Output : Element + core :: ops :: Add < Output = < T as super :: promotion :: Promoted < U > > :: Output > ,"
+    },
+    {
+      "path": "ferray_core::dtype::casting::Array::cast",
+      "kind": "method",
+      "signature": "pub fn cast < U : Element > (& self , casting : CastKind ,) -> FerrayResult < crate :: array :: owned :: Array < U , D > > where T : super :: unsafe_cast :: CastTo < U > ,"
+    },
+    {
+      "path": "ferray_core::dtype::casting::Array::div_promoted",
+      "kind": "method",
+      "signature": "pub fn div_promoted < U > (& self , other : & crate :: array :: owned :: Array < U , D > ,) -> FerrayResult < crate :: array :: owned :: Array < < T as super :: promotion :: Promoted < U > > :: Output , D > > where U : Element + PromoteTo < < T as super :: promotion :: Promoted < U > > :: Output > , T : super :: promotion :: Promoted < U > + PromoteTo < < T as super :: promotion :: Promoted < U > > :: Output > , < T as super :: promotion :: Promoted < U > > :: Output : Element + core :: ops :: Div < Output = < T as super :: promotion :: Promoted < U > > :: Output > ,"
+    },
+    {
+      "path": "ferray_core::dtype::casting::Array::mul_promoted",
+      "kind": "method",
+      "signature": "pub fn mul_promoted < U > (& self , other : & crate :: array :: owned :: Array < U , D > ,) -> FerrayResult < crate :: array :: owned :: Array < < T as super :: promotion :: Promoted < U > > :: Output , D > > where U : Element + PromoteTo < < T as super :: promotion :: Promoted < U > > :: Output > , T : super :: promotion :: Promoted < U > + PromoteTo < < T as super :: promotion :: Promoted < U > > :: Output > , < T as super :: promotion :: Promoted < U > > :: Output : Element + core :: ops :: Mul < Output = < T as super :: promotion :: Promoted < U > > :: Output > ,"
+    },
+    {
+      "path": "ferray_core::dtype::casting::Array::sub_promoted",
+      "kind": "method",
+      "signature": "pub fn sub_promoted < U > (& self , other : & crate :: array :: owned :: Array < U , D > ,) -> FerrayResult < crate :: array :: owned :: Array < < T as super :: promotion :: Promoted < U > > :: Output , D > > where U : Element + PromoteTo < < T as super :: promotion :: Promoted < U > > :: Output > , T : super :: promotion :: Promoted < U > + PromoteTo < < T as super :: promotion :: Promoted < U > > :: Output > , < T as super :: promotion :: Promoted < U > > :: Output : Element + core :: ops :: Sub < Output = < T as super :: promotion :: Promoted < U > > :: Output > ,"
+    },
+    {
+      "path": "ferray_core::dtype::casting::AsType",
+      "kind": "trait",
+      "signature": "pub trait AsType < D : Dimension >"
+    },
+    {
+      "path": "ferray_core::dtype::casting::AsTypeInner",
+      "kind": "trait",
+      "signature": "pub trait AsTypeInner < U : Element , D : Dimension >"
+    },
+    {
+      "path": "ferray_core::dtype::casting::CastKind",
+      "kind": "enum",
+      "signature": "pub enum CastKind"
+    },
+    {
+      "path": "ferray_core::dtype::casting::DTypeCategory",
+      "kind": "enum",
+      "signature": "pub enum DTypeCategory"
+    },
+    {
+      "path": "ferray_core::dtype::casting::can_cast",
+      "kind": "fn",
+      "signature": "pub fn can_cast (from : DType , to : DType , casting : CastKind) -> FerrayResult < bool >"
+    },
+    {
+      "path": "ferray_core::dtype::casting::common_type",
+      "kind": "fn",
+      "signature": "pub fn common_type (a : DType , b : DType) -> FerrayResult < DType >"
+    },
+    {
+      "path": "ferray_core::dtype::casting::iscomplexobj",
+      "kind": "fn",
+      "signature": "pub fn iscomplexobj < T : Element > () -> bool"
+    },
+    {
+      "path": "ferray_core::dtype::casting::isrealobj",
+      "kind": "fn",
+      "signature": "pub fn isrealobj < T : Element > () -> bool"
+    },
+    {
+      "path": "ferray_core::dtype::casting::issubdtype",
+      "kind": "fn",
+      "signature": "pub const fn issubdtype (dt : DType , category : DTypeCategory) -> bool"
+    },
+    {
+      "path": "ferray_core::dtype::casting::min_scalar_type",
+      "kind": "fn",
+      "signature": "pub const fn min_scalar_type (dt : DType) -> DType"
+    },
+    {
+      "path": "ferray_core::dtype::casting::promote_types",
+      "kind": "fn",
+      "signature": "pub fn promote_types (a : DType , b : DType) -> FerrayResult < DType >"
+    },
+    {
+      "path": "ferray_core::dtype::casting::view_cast",
+      "kind": "fn",
+      "signature": "pub fn view_cast < T : Element , U : Element , D : Dimension > (arr : & crate :: array :: owned :: Array < T , D > ,) -> FerrayResult < crate :: array :: owned :: Array < U , D > >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::DateTime64",
+      "kind": "struct",
+      "signature": "pub struct DateTime64"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::DateTime64::is_nat",
+      "kind": "method",
+      "signature": "pub const fn is_nat (self) -> bool"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::DateTime64::nat",
+      "kind": "method",
+      "signature": "pub const fn nat () -> Self"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::TimeUnit",
+      "kind": "enum",
+      "signature": "pub enum TimeUnit"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::TimeUnit::descr_suffix",
+      "kind": "method",
+      "signature": "pub const fn descr_suffix (self) -> & 'static str"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::TimeUnit::finer",
+      "kind": "method",
+      "signature": "pub const fn finer (self , other : Self) -> Self"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::TimeUnit::from_descr_suffix",
+      "kind": "method",
+      "signature": "pub fn from_descr_suffix (s : & str) -> Option < Self >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::TimeUnit::ns_per_tick",
+      "kind": "method",
+      "signature": "pub const fn ns_per_tick (self) -> i64"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::TimeUnit::scale_to",
+      "kind": "method",
+      "signature": "pub const fn scale_to (self , target : Self) -> Option < i64 >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::Timedelta64",
+      "kind": "struct",
+      "signature": "pub struct Timedelta64"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::Timedelta64::is_nat",
+      "kind": "method",
+      "signature": "pub const fn is_nat (self) -> bool"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::Timedelta64::nat",
+      "kind": "method",
+      "signature": "pub const fn nat () -> Self"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::chrono_interop::DateTime64::from_chrono",
+      "kind": "method",
+      "signature": "pub fn from_chrono (dt : DateTime < Utc > , unit : TimeUnit) -> Option < Self >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::chrono_interop::DateTime64::from_fixed_offset",
+      "kind": "method",
+      "signature": "pub fn from_fixed_offset (dt : DateTime < FixedOffset > , unit : TimeUnit) -> Option < Self >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::chrono_interop::DateTime64::from_naive_date",
+      "kind": "method",
+      "signature": "pub fn from_naive_date (date : NaiveDate , unit : TimeUnit) -> Option < Self >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::chrono_interop::DateTime64::from_naive_datetime",
+      "kind": "method",
+      "signature": "pub fn from_naive_datetime (dt : NaiveDateTime , unit : TimeUnit) -> Option < Self >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::chrono_interop::DateTime64::to_chrono",
+      "kind": "method",
+      "signature": "pub fn to_chrono (self , unit : TimeUnit) -> Option < DateTime < Utc > >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::chrono_interop::DateTime64::to_fixed_offset",
+      "kind": "method",
+      "signature": "pub fn to_fixed_offset (self , unit : TimeUnit , offset : FixedOffset ,) -> Option < DateTime < FixedOffset > >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::chrono_interop::DateTime64::to_naive_date",
+      "kind": "method",
+      "signature": "pub fn to_naive_date (self , unit : TimeUnit) -> Option < NaiveDate >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::chrono_interop::DateTime64::to_naive_datetime",
+      "kind": "method",
+      "signature": "pub fn to_naive_datetime (self , unit : TimeUnit) -> Option < NaiveDateTime >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::chrono_interop::Timedelta64::from_chrono",
+      "kind": "method",
+      "signature": "pub fn from_chrono (d : Duration , unit : TimeUnit) -> Option < Self >"
+    },
+    {
+      "path": "ferray_core::dtype::datetime::chrono_interop::Timedelta64::to_chrono",
+      "kind": "method",
+      "signature": "pub fn to_chrono (self , unit : TimeUnit) -> Option < Duration >"
+    },
+    {
+      "path": "ferray_core::dtype::finfo::FloatInfo",
+      "kind": "struct",
+      "signature": "pub struct FloatInfo"
+    },
+    {
+      "path": "ferray_core::dtype::finfo::FloatType",
+      "kind": "trait",
+      "signature": "pub trait FloatType"
+    },
+    {
+      "path": "ferray_core::dtype::finfo::IntInfo",
+      "kind": "struct",
+      "signature": "pub struct IntInfo"
+    },
+    {
+      "path": "ferray_core::dtype::finfo::IntType",
+      "kind": "trait",
+      "signature": "pub trait IntType"
+    },
+    {
+      "path": "ferray_core::dtype::finfo::finfo",
+      "kind": "fn",
+      "signature": "pub fn finfo < T : FloatType > () -> FloatInfo"
+    },
+    {
+      "path": "ferray_core::dtype::finfo::iinfo",
+      "kind": "fn",
+      "signature": "pub fn iinfo < T : IntType > () -> IntInfo"
+    },
+    {
+      "path": "ferray_core::dtype::finfo::sealed::SealedFloat",
+      "kind": "trait",
+      "signature": "pub trait SealedFloat"
+    },
+    {
+      "path": "ferray_core::dtype::finfo::sealed::SealedInt",
+      "kind": "trait",
+      "signature": "pub trait SealedInt"
+    },
+    {
+      "path": "ferray_core::dtype::i256::I256",
+      "kind": "struct",
+      "signature": "pub struct I256"
+    },
+    {
+      "path": "ferray_core::dtype::i256::I256::from_limbs",
+      "kind": "method",
+      "signature": "pub const fn from_limbs (limbs : [u64 ; 4]) -> Self"
+    },
+    {
+      "path": "ferray_core::dtype::i256::I256::is_negative",
+      "kind": "method",
+      "signature": "pub const fn is_negative (self) -> bool"
+    },
+    {
+      "path": "ferray_core::dtype::i256::I256::to_limbs",
+      "kind": "method",
+      "signature": "pub const fn to_limbs (self) -> [u64 ; 4]"
+    },
+    {
+      "path": "ferray_core::dtype::i256::I256::try_to_i128",
+      "kind": "method",
+      "signature": "pub const fn try_to_i128 (self) -> Option < i128 >"
+    },
+    {
+      "path": "ferray_core::dtype::i256::I256::try_to_u128",
+      "kind": "method",
+      "signature": "pub const fn try_to_u128 (self) -> Option < u128 >"
+    },
+    {
+      "path": "ferray_core::dtype::i256::I256::wrapping_add",
+      "kind": "method",
+      "signature": "pub const fn wrapping_add (self , rhs : Self) -> Self"
+    },
+    {
+      "path": "ferray_core::dtype::i256::I256::wrapping_mul",
+      "kind": "method",
+      "signature": "pub const fn wrapping_mul (self , rhs : Self) -> Self"
+    },
+    {
+      "path": "ferray_core::dtype::i256::I256::wrapping_neg",
+      "kind": "method",
+      "signature": "pub const fn wrapping_neg (self) -> Self"
+    },
+    {
+      "path": "ferray_core::dtype::i256::I256::wrapping_sub",
+      "kind": "method",
+      "signature": "pub const fn wrapping_sub (self , rhs : Self) -> Self"
+    },
+    {
+      "path": "ferray_core::dtype::private::Sealed",
+      "kind": "trait",
+      "signature": "pub trait Sealed"
+    },
+    {
+      "path": "ferray_core::dtype::promotion::PromoteTo",
+      "kind": "trait",
+      "signature": "pub trait PromoteTo < Target : Element >"
+    },
+    {
+      "path": "ferray_core::dtype::promotion::Promoted",
+      "kind": "trait",
+      "signature": "pub trait Promoted < Rhs : Element >"
+    },
+    {
+      "path": "ferray_core::dtype::promotion::result_type",
+      "kind": "fn",
+      "signature": "pub fn result_type (a : DType , b : DType) -> FerrayResult < DType >"
+    },
+    {
+      "path": "ferray_core::dtype::unsafe_cast::CastTo",
+      "kind": "trait",
+      "signature": "pub trait CastTo < U : Element >"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray",
+      "kind": "enum",
+      "signature": "pub enum DynArray"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::astype",
+      "kind": "method",
+      "signature": "pub fn astype (& self , target : DType , casting : CastKind) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::dtype",
+      "kind": "method",
+      "signature": "pub const fn dtype (& self) -> DType"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::from_datetime64",
+      "kind": "method",
+      "signature": "pub fn from_datetime64 (arr : Array < DateTime64 , IxDyn > , unit : TimeUnit) -> Self"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::from_timedelta64",
+      "kind": "method",
+      "signature": "pub fn from_timedelta64 (arr : Array < Timedelta64 , IxDyn > , unit : TimeUnit) -> Self"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::is_empty",
+      "kind": "method",
+      "signature": "pub fn is_empty (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::itemsize",
+      "kind": "method",
+      "signature": "pub fn itemsize (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::nbytes",
+      "kind": "method",
+      "signature": "pub fn nbytes (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::ndim",
+      "kind": "method",
+      "signature": "pub fn ndim (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::size",
+      "kind": "method",
+      "signature": "pub fn size (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::try_into_bool",
+      "kind": "method",
+      "signature": "pub fn try_into_bool (self) -> FerrayResult < Array < bool , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::try_into_datetime64",
+      "kind": "method",
+      "signature": "pub fn try_into_datetime64 (self) -> FerrayResult < (Array < DateTime64 , IxDyn > , TimeUnit) >"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::try_into_f32",
+      "kind": "method",
+      "signature": "pub fn try_into_f32 (self) -> FerrayResult < Array < f32 , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::try_into_f64",
+      "kind": "method",
+      "signature": "pub fn try_into_f64 (self) -> FerrayResult < Array < f64 , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::try_into_i32",
+      "kind": "method",
+      "signature": "pub fn try_into_i32 (self) -> FerrayResult < Array < i32 , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::try_into_i64",
+      "kind": "method",
+      "signature": "pub fn try_into_i64 (self) -> FerrayResult < Array < i64 , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::try_into_timedelta64",
+      "kind": "method",
+      "signature": "pub fn try_into_timedelta64 (self) -> FerrayResult < (Array < Timedelta64 , IxDyn > , TimeUnit) >"
+    },
+    {
+      "path": "ferray_core::dynarray::DynArray::zeros",
+      "kind": "method",
+      "signature": "pub fn zeros (dtype : DType , shape : & [usize]) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_core::error::FerrayError",
+      "kind": "enum",
+      "signature": "pub enum FerrayError"
+    },
+    {
+      "path": "ferray_core::error::FerrayError::axis_out_of_bounds",
+      "kind": "method",
+      "signature": "pub const fn axis_out_of_bounds (axis : usize , ndim : usize) -> Self"
+    },
+    {
+      "path": "ferray_core::error::FerrayError::broadcast_failure",
+      "kind": "method",
+      "signature": "pub fn broadcast_failure (a : & [usize] , b : & [usize]) -> Self"
+    },
+    {
+      "path": "ferray_core::error::FerrayError::index_out_of_bounds",
+      "kind": "method",
+      "signature": "pub const fn index_out_of_bounds (index : isize , axis : usize , size : usize) -> Self"
+    },
+    {
+      "path": "ferray_core::error::FerrayError::invalid_dtype",
+      "kind": "method",
+      "signature": "pub fn invalid_dtype (msg : impl fmt :: Display) -> Self"
+    },
+    {
+      "path": "ferray_core::error::FerrayError::invalid_value",
+      "kind": "method",
+      "signature": "pub fn invalid_value (msg : impl fmt :: Display) -> Self"
+    },
+    {
+      "path": "ferray_core::error::FerrayError::io_error",
+      "kind": "method",
+      "signature": "pub fn io_error (msg : impl fmt :: Display) -> Self"
+    },
+    {
+      "path": "ferray_core::error::FerrayError::is_linalg_error",
+      "kind": "method",
+      "signature": "pub const fn is_linalg_error (& self) -> bool"
+    },
+    {
+      "path": "ferray_core::error::FerrayError::shape_mismatch",
+      "kind": "method",
+      "signature": "pub fn shape_mismatch (msg : impl fmt :: Display) -> Self"
+    },
+    {
+      "path": "ferray_core::error::FerrayResult",
+      "kind": "type",
+      "signature": "# [doc = \" Convenience alias used throughout ferray.\"] pub type FerrayResult < T > = Result < T , FerrayError > ;"
+    },
+    {
+      "path": "ferray_core::get_print_options",
+      "kind": "reexport",
+      "signature": "pub use array :: display :: { get_print_options , set_print_options }"
+    },
+    {
+      "path": "ferray_core::indexing::MaskKind",
+      "kind": "reexport",
+      "signature": "pub use extended :: { MaskKind , argwhere , extract , flatnonzero , mask_indices , nonzero , place , putmask , ravel_multi_index , unravel_index , }"
+    },
+    {
+      "path": "ferray_core::indexing::advanced::Array::boolean_index",
+      "kind": "method",
+      "signature": "pub fn boolean_index (& self , mask : & Array < bool , D >) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::indexing::advanced::Array::boolean_index_assign",
+      "kind": "method",
+      "signature": "pub fn boolean_index_assign (& mut self , mask : & Array < bool , D > , value : T) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_core::indexing::advanced::Array::boolean_index_assign_array",
+      "kind": "method",
+      "signature": "pub fn boolean_index_assign_array (& mut self , mask : & Array < bool , D > , values : & Array < T , Ix1 > ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_core::indexing::advanced::Array::boolean_index_flat",
+      "kind": "method",
+      "signature": "pub fn boolean_index_flat (& self , mask : & Array < bool , Ix1 >) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::indexing::advanced::Array::index_select",
+      "kind": "method",
+      "signature": "pub fn index_select (& self , axis : Axis , indices : & [isize]) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::advanced::ArrayView::boolean_index",
+      "kind": "method",
+      "signature": "pub fn boolean_index (& self , mask : & Array < bool , D >) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::indexing::advanced::ArrayView::index_select",
+      "kind": "method",
+      "signature": "pub fn index_select (& self , axis : Axis , indices : & [isize]) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::argwhere",
+      "kind": "reexport",
+      "signature": "pub use extended :: { MaskKind , argwhere , extract , flatnonzero , mask_indices , nonzero , place , putmask , ravel_multi_index , unravel_index , }"
+    },
+    {
+      "path": "ferray_core::indexing::basic::Array::flat_index",
+      "kind": "method",
+      "signature": "pub fn flat_index (& self , index : isize) -> FerrayResult < & T >"
+    },
+    {
+      "path": "ferray_core::indexing::basic::Array::get",
+      "kind": "method",
+      "signature": "pub fn get (& self , indices : & [isize]) -> FerrayResult < & T >"
+    },
+    {
+      "path": "ferray_core::indexing::basic::Array::get_mut",
+      "kind": "method",
+      "signature": "pub fn get_mut (& mut self , indices : & [isize]) -> FerrayResult < & mut T >"
+    },
+    {
+      "path": "ferray_core::indexing::basic::Array::index_axis",
+      "kind": "method",
+      "signature": "pub fn index_axis (& self , axis : Axis , index : isize) -> FerrayResult < ArrayView < '_ , T , D :: Smaller > > where D :: NdarrayDim : ndarray :: RemoveAxis < Smaller = < D :: Smaller as crate :: dimension :: Dimension > :: NdarrayDim > ,"
+    },
+    {
+      "path": "ferray_core::indexing::basic::Array::insert_axis",
+      "kind": "method",
+      "signature": "pub fn insert_axis (& self , axis : Axis) -> FerrayResult < ArrayView < '_ , T , D :: Larger > > where D :: NdarrayDim : ndarray :: Dimension < Larger = < D :: Larger as crate :: dimension :: Dimension > :: NdarrayDim > ,"
+    },
+    {
+      "path": "ferray_core::indexing::basic::Array::remove_axis",
+      "kind": "method",
+      "signature": "pub fn remove_axis (& self , axis : Axis) -> FerrayResult < ArrayView < '_ , T , D :: Smaller > > where D :: NdarrayDim : ndarray :: RemoveAxis < Smaller = < D :: Smaller as crate :: dimension :: Dimension > :: NdarrayDim > ,"
+    },
+    {
+      "path": "ferray_core::indexing::basic::Array::slice_axis",
+      "kind": "method",
+      "signature": "pub fn slice_axis (& self , axis : Axis , spec : SliceSpec) -> FerrayResult < ArrayView < '_ , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::basic::Array::slice_axis_mut",
+      "kind": "method",
+      "signature": "pub fn slice_axis_mut (& mut self , axis : Axis , spec : SliceSpec ,) -> FerrayResult < ArrayViewMut < '_ , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::basic::Array::slice_multi",
+      "kind": "method",
+      "signature": "pub fn slice_multi (& self , specs : & [SliceSpec]) -> FerrayResult < ArrayView < '_ , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::basic::ArrayView::get",
+      "kind": "method",
+      "signature": "pub fn get (& self , indices : & [isize]) -> FerrayResult < & 'a T >"
+    },
+    {
+      "path": "ferray_core::indexing::basic::ArrayView::index_axis",
+      "kind": "method",
+      "signature": "pub fn index_axis (& self , axis : Axis , index : isize) -> FerrayResult < ArrayView < 'a , T , D :: Smaller > > where D :: NdarrayDim : ndarray :: RemoveAxis < Smaller = < D :: Smaller as crate :: dimension :: Dimension > :: NdarrayDim > ,"
+    },
+    {
+      "path": "ferray_core::indexing::basic::ArrayView::insert_axis",
+      "kind": "method",
+      "signature": "pub fn insert_axis (& self , axis : Axis) -> FerrayResult < ArrayView < 'a , T , D :: Larger > > where D :: NdarrayDim : ndarray :: Dimension < Larger = < D :: Larger as crate :: dimension :: Dimension > :: NdarrayDim > ,"
+    },
+    {
+      "path": "ferray_core::indexing::basic::ArrayView::remove_axis",
+      "kind": "method",
+      "signature": "pub fn remove_axis (& self , axis : Axis) -> FerrayResult < ArrayView < 'a , T , D :: Smaller > > where D :: NdarrayDim : ndarray :: RemoveAxis < Smaller = < D :: Smaller as crate :: dimension :: Dimension > :: NdarrayDim > ,"
+    },
+    {
+      "path": "ferray_core::indexing::basic::ArrayView::slice_axis",
+      "kind": "method",
+      "signature": "pub fn slice_axis (& self , axis : Axis , spec : SliceSpec) -> FerrayResult < ArrayView < 'a , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::basic::ArrayViewMut::slice_axis_mut",
+      "kind": "method",
+      "signature": "pub fn slice_axis_mut (& mut self , axis : Axis , spec : SliceSpec ,) -> FerrayResult < ArrayViewMut < '_ , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::basic::SliceSpec",
+      "kind": "struct",
+      "signature": "pub struct SliceSpec"
+    },
+    {
+      "path": "ferray_core::indexing::basic::SliceSpec::full",
+      "kind": "method",
+      "signature": "pub const fn full () -> Self"
+    },
+    {
+      "path": "ferray_core::indexing::basic::SliceSpec::new",
+      "kind": "method",
+      "signature": "pub const fn new (start : isize , stop : isize) -> Self"
+    },
+    {
+      "path": "ferray_core::indexing::basic::SliceSpec::with_step",
+      "kind": "method",
+      "signature": "pub const fn with_step (start : isize , stop : isize , step : isize) -> Self"
+    },
+    {
+      "path": "ferray_core::indexing::extended::Array::fill_diagonal",
+      "kind": "method",
+      "signature": "pub fn fill_diagonal (& mut self , val : T)"
+    },
+    {
+      "path": "ferray_core::indexing::extended::Array::put",
+      "kind": "method",
+      "signature": "pub fn put (& mut self , indices : & [isize] , values : & [T]) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::Array::put_along_axis",
+      "kind": "method",
+      "signature": "pub fn put_along_axis (& mut self , indices : & [isize] , values : & Array < T , IxDyn > , axis : Axis ,) -> FerrayResult < () > where D :: NdarrayDim : ndarray :: RemoveAxis ,"
+    },
+    {
+      "path": "ferray_core::indexing::extended::MaskKind",
+      "kind": "enum",
+      "signature": "pub enum MaskKind"
+    },
+    {
+      "path": "ferray_core::indexing::extended::NdIndex",
+      "kind": "struct",
+      "signature": "pub struct NdIndex"
+    },
+    {
+      "path": "ferray_core::indexing::extended::argwhere",
+      "kind": "fn",
+      "signature": "pub fn argwhere < T : Element + PartialEq , D : Dimension > (a : & Array < T , D > ,) -> FerrayResult < Array < i64 , Ix2 > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::choose",
+      "kind": "fn",
+      "signature": "pub fn choose < T : Element , D : Dimension > (index_arr : & Array < u64 , D > , choices : & [Array < T , D >] ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::compress",
+      "kind": "fn",
+      "signature": "pub fn compress < T : Element , D : Dimension > (condition : & [bool] , a : & Array < T , D > , axis : Axis ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::diag_indices",
+      "kind": "fn",
+      "signature": "pub fn diag_indices (n : usize , ndim : usize) -> Vec < Vec < usize > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::diag_indices_from",
+      "kind": "fn",
+      "signature": "pub fn diag_indices_from < T : Element , D : Dimension > (a : & Array < T , D > ,) -> FerrayResult < Vec < Vec < usize > > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::extract",
+      "kind": "fn",
+      "signature": "pub fn extract < T : Element + Copy , D : Dimension > (condition : & Array < bool , D > , a : & Array < T , D > ,) -> FerrayResult < Array < T , crate :: dimension :: Ix1 > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::flatnonzero",
+      "kind": "fn",
+      "signature": "pub fn flatnonzero < T : Element + PartialEq , D : Dimension > (a : & Array < T , D >) -> Vec < usize >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::indices",
+      "kind": "fn",
+      "signature": "pub fn indices (dimensions : & [usize]) -> FerrayResult < Vec < Array < u64 , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::ix_",
+      "kind": "fn",
+      "signature": "pub fn ix_ (sequences : & [& [u64]]) -> FerrayResult < Vec < Array < u64 , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::mask_indices",
+      "kind": "fn",
+      "signature": "pub fn mask_indices (n : usize , kind : MaskKind , k : isize) -> Vec < usize >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::ndenumerate",
+      "kind": "fn",
+      "signature": "pub fn ndenumerate < T : Element , D : Dimension > (a : & Array < T , D > ,) -> impl Iterator < Item = (Vec < usize > , & T) > + '_"
+    },
+    {
+      "path": "ferray_core::indexing::extended::ndindex",
+      "kind": "fn",
+      "signature": "pub fn ndindex (shape : & [usize]) -> NdIndex"
+    },
+    {
+      "path": "ferray_core::indexing::extended::nonzero",
+      "kind": "fn",
+      "signature": "pub fn nonzero < T : Element + PartialEq , D : Dimension > (a : & Array < T , D >) -> Vec < Vec < usize > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::place",
+      "kind": "fn",
+      "signature": "pub fn place < T : Element + Copy , D : Dimension > (a : & mut Array < T , D > , mask : & Array < bool , D > , vals : & [T] ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::putmask",
+      "kind": "fn",
+      "signature": "pub fn putmask < T : Element + Copy , D : Dimension > (a : & mut Array < T , D > , mask : & Array < bool , D > , values : & [T] ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::ravel_multi_index",
+      "kind": "fn",
+      "signature": "pub fn ravel_multi_index (multi_index : & [& [usize]] , dims : & [usize]) -> FerrayResult < Vec < usize > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::select",
+      "kind": "fn",
+      "signature": "pub fn select < T : Element , D : Dimension > (condlist : & [Array < bool , D >] , choicelist : & [Array < T , D >] , default : T ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::take",
+      "kind": "fn",
+      "signature": "pub fn take < T : Element , D : Dimension > (a : & Array < T , D > , indices : & [isize] , axis : Axis ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::take_along_axis",
+      "kind": "fn",
+      "signature": "pub fn take_along_axis < T : Element , D : Dimension > (a : & Array < T , D > , indices : & [isize] , axis : Axis ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::tril_indices",
+      "kind": "fn",
+      "signature": "pub fn tril_indices (n : usize , k : isize , m : Option < usize >) -> (Vec < usize > , Vec < usize >)"
+    },
+    {
+      "path": "ferray_core::indexing::extended::tril_indices_from",
+      "kind": "fn",
+      "signature": "pub fn tril_indices_from < T : Element , D : Dimension > (a : & Array < T , D > , k : isize ,) -> FerrayResult < (Vec < usize > , Vec < usize >) >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::triu_indices",
+      "kind": "fn",
+      "signature": "pub fn triu_indices (n : usize , k : isize , m : Option < usize >) -> (Vec < usize > , Vec < usize >)"
+    },
+    {
+      "path": "ferray_core::indexing::extended::triu_indices_from",
+      "kind": "fn",
+      "signature": "pub fn triu_indices_from < T : Element , D : Dimension > (a : & Array < T , D > , k : isize ,) -> FerrayResult < (Vec < usize > , Vec < usize >) >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::unravel_index",
+      "kind": "fn",
+      "signature": "pub fn unravel_index (flat_indices : & [usize] , shape : & [usize]) -> FerrayResult < Vec < Vec < usize > > >"
+    },
+    {
+      "path": "ferray_core::indexing::extended::where_select",
+      "kind": "fn",
+      "signature": "pub fn where_select < T : Element + Copy , D : Dimension > (condition : & Array < bool , D > , x : & Array < T , D > , y : & Array < T , D > ,) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_core::indexing::extract",
+      "kind": "reexport",
+      "signature": "pub use extended :: { MaskKind , argwhere , extract , flatnonzero , mask_indices , nonzero , place , putmask , ravel_multi_index , unravel_index , }"
+    },
+    {
+      "path": "ferray_core::indexing::flatnonzero",
+      "kind": "reexport",
+      "signature": "pub use extended :: { MaskKind , argwhere , extract , flatnonzero , mask_indices , nonzero , place , putmask , ravel_multi_index , unravel_index , }"
+    },
+    {
+      "path": "ferray_core::indexing::mask_indices",
+      "kind": "reexport",
+      "signature": "pub use extended :: { MaskKind , argwhere , extract , flatnonzero , mask_indices , nonzero , place , putmask , ravel_multi_index , unravel_index , }"
+    },
+    {
+      "path": "ferray_core::indexing::nonzero",
+      "kind": "reexport",
+      "signature": "pub use extended :: { MaskKind , argwhere , extract , flatnonzero , mask_indices , nonzero , place , putmask , ravel_multi_index , unravel_index , }"
+    },
+    {
+      "path": "ferray_core::indexing::place",
+      "kind": "reexport",
+      "signature": "pub use extended :: { MaskKind , argwhere , extract , flatnonzero , mask_indices , nonzero , place , putmask , ravel_multi_index , unravel_index , }"
+    },
+    {
+      "path": "ferray_core::indexing::putmask",
+      "kind": "reexport",
+      "signature": "pub use extended :: { MaskKind , argwhere , extract , flatnonzero , mask_indices , nonzero , place , putmask , ravel_multi_index , unravel_index , }"
+    },
+    {
+      "path": "ferray_core::indexing::ravel_multi_index",
+      "kind": "reexport",
+      "signature": "pub use extended :: { MaskKind , argwhere , extract , flatnonzero , mask_indices , nonzero , place , putmask , ravel_multi_index , unravel_index , }"
+    },
+    {
+      "path": "ferray_core::indexing::unravel_index",
+      "kind": "reexport",
+      "signature": "pub use extended :: { MaskKind , argwhere , extract , flatnonzero , mask_indices , nonzero , place , putmask , ravel_multi_index , unravel_index , }"
+    },
+    {
+      "path": "ferray_core::layout::MemoryLayout",
+      "kind": "enum",
+      "signature": "pub enum MemoryLayout"
+    },
+    {
+      "path": "ferray_core::layout::MemoryLayout::is_c_contiguous",
+      "kind": "method",
+      "signature": "pub fn is_c_contiguous (self) -> bool"
+    },
+    {
+      "path": "ferray_core::layout::MemoryLayout::is_custom",
+      "kind": "method",
+      "signature": "pub fn is_custom (self) -> bool"
+    },
+    {
+      "path": "ferray_core::layout::MemoryLayout::is_f_contiguous",
+      "kind": "method",
+      "signature": "pub fn is_f_contiguous (self) -> bool"
+    },
+    {
+      "path": "ferray_core::manipulation::array_split",
+      "kind": "fn",
+      "signature": "pub fn array_split < T : Element > (a : & Array < T , IxDyn > , indices : & [usize] , axis : usize ,) -> FerrayResult < Vec < Array < T , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::manipulation::array_split_n",
+      "kind": "fn",
+      "signature": "pub fn array_split_n < T : Element > (a : & Array < T , IxDyn > , n : usize , axis : usize ,) -> FerrayResult < Vec < Array < T , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::manipulation::block",
+      "kind": "fn",
+      "signature": "pub fn block < T : Element > (blocks : & [Vec < Array < T , IxDyn > >]) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::broadcast_to",
+      "kind": "fn",
+      "signature": "pub fn broadcast_to < T : Element , D : Dimension > (a : & Array < T , D > , new_shape : & [usize] ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::c_",
+      "kind": "fn",
+      "signature": "pub fn c_ < T : Element > (arrays : & [Array < T , Ix1 >]) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::column_stack",
+      "kind": "fn",
+      "signature": "pub fn column_stack < T : Element > (arrays : & [Array < T , IxDyn >]) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::concatenate",
+      "kind": "fn",
+      "signature": "pub fn concatenate < T : Element > (arrays : & [Array < T , IxDyn >] , axis : usize ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::dsplit",
+      "kind": "fn",
+      "signature": "pub fn dsplit < T : Element > (a : & Array < T , IxDyn > , n_sections : usize ,) -> FerrayResult < Vec < Array < T , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::manipulation::dstack",
+      "kind": "fn",
+      "signature": "pub fn dstack < T : Element > (arrays : & [Array < T , IxDyn >]) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::expand_dims",
+      "kind": "fn",
+      "signature": "pub fn expand_dims < T : Element , D : Dimension > (a : & Array < T , D > , axis : usize ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::PadMode",
+      "kind": "enum",
+      "signature": "pub enum PadMode < T : Element >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::append",
+      "kind": "fn",
+      "signature": "pub fn append < T : Element , D : Dimension > (a : & Array < T , D > , values : & Array < T , IxDyn > , axis : Option < usize > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::atleast_1d",
+      "kind": "fn",
+      "signature": "pub fn atleast_1d < T : Element , D : Dimension > (a : & Array < T , D >) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::atleast_2d",
+      "kind": "fn",
+      "signature": "pub fn atleast_2d < T : Element , D : Dimension > (a : & Array < T , D >) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::atleast_3d",
+      "kind": "fn",
+      "signature": "pub fn atleast_3d < T : Element , D : Dimension > (a : & Array < T , D >) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::delete",
+      "kind": "fn",
+      "signature": "pub fn delete < T : Element , D : Dimension > (a : & Array < T , D > , indices : & [usize] , axis : usize ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::insert",
+      "kind": "fn",
+      "signature": "pub fn insert < T : Element , D : Dimension > (a : & Array < T , D > , index : usize , values : & Array < T , IxDyn > , axis : usize ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::pad",
+      "kind": "fn",
+      "signature": "pub fn pad < T : Element , D : Dimension > (a : & Array < T , D > , pad_width : & [(usize , usize)] , mode : & PadMode < T > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::pad_1d",
+      "kind": "fn",
+      "signature": "pub fn pad_1d < T : Element > (a : & Array < T , Ix1 > , pad_width : (usize , usize) , mode : & PadMode < T > ,) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::repeat",
+      "kind": "fn",
+      "signature": "pub fn repeat < T : Element , D : Dimension > (a : & Array < T , D > , repeats : usize , axis : Option < usize > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::resize",
+      "kind": "fn",
+      "signature": "pub fn resize < T : Element , D : Dimension > (a : & Array < T , D > , new_shape : & [usize] ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::tile",
+      "kind": "fn",
+      "signature": "pub fn tile < T : Element , D : Dimension > (a : & Array < T , D > , reps : & [usize] ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::extended::trim_zeros",
+      "kind": "fn",
+      "signature": "pub fn trim_zeros < T : Element + PartialEq > (a : & Array < T , Ix1 > , trim : & str ,) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::manipulation::flatten",
+      "kind": "fn",
+      "signature": "pub fn flatten < T : Element , D : Dimension > (a : & Array < T , D >) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::manipulation::flip",
+      "kind": "fn",
+      "signature": "pub fn flip < T : Element , D : Dimension > (a : & Array < T , D > , axis : usize ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::fliplr",
+      "kind": "fn",
+      "signature": "pub fn fliplr < T : Element , D : Dimension > (a : & Array < T , D >) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::flipud",
+      "kind": "fn",
+      "signature": "pub fn flipud < T : Element , D : Dimension > (a : & Array < T , D >) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::hsplit",
+      "kind": "fn",
+      "signature": "pub fn hsplit < T : Element > (a : & Array < T , IxDyn > , n_sections : usize ,) -> FerrayResult < Vec < Array < T , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::manipulation::hstack",
+      "kind": "fn",
+      "signature": "pub fn hstack < T : Element > (arrays : & [Array < T , IxDyn >]) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::moveaxis",
+      "kind": "fn",
+      "signature": "pub fn moveaxis < T : Element , D : Dimension > (a : & Array < T , D > , source : usize , destination : usize ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::r_",
+      "kind": "fn",
+      "signature": "pub fn r_ < T : Element > (arrays : & [Array < T , Ix1 >]) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::manipulation::ravel",
+      "kind": "fn",
+      "signature": "pub fn ravel < T : Element , D : Dimension > (a : & Array < T , D >) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_core::manipulation::reshape",
+      "kind": "fn",
+      "signature": "pub fn reshape < T : Element , D : Dimension > (a : & Array < T , D > , new_shape : & [usize] ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::roll",
+      "kind": "fn",
+      "signature": "pub fn roll < T : Element , D : Dimension > (a : & Array < T , D > , shift : isize , axis : Option < usize > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::rollaxis",
+      "kind": "fn",
+      "signature": "pub fn rollaxis < T : Element , D : Dimension > (a : & Array < T , D > , axis : usize , start : usize ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::rot90",
+      "kind": "fn",
+      "signature": "pub fn rot90 < T : Element , D : Dimension > (a : & Array < T , D > , k : i32) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::row_stack",
+      "kind": "fn",
+      "signature": "pub fn row_stack < T : Element > (arrays : & [Array < T , IxDyn >]) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::split",
+      "kind": "fn",
+      "signature": "pub fn split < T : Element > (a : & Array < T , IxDyn > , n_sections : usize , axis : usize ,) -> FerrayResult < Vec < Array < T , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::manipulation::squeeze",
+      "kind": "fn",
+      "signature": "pub fn squeeze < T : Element , D : Dimension > (a : & Array < T , D > , axis : Option < usize > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::stack",
+      "kind": "fn",
+      "signature": "pub fn stack < T : Element > (arrays : & [Array < T , IxDyn >] , axis : usize) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::swapaxes",
+      "kind": "fn",
+      "signature": "pub fn swapaxes < T : Element , D : Dimension > (a : & Array < T , D > , axis1 : usize , axis2 : usize ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::transpose",
+      "kind": "fn",
+      "signature": "pub fn transpose < T : Element , D : Dimension > (a : & Array < T , D > , axes : Option < & [usize] > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::manipulation::vsplit",
+      "kind": "fn",
+      "signature": "pub fn vsplit < T : Element > (a : & Array < T , IxDyn > , n_sections : usize ,) -> FerrayResult < Vec < Array < T , IxDyn > > >"
+    },
+    {
+      "path": "ferray_core::manipulation::vstack",
+      "kind": "fn",
+      "signature": "pub fn vstack < T : Element > (arrays : & [Array < T , IxDyn >]) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_core::nditer::BinaryBroadcastIter",
+      "kind": "struct",
+      "signature": "pub struct BinaryBroadcastIter < 'a , T : Element >"
+    },
+    {
+      "path": "ferray_core::nditer::BinaryBroadcastIter::for_each",
+      "kind": "method",
+      "signature": "pub fn for_each < F > (self , mut f : F) where T : Copy , F : FnMut (T , T) ,"
+    },
+    {
+      "path": "ferray_core::nditer::BinaryBroadcastIter::map_collect",
+      "kind": "method",
+      "signature": "pub fn map_collect < U , F > (self , f : F) -> Vec < U > where T : Copy , F : Fn (T , T) -> U ,"
+    },
+    {
+      "path": "ferray_core::nditer::BinaryBroadcastIter::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_core::nditer::BinaryBroadcastIter::size",
+      "kind": "method",
+      "signature": "pub fn size (& self) -> usize"
+    },
+    {
+      "path": "ferray_core::nditer::NdIter",
+      "kind": "struct",
+      "signature": "pub struct NdIter"
+    },
+    {
+      "path": "ferray_core::nditer::NdIter::binary_iter",
+      "kind": "method",
+      "signature": "pub fn binary_iter < 'a , T , D1 , D2 > (a : & 'a Array < T , D1 > , b : & 'a Array < T , D2 > ,) -> FerrayResult < BinaryBroadcastIter < 'a , T > > where T : Element + Copy , D1 : Dimension , D2 : Dimension ,"
+    },
+    {
+      "path": "ferray_core::nditer::NdIter::binary_map",
+      "kind": "method",
+      "signature": "pub fn binary_map < T , U , D1 , D2 , F > (a : & Array < T , D1 > , b : & Array < T , D2 > , f : F ,) -> FerrayResult < Array < U , IxDyn > > where T : Element + Copy , U : Element , D1 : Dimension , D2 : Dimension , F : Fn (T , T) -> U ,"
+    },
+    {
+      "path": "ferray_core::nditer::NdIter::binary_map_into",
+      "kind": "method",
+      "signature": "pub fn binary_map_into < T , D1 , D2 > (a : & Array < T , D1 > , b : & Array < T , D2 > , out : & mut Array < T , IxDyn > , f : impl Fn (T , T) -> T ,) -> FerrayResult < () > where T : Element + Copy , D1 : Dimension , D2 : Dimension ,"
+    },
+    {
+      "path": "ferray_core::nditer::NdIter::binary_map_mixed",
+      "kind": "method",
+      "signature": "pub fn binary_map_mixed < A , B , U , D1 , D2 , F > (a : & Array < A , D1 > , b : & Array < B , D2 > , f : F ,) -> FerrayResult < Array < U , IxDyn > > where A : Element + Copy , B : Element + Copy , U : Element , D1 : Dimension , D2 : Dimension , F : Fn (A , B) -> U ,"
+    },
+    {
+      "path": "ferray_core::nditer::NdIter::broadcast_shape",
+      "kind": "method",
+      "signature": "pub fn broadcast_shape (a_shape : & [usize] , b_shape : & [usize]) -> FerrayResult < Vec < usize > >"
+    },
+    {
+      "path": "ferray_core::nditer::NdIter::unary_map",
+      "kind": "method",
+      "signature": "pub fn unary_map < T , U , D , F > (a : & Array < T , D > , f : F) -> FerrayResult < Array < U , IxDyn > > where T : Element + Copy , U : Element , D : Dimension , F : Fn (T) -> U ,"
+    },
+    {
+      "path": "ferray_core::nditer::NdIter::unary_map_into",
+      "kind": "method",
+      "signature": "pub fn unary_map_into < T , D > (a : & Array < T , D > , out : & mut Array < T , IxDyn > , f : impl Fn (T) -> T ,) -> FerrayResult < () > where T : Element + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_core::ops::Array::add_broadcast",
+      "kind": "method",
+      "signature": "pub fn add_broadcast < D2 : Dimension > (& self , other : & Array < T , D2 > ,) -> FerrayResult < Array < T , IxDyn > > where T : std :: ops :: Add < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::ops::Array::add_inplace",
+      "kind": "method",
+      "signature": "pub fn add_inplace (& mut self , other : & Self) -> FerrayResult < () > where T : std :: ops :: Add < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::ops::Array::copy_from",
+      "kind": "method",
+      "signature": "pub fn copy_from < D2 : Dimension > (& mut self , src : & Array < T , D2 >) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_core::ops::Array::copy_from_where",
+      "kind": "method",
+      "signature": "pub fn copy_from_where < D2 : Dimension , D3 : Dimension > (& mut self , src : & Array < T , D2 > , mask : & Array < bool , D3 > ,) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_core::ops::Array::div_broadcast",
+      "kind": "method",
+      "signature": "pub fn div_broadcast < D2 : Dimension > (& self , other : & Array < T , D2 > ,) -> FerrayResult < Array < T , IxDyn > > where T : std :: ops :: Div < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::ops::Array::div_inplace",
+      "kind": "method",
+      "signature": "pub fn div_inplace (& mut self , other : & Self) -> FerrayResult < () > where T : std :: ops :: Div < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::ops::Array::mul_broadcast",
+      "kind": "method",
+      "signature": "pub fn mul_broadcast < D2 : Dimension > (& self , other : & Array < T , D2 > ,) -> FerrayResult < Array < T , IxDyn > > where T : std :: ops :: Mul < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::ops::Array::mul_inplace",
+      "kind": "method",
+      "signature": "pub fn mul_inplace (& mut self , other : & Self) -> FerrayResult < () > where T : std :: ops :: Mul < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::ops::Array::rem_broadcast",
+      "kind": "method",
+      "signature": "pub fn rem_broadcast < D2 : Dimension > (& self , other : & Array < T , D2 > ,) -> FerrayResult < Array < T , IxDyn > > where T : std :: ops :: Rem < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::ops::Array::rem_inplace",
+      "kind": "method",
+      "signature": "pub fn rem_inplace (& mut self , other : & Self) -> FerrayResult < () > where T : std :: ops :: Rem < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::ops::Array::sub_broadcast",
+      "kind": "method",
+      "signature": "pub fn sub_broadcast < D2 : Dimension > (& self , other : & Array < T , D2 > ,) -> FerrayResult < Array < T , IxDyn > > where T : std :: ops :: Sub < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::ops::Array::sub_inplace",
+      "kind": "method",
+      "signature": "pub fn sub_inplace (& mut self , other : & Self) -> FerrayResult < () > where T : std :: ops :: Sub < Output = T > ,"
+    },
+    {
+      "path": "ferray_core::ops::copyto",
+      "kind": "fn",
+      "signature": "pub fn copyto < T , D1 , D2 > (dst : & mut Array < T , D1 > , src : & Array < T , D2 >) -> FerrayResult < () > where T : Element , D1 : Dimension , D2 : Dimension ,"
+    },
+    {
+      "path": "ferray_core::ops::copyto_where",
+      "kind": "fn",
+      "signature": "pub fn copyto_where < T , D1 , D2 , D3 > (dst : & mut Array < T , D1 > , src : & Array < T , D2 > , mask : & Array < bool , D3 > ,) -> FerrayResult < () > where T : Element , D1 : Dimension , D2 : Dimension , D3 : Dimension ,"
+    },
+    {
+      "path": "ferray_core::prelude::ArcArray",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: arc :: ArcArray"
+    },
+    {
+      "path": "ferray_core::prelude::Array",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: owned :: Array"
+    },
+    {
+      "path": "ferray_core::prelude::Array1",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::Array2",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::Array3",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::Array4",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::Array5",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::Array6",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayD",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayFlags",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: ArrayFlags"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayView",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: view :: ArrayView"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayView1",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayView2",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayView3",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayViewD",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayViewMut",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: view_mut :: ArrayViewMut"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayViewMut1",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayViewMut2",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayViewMut3",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::ArrayViewMutD",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::AsRawBuffer",
+      "kind": "reexport",
+      "signature": "pub use crate :: buffer :: AsRawBuffer"
+    },
+    {
+      "path": "ferray_core::prelude::AsType",
+      "kind": "reexport",
+      "signature": "pub use crate :: dtype :: casting :: { AsType , CastKind }"
+    },
+    {
+      "path": "ferray_core::prelude::Axis",
+      "kind": "reexport",
+      "signature": "pub use crate :: dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::prelude::CastKind",
+      "kind": "reexport",
+      "signature": "pub use crate :: dtype :: casting :: { AsType , CastKind }"
+    },
+    {
+      "path": "ferray_core::prelude::CowArray",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: cow :: CowArray"
+    },
+    {
+      "path": "ferray_core::prelude::DType",
+      "kind": "reexport",
+      "signature": "pub use crate :: dtype :: { DType , Element , SliceInfoElem }"
+    },
+    {
+      "path": "ferray_core::prelude::Dimension",
+      "kind": "reexport",
+      "signature": "pub use crate :: dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::prelude::DynArray",
+      "kind": "reexport",
+      "signature": "pub use crate :: dynarray :: DynArray"
+    },
+    {
+      "path": "ferray_core::prelude::Element",
+      "kind": "reexport",
+      "signature": "pub use crate :: dtype :: { DType , Element , SliceInfoElem }"
+    },
+    {
+      "path": "ferray_core::prelude::F32Array1",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::F32Array2",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::F64Array1",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::F64Array2",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: aliases :: { Array1 , Array2 , Array3 , Array4 , Array5 , Array6 , ArrayD , ArrayView1 , ArrayView2 , ArrayView3 , ArrayViewD , ArrayViewMut1 , ArrayViewMut2 , ArrayViewMut3 , ArrayViewMutD , F32Array1 , F32Array2 , F64Array1 , F64Array2 , }"
+    },
+    {
+      "path": "ferray_core::prelude::FerrayError",
+      "kind": "reexport",
+      "signature": "pub use crate :: error :: { FerrayError , FerrayResult }"
+    },
+    {
+      "path": "ferray_core::prelude::FerrayRecord",
+      "kind": "reexport",
+      "signature": "pub use crate :: record :: FerrayRecord"
+    },
+    {
+      "path": "ferray_core::prelude::FerrayResult",
+      "kind": "reexport",
+      "signature": "pub use crate :: error :: { FerrayError , FerrayResult }"
+    },
+    {
+      "path": "ferray_core::prelude::Ix0",
+      "kind": "reexport",
+      "signature": "pub use crate :: dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::prelude::Ix1",
+      "kind": "reexport",
+      "signature": "pub use crate :: dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::prelude::Ix2",
+      "kind": "reexport",
+      "signature": "pub use crate :: dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::prelude::Ix3",
+      "kind": "reexport",
+      "signature": "pub use crate :: dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::prelude::Ix4",
+      "kind": "reexport",
+      "signature": "pub use crate :: dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::prelude::Ix5",
+      "kind": "reexport",
+      "signature": "pub use crate :: dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::prelude::Ix6",
+      "kind": "reexport",
+      "signature": "pub use crate :: dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::prelude::IxDyn",
+      "kind": "reexport",
+      "signature": "pub use crate :: dimension :: { Axis , Dimension , Ix0 , Ix1 , Ix2 , Ix3 , Ix4 , Ix5 , Ix6 , IxDyn }"
+    },
+    {
+      "path": "ferray_core::prelude::MemoryLayout",
+      "kind": "reexport",
+      "signature": "pub use crate :: layout :: MemoryLayout"
+    },
+    {
+      "path": "ferray_core::prelude::PromoteTo",
+      "kind": "reexport",
+      "signature": "pub use crate :: dtype :: promotion :: { PromoteTo , Promoted }"
+    },
+    {
+      "path": "ferray_core::prelude::Promoted",
+      "kind": "reexport",
+      "signature": "pub use crate :: dtype :: promotion :: { PromoteTo , Promoted }"
+    },
+    {
+      "path": "ferray_core::prelude::SliceInfoElem",
+      "kind": "reexport",
+      "signature": "pub use crate :: dtype :: { DType , Element , SliceInfoElem }"
+    },
+    {
+      "path": "ferray_core::prelude::get_print_options",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: display :: { get_print_options , set_print_options }"
+    },
+    {
+      "path": "ferray_core::prelude::promoted_type",
+      "kind": "reexport",
+      "signature": "pub use ferray_core_macros :: { FerrayRecord , promoted_type , s }"
+    },
+    {
+      "path": "ferray_core::prelude::s",
+      "kind": "reexport",
+      "signature": "pub use ferray_core_macros :: { FerrayRecord , promoted_type , s }"
+    },
+    {
+      "path": "ferray_core::prelude::set_print_options",
+      "kind": "reexport",
+      "signature": "pub use crate :: array :: display :: { get_print_options , set_print_options }"
+    },
+    {
+      "path": "ferray_core::promoted_type",
+      "kind": "reexport",
+      "signature": "pub use ferray_core_macros :: { FerrayRecord , promoted_type , s }"
+    },
+    {
+      "path": "ferray_core::record::FerrayRecord",
+      "kind": "trait",
+      "signature": "pub trait FerrayRecord"
+    },
+    {
+      "path": "ferray_core::record::FieldDescriptor",
+      "kind": "struct",
+      "signature": "pub struct FieldDescriptor"
+    },
+    {
+      "path": "ferray_core::s",
+      "kind": "reexport",
+      "signature": "pub use ferray_core_macros :: { FerrayRecord , promoted_type , s }"
+    },
+    {
+      "path": "ferray_core::set_print_options",
+      "kind": "reexport",
+      "signature": "pub use array :: display :: { get_print_options , set_print_options }"
+    },
+    {
+      "path": "ferray_core::static_reshape_array",
+      "kind": "reexport",
+      "signature": "pub use dimension :: static_shape :: { Assert , DefaultNdarrayDim , IsTrue , Shape1 , Shape2 , Shape3 , Shape4 , Shape5 , Shape6 , StaticBroadcast , StaticMatMul , StaticSize , static_reshape_array , }"
+    },
+    {
+      "path": "ferray_core::writeback::WritebackGuard",
+      "kind": "struct",
+      "signature": "pub struct WritebackGuard < 'a , T : Element + Clone , D : Dimension >"
+    },
+    {
+      "path": "ferray_core::writeback::WritebackGuard::commit",
+      "kind": "method",
+      "signature": "pub fn commit (self) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_core::writeback::WritebackGuard::discard",
+      "kind": "method",
+      "signature": "pub fn discard (self)"
+    },
+    {
+      "path": "ferray_core::writeback::WritebackGuard::new",
+      "kind": "method",
+      "signature": "pub fn new (target : & 'a mut Array < T , D >) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_core::writeback::WritebackGuard::scratch",
+      "kind": "method",
+      "signature": "pub const fn scratch (& self) -> & Array < T , D >"
+    },
+    {
+      "path": "ferray_core::writeback::WritebackGuard::scratch_mut",
+      "kind": "method",
+      "signature": "pub fn scratch_mut (& mut self) -> & mut Array < T , D >"
+    }
+  ]
+}

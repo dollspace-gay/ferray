@@ -1,0 +1,17 @@
+# Documented cases where ferray-core returns a more mathematically
+# correct value than the reference. None currently documented for
+# ferray-core. New divergences should be filed with reference_function
+# + reference_library + tracking_issue fields per
+# docs/conformance-suites.md.
+#
+# Umbrella fixture-coverage gap tracker: see crosslink #748 (Stage 4
+# tracking) for missing JSON fixtures covering the indexing::extended
+# surface (25 fns), dtype::casting/finfo/promotion surface, dimension
+# broadcast and static-shape helpers, manipulation::extended variants
+# (pad / tile / repeat / delete / insert / append / resize /
+# trim_zeros / atleast_*), and the many creation-surface variants
+# (geomspace/logspace/meshgrid/mgrid/ogrid/identity/diag/diagflat/tri/
+# tril/triu/vander/fromfunction/fromstring/fromfile/frombuffer/fromiter/
+# ascontiguousarray/asfortranarray/asanyarray/asarray_chkfinite/copy/
+# require/empty/empty_like) — these are currently exercised inline
+# against analytic reference values rather than NumPy-generated fixtures.
