@@ -1,0 +1,36 @@
+name: Conformance gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain (stable, MSRV)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build conformance test binaries
+        run: cargo build --workspace --tests
+
+      - name: Run strict surface-coverage gates for all 13 crates
+        run: |
+          for crate in ferray-window ferray-ufunc ferray-stride-tricks \
+                       ferray-autodiff ferray-strings ferray-numpy-interop \
+                       ferray-fft ferray-ma ferray-io ferray-random \
+                       ferray-polynomial ferray-stats ferray-core ferray-linalg; do
+            echo "::group::$crate surface-coverage"
+            cargo test -p $crate --test conformance_surface_coverage
+            echo "::endgroup::"
+          done
+
+      - name: Run all conformance suites (catch cascade bugs / regressions)
+        run: cargo test --workspace --tests
