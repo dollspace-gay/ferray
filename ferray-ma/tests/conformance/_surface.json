@@ -1,0 +1,1276 @@
+{
+  "crate": "ferray-ma",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_ma::MaskAware",
+      "kind": "reexport",
+      "signature": "pub use interop :: { MaskAware , ma_apply_unary }"
+    },
+    {
+      "path": "ferray_ma::MaskedArray",
+      "kind": "reexport",
+      "signature": "pub use masked_array :: MaskedArray"
+    },
+    {
+      "path": "ferray_ma::NOMASK",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::arccos_domain",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { arccos_domain , arccosh_domain , arcsin_domain , arctanh_domain , divide_domain , log_domain , log2_domain , log10_domain , masked_binary_domain , masked_unary_domain , sqrt_domain , }"
+    },
+    {
+      "path": "ferray_ma::arccosh_domain",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { arccos_domain , arccosh_domain , arcsin_domain , arctanh_domain , divide_domain , log_domain , log2_domain , log10_domain , masked_binary_domain , masked_unary_domain , sqrt_domain , }"
+    },
+    {
+      "path": "ferray_ma::arcsin_domain",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { arccos_domain , arccosh_domain , arcsin_domain , arctanh_domain , divide_domain , log_domain , log2_domain , log10_domain , masked_binary_domain , masked_unary_domain , sqrt_domain , }"
+    },
+    {
+      "path": "ferray_ma::arctanh_domain",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { arccos_domain , arccosh_domain , arcsin_domain , arctanh_domain , divide_domain , log_domain , log2_domain , log10_domain , masked_binary_domain , masked_unary_domain , sqrt_domain , }"
+    },
+    {
+      "path": "ferray_ma::arithmetic::masked_add",
+      "kind": "fn",
+      "signature": "pub fn masked_add < T , D > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D > ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Add < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::arithmetic::masked_add_array",
+      "kind": "fn",
+      "signature": "pub fn masked_add_array < T , D > (ma : & MaskedArray < T , D > , arr : & Array < T , D > ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Add < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::arithmetic::masked_div",
+      "kind": "fn",
+      "signature": "pub fn masked_div < T , D > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D > ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Div < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::arithmetic::masked_div_array",
+      "kind": "fn",
+      "signature": "pub fn masked_div_array < T , D > (ma : & MaskedArray < T , D > , arr : & Array < T , D > ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Div < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::arithmetic::masked_mul",
+      "kind": "fn",
+      "signature": "pub fn masked_mul < T , D > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D > ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Mul < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::arithmetic::masked_mul_array",
+      "kind": "fn",
+      "signature": "pub fn masked_mul_array < T , D > (ma : & MaskedArray < T , D > , arr : & Array < T , D > ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Mul < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::arithmetic::masked_sub",
+      "kind": "fn",
+      "signature": "pub fn masked_sub < T , D > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D > ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Sub < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::arithmetic::masked_sub_array",
+      "kind": "fn",
+      "signature": "pub fn masked_sub_array < T , D > (ma : & MaskedArray < T , D > , arr : & Array < T , D > ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Sub < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::common_fill_value",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::constructors::fix_invalid",
+      "kind": "fn",
+      "signature": "pub fn fix_invalid < T : Element + Float , D : Dimension > (data : & Array < T , D > , fill_value : T ,) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::constructors::masked_equal",
+      "kind": "fn",
+      "signature": "pub fn masked_equal < T : Element + PartialEq + Copy , D : Dimension > (data : & Array < T , D > , value : T ,) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::constructors::masked_greater",
+      "kind": "fn",
+      "signature": "pub fn masked_greater < T : Element + PartialOrd + Copy , D : Dimension > (data : & Array < T , D > , value : T ,) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::constructors::masked_greater_equal",
+      "kind": "fn",
+      "signature": "pub fn masked_greater_equal < T : Element + PartialOrd + Copy , D : Dimension > (data : & Array < T , D > , value : T ,) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::constructors::masked_inside",
+      "kind": "fn",
+      "signature": "pub fn masked_inside < T : Element + PartialOrd + Copy , D : Dimension > (data : & Array < T , D > , v1 : T , v2 : T ,) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::constructors::masked_invalid",
+      "kind": "fn",
+      "signature": "pub fn masked_invalid < T : Element + Float , D : Dimension > (data : & Array < T , D > ,) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::constructors::masked_less",
+      "kind": "fn",
+      "signature": "pub fn masked_less < T : Element + PartialOrd + Copy , D : Dimension > (data : & Array < T , D > , value : T ,) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::constructors::masked_less_equal",
+      "kind": "fn",
+      "signature": "pub fn masked_less_equal < T : Element + PartialOrd + Copy , D : Dimension > (data : & Array < T , D > , value : T ,) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::constructors::masked_not_equal",
+      "kind": "fn",
+      "signature": "pub fn masked_not_equal < T : Element + PartialEq + Copy , D : Dimension > (data : & Array < T , D > , value : T ,) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::constructors::masked_outside",
+      "kind": "fn",
+      "signature": "pub fn masked_outside < T : Element + PartialOrd + Copy , D : Dimension > (data : & Array < T , D > , v1 : T , v2 : T ,) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::constructors::masked_where",
+      "kind": "fn",
+      "signature": "pub fn masked_where < T : Element + Copy , D : Dimension > (condition : & Array < bool , D > , data : & Array < T , D > ,) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::count_masked",
+      "kind": "reexport",
+      "signature": "pub use mask_ops :: { count_masked , count_masked_axis , getdata , getmask , is_masked }"
+    },
+    {
+      "path": "ferray_ma::count_masked_axis",
+      "kind": "reexport",
+      "signature": "pub use mask_ops :: { count_masked , count_masked_axis , getdata , getmask , is_masked }"
+    },
+    {
+      "path": "ferray_ma::default_fill_value_bool",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::default_fill_value_f32",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::default_fill_value_f64",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::default_fill_value_i64",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::divide_domain",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { arccos_domain , arccosh_domain , arcsin_domain , arctanh_domain , divide_domain , log_domain , log2_domain , log10_domain , masked_binary_domain , masked_unary_domain , sqrt_domain , }"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::anom",
+      "kind": "method",
+      "signature": "pub fn anom (& self) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::argmax",
+      "kind": "method",
+      "signature": "pub fn argmax (& self) -> FerrayResult < usize >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::argmin",
+      "kind": "method",
+      "signature": "pub fn argmin (& self) -> FerrayResult < usize >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::atleast_1d",
+      "kind": "method",
+      "signature": "pub fn atleast_1d (& self) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::atleast_2d",
+      "kind": "method",
+      "signature": "pub fn atleast_2d (& self) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::atleast_3d",
+      "kind": "method",
+      "signature": "pub fn atleast_3d (& self) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::average",
+      "kind": "method",
+      "signature": "pub fn average (& self , weights : Option < & Array < T , D > >) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::clip",
+      "kind": "method",
+      "signature": "pub fn clip (& self , a_min : T , a_max : T) -> FerrayResult < MaskedArray < T , D > >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::cumprod_flat",
+      "kind": "method",
+      "signature": "pub fn cumprod_flat (& self) -> FerrayResult < MaskedArray < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::cumsum_flat",
+      "kind": "method",
+      "signature": "pub fn cumsum_flat (& self) -> FerrayResult < MaskedArray < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::diagonal",
+      "kind": "method",
+      "signature": "pub fn diagonal (& self , k : isize) -> FerrayResult < MaskedArray < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::expand_dims",
+      "kind": "method",
+      "signature": "pub fn expand_dims (& self , axis : usize) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::ma_dot_flat",
+      "kind": "method",
+      "signature": "pub fn ma_dot_flat (& self , other : & MaskedArray < T , D >) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::median",
+      "kind": "method",
+      "signature": "pub fn median (& self) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::prod",
+      "kind": "method",
+      "signature": "pub fn prod (& self) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::ptp",
+      "kind": "method",
+      "signature": "pub fn ptp (& self) -> FerrayResult < T > where T : std :: ops :: Sub < Output = T > ,"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::repeat",
+      "kind": "method",
+      "signature": "pub fn repeat (& self , repeats : usize) -> FerrayResult < MaskedArray < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_ma::extras::MaskedArray::trace",
+      "kind": "method",
+      "signature": "pub fn trace (& self , k : isize) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::extras::common_fill_value",
+      "kind": "fn",
+      "signature": "pub fn common_fill_value < T , D > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D >) -> T where T : Element + Copy + PartialEq , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::extras::default_fill_value_bool",
+      "kind": "fn",
+      "signature": "pub const fn default_fill_value_bool () -> bool"
+    },
+    {
+      "path": "ferray_ma::extras::default_fill_value_f32",
+      "kind": "fn",
+      "signature": "pub fn default_fill_value_f32 () -> f32"
+    },
+    {
+      "path": "ferray_ma::extras::default_fill_value_f64",
+      "kind": "fn",
+      "signature": "pub fn default_fill_value_f64 () -> f64"
+    },
+    {
+      "path": "ferray_ma::extras::default_fill_value_i64",
+      "kind": "fn",
+      "signature": "pub const fn default_fill_value_i64 () -> i64"
+    },
+    {
+      "path": "ferray_ma::extras::getmaskarray",
+      "kind": "fn",
+      "signature": "pub fn getmaskarray < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < Array < bool , D > > where T : Element , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::extras::ids",
+      "kind": "fn",
+      "signature": "pub fn ids < T , D > (ma : & MaskedArray < T , D >) -> (* const u8 , * const u8) where T : Element , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::extras::is_ma",
+      "kind": "fn",
+      "signature": "pub const fn is_ma < T , D > (ma : & MaskedArray < T , D >) -> bool where T : Element , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::extras::is_masked_array",
+      "kind": "fn",
+      "signature": "pub const fn is_masked_array < T , D > (_ma : & MaskedArray < T , D >) -> bool where T : Element , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::extras::ma_apply_along_axis",
+      "kind": "fn",
+      "signature": "pub fn ma_apply_along_axis < T , F > (ma : & MaskedArray < T , IxDyn > , axis : usize , mut f : F ,) -> FerrayResult < MaskedArray < T , IxDyn > > where T : Element + Copy , F : FnMut (& MaskedArray < T , Ix1 >) -> FerrayResult < (T , bool) > ,"
+    },
+    {
+      "path": "ferray_ma::extras::ma_apply_over_axes",
+      "kind": "fn",
+      "signature": "pub fn ma_apply_over_axes < T , F > (ma : & MaskedArray < T , IxDyn > , axes : & [usize] , mut f : F ,) -> FerrayResult < MaskedArray < T , IxDyn > > where T : Element + Copy , F : FnMut (& MaskedArray < T , Ix1 >) -> FerrayResult < (T , bool) > ,"
+    },
+    {
+      "path": "ferray_ma::extras::ma_concatenate",
+      "kind": "fn",
+      "signature": "pub fn ma_concatenate < T > (a : & MaskedArray < T , IxDyn > , b : & MaskedArray < T , IxDyn > , axis : usize ,) -> FerrayResult < MaskedArray < T , IxDyn > > where T : Element + Copy ,"
+    },
+    {
+      "path": "ferray_ma::extras::ma_in1d",
+      "kind": "fn",
+      "signature": "pub fn ma_in1d < T > (ma : & MaskedArray < T , Ix1 > , test_values : & [T] ,) -> FerrayResult < MaskedArray < bool , Ix1 > > where T : Element + Copy + PartialEq ,"
+    },
+    {
+      "path": "ferray_ma::extras::ma_isin",
+      "kind": "fn",
+      "signature": "pub fn ma_isin < T , D > (ma : & MaskedArray < T , D > , test_values : & [T] ,) -> FerrayResult < MaskedArray < bool , D > > where T : Element + Copy + PartialEq , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::extras::ma_logical_and",
+      "kind": "fn",
+      "signature": "pub fn ma_logical_and < D : Dimension > (a : & MaskedArray < bool , D > , b : & MaskedArray < bool , D > ,) -> FerrayResult < MaskedArray < bool , D > >"
+    },
+    {
+      "path": "ferray_ma::extras::ma_logical_not",
+      "kind": "fn",
+      "signature": "pub fn ma_logical_not < D : Dimension > (a : & MaskedArray < bool , D > ,) -> FerrayResult < MaskedArray < bool , D > >"
+    },
+    {
+      "path": "ferray_ma::extras::ma_logical_or",
+      "kind": "fn",
+      "signature": "pub fn ma_logical_or < D : Dimension > (a : & MaskedArray < bool , D > , b : & MaskedArray < bool , D > ,) -> FerrayResult < MaskedArray < bool , D > >"
+    },
+    {
+      "path": "ferray_ma::extras::ma_logical_xor",
+      "kind": "fn",
+      "signature": "pub fn ma_logical_xor < D : Dimension > (a : & MaskedArray < bool , D > , b : & MaskedArray < bool , D > ,) -> FerrayResult < MaskedArray < bool , D > >"
+    },
+    {
+      "path": "ferray_ma::extras::ma_unique",
+      "kind": "fn",
+      "signature": "pub fn ma_unique < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < Array < T , Ix1 > > where T : Element + Copy + PartialOrd , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::extras::ma_vander",
+      "kind": "fn",
+      "signature": "pub fn ma_vander < T > (x : & MaskedArray < T , Ix1 > , n : Option < usize >) -> FerrayResult < MaskedArray < T , Ix2 > > where T : Element + Copy + std :: ops :: Mul < Output = T > + num_traits :: One ,"
+    },
+    {
+      "path": "ferray_ma::extras::make_mask",
+      "kind": "fn",
+      "signature": "pub fn make_mask < D : Dimension > (values : & [bool] , shape : D) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_ma::extras::make_mask_none",
+      "kind": "fn",
+      "signature": "pub fn make_mask_none < D : Dimension > (shape : D) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_ma::extras::mask_or",
+      "kind": "fn",
+      "signature": "pub fn mask_or < D : Dimension > (a : & Array < bool , D > , b : & Array < bool , D > ,) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_ma::extras::masked_all",
+      "kind": "fn",
+      "signature": "pub fn masked_all < T , D > (shape : D) -> FerrayResult < MaskedArray < T , D > > where T : Element + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::extras::masked_all_like",
+      "kind": "fn",
+      "signature": "pub fn masked_all_like < T , U , D > (reference : & Array < U , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Copy , U : Element , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::extras::masked_values",
+      "kind": "fn",
+      "signature": "pub fn masked_values < T , D > (arr : & Array < T , D > , value : T , rtol : T , atol : T ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Copy + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::extras::maximum_fill_value",
+      "kind": "fn",
+      "signature": "pub fn maximum_fill_value < T : Float > () -> T"
+    },
+    {
+      "path": "ferray_ma::extras::minimum_fill_value",
+      "kind": "fn",
+      "signature": "pub fn minimum_fill_value < T : Float > () -> T"
+    },
+    {
+      "path": "ferray_ma::filled::MaskedArray::compressed",
+      "kind": "method",
+      "signature": "pub fn compressed (& self) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_ma::filled::MaskedArray::filled",
+      "kind": "method",
+      "signature": "pub fn filled (& self , fill_value : T) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_ma::filled::MaskedArray::filled_default",
+      "kind": "method",
+      "signature": "pub fn filled_default (& self) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_ma::fix_invalid",
+      "kind": "reexport",
+      "signature": "pub use constructors :: { fix_invalid , masked_equal , masked_greater , masked_greater_equal , masked_inside , masked_invalid , masked_less , masked_less_equal , masked_not_equal , masked_outside , masked_where , }"
+    },
+    {
+      "path": "ferray_ma::getdata",
+      "kind": "reexport",
+      "signature": "pub use mask_ops :: { count_masked , count_masked_axis , getdata , getmask , is_masked }"
+    },
+    {
+      "path": "ferray_ma::getmask",
+      "kind": "reexport",
+      "signature": "pub use mask_ops :: { count_masked , count_masked_axis , getdata , getmask , is_masked }"
+    },
+    {
+      "path": "ferray_ma::getmaskarray",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ids",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::interop::MaskAware",
+      "kind": "trait",
+      "signature": "pub trait MaskAware < T : Element , D : Dimension >"
+    },
+    {
+      "path": "ferray_ma::interop::MaskedArray::apply_binary",
+      "kind": "method",
+      "signature": "pub fn apply_binary < F > (& self , other : & Self , f : F) -> FerrayResult < Self > where F : FnOnce (& Array < T , D > , & Array < T , D >) -> FerrayResult < Array < T , D > > ,"
+    },
+    {
+      "path": "ferray_ma::interop::MaskedArray::apply_unary",
+      "kind": "method",
+      "signature": "pub fn apply_unary < F > (& self , f : F) -> FerrayResult < Self > where F : FnOnce (& Array < T , D >) -> FerrayResult < Array < T , D > > ,"
+    },
+    {
+      "path": "ferray_ma::interop::MaskedArray::apply_unary_to",
+      "kind": "method",
+      "signature": "pub fn apply_unary_to < U , F > (& self , f : F , default_for_masked : U ,) -> FerrayResult < MaskedArray < U , D > > where U : Element + Copy , F : FnOnce (& Array < T , D >) -> FerrayResult < Array < U , D > > ,"
+    },
+    {
+      "path": "ferray_ma::interop::MaskedArray::into_data",
+      "kind": "method",
+      "signature": "pub fn into_data (self) -> Array < T , D >"
+    },
+    {
+      "path": "ferray_ma::interop::ma_apply_unary",
+      "kind": "fn",
+      "signature": "pub fn ma_apply_unary < T , D , X , F > (input : & X , f : F) -> FerrayResult < MaskedArray < T , D > > where T : Element + Copy , D : Dimension , X : MaskAware < T , D > , F : FnOnce (& Array < T , D >) -> FerrayResult < Array < T , D > > ,"
+    },
+    {
+      "path": "ferray_ma::io::load_masked",
+      "kind": "fn",
+      "signature": "pub fn load_masked < T , D , P1 , P2 > (data_path : P1 , mask_path : P2) -> FerrayResult < MaskedArray < T , D > > where T : Element + NpyElement , D : Dimension , P1 : AsRef < Path > , P2 : AsRef < Path > ,"
+    },
+    {
+      "path": "ferray_ma::io::save_masked",
+      "kind": "fn",
+      "signature": "pub fn save_masked < T , D , P1 , P2 > (data_path : P1 , mask_path : P2 , ma : & MaskedArray < T , D > ,) -> FerrayResult < () > where T : Element + NpyElement , D : Dimension , P1 : AsRef < Path > , P2 : AsRef < Path > ,"
+    },
+    {
+      "path": "ferray_ma::is_ma",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::is_masked",
+      "kind": "reexport",
+      "signature": "pub use mask_ops :: { count_masked , count_masked_axis , getdata , getmask , is_masked }"
+    },
+    {
+      "path": "ferray_ma::is_masked_array",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::log10_domain",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { arccos_domain , arccosh_domain , arcsin_domain , arctanh_domain , divide_domain , log_domain , log2_domain , log10_domain , masked_binary_domain , masked_unary_domain , sqrt_domain , }"
+    },
+    {
+      "path": "ferray_ma::log2_domain",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { arccos_domain , arccosh_domain , arcsin_domain , arctanh_domain , divide_domain , log_domain , log2_domain , log10_domain , masked_binary_domain , masked_unary_domain , sqrt_domain , }"
+    },
+    {
+      "path": "ferray_ma::log_domain",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { arccos_domain , arccosh_domain , arcsin_domain , arctanh_domain , divide_domain , log_domain , log2_domain , log10_domain , masked_binary_domain , masked_unary_domain , sqrt_domain , }"
+    },
+    {
+      "path": "ferray_ma::ma_apply_along_axis",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_apply_over_axes",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_apply_unary",
+      "kind": "reexport",
+      "signature": "pub use interop :: { MaskAware , ma_apply_unary }"
+    },
+    {
+      "path": "ferray_ma::ma_concatenate",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_equal",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_greater",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_greater_equal",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_in1d",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_isin",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_less",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_less_equal",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_logical_and",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_logical_not",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_logical_or",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_logical_xor",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_not_equal",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_unique",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::ma_vander",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::make_mask",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::make_mask_none",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::manipulation::MaskedArray::boolean_index",
+      "kind": "method",
+      "signature": "pub fn boolean_index (& self , bool_mask : & Array < bool , D >) -> FerrayResult < MaskedArray < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_ma::manipulation::MaskedArray::flatten",
+      "kind": "method",
+      "signature": "pub fn flatten (& self) -> FerrayResult < MaskedArray < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_ma::manipulation::MaskedArray::get_flat",
+      "kind": "method",
+      "signature": "pub fn get_flat (& self , flat_idx : usize) -> FerrayResult < (T , bool) >"
+    },
+    {
+      "path": "ferray_ma::manipulation::MaskedArray::ravel",
+      "kind": "method",
+      "signature": "pub fn ravel (& self) -> FerrayResult < MaskedArray < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_ma::manipulation::MaskedArray::reshape",
+      "kind": "method",
+      "signature": "pub fn reshape (& self , new_shape : & [usize]) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::manipulation::MaskedArray::squeeze",
+      "kind": "method",
+      "signature": "pub fn squeeze (& self , axis : Option < usize >) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::manipulation::MaskedArray::t",
+      "kind": "method",
+      "signature": "pub fn t (& self) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::manipulation::MaskedArray::take",
+      "kind": "method",
+      "signature": "pub fn take (& self , indices : & [usize]) -> FerrayResult < MaskedArray < T , Ix1 > > where D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::manipulation::MaskedArray::transpose",
+      "kind": "method",
+      "signature": "pub fn transpose (& self , axes : Option < & [usize] >) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::mask_ops::MaskedArray::harden_mask",
+      "kind": "method",
+      "signature": "pub const fn harden_mask (& mut self) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_ma::mask_ops::MaskedArray::soften_mask",
+      "kind": "method",
+      "signature": "pub const fn soften_mask (& mut self) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_ma::mask_ops::count_masked",
+      "kind": "fn",
+      "signature": "pub fn count_masked < T : Element , D : Dimension > (ma : & MaskedArray < T , D >) -> FerrayResult < usize >"
+    },
+    {
+      "path": "ferray_ma::mask_ops::count_masked_axis",
+      "kind": "fn",
+      "signature": "pub fn count_masked_axis < T : Element , D : Dimension > (ma : & MaskedArray < T , D > , axis : usize ,) -> FerrayResult < ferray_core :: Array < u64 , ferray_core :: dimension :: IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::mask_ops::getdata",
+      "kind": "fn",
+      "signature": "pub fn getdata < T : Element + Copy , D : Dimension > (ma : & MaskedArray < T , D > ,) -> FerrayResult < Array < T , D > >"
+    },
+    {
+      "path": "ferray_ma::mask_ops::getmask",
+      "kind": "fn",
+      "signature": "pub fn getmask < T : Element , D : Dimension > (ma : & MaskedArray < T , D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_ma::mask_ops::is_masked",
+      "kind": "fn",
+      "signature": "pub fn is_masked < T : Element , D : Dimension > (ma : & MaskedArray < T , D >) -> FerrayResult < bool >"
+    },
+    {
+      "path": "ferray_ma::mask_or",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::masked_add",
+      "kind": "reexport",
+      "signature": "pub use arithmetic :: { masked_add , masked_add_array , masked_div , masked_div_array , masked_mul , masked_mul_array , masked_sub , masked_sub_array , }"
+    },
+    {
+      "path": "ferray_ma::masked_add_array",
+      "kind": "reexport",
+      "signature": "pub use arithmetic :: { masked_add , masked_add_array , masked_div , masked_div_array , masked_mul , masked_mul_array , masked_sub , masked_sub_array , }"
+    },
+    {
+      "path": "ferray_ma::masked_all",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::masked_all_like",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray",
+      "kind": "struct",
+      "signature": "pub struct MaskedArray < T : Element , D : Dimension >"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::data",
+      "kind": "method",
+      "signature": "pub const fn data (& self) -> & Array < T , D >"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::data_mut",
+      "kind": "method",
+      "signature": "pub fn data_mut (& mut self) -> Option < & mut [T] >"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::dim",
+      "kind": "method",
+      "signature": "pub const fn dim (& self) -> & D"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::fill_value",
+      "kind": "method",
+      "signature": "pub const fn fill_value (& self) -> T where T : Copy ,"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::from_data",
+      "kind": "method",
+      "signature": "pub fn from_data (data : Array < T , D >) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::has_real_mask",
+      "kind": "method",
+      "signature": "pub const fn has_real_mask (& self) -> bool"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::is_hard_mask",
+      "kind": "method",
+      "signature": "pub const fn is_hard_mask (& self) -> bool"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::mask",
+      "kind": "method",
+      "signature": "pub fn mask (& self) -> & Array < bool , D >"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::mask_opt",
+      "kind": "method",
+      "signature": "pub fn mask_opt (& self) -> Option < & Array < bool , D > >"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::ndim",
+      "kind": "method",
+      "signature": "pub fn ndim (& self) -> usize"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::new",
+      "kind": "method",
+      "signature": "pub fn new (data : Array < T , D > , mask : Array < bool , D >) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::set_fill_value",
+      "kind": "method",
+      "signature": "pub fn set_fill_value (& mut self , fill_value : T)"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::set_mask",
+      "kind": "method",
+      "signature": "pub fn set_mask (& mut self , new_mask : Array < bool , D >) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::set_mask_flat",
+      "kind": "method",
+      "signature": "pub fn set_mask_flat (& mut self , flat_idx : usize , value : bool) -> FerrayResult < () >"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::shares_mask",
+      "kind": "method",
+      "signature": "pub fn shares_mask (& self) -> bool"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::size",
+      "kind": "method",
+      "signature": "pub fn size (& self) -> usize"
+    },
+    {
+      "path": "ferray_ma::masked_array::MaskedArray::with_fill_value",
+      "kind": "method",
+      "signature": "pub fn with_fill_value (mut self , fill_value : T) -> Self"
+    },
+    {
+      "path": "ferray_ma::masked_binary",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { masked_binary , masked_unary }"
+    },
+    {
+      "path": "ferray_ma::masked_binary_domain",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { arccos_domain , arccosh_domain , arcsin_domain , arctanh_domain , divide_domain , log_domain , log2_domain , log10_domain , masked_binary_domain , masked_unary_domain , sqrt_domain , }"
+    },
+    {
+      "path": "ferray_ma::masked_div",
+      "kind": "reexport",
+      "signature": "pub use arithmetic :: { masked_add , masked_add_array , masked_div , masked_div_array , masked_mul , masked_mul_array , masked_sub , masked_sub_array , }"
+    },
+    {
+      "path": "ferray_ma::masked_div_array",
+      "kind": "reexport",
+      "signature": "pub use arithmetic :: { masked_add , masked_add_array , masked_div , masked_div_array , masked_mul , masked_mul_array , masked_sub , masked_sub_array , }"
+    },
+    {
+      "path": "ferray_ma::masked_equal",
+      "kind": "reexport",
+      "signature": "pub use constructors :: { fix_invalid , masked_equal , masked_greater , masked_greater_equal , masked_inside , masked_invalid , masked_less , masked_less_equal , masked_not_equal , masked_outside , masked_where , }"
+    },
+    {
+      "path": "ferray_ma::masked_greater",
+      "kind": "reexport",
+      "signature": "pub use constructors :: { fix_invalid , masked_equal , masked_greater , masked_greater_equal , masked_inside , masked_invalid , masked_less , masked_less_equal , masked_not_equal , masked_outside , masked_where , }"
+    },
+    {
+      "path": "ferray_ma::masked_greater_equal",
+      "kind": "reexport",
+      "signature": "pub use constructors :: { fix_invalid , masked_equal , masked_greater , masked_greater_equal , masked_inside , masked_invalid , masked_less , masked_less_equal , masked_not_equal , masked_outside , masked_where , }"
+    },
+    {
+      "path": "ferray_ma::masked_inside",
+      "kind": "reexport",
+      "signature": "pub use constructors :: { fix_invalid , masked_equal , masked_greater , masked_greater_equal , masked_inside , masked_invalid , masked_less , masked_less_equal , masked_not_equal , masked_outside , masked_where , }"
+    },
+    {
+      "path": "ferray_ma::masked_invalid",
+      "kind": "reexport",
+      "signature": "pub use constructors :: { fix_invalid , masked_equal , masked_greater , masked_greater_equal , masked_inside , masked_invalid , masked_less , masked_less_equal , masked_not_equal , masked_outside , masked_where , }"
+    },
+    {
+      "path": "ferray_ma::masked_less",
+      "kind": "reexport",
+      "signature": "pub use constructors :: { fix_invalid , masked_equal , masked_greater , masked_greater_equal , masked_inside , masked_invalid , masked_less , masked_less_equal , masked_not_equal , masked_outside , masked_where , }"
+    },
+    {
+      "path": "ferray_ma::masked_less_equal",
+      "kind": "reexport",
+      "signature": "pub use constructors :: { fix_invalid , masked_equal , masked_greater , masked_greater_equal , masked_inside , masked_invalid , masked_less , masked_less_equal , masked_not_equal , masked_outside , masked_where , }"
+    },
+    {
+      "path": "ferray_ma::masked_mul",
+      "kind": "reexport",
+      "signature": "pub use arithmetic :: { masked_add , masked_add_array , masked_div , masked_div_array , masked_mul , masked_mul_array , masked_sub , masked_sub_array , }"
+    },
+    {
+      "path": "ferray_ma::masked_mul_array",
+      "kind": "reexport",
+      "signature": "pub use arithmetic :: { masked_add , masked_add_array , masked_div , masked_div_array , masked_mul , masked_mul_array , masked_sub , masked_sub_array , }"
+    },
+    {
+      "path": "ferray_ma::masked_not_equal",
+      "kind": "reexport",
+      "signature": "pub use constructors :: { fix_invalid , masked_equal , masked_greater , masked_greater_equal , masked_inside , masked_invalid , masked_less , masked_less_equal , masked_not_equal , masked_outside , masked_where , }"
+    },
+    {
+      "path": "ferray_ma::masked_outside",
+      "kind": "reexport",
+      "signature": "pub use constructors :: { fix_invalid , masked_equal , masked_greater , masked_greater_equal , masked_inside , masked_invalid , masked_less , masked_less_equal , masked_not_equal , masked_outside , masked_where , }"
+    },
+    {
+      "path": "ferray_ma::masked_sub",
+      "kind": "reexport",
+      "signature": "pub use arithmetic :: { masked_add , masked_add_array , masked_div , masked_div_array , masked_mul , masked_mul_array , masked_sub , masked_sub_array , }"
+    },
+    {
+      "path": "ferray_ma::masked_sub_array",
+      "kind": "reexport",
+      "signature": "pub use arithmetic :: { masked_add , masked_add_array , masked_div , masked_div_array , masked_mul , masked_mul_array , masked_sub , masked_sub_array , }"
+    },
+    {
+      "path": "ferray_ma::masked_unary",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { masked_binary , masked_unary }"
+    },
+    {
+      "path": "ferray_ma::masked_unary_domain",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { arccos_domain , arccosh_domain , arcsin_domain , arctanh_domain , divide_domain , log_domain , log2_domain , log10_domain , masked_binary_domain , masked_unary_domain , sqrt_domain , }"
+    },
+    {
+      "path": "ferray_ma::masked_values",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::masked_where",
+      "kind": "reexport",
+      "signature": "pub use constructors :: { fix_invalid , masked_equal , masked_greater , masked_greater_equal , masked_inside , masked_invalid , masked_less , masked_less_equal , masked_not_equal , masked_outside , masked_where , }"
+    },
+    {
+      "path": "ferray_ma::maximum_fill_value",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::minimum_fill_value",
+      "kind": "reexport",
+      "signature": "pub use extras :: { NOMASK , common_fill_value , default_fill_value_bool , default_fill_value_f32 , default_fill_value_f64 , default_fill_value_i64 , getmaskarray , ids , is_ma , is_masked_array , ma_apply_along_axis , ma_apply_over_axes , ma_concatenate , ma_equal , ma_greater , ma_greater_equal , ma_in1d , ma_isin , ma_less , ma_less_equal , ma_logical_and , ma_logical_not , ma_logical_or , ma_logical_xor , ma_not_equal , ma_unique , ma_vander , make_mask , make_mask_none , mask_or , masked_all , masked_all_like , masked_values , maximum_fill_value , minimum_fill_value , }"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::count",
+      "kind": "method",
+      "signature": "pub fn count (& self) -> FerrayResult < usize >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::count_axis",
+      "kind": "method",
+      "signature": "pub fn count_axis (& self , axis : usize) -> FerrayResult < Array < u64 , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::max",
+      "kind": "method",
+      "signature": "pub fn max (& self) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::max_axis",
+      "kind": "method",
+      "signature": "pub fn max_axis (& self , axis : usize) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::mean",
+      "kind": "method",
+      "signature": "pub fn mean (& self) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::mean_axis",
+      "kind": "method",
+      "signature": "pub fn mean_axis (& self , axis : usize) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::min",
+      "kind": "method",
+      "signature": "pub fn min (& self) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::min_axis",
+      "kind": "method",
+      "signature": "pub fn min_axis (& self , axis : usize) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::std",
+      "kind": "method",
+      "signature": "pub fn std (& self) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::std_axis",
+      "kind": "method",
+      "signature": "pub fn std_axis (& self , axis : usize) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::std_axis_ddof",
+      "kind": "method",
+      "signature": "pub fn std_axis_ddof (& self , axis : usize , ddof : usize) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::std_ddof",
+      "kind": "method",
+      "signature": "pub fn std_ddof (& self , ddof : usize) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::sum",
+      "kind": "method",
+      "signature": "pub fn sum (& self) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::sum_axis",
+      "kind": "method",
+      "signature": "pub fn sum_axis (& self , axis : usize) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::var",
+      "kind": "method",
+      "signature": "pub fn var (& self) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::var_axis",
+      "kind": "method",
+      "signature": "pub fn var_axis (& self , axis : usize) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::var_axis_ddof",
+      "kind": "method",
+      "signature": "pub fn var_axis_ddof (& self , axis : usize , ddof : usize) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::reductions::MaskedArray::var_ddof",
+      "kind": "method",
+      "signature": "pub fn var_ddof (& self , ddof : usize) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_ma::sorting::MaskedArray::argsort",
+      "kind": "method",
+      "signature": "pub fn argsort (& self) -> FerrayResult < Array < u64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_ma::sorting::MaskedArray::sort",
+      "kind": "method",
+      "signature": "pub fn sort (& self) -> FerrayResult < MaskedArray < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_ma::sorting::MaskedArray::sort_axis",
+      "kind": "method",
+      "signature": "pub fn sort_axis (& self , axis : usize) -> FerrayResult < MaskedArray < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_ma::sqrt_domain",
+      "kind": "reexport",
+      "signature": "pub use ufunc_support :: { arccos_domain , arccosh_domain , arcsin_domain , arctanh_domain , divide_domain , log_domain , log2_domain , log10_domain , masked_binary_domain , masked_unary_domain , sqrt_domain , }"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::absolute",
+      "kind": "fn",
+      "signature": "pub fn absolute < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::add",
+      "kind": "fn",
+      "signature": "pub fn add < T , D > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::arccos",
+      "kind": "fn",
+      "signature": "pub fn arccos < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::arccos_domain",
+      "kind": "fn",
+      "signature": "pub fn arccos_domain < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::arccosh",
+      "kind": "fn",
+      "signature": "pub fn arccosh < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::arccosh_domain",
+      "kind": "fn",
+      "signature": "pub fn arccosh_domain < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::arcsin",
+      "kind": "fn",
+      "signature": "pub fn arcsin < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::arcsin_domain",
+      "kind": "fn",
+      "signature": "pub fn arcsin_domain < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::arcsinh",
+      "kind": "fn",
+      "signature": "pub fn arcsinh < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::arctan",
+      "kind": "fn",
+      "signature": "pub fn arctan < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::arctanh",
+      "kind": "fn",
+      "signature": "pub fn arctanh < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::arctanh_domain",
+      "kind": "fn",
+      "signature": "pub fn arctanh_domain < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::ceil",
+      "kind": "fn",
+      "signature": "pub fn ceil < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::cos",
+      "kind": "fn",
+      "signature": "pub fn cos < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::cosh",
+      "kind": "fn",
+      "signature": "pub fn cosh < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::divide",
+      "kind": "fn",
+      "signature": "pub fn divide < T , D > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::divide_domain",
+      "kind": "fn",
+      "signature": "pub fn divide_domain < T , D > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D > ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::exp",
+      "kind": "fn",
+      "signature": "pub fn exp < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::exp2",
+      "kind": "fn",
+      "signature": "pub fn exp2 < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::expm1",
+      "kind": "fn",
+      "signature": "pub fn expm1 < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::floor",
+      "kind": "fn",
+      "signature": "pub fn floor < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::log",
+      "kind": "fn",
+      "signature": "pub fn log < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::log10",
+      "kind": "fn",
+      "signature": "pub fn log10 < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::log10_domain",
+      "kind": "fn",
+      "signature": "pub fn log10_domain < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::log1p",
+      "kind": "fn",
+      "signature": "pub fn log1p < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::log2",
+      "kind": "fn",
+      "signature": "pub fn log2 < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::log2_domain",
+      "kind": "fn",
+      "signature": "pub fn log2_domain < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::log_domain",
+      "kind": "fn",
+      "signature": "pub fn log_domain < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::masked_binary",
+      "kind": "fn",
+      "signature": "pub fn masked_binary < T , D , F > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D > , f : F , op_name : & str ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Copy , D : Dimension , F : Fn (T , T) -> T ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::masked_binary_domain",
+      "kind": "fn",
+      "signature": "pub fn masked_binary_domain < T , D , F , Dom > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D > , f : F , in_domain : Dom , op_name : & str ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Copy , D : Dimension , F : Fn (T , T) -> T , Dom : Fn (T , T) -> bool ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::masked_unary",
+      "kind": "fn",
+      "signature": "pub fn masked_unary < T , D , F > (ma : & MaskedArray < T , D > , f : F) -> FerrayResult < MaskedArray < T , D > > where T : Element + Copy , D : Dimension , F : Fn (T) -> T ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::masked_unary_domain",
+      "kind": "fn",
+      "signature": "pub fn masked_unary_domain < T , D , F , Dom > (ma : & MaskedArray < T , D > , f : F , in_domain : Dom ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Copy , D : Dimension , F : Fn (T) -> T , Dom : Fn (T) -> bool ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::multiply",
+      "kind": "fn",
+      "signature": "pub fn multiply < T , D > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D > ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::negative",
+      "kind": "fn",
+      "signature": "pub fn negative < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::power",
+      "kind": "fn",
+      "signature": "pub fn power < T , D > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::reciprocal",
+      "kind": "fn",
+      "signature": "pub fn reciprocal < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::round",
+      "kind": "fn",
+      "signature": "pub fn round < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::sign",
+      "kind": "fn",
+      "signature": "pub fn sign < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::sin",
+      "kind": "fn",
+      "signature": "pub fn sin < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::sinh",
+      "kind": "fn",
+      "signature": "pub fn sinh < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::sqrt",
+      "kind": "fn",
+      "signature": "pub fn sqrt < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::sqrt_domain",
+      "kind": "fn",
+      "signature": "pub fn sqrt_domain < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::square",
+      "kind": "fn",
+      "signature": "pub fn square < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::subtract",
+      "kind": "fn",
+      "signature": "pub fn subtract < T , D > (a : & MaskedArray < T , D > , b : & MaskedArray < T , D > ,) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::tan",
+      "kind": "fn",
+      "signature": "pub fn tan < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::tanh",
+      "kind": "fn",
+      "signature": "pub fn tanh < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_ma::ufunc_support::trunc",
+      "kind": "fn",
+      "signature": "pub fn trunc < T , D > (ma : & MaskedArray < T , D >) -> FerrayResult < MaskedArray < T , D > > where T : Element + Float , D : Dimension ,"
+    }
+  ]
+}

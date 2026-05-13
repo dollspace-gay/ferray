@@ -1,0 +1,7 @@
+# Documented cases where ferray-ma returns a more mathematically correct
+# value than the reference. None currently documented for ferray-ma —
+# the masked-array operations covered by today's fixtures (mean/sum/min/
+# max/compressed/masked_invalid/getmask/getdata) all match NumPy bit-for-
+# bit or within the Stage 1 reduction tolerance. New divergences should
+# be filed with reference_function + reference_library + tracking_issue
+# fields per docs/conformance-suites.md.
