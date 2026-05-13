@@ -1,0 +1,13 @@
+# Documented cases where ferray-stats returns a more mathematically
+# correct value than the reference. None currently documented for
+# ferray-stats. New divergences should be filed with reference_function
+# + reference_library + tracking_issue fields per
+# docs/conformance-suites.md.
+#
+# Umbrella fixture-coverage gap tracker: see crosslink #748 (Stage 4
+# tracking) for missing JSON fixtures covering the nan-aware reductions,
+# axis/keepdims/into/with variants of the standard reductions, the
+# scipy-parity descriptive and hypothesis surfaces, set-ops, lexsort/
+# argpartition/searchsorted, bincount/histogram2d/histogramdd, and the
+# Rayon parallel kernels — these are currently exercised inline against
+# analytic reference values rather than NumPy-generated fixtures.

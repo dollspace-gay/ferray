@@ -1,0 +1,1146 @@
+{
+  "crate": "ferray-stats",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_stats::Bins",
+      "kind": "reexport",
+      "signature": "pub use histogram :: { Bins , bincount , bincount_u64 , bincount_weighted , digitize , histogram , histogram_bin_edges , histogram2d , histogramdd , }"
+    },
+    {
+      "path": "ferray_stats::Chi2ContingencyResult",
+      "kind": "reexport",
+      "signature": "pub use hypothesis :: { Chi2ContingencyResult , chi2_contingency , ks_2samp , pearsonr , spearmanr , ttest_1samp , ttest_ind , }"
+    },
+    {
+      "path": "ferray_stats::CorrelateMode",
+      "kind": "reexport",
+      "signature": "pub use correlation :: { CorrelateMode , corrcoef , correlate , cov }"
+    },
+    {
+      "path": "ferray_stats::ModeResult",
+      "kind": "reexport",
+      "signature": "pub use descriptive :: { ModeResult , gmean , hmean , iqr , kurtosis , mode , sem , skew , zscore }"
+    },
+    {
+      "path": "ferray_stats::QuantileMethod",
+      "kind": "reexport",
+      "signature": "pub use reductions :: quantile :: { QuantileMethod , median , nanmedian , nanpercentile , nanquantile , percentile , percentile_with_method , quantile , quantile_with_method , }"
+    },
+    {
+      "path": "ferray_stats::Side",
+      "kind": "reexport",
+      "signature": "pub use sorting :: { Side , SortKind , argpartition , argsort , lexsort , partition , searchsorted , searchsorted_with_sorter , sort , sort_complex , }"
+    },
+    {
+      "path": "ferray_stats::SortKind",
+      "kind": "reexport",
+      "signature": "pub use sorting :: { Side , SortKind , argpartition , argsort , lexsort , partition , searchsorted , searchsorted_with_sorter , sort , sort_complex , }"
+    },
+    {
+      "path": "ferray_stats::UniqueResult",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::argmax",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::argmin",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::argpartition",
+      "kind": "reexport",
+      "signature": "pub use sorting :: { Side , SortKind , argpartition , argsort , lexsort , partition , searchsorted , searchsorted_with_sorter , sort , sort_complex , }"
+    },
+    {
+      "path": "ferray_stats::argsort",
+      "kind": "reexport",
+      "signature": "pub use sorting :: { Side , SortKind , argpartition , argsort , lexsort , partition , searchsorted , searchsorted_with_sorter , sort , sort_complex , }"
+    },
+    {
+      "path": "ferray_stats::average",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::bincount",
+      "kind": "reexport",
+      "signature": "pub use histogram :: { Bins , bincount , bincount_u64 , bincount_weighted , digitize , histogram , histogram_bin_edges , histogram2d , histogramdd , }"
+    },
+    {
+      "path": "ferray_stats::bincount_u64",
+      "kind": "reexport",
+      "signature": "pub use histogram :: { Bins , bincount , bincount_u64 , bincount_weighted , digitize , histogram , histogram_bin_edges , histogram2d , histogramdd , }"
+    },
+    {
+      "path": "ferray_stats::bincount_weighted",
+      "kind": "reexport",
+      "signature": "pub use histogram :: { Bins , bincount , bincount_u64 , bincount_weighted , digitize , histogram , histogram_bin_edges , histogram2d , histogramdd , }"
+    },
+    {
+      "path": "ferray_stats::chi2_contingency",
+      "kind": "reexport",
+      "signature": "pub use hypothesis :: { Chi2ContingencyResult , chi2_contingency , ks_2samp , pearsonr , spearmanr , ttest_1samp , ttest_ind , }"
+    },
+    {
+      "path": "ferray_stats::corrcoef",
+      "kind": "reexport",
+      "signature": "pub use correlation :: { CorrelateMode , corrcoef , correlate , cov }"
+    },
+    {
+      "path": "ferray_stats::correlate",
+      "kind": "reexport",
+      "signature": "pub use correlation :: { CorrelateMode , corrcoef , correlate , cov }"
+    },
+    {
+      "path": "ferray_stats::correlation::CorrelateMode",
+      "kind": "enum",
+      "signature": "pub enum CorrelateMode"
+    },
+    {
+      "path": "ferray_stats::correlation::corrcoef",
+      "kind": "fn",
+      "signature": "pub fn corrcoef < T , D > (x : & Array < T , D > , rowvar : bool) -> FerrayResult < Array < T , Ix2 > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::correlation::correlate",
+      "kind": "fn",
+      "signature": "pub fn correlate < T > (a : & Array < T , Ix1 > , v : & Array < T , Ix1 > , mode : CorrelateMode ,) -> FerrayResult < Array < T , Ix1 > > where T : Element + Float ,"
+    },
+    {
+      "path": "ferray_stats::correlation::cov",
+      "kind": "fn",
+      "signature": "pub fn cov < T , D > (m : & Array < T , D > , rowvar : bool , ddof : Option < usize >) -> FerrayResult < Array < T , Ix2 > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::count_nonzero",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::cov",
+      "kind": "reexport",
+      "signature": "pub use correlation :: { CorrelateMode , corrcoef , correlate , cov }"
+    },
+    {
+      "path": "ferray_stats::cumprod",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::cumsum",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::descriptive::ModeResult",
+      "kind": "struct",
+      "signature": "pub struct ModeResult < T >"
+    },
+    {
+      "path": "ferray_stats::descriptive::gmean",
+      "kind": "fn",
+      "signature": "pub fn gmean < T , D > (a : & Array < T , D >) -> FerrayResult < f64 > where T : Element + Copy + Into < f64 > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::descriptive::hmean",
+      "kind": "fn",
+      "signature": "pub fn hmean < T , D > (a : & Array < T , D >) -> FerrayResult < f64 > where T : Element + Copy + Into < f64 > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::descriptive::iqr",
+      "kind": "fn",
+      "signature": "pub fn iqr < T , D > (a : & Array < T , D >) -> FerrayResult < T > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::descriptive::kurtosis",
+      "kind": "fn",
+      "signature": "pub fn kurtosis < T , D > (a : & Array < T , D > , fisher : bool) -> FerrayResult < f64 > where T : Element + Copy + Into < f64 > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::descriptive::mode",
+      "kind": "fn",
+      "signature": "pub fn mode < T , D > (a : & Array < T , D >) -> FerrayResult < ModeResult < T > > where T : Element + Copy + PartialOrd , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::descriptive::sem",
+      "kind": "fn",
+      "signature": "pub fn sem < T , D > (a : & Array < T , D >) -> FerrayResult < f64 > where T : Element + Copy + Into < f64 > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::descriptive::skew",
+      "kind": "fn",
+      "signature": "pub fn skew < T , D > (a : & Array < T , D >) -> FerrayResult < f64 > where T : Element + Copy + Into < f64 > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::descriptive::zscore",
+      "kind": "fn",
+      "signature": "pub fn zscore < T , D > (a : & Array < T , D >) -> FerrayResult < Array < f64 , IxDyn > > where T : Element + Copy + Into < f64 > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::digitize",
+      "kind": "reexport",
+      "signature": "pub use histogram :: { Bins , bincount , bincount_u64 , bincount_weighted , digitize , histogram , histogram_bin_edges , histogram2d , histogramdd , }"
+    },
+    {
+      "path": "ferray_stats::gmean",
+      "kind": "reexport",
+      "signature": "pub use descriptive :: { ModeResult , gmean , hmean , iqr , kurtosis , mode , sem , skew , zscore }"
+    },
+    {
+      "path": "ferray_stats::histogram",
+      "kind": "reexport",
+      "signature": "pub use histogram :: { Bins , bincount , bincount_u64 , bincount_weighted , digitize , histogram , histogram_bin_edges , histogram2d , histogramdd , }"
+    },
+    {
+      "path": "ferray_stats::histogram2d",
+      "kind": "reexport",
+      "signature": "pub use histogram :: { Bins , bincount , bincount_u64 , bincount_weighted , digitize , histogram , histogram_bin_edges , histogram2d , histogramdd , }"
+    },
+    {
+      "path": "ferray_stats::histogram::Bins",
+      "kind": "enum",
+      "signature": "pub enum Bins < T >"
+    },
+    {
+      "path": "ferray_stats::histogram::bincount",
+      "kind": "fn",
+      "signature": "pub fn bincount (x : & Array < u64 , Ix1 > , weights : Option < & Array < f64 , Ix1 > > , minlength : usize ,) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_stats::histogram::bincount_u64",
+      "kind": "fn",
+      "signature": "pub fn bincount_u64 (x : & Array < u64 , Ix1 > , minlength : usize) -> FerrayResult < Array < u64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_stats::histogram::bincount_weighted",
+      "kind": "fn",
+      "signature": "pub fn bincount_weighted (x : & Array < u64 , Ix1 > , weights : & Array < f64 , Ix1 > , minlength : usize ,) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_stats::histogram::digitize",
+      "kind": "fn",
+      "signature": "pub fn digitize < T > (x : & Array < T , Ix1 > , bins : & Array < T , Ix1 > , right : bool ,) -> FerrayResult < Array < u64 , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::histogram::histogram",
+      "kind": "fn",
+      "signature": "pub fn histogram < T > (a : & Array < T , Ix1 > , bins : Bins < T > , range : Option < (T , T) > , density : bool ,) -> FerrayResult < (Array < f64 , Ix1 > , Array < T , Ix1 >) > where T : Element + Float ,"
+    },
+    {
+      "path": "ferray_stats::histogram::histogram2d",
+      "kind": "fn",
+      "signature": "pub fn histogram2d < T > (x : & Array < T , Ix1 > , y : & Array < T , Ix1 > , bins : (usize , usize) ,) -> FerrayResult < (Array < u64 , Ix2 > , Array < T , Ix1 > , Array < T , Ix1 >) > where T : Element + Float ,"
+    },
+    {
+      "path": "ferray_stats::histogram::histogram_bin_edges",
+      "kind": "fn",
+      "signature": "pub fn histogram_bin_edges < T > (a : & Array < T , Ix1 > , bins : Bins < T > , range : Option < (T , T) > ,) -> FerrayResult < Array < T , Ix1 > > where T : Element + Float ,"
+    },
+    {
+      "path": "ferray_stats::histogram::histogramdd",
+      "kind": "fn",
+      "signature": "pub fn histogramdd < T > (sample : & Array < T , Ix2 > , bins : & [usize] ,) -> FerrayResult < (Array < u64 , IxDyn > , Vec < Array < T , Ix1 > >) > where T : Element + Float ,"
+    },
+    {
+      "path": "ferray_stats::histogram_bin_edges",
+      "kind": "reexport",
+      "signature": "pub use histogram :: { Bins , bincount , bincount_u64 , bincount_weighted , digitize , histogram , histogram_bin_edges , histogram2d , histogramdd , }"
+    },
+    {
+      "path": "ferray_stats::histogramdd",
+      "kind": "reexport",
+      "signature": "pub use histogram :: { Bins , bincount , bincount_u64 , bincount_weighted , digitize , histogram , histogram_bin_edges , histogram2d , histogramdd , }"
+    },
+    {
+      "path": "ferray_stats::hmean",
+      "kind": "reexport",
+      "signature": "pub use descriptive :: { ModeResult , gmean , hmean , iqr , kurtosis , mode , sem , skew , zscore }"
+    },
+    {
+      "path": "ferray_stats::hypothesis::Chi2ContingencyResult",
+      "kind": "struct",
+      "signature": "pub struct Chi2ContingencyResult"
+    },
+    {
+      "path": "ferray_stats::hypothesis::chi2_contingency",
+      "kind": "fn",
+      "signature": "pub fn chi2_contingency < T > (observed : & Array < T , Ix2 >) -> FerrayResult < Chi2ContingencyResult > where T : Element + Copy + Into < f64 > ,"
+    },
+    {
+      "path": "ferray_stats::hypothesis::ks_2samp",
+      "kind": "fn",
+      "signature": "pub fn ks_2samp < T , D > (a : & Array < T , D > , b : & Array < T , D >) -> FerrayResult < (f64 , f64) > where T : Element + Copy + PartialOrd + Into < f64 > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::hypothesis::pearsonr",
+      "kind": "fn",
+      "signature": "pub fn pearsonr < T , D > (x : & Array < T , D > , y : & Array < T , D >) -> FerrayResult < (f64 , f64) > where T : Element + Copy + Into < f64 > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::hypothesis::spearmanr",
+      "kind": "fn",
+      "signature": "pub fn spearmanr < T , D > (x : & Array < T , D > , y : & Array < T , D >) -> FerrayResult < (f64 , f64) > where T : Element + Copy + PartialOrd + Into < f64 > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::hypothesis::ttest_1samp",
+      "kind": "fn",
+      "signature": "pub fn ttest_1samp < T , D > (a : & Array < T , D > , popmean : f64) -> FerrayResult < (f64 , f64) > where T : Element + Copy + Into < f64 > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::hypothesis::ttest_ind",
+      "kind": "fn",
+      "signature": "pub fn ttest_ind < T , D > (a : & Array < T , D > , b : & Array < T , D >) -> FerrayResult < (f64 , f64) > where T : Element + Copy + Into < f64 > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::in1d",
+      "kind": "reexport",
+      "signature": "pub use set_ops :: { in1d , intersect1d , isin , setdiff1d , setxor1d , union1d }"
+    },
+    {
+      "path": "ferray_stats::intersect1d",
+      "kind": "reexport",
+      "signature": "pub use set_ops :: { in1d , intersect1d , isin , setdiff1d , setxor1d , union1d }"
+    },
+    {
+      "path": "ferray_stats::iqr",
+      "kind": "reexport",
+      "signature": "pub use descriptive :: { ModeResult , gmean , hmean , iqr , kurtosis , mode , sem , skew , zscore }"
+    },
+    {
+      "path": "ferray_stats::isin",
+      "kind": "reexport",
+      "signature": "pub use set_ops :: { in1d , intersect1d , isin , setdiff1d , setxor1d , union1d }"
+    },
+    {
+      "path": "ferray_stats::ks_2samp",
+      "kind": "reexport",
+      "signature": "pub use hypothesis :: { Chi2ContingencyResult , chi2_contingency , ks_2samp , pearsonr , spearmanr , ttest_1samp , ttest_ind , }"
+    },
+    {
+      "path": "ferray_stats::kurtosis",
+      "kind": "reexport",
+      "signature": "pub use descriptive :: { ModeResult , gmean , hmean , iqr , kurtosis , mode , sem , skew , zscore }"
+    },
+    {
+      "path": "ferray_stats::lexsort",
+      "kind": "reexport",
+      "signature": "pub use sorting :: { Side , SortKind , argpartition , argsort , lexsort , partition , searchsorted , searchsorted_with_sorter , sort , sort_complex , }"
+    },
+    {
+      "path": "ferray_stats::max",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::max_into",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::max_with",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::mean",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::mean_as_f64",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::mean_into",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::mean_where",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::median",
+      "kind": "reexport",
+      "signature": "pub use reductions :: quantile :: { QuantileMethod , median , nanmedian , nanpercentile , nanquantile , percentile , percentile_with_method , quantile , quantile_with_method , }"
+    },
+    {
+      "path": "ferray_stats::min",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::min_into",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::min_with",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::mode",
+      "kind": "reexport",
+      "signature": "pub use descriptive :: { ModeResult , gmean , hmean , iqr , kurtosis , mode , sem , skew , zscore }"
+    },
+    {
+      "path": "ferray_stats::nanargmax",
+      "kind": "reexport",
+      "signature": "pub use reductions :: nan_aware :: { nanargmax , nanargmin , nancumprod , nancumsum , nanmax , nanmean , nanmin , nanprod , nanstd , nansum , nanvar , }"
+    },
+    {
+      "path": "ferray_stats::nanargmin",
+      "kind": "reexport",
+      "signature": "pub use reductions :: nan_aware :: { nanargmax , nanargmin , nancumprod , nancumsum , nanmax , nanmean , nanmin , nanprod , nanstd , nansum , nanvar , }"
+    },
+    {
+      "path": "ferray_stats::nancumprod",
+      "kind": "reexport",
+      "signature": "pub use reductions :: nan_aware :: { nanargmax , nanargmin , nancumprod , nancumsum , nanmax , nanmean , nanmin , nanprod , nanstd , nansum , nanvar , }"
+    },
+    {
+      "path": "ferray_stats::nancumsum",
+      "kind": "reexport",
+      "signature": "pub use reductions :: nan_aware :: { nanargmax , nanargmin , nancumprod , nancumsum , nanmax , nanmean , nanmin , nanprod , nanstd , nansum , nanvar , }"
+    },
+    {
+      "path": "ferray_stats::nanmax",
+      "kind": "reexport",
+      "signature": "pub use reductions :: nan_aware :: { nanargmax , nanargmin , nancumprod , nancumsum , nanmax , nanmean , nanmin , nanprod , nanstd , nansum , nanvar , }"
+    },
+    {
+      "path": "ferray_stats::nanmean",
+      "kind": "reexport",
+      "signature": "pub use reductions :: nan_aware :: { nanargmax , nanargmin , nancumprod , nancumsum , nanmax , nanmean , nanmin , nanprod , nanstd , nansum , nanvar , }"
+    },
+    {
+      "path": "ferray_stats::nanmedian",
+      "kind": "reexport",
+      "signature": "pub use reductions :: quantile :: { QuantileMethod , median , nanmedian , nanpercentile , nanquantile , percentile , percentile_with_method , quantile , quantile_with_method , }"
+    },
+    {
+      "path": "ferray_stats::nanmin",
+      "kind": "reexport",
+      "signature": "pub use reductions :: nan_aware :: { nanargmax , nanargmin , nancumprod , nancumsum , nanmax , nanmean , nanmin , nanprod , nanstd , nansum , nanvar , }"
+    },
+    {
+      "path": "ferray_stats::nanpercentile",
+      "kind": "reexport",
+      "signature": "pub use reductions :: quantile :: { QuantileMethod , median , nanmedian , nanpercentile , nanquantile , percentile , percentile_with_method , quantile , quantile_with_method , }"
+    },
+    {
+      "path": "ferray_stats::nanprod",
+      "kind": "reexport",
+      "signature": "pub use reductions :: nan_aware :: { nanargmax , nanargmin , nancumprod , nancumsum , nanmax , nanmean , nanmin , nanprod , nanstd , nansum , nanvar , }"
+    },
+    {
+      "path": "ferray_stats::nanquantile",
+      "kind": "reexport",
+      "signature": "pub use reductions :: quantile :: { QuantileMethod , median , nanmedian , nanpercentile , nanquantile , percentile , percentile_with_method , quantile , quantile_with_method , }"
+    },
+    {
+      "path": "ferray_stats::nanstd",
+      "kind": "reexport",
+      "signature": "pub use reductions :: nan_aware :: { nanargmax , nanargmin , nancumprod , nancumsum , nanmax , nanmean , nanmin , nanprod , nanstd , nansum , nanvar , }"
+    },
+    {
+      "path": "ferray_stats::nansum",
+      "kind": "reexport",
+      "signature": "pub use reductions :: nan_aware :: { nanargmax , nanargmin , nancumprod , nancumsum , nanmax , nanmean , nanmin , nanprod , nanstd , nansum , nanvar , }"
+    },
+    {
+      "path": "ferray_stats::nanvar",
+      "kind": "reexport",
+      "signature": "pub use reductions :: nan_aware :: { nanargmax , nanargmin , nancumprod , nancumsum , nanmax , nanmean , nanmin , nanprod , nanstd , nansum , nanvar , }"
+    },
+    {
+      "path": "ferray_stats::nonzero",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::parallel::pairwise_sum",
+      "kind": "fn",
+      "signature": "pub fn pairwise_sum < T > (data : & [T] , identity : T) -> T where T : Copy + std :: ops :: Add < Output = T > ,"
+    },
+    {
+      "path": "ferray_stats::parallel::pairwise_sum_f32",
+      "kind": "fn",
+      "signature": "pub fn pairwise_sum_f32 (data : & [f32]) -> f32"
+    },
+    {
+      "path": "ferray_stats::parallel::pairwise_sum_f64",
+      "kind": "fn",
+      "signature": "pub fn pairwise_sum_f64 (data : & [f64]) -> f64"
+    },
+    {
+      "path": "ferray_stats::parallel::parallel_prod",
+      "kind": "fn",
+      "signature": "pub fn parallel_prod < T > (data : & [T] , identity : T) -> T where T : Copy + Send + Sync + std :: ops :: Mul < Output = T > ,"
+    },
+    {
+      "path": "ferray_stats::parallel::parallel_sort",
+      "kind": "fn",
+      "signature": "pub fn parallel_sort < T > (data : & mut [T]) where T : Copy + Send + Sync + PartialOrd ,"
+    },
+    {
+      "path": "ferray_stats::parallel::parallel_sort_stable",
+      "kind": "fn",
+      "signature": "pub fn parallel_sort_stable < T > (data : & mut [T]) where T : Copy + Send + Sync + PartialOrd ,"
+    },
+    {
+      "path": "ferray_stats::parallel::parallel_sum",
+      "kind": "fn",
+      "signature": "pub fn parallel_sum < T > (data : & [T] , identity : T) -> T where T : Copy + Send + Sync + std :: ops :: Add < Output = T > ,"
+    },
+    {
+      "path": "ferray_stats::parallel::simd_sum_sq_diff_f32",
+      "kind": "fn",
+      "signature": "pub fn simd_sum_sq_diff_f32 (data : & [f32] , mean : f32) -> f32"
+    },
+    {
+      "path": "ferray_stats::parallel::simd_sum_sq_diff_f64",
+      "kind": "fn",
+      "signature": "pub fn simd_sum_sq_diff_f64 (data : & [f64] , mean : f64) -> f64"
+    },
+    {
+      "path": "ferray_stats::partition",
+      "kind": "reexport",
+      "signature": "pub use sorting :: { Side , SortKind , argpartition , argsort , lexsort , partition , searchsorted , searchsorted_with_sorter , sort , sort_complex , }"
+    },
+    {
+      "path": "ferray_stats::pearsonr",
+      "kind": "reexport",
+      "signature": "pub use hypothesis :: { Chi2ContingencyResult , chi2_contingency , ks_2samp , pearsonr , spearmanr , ttest_1samp , ttest_ind , }"
+    },
+    {
+      "path": "ferray_stats::percentile",
+      "kind": "reexport",
+      "signature": "pub use reductions :: quantile :: { QuantileMethod , median , nanmedian , nanpercentile , nanquantile , percentile , percentile_with_method , quantile , quantile_with_method , }"
+    },
+    {
+      "path": "ferray_stats::percentile_with_method",
+      "kind": "reexport",
+      "signature": "pub use reductions :: quantile :: { QuantileMethod , median , nanmedian , nanpercentile , nanquantile , percentile , percentile_with_method , quantile , quantile_with_method , }"
+    },
+    {
+      "path": "ferray_stats::prod",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::prod_into",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::prod_with",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::ptp",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::quantile",
+      "kind": "reexport",
+      "signature": "pub use reductions :: quantile :: { QuantileMethod , median , nanmedian , nanpercentile , nanquantile , percentile , percentile_with_method , quantile , quantile_with_method , }"
+    },
+    {
+      "path": "ferray_stats::quantile_with_method",
+      "kind": "reexport",
+      "signature": "pub use reductions :: quantile :: { QuantileMethod , median , nanmedian , nanpercentile , nanquantile , percentile , percentile_with_method , quantile , quantile_with_method , }"
+    },
+    {
+      "path": "ferray_stats::reductions::argmax",
+      "kind": "fn",
+      "signature": "pub fn argmax < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < u64 , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::argmax_keepdims",
+      "kind": "fn",
+      "signature": "pub fn argmax_keepdims < T , D > (a : & Array < T , D > , axis : Option < usize > , keepdims : bool ,) -> FerrayResult < Array < u64 , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::argmin",
+      "kind": "fn",
+      "signature": "pub fn argmin < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < u64 , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::argmin_keepdims",
+      "kind": "fn",
+      "signature": "pub fn argmin_keepdims < T , D > (a : & Array < T , D > , axis : Option < usize > , keepdims : bool ,) -> FerrayResult < Array < u64 , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::average",
+      "kind": "fn",
+      "signature": "pub fn average < T , D > (a : & Array < T , D > , weights : Option < & Array < T , D > > , axis : Option < usize > ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::cumprod",
+      "kind": "fn",
+      "signature": "pub fn cumprod < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , D > > where T : Element + std :: ops :: Mul < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::cumsum",
+      "kind": "fn",
+      "signature": "pub fn cumsum < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , D > > where T : Element + std :: ops :: Add < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::max",
+      "kind": "fn",
+      "signature": "pub fn max < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::max_axes",
+      "kind": "fn",
+      "signature": "pub fn max_axes < T , D > (a : & Array < T , D > , axes : Option < & [usize] > , keepdims : bool ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::max_into",
+      "kind": "fn",
+      "signature": "pub fn max_into < T , D > (a : & Array < T , D > , axis : Option < usize > , out : & mut Array < T , IxDyn > ,) -> FerrayResult < () > where T : Element + PartialOrd + Copy + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::max_with",
+      "kind": "fn",
+      "signature": "pub fn max_with < T , D > (a : & Array < T , D > , axis : Option < usize > , initial : Option < T > , where_mask : Option < & Array < bool , IxDyn > > ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::mean",
+      "kind": "fn",
+      "signature": "pub fn mean < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::mean_as_f64",
+      "kind": "fn",
+      "signature": "pub fn mean_as_f64 < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < f64 , IxDyn > > where T : Element + Copy + Send + Sync + num_traits :: ToPrimitive , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::mean_axes",
+      "kind": "fn",
+      "signature": "pub fn mean_axes < T , D > (a : & Array < T , D > , axes : Option < & [usize] > , keepdims : bool ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::mean_into",
+      "kind": "fn",
+      "signature": "pub fn mean_into < T , D > (a : & Array < T , D > , axis : Option < usize > , out : & mut Array < T , IxDyn > ,) -> FerrayResult < () > where T : Element + Float + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::mean_where",
+      "kind": "fn",
+      "signature": "pub fn mean_where < T , D > (a : & Array < T , D > , axis : Option < usize > , where_mask : Option < & Array < bool , IxDyn > > ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::min",
+      "kind": "fn",
+      "signature": "pub fn min < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::min_axes",
+      "kind": "fn",
+      "signature": "pub fn min_axes < T , D > (a : & Array < T , D > , axes : Option < & [usize] > , keepdims : bool ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::min_into",
+      "kind": "fn",
+      "signature": "pub fn min_into < T , D > (a : & Array < T , D > , axis : Option < usize > , out : & mut Array < T , IxDyn > ,) -> FerrayResult < () > where T : Element + PartialOrd + Copy + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::min_with",
+      "kind": "fn",
+      "signature": "pub fn min_with < T , D > (a : & Array < T , D > , axis : Option < usize > , initial : Option < T > , where_mask : Option < & Array < bool , IxDyn > > ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::nan_aware::nanargmax",
+      "kind": "fn",
+      "signature": "pub fn nanargmax < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < u64 , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::nan_aware::nanargmin",
+      "kind": "fn",
+      "signature": "pub fn nanargmin < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < u64 , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::nan_aware::nancumprod",
+      "kind": "fn",
+      "signature": "pub fn nancumprod < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::nan_aware::nancumsum",
+      "kind": "fn",
+      "signature": "pub fn nancumsum < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , D > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::nan_aware::nanmax",
+      "kind": "fn",
+      "signature": "pub fn nanmax < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::nan_aware::nanmean",
+      "kind": "fn",
+      "signature": "pub fn nanmean < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::nan_aware::nanmin",
+      "kind": "fn",
+      "signature": "pub fn nanmin < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::nan_aware::nanprod",
+      "kind": "fn",
+      "signature": "pub fn nanprod < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::nan_aware::nanstd",
+      "kind": "fn",
+      "signature": "pub fn nanstd < T , D > (a : & Array < T , D > , axis : Option < usize > , ddof : usize ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::nan_aware::nansum",
+      "kind": "fn",
+      "signature": "pub fn nansum < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::nan_aware::nanvar",
+      "kind": "fn",
+      "signature": "pub fn nanvar < T , D > (a : & Array < T , D > , axis : Option < usize > , ddof : usize ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::prod",
+      "kind": "fn",
+      "signature": "pub fn prod < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + std :: ops :: Mul < Output = T > + Copy + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::prod_axes",
+      "kind": "fn",
+      "signature": "pub fn prod_axes < T , D > (a : & Array < T , D > , axes : Option < & [usize] > , keepdims : bool ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + std :: ops :: Mul < Output = T > + Copy + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::prod_into",
+      "kind": "fn",
+      "signature": "pub fn prod_into < T , D > (a : & Array < T , D > , axis : Option < usize > , out : & mut Array < T , IxDyn > ,) -> FerrayResult < () > where T : Element + std :: ops :: Mul < Output = T > + Copy + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::prod_with",
+      "kind": "fn",
+      "signature": "pub fn prod_with < T , D > (a : & Array < T , D > , axis : Option < usize > , initial : Option < T > , where_mask : Option < & Array < bool , IxDyn > > ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + std :: ops :: Mul < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::ptp",
+      "kind": "fn",
+      "signature": "pub fn ptp < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + PartialOrd + Copy + std :: ops :: Sub < Output = T > , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::quantile::QuantileMethod",
+      "kind": "enum",
+      "signature": "pub enum QuantileMethod"
+    },
+    {
+      "path": "ferray_stats::reductions::quantile::median",
+      "kind": "fn",
+      "signature": "pub fn median < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::quantile::nanmedian",
+      "kind": "fn",
+      "signature": "pub fn nanmedian < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::quantile::nanpercentile",
+      "kind": "fn",
+      "signature": "pub fn nanpercentile < T , D > (a : & Array < T , D > , q : T , axis : Option < usize > ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::quantile::nanquantile",
+      "kind": "fn",
+      "signature": "pub fn nanquantile < T , D > (a : & Array < T , D > , q : T , axis : Option < usize > ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::quantile::percentile",
+      "kind": "fn",
+      "signature": "pub fn percentile < T , D > (a : & Array < T , D > , q : T , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::quantile::percentile_with_method",
+      "kind": "fn",
+      "signature": "pub fn percentile_with_method < T , D > (a : & Array < T , D > , q : T , axis : Option < usize > , method : QuantileMethod ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::quantile::quantile",
+      "kind": "fn",
+      "signature": "pub fn quantile < T , D > (a : & Array < T , D > , q : T , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::quantile::quantile_with_method",
+      "kind": "fn",
+      "signature": "pub fn quantile_with_method < T , D > (a : & Array < T , D > , q : T , axis : Option < usize > , method : QuantileMethod ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::std_",
+      "kind": "fn",
+      "signature": "pub fn std_ < T , D > (a : & Array < T , D > , axis : Option < usize > , ddof : usize ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::std_as_f64",
+      "kind": "fn",
+      "signature": "pub fn std_as_f64 < T , D > (a : & Array < T , D > , axis : Option < usize > , ddof : usize ,) -> FerrayResult < Array < f64 , IxDyn > > where T : Element + Copy + Send + Sync + num_traits :: ToPrimitive , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::std_axes",
+      "kind": "fn",
+      "signature": "pub fn std_axes < T , D > (a : & Array < T , D > , axes : Option < & [usize] > , ddof : usize , keepdims : bool ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::std_into",
+      "kind": "fn",
+      "signature": "pub fn std_into < T , D > (a : & Array < T , D > , axis : Option < usize > , ddof : usize , out : & mut Array < T , IxDyn > ,) -> FerrayResult < () > where T : Element + Float + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::sum",
+      "kind": "fn",
+      "signature": "pub fn sum < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < T , IxDyn > > where T : Element + std :: ops :: Add < Output = T > + Copy + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::sum_as_f64",
+      "kind": "fn",
+      "signature": "pub fn sum_as_f64 < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < f64 , IxDyn > > where T : Element + Copy + Send + Sync + num_traits :: ToPrimitive , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::sum_axes",
+      "kind": "fn",
+      "signature": "pub fn sum_axes < T , D > (a : & Array < T , D > , axes : Option < & [usize] > , keepdims : bool ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + std :: ops :: Add < Output = T > + Copy + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::sum_into",
+      "kind": "fn",
+      "signature": "pub fn sum_into < T , D > (a : & Array < T , D > , axis : Option < usize > , out : & mut Array < T , IxDyn > ,) -> FerrayResult < () > where T : Element + std :: ops :: Add < Output = T > + Copy + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::sum_with",
+      "kind": "fn",
+      "signature": "pub fn sum_with < T , D > (a : & Array < T , D > , axis : Option < usize > , initial : Option < T > , where_mask : Option < & Array < bool , IxDyn > > ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + std :: ops :: Add < Output = T > + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::var",
+      "kind": "fn",
+      "signature": "pub fn var < T , D > (a : & Array < T , D > , axis : Option < usize > , ddof : usize) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::var_as_f64",
+      "kind": "fn",
+      "signature": "pub fn var_as_f64 < T , D > (a : & Array < T , D > , axis : Option < usize > , ddof : usize ,) -> FerrayResult < Array < f64 , IxDyn > > where T : Element + Copy + Send + Sync + num_traits :: ToPrimitive , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::var_axes",
+      "kind": "fn",
+      "signature": "pub fn var_axes < T , D > (a : & Array < T , D > , axes : Option < & [usize] > , ddof : usize , keepdims : bool ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Float + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::reductions::var_into",
+      "kind": "fn",
+      "signature": "pub fn var_into < T , D > (a : & Array < T , D > , axis : Option < usize > , ddof : usize , out : & mut Array < T , IxDyn > ,) -> FerrayResult < () > where T : Element + Float + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::searching::UniqueResult",
+      "kind": "struct",
+      "signature": "pub struct UniqueResult < T : Element >"
+    },
+    {
+      "path": "ferray_stats::searching::count_nonzero",
+      "kind": "fn",
+      "signature": "pub fn count_nonzero < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < u64 , IxDyn > > where T : Element + PartialEq + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::searching::nonzero",
+      "kind": "fn",
+      "signature": "pub fn nonzero < T , D > (a : & Array < T , D >) -> FerrayResult < Vec < Array < u64 , Ix1 > > > where T : Element + PartialEq + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::searching::unique",
+      "kind": "fn",
+      "signature": "pub fn unique < T , D > (a : & Array < T , D > , return_index : bool , return_inverse : bool , return_counts : bool ,) -> FerrayResult < UniqueResult < T > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::searching::unique_all",
+      "kind": "fn",
+      "signature": "pub fn unique_all < T , D > (a : & Array < T , D > ,) -> FerrayResult < (Array < T , Ix1 > , Array < u64 , Ix1 > , Array < u64 , Ix1 > , Array < u64 , Ix1 > ,) > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::searching::unique_axis",
+      "kind": "fn",
+      "signature": "pub fn unique_axis < T , D > (a : & Array < T , D > , axis : usize) -> FerrayResult < Array < T , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::searching::unique_counts",
+      "kind": "fn",
+      "signature": "pub fn unique_counts < T , D > (a : & Array < T , D >) -> FerrayResult < (Array < T , Ix1 > , Array < u64 , Ix1 >) > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::searching::unique_inverse",
+      "kind": "fn",
+      "signature": "pub fn unique_inverse < T , D > (a : & Array < T , D >) -> FerrayResult < (Array < T , Ix1 > , Array < u64 , Ix1 >) > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::searching::unique_values",
+      "kind": "fn",
+      "signature": "pub fn unique_values < T , D > (a : & Array < T , D >) -> FerrayResult < Array < T , Ix1 > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::searching::where_",
+      "kind": "fn",
+      "signature": "pub fn where_ < T , D > (condition : & Array < bool , D > , x : & Array < T , D > , y : & Array < T , D > ,) -> FerrayResult < Array < T , D > > where T : Element + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::searching::where_broadcast",
+      "kind": "fn",
+      "signature": "pub fn where_broadcast < T > (condition : & Array < bool , IxDyn > , x : & Array < T , IxDyn > , y : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Copy ,"
+    },
+    {
+      "path": "ferray_stats::searching::where_condition",
+      "kind": "fn",
+      "signature": "pub fn where_condition < D : Dimension > (condition : & Array < bool , D > ,) -> FerrayResult < Vec < Array < u64 , Ix1 > > >"
+    },
+    {
+      "path": "ferray_stats::searchsorted",
+      "kind": "reexport",
+      "signature": "pub use sorting :: { Side , SortKind , argpartition , argsort , lexsort , partition , searchsorted , searchsorted_with_sorter , sort , sort_complex , }"
+    },
+    {
+      "path": "ferray_stats::searchsorted_with_sorter",
+      "kind": "reexport",
+      "signature": "pub use sorting :: { Side , SortKind , argpartition , argsort , lexsort , partition , searchsorted , searchsorted_with_sorter , sort , sort_complex , }"
+    },
+    {
+      "path": "ferray_stats::sem",
+      "kind": "reexport",
+      "signature": "pub use descriptive :: { ModeResult , gmean , hmean , iqr , kurtosis , mode , sem , skew , zscore }"
+    },
+    {
+      "path": "ferray_stats::set_ops::in1d",
+      "kind": "fn",
+      "signature": "pub fn in1d < T > (a : & Array < T , Ix1 > , b : & Array < T , Ix1 > , assume_unique : bool ,) -> FerrayResult < Array < bool , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::set_ops::intersect1d",
+      "kind": "fn",
+      "signature": "pub fn intersect1d < T > (a : & Array < T , Ix1 > , b : & Array < T , Ix1 > , assume_unique : bool ,) -> FerrayResult < Array < T , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::set_ops::isin",
+      "kind": "fn",
+      "signature": "pub fn isin < T > (element : & Array < T , Ix1 > , test_elements : & Array < T , Ix1 > , assume_unique : bool ,) -> FerrayResult < Array < bool , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::set_ops::setdiff1d",
+      "kind": "fn",
+      "signature": "pub fn setdiff1d < T > (a : & Array < T , Ix1 > , b : & Array < T , Ix1 > , assume_unique : bool ,) -> FerrayResult < Array < T , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::set_ops::setxor1d",
+      "kind": "fn",
+      "signature": "pub fn setxor1d < T > (a : & Array < T , Ix1 > , b : & Array < T , Ix1 > , assume_unique : bool ,) -> FerrayResult < Array < T , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::set_ops::union1d",
+      "kind": "fn",
+      "signature": "pub fn union1d < T > (a : & Array < T , Ix1 > , b : & Array < T , Ix1 > , assume_unique : bool ,) -> FerrayResult < Array < T , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::setdiff1d",
+      "kind": "reexport",
+      "signature": "pub use set_ops :: { in1d , intersect1d , isin , setdiff1d , setxor1d , union1d }"
+    },
+    {
+      "path": "ferray_stats::setxor1d",
+      "kind": "reexport",
+      "signature": "pub use set_ops :: { in1d , intersect1d , isin , setdiff1d , setxor1d , union1d }"
+    },
+    {
+      "path": "ferray_stats::skew",
+      "kind": "reexport",
+      "signature": "pub use descriptive :: { ModeResult , gmean , hmean , iqr , kurtosis , mode , sem , skew , zscore }"
+    },
+    {
+      "path": "ferray_stats::sort",
+      "kind": "reexport",
+      "signature": "pub use sorting :: { Side , SortKind , argpartition , argsort , lexsort , partition , searchsorted , searchsorted_with_sorter , sort , sort_complex , }"
+    },
+    {
+      "path": "ferray_stats::sort_complex",
+      "kind": "reexport",
+      "signature": "pub use sorting :: { Side , SortKind , argpartition , argsort , lexsort , partition , searchsorted , searchsorted_with_sorter , sort , sort_complex , }"
+    },
+    {
+      "path": "ferray_stats::sorting::Side",
+      "kind": "enum",
+      "signature": "pub enum Side"
+    },
+    {
+      "path": "ferray_stats::sorting::SortKind",
+      "kind": "enum",
+      "signature": "pub enum SortKind"
+    },
+    {
+      "path": "ferray_stats::sorting::argpartition",
+      "kind": "fn",
+      "signature": "pub fn argpartition < T > (a : & Array < T , Ix1 > , kth : usize) -> FerrayResult < Array < u64 , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::sorting::argsort",
+      "kind": "fn",
+      "signature": "pub fn argsort < T , D > (a : & Array < T , D > , axis : Option < usize >) -> FerrayResult < Array < u64 , IxDyn > > where T : Element + PartialOrd + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::sorting::lexsort",
+      "kind": "fn",
+      "signature": "pub fn lexsort < T > (keys : & [& Array < T , Ix1 >]) -> FerrayResult < Array < u64 , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::sorting::partition",
+      "kind": "fn",
+      "signature": "pub fn partition < T > (a : & Array < T , Ix1 > , kth : usize) -> FerrayResult < Array < T , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::sorting::searchsorted",
+      "kind": "fn",
+      "signature": "pub fn searchsorted < T > (a : & Array < T , Ix1 > , v : & Array < T , Ix1 > , side : Side ,) -> FerrayResult < Array < u64 , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::sorting::searchsorted_with_sorter",
+      "kind": "fn",
+      "signature": "pub fn searchsorted_with_sorter < T > (a : & Array < T , Ix1 > , v : & Array < T , Ix1 > , side : Side , sorter : & Array < u64 , Ix1 > ,) -> FerrayResult < Array < u64 , Ix1 > > where T : Element + PartialOrd + Copy ,"
+    },
+    {
+      "path": "ferray_stats::sorting::sort",
+      "kind": "fn",
+      "signature": "pub fn sort < T , D > (a : & Array < T , D > , axis : Option < usize > , kind : SortKind ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + PartialOrd + Copy + Send + Sync , D : Dimension ,"
+    },
+    {
+      "path": "ferray_stats::sorting::sort_complex",
+      "kind": "fn",
+      "signature": "pub fn sort_complex < T > (a : & Array < num_complex :: Complex < T > , Ix1 > ,) -> FerrayResult < Array < num_complex :: Complex < T > , Ix1 > > where T : Element + num_traits :: Float , num_complex :: Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_stats::spearmanr",
+      "kind": "reexport",
+      "signature": "pub use hypothesis :: { Chi2ContingencyResult , chi2_contingency , ks_2samp , pearsonr , spearmanr , ttest_1samp , ttest_ind , }"
+    },
+    {
+      "path": "ferray_stats::std_",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::std_into",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::sum",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::sum_as_f64",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::sum_into",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::sum_with",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::ttest_1samp",
+      "kind": "reexport",
+      "signature": "pub use hypothesis :: { Chi2ContingencyResult , chi2_contingency , ks_2samp , pearsonr , spearmanr , ttest_1samp , ttest_ind , }"
+    },
+    {
+      "path": "ferray_stats::ttest_ind",
+      "kind": "reexport",
+      "signature": "pub use hypothesis :: { Chi2ContingencyResult , chi2_contingency , ks_2samp , pearsonr , spearmanr , ttest_1samp , ttest_ind , }"
+    },
+    {
+      "path": "ferray_stats::union1d",
+      "kind": "reexport",
+      "signature": "pub use set_ops :: { in1d , intersect1d , isin , setdiff1d , setxor1d , union1d }"
+    },
+    {
+      "path": "ferray_stats::unique",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::unique_all",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::unique_axis",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::unique_counts",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::unique_inverse",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::unique_values",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::var",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::var_into",
+      "kind": "reexport",
+      "signature": "pub use reductions :: { argmax , argmin , average , cumprod , cumsum , max , max_into , max_with , mean , mean_as_f64 , mean_into , mean_where , min , min_into , min_with , prod , prod_into , prod_with , ptp , std_ , std_into , sum , sum_as_f64 , sum_into , sum_with , var , var_into , }"
+    },
+    {
+      "path": "ferray_stats::where_",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::where_broadcast",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::where_condition",
+      "kind": "reexport",
+      "signature": "pub use searching :: { UniqueResult , count_nonzero , nonzero , unique , unique_all , unique_axis , unique_counts , unique_inverse , unique_values , where_ , where_broadcast , where_condition , }"
+    },
+    {
+      "path": "ferray_stats::zscore",
+      "kind": "reexport",
+      "signature": "pub use descriptive :: { ModeResult , gmean , hmean , iqr , kurtosis , mode , sem , skew , zscore }"
+    }
+  ]
+}
