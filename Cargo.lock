@@ -1075,8 +1075,12 @@ name = "ferray-autodiff"
 version = "0.3.8"
 dependencies = [
  "ferray-core",
+ "ferray-test-oracle",
  "num-traits",
  "proptest",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1094,6 +1098,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1119,6 +1124,9 @@ dependencies = [
  "rayon",
  "realfft",
  "rustfft",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1127,13 +1135,17 @@ version = "0.3.8"
 dependencies = [
  "byteorder",
  "ferray-core",
+ "ferray-test-oracle",
  "flate2",
  "half",
  "memmap2",
  "num-complex",
  "proptest",
  "regex",
+ "serde",
+ "serde_json",
  "tempfile",
+ "toml 0.8.23",
  "zip",
 ]
 
@@ -1153,6 +1165,9 @@ dependencies = [
  "openblas-src",
  "proptest",
  "rayon",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1164,6 +1179,9 @@ dependencies = [
  "ferray-test-oracle",
  "num-traits",
  "proptest",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1172,12 +1190,16 @@ version = "0.3.8"
 dependencies = [
  "arrow",
  "ferray-core",
+ "ferray-test-oracle",
  "half",
  "num-complex",
  "numpy",
  "polars",
  "proptest",
  "pyo3",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1190,6 +1212,9 @@ dependencies = [
  "num-complex",
  "num-traits",
  "proptest",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1198,9 +1223,13 @@ version = "0.3.8"
 dependencies = [
  "ferray-core",
  "ferray-linalg",
+ "ferray-test-oracle",
  "getrandom 0.4.2",
  "proptest",
  "rayon",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1215,6 +1244,9 @@ dependencies = [
  "proptest",
  "pulp",
  "rayon",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1222,7 +1254,11 @@ name = "ferray-stride-tricks"
 version = "0.3.8"
 dependencies = [
  "ferray-core",
+ "ferray-test-oracle",
  "proptest",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1235,6 +1271,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]

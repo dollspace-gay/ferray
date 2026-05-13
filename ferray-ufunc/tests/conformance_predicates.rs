@@ -6,9 +6,7 @@
 //! (`ferray_ufunc::ops::floatintrinsic::isnan`) is named in the test's doc
 //! comment so the surface-coverage gate's text match picks it up too.
 
-use ferray_test_oracle::{
-    load_fixture, make_f64_array, parse_shape, should_skip_f64,
-};
+use ferray_test_oracle::{load_fixture, make_f64_array, parse_shape, should_skip_f64};
 
 fn ufunc_fixture(name: &str) -> std::path::PathBuf {
     ferray_test_oracle::fixtures_dir().join("ufunc").join(name)

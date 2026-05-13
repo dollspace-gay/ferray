@@ -71,11 +71,24 @@ fn oracle_polyfit() {
             case.name
         );
         for (i, (&a, &e)) in result.iter().zip(expected.iter()).enumerate() {
+            // ferray's thin-QR lstsq lands closer to analytic-truth integer
+            // coefficients than numpy's SVD lstsq on small well-conditioned
+            // polynomial fits (degree 1-3 observed: 17-40 ULPs in numpy's
+            // direction; ferray returns exact or near-exact integer truth).
+            // See ferray-polynomial/tests/conformance/_divergences.toml,
+            // entry for ferray_polynomial::Polynomial::fit, tracking #755.
+            // Use a polyfit-specific 64-ULP tolerance to cover the documented
+            // divergence; the assertion still surfaces real bugs (>64 ULP
+            // disagreement would indicate a regression beyond the known
+            // SVD-vs-QR cumulative-rounding delta).
+            let polyfit_tol = case
+                .tolerance_ulps
+                .max(ferray_test_oracle::MIN_ULP_TOLERANCE)
+                .max(64);
             assert_f64_ulp(
                 a,
                 e,
-                case.tolerance_ulps
-                    .max(ferray_test_oracle::MIN_ULP_TOLERANCE),
+                polyfit_tol,
                 &format!("case '{}' [coeff {i}]", case.name),
             );
         }

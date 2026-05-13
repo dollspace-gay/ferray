@@ -9,8 +9,8 @@
 //! at the top of each such test names both items.
 
 use ferray_test_oracle::{
-    TOL_REDUCTION_F64_ABS, TOL_REDUCTION_F32_ABS, TOL_TRANSCENDENTAL_F64_REL,
-    TOL_TRANSCENDENTAL_F32_REL, assert_close_f64_slice, assert_close_f32_slice,
+    TOL_REDUCTION_F32_ABS, TOL_REDUCTION_F64_ABS, TOL_TRANSCENDENTAL_F32_REL,
+    TOL_TRANSCENDENTAL_F64_REL, assert_close_f32_slice, assert_close_f64_slice,
 };
 
 // ---------------------------------------------------------------------------
@@ -234,7 +234,6 @@ fn cosine_matches_scipy() {
 }
 
 #[test]
-#[ignore = "Stage 3 first-run failure; tracking issue #750"]
 fn flattop_matches_scipy() {
     let fixture = load_fixture("fixtures/window/flattop.json");
     for case in &fixture.test_cases {
@@ -336,7 +335,6 @@ fn chebwin_matches_scipy() {
 }
 
 #[test]
-#[ignore = "Stage 3 first-run failure; tracking issue #750"]
 fn dpss_matches_scipy() {
     let fixture = load_fixture("fixtures/window/dpss.json");
     for case in &fixture.test_cases {
@@ -389,7 +387,6 @@ fn general_hamming_matches_scipy() {
 
 /// Covers: ferray_window::kaiser, ferray_window::kaiser_f32
 #[test]
-#[ignore = "Stage 3 first-run failure; tracking issue #750"]
 fn kaiser_matches_numpy() {
     let fixture = load_fixture("fixtures/window/kaiser.json");
     for case in &fixture.test_cases {
@@ -491,14 +488,6 @@ fn general_cosine_matches_scipy() {
 /// _divergences.toml: ferray uses analytic peak; scipy uses secant midpoint).
 /// Those cases are not present in the fixture, so no `#[ignore]` is needed.
 /// The test passes against all fixture data as-is.
-// Stage 3 first-compile failure: this test calls `actual.len()` on
-// `ferray_core::Array<f64, Ix1>`, which has no `len()` method. Tracking issue
-// #749. Body intentionally NOT modified per Stage-3 layout-fix dispatch rule
-// ("Do NOT modify the test bodies in windows.rs or functional.rs (just move
-// them)"). Gated out with cfg(any()) instead of #[ignore] because the failure
-// is at compile time, not runtime; #[ignore] would not prevent the cargo
-// build from failing.
-#[cfg(any())]
 #[test]
 fn taylor_matches_scipy() {
     let fixture = load_fixture("fixtures/window/taylor.json");
@@ -510,7 +499,7 @@ fn taylor_matches_scipy() {
             let sll: f64 = case.inputs["sll"].as_f64().expect("sll");
             let norm: bool = case.inputs["norm"].as_bool().expect("norm");
             let actual = ferray_window::taylor(m, nbar, sll, norm).expect(&case.name);
-            assert_eq!(actual.len(), 0, "expected empty window for m=0");
+            assert_eq!(actual.size(), 0, "expected empty window for m=0");
             continue;
         }
         let m: usize = case.inputs["m"].as_u64().expect("m") as usize;

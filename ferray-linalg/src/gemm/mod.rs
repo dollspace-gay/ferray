@@ -40,7 +40,11 @@
 #[cfg(all(test, target_arch = "x86_64"))]
 mod integer_tests;
 
-#[cfg(test)]
+// NEON-specific tests: only meaningful on aarch64 builds where the
+// NEON GEMM kernels actually compile and run. On x86_64 the kernels
+// are not built (see the aarch64-gated kernel modules below), so the
+// tests have no targets — gate the test module the same way (#757).
+#[cfg(all(test, target_arch = "aarch64"))]
 mod neon_tests;
 
 // x86_64-only kernel modules. These use `#[target_feature(enable = "avx2")]`

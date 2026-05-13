@@ -461,7 +461,8 @@ pub fn chebwin(m: usize, at: f64) -> FerrayResult<Array<f64, Ix1>> {
 /// `nw` is the standardised half bandwidth (`NW = M·W`), typically
 /// in the range 2..=4 for spectral analysis.
 ///
-/// Computed via power iteration on the symmetric tridiagonal
+/// Computed by warm-up power iteration followed by Rayleigh-quotient
+/// inverse iteration (RQI) on the symmetric tridiagonal
 /// concentration matrix
 ///
 /// ```text
@@ -469,11 +470,13 @@ pub fn chebwin(m: usize, at: f64) -> FerrayResult<Array<f64, Ix1>> {
 ///   e[i]  = (i+1)(M−i−1) / 2
 /// ```
 ///
-/// Power iteration converges to the dominant eigenvector since the
-/// concentration eigenvalues are well-separated for the typical
-/// `NW = 2..4` regime. The result is sign-flipped if needed so the
-/// centre value is positive, and normalised to unit `ℓ²` norm
-/// (matching scipy's default `norm=2`).
+/// Power iteration alone converges only linearly with rate
+/// `λ₂/λ₁`, which is far too slow for the nearly-degenerate
+/// dominant DPSS eigenvalues; RQI achieves cubic local convergence
+/// near the dominant eigenpair via tridiagonal LU (Thomas
+/// algorithm) solves of `(T - σI) w = v`. The result is
+/// sign-flipped if needed so the centre value is positive, and
+/// peak-normalised (matching scipy's default `norm='approximate'`).
 ///
 /// Multiple Slepian sequences (`Kmax > 1`) need orthogonal
 /// power-iteration / deflation; tracked as a future extension.
@@ -527,20 +530,25 @@ pub fn dpss(m: usize, nw: f64) -> FerrayResult<Array<f64, Ix1>> {
         *x /= n0.max(f64::MIN_POSITIVE);
     }
 
-    let mut prev_eig = 0.0_f64;
-    for _ in 0..500 {
-        let mut next = vec![0.0_f64; m];
+    // Helper: y = T v for the symmetric tridiagonal T.
+    let apply_t = |x: &[f64]| -> Vec<f64> {
+        let mut y = vec![0.0_f64; m];
         for i in 0..m {
-            next[i] = diag[i] * v[i];
+            y[i] = diag[i] * x[i];
             if i > 0 {
-                next[i] += off[i - 1] * v[i - 1];
+                y[i] += off[i - 1] * x[i - 1];
             }
             if i + 1 < m {
-                next[i] += off[i] * v[i + 1];
+                y[i] += off[i] * x[i + 1];
             }
         }
-        // Eigenvalue estimate via Rayleigh quotient v^T T v.
-        let eig: f64 = v.iter().zip(next.iter()).map(|(a, b)| a * b).sum();
+        y
+    };
+
+    // Stage 1: warm-up power iteration (~50 steps) to land near the
+    // dominant eigenspace before switching to RQI.
+    for _ in 0..50 {
+        let mut next = apply_t(&v);
         let norm = next.iter().map(|x| x * x).sum::<f64>().sqrt();
         if norm < f64::MIN_POSITIVE {
             return Err(FerrayError::invalid_value(
@@ -551,11 +559,81 @@ pub fn dpss(m: usize, nw: f64) -> FerrayResult<Array<f64, Ix1>> {
             *x /= norm;
         }
         v = next;
-        if (eig - prev_eig).abs() < 1e-12 * eig.abs().max(1.0) {
+    }
+
+    // Initial eigenvalue estimate σ = v^T (T v).
+    let tv0 = apply_t(&v);
+    let mut sigma: f64 = v.iter().zip(tv0.iter()).map(|(a, b)| a * b).sum();
+
+    // Stage 2: Rayleigh-quotient inverse iteration. Each step solves
+    // (T - σI) w = v via the Thomas algorithm (tridiagonal LU with
+    // no pivoting), normalises w, and updates σ = w^T (T w). Cubic
+    // local convergence near the dominant eigenpair.
+    for _ in 0..50 {
+        // Build the shifted tridiagonal: lower = upper = off (symmetric).
+        let mut d_shift: Vec<f64> = diag.iter().map(|d| d - sigma).collect();
+        let sup: Vec<f64> = off.clone();
+        let mut rhs: Vec<f64> = v.clone();
+
+        // Forward sweep: eliminate sub-diagonal.
+        let mut singular = false;
+        for i in 1..m {
+            if d_shift[i - 1].abs() < 1e-30 {
+                // σ is essentially an eigenvalue — v is already the
+                // eigenvector to machine precision; stop here.
+                singular = true;
+                break;
+            }
+            let factor = off[i - 1] / d_shift[i - 1];
+            d_shift[i] -= factor * sup[i - 1];
+            rhs[i] -= factor * rhs[i - 1];
+        }
+        if singular {
             break;
         }
-        prev_eig = eig;
+        if d_shift[m - 1].abs() < 1e-30 {
+            break;
+        }
+
+        // Back sweep.
+        let mut w = vec![0.0_f64; m];
+        w[m - 1] = rhs[m - 1] / d_shift[m - 1];
+        for i in (0..m - 1).rev() {
+            w[i] = (rhs[i] - sup[i] * w[i + 1]) / d_shift[i];
+        }
+
+        let norm = w.iter().map(|x| x * x).sum::<f64>().sqrt();
+        if norm < f64::MIN_POSITIVE {
+            break;
+        }
+        for x in &mut w {
+            *x /= norm;
+        }
+
+        let tw = apply_t(&w);
+        let new_sigma: f64 = w.iter().zip(tw.iter()).map(|(a, b)| a * b).sum();
+
+        // Residual ||T w - σ w||.
+        let resid: f64 = tw
+            .iter()
+            .zip(w.iter())
+            .map(|(t, x)| {
+                let r = t - new_sigma * x;
+                r * r
+            })
+            .sum::<f64>()
+            .sqrt();
+
+        v = w;
+        sigma = new_sigma;
+        if resid < 1e-14 {
+            break;
+        }
     }
+    // Silence unused-assignment lint: sigma is the final eigenvalue
+    // estimate, kept for clarity even though it is not read after
+    // the loop.
+    let _ = sigma;
 
     // Sign convention: scipy returns the dominant DPSS with a
     // positive centre value.
@@ -678,12 +756,13 @@ pub fn bohman(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 /// # Errors
 /// Only on internal array construction failure.
 pub fn flattop(m: usize) -> FerrayResult<Array<f64, Ix1>> {
-    // scipy's coefficients (a0..a4):
+    // scipy.signal.windows.flattop coefficients (a0..a4), verbatim from
+    // scipy 1.13.0 signal/windows/_windows.py.
     const COEFFS: [f64; 5] = [
         0.215_578_95,
         0.416_631_58,
         0.277_263_158,
-        0.083_578_95,
+        0.083_578_947,
         0.006_947_368,
     ];
     if m == 0 {
@@ -1388,21 +1467,25 @@ mod tests {
 
     #[test]
     fn bessel_i0_scalar_zero() {
-        assert!((bessel_i0_scalar::<f64>(0.0) - 1.0).abs() < 1e-6);
+        // Cephes Chebyshev expansion (issue #750): bit-near-exact at origin.
+        assert!((bessel_i0_scalar::<f64>(0.0) - 1.0).abs() < 1e-13);
     }
 
     #[test]
     fn bessel_i0_scalar_known() {
-        // Issue #296: tighten the tolerances. The Abramowitz & Stegun
-        // approximation is rated ~1e-7 in the polynomial branch and
-        // ~1e-7 in the asymptotic branch per its documentation.
+        // Issue #750: bessel_i0_scalar replaced A&S 9.8.1/9.8.2 with the
+        // Cephes Chebyshev expansion (~1e-15 relative precision). Reference
+        // values are from scipy.special.i0 (also Cephes).
         // I0(1) ~ 1.2660658777520082
-        assert!((bessel_i0_scalar::<f64>(1.0) - 1.266_065_877_752_008_2).abs() < 1e-7);
-        // I0(5) ~ 27.239871823604443 (asymptotic branch)
-        assert!((bessel_i0_scalar::<f64>(5.0) - 27.239_871_823_604_443).abs() < 1e-5);
-        // I0(10) ~ 2815.7166284662544
+        assert!((bessel_i0_scalar::<f64>(1.0) - 1.266_065_877_752_008_2).abs() < 1e-13);
+        // I0(5) ~ 27.239871823604442 (now in the |x| <= 8 branch)
+        assert!(
+            (bessel_i0_scalar::<f64>(5.0) - 27.239_871_823_604_442).abs() / 27.239_871_823_604_442
+                < 1e-13
+        );
+        // I0(10) ~ 2815.7166284662544 (asymptotic |x| > 8 branch)
         let expected_i0_10 = 2_815.716_628_466_254;
-        assert!((bessel_i0_scalar::<f64>(10.0) - expected_i0_10).abs() / expected_i0_10 < 1e-5);
+        assert!((bessel_i0_scalar::<f64>(10.0) - expected_i0_10).abs() / expected_i0_10 < 1e-13);
     }
 
     // ----- Edge-length window coverage (#295) -----

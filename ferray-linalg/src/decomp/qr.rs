@@ -42,9 +42,31 @@ pub fn qr<T: LinalgFloat>(
         }
         QrMode::Complete => {
             let q = decomp.compute_Q();
-            let r_full = decomp.R().to_owned();
+            // faer's decomp.R() returns the thin upper-triangular R of
+            // shape (min(m, n), n). For Complete QR we need the full
+            // (m, n) factor, with rows beyond min(m, n) padded with zeros
+            // — this matches numpy.linalg.qr(mode='complete') (#756).
+            let r_thin = decomp.R().to_owned();
+            let r_thin_arr = faer_bridge::faer_to_array2(&r_thin)?;
+            let m = a.shape()[0];
+            let n = a.shape()[1];
+            let k = m.min(n);
+            let r_arr = if m == k {
+                // No padding needed (square or wide input: thin R already
+                // has m rows).
+                r_thin_arr
+            } else {
+                // Pad with (m - k) rows of zeros at the bottom. Row-major
+                // layout: copy the first k*n elements then append zeros.
+                let thin_slice = r_thin_arr
+                    .as_slice()
+                    .expect("faer_to_array2 returns contiguous");
+                let mut data = Vec::with_capacity(m * n);
+                data.extend_from_slice(thin_slice);
+                data.resize(m * n, <T as num_traits::Zero>::zero());
+                Array::<T, Ix2>::from_vec(Ix2::new([m, n]), data)?
+            };
             let q_arr = faer_bridge::faer_to_array2(&q)?;
-            let r_arr = faer_bridge::faer_to_array2(&r_full)?;
             Ok((q_arr, r_arr))
         }
     }

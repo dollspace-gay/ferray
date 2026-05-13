@@ -240,7 +240,6 @@ fn fixture_eigvals() {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "Stage 4-linalg first-run failure; tracking #756"]
 fn fixture_qr() {
     let suite = load_fixture(&linalg_path("qr.json"));
     let mut tested = 0;

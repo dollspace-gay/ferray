@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.3.8] - 2026-05-06
 
 ### Fixed
+- ferray-window conformance: dpss/flattop/kaiser exceed tolerance vs numpy/scipy (#750)
+- ferray-window conformance_windows.rs taylor_matches_scipy uses missing Array::len() (#749)
 
 #### ferray-fft
 - `irfft` / `irfftn` / `irfft2` / `hfft` / `hfftn` / `hfft2` now silently
@@ -85,6 +87,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   in ARMv8), false elsewhere.
 
 ### Changed
+- ferray-linalg gemm::neon_tests i8 tests not arch-gated; fail on x86_64 (pre-existing from #34) (#757)
+- ferray-linalg qr: Complete mode returns R with wrong shape (2x2 instead of 3x2 for 3x2 input) (#756)
+- ferray-polynomial oracle_polyfit ULP=17 exceeds tolerance=10 (pre-existing, surfaced during Stage 4-polynomial) (#755)
+- Stage 4-ufunc strict tolerance: square 2 ULP off NumPy on 2d_f64 case (1/11 squared) (#752)
 
 #### ferray-linalg
 - `mod.rs` dispatcher now branches on `cfg(target_arch)` per public

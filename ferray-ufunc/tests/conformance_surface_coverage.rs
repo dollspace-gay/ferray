@@ -5,13 +5,17 @@
 use std::collections::BTreeSet;
 
 #[derive(serde::Deserialize)]
-struct SurfaceFile { items: Vec<SurfaceItem> }
+struct SurfaceFile {
+    items: Vec<SurfaceItem>,
+}
 
 #[derive(serde::Deserialize)]
 struct SurfaceItem {
     path: String,
-    #[allow(dead_code)] kind: String,
-    #[allow(dead_code)] signature: String,
+    #[allow(dead_code)]
+    kind: String,
+    #[allow(dead_code)]
+    signature: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -21,7 +25,11 @@ struct ExclusionsFile {
 }
 
 #[derive(serde::Deserialize)]
-struct ExclusionEntry { path: String, reason: String, covered_by: String }
+struct ExclusionEntry {
+    path: String,
+    reason: String,
+    covered_by: String,
+}
 
 #[derive(serde::Deserialize)]
 struct DivergencesFile {
@@ -32,7 +40,8 @@ struct DivergencesFile {
 #[derive(serde::Deserialize)]
 struct DivergenceEntry {
     ferray_path: String,
-    #[allow(dead_code)] tracking_issue: u32,
+    #[allow(dead_code)]
+    tracking_issue: u32,
 }
 
 #[test]
@@ -40,14 +49,15 @@ fn every_public_item_has_a_conformance_reference() {
     let manifest = env!("CARGO_MANIFEST_DIR");
 
     let surface_path = std::path::Path::new(manifest).join("tests/conformance/_surface.json");
-    let surface: SurfaceFile = serde_json::from_str(
-        &std::fs::read_to_string(&surface_path).expect("read _surface.json"),
-    )
-    .expect("parse _surface.json");
+    let surface: SurfaceFile =
+        serde_json::from_str(&std::fs::read_to_string(&surface_path).expect("read _surface.json"))
+            .expect("parse _surface.json");
 
-    let excl_path = std::path::Path::new(manifest).join("tests/conformance/_surface_exclusions.toml");
+    let excl_path =
+        std::path::Path::new(manifest).join("tests/conformance/_surface_exclusions.toml");
     let excl_text = std::fs::read_to_string(&excl_path).unwrap_or_default();
-    let exclusions: ExclusionsFile = toml::from_str(&excl_text).expect("parse _surface_exclusions.toml");
+    let exclusions: ExclusionsFile =
+        toml::from_str(&excl_text).expect("parse _surface_exclusions.toml");
     for e in &exclusions.entries {
         assert!(
             !e.reason.trim().is_empty(),
@@ -65,7 +75,11 @@ fn every_public_item_has_a_conformance_reference() {
     let div_path = std::path::Path::new(manifest).join("tests/conformance/_divergences.toml");
     let div_text = std::fs::read_to_string(&div_path).unwrap_or_default();
     let divergences: DivergencesFile = toml::from_str(&div_text).expect("parse _divergences.toml");
-    let divergent: BTreeSet<String> = divergences.entries.iter().map(|d| d.ferray_path.clone()).collect();
+    let divergent: BTreeSet<String> = divergences
+        .entries
+        .iter()
+        .map(|d| d.ferray_path.clone())
+        .collect();
 
     let tests_dir = std::path::Path::new(manifest).join("tests");
     let mut all_test_text = String::new();
@@ -85,9 +99,15 @@ fn every_public_item_has_a_conformance_reference() {
 
     let mut uncovered = Vec::new();
     for item in &surface.items {
-        if excluded.contains(&item.path) { continue; }
-        if divergent.contains(&item.path) { continue; }
-        if all_test_text.contains(&item.path) { continue; }
+        if excluded.contains(&item.path) {
+            continue;
+        }
+        if divergent.contains(&item.path) {
+            continue;
+        }
+        if all_test_text.contains(&item.path) {
+            continue;
+        }
         uncovered.push(item.path.clone());
     }
 

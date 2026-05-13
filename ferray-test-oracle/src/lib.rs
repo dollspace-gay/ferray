@@ -295,7 +295,7 @@ pub fn fixtures_dir() -> PathBuf {
 pub fn parse_f64_data(value: &serde_json::Value) -> Vec<f64> {
     match value {
         serde_json::Value::Array(arr) => arr.iter().map(parse_f64_value).collect(),
-        serde_json::Value::Number(n) => vec![n.as_f64().unwrap()],
+        serde_json::Value::Number(n) => vec![number_to_f64_strict(n)],
         serde_json::Value::String(s) => vec![parse_f64_special(s)],
         _ => panic!("unexpected data format: {value}"),
     }
@@ -305,10 +305,24 @@ pub fn parse_f64_data(value: &serde_json::Value) -> Vec<f64> {
 #[must_use]
 pub fn parse_f64_value(v: &serde_json::Value) -> f64 {
     match v {
-        serde_json::Value::Number(n) => n.as_f64().unwrap(),
+        serde_json::Value::Number(n) => number_to_f64_strict(n),
         serde_json::Value::String(s) => parse_f64_special(s),
         _ => panic!("unexpected value: {v}"),
     }
+}
+
+/// Convert a `serde_json::Number` to f64 using Rust std's bit-exact float
+/// parser. The crate enables serde_json's `arbitrary_precision` feature so
+/// numeric literals are preserved as their original decimal string, which
+/// lets us route them through `f64::from_str` (Eisel-Lemire round-to-nearest)
+/// instead of serde_json's own ryu-derived parser. The two differ in the
+/// last ULP for some decimal literals (e.g. "-0.09090909090909083" rounds
+/// to `0xbfb745d1745d1740` via std vs `0xbfb745d1745d1741` via serde_json).
+#[must_use]
+fn number_to_f64_strict(n: &serde_json::Number) -> f64 {
+    n.to_string()
+        .parse::<f64>()
+        .expect("serde_json::Number string round-trips through f64::from_str")
 }
 
 fn parse_f64_special(s: &str) -> f64 {
@@ -327,7 +341,7 @@ fn parse_f64_special(s: &str) -> f64 {
 pub fn parse_f32_data(value: &serde_json::Value) -> Vec<f32> {
     match value {
         serde_json::Value::Array(arr) => arr.iter().map(|v| parse_f64_value(v) as f32).collect(),
-        serde_json::Value::Number(n) => vec![n.as_f64().unwrap() as f32],
+        serde_json::Value::Number(n) => vec![number_to_f64_strict(n) as f32],
         serde_json::Value::String(s) => vec![parse_f64_special(s) as f32],
         _ => panic!("unexpected data format: {value}"),
     }

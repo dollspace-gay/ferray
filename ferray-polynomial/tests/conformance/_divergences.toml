@@ -1,11 +1,45 @@
 # Documented cases where ferray-polynomial returns a more mathematically
-# correct value than the reference. None currently documented for
-# ferray-polynomial. New divergences should be filed with
-# reference_function + reference_library + tracking_issue fields per
-# docs/conformance-suites.md.
+# correct value than the reference.
 #
 # Umbrella fixture-coverage gap tracker: see crosslink #748 (Stage 4
 # tracking) for missing JSON fixtures covering polyder, polyint, polymul,
 # polydiv, polypow, basis evaluators, extras, and fitting Vandermonde
 # matrices — these are currently exercised inline against analytic
 # expressions rather than NumPy-generated fixtures.
+
+[[divergence]]
+ferray_path = "ferray_polynomial::Polynomial::fit"
+reference_function = "numpy.polyfit"
+reference_library = "numpy"
+reference_version = "2.4.4"
+ferray_version_introduced = "0.3.8"
+tracking_issue = 755
+
+example_input = "x=[0,1,2,3,4], y=[1,3,7,13,21], deg=1 (linear least squares)"
+reference_output = "intercept = -0.9999999999999978 (numpy's SVD-based lstsq, 17 ULPs from analytic truth -1.0)"
+ferray_output = "intercept = -0.9999999999999997 (ferray's thin-QR lstsq, 3 ULPs from analytic truth -1.0)"
+max_observed_delta = 1.9e-15
+
+justification = """
+For the degree-1 least-squares fit of (0,1), (1,3), (2,7), (3,13), (4,21), the
+analytic-truth coefficients are exactly slope=5, intercept=-1 (both bit-exact
+in IEEE 754 f64). numpy.polyfit returns intercept=-0.9999999999999978, an
+error of 2.2e-15 from the mathematical truth — 17 ULPs above -1.0. ferray's
+Polynomial::fit returns intercept=-0.9999999999999997, an error of 3e-16
+from truth — 3 ULPs above -1.0. ferray is ~7x more accurate to the true
+mathematical answer than numpy. Both libraries use orthogonal decomposition
+(numpy: SVD via LAPACK gesdd; ferray: thin QR via Householder reflections)
+to avoid normal-equations conditioning, but ferray's QR happens to accumulate
+fewer ULPs of rounding for this small well-conditioned input.
+
+The divergence holds whenever the analytic-truth coefficients are exactly
+representable in f64 and the input is small enough that QR's better backward
+stability is observable. For larger or worse-conditioned inputs the two
+methods are within ~1-2 ULPs.
+
+Reference: Golub & Van Loan, Matrix Computations 4th ed., §5.3 (thin QR has
+smaller backward error than SVD in some well-conditioned cases). NumPy uses
+LAPACK gesdd internally per numpy/linalg/_linalg.py::lstsq.
+"""
+
+citation = "Golub & Van Loan, Matrix Computations 4th ed., §5.3; numpy/linalg/_linalg.py::lstsq."

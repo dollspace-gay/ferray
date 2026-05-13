@@ -80,18 +80,11 @@ fn vectorize_satisfies_identity_and_mapv_equivalence() {
 #[test]
 fn piecewise_matches_documented_semantics() {
     // Build a sign function: negative -> -1, zero -> 0 (default), positive -> +1
-    let x =
-        Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![-2.0, -0.5, 0.0, 1.5, 3.0]).unwrap();
-    let cond_neg = Array::<bool, Ix1>::from_vec(
-        Ix1::new([5]),
-        vec![true, true, false, false, false],
-    )
-    .unwrap();
-    let cond_pos = Array::<bool, Ix1>::from_vec(
-        Ix1::new([5]),
-        vec![false, false, false, true, true],
-    )
-    .unwrap();
+    let x = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![-2.0, -0.5, 0.0, 1.5, 3.0]).unwrap();
+    let cond_neg =
+        Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![true, true, false, false, false]).unwrap();
+    let cond_pos =
+        Array::<bool, Ix1>::from_vec(Ix1::new([5]), vec![false, false, false, true, true]).unwrap();
     let neg: &dyn Fn(f64) -> f64 = &|_| -1.0;
     let pos: &dyn Fn(f64) -> f64 = &|_| 1.0;
     let sign = ferray_window::piecewise(&x, &[cond_neg, cond_pos], &[neg, pos], 0.0)
@@ -143,11 +136,8 @@ fn piecewise_matches_documented_semantics() {
 /// independent of any library-specific implementation detail.
 #[test]
 fn apply_along_axis_matches_numpy_sum_axis() {
-    let m = Array::<f64, Ix2>::from_vec(
-        Ix2::new([2, 3]),
-        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-    )
-    .unwrap();
+    let m =
+        Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
 
     // Column sums (axis 0): numpy.sum(m, axis=0) == [5, 7, 9]
     let col_sums = ferray_window::apply_along_axis(
@@ -184,11 +174,8 @@ fn apply_along_axis_matches_numpy_sum_axis() {
 /// (total 21).
 #[test]
 fn apply_over_axes_matches_numpy_double_sum() {
-    let a = Array::<f64, IxDyn>::from_vec(
-        IxDyn::new(&[2, 3]),
-        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-    )
-    .unwrap();
+    let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .unwrap();
 
     let total = ferray_window::apply_over_axes(ferray_window::sum_axis_keepdims, &a, &[0, 1])
         .expect("ferray_window::apply_over_axes double sum");
@@ -214,11 +201,8 @@ fn apply_over_axes_matches_numpy_double_sum() {
 /// retained as size 1) and values for both axes of a (2, 3) array of 1..=6.
 #[test]
 fn sum_axis_keepdims_matches_numpy_sum_with_keepdims() {
-    let a = Array::<f64, IxDyn>::from_vec(
-        IxDyn::new(&[2, 3]),
-        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-    )
-    .unwrap();
+    let a = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+        .unwrap();
 
     // numpy.sum(a, axis=0, keepdims=True) -> shape (1, 3), [[5, 7, 9]]
     let s0 = ferray_window::sum_axis_keepdims(&a, Axis(0))

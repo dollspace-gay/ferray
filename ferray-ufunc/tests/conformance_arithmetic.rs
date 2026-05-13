@@ -104,7 +104,6 @@ fn cbrt_matches_numpy() {
 /// Covers: `ferray_ufunc::square` (re-export of
 /// `ferray_ufunc::ops::arithmetic::square`).
 #[test]
-#[ignore = "Stage 4-ufunc strict-tolerance failure; tracking issue #752"]
 fn square_matches_numpy() {
     run_unary("square.json", "square", ferray_ufunc::square);
 }
