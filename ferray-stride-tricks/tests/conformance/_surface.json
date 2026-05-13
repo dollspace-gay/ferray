@@ -1,0 +1,106 @@
+{
+  "crate": "ferray-stride-tricks",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_stride_tricks::StridedSource",
+      "kind": "reexport",
+      "signature": "pub use as_strided :: { StridedSource , as_strided , as_strided_signed , as_strided_signed_unchecked , as_strided_unchecked , }"
+    },
+    {
+      "path": "ferray_stride_tricks::as_strided",
+      "kind": "reexport",
+      "signature": "pub use as_strided :: { StridedSource , as_strided , as_strided_signed , as_strided_signed_unchecked , as_strided_unchecked , }"
+    },
+    {
+      "path": "ferray_stride_tricks::as_strided::StridedSource",
+      "kind": "trait",
+      "signature": "pub trait StridedSource < T : Element >"
+    },
+    {
+      "path": "ferray_stride_tricks::as_strided::as_strided",
+      "kind": "fn",
+      "signature": "pub fn as_strided < 'a , T , S > (source : & 'a S , shape : & [usize] , strides : & [usize] ,) -> FerrayResult < ArrayView < 'a , T , IxDyn > > where T : Element , S : StridedSource < T > ,"
+    },
+    {
+      "path": "ferray_stride_tricks::as_strided::as_strided_signed",
+      "kind": "fn",
+      "signature": "pub fn as_strided_signed < 'a , T , S > (source : & 'a S , shape : & [usize] , strides : & [isize] , start_offset : usize ,) -> FerrayResult < ArrayView < 'a , T , IxDyn > > where T : Element , S : StridedSource < T > ,"
+    },
+    {
+      "path": "ferray_stride_tricks::as_strided::as_strided_signed_unchecked",
+      "kind": "fn",
+      "signature": "pub unsafe fn as_strided_signed_unchecked < 'a , T , S > (source : & 'a S , shape : & [usize] , strides : & [isize] , start_offset : usize ,) -> FerrayResult < ArrayView < 'a , T , IxDyn > > where T : Element , S : StridedSource < T > ,"
+    },
+    {
+      "path": "ferray_stride_tricks::as_strided::as_strided_unchecked",
+      "kind": "fn",
+      "signature": "pub unsafe fn as_strided_unchecked < 'a , T , S > (source : & 'a S , shape : & [usize] , strides : & [usize] ,) -> FerrayResult < ArrayView < 'a , T , IxDyn > > where T : Element , S : StridedSource < T > ,"
+    },
+    {
+      "path": "ferray_stride_tricks::as_strided_signed",
+      "kind": "reexport",
+      "signature": "pub use as_strided :: { StridedSource , as_strided , as_strided_signed , as_strided_signed_unchecked , as_strided_unchecked , }"
+    },
+    {
+      "path": "ferray_stride_tricks::as_strided_signed_unchecked",
+      "kind": "reexport",
+      "signature": "pub use as_strided :: { StridedSource , as_strided , as_strided_signed , as_strided_signed_unchecked , as_strided_unchecked , }"
+    },
+    {
+      "path": "ferray_stride_tricks::as_strided_unchecked",
+      "kind": "reexport",
+      "signature": "pub use as_strided :: { StridedSource , as_strided , as_strided_signed , as_strided_signed_unchecked , as_strided_unchecked , }"
+    },
+    {
+      "path": "ferray_stride_tricks::broadcast::broadcast_arrays",
+      "kind": "fn",
+      "signature": "pub fn broadcast_arrays < T : Element , D : Dimension > (arrays : & [Array < T , D >] ,) -> FerrayResult < Vec < ArrayView < '_ , T , IxDyn > > >"
+    },
+    {
+      "path": "ferray_stride_tricks::broadcast::broadcast_shapes",
+      "kind": "fn",
+      "signature": "pub fn broadcast_shapes (shapes : & [& [usize]]) -> FerrayResult < Vec < usize > >"
+    },
+    {
+      "path": "ferray_stride_tricks::broadcast::broadcast_to",
+      "kind": "fn",
+      "signature": "pub fn broadcast_to < 'a , T : Element , D : Dimension > (array : & 'a Array < T , D > , target_shape : & [usize] ,) -> FerrayResult < ArrayView < 'a , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_stride_tricks::broadcast_arrays",
+      "kind": "reexport",
+      "signature": "pub use broadcast :: { broadcast_arrays , broadcast_shapes , broadcast_to }"
+    },
+    {
+      "path": "ferray_stride_tricks::broadcast_shapes",
+      "kind": "reexport",
+      "signature": "pub use broadcast :: { broadcast_arrays , broadcast_shapes , broadcast_to }"
+    },
+    {
+      "path": "ferray_stride_tricks::broadcast_to",
+      "kind": "reexport",
+      "signature": "pub use broadcast :: { broadcast_arrays , broadcast_shapes , broadcast_to }"
+    },
+    {
+      "path": "ferray_stride_tricks::sliding_window::sliding_window_view",
+      "kind": "fn",
+      "signature": "pub fn sliding_window_view < 'a , T : Element , D : Dimension > (array : & 'a Array < T , D > , window_shape : & [usize] ,) -> FerrayResult < ArrayView < 'a , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_stride_tricks::sliding_window::sliding_window_view_axis",
+      "kind": "fn",
+      "signature": "pub fn sliding_window_view_axis < 'a , T : Element , D : Dimension > (array : & 'a Array < T , D > , window_shape : & [usize] , axes : & [usize] ,) -> FerrayResult < ArrayView < 'a , T , IxDyn > >"
+    },
+    {
+      "path": "ferray_stride_tricks::sliding_window_view",
+      "kind": "reexport",
+      "signature": "pub use sliding_window :: { sliding_window_view , sliding_window_view_axis }"
+    },
+    {
+      "path": "ferray_stride_tricks::sliding_window_view_axis",
+      "kind": "reexport",
+      "signature": "pub use sliding_window :: { sliding_window_view , sliding_window_view_axis }"
+    }
+  ]
+}

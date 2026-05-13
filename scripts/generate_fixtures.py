@@ -2236,6 +2236,267 @@ def generate_window_fixtures() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Stride-tricks fixtures
+# ---------------------------------------------------------------------------
+
+def generate_stride_tricks_fixtures() -> None:
+    """Generate fixtures/stride_tricks/<name>.json for each ferray-stride-tricks
+    public view-constructing function.
+
+    Reference: numpy.lib.stride_tricks (as_strided, sliding_window_view) and
+    numpy top-level (broadcast_to, broadcast_arrays, broadcast_shapes).
+
+    All operations are pure view-construction (no float arithmetic, no RNG),
+    so outputs are bit-exact and `tolerance_ulps = 0` is the only correct
+    value for the fixture-strict tolerance policy.
+    """
+    from numpy.lib.stride_tricks import as_strided, sliding_window_view
+
+    print("Generating stride_tricks fixtures...")
+    subdir = FIXTURES_DIR / "stride_tricks"
+    subdir.mkdir(parents=True, exist_ok=True)
+
+    numpy_ver = np.__version__
+
+    def _st_fixture(np_func_name, ferray_func_name, test_cases):
+        return {
+            "numpy_version": numpy_ver,
+            "fixture_schema_version": 2,
+            "reference_library": "numpy",
+            "function": np_func_name,
+            "ferray_function": ferray_func_name,
+            "test_cases": test_cases,
+        }
+
+    # ------------------------------------------------------------------
+    # as_strided (numpy.lib.stride_tricks.as_strided)
+    #
+    # Inputs encoded:
+    #   source   = array_to_dict(source_array, dtype=float64)
+    #   shape    = list[int]                — view shape
+    #   strides  = list[int]                — view strides in ELEMENT units
+    #                                         (we test non-overlapping cases
+    #                                         so the safe `as_strided` path
+    #                                         accepts them)
+    # Expected:
+    #   array_to_dict of the materialised numpy view (numpy expects byte
+    #   strides; we convert from element strides at fixture-build time).
+    # ------------------------------------------------------------------
+    def _as_strided_case(name, source, shape, strides):
+        elem_size = source.dtype.itemsize
+        byte_strides = tuple(s * elem_size for s in strides)
+        out = as_strided(source, shape=tuple(shape), strides=byte_strides)
+        # .copy() materialises the view into a contiguous buffer so the
+        # flattened data is well-defined regardless of overlap.
+        out_mat = np.array(out, copy=True)
+        return {
+            "name": name,
+            "inputs": {
+                "source": array_to_dict(source.astype(np.float64), "float64"),
+                "shape": list(shape),
+                "strides": list(strides),
+            },
+            "expected": array_to_dict(out_mat.astype(np.float64), "float64"),
+            "tolerance_ulps": 0,
+        }
+
+    as_strided_cases = [
+        # 1-D source reshaped to 2x3 with row-major strides (non-overlapping).
+        _as_strided_case(
+            "reshape_1d_to_2x3",
+            np.arange(6, dtype=np.float64),
+            shape=[2, 3],
+            strides=[3, 1],
+        ),
+        # 1-D source, take every 2nd element (stride 2).
+        _as_strided_case(
+            "stride_2_subset",
+            np.arange(6, dtype=np.float64),
+            shape=[3],
+            strides=[2],
+        ),
+        # Larger source, non-trivial 2-D view with strides [10, 3] (skip).
+        _as_strided_case(
+            "non_overlap_skip_strides",
+            np.arange(20, dtype=np.float64),
+            shape=[2, 3],
+            strides=[10, 3],
+        ),
+    ]
+    save_fixture("stride_tricks", "as_strided.json",
+                 _st_fixture("numpy.lib.stride_tricks.as_strided",
+                             "ferray_stride_tricks::as_strided",
+                             as_strided_cases))
+
+    # ------------------------------------------------------------------
+    # broadcast_to (numpy.broadcast_to)
+    # ------------------------------------------------------------------
+    def _broadcast_to_case(name, source, target_shape):
+        out = np.broadcast_to(source, tuple(target_shape))
+        out_mat = np.array(out, copy=True)
+        return {
+            "name": name,
+            "inputs": {
+                "source": array_to_dict(source.astype(np.float64), "float64"),
+                "target_shape": list(target_shape),
+            },
+            "expected": array_to_dict(out_mat.astype(np.float64), "float64"),
+            "tolerance_ulps": 0,
+        }
+
+    broadcast_to_cases = [
+        # 1-D (3,) -> 2-D (4, 3) — row broadcast.
+        _broadcast_to_case(
+            "row_to_2d",
+            np.array([1.0, 2.0, 3.0], dtype=np.float64),
+            target_shape=[4, 3],
+        ),
+        # 2-D (1, 3) -> (4, 3) — explicit unit-axis broadcast.
+        _broadcast_to_case(
+            "unit_axis_to_2d",
+            np.array([[10.0, 20.0, 30.0]], dtype=np.float64),
+            target_shape=[4, 3],
+        ),
+        # 2-D (4, 1) -> (4, 3) — column broadcast.
+        _broadcast_to_case(
+            "column_to_2d",
+            np.array([[1.0], [2.0], [3.0], [4.0]], dtype=np.float64),
+            target_shape=[4, 3],
+        ),
+    ]
+    save_fixture("stride_tricks", "broadcast_to.json",
+                 _st_fixture("numpy.broadcast_to",
+                             "ferray_stride_tricks::broadcast_to",
+                             broadcast_to_cases))
+
+    # ------------------------------------------------------------------
+    # broadcast_arrays (numpy.broadcast_arrays)
+    #
+    # Reference takes N arrays and returns N broadcast views of the common
+    # shape. Fixture encodes each input as a separate slot ("a", "b", ...)
+    # and the expected output as a list of array_to_dict materialised views.
+    # ------------------------------------------------------------------
+    def _broadcast_arrays_case(name, arrays):
+        outs = np.broadcast_arrays(*arrays)
+        return {
+            "name": name,
+            "inputs": {
+                f"arr_{i}": array_to_dict(a.astype(np.float64), "float64")
+                for i, a in enumerate(arrays)
+            },
+            "expected": {
+                "arrays": [
+                    array_to_dict(np.array(o, copy=True).astype(np.float64), "float64")
+                    for o in outs
+                ],
+            },
+            "tolerance_ulps": 0,
+        }
+
+    broadcast_arrays_cases = [
+        # (4, 1) + (1, 3) -> two views of (4, 3).
+        _broadcast_arrays_case(
+            "column_and_row",
+            [
+                np.array([[1.0], [2.0], [3.0], [4.0]], dtype=np.float64),
+                np.array([[10.0, 20.0, 30.0]], dtype=np.float64),
+            ],
+        ),
+        # (3,) + (4, 3) -> two views of (4, 3) — 1-D row broadcast against 2-D.
+        _broadcast_arrays_case(
+            "row_and_matrix",
+            [
+                np.array([1.0, 2.0, 3.0], dtype=np.float64),
+                np.arange(12, dtype=np.float64).reshape(4, 3),
+            ],
+        ),
+        # Three-way: (2, 1) + (3,) + (1, 3) -> common shape (2, 3).
+        _broadcast_arrays_case(
+            "three_arrays",
+            [
+                np.array([[1.0], [2.0]], dtype=np.float64),
+                np.array([10.0, 20.0, 30.0], dtype=np.float64),
+                np.array([[100.0, 200.0, 300.0]], dtype=np.float64),
+            ],
+        ),
+    ]
+    save_fixture("stride_tricks", "broadcast_arrays.json",
+                 _st_fixture("numpy.broadcast_arrays",
+                             "ferray_stride_tricks::broadcast_arrays",
+                             broadcast_arrays_cases))
+
+    # ------------------------------------------------------------------
+    # broadcast_shapes (numpy.broadcast_shapes)
+    #
+    # Pure shape arithmetic — no array data involved. Inputs encode shapes
+    # as `[[usize], [usize], ...]`. Expected output is the result shape as
+    # a `[usize]` list.
+    # ------------------------------------------------------------------
+    def _broadcast_shapes_case(name, shapes):
+        result = list(np.broadcast_shapes(*[tuple(s) for s in shapes]))
+        return {
+            "name": name,
+            "inputs": {"shapes": [list(s) for s in shapes]},
+            "expected": {"shape": result},
+            "tolerance_ulps": 0,
+        }
+
+    broadcast_shapes_cases = [
+        _broadcast_shapes_case("two_2d_unit_axes", [[3, 1], [1, 4]]),
+        _broadcast_shapes_case("three_mixed_ndim", [[2, 1], [3], [1, 3]]),
+        _broadcast_shapes_case("scalar_with_2d", [[], [4, 5]]),
+    ]
+    save_fixture("stride_tricks", "broadcast_shapes.json",
+                 _st_fixture("numpy.broadcast_shapes",
+                             "ferray_stride_tricks::broadcast_shapes",
+                             broadcast_shapes_cases))
+
+    # ------------------------------------------------------------------
+    # sliding_window_view (numpy.lib.stride_tricks.sliding_window_view)
+    # ------------------------------------------------------------------
+    def _sliding_window_case(name, source, window_shape):
+        out = sliding_window_view(source, window_shape=tuple(window_shape))
+        out_mat = np.array(out, copy=True)
+        return {
+            "name": name,
+            "inputs": {
+                "source": array_to_dict(source.astype(np.float64), "float64"),
+                "window_shape": list(window_shape),
+            },
+            "expected": array_to_dict(out_mat.astype(np.float64), "float64"),
+            "tolerance_ulps": 0,
+        }
+
+    sliding_window_cases = [
+        # 1-D source length 5, window 3 -> output shape (3, 3).
+        _sliding_window_case(
+            "1d_window3",
+            np.arange(1.0, 6.0, dtype=np.float64),
+            window_shape=[3],
+        ),
+        # 1-D source length 6, window 2 -> output shape (5, 2).
+        _sliding_window_case(
+            "1d_window2",
+            np.arange(1.0, 7.0, dtype=np.float64),
+            window_shape=[2],
+        ),
+        # 2-D source (3, 4), window (2, 2) -> output shape (2, 3, 2, 2).
+        _sliding_window_case(
+            "2d_window_2x2",
+            np.arange(1.0, 13.0, dtype=np.float64).reshape(3, 4),
+            window_shape=[2, 2],
+        ),
+    ]
+    save_fixture("stride_tricks", "sliding_window_view.json",
+                 _st_fixture("numpy.lib.stride_tricks.sliding_window_view",
+                             "ferray_stride_tricks::sliding_window_view",
+                             sliding_window_cases))
+
+    print(f"  Stride-tricks fixtures complete — "
+          f"{len(list(subdir.glob('*.json')))} files.")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -2245,7 +2506,7 @@ def main():
     print()
 
     # Ensure directories exist
-    for subdir in ["core", "ufunc", "stats", "linalg", "fft", "random", "io", "polynomial", "strings", "ma", "window"]:
+    for subdir in ["core", "ufunc", "stats", "linalg", "fft", "random", "io", "polynomial", "strings", "ma", "window", "stride_tricks"]:
         (FIXTURES_DIR / subdir).mkdir(parents=True, exist_ok=True)
 
     generators = [
@@ -2260,6 +2521,7 @@ def main():
         ("strings", generate_strings_fixtures),
         ("ma", generate_ma_fixtures),
         ("window", generate_window_fixtures),
+        ("stride_tricks", generate_stride_tricks_fixtures),
     ]
 
     errors = []

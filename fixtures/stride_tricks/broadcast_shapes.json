@@ -1,0 +1,75 @@
+{
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
+  "reference_library": "numpy",
+  "function": "numpy.broadcast_shapes",
+  "ferray_function": "ferray_stride_tricks::broadcast_shapes",
+  "test_cases": [
+    {
+      "name": "two_2d_unit_axes",
+      "inputs": {
+        "shapes": [
+          [
+            3,
+            1
+          ],
+          [
+            1,
+            4
+          ]
+        ]
+      },
+      "expected": {
+        "shape": [
+          3,
+          4
+        ]
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "three_mixed_ndim",
+      "inputs": {
+        "shapes": [
+          [
+            2,
+            1
+          ],
+          [
+            3
+          ],
+          [
+            1,
+            3
+          ]
+        ]
+      },
+      "expected": {
+        "shape": [
+          2,
+          3
+        ]
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "scalar_with_2d",
+      "inputs": {
+        "shapes": [
+          [],
+          [
+            4,
+            5
+          ]
+        ]
+      },
+      "expected": {
+        "shape": [
+          4,
+          5
+        ]
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

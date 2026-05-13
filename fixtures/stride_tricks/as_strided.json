@@ -1,0 +1,146 @@
+{
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
+  "reference_library": "numpy",
+  "function": "numpy.lib.stride_tricks.as_strided",
+  "ferray_function": "ferray_stride_tricks::as_strided",
+  "test_cases": [
+    {
+      "name": "reshape_1d_to_2x3",
+      "inputs": {
+        "source": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0
+          ],
+          "shape": [
+            6
+          ],
+          "dtype": "float64"
+        },
+        "shape": [
+          2,
+          3
+        ],
+        "strides": [
+          3,
+          1
+        ]
+      },
+      "expected": {
+        "data": [
+          0.0,
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0
+        ],
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "stride_2_subset",
+      "inputs": {
+        "source": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0
+          ],
+          "shape": [
+            6
+          ],
+          "dtype": "float64"
+        },
+        "shape": [
+          3
+        ],
+        "strides": [
+          2
+        ]
+      },
+      "expected": {
+        "data": [
+          0.0,
+          2.0,
+          4.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "non_overlap_skip_strides",
+      "inputs": {
+        "source": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0,
+            12.0,
+            13.0,
+            14.0,
+            15.0,
+            16.0,
+            17.0,
+            18.0,
+            19.0
+          ],
+          "shape": [
+            20
+          ],
+          "dtype": "float64"
+        },
+        "shape": [
+          2,
+          3
+        ],
+        "strides": [
+          10,
+          3
+        ]
+      },
+      "expected": {
+        "data": [
+          0.0,
+          3.0,
+          6.0,
+          10.0,
+          13.0,
+          16.0
+        ],
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

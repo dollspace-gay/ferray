@@ -1,0 +1,65 @@
+# Surface exclusions for ferray-stride-tricks.
+#
+# Each entry covers a public item that is not directly mentioned by a
+# conformance test under `tests/conformance_*.rs`. Categories used here:
+#
+#   - Inner canonical paths (`as_strided::*`, etc.) for the signed and
+#     unchecked variants whose family representative IS exercised but
+#     whose distinct path is not (e.g. `as_strided::as_strided_signed`
+#     is a sibling of the tested `as_strided::as_strided`). The
+#     unsafe and signed forms have no NumPy equivalent — NumPy's
+#     `as_strided` accepts byte strides and is the only path covered
+#     by the fixture. Dedicated fixture coverage tracked under #748.
+#
+#   - User-facing re-exports of those siblings (`as_strided_signed`
+#     etc. at the crate root) — same justification, same tracker.
+#
+#   - The `StridedSource` trait (both inner and re-exported paths) is
+#     a type-system extension point with no direct numpy oracle; its
+#     contract is verified by the in-crate unit tests that use both
+#     `&Array<...>` and `&ArrayView<...>` against the same `as_strided`
+#     call (src/as_strided.rs `as_strided_accepts_array_view` and
+#     siblings).
+#
+# All entries cite a non-empty `reason` and a non-empty `covered_by`
+# anchor as required by the strict surface-coverage gate.
+
+[[exclusion]]
+path = "ferray_stride_tricks::StridedSource"
+reason = "User-facing re-export of the `StridedSource` trait. Trait-impl correctness is exercised by in-crate unit tests that hand both `&Array<...>` and `&ArrayView<...>` to the same `as_strided` call (src/as_strided.rs::tests::as_strided_accepts_array_view and siblings). No NumPy oracle exists for a trait surface."
+covered_by = "ferray-stride-tricks/src/as_strided.rs::tests::as_strided_accepts_array_view"
+
+[[exclusion]]
+path = "ferray_stride_tricks::as_strided::StridedSource"
+reason = "Inner canonical path of the `StridedSource` trait, re-exported at the crate root. The trait-impl contract is verified by the same in-crate unit tests that exercise the re-export. No NumPy oracle exists for a trait surface."
+covered_by = "ferray-stride-tricks/src/as_strided.rs::tests::as_strided_accepts_array_view"
+
+[[exclusion]]
+path = "ferray_stride_tricks::as_strided::as_strided_signed"
+reason = "Signed-stride sibling of `as_strided` (#737). NumPy's `as_strided` only accepts a single (byte-stride) parameter set, so there is no direct numpy oracle for the isize-stride / start_offset signature. Behavioural coverage lives in src/as_strided.rs::tests (signed_with_positive_strides_works_like_as_strided, signed_with_start_offset_advances_base, signed_zero_stride_overlap_rejected_by_default, signed_negative_stride_currently_rejected_with_diagnostic). Dedicated fixture coverage tracked under #748."
+covered_by = "ferray-stride-tricks/src/as_strided.rs::tests::signed_with_positive_strides_works_like_as_strided"
+
+[[exclusion]]
+path = "ferray_stride_tricks::as_strided::as_strided_signed_unchecked"
+reason = "Unchecked sibling of `as_strided_signed` (#737). Identical surface to `as_strided_signed` minus the overlap check — same lack of a direct numpy oracle. The overlap-skipping behaviour is exercised by src/as_strided.rs::tests::signed_unchecked_allows_zero_stride_broadcast. Dedicated fixture coverage tracked under #748."
+covered_by = "ferray-stride-tricks/src/as_strided.rs::tests::signed_unchecked_allows_zero_stride_broadcast"
+
+[[exclusion]]
+path = "ferray_stride_tricks::as_strided::as_strided_unchecked"
+reason = "Unsafe sibling of `as_strided` whose primary purpose is to permit overlapping strides (sliding-window / Toeplitz patterns) — NumPy's `as_strided` is also memory-unsafe but the fixture covers only non-overlapping reshapes, since overlap is the tested case for `sliding_window_view`. Behavioural coverage lives in src/as_strided.rs::tests::as_strided_unchecked_overlapping and as_strided_unchecked_broadcast_pattern. Dedicated fixture coverage tracked under #748."
+covered_by = "ferray-stride-tricks/src/as_strided.rs::tests::as_strided_unchecked_overlapping"
+
+[[exclusion]]
+path = "ferray_stride_tricks::as_strided_signed"
+reason = "User-facing re-export of `as_strided::as_strided_signed`. Same justification as the inner path: no direct numpy oracle for the signed-stride surface. Exercised by in-crate unit tests in src/as_strided.rs::tests. Dedicated fixture coverage tracked under #748."
+covered_by = "ferray-stride-tricks/src/as_strided.rs::tests::signed_with_positive_strides_works_like_as_strided"
+
+[[exclusion]]
+path = "ferray_stride_tricks::as_strided_signed_unchecked"
+reason = "User-facing re-export of `as_strided::as_strided_signed_unchecked`. Same justification as the inner path: overlap-skipping signed-stride variant has no direct numpy oracle. Exercised by src/as_strided.rs::tests::signed_unchecked_allows_zero_stride_broadcast. Dedicated fixture coverage tracked under #748."
+covered_by = "ferray-stride-tricks/src/as_strided.rs::tests::signed_unchecked_allows_zero_stride_broadcast"
+
+[[exclusion]]
+path = "ferray_stride_tricks::as_strided_unchecked"
+reason = "User-facing re-export of `as_strided::as_strided_unchecked`. Same justification as the inner path: overlapping-stride patterns are covered by sliding_window_view's fixture; the raw unchecked surface is exercised by src/as_strided.rs::tests::as_strided_unchecked_overlapping and as_strided_unchecked_broadcast_pattern. Dedicated fixture coverage tracked under #748."
+covered_by = "ferray-stride-tricks/src/as_strided.rs::tests::as_strided_unchecked_overlapping"

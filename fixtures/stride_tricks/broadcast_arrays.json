@@ -1,0 +1,259 @@
+{
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
+  "reference_library": "numpy",
+  "function": "numpy.broadcast_arrays",
+  "ferray_function": "ferray_stride_tricks::broadcast_arrays",
+  "test_cases": [
+    {
+      "name": "column_and_row",
+      "inputs": {
+        "arr_0": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0
+          ],
+          "shape": [
+            4,
+            1
+          ],
+          "dtype": "float64"
+        },
+        "arr_1": {
+          "data": [
+            10.0,
+            20.0,
+            30.0
+          ],
+          "shape": [
+            1,
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "arrays": [
+          {
+            "data": [
+              1.0,
+              1.0,
+              1.0,
+              2.0,
+              2.0,
+              2.0,
+              3.0,
+              3.0,
+              3.0,
+              4.0,
+              4.0,
+              4.0
+            ],
+            "shape": [
+              4,
+              3
+            ],
+            "dtype": "float64"
+          },
+          {
+            "data": [
+              10.0,
+              20.0,
+              30.0,
+              10.0,
+              20.0,
+              30.0,
+              10.0,
+              20.0,
+              30.0,
+              10.0,
+              20.0,
+              30.0
+            ],
+            "shape": [
+              4,
+              3
+            ],
+            "dtype": "float64"
+          }
+        ]
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "row_and_matrix",
+      "inputs": {
+        "arr_0": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "arr_1": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            4,
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "arrays": [
+          {
+            "data": [
+              1.0,
+              2.0,
+              3.0,
+              1.0,
+              2.0,
+              3.0,
+              1.0,
+              2.0,
+              3.0,
+              1.0,
+              2.0,
+              3.0
+            ],
+            "shape": [
+              4,
+              3
+            ],
+            "dtype": "float64"
+          },
+          {
+            "data": [
+              0.0,
+              1.0,
+              2.0,
+              3.0,
+              4.0,
+              5.0,
+              6.0,
+              7.0,
+              8.0,
+              9.0,
+              10.0,
+              11.0
+            ],
+            "shape": [
+              4,
+              3
+            ],
+            "dtype": "float64"
+          }
+        ]
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "three_arrays",
+      "inputs": {
+        "arr_0": {
+          "data": [
+            1.0,
+            2.0
+          ],
+          "shape": [
+            2,
+            1
+          ],
+          "dtype": "float64"
+        },
+        "arr_1": {
+          "data": [
+            10.0,
+            20.0,
+            30.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "arr_2": {
+          "data": [
+            100.0,
+            200.0,
+            300.0
+          ],
+          "shape": [
+            1,
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "arrays": [
+          {
+            "data": [
+              1.0,
+              1.0,
+              1.0,
+              2.0,
+              2.0,
+              2.0
+            ],
+            "shape": [
+              2,
+              3
+            ],
+            "dtype": "float64"
+          },
+          {
+            "data": [
+              10.0,
+              20.0,
+              30.0,
+              10.0,
+              20.0,
+              30.0
+            ],
+            "shape": [
+              2,
+              3
+            ],
+            "dtype": "float64"
+          },
+          {
+            "data": [
+              100.0,
+              200.0,
+              300.0,
+              100.0,
+              200.0,
+              300.0
+            ],
+            "shape": [
+              2,
+              3
+            ],
+            "dtype": "float64"
+          }
+        ]
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

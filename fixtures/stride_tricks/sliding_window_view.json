@@ -1,0 +1,157 @@
+{
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
+  "reference_library": "numpy",
+  "function": "numpy.lib.stride_tricks.sliding_window_view",
+  "ferray_function": "ferray_stride_tricks::sliding_window_view",
+  "test_cases": [
+    {
+      "name": "1d_window3",
+      "inputs": {
+        "source": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "window_shape": [
+          3
+        ]
+      },
+      "expected": {
+        "data": [
+          1.0,
+          2.0,
+          3.0,
+          2.0,
+          3.0,
+          4.0,
+          3.0,
+          4.0,
+          5.0
+        ],
+        "shape": [
+          3,
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "1d_window2",
+      "inputs": {
+        "source": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            6
+          ],
+          "dtype": "float64"
+        },
+        "window_shape": [
+          2
+        ]
+      },
+      "expected": {
+        "data": [
+          1.0,
+          2.0,
+          2.0,
+          3.0,
+          3.0,
+          4.0,
+          4.0,
+          5.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          5,
+          2
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "2d_window_2x2",
+      "inputs": {
+        "source": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0,
+            12.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "window_shape": [
+          2,
+          2
+        ]
+      },
+      "expected": {
+        "data": [
+          1.0,
+          2.0,
+          5.0,
+          6.0,
+          2.0,
+          3.0,
+          6.0,
+          7.0,
+          3.0,
+          4.0,
+          7.0,
+          8.0,
+          5.0,
+          6.0,
+          9.0,
+          10.0,
+          6.0,
+          7.0,
+          10.0,
+          11.0,
+          7.0,
+          8.0,
+          11.0,
+          12.0
+        ],
+        "shape": [
+          2,
+          3,
+          2,
+          2
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

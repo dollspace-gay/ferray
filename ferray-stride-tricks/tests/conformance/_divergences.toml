@@ -1,0 +1,3 @@
+# Documented cases where ferray-stride-tricks returns a more mathematically
+# correct value than the reference. None currently documented for
+# ferray-stride-tricks.
