@@ -1,0 +1,581 @@
+{
+  "crate": "ferray-random",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_random::BitGenerator",
+      "kind": "reexport",
+      "signature": "pub use bitgen :: { BitGenerator , MT19937 , Pcg64 , Pcg64Dxsm , Philox , SeedSequence , Sfc64 , Xoshiro256StarStar , }"
+    },
+    {
+      "path": "ferray_random::Generator",
+      "kind": "reexport",
+      "signature": "pub use generator :: { Generator , default_rng , default_rng_seeded }"
+    },
+    {
+      "path": "ferray_random::IntoShape",
+      "kind": "reexport",
+      "signature": "pub use shape :: IntoShape"
+    },
+    {
+      "path": "ferray_random::MT19937",
+      "kind": "reexport",
+      "signature": "pub use bitgen :: { BitGenerator , MT19937 , Pcg64 , Pcg64Dxsm , Philox , SeedSequence , Sfc64 , Xoshiro256StarStar , }"
+    },
+    {
+      "path": "ferray_random::Pcg64",
+      "kind": "reexport",
+      "signature": "pub use bitgen :: { BitGenerator , MT19937 , Pcg64 , Pcg64Dxsm , Philox , SeedSequence , Sfc64 , Xoshiro256StarStar , }"
+    },
+    {
+      "path": "ferray_random::Pcg64Dxsm",
+      "kind": "reexport",
+      "signature": "pub use bitgen :: { BitGenerator , MT19937 , Pcg64 , Pcg64Dxsm , Philox , SeedSequence , Sfc64 , Xoshiro256StarStar , }"
+    },
+    {
+      "path": "ferray_random::Philox",
+      "kind": "reexport",
+      "signature": "pub use bitgen :: { BitGenerator , MT19937 , Pcg64 , Pcg64Dxsm , Philox , SeedSequence , Sfc64 , Xoshiro256StarStar , }"
+    },
+    {
+      "path": "ferray_random::SeedSequence",
+      "kind": "reexport",
+      "signature": "pub use bitgen :: { BitGenerator , MT19937 , Pcg64 , Pcg64Dxsm , Philox , SeedSequence , Sfc64 , Xoshiro256StarStar , }"
+    },
+    {
+      "path": "ferray_random::Sfc64",
+      "kind": "reexport",
+      "signature": "pub use bitgen :: { BitGenerator , MT19937 , Pcg64 , Pcg64Dxsm , Philox , SeedSequence , Sfc64 , Xoshiro256StarStar , }"
+    },
+    {
+      "path": "ferray_random::Xoshiro256StarStar",
+      "kind": "reexport",
+      "signature": "pub use bitgen :: { BitGenerator , MT19937 , Pcg64 , Pcg64Dxsm , Philox , SeedSequence , Sfc64 , Xoshiro256StarStar , }"
+    },
+    {
+      "path": "ferray_random::bitgen::BitGenerator",
+      "kind": "trait",
+      "signature": "pub trait BitGenerator"
+    },
+    {
+      "path": "ferray_random::bitgen::MT19937",
+      "kind": "reexport",
+      "signature": "pub use mt19937 :: MT19937"
+    },
+    {
+      "path": "ferray_random::bitgen::Pcg64",
+      "kind": "reexport",
+      "signature": "pub use pcg64 :: Pcg64"
+    },
+    {
+      "path": "ferray_random::bitgen::Pcg64Dxsm",
+      "kind": "reexport",
+      "signature": "pub use pcg64dxsm :: Pcg64Dxsm"
+    },
+    {
+      "path": "ferray_random::bitgen::Philox",
+      "kind": "reexport",
+      "signature": "pub use philox :: Philox"
+    },
+    {
+      "path": "ferray_random::bitgen::SeedSequence",
+      "kind": "reexport",
+      "signature": "pub use seed_sequence :: SeedSequence"
+    },
+    {
+      "path": "ferray_random::bitgen::Sfc64",
+      "kind": "reexport",
+      "signature": "pub use sfc64 :: Sfc64"
+    },
+    {
+      "path": "ferray_random::bitgen::Xoshiro256StarStar",
+      "kind": "reexport",
+      "signature": "pub use xoshiro256 :: Xoshiro256StarStar"
+    },
+    {
+      "path": "ferray_random::bitgen::mt19937::MT19937",
+      "kind": "struct",
+      "signature": "pub struct MT19937"
+    },
+    {
+      "path": "ferray_random::bitgen::pcg64::Pcg64",
+      "kind": "struct",
+      "signature": "pub struct Pcg64"
+    },
+    {
+      "path": "ferray_random::bitgen::pcg64dxsm::Pcg64Dxsm",
+      "kind": "struct",
+      "signature": "pub struct Pcg64Dxsm"
+    },
+    {
+      "path": "ferray_random::bitgen::philox::Philox",
+      "kind": "struct",
+      "signature": "pub struct Philox"
+    },
+    {
+      "path": "ferray_random::bitgen::seed_sequence::SeedSequence",
+      "kind": "struct",
+      "signature": "pub struct SeedSequence"
+    },
+    {
+      "path": "ferray_random::bitgen::seed_sequence::SeedSequence::entropy",
+      "kind": "method",
+      "signature": "pub fn entropy (& self) -> u64"
+    },
+    {
+      "path": "ferray_random::bitgen::seed_sequence::SeedSequence::generate_state",
+      "kind": "method",
+      "signature": "pub fn generate_state (& self , n_words : usize) -> Vec < u32 >"
+    },
+    {
+      "path": "ferray_random::bitgen::seed_sequence::SeedSequence::generate_u64",
+      "kind": "method",
+      "signature": "pub fn generate_u64 (& self) -> u64"
+    },
+    {
+      "path": "ferray_random::bitgen::seed_sequence::SeedSequence::new",
+      "kind": "method",
+      "signature": "pub fn new (entropy : u64) -> Self"
+    },
+    {
+      "path": "ferray_random::bitgen::seed_sequence::SeedSequence::seed",
+      "kind": "method",
+      "signature": "pub fn seed < B : BitGenerator > (& self) -> B"
+    },
+    {
+      "path": "ferray_random::bitgen::seed_sequence::SeedSequence::spawn",
+      "kind": "method",
+      "signature": "pub fn spawn (& mut self , n : usize) -> Vec < SeedSequence >"
+    },
+    {
+      "path": "ferray_random::bitgen::seed_sequence::SeedSequence::spawn_key",
+      "kind": "method",
+      "signature": "pub fn spawn_key (& self) -> & [u64]"
+    },
+    {
+      "path": "ferray_random::bitgen::seed_sequence::SeedSequence::with_spawn_key",
+      "kind": "method",
+      "signature": "pub fn with_spawn_key (entropy : u64 , spawn_key : Vec < u64 >) -> Self"
+    },
+    {
+      "path": "ferray_random::bitgen::sfc64::Sfc64",
+      "kind": "struct",
+      "signature": "pub struct Sfc64"
+    },
+    {
+      "path": "ferray_random::bitgen::xoshiro256::Xoshiro256StarStar",
+      "kind": "struct",
+      "signature": "pub struct Xoshiro256StarStar"
+    },
+    {
+      "path": "ferray_random::default_rng",
+      "kind": "reexport",
+      "signature": "pub use generator :: { Generator , default_rng , default_rng_seeded }"
+    },
+    {
+      "path": "ferray_random::default_rng_seeded",
+      "kind": "reexport",
+      "signature": "pub use generator :: { Generator , default_rng , default_rng_seeded }"
+    },
+    {
+      "path": "ferray_random::distributions::discrete::Generator::binomial",
+      "kind": "method",
+      "signature": "pub fn binomial (& mut self , n : u64 , p : f64 , size : impl IntoShape ,) -> Result < Array < i64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::discrete::Generator::geometric",
+      "kind": "method",
+      "signature": "pub fn geometric (& mut self , p : f64 , size : impl IntoShape ,) -> Result < Array < i64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::discrete::Generator::hypergeometric",
+      "kind": "method",
+      "signature": "pub fn hypergeometric (& mut self , ngood : u64 , nbad : u64 , nsample : u64 , size : impl IntoShape ,) -> Result < Array < i64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::discrete::Generator::logseries",
+      "kind": "method",
+      "signature": "pub fn logseries (& mut self , p : f64 , size : impl IntoShape ,) -> Result < Array < i64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::discrete::Generator::negative_binomial",
+      "kind": "method",
+      "signature": "pub fn negative_binomial (& mut self , n : f64 , p : f64 , size : impl IntoShape ,) -> Result < Array < i64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::discrete::Generator::poisson",
+      "kind": "method",
+      "signature": "pub fn poisson (& mut self , lam : f64 , size : impl IntoShape ,) -> Result < Array < i64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::discrete::Generator::poisson_array",
+      "kind": "method",
+      "signature": "pub fn poisson_array (& mut self , lam : & Array < f64 , IxDyn > ,) -> Result < Array < i64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::discrete::Generator::zipf",
+      "kind": "method",
+      "signature": "pub fn zipf (& mut self , a : f64 , size : impl IntoShape) -> Result < Array < i64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::exponential::Generator::exponential",
+      "kind": "method",
+      "signature": "pub fn exponential (& mut self , scale : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::exponential::Generator::exponential_array",
+      "kind": "method",
+      "signature": "pub fn exponential_array (& mut self , scale : & Array < f64 , IxDyn > ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::exponential::Generator::exponential_f32",
+      "kind": "method",
+      "signature": "pub fn exponential_f32 (& mut self , scale : f32 , size : impl IntoShape ,) -> Result < Array < f32 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::exponential::Generator::standard_exponential",
+      "kind": "method",
+      "signature": "pub fn standard_exponential (& mut self , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::exponential::Generator::standard_exponential_f32",
+      "kind": "method",
+      "signature": "pub fn standard_exponential_f32 (& mut self , size : impl IntoShape ,) -> Result < Array < f32 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::exponential::Generator::standard_exponential_into",
+      "kind": "method",
+      "signature": "pub fn standard_exponential_into (& mut self , out : & mut Array < f64 , IxDyn > ,) -> Result < () , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::gamma::Generator::beta",
+      "kind": "method",
+      "signature": "pub fn beta (& mut self , a : f64 , b : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::gamma::Generator::chisquare",
+      "kind": "method",
+      "signature": "pub fn chisquare (& mut self , df : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::gamma::Generator::f",
+      "kind": "method",
+      "signature": "pub fn f (& mut self , dfnum : f64 , dfden : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::gamma::Generator::gamma",
+      "kind": "method",
+      "signature": "pub fn gamma (& mut self , alpha : f64 , scale : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::gamma::Generator::noncentral_chisquare",
+      "kind": "method",
+      "signature": "pub fn noncentral_chisquare (& mut self , df : f64 , nonc : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::gamma::Generator::noncentral_f",
+      "kind": "method",
+      "signature": "pub fn noncentral_f (& mut self , dfnum : f64 , dfden : f64 , nonc : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::gamma::Generator::standard_gamma",
+      "kind": "method",
+      "signature": "pub fn standard_gamma (& mut self , alpha : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::gamma::Generator::standard_t",
+      "kind": "method",
+      "signature": "pub fn standard_t (& mut self , df : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::gamma::Generator::student_t",
+      "kind": "method",
+      "signature": "pub fn student_t (& mut self , df : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::misc_continuous::Generator::gumbel",
+      "kind": "method",
+      "signature": "pub fn gumbel (& mut self , loc : f64 , scale : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::misc_continuous::Generator::laplace",
+      "kind": "method",
+      "signature": "pub fn laplace (& mut self , loc : f64 , scale : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::misc_continuous::Generator::logistic",
+      "kind": "method",
+      "signature": "pub fn logistic (& mut self , loc : f64 , scale : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::misc_continuous::Generator::pareto",
+      "kind": "method",
+      "signature": "pub fn pareto (& mut self , a : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::misc_continuous::Generator::power",
+      "kind": "method",
+      "signature": "pub fn power (& mut self , a : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::misc_continuous::Generator::rayleigh",
+      "kind": "method",
+      "signature": "pub fn rayleigh (& mut self , scale : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::misc_continuous::Generator::standard_cauchy",
+      "kind": "method",
+      "signature": "pub fn standard_cauchy (& mut self , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::misc_continuous::Generator::triangular",
+      "kind": "method",
+      "signature": "pub fn triangular (& mut self , left : f64 , mode : f64 , right : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::misc_continuous::Generator::vonmises",
+      "kind": "method",
+      "signature": "pub fn vonmises (& mut self , mu : f64 , kappa : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::misc_continuous::Generator::wald",
+      "kind": "method",
+      "signature": "pub fn wald (& mut self , mean : f64 , scale : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::misc_continuous::Generator::weibull",
+      "kind": "method",
+      "signature": "pub fn weibull (& mut self , a : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::multivariate::Generator::dirichlet",
+      "kind": "method",
+      "signature": "pub fn dirichlet (& mut self , alpha : & [f64] , size : usize ,) -> Result < Array < f64 , Ix2 > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::multivariate::Generator::multinomial",
+      "kind": "method",
+      "signature": "pub fn multinomial (& mut self , n : u64 , pvals : & [f64] , size : usize ,) -> Result < Array < i64 , Ix2 > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::multivariate::Generator::multivariate_hypergeometric",
+      "kind": "method",
+      "signature": "pub fn multivariate_hypergeometric (& mut self , colors : & [u64] , nsample : u64 , size : usize ,) -> Result < Array < i64 , Ix2 > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::multivariate::Generator::multivariate_normal",
+      "kind": "method",
+      "signature": "pub fn multivariate_normal (& mut self , mean : & [f64] , cov : & [f64] , size : usize ,) -> Result < Array < f64 , Ix2 > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::multivariate::Generator::multivariate_normal_array",
+      "kind": "method",
+      "signature": "pub fn multivariate_normal_array (& mut self , mean : & Array < f64 , Ix1 > , cov : & Array < f64 , Ix2 > , size : usize ,) -> Result < Array < f64 , Ix2 > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::normal::Generator::lognormal",
+      "kind": "method",
+      "signature": "pub fn lognormal (& mut self , mean : f64 , sigma : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::normal::Generator::lognormal_f32",
+      "kind": "method",
+      "signature": "pub fn lognormal_f32 (& mut self , mean : f32 , sigma : f32 , size : impl IntoShape ,) -> Result < Array < f32 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::normal::Generator::normal",
+      "kind": "method",
+      "signature": "pub fn normal (& mut self , loc : f64 , scale : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::normal::Generator::normal_array",
+      "kind": "method",
+      "signature": "pub fn normal_array (& mut self , loc : & Array < f64 , IxDyn > , scale : & Array < f64 , IxDyn > ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::normal::Generator::normal_f32",
+      "kind": "method",
+      "signature": "pub fn normal_f32 (& mut self , loc : f32 , scale : f32 , size : impl IntoShape ,) -> Result < Array < f32 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::normal::Generator::standard_normal",
+      "kind": "method",
+      "signature": "pub fn standard_normal (& mut self , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::normal::Generator::standard_normal_f32",
+      "kind": "method",
+      "signature": "pub fn standard_normal_f32 (& mut self , size : impl IntoShape ,) -> Result < Array < f32 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::normal::Generator::standard_normal_into",
+      "kind": "method",
+      "signature": "pub fn standard_normal_into (& mut self , out : & mut Array < f64 , IxDyn >) -> Result < () , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::uniform::Generator::integers",
+      "kind": "method",
+      "signature": "pub fn integers (& mut self , low : i64 , high : i64 , size : impl IntoShape ,) -> Result < Array < i64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::uniform::Generator::random",
+      "kind": "method",
+      "signature": "pub fn random (& mut self , size : impl IntoShape) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::uniform::Generator::random_f32",
+      "kind": "method",
+      "signature": "pub fn random_f32 (& mut self , size : impl IntoShape) -> Result < Array < f32 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::uniform::Generator::random_into",
+      "kind": "method",
+      "signature": "pub fn random_into (& mut self , out : & mut Array < f64 , IxDyn >) -> Result < () , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::uniform::Generator::uniform",
+      "kind": "method",
+      "signature": "pub fn uniform (& mut self , low : f64 , high : f64 , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::uniform::Generator::uniform_array",
+      "kind": "method",
+      "signature": "pub fn uniform_array (& mut self , low : & Array < f64 , IxDyn > , high : & Array < f64 , IxDyn > ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::uniform::Generator::uniform_f32",
+      "kind": "method",
+      "signature": "pub fn uniform_f32 (& mut self , low : f32 , high : f32 , size : impl IntoShape ,) -> Result < Array < f32 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::distributions::ziggurat::standard_normal_ziggurat",
+      "kind": "fn",
+      "signature": "pub fn standard_normal_ziggurat < B : BitGenerator > (bg : & mut B) -> f64"
+    },
+    {
+      "path": "ferray_random::distributions::ziggurat::standard_normal_ziggurat_f32",
+      "kind": "fn",
+      "signature": "pub fn standard_normal_ziggurat_f32 < B : BitGenerator > (bg : & mut B) -> f32"
+    },
+    {
+      "path": "ferray_random::generator::Generator",
+      "kind": "struct",
+      "signature": "pub struct Generator < B : BitGenerator = Xoshiro256StarStar >"
+    },
+    {
+      "path": "ferray_random::generator::Generator::bit_generator",
+      "kind": "method",
+      "signature": "pub const fn bit_generator (& mut self) -> & mut B"
+    },
+    {
+      "path": "ferray_random::generator::Generator::bytes",
+      "kind": "method",
+      "signature": "pub fn bytes (& mut self , n : usize) -> Vec < u8 >"
+    },
+    {
+      "path": "ferray_random::generator::Generator::new",
+      "kind": "method",
+      "signature": "pub const fn new (bg : B) -> Self"
+    },
+    {
+      "path": "ferray_random::generator::Generator::next_f32",
+      "kind": "method",
+      "signature": "pub fn next_f32 (& mut self) -> f32"
+    },
+    {
+      "path": "ferray_random::generator::Generator::next_f64",
+      "kind": "method",
+      "signature": "pub fn next_f64 (& mut self) -> f64"
+    },
+    {
+      "path": "ferray_random::generator::Generator::next_u64",
+      "kind": "method",
+      "signature": "pub fn next_u64 (& mut self) -> u64"
+    },
+    {
+      "path": "ferray_random::generator::Generator::next_u64_bounded",
+      "kind": "method",
+      "signature": "pub fn next_u64_bounded (& mut self , bound : u64) -> u64"
+    },
+    {
+      "path": "ferray_random::generator::Generator::set_state_bytes",
+      "kind": "method",
+      "signature": "pub fn set_state_bytes (& mut self , bytes : & [u8]) -> Result < () , FerrayError >"
+    },
+    {
+      "path": "ferray_random::generator::Generator::state_bytes",
+      "kind": "method",
+      "signature": "pub fn state_bytes (& self) -> Result < Vec < u8 > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::generator::default_rng",
+      "kind": "fn",
+      "signature": "pub fn default_rng () -> Generator < Xoshiro256StarStar >"
+    },
+    {
+      "path": "ferray_random::generator::default_rng_seeded",
+      "kind": "fn",
+      "signature": "pub fn default_rng_seeded (seed : u64) -> Generator < Xoshiro256StarStar >"
+    },
+    {
+      "path": "ferray_random::generator::spawn_generators",
+      "kind": "fn",
+      "signature": "pub fn spawn_generators < B : BitGenerator + Clone > (parent : & mut Generator < B > , n : usize ,) -> Result < Vec < Generator < B > > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::parallel::Generator::spawn",
+      "kind": "method",
+      "signature": "pub fn spawn (& mut self , n : usize) -> Result < Vec < Self > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::parallel::Generator::standard_normal_parallel",
+      "kind": "method",
+      "signature": "pub fn standard_normal_parallel (& mut self , size : impl IntoShape ,) -> Result < Array < f64 , IxDyn > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::permutations::Generator::choice",
+      "kind": "method",
+      "signature": "pub fn choice < T > (& mut self , arr : & Array < T , Ix1 > , size : usize , replace : bool , p : Option < & [f64] > ,) -> Result < Array < T , Ix1 > , FerrayError > where T : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_random::permutations::Generator::choice_dyn",
+      "kind": "method",
+      "signature": "pub fn choice_dyn < T > (& mut self , arr : & Array < T , IxDyn > , size : usize , replace : bool , p : Option < & [f64] > , axis : usize , shuffle : bool ,) -> Result < Array < T , IxDyn > , FerrayError > where T : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_random::permutations::Generator::permutation",
+      "kind": "method",
+      "signature": "pub fn permutation < T > (& mut self , arr : & Array < T , Ix1 >) -> Result < Array < T , Ix1 > , FerrayError > where T : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_random::permutations::Generator::permutation_range",
+      "kind": "method",
+      "signature": "pub fn permutation_range (& mut self , n : usize) -> Result < Array < i64 , Ix1 > , FerrayError >"
+    },
+    {
+      "path": "ferray_random::permutations::Generator::permuted",
+      "kind": "method",
+      "signature": "pub fn permuted < T > (& mut self , arr : & Array < T , Ix1 > , _axis : usize ,) -> Result < Array < T , Ix1 > , FerrayError > where T : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_random::permutations::Generator::permuted_dyn",
+      "kind": "method",
+      "signature": "pub fn permuted_dyn < T > (& mut self , arr : & Array < T , IxDyn > , axis : usize ,) -> Result < Array < T , IxDyn > , FerrayError > where T : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_random::permutations::Generator::shuffle",
+      "kind": "method",
+      "signature": "pub fn shuffle < T > (& mut self , arr : & mut Array < T , Ix1 >) -> Result < () , FerrayError > where T : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_random::permutations::Generator::shuffle_dyn",
+      "kind": "method",
+      "signature": "pub fn shuffle_dyn < T > (& mut self , arr : & mut Array < T , IxDyn > , axis : usize ,) -> Result < () , FerrayError > where T : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_random::shape::IntoShape",
+      "kind": "trait",
+      "signature": "pub trait IntoShape"
+    }
+  ]
+}

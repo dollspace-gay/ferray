@@ -1,0 +1,8 @@
+# Documented cases where ferray-random returns a more mathematically
+# correct value than the reference. None currently documented for
+# ferray-random — distributional output is validated via moment
+# tolerances (mean/variance), not raw sample equality, so per-sample
+# differences from numpy's BitGenerator state machine are expected and
+# not divergences. New divergences should be filed with
+# reference_function + reference_library + tracking_issue fields per
+# docs/conformance-suites.md.
