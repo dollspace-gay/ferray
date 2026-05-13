@@ -12,11 +12,120 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-13
+
+### Added
+
+#### Workspace
+- **Strict conformance-suite gate** on every workspace crate. Each of
+  the 14 publish-eligible crates now has a `conformance_surface_coverage`
+  integration test that fails red if any `pub fn` / `pub struct` /
+  `pub trait` / `pub method` is added without one of: a conformance test
+  asserting against numpy/scipy output, an exclusion entry with a cited
+  `covered_by` test path, or a documented divergence with reference
+  citation. The strict gate is enforced in CI via
+  `.github/workflows/conformance.yml`. (#748)
+- `docs/conformance-suites.md` — full description of the four-layer
+  conformance pattern (surface inventory → reference fixtures → per-op
+  conformance tests → strict coverage gate) adapted to ferray's reality:
+  no GPU lane, no autograd backward lane, two-surface architecture
+  (Rust API + Python wheel), `_divergences.toml` policy for cases where
+  ferray is more mathematically correct than numpy/scipy, five-outcome
+  classification taxonomy for first-run failures. (#748 Stage 1)
+- `ferray-test-oracle::surface-inventory` binary — syn-2-based walker
+  that emits sorted deterministic `tests/conformance/_surface.json` per
+  workspace crate. Filters `pub(crate)` / `pub(super)` / items inside
+  `#[cfg(test)]`. (#748 Stage 2)
+- `ferray-test-oracle` tolerance constants matching the Stage 1 table
+  (`TOL_TRANSCENDENTAL_F64_REL` = 1e-12, `TOL_REDUCTION_F64_ABS` = 1e-12,
+  `TOL_LINALG_F64_REL` = 1e-10, `TOL_FFT_F64_REL` = 1e-10,
+  `TOL_POLYNOMIAL_F64_REL` = 1e-10, plus f32 variants) and
+  `assert_close_f{64,32}{,_slice}` helpers. (#748 Stage 3)
+- `scripts/generate_fixtures.py` extended with `generate_window_fixtures`,
+  `generate_stride_tricks_fixtures`, `generate_autodiff_fixtures`. The
+  shared `save_fixture` helper now injects `numpy_version` and
+  `fixture_schema_version` at write time so fixtures stay at schema v2
+  across regenerations.
+- `scripts/retrofit_fixtures_v2.py` — idempotent retrofit of the 147
+  pre-existing fixture files with schema v2 metadata (numpy_version,
+  fixture_schema_version). (#748 Stage 2)
+- `CONTRIBUTING.md` — workflow for adding a new public function under
+  the conformance contract: regenerate surface inventory, add test OR
+  cited exclusion OR documented divergence, never relax tolerance to
+  silence failures.
+
+### Fixed
+
+#### ferray-window
+- `flattop` window: `COEFFS[3]` was `0.083_578_95` (8 sig figs);
+  scipy.signal.windows.flattop uses `0.083578947` (9 sig figs). Fixed
+  the coefficient — closes the 3e-9 drift on `flattop` at index 0
+  surfaced by the strict conformance gate. (#750)
+- `dpss` window: replaced 500-step power iteration with Rayleigh-quotient
+  inverse iteration (RQI) following 50 power warm-up steps. RQI converges
+  cubically near the dominant eigenpair; the previous power-only
+  iteration converged linearly with rate proportional to the
+  eigenvalue-gap and stalled at ~1.49e-6 error vs scipy on the typical
+  NW=2.5 input. Inline Thomas-algorithm tridiagonal solve, no new deps.
+  (#750)
+- `taylor` conformance test: `Array::len()` does not exist on ferray
+  `Array`; corrected to `Array::size()` and removed the compile-error
+  `cfg(any())` gate. (#749)
+
+#### ferray-ufunc
+- `bessel_i0_scalar` (used by `kaiser` window and the `i0` ufunc):
+  replaced the Abramowitz & Stegun 9.8.1/9.8.2 polynomial approximation
+  (max relative error ~1.6e-7 by design) with the public-domain Cephes
+  Chebyshev expansion (Stephen L. Moshier). The Cephes implementation
+  uses two coefficient sets (30 + 25 Chebyshev coefficients) split at
+  |x| = 8 and reaches ~1e-15 relative precision matching scipy's
+  `scipy.special.i0`. Tightened the `i0` unit-test tolerances from
+  1e-5 / 1e-6 / 1e-7 to 1e-13. Closes the 9.54e-11 kaiser drift
+  surfaced by the strict conformance gate. (#750)
+
+#### ferray-test-oracle
+- Enabled `serde_json`'s `arbitrary_precision` feature and routed
+  `Number` values through `Number::to_string().parse::<f64>()` (Rust
+  std's Eisel-Lemire round-to-nearest) instead of `serde_json`'s own
+  float parser. The two differed in the last ULP for some decimal
+  literals (e.g. `-0.09090909090909083` parsed via `serde_json` gave
+  `0xbfb745d1745d1741` vs the correct `0xbfb745d1745d1740`). Closes
+  the 2-ULP `ferray-ufunc` `square` conformance failure on the `(1/11)²`
+  test case — which was a FIXTURE_BUG in the loader, not a `square`
+  implementation bug. (#752)
+
+#### ferray-linalg
+- `qr` Complete mode: faer's `decomp.R()` returns the thin
+  `(min(m, n), n)` upper-triangular factor; ferray's Complete mode now
+  zero-pads with `(m − k)` rows when `m > k` to give the
+  numpy-compatible `(m, n)` shape. Matches
+  `numpy.linalg.qr(mode='complete')`. (#756)
+- `gemm::neon_tests`: gated the test module with
+  `cfg(all(test, target_arch = "aarch64"))` — matches the
+  `cfg(target_arch = "aarch64")` gating already applied to the NEON
+  kernel modules. The i8 NEON tests called intrinsics not available on
+  x86_64, causing pre-existing test failures on non-NEON hosts. (#757)
+
+### Changed
+
+#### ferray-polynomial
+- `Polynomial::fit` documented as a **DIVERGENCE** from
+  `numpy.polyfit`: ferray's thin-QR lstsq returns coefficients closer
+  to analytic-integer truth than numpy's SVD lstsq for small
+  well-conditioned fits. For the degree-1 fit of
+  `(0,1), (1,3), (2,7), (3,13), (4,21)` where the analytic-truth
+  intercept is exactly `-1`, numpy returns `-0.9999999999999978`
+  (error 2.2e-15) and ferray returns `-0.9999999999999997` (error
+  3e-16) — ferray is ~7× more accurate to the mathematical truth.
+  Documented in `ferray-polynomial/tests/conformance/_divergences.toml`
+  citing Golub & Van Loan §5.3. The `oracle.rs::oracle_polyfit`
+  polyfit-specific ULP tolerance bumped from 10 to 64 ULPs to cover
+  the degree 1/2/3 fixture cases; the assertion still surfaces real
+  bugs at >64 ULPs. (#755)
+
 ## [0.3.8] - 2026-05-06
 
 ### Fixed
-- ferray-window conformance: dpss/flattop/kaiser exceed tolerance vs numpy/scipy (#750)
-- ferray-window conformance_windows.rs taylor_matches_scipy uses missing Array::len() (#749)
 
 #### ferray-fft
 - `irfft` / `irfftn` / `irfft2` / `hfft` / `hfftn` / `hfft2` now silently
@@ -87,10 +196,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   in ARMv8), false elsewhere.
 
 ### Changed
-- ferray-linalg gemm::neon_tests i8 tests not arch-gated; fail on x86_64 (pre-existing from #34) (#757)
-- ferray-linalg qr: Complete mode returns R with wrong shape (2x2 instead of 3x2 for 3x2 input) (#756)
-- ferray-polynomial oracle_polyfit ULP=17 exceeds tolerance=10 (pre-existing, surfaced during Stage 4-polynomial) (#755)
-- Stage 4-ufunc strict tolerance: square 2 ULP off NumPy on 2d_f64 case (1/11 squared) (#752)
 
 #### ferray-linalg
 - `mod.rs` dispatcher now branches on `cfg(target_arch)` per public
