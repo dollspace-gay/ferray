@@ -23,3 +23,6 @@ rayon = { workspace = true }
 proptest = { workspace = true }
 ferray-test-oracle = { path = "../ferray-test-oracle" }
 num-complex = { workspace = true }
+serde = { workspace = true }
+serde_json = "1.0"
+toml = "0.8"

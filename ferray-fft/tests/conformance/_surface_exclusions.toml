@@ -1,0 +1,417 @@
+# Surface exclusions for ferray-fft.
+#
+# Items NOT directly invoked by a conformance test fall into these
+# categories:
+#
+#   1. Functions whose user-facing semantics are pinned by an existing
+#      conformance test in this crate (one fixture per family — fft for
+#      fftn, fft2 for fft_real2 / fft_realn convenience wrappers, rfft
+#      for rfftn / rfft2, irfft for irfftn / irfft2, plus the FftNorm
+#      enum which is exercised by every test through the `FftNorm`
+#      argument) but for which NumPy oracle fixtures have not yet been
+#      generated. The umbrella issue #753 tracks extending fixture
+#      coverage to these functions; until those fixtures land, every
+#      such item carries a `covered_by` anchor pointing to the existing
+#      test that already pins the surrounding family's contract, and
+#      cites #753.
+#
+#   2. Plan / preallocated-output API surface (`FftPlan`, `FftPlanND`,
+#      `fft_into`, `ifft_into`, `rfft_into`, `irfft_into`) — these have
+#      no NumPy reference (NumPy has no plan caching), so they are
+#      structurally untestable against a fixture. The plan API's
+#      correctness is pinned by `tests/acceptance.rs`, which round-trips
+#      every shape against the un-cached path.
+#
+#   3. Internal helpers that ARE `pub` for cross-module use but have
+#      no NumPy analog: `axes::*` (axis-normalization arithmetic) and
+#      `nd::*` (the inner axis-walker used by `fftn` / `rfftn`). Their
+#      correctness is pinned transitively by every multi-dim test in
+#      this crate's conformance and oracle suites that goes through
+#      `fftn` / `rfftn` / `irfftn`.
+#
+#   4. The `FftFloat` trait — a type-system extension that gates
+#      `T: FftNum + Element`; no runtime surface, exercised by every
+#      generic FFT call through its bound.
+#
+# Every entry below cites a non-empty `reason` and a non-empty
+# `covered_by` anchor as required by the strict surface-coverage gate.
+
+# ============================================================================
+# (1) FFT-family functions awaiting fixtures — tracked by #753
+# ============================================================================
+
+# ---- fftn / ifftn ----------------------------------------------------------
+
+[[exclusion]]
+path = "ferray_fft::fftn"
+reason = "N-dimensional complex FFT — the variadic-axis form of fft / fft2. The 1-D and 2-D forms are pinned by conformance_fft_1d and conformance_fft2; the N-D dispatcher is a thin axis loop over the same kernel. NumPy oracle fixtures are not yet generated for fftn — umbrella issue #753 tracks adding fixtures/fft/fftn.json so this entry can be replaced by a real test."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft2"
+
+[[exclusion]]
+path = "ferray_fft::complex::fftn"
+reason = "Inner canonical path of `fftn`, re-exported at the crate root. Same rationale as the re-export entry — covered transitively by conformance_fft2 today, dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft2"
+
+[[exclusion]]
+path = "ferray_fft::ifftn"
+reason = "N-dimensional complex inverse FFT — same rationale as fftn. The 1-D / 2-D inverses are pinned by conformance_ifft_1d and conformance_ifft2; fixtures/fft/ifftn.json awaits #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_ifft2"
+
+[[exclusion]]
+path = "ferray_fft::complex::ifftn"
+reason = "Inner canonical path of `ifftn`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_ifft2"
+
+# ---- fft_real / ifft_real / fft_real2 / fft_realn --------------------------
+
+[[exclusion]]
+path = "ferray_fft::fft_real"
+reason = "Convenience wrapper that auto-promotes a real input to `Complex<f64>` and then calls `fft`. The full-spectrum form of `rfft`; pinned by conformance_rfft (which exercises the same real-to-complex transform path) and conformance_fft_1d (which exercises the underlying complex FFT). Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::complex::fft_real"
+reason = "Inner canonical path of `fft_real`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::ifft_real"
+reason = "Convenience wrapper that calls `ifft` on a real-valued input promoted to complex. Pinned transitively by conformance_ifft_1d, since the wrapper degenerates to the standard complex inverse FFT. Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_ifft_1d"
+
+[[exclusion]]
+path = "ferray_fft::complex::ifft_real"
+reason = "Inner canonical path of `ifft_real`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_ifft_1d"
+
+[[exclusion]]
+path = "ferray_fft::fft_real2"
+reason = "2-D real-to-complex convenience wrapper that promotes the input to complex and dispatches to `fft2`. Pinned transitively by conformance_fft2 with a float64 input branch (the test feeds real fixtures through the same promotion). Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft2"
+
+[[exclusion]]
+path = "ferray_fft::complex::fft_real2"
+reason = "Inner canonical path of `fft_real2`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft2"
+
+[[exclusion]]
+path = "ferray_fft::fft_realn"
+reason = "N-D real-to-complex convenience wrapper that promotes the input and dispatches to `fftn`. Pinned transitively by conformance_fft2 (its float64 branch walks the same promotion logic). Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft2"
+
+[[exclusion]]
+path = "ferray_fft::complex::fft_realn"
+reason = "Inner canonical path of `fft_realn`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft2"
+
+# ---- fft_into / ifft_into preallocated-output 1-D variants -----------------
+
+[[exclusion]]
+path = "ferray_fft::fft_into"
+reason = "Preallocated-output variant of `fft` (#429) — writes its result into a caller-provided buffer instead of allocating. Identical numerics to `fft`; pinned by conformance_fft_1d, with the in-crate `tests/acceptance.rs` exercising the buffer-write path. Fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft_1d"
+
+[[exclusion]]
+path = "ferray_fft::complex::fft_into"
+reason = "Inner canonical path of `fft_into`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft_1d"
+
+[[exclusion]]
+path = "ferray_fft::ifft_into"
+reason = "Preallocated-output variant of `ifft` (#429). Identical numerics to `ifft`; pinned by conformance_ifft_1d. Fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_ifft_1d"
+
+[[exclusion]]
+path = "ferray_fft::complex::ifft_into"
+reason = "Inner canonical path of `ifft_into`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_ifft_1d"
+
+# ---- rfft2 / rfftn / irfft2 / irfftn ---------------------------------------
+
+[[exclusion]]
+path = "ferray_fft::rfft2"
+reason = "2-D real-to-complex FFT (Hermitian half-spectrum). 1-D form pinned by conformance_rfft; the 2-D dispatcher is `rfft` along axis -1 followed by `fft` along axis -2. Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::real::rfft2"
+reason = "Inner canonical path of `rfft2`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::rfftn"
+reason = "N-D real-to-complex FFT (Hermitian half-spectrum). Pinned transitively by conformance_rfft and the in-crate property tests; the N-D form composes 1-D `rfft` with `fft` along the remaining axes. Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::real::rfftn"
+reason = "Inner canonical path of `rfftn`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::irfft2"
+reason = "2-D complex-to-real inverse FFT. 1-D form pinned by conformance_irfft, which also exercises the 0.3.8 Hermitian-projection precedent (#808). Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+[[exclusion]]
+path = "ferray_fft::real::irfft2"
+reason = "Inner canonical path of `irfft2`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+[[exclusion]]
+path = "ferray_fft::irfftn"
+reason = "N-D complex-to-real inverse FFT. Pinned transitively by conformance_irfft; the N-D form composes `irfft` along the last axis with `ifft` along the rest. Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+[[exclusion]]
+path = "ferray_fft::real::irfftn"
+reason = "Inner canonical path of `irfftn`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+# ---- rfft_into / irfft_into preallocated-output 1-D variants ---------------
+
+[[exclusion]]
+path = "ferray_fft::rfft_into"
+reason = "Preallocated-output variant of `rfft` (#429). Identical numerics to `rfft`; pinned by conformance_rfft. Fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::real::rfft_into"
+reason = "Inner canonical path of `rfft_into`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::irfft_into"
+reason = "Preallocated-output variant of `irfft` (#429). Identical numerics to `irfft`; pinned by conformance_irfft. Fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+[[exclusion]]
+path = "ferray_fft::real::irfft_into"
+reason = "Inner canonical path of `irfft_into`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+# ---- hfft / ihfft / hfft2 / ihfft2 / hfftn / ihfftn ------------------------
+
+[[exclusion]]
+path = "ferray_fft::hfft"
+reason = "Hermitian FFT (real spectrum from a Hermitian time-domain signal) — the conjugate-time-symmetric variant of rfft. Pinned transitively by conformance_rfft / conformance_irfft, which exercise the same Hermitian-projection precedent (#808). Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+[[exclusion]]
+path = "ferray_fft::hermitian::hfft"
+reason = "Inner canonical path of `hfft`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+[[exclusion]]
+path = "ferray_fft::ihfft"
+reason = "Inverse Hermitian FFT — conjugate-time-symmetric variant of irfft. Pinned transitively by conformance_rfft / conformance_irfft. Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::hermitian::ihfft"
+reason = "Inner canonical path of `ihfft`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::hfft2"
+reason = "2-D Hermitian FFT. Same rationale as `hfft`; pinned transitively by conformance_irfft and the 2-D real-FFT family. Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+[[exclusion]]
+path = "ferray_fft::hermitian::hfft2"
+reason = "Inner canonical path of `hfft2`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+[[exclusion]]
+path = "ferray_fft::ihfft2"
+reason = "2-D inverse Hermitian FFT. Same rationale as `ihfft`. Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::hermitian::ihfft2"
+reason = "Inner canonical path of `ihfft2`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::hfftn"
+reason = "N-D Hermitian FFT. Same rationale as `hfft`. Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+[[exclusion]]
+path = "ferray_fft::hermitian::hfftn"
+reason = "Inner canonical path of `hfftn`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+[[exclusion]]
+path = "ferray_fft::ihfftn"
+reason = "N-D inverse Hermitian FFT. Same rationale as `ihfft`. Dedicated fixture awaits #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::hermitian::ihfftn"
+reason = "Inner canonical path of `ihfftn`. Same rationale as the re-export entry; fixture pending under #753."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+# ============================================================================
+# (2) Plan / preallocated API — no NumPy analog
+# ============================================================================
+
+[[exclusion]]
+path = "ferray_fft::FftPlan"
+reason = "Plan-caching handle for 1-D FFTs. NumPy has no plan API, so this struct has no oracle fixture — its correctness is pinned by `tests/acceptance.rs`, which round-trips every supported shape through the plan and asserts numerical equivalence with the un-cached `fft` / `ifft` path."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlan"
+reason = "Inner canonical path of `FftPlan`. Same rationale as the re-export entry — pinned by tests/acceptance.rs."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::FftPlanND"
+reason = "Plan-caching handle for N-D FFTs. No NumPy analog; pinned by tests/acceptance.rs."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlanND"
+reason = "Inner canonical path of `FftPlanND`. Same rationale as the re-export entry — pinned by tests/acceptance.rs."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+# FftPlan methods
+[[exclusion]]
+path = "ferray_fft::plan::FftPlan::new"
+reason = "Constructor for FftPlan. Exercised by every `FftPlan::execute` call in tests/acceptance.rs."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlan::size"
+reason = "Accessor returning the planned transform size. Exercised by tests/acceptance.rs, which constructs plans of varying sizes and asserts `size()` equals the input length."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlan::execute"
+reason = "Forward FFT through the cached plan. Pinned by tests/acceptance.rs, which round-trips against the un-cached `fft` and asserts numerical agreement."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlan::execute_inverse"
+reason = "Inverse FFT through the cached plan. Pinned by tests/acceptance.rs."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlan::execute_with_norm"
+reason = "Forward FFT with explicit normalization. Pinned by tests/acceptance.rs (norm-mode coverage)."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlan::execute_inverse_with_norm"
+reason = "Inverse FFT with explicit normalization. Pinned by tests/acceptance.rs."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+# FftPlanND methods
+[[exclusion]]
+path = "ferray_fft::plan::FftPlanND::new"
+reason = "Constructor for FftPlanND. Exercised by tests/acceptance.rs (N-D plan-cache coverage)."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlanND::shape"
+reason = "Accessor returning the planned N-D shape. Pinned by tests/acceptance.rs."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlanND::axes"
+reason = "Accessor returning the planned axes. Pinned by tests/acceptance.rs."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlanND::num_axis_plans"
+reason = "Returns the number of cached per-axis 1-D plans. Pinned by tests/acceptance.rs (asserts equals axes().len())."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlanND::forward_axis_plan"
+reason = "Returns the per-axis 1-D forward plan handle. Pinned by tests/acceptance.rs through fftn / fft2."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlanND::inverse_axis_plan"
+reason = "Returns the per-axis 1-D inverse plan handle. Pinned by tests/acceptance.rs through ifftn / ifft2."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlanND::execute"
+reason = "N-D forward FFT through the cached plan. Pinned by tests/acceptance.rs."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+[[exclusion]]
+path = "ferray_fft::plan::FftPlanND::execute_inverse"
+reason = "N-D inverse FFT through the cached plan. Pinned by tests/acceptance.rs."
+covered_by = "ferray-fft/tests/acceptance.rs"
+
+# ============================================================================
+# (3) Internal helpers (axes, nd) — exercised transitively
+# ============================================================================
+
+[[exclusion]]
+path = "ferray_fft::axes::normalize_axis"
+reason = "Internal axis-normalization helper (negative-index resolution against ndim). Exercised transitively by every multi-dim conformance test (conformance_fft2, conformance_ifft2) that passes axes through any FFT entry point."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft2"
+
+[[exclusion]]
+path = "ferray_fft::axes::resolve_axis"
+reason = "Internal helper that resolves an `Option<isize>` axis argument to a `usize` axis index. Exercised by every test that supplies `None` for the axis (every conformance test in this crate)."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft_1d"
+
+[[exclusion]]
+path = "ferray_fft::axes::resolve_axes"
+reason = "Internal helper that resolves an `Option<&[isize]>` axes argument to a `Vec<usize>`. Exercised by every multi-dim FFT call (conformance_fft2, conformance_ifft2 pass None and walk the default-axes path)."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft2"
+
+[[exclusion]]
+path = "ferray_fft::axes::compute_strides"
+reason = "Internal helper that computes row-major strides for a shape. Exercised by every fft / fft2 / ifft / ifft2 call (stride table is constructed inside the kernel)."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft2"
+
+[[exclusion]]
+path = "ferray_fft::nd::fft_along_axis"
+reason = "Internal axis-walker used by `fft` / `fftn` for the non-final axes of an N-D transform. Exercised by every multi-dim complex FFT test (conformance_fft2, conformance_ifft2)."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft2"
+
+[[exclusion]]
+path = "ferray_fft::nd::fft_along_axes"
+reason = "Internal axis-loop driver that calls `fft_along_axis` for each axis in turn. Exercised by every multi-dim conformance test (conformance_fft2, conformance_ifft2)."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft2"
+
+[[exclusion]]
+path = "ferray_fft::nd::rfft_along_axis"
+reason = "Internal axis-walker used by `rfft` / `rfftn` for the final axis of an N-D real FFT. Exercised by conformance_rfft and the rfft-family tests."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_rfft"
+
+[[exclusion]]
+path = "ferray_fft::nd::irfft_along_axis"
+reason = "Internal axis-walker used by `irfft` / `irfftn` for the final axis of an N-D inverse real FFT. Exercised by conformance_irfft and the irfft-family tests."
+covered_by = "ferray-fft/tests/conformance_real.rs::conformance_irfft"
+
+# ============================================================================
+# (4) Type-system surface — FftFloat trait, FftNorm enum, FftDirection enum
+# ============================================================================
+
+[[exclusion]]
+path = "ferray_fft::float::FftFloat"
+reason = "Type-system extension trait that bounds the FFT scalar (`Element + FftNum + Copy + 'static`). No runtime surface to invoke directly; every `impl FftFloat for T` (f32, f64) is exercised transitively by every generic conformance test in this crate through its `T: FftFloat` bound."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft_1d"
+
+[[exclusion]]
+path = "ferray_fft::norm::FftNorm"
+reason = "Inner canonical path of the `FftNorm` enum, re-exported at the crate root as `ferray_fft::FftNorm`. The crate-root re-export is named in every conformance test (each call passes `FftNorm::Backward`)."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft_1d"
+
+[[exclusion]]
+path = "ferray_fft::norm::FftNorm::scale_factor_f64"
+reason = "Method on `FftNorm` returning the normalization scale factor for a given direction / length. Pure arithmetic on the enum variant; exercised transitively by every conformance test in this crate (every FFT kernel applies the scale through this method)."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft_1d"
+
+[[exclusion]]
+path = "ferray_fft::norm::FftDirection"
+reason = "Internal forward/inverse direction enum used by the plan kernels. No NumPy analog; exercised by every forward / inverse FFT call (every conformance test in this crate selects a direction through this enum)."
+covered_by = "ferray-fft/tests/conformance_complex.rs::conformance_fft_1d"

@@ -1,0 +1,4 @@
+# Documented cases where ferray-fft returns a more mathematically correct
+# value than the reference. None currently documented for ferray-fft
+# (the 0.3.8 Hermitian-projection fix brings ferray into agreement with
+# scipy/PyTorch; no divergence remains).

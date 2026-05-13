@@ -1,0 +1,461 @@
+{
+  "crate": "ferray-fft",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_fft::FftNorm",
+      "kind": "reexport",
+      "signature": "pub use norm :: FftNorm"
+    },
+    {
+      "path": "ferray_fft::FftPlan",
+      "kind": "reexport",
+      "signature": "pub use plan :: { FftPlan , FftPlanND }"
+    },
+    {
+      "path": "ferray_fft::FftPlanND",
+      "kind": "reexport",
+      "signature": "pub use plan :: { FftPlan , FftPlanND }"
+    },
+    {
+      "path": "ferray_fft::axes::compute_strides",
+      "kind": "fn",
+      "signature": "pub fn compute_strides (shape : & [usize]) -> Vec < isize >"
+    },
+    {
+      "path": "ferray_fft::axes::normalize_axis",
+      "kind": "fn",
+      "signature": "pub const fn normalize_axis (ndim : usize , axis : isize) -> FerrayResult < usize >"
+    },
+    {
+      "path": "ferray_fft::axes::resolve_axes",
+      "kind": "fn",
+      "signature": "pub fn resolve_axes (ndim : usize , axes : Option < & [isize] >) -> FerrayResult < Vec < usize > >"
+    },
+    {
+      "path": "ferray_fft::axes::resolve_axis",
+      "kind": "fn",
+      "signature": "pub fn resolve_axis (ndim : usize , axis : Option < isize >) -> FerrayResult < usize >"
+    },
+    {
+      "path": "ferray_fft::complex::fft",
+      "kind": "fn",
+      "signature": "pub fn fft < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::complex::fft2",
+      "kind": "fn",
+      "signature": "pub fn fft2 < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::complex::fft_into",
+      "kind": "fn",
+      "signature": "pub fn fft_into < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm , out : & mut Array < Complex < T > , IxDyn > ,) -> FerrayResult < () > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::complex::fft_real",
+      "kind": "fn",
+      "signature": "pub fn fft_real < T : FftFloat , D : Dimension > (a : & Array < T , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::complex::fft_real2",
+      "kind": "fn",
+      "signature": "pub fn fft_real2 < T : FftFloat , D : Dimension > (a : & Array < T , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::complex::fft_realn",
+      "kind": "fn",
+      "signature": "pub fn fft_realn < T : FftFloat , D : Dimension > (a : & Array < T , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::complex::fftn",
+      "kind": "fn",
+      "signature": "pub fn fftn < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::complex::ifft",
+      "kind": "fn",
+      "signature": "pub fn ifft < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::complex::ifft2",
+      "kind": "fn",
+      "signature": "pub fn ifft2 < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::complex::ifft_into",
+      "kind": "fn",
+      "signature": "pub fn ifft_into < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm , out : & mut Array < Complex < T > , IxDyn > ,) -> FerrayResult < () > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::complex::ifft_real",
+      "kind": "fn",
+      "signature": "pub fn ifft_real < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm ,) -> FerrayResult < Array < T , IxDyn > > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::complex::ifftn",
+      "kind": "fn",
+      "signature": "pub fn ifftn < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::fft",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft , fft2 , fftn , ifft , ifft2 , ifftn }"
+    },
+    {
+      "path": "ferray_fft::fft2",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft , fft2 , fftn , ifft , ifft2 , ifftn }"
+    },
+    {
+      "path": "ferray_fft::fft_into",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft_into , ifft_into }"
+    },
+    {
+      "path": "ferray_fft::fft_real",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft_real , fft_real2 , fft_realn , ifft_real }"
+    },
+    {
+      "path": "ferray_fft::fft_real2",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft_real , fft_real2 , fft_realn , ifft_real }"
+    },
+    {
+      "path": "ferray_fft::fft_realn",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft_real , fft_real2 , fft_realn , ifft_real }"
+    },
+    {
+      "path": "ferray_fft::fftfreq",
+      "kind": "reexport",
+      "signature": "pub use freq :: { fftfreq , rfftfreq }"
+    },
+    {
+      "path": "ferray_fft::fftn",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft , fft2 , fftn , ifft , ifft2 , ifftn }"
+    },
+    {
+      "path": "ferray_fft::fftshift",
+      "kind": "reexport",
+      "signature": "pub use shift :: { fftshift , ifftshift }"
+    },
+    {
+      "path": "ferray_fft::float::FftFloat",
+      "kind": "trait",
+      "signature": "pub trait FftFloat"
+    },
+    {
+      "path": "ferray_fft::freq::fftfreq",
+      "kind": "fn",
+      "signature": "pub fn fftfreq (n : usize , d : f64) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_fft::freq::rfftfreq",
+      "kind": "fn",
+      "signature": "pub fn rfftfreq (n : usize , d : f64) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_fft::hermitian::hfft",
+      "kind": "fn",
+      "signature": "pub fn hfft < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm ,) -> FerrayResult < Array < T , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::hermitian::hfft2",
+      "kind": "fn",
+      "signature": "pub fn hfft2 < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < T , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::hermitian::hfftn",
+      "kind": "fn",
+      "signature": "pub fn hfftn < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < T , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::hermitian::ihfft",
+      "kind": "fn",
+      "signature": "pub fn ihfft < T : FftFloat , D : Dimension > (a : & Array < T , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::hermitian::ihfft2",
+      "kind": "fn",
+      "signature": "pub fn ihfft2 < T : FftFloat , D : Dimension > (a : & Array < T , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::hermitian::ihfftn",
+      "kind": "fn",
+      "signature": "pub fn ihfftn < T : FftFloat , D : Dimension > (a : & Array < T , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::hfft",
+      "kind": "reexport",
+      "signature": "pub use hermitian :: { hfft , hfft2 , hfftn , ihfft , ihfft2 , ihfftn }"
+    },
+    {
+      "path": "ferray_fft::hfft2",
+      "kind": "reexport",
+      "signature": "pub use hermitian :: { hfft , hfft2 , hfftn , ihfft , ihfft2 , ihfftn }"
+    },
+    {
+      "path": "ferray_fft::hfftn",
+      "kind": "reexport",
+      "signature": "pub use hermitian :: { hfft , hfft2 , hfftn , ihfft , ihfft2 , ihfftn }"
+    },
+    {
+      "path": "ferray_fft::ifft",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft , fft2 , fftn , ifft , ifft2 , ifftn }"
+    },
+    {
+      "path": "ferray_fft::ifft2",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft , fft2 , fftn , ifft , ifft2 , ifftn }"
+    },
+    {
+      "path": "ferray_fft::ifft_into",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft_into , ifft_into }"
+    },
+    {
+      "path": "ferray_fft::ifft_real",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft_real , fft_real2 , fft_realn , ifft_real }"
+    },
+    {
+      "path": "ferray_fft::ifftn",
+      "kind": "reexport",
+      "signature": "pub use complex :: { fft , fft2 , fftn , ifft , ifft2 , ifftn }"
+    },
+    {
+      "path": "ferray_fft::ifftshift",
+      "kind": "reexport",
+      "signature": "pub use shift :: { fftshift , ifftshift }"
+    },
+    {
+      "path": "ferray_fft::ihfft",
+      "kind": "reexport",
+      "signature": "pub use hermitian :: { hfft , hfft2 , hfftn , ihfft , ihfft2 , ihfftn }"
+    },
+    {
+      "path": "ferray_fft::ihfft2",
+      "kind": "reexport",
+      "signature": "pub use hermitian :: { hfft , hfft2 , hfftn , ihfft , ihfft2 , ihfftn }"
+    },
+    {
+      "path": "ferray_fft::ihfftn",
+      "kind": "reexport",
+      "signature": "pub use hermitian :: { hfft , hfft2 , hfftn , ihfft , ihfft2 , ihfftn }"
+    },
+    {
+      "path": "ferray_fft::irfft",
+      "kind": "reexport",
+      "signature": "pub use real :: { irfft , irfft2 , irfftn , rfft , rfft2 , rfftn }"
+    },
+    {
+      "path": "ferray_fft::irfft2",
+      "kind": "reexport",
+      "signature": "pub use real :: { irfft , irfft2 , irfftn , rfft , rfft2 , rfftn }"
+    },
+    {
+      "path": "ferray_fft::irfft_into",
+      "kind": "reexport",
+      "signature": "pub use real :: { irfft_into , rfft_into }"
+    },
+    {
+      "path": "ferray_fft::irfftn",
+      "kind": "reexport",
+      "signature": "pub use real :: { irfft , irfft2 , irfftn , rfft , rfft2 , rfftn }"
+    },
+    {
+      "path": "ferray_fft::nd::fft_along_axes",
+      "kind": "fn",
+      "signature": "pub fn fft_along_axes < T : FftFloat > (data : & [Complex < T >] , shape : & [usize] , axes_and_sizes : & [(usize , Option < usize >)] , inverse : bool , norm : FftNorm ,) -> FerrayResult < (Vec < usize > , Vec < Complex < T > >) > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::nd::fft_along_axis",
+      "kind": "fn",
+      "signature": "pub fn fft_along_axis < T : FftFloat > (data : & [Complex < T >] , shape : & [usize] , axis : usize , n : Option < usize > , inverse : bool , norm : FftNorm ,) -> FerrayResult < (Vec < usize > , Vec < Complex < T > >) > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::nd::irfft_along_axis",
+      "kind": "fn",
+      "signature": "pub fn irfft_along_axis < T : FftFloat > (data : & [Complex < T >] , shape : & [usize] , axis : usize , output_len : usize , norm : FftNorm ,) -> FerrayResult < (Vec < usize > , Vec < T >) > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::nd::rfft_along_axis",
+      "kind": "fn",
+      "signature": "pub fn rfft_along_axis < T : FftFloat > (data : & [T] , shape : & [usize] , axis : usize , n : Option < usize > , norm : FftNorm ,) -> FerrayResult < (Vec < usize > , Vec < Complex < T > >) > where Complex < T > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::norm::FftDirection",
+      "kind": "enum",
+      "signature": "pub enum FftDirection"
+    },
+    {
+      "path": "ferray_fft::norm::FftNorm",
+      "kind": "enum",
+      "signature": "pub enum FftNorm"
+    },
+    {
+      "path": "ferray_fft::norm::FftNorm::scale_factor_f64",
+      "kind": "method",
+      "signature": "pub fn scale_factor_f64 (self , n : usize , direction : FftDirection) -> f64"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlan",
+      "kind": "struct",
+      "signature": "pub struct FftPlan"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlan::execute",
+      "kind": "method",
+      "signature": "pub fn execute (& self , signal : & Array < Complex < f64 > , Ix1 > ,) -> FerrayResult < Array < Complex < f64 > , Ix1 > >"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlan::execute_inverse",
+      "kind": "method",
+      "signature": "pub fn execute_inverse (& self , spectrum : & Array < Complex < f64 > , Ix1 > ,) -> FerrayResult < Array < Complex < f64 > , Ix1 > >"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlan::execute_inverse_with_norm",
+      "kind": "method",
+      "signature": "pub fn execute_inverse_with_norm (& self , spectrum : & Array < Complex < f64 > , Ix1 > , norm : FftNorm ,) -> FerrayResult < Array < Complex < f64 > , Ix1 > >"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlan::execute_with_norm",
+      "kind": "method",
+      "signature": "pub fn execute_with_norm (& self , signal : & Array < Complex < f64 > , Ix1 > , norm : FftNorm ,) -> FerrayResult < Array < Complex < f64 > , Ix1 > >"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlan::new",
+      "kind": "method",
+      "signature": "pub fn new (size : usize) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlan::size",
+      "kind": "method",
+      "signature": "pub const fn size (& self) -> usize"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlanND",
+      "kind": "struct",
+      "signature": "pub struct FftPlanND"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlanND::axes",
+      "kind": "method",
+      "signature": "pub fn axes (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlanND::execute",
+      "kind": "method",
+      "signature": "pub fn execute < D : Dimension > (& self , a : & Array < Complex < f64 > , D > , norm : FftNorm ,) -> FerrayResult < Array < Complex < f64 > , IxDyn > > where Complex < f64 > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlanND::execute_inverse",
+      "kind": "method",
+      "signature": "pub fn execute_inverse < D : Dimension > (& self , a : & Array < Complex < f64 > , D > , norm : FftNorm ,) -> FerrayResult < Array < Complex < f64 > , IxDyn > > where Complex < f64 > : ferray_core :: Element ,"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlanND::forward_axis_plan",
+      "kind": "method",
+      "signature": "pub fn forward_axis_plan (& self , i : usize) -> Option < & Arc < dyn Fft < f64 > > >"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlanND::inverse_axis_plan",
+      "kind": "method",
+      "signature": "pub fn inverse_axis_plan (& self , i : usize) -> Option < & Arc < dyn Fft < f64 > > >"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlanND::new",
+      "kind": "method",
+      "signature": "pub fn new (shape : & [usize] , axes : Option < & [isize] >) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlanND::num_axis_plans",
+      "kind": "method",
+      "signature": "pub fn num_axis_plans (& self) -> usize"
+    },
+    {
+      "path": "ferray_fft::plan::FftPlanND::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_fft::real::irfft",
+      "kind": "fn",
+      "signature": "pub fn irfft < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm ,) -> FerrayResult < Array < T , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::real::irfft2",
+      "kind": "fn",
+      "signature": "pub fn irfft2 < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < T , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::real::irfft_into",
+      "kind": "fn",
+      "signature": "pub fn irfft_into < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm , out : & mut Array < T , IxDyn > ,) -> FerrayResult < () > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::real::irfftn",
+      "kind": "fn",
+      "signature": "pub fn irfftn < T : FftFloat , D : Dimension > (a : & Array < Complex < T > , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < T , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::real::rfft",
+      "kind": "fn",
+      "signature": "pub fn rfft < T : FftFloat , D : Dimension > (a : & Array < T , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::real::rfft2",
+      "kind": "fn",
+      "signature": "pub fn rfft2 < T : FftFloat , D : Dimension > (a : & Array < T , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::real::rfft_into",
+      "kind": "fn",
+      "signature": "pub fn rfft_into < T : FftFloat , D : Dimension > (a : & Array < T , D > , n : Option < usize > , axis : Option < isize > , norm : FftNorm , out : & mut Array < Complex < T > , IxDyn > ,) -> FerrayResult < () > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::real::rfftn",
+      "kind": "fn",
+      "signature": "pub fn rfftn < T : FftFloat , D : Dimension > (a : & Array < T , D > , s : Option < & [usize] > , axes : Option < & [isize] > , norm : FftNorm ,) -> FerrayResult < Array < Complex < T > , IxDyn > > where Complex < T > : Element ,"
+    },
+    {
+      "path": "ferray_fft::rfft",
+      "kind": "reexport",
+      "signature": "pub use real :: { irfft , irfft2 , irfftn , rfft , rfft2 , rfftn }"
+    },
+    {
+      "path": "ferray_fft::rfft2",
+      "kind": "reexport",
+      "signature": "pub use real :: { irfft , irfft2 , irfftn , rfft , rfft2 , rfftn }"
+    },
+    {
+      "path": "ferray_fft::rfft_into",
+      "kind": "reexport",
+      "signature": "pub use real :: { irfft_into , rfft_into }"
+    },
+    {
+      "path": "ferray_fft::rfftfreq",
+      "kind": "reexport",
+      "signature": "pub use freq :: { fftfreq , rfftfreq }"
+    },
+    {
+      "path": "ferray_fft::rfftn",
+      "kind": "reexport",
+      "signature": "pub use real :: { irfft , irfft2 , irfftn , rfft , rfft2 , rfftn }"
+    },
+    {
+      "path": "ferray_fft::shift::fftshift",
+      "kind": "fn",
+      "signature": "pub fn fftshift < T : Element , D : Dimension > (a : & Array < T , D > , axes : Option < & [isize] > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_fft::shift::ifftshift",
+      "kind": "fn",
+      "signature": "pub fn ifftshift < T : Element , D : Dimension > (a : & Array < T , D > , axes : Option < & [isize] > ,) -> FerrayResult < Array < T , IxDyn > >"
+    }
+  ]
+}
