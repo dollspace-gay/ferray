@@ -1,0 +1,18 @@
+# Documented cases where ferray-ufunc returns a more mathematically correct
+# value than the reference. None currently documented for ferray-ufunc.
+#
+# Schema (see docs/conformance-suites.md):
+#
+# [[divergence]]
+# ferray_path = "ferray_ufunc::<path>"
+# reference_function = "numpy.<func>" or "scipy.<func>"
+# reference_library = "numpy" or "scipy.<submod>"
+# reference_version = "2.4.4"
+# ferray_version_introduced = "0.3.x"
+# tracking_issue = 123
+# example_input = "..."
+# reference_output = "..."
+# ferray_output = "..."
+# max_observed_delta = 1.5e-3
+# justification = "..."
+# citation = "..."

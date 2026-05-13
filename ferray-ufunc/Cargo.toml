@@ -38,3 +38,6 @@ fft-convolve = ["dep:ferray-fft"]
 [dev-dependencies]
 proptest = { workspace = true }
 ferray-test-oracle = { path = "../ferray-test-oracle" }
+serde = { workspace = true }
+serde_json = "1.0"
+toml = "0.8"

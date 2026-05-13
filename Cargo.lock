@@ -1266,6 +1266,9 @@ dependencies = [
  "proptest",
  "pulp",
  "rayon",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1273,9 +1276,13 @@ name = "ferray-window"
 version = "0.3.8"
 dependencies = [
  "ferray-core",
+ "ferray-test-oracle",
  "ferray-ufunc",
  "num-traits",
  "proptest",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
