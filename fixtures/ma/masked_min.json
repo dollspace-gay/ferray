@@ -1,4 +1,6 @@
 {
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
   "function": "numpy.ma.min",
   "ferray_function": "ferray_ma::MaskedArray::min",
   "test_cases": [

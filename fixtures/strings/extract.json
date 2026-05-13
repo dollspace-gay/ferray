@@ -1,4 +1,6 @@
 {
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
   "function": "regex extract first capture group",
   "ferray_function": "ferray_strings::extract",
   "test_cases": [
@@ -6,15 +8,27 @@
       "name": "extract_digits",
       "inputs": {
         "x": {
-          "data": ["abc123", "def", "ghi456"],
-          "shape": [3],
+          "data": [
+            "abc123",
+            "def",
+            "ghi456"
+          ],
+          "shape": [
+            3
+          ],
           "dtype": "str"
         },
         "pattern": "(\\d+)"
       },
       "expected": {
-        "data": ["123", "", "456"],
-        "shape": [3],
+        "data": [
+          "123",
+          "",
+          "456"
+        ],
+        "shape": [
+          3
+        ],
         "dtype": "str"
       },
       "tolerance_ulps": 0

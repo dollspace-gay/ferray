@@ -1,4 +1,6 @@
 {
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
   "function": "numpy.unique",
   "ferray_function": "ferray_stats::unique",
   "test_cases": [

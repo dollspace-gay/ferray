@@ -1,4 +1,6 @@
 {
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
   "function": "regex match (anchored)",
   "ferray_function": "ferray_strings::match_",
   "test_cases": [
@@ -6,15 +8,27 @@
       "name": "digit_pattern",
       "inputs": {
         "x": {
-          "data": ["abc123", "noNumbers", "456"],
-          "shape": [3],
+          "data": [
+            "abc123",
+            "noNumbers",
+            "456"
+          ],
+          "shape": [
+            3
+          ],
           "dtype": "str"
         },
         "pattern": "\\d+"
       },
       "expected": {
-        "data": [true, false, true],
-        "shape": [3],
+        "data": [
+          true,
+          false,
+          true
+        ],
+        "shape": [
+          3
+        ],
         "dtype": "bool"
       },
       "tolerance_ulps": 0
@@ -23,15 +37,27 @@
       "name": "anchored_full_match",
       "inputs": {
         "x": {
-          "data": ["abc", "abcdef", "xabc"],
-          "shape": [3],
+          "data": [
+            "abc",
+            "abcdef",
+            "xabc"
+          ],
+          "shape": [
+            3
+          ],
           "dtype": "str"
         },
         "pattern": "^abc$"
       },
       "expected": {
-        "data": [true, false, false],
-        "shape": [3],
+        "data": [
+          true,
+          false,
+          false
+        ],
+        "shape": [
+          3
+        ],
         "dtype": "bool"
       },
       "tolerance_ulps": 0

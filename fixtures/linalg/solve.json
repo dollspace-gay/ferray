@@ -1,4 +1,6 @@
 {
+  "numpy_version": "2.4.4",
+  "fixture_schema_version": 2,
   "function": "numpy.linalg.solve",
   "ferray_function": "ferray_linalg::solve",
   "test_cases": [

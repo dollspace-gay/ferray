@@ -1,0 +1,316 @@
+{
+  "crate": "ferray-window",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_window::apply_along_axis",
+      "kind": "reexport",
+      "signature": "pub use functional :: { apply_along_axis , apply_over_axes , piecewise , sum_axis_keepdims , vectorize }"
+    },
+    {
+      "path": "ferray_window::apply_over_axes",
+      "kind": "reexport",
+      "signature": "pub use functional :: { apply_along_axis , apply_over_axes , piecewise , sum_axis_keepdims , vectorize }"
+    },
+    {
+      "path": "ferray_window::bartlett",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::bartlett_f32",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::blackman",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::blackman_f32",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::bohman",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::boxcar",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::chebwin",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::cosine",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::dpss",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::exponential",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::flattop",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::functional::apply_along_axis",
+      "kind": "fn",
+      "signature": "pub fn apply_along_axis < T , D > (func : impl Fn (& Array < T , Ix1 >) -> FerrayResult < T > , axis : Axis , a : & Array < T , D > ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_window::functional::apply_over_axes",
+      "kind": "fn",
+      "signature": "pub fn apply_over_axes < T , F > (func : F , a : & Array < T , IxDyn > , axes : & [usize] ,) -> FerrayResult < Array < T , IxDyn > > where T : Element + Copy , F : Fn (& Array < T , IxDyn > , Axis) -> FerrayResult < Array < T , IxDyn > > ,"
+    },
+    {
+      "path": "ferray_window::functional::piecewise",
+      "kind": "fn",
+      "signature": "pub fn piecewise < T , D > (x : & Array < T , D > , condlist : & [Array < bool , D >] , funclist : & [& dyn Fn (T) -> T] , default : T ,) -> FerrayResult < Array < T , D > > where T : Element + Copy , D : Dimension ,"
+    },
+    {
+      "path": "ferray_window::functional::sum_axis_keepdims",
+      "kind": "fn",
+      "signature": "pub fn sum_axis_keepdims < T > (a : & Array < T , IxDyn > , axis : Axis) -> FerrayResult < Array < T , IxDyn > > where T : Element + Copy + Zero + core :: ops :: Add < Output = T > ,"
+    },
+    {
+      "path": "ferray_window::functional::vectorize",
+      "kind": "fn",
+      "signature": "pub fn vectorize < T , U , F , D > (f : F) -> impl Fn (& Array < T , D >) -> FerrayResult < Array < U , D > > where T : Element + Copy , U : Element , D : Dimension , F : Fn (T) -> U ,"
+    },
+    {
+      "path": "ferray_window::gaussian",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::general_cosine",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::general_hamming",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::hamming",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::hamming_f32",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::hanning",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::hanning_f32",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::kaiser",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::kaiser_f32",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::lanczos",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::nuttall",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::parzen",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::piecewise",
+      "kind": "reexport",
+      "signature": "pub use functional :: { apply_along_axis , apply_over_axes , piecewise , sum_axis_keepdims , vectorize }"
+    },
+    {
+      "path": "ferray_window::sum_axis_keepdims",
+      "kind": "reexport",
+      "signature": "pub use functional :: { apply_along_axis , apply_over_axes , piecewise , sum_axis_keepdims , vectorize }"
+    },
+    {
+      "path": "ferray_window::taylor",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::triang",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::tukey",
+      "kind": "reexport",
+      "signature": "pub use windows :: { bartlett , bartlett_f32 , blackman , blackman_f32 , bohman , boxcar , chebwin , cosine , dpss , exponential , flattop , gaussian , general_cosine , general_hamming , hamming , hamming_f32 , hanning , hanning_f32 , kaiser , kaiser_f32 , lanczos , nuttall , parzen , taylor , triang , tukey , }"
+    },
+    {
+      "path": "ferray_window::vectorize",
+      "kind": "reexport",
+      "signature": "pub use functional :: { apply_along_axis , apply_over_axes , piecewise , sum_axis_keepdims , vectorize }"
+    },
+    {
+      "path": "ferray_window::windows::bartlett",
+      "kind": "fn",
+      "signature": "pub fn bartlett (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::bartlett_f32",
+      "kind": "fn",
+      "signature": "pub fn bartlett_f32 (m : usize) -> FerrayResult < Array < f32 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::blackman",
+      "kind": "fn",
+      "signature": "pub fn blackman (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::blackman_f32",
+      "kind": "fn",
+      "signature": "pub fn blackman_f32 (m : usize) -> FerrayResult < Array < f32 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::bohman",
+      "kind": "fn",
+      "signature": "pub fn bohman (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::boxcar",
+      "kind": "fn",
+      "signature": "pub fn boxcar (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::chebwin",
+      "kind": "fn",
+      "signature": "pub fn chebwin (m : usize , at : f64) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::cosine",
+      "kind": "fn",
+      "signature": "pub fn cosine (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::dpss",
+      "kind": "fn",
+      "signature": "pub fn dpss (m : usize , nw : f64) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::exponential",
+      "kind": "fn",
+      "signature": "pub fn exponential (m : usize , center : Option < f64 > , tau : f64) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::flattop",
+      "kind": "fn",
+      "signature": "pub fn flattop (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::gaussian",
+      "kind": "fn",
+      "signature": "pub fn gaussian (m : usize , std : f64) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::general_cosine",
+      "kind": "fn",
+      "signature": "pub fn general_cosine (m : usize , coeffs : & [f64]) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::general_hamming",
+      "kind": "fn",
+      "signature": "pub fn general_hamming (m : usize , alpha : f64) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::hamming",
+      "kind": "fn",
+      "signature": "pub fn hamming (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::hamming_f32",
+      "kind": "fn",
+      "signature": "pub fn hamming_f32 (m : usize) -> FerrayResult < Array < f32 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::hanning",
+      "kind": "fn",
+      "signature": "pub fn hanning (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::hanning_f32",
+      "kind": "fn",
+      "signature": "pub fn hanning_f32 (m : usize) -> FerrayResult < Array < f32 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::kaiser",
+      "kind": "fn",
+      "signature": "pub fn kaiser (m : usize , beta : f64) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::kaiser_f32",
+      "kind": "fn",
+      "signature": "pub fn kaiser_f32 (m : usize , beta : f64) -> FerrayResult < Array < f32 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::lanczos",
+      "kind": "fn",
+      "signature": "pub fn lanczos (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::nuttall",
+      "kind": "fn",
+      "signature": "pub fn nuttall (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::parzen",
+      "kind": "fn",
+      "signature": "pub fn parzen (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::taylor",
+      "kind": "fn",
+      "signature": "pub fn taylor (m : usize , nbar : usize , sll : f64 , norm : bool) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::triang",
+      "kind": "fn",
+      "signature": "pub fn triang (m : usize) -> FerrayResult < Array < f64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_window::windows::tukey",
+      "kind": "fn",
+      "signature": "pub fn tukey (m : usize , alpha : f64) -> FerrayResult < Array < f64 , Ix1 > >"
+    }
+  ]
+}
