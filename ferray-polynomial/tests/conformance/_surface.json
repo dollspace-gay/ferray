@@ -1,0 +1,961 @@
+{
+  "crate": "ferray-polynomial",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_polynomial::Chebyshev",
+      "kind": "reexport",
+      "signature": "pub use chebyshev :: Chebyshev"
+    },
+    {
+      "path": "ferray_polynomial::ChebyshevF32",
+      "kind": "reexport",
+      "signature": "pub use f32_wrappers :: { ChebyshevF32 , HermiteEF32 , HermiteF32 , LaguerreF32 , LegendreF32 }"
+    },
+    {
+      "path": "ferray_polynomial::ComplexPolynomial",
+      "kind": "reexport",
+      "signature": "pub use power_complex :: ComplexPolynomial"
+    },
+    {
+      "path": "ferray_polynomial::ConvertBasis",
+      "kind": "reexport",
+      "signature": "pub use traits :: { ConvertBasis , FromPowerBasis , Poly , ToPowerBasis }"
+    },
+    {
+      "path": "ferray_polynomial::FromPowerBasis",
+      "kind": "reexport",
+      "signature": "pub use traits :: { ConvertBasis , FromPowerBasis , Poly , ToPowerBasis }"
+    },
+    {
+      "path": "ferray_polynomial::Hermite",
+      "kind": "reexport",
+      "signature": "pub use hermite :: Hermite"
+    },
+    {
+      "path": "ferray_polynomial::HermiteE",
+      "kind": "reexport",
+      "signature": "pub use hermite_e :: HermiteE"
+    },
+    {
+      "path": "ferray_polynomial::HermiteEF32",
+      "kind": "reexport",
+      "signature": "pub use f32_wrappers :: { ChebyshevF32 , HermiteEF32 , HermiteF32 , LaguerreF32 , LegendreF32 }"
+    },
+    {
+      "path": "ferray_polynomial::HermiteF32",
+      "kind": "reexport",
+      "signature": "pub use f32_wrappers :: { ChebyshevF32 , HermiteEF32 , HermiteF32 , LaguerreF32 , LegendreF32 }"
+    },
+    {
+      "path": "ferray_polynomial::Laguerre",
+      "kind": "reexport",
+      "signature": "pub use laguerre :: Laguerre"
+    },
+    {
+      "path": "ferray_polynomial::LaguerreF32",
+      "kind": "reexport",
+      "signature": "pub use f32_wrappers :: { ChebyshevF32 , HermiteEF32 , HermiteF32 , LaguerreF32 , LegendreF32 }"
+    },
+    {
+      "path": "ferray_polynomial::Legendre",
+      "kind": "reexport",
+      "signature": "pub use legendre :: Legendre"
+    },
+    {
+      "path": "ferray_polynomial::LegendreF32",
+      "kind": "reexport",
+      "signature": "pub use f32_wrappers :: { ChebyshevF32 , HermiteEF32 , HermiteF32 , LaguerreF32 , LegendreF32 }"
+    },
+    {
+      "path": "ferray_polynomial::Poly",
+      "kind": "reexport",
+      "signature": "pub use traits :: { ConvertBasis , FromPowerBasis , Poly , ToPowerBasis }"
+    },
+    {
+      "path": "ferray_polynomial::Polynomial",
+      "kind": "reexport",
+      "signature": "pub use power :: Polynomial"
+    },
+    {
+      "path": "ferray_polynomial::PolynomialF32",
+      "kind": "reexport",
+      "signature": "pub use power_f32 :: PolynomialF32"
+    },
+    {
+      "path": "ferray_polynomial::ToPowerBasis",
+      "kind": "reexport",
+      "signature": "pub use traits :: { ConvertBasis , FromPowerBasis , Poly , ToPowerBasis }"
+    },
+    {
+      "path": "ferray_polynomial::cheb2poly",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::chebfromroots",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::chebgauss",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::chebinterpolate",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::chebline",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::chebmulx",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::chebpts1",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::chebpts2",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::chebweight",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::chebyshev::Chebyshev",
+      "kind": "struct",
+      "signature": "pub struct Chebyshev"
+    },
+    {
+      "path": "ferray_polynomial::chebyshev::Chebyshev::fit_with_domain",
+      "kind": "method",
+      "signature": "pub fn fit_with_domain (x : & [f64] , y : & [f64] , deg : usize) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::chebyshev::Chebyshev::new",
+      "kind": "method",
+      "signature": "pub fn new (coeffs : & [f64]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::chebyshev::Chebyshev::with_domain",
+      "kind": "method",
+      "signature": "pub fn with_domain (mut self , domain : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::chebyshev::Chebyshev::with_window",
+      "kind": "method",
+      "signature": "pub fn with_window (mut self , window : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::companion::companion_matrix",
+      "kind": "fn",
+      "signature": "pub fn companion_matrix (coeffs : & [f64]) -> Result < Vec < f64 > , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::extras::cheb2poly",
+      "kind": "fn",
+      "signature": "pub fn cheb2poly (coeffs : & [f64]) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::chebfromroots",
+      "kind": "fn",
+      "signature": "pub fn chebfromroots (roots : & [f64]) -> FerrayResult < Chebyshev >"
+    },
+    {
+      "path": "ferray_polynomial::extras::chebgauss",
+      "kind": "fn",
+      "signature": "pub fn chebgauss (n : usize) -> FerrayResult < (Vec < f64 > , Vec < f64 >) >"
+    },
+    {
+      "path": "ferray_polynomial::extras::chebinterpolate",
+      "kind": "fn",
+      "signature": "pub fn chebinterpolate < F > (f : F , deg : usize) -> FerrayResult < Chebyshev > where F : Fn (f64) -> f64 ,"
+    },
+    {
+      "path": "ferray_polynomial::extras::chebline",
+      "kind": "fn",
+      "signature": "pub fn chebline (c0 : f64 , c1 : f64) -> Chebyshev"
+    },
+    {
+      "path": "ferray_polynomial::extras::chebmulx",
+      "kind": "fn",
+      "signature": "pub fn chebmulx (coeffs : & [f64]) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::extras::chebpts1",
+      "kind": "fn",
+      "signature": "pub fn chebpts1 (n : usize) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::chebpts2",
+      "kind": "fn",
+      "signature": "pub fn chebpts2 (n : usize) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::chebweight",
+      "kind": "fn",
+      "signature": "pub fn chebweight (x : f64) -> f64"
+    },
+    {
+      "path": "ferray_polynomial::extras::herm2poly",
+      "kind": "fn",
+      "signature": "pub fn herm2poly (coeffs : & [f64]) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::herme2poly",
+      "kind": "fn",
+      "signature": "pub fn herme2poly (coeffs : & [f64]) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::hermefromroots",
+      "kind": "fn",
+      "signature": "pub fn hermefromroots (roots : & [f64]) -> FerrayResult < HermiteE >"
+    },
+    {
+      "path": "ferray_polynomial::extras::hermegauss",
+      "kind": "fn",
+      "signature": "pub fn hermegauss (n : usize) -> FerrayResult < (Vec < f64 > , Vec < f64 >) >"
+    },
+    {
+      "path": "ferray_polynomial::extras::hermeline",
+      "kind": "fn",
+      "signature": "pub fn hermeline (c0 : f64 , c1 : f64) -> HermiteE"
+    },
+    {
+      "path": "ferray_polynomial::extras::hermemulx",
+      "kind": "fn",
+      "signature": "pub fn hermemulx (coeffs : & [f64]) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::extras::hermfromroots",
+      "kind": "fn",
+      "signature": "pub fn hermfromroots (roots : & [f64]) -> FerrayResult < Hermite >"
+    },
+    {
+      "path": "ferray_polynomial::extras::hermgauss",
+      "kind": "fn",
+      "signature": "pub fn hermgauss (n : usize) -> FerrayResult < (Vec < f64 > , Vec < f64 >) >"
+    },
+    {
+      "path": "ferray_polynomial::extras::hermline",
+      "kind": "fn",
+      "signature": "pub fn hermline (c0 : f64 , c1 : f64) -> Hermite"
+    },
+    {
+      "path": "ferray_polynomial::extras::hermmulx",
+      "kind": "fn",
+      "signature": "pub fn hermmulx (coeffs : & [f64]) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::extras::lag2poly",
+      "kind": "fn",
+      "signature": "pub fn lag2poly (coeffs : & [f64]) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::lagfromroots",
+      "kind": "fn",
+      "signature": "pub fn lagfromroots (roots : & [f64]) -> FerrayResult < Laguerre >"
+    },
+    {
+      "path": "ferray_polynomial::extras::laggauss",
+      "kind": "fn",
+      "signature": "pub fn laggauss (n : usize) -> FerrayResult < (Vec < f64 > , Vec < f64 >) >"
+    },
+    {
+      "path": "ferray_polynomial::extras::lagguass",
+      "kind": "fn",
+      "signature": "pub fn lagguass (n : usize) -> FerrayResult < (Vec < f64 > , Vec < f64 >) >"
+    },
+    {
+      "path": "ferray_polynomial::extras::lagline",
+      "kind": "fn",
+      "signature": "pub fn lagline (c0 : f64 , c1 : f64) -> Laguerre"
+    },
+    {
+      "path": "ferray_polynomial::extras::lagmulx",
+      "kind": "fn",
+      "signature": "pub fn lagmulx (coeffs : & [f64]) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::extras::leg2poly",
+      "kind": "fn",
+      "signature": "pub fn leg2poly (coeffs : & [f64]) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::legfromroots",
+      "kind": "fn",
+      "signature": "pub fn legfromroots (roots : & [f64]) -> FerrayResult < Legendre >"
+    },
+    {
+      "path": "ferray_polynomial::extras::leggauss",
+      "kind": "fn",
+      "signature": "pub fn leggauss (n : usize) -> FerrayResult < (Vec < f64 > , Vec < f64 >) >"
+    },
+    {
+      "path": "ferray_polynomial::extras::legline",
+      "kind": "fn",
+      "signature": "pub fn legline (c0 : f64 , c1 : f64) -> Legendre"
+    },
+    {
+      "path": "ferray_polynomial::extras::legmulx",
+      "kind": "fn",
+      "signature": "pub fn legmulx (coeffs : & [f64]) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::extras::poly2cheb",
+      "kind": "fn",
+      "signature": "pub fn poly2cheb (coeffs : & [f64]) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::poly2herm",
+      "kind": "fn",
+      "signature": "pub fn poly2herm (coeffs : & [f64]) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::poly2herme",
+      "kind": "fn",
+      "signature": "pub fn poly2herme (coeffs : & [f64]) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::poly2lag",
+      "kind": "fn",
+      "signature": "pub fn poly2lag (coeffs : & [f64]) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::poly2leg",
+      "kind": "fn",
+      "signature": "pub fn poly2leg (coeffs : & [f64]) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::polyfromroots",
+      "kind": "fn",
+      "signature": "pub fn polyfromroots (roots : & [f64]) -> Polynomial"
+    },
+    {
+      "path": "ferray_polynomial::extras::polygrid2d",
+      "kind": "fn",
+      "signature": "pub fn polygrid2d (xs : & [f64] , ys : & [f64] , coeffs : & [f64] , nx : usize , ny : usize ,) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::polygrid3d",
+      "kind": "fn",
+      "signature": "pub fn polygrid3d (xs : & [f64] , ys : & [f64] , zs : & [f64] , coeffs : & [f64] , nx : usize , ny : usize , nz : usize ,) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::polyline",
+      "kind": "fn",
+      "signature": "pub fn polyline (c0 : f64 , c1 : f64) -> Polynomial"
+    },
+    {
+      "path": "ferray_polynomial::extras::polymulx",
+      "kind": "fn",
+      "signature": "pub fn polymulx (coeffs : & [f64]) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::extras::polyval2d",
+      "kind": "fn",
+      "signature": "pub fn polyval2d (xs : & [f64] , ys : & [f64] , coeffs : & [f64] , nx : usize , ny : usize ,) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::polyval3d",
+      "kind": "fn",
+      "signature": "pub fn polyval3d (xs : & [f64] , ys : & [f64] , zs : & [f64] , coeffs : & [f64] , nx : usize , ny : usize , nz : usize ,) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::polyvalfromroots",
+      "kind": "fn",
+      "signature": "pub fn polyvalfromroots (x : f64 , roots : & [f64]) -> f64"
+    },
+    {
+      "path": "ferray_polynomial::extras::polyvander2d",
+      "kind": "fn",
+      "signature": "pub fn polyvander2d (xs : & [f64] , ys : & [f64] , degx : usize , degy : usize) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::extras::polyvander3d",
+      "kind": "fn",
+      "signature": "pub fn polyvander3d (xs : & [f64] , ys : & [f64] , zs : & [f64] , degx : usize , degy : usize , degz : usize ,) -> FerrayResult < Vec < f64 > >"
+    },
+    {
+      "path": "ferray_polynomial::fitting::chebyshev_vandermonde",
+      "kind": "fn",
+      "signature": "pub fn chebyshev_vandermonde (x : & [f64] , deg : usize) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::fitting::hermite_e_vandermonde",
+      "kind": "fn",
+      "signature": "pub fn hermite_e_vandermonde (x : & [f64] , deg : usize) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::fitting::hermite_vandermonde",
+      "kind": "fn",
+      "signature": "pub fn hermite_vandermonde (x : & [f64] , deg : usize) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::fitting::laguerre_vandermonde",
+      "kind": "fn",
+      "signature": "pub fn laguerre_vandermonde (x : & [f64] , deg : usize) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::fitting::least_squares_fit",
+      "kind": "fn",
+      "signature": "pub fn least_squares_fit (v : & [f64] , n : usize , m : usize , y : & [f64] , w : Option < & [f64] > ,) -> Result < Vec < f64 > , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::fitting::legendre_vandermonde",
+      "kind": "fn",
+      "signature": "pub fn legendre_vandermonde (x : & [f64] , deg : usize) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::fitting::power_vandermonde",
+      "kind": "fn",
+      "signature": "pub fn power_vandermonde (x : & [f64] , deg : usize) -> Vec < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::herm2poly",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::herme2poly",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::hermefromroots",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::hermegauss",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::hermeline",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::hermemulx",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::hermfromroots",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::hermgauss",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::hermite::Hermite",
+      "kind": "struct",
+      "signature": "pub struct Hermite"
+    },
+    {
+      "path": "ferray_polynomial::hermite::Hermite::fit_with_domain",
+      "kind": "method",
+      "signature": "pub fn fit_with_domain (x : & [f64] , y : & [f64] , deg : usize) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::hermite::Hermite::new",
+      "kind": "method",
+      "signature": "pub fn new (coeffs : & [f64]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::hermite::Hermite::with_domain",
+      "kind": "method",
+      "signature": "pub fn with_domain (mut self , domain : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::hermite::Hermite::with_window",
+      "kind": "method",
+      "signature": "pub fn with_window (mut self , window : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::hermite_e::HermiteE",
+      "kind": "struct",
+      "signature": "pub struct HermiteE"
+    },
+    {
+      "path": "ferray_polynomial::hermite_e::HermiteE::fit_with_domain",
+      "kind": "method",
+      "signature": "pub fn fit_with_domain (x : & [f64] , y : & [f64] , deg : usize) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::hermite_e::HermiteE::new",
+      "kind": "method",
+      "signature": "pub fn new (coeffs : & [f64]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::hermite_e::HermiteE::with_domain",
+      "kind": "method",
+      "signature": "pub fn with_domain (mut self , domain : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::hermite_e::HermiteE::with_window",
+      "kind": "method",
+      "signature": "pub fn with_window (mut self , window : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::hermline",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::hermmulx",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::lag2poly",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::lagfromroots",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::laggauss",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::lagguass",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::lagline",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::lagmulx",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::laguerre::Laguerre",
+      "kind": "struct",
+      "signature": "pub struct Laguerre"
+    },
+    {
+      "path": "ferray_polynomial::laguerre::Laguerre::fit_with_domain",
+      "kind": "method",
+      "signature": "pub fn fit_with_domain (x : & [f64] , y : & [f64] , deg : usize) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::laguerre::Laguerre::new",
+      "kind": "method",
+      "signature": "pub fn new (coeffs : & [f64]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::laguerre::Laguerre::with_domain",
+      "kind": "method",
+      "signature": "pub fn with_domain (mut self , domain : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::laguerre::Laguerre::with_window",
+      "kind": "method",
+      "signature": "pub fn with_window (mut self , window : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::leg2poly",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::legendre::Legendre",
+      "kind": "struct",
+      "signature": "pub struct Legendre"
+    },
+    {
+      "path": "ferray_polynomial::legendre::Legendre::fit_with_domain",
+      "kind": "method",
+      "signature": "pub fn fit_with_domain (x : & [f64] , y : & [f64] , deg : usize) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::legendre::Legendre::new",
+      "kind": "method",
+      "signature": "pub fn new (coeffs : & [f64]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::legendre::Legendre::with_domain",
+      "kind": "method",
+      "signature": "pub fn with_domain (mut self , domain : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::legendre::Legendre::with_window",
+      "kind": "method",
+      "signature": "pub fn with_window (mut self , window : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::legfromroots",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::leggauss",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::legline",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::legmulx",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::mapping::auto_domain",
+      "kind": "fn",
+      "signature": "pub fn auto_domain (x : & [f64]) -> [f64 ; 2]"
+    },
+    {
+      "path": "ferray_polynomial::mapping::map_x",
+      "kind": "fn",
+      "signature": "pub fn map_x (x : f64 , offset : f64 , scale : f64) -> f64"
+    },
+    {
+      "path": "ferray_polynomial::mapping::mapparms",
+      "kind": "fn",
+      "signature": "pub fn mapparms (domain : [f64 ; 2] , window : [f64 ; 2]) -> Result < (f64 , f64) , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::mapping::validate_domain_window",
+      "kind": "fn",
+      "signature": "pub fn validate_domain_window (domain : [f64 ; 2] , window : [f64 ; 2]) -> Result < () , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::poly2cheb",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::poly2herm",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::poly2herme",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::poly2lag",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::poly2leg",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::polyfromroots",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::polygrid2d",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::polygrid3d",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::polyline",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::polymulx",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::polyval2d",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::polyval3d",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::polyvalfromroots",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::polyvander2d",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::polyvander3d",
+      "kind": "reexport",
+      "signature": "pub use extras :: { cheb2poly , chebfromroots , chebgauss , chebinterpolate , chebline , chebmulx , chebpts1 , chebpts2 , chebweight , herm2poly , herme2poly , hermefromroots , hermegauss , hermeline , hermemulx , hermfromroots , hermgauss , hermline , hermmulx , lag2poly , lagfromroots , laggauss , lagguass , lagline , lagmulx , leg2poly , legfromroots , leggauss , legline , legmulx , poly2cheb , poly2herm , poly2herme , poly2lag , poly2leg , polyfromroots , polygrid2d , polygrid3d , polyline , polymulx , polyval2d , polyval3d , polyvalfromroots , polyvander2d , polyvander3d , }"
+    },
+    {
+      "path": "ferray_polynomial::power::Polynomial",
+      "kind": "struct",
+      "signature": "pub struct Polynomial"
+    },
+    {
+      "path": "ferray_polynomial::power::Polynomial::basis",
+      "kind": "method",
+      "signature": "pub fn basis (deg : usize , domain : Option < [f64 ; 2] > , window : Option < [f64 ; 2] > ,) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::power::Polynomial::compose",
+      "kind": "method",
+      "signature": "pub fn compose (& self , q : & Self) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::power::Polynomial::fit_with_domain",
+      "kind": "method",
+      "signature": "pub fn fit_with_domain (x : & [f64] , y : & [f64] , deg : usize) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::power::Polynomial::from_roots",
+      "kind": "method",
+      "signature": "pub fn from_roots (roots : & [f64]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power::Polynomial::identity",
+      "kind": "method",
+      "signature": "pub fn identity (domain : Option < [f64 ; 2] > , window : Option < [f64 ; 2] > ,) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::power::Polynomial::integ_with_bounds",
+      "kind": "method",
+      "signature": "pub fn integ_with_bounds (& self , m : usize , k : & [f64] , lbnd : f64 , scl : f64 ,) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::power::Polynomial::new",
+      "kind": "method",
+      "signature": "pub fn new (coeffs : & [f64]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power::Polynomial::with_domain",
+      "kind": "method",
+      "signature": "pub fn with_domain (mut self , domain : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::power::Polynomial::with_window",
+      "kind": "method",
+      "signature": "pub fn with_window (mut self , window : [f64 ; 2]) -> Result < Self , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial",
+      "kind": "struct",
+      "signature": "pub struct ComplexPolynomial"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::add",
+      "kind": "method",
+      "signature": "pub fn add (& self , other : & Self) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::coeffs",
+      "kind": "method",
+      "signature": "pub fn coeffs (& self) -> & [Complex < f64 >]"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::degree",
+      "kind": "method",
+      "signature": "pub fn degree (& self) -> usize"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::deriv",
+      "kind": "method",
+      "signature": "pub fn deriv (& self , m : usize) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::eval",
+      "kind": "method",
+      "signature": "pub fn eval (& self , x : f64) -> Complex < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::eval_complex",
+      "kind": "method",
+      "signature": "pub fn eval_complex (& self , x : Complex < f64 >) -> Complex < f64 >"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::from_roots",
+      "kind": "method",
+      "signature": "pub fn from_roots (roots : & [Complex < f64 >]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::integ",
+      "kind": "method",
+      "signature": "pub fn integ (& self , m : usize , k : & [Complex < f64 >]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::mul",
+      "kind": "method",
+      "signature": "pub fn mul (& self , other : & Self) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::new",
+      "kind": "method",
+      "signature": "pub fn new (coeffs : & [Complex < f64 >]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::sub",
+      "kind": "method",
+      "signature": "pub fn sub (& self , other : & Self) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::trim",
+      "kind": "method",
+      "signature": "pub fn trim (& self , tol : f64) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_polynomial::power_complex::ComplexPolynomial::truncate",
+      "kind": "method",
+      "signature": "pub fn truncate (& self , size : usize) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32",
+      "kind": "struct",
+      "signature": "pub struct PolynomialF32"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::add",
+      "kind": "method",
+      "signature": "pub fn add (& self , other : & Self) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::coeffs",
+      "kind": "method",
+      "signature": "pub fn coeffs (& self) -> & [f32]"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::degree",
+      "kind": "method",
+      "signature": "pub fn degree (& self) -> usize"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::deriv",
+      "kind": "method",
+      "signature": "pub fn deriv (& self , m : usize) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::eval",
+      "kind": "method",
+      "signature": "pub fn eval (& self , x : f32) -> f32"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::fit",
+      "kind": "method",
+      "signature": "pub fn fit (x : & [f32] , y : & [f32] , deg : usize) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::from_f64",
+      "kind": "method",
+      "signature": "pub fn from_f64 (p : & Polynomial) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::integ",
+      "kind": "method",
+      "signature": "pub fn integ (& self , m : usize , k : & [f32]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::mul",
+      "kind": "method",
+      "signature": "pub fn mul (& self , other : & Self) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::new",
+      "kind": "method",
+      "signature": "pub fn new (coeffs : & [f32]) -> Self"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::roots",
+      "kind": "method",
+      "signature": "pub fn roots (& self) -> FerrayResult < Vec < Complex < f32 > > >"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::sub",
+      "kind": "method",
+      "signature": "pub fn sub (& self , other : & Self) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::to_f64",
+      "kind": "method",
+      "signature": "pub fn to_f64 (& self) -> Polynomial"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::trim",
+      "kind": "method",
+      "signature": "pub fn trim (& self , tol : f32) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::truncate",
+      "kind": "method",
+      "signature": "pub fn truncate (& self , size : usize) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::with_domain",
+      "kind": "method",
+      "signature": "pub fn with_domain (mut self , domain : [f32 ; 2]) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_polynomial::power_f32::PolynomialF32::with_window",
+      "kind": "method",
+      "signature": "pub fn with_window (mut self , window : [f32 ; 2]) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_polynomial::roots::find_roots_from_power_coeffs",
+      "kind": "fn",
+      "signature": "pub fn find_roots_from_power_coeffs (coeffs : & [f64]) -> Result < Vec < Complex < f64 > > , FerrayError >"
+    },
+    {
+      "path": "ferray_polynomial::traits::ConvertBasis",
+      "kind": "trait",
+      "signature": "pub trait ConvertBasis"
+    },
+    {
+      "path": "ferray_polynomial::traits::FromPowerBasis",
+      "kind": "trait",
+      "signature": "pub trait FromPowerBasis"
+    },
+    {
+      "path": "ferray_polynomial::traits::Poly",
+      "kind": "trait",
+      "signature": "pub trait Poly"
+    },
+    {
+      "path": "ferray_polynomial::traits::ToPowerBasis",
+      "kind": "trait",
+      "signature": "pub trait ToPowerBasis"
+    }
+  ]
+}

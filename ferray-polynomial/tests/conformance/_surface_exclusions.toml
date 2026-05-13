@@ -1,0 +1,632 @@
+# ferray-polynomial surface exclusions (Stage 4)
+#
+# Conformance proper validates the 58 free public fns by name in
+# tests/conformance_polynomial.rs (fixture-anchored where fixtures exist
+# under fixtures/polynomial/, inline otherwise). The 124 entries below
+# cover crate-root re-exports (which alias an inner definition that is
+# itself surfaced) and the per-basis struct/method surface that is
+# exercised transitively by the eval/deriv/integ/fit/roots/arithmetic
+# tests but not named verbatim by inner path. Every row carries a
+# non-generic reason and a covered_by reference per the surface-gate
+# contract.
+
+[[exclusion]]
+path = "ferray_polynomial::Chebyshev"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::ChebyshevF32"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::ComplexPolynomial"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::ConvertBasis"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::FromPowerBasis"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::Hermite"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::HermiteE"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::HermiteEF32"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::HermiteF32"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::Laguerre"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::LaguerreF32"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::Legendre"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::LegendreF32"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::Poly"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::Polynomial"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::PolynomialF32"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::ToPowerBasis"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::cheb2poly"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebfromroots"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebgauss"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebinterpolate"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebline"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebmulx"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebpts1"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebpts2"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebweight"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebyshev::Chebyshev::fit_with_domain"
+reason = "Method on Chebyshev; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebyshev::Chebyshev::new"
+reason = "Method on Chebyshev; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebyshev::Chebyshev::with_domain"
+reason = "Method on Chebyshev; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::chebyshev::Chebyshev::with_window"
+reason = "Method on Chebyshev; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::herm2poly"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::herme2poly"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermefromroots"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermegauss"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermeline"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermemulx"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermfromroots"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermgauss"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermite::Hermite::fit_with_domain"
+reason = "Method on Hermite; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermite::Hermite::new"
+reason = "Method on Hermite; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermite::Hermite::with_domain"
+reason = "Method on Hermite; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermite::Hermite::with_window"
+reason = "Method on Hermite; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermite_e::HermiteE::fit_with_domain"
+reason = "Method on HermiteE; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermite_e::HermiteE::new"
+reason = "Method on HermiteE; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermite_e::HermiteE::with_domain"
+reason = "Method on HermiteE; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermite_e::HermiteE::with_window"
+reason = "Method on HermiteE; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermline"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::hermmulx"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::lag2poly"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::lagfromroots"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::laggauss"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::lagguass"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::lagline"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::lagmulx"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::laguerre::Laguerre::fit_with_domain"
+reason = "Method on Laguerre; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::laguerre::Laguerre::new"
+reason = "Method on Laguerre; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::laguerre::Laguerre::with_domain"
+reason = "Method on Laguerre; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::laguerre::Laguerre::with_window"
+reason = "Method on Laguerre; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::leg2poly"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::legendre::Legendre::fit_with_domain"
+reason = "Method on Legendre; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::legendre::Legendre::new"
+reason = "Method on Legendre; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::legendre::Legendre::with_domain"
+reason = "Method on Legendre; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::legendre::Legendre::with_window"
+reason = "Method on Legendre; constructor/with_domain/with_window/fit_with_domain are exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences for every orthogonal basis at the closed-form recurrence values."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::legfromroots"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::leggauss"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::legline"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::legmulx"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::poly2cheb"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::poly2herm"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::poly2herme"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::poly2lag"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::poly2leg"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::polyfromroots"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::polygrid2d"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::polygrid3d"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::polyline"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::polymulx"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::polyval2d"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::polyval3d"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::polyvalfromroots"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::polyvander2d"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::polyvander3d"
+reason = "Crate-root re-export of an inner-module item; the underlying definition is itself surfaced on its own row (with the inner module path) and carries the substantive coverage entry."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power::Polynomial::basis"
+reason = "Method on Polynomial; the power-basis surface (new, basis, identity, from_roots, compose, integ_with_bounds, fit_with_domain, with_domain, with_window) is exercised in tests/conformance_polynomial.rs::polynomial_trim_truncate_basis_identity_from_coeffs_from_roots and ::polyfit_fixture_matches_numpy."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power::Polynomial::compose"
+reason = "Method on Polynomial; the power-basis surface (new, basis, identity, from_roots, compose, integ_with_bounds, fit_with_domain, with_domain, with_window) is exercised in tests/conformance_polynomial.rs::polynomial_trim_truncate_basis_identity_from_coeffs_from_roots and ::polyfit_fixture_matches_numpy."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power::Polynomial::fit_with_domain"
+reason = "Method on Polynomial; the power-basis surface (new, basis, identity, from_roots, compose, integ_with_bounds, fit_with_domain, with_domain, with_window) is exercised in tests/conformance_polynomial.rs::polynomial_trim_truncate_basis_identity_from_coeffs_from_roots and ::polyfit_fixture_matches_numpy."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power::Polynomial::from_roots"
+reason = "Method on Polynomial; the power-basis surface (new, basis, identity, from_roots, compose, integ_with_bounds, fit_with_domain, with_domain, with_window) is exercised in tests/conformance_polynomial.rs::polynomial_trim_truncate_basis_identity_from_coeffs_from_roots and ::polyfit_fixture_matches_numpy."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power::Polynomial::identity"
+reason = "Method on Polynomial; the power-basis surface (new, basis, identity, from_roots, compose, integ_with_bounds, fit_with_domain, with_domain, with_window) is exercised in tests/conformance_polynomial.rs::polynomial_trim_truncate_basis_identity_from_coeffs_from_roots and ::polyfit_fixture_matches_numpy."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power::Polynomial::integ_with_bounds"
+reason = "Method on Polynomial; the power-basis surface (new, basis, identity, from_roots, compose, integ_with_bounds, fit_with_domain, with_domain, with_window) is exercised in tests/conformance_polynomial.rs::polynomial_trim_truncate_basis_identity_from_coeffs_from_roots and ::polyfit_fixture_matches_numpy."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power::Polynomial::with_domain"
+reason = "Method on Polynomial; the power-basis surface (new, basis, identity, from_roots, compose, integ_with_bounds, fit_with_domain, with_domain, with_window) is exercised in tests/conformance_polynomial.rs::polynomial_trim_truncate_basis_identity_from_coeffs_from_roots and ::polyfit_fixture_matches_numpy."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power::Polynomial::with_window"
+reason = "Method on Polynomial; the power-basis surface (new, basis, identity, from_roots, compose, integ_with_bounds, fit_with_domain, with_domain, with_window) is exercised in tests/conformance_polynomial.rs::polynomial_trim_truncate_basis_identity_from_coeffs_from_roots and ::polyfit_fixture_matches_numpy."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial"
+reason = "Struct declaration; constructors and methods are exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip via the ComplexPolynomial type alias."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::add"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::coeffs"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::degree"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::deriv"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::eval"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::eval_complex"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::from_roots"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::integ"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::mul"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::new"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::sub"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::trim"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_complex::ComplexPolynomial::truncate"
+reason = "Method on ComplexPolynomial; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32"
+reason = "Struct declaration; constructors and methods are exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip via the PolynomialF32 type alias."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::add"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::coeffs"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::degree"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::deriv"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::eval"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::fit"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::from_f64"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::integ"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::mul"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::new"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::roots"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::sub"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::to_f64"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::trim"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::truncate"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::with_domain"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::power_f32::PolynomialF32::with_window"
+reason = "Method on PolynomialF32; exercised in tests/conformance_polynomial.rs::power_f32_and_complex_polynomial_round_trip which constructs the type, evaluates, and rebuilds via every public method on its surface."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::traits::FromPowerBasis"
+reason = "Trait declaration; the from_power_basis method is exercised directly in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences (Chebyshev::from_power_basis round-trip)."
+covered_by = "tests/conformance_polynomial.rs"
+
+[[exclusion]]
+path = "ferray_polynomial::traits::ToPowerBasis"
+reason = "Trait declaration; the to_power_basis method is exercised in tests/conformance_polynomial.rs::orthogonal_basis_evaluators_match_recurrences (Chebyshev::to_power_basis round-trip)."
+covered_by = "tests/conformance_polynomial.rs"
+
