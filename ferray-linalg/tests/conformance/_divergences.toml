@@ -1,0 +1,18 @@
+# Documented cases where ferray-linalg returns a more mathematically
+# correct value than the reference. None currently documented for
+# ferray-linalg. New divergences should be filed with reference_function
+# + reference_library + tracking_issue fields per
+# docs/conformance-suites.md.
+#
+# Umbrella fixture-coverage gap tracker: see crosslink #748 (Stage 4
+# tracking) for missing JSON fixtures covering batched decompositions
+# (cholesky_batched / eigh_batched / qr_batched / svd_batched /
+# det_batched / solve_batched / inv_batched), the UPLO variant family
+# (eigh_uplo / eigvalsh_uplo and their batched siblings), the slogdet
+# family, einsum (full expression coverage), pinv (Moore-Penrose
+# pseudoinverse), matrix_power, tensorsolve / tensorinv, multi_dot,
+# matvec / vecdot / vecmat / cross / diagonal / matrix_transpose /
+# matrix_norm / vector_norm / norm_axis / trace_offset, the complex
+# matmul/inv/solve/det family, and the f16 promotion shims — these are
+# currently exercised inline against analytic reference values rather
+# than NumPy-generated fixtures.

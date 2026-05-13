@@ -1,0 +1,1646 @@
+{
+  "crate": "ferray-linalg",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_linalg::LinalgFloat",
+      "kind": "reexport",
+      "signature": "pub use scalar :: LinalgFloat"
+    },
+    {
+      "path": "ferray_linalg::NormOrder",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::QrMode",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::TensordotAxes",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::UPLO",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::batch::apply_batched_2d",
+      "kind": "fn",
+      "signature": "pub fn apply_batched_2d < T , F > (a : & Array < T , IxDyn > , f : F) -> FerrayResult < Vec < Vec < T > > > where T : LinalgFloat , F : Fn (usize , usize , & [T]) -> FerrayResult < Vec < T > > + Send + Sync ,"
+    },
+    {
+      "path": "ferray_linalg::batch::apply_batched_2d_pair",
+      "kind": "fn",
+      "signature": "pub fn apply_batched_2d_pair < T , F > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > , f : F ,) -> FerrayResult < Vec < Vec < T > > > where T : LinalgFloat , F : Fn (usize , usize , & [T] , usize , usize , & [T]) -> FerrayResult < Vec < T > > + Send + Sync ,"
+    },
+    {
+      "path": "ferray_linalg::batch::apply_batched_scalar",
+      "kind": "fn",
+      "signature": "pub fn apply_batched_scalar < T , F > (a : & Array < T , IxDyn > , f : F) -> FerrayResult < Array < T , Ix1 > > where T : LinalgFloat , F : Fn (usize , usize , & [T]) -> FerrayResult < T > + Send + Sync ,"
+    },
+    {
+      "path": "ferray_linalg::batch::batch_count",
+      "kind": "fn",
+      "signature": "pub fn batch_count (shape : & [usize] , tail_dims : usize) -> FerrayResult < usize >"
+    },
+    {
+      "path": "ferray_linalg::batch::extract_batch_matrix",
+      "kind": "fn",
+      "signature": "pub fn extract_batch_matrix < T : Copy > (data : & [T] , shape : & [usize] , batch_idx : usize) -> Vec < T >"
+    },
+    {
+      "path": "ferray_linalg::batch::faer_to_vec",
+      "kind": "fn",
+      "signature": "pub fn faer_to_vec < T : LinalgFloat > (mat : & faer :: Mat < T >) -> Vec < T >"
+    },
+    {
+      "path": "ferray_linalg::batch::slice_to_faer",
+      "kind": "fn",
+      "signature": "pub fn slice_to_faer < T : LinalgFloat > (m : usize , n : usize , data : & [T]) -> faer :: Mat < T >"
+    },
+    {
+      "path": "ferray_linalg::cholesky",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::cholesky_batched",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::cholesky_upper",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::cholesky_upper_batched",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::complex::det_complex",
+      "kind": "fn",
+      "signature": "pub fn det_complex < T > (a : & Array < Complex < T > , Ix2 >) -> FerrayResult < Complex < T > > where T : Copy + 'static , Complex < T > : Element + Copy + faer_traits :: ComplexField ,"
+    },
+    {
+      "path": "ferray_linalg::complex::inv_complex",
+      "kind": "fn",
+      "signature": "pub fn inv_complex < T > (a : & Array < Complex < T > , Ix2 >) -> FerrayResult < Array < Complex < T > , Ix2 > > where T : Copy + 'static , Complex < T > : Element + Copy + faer_traits :: ComplexField ,"
+    },
+    {
+      "path": "ferray_linalg::complex::matmul_complex",
+      "kind": "fn",
+      "signature": "pub fn matmul_complex < T > (a : & Array < Complex < T > , Ix2 > , b : & Array < Complex < T > , Ix2 > ,) -> FerrayResult < Array < Complex < T > , Ix2 > > where T : Copy + 'static , Complex < T > : Element + Copy + faer_traits :: ComplexField ,"
+    },
+    {
+      "path": "ferray_linalg::complex::solve_complex",
+      "kind": "fn",
+      "signature": "pub fn solve_complex < T > (a : & Array < Complex < T > , Ix2 > , b : & Array < Complex < T > , Ix2 > ,) -> FerrayResult < Array < Complex < T > , Ix2 > > where T : Copy + 'static , Complex < T > : Element + Copy + faer_traits :: ComplexField ,"
+    },
+    {
+      "path": "ferray_linalg::complex::solve_complex_vec",
+      "kind": "fn",
+      "signature": "pub fn solve_complex_vec < T > (a : & Array < Complex < T > , Ix2 > , b : & Array < Complex < T > , Ix1 > ,) -> FerrayResult < Array < Complex < T > , Ix1 > > where T : Copy + 'static , Complex < T > : Element + Copy + faer_traits :: ComplexField ,"
+    },
+    {
+      "path": "ferray_linalg::cond",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::cross",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::QrMode",
+      "kind": "reexport",
+      "signature": "pub use qr :: { QrMode , qr , qr_batched }"
+    },
+    {
+      "path": "ferray_linalg::decomp::UPLO",
+      "kind": "reexport",
+      "signature": "pub use eigen :: { UPLO , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::cholesky",
+      "kind": "reexport",
+      "signature": "pub use cholesky :: { cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched }"
+    },
+    {
+      "path": "ferray_linalg::decomp::cholesky::cholesky",
+      "kind": "fn",
+      "signature": "pub fn cholesky < T : LinalgFloat > (a : & Array < T , Ix2 >) -> FerrayResult < Array < T , Ix2 > >"
+    },
+    {
+      "path": "ferray_linalg::decomp::cholesky::cholesky_batched",
+      "kind": "fn",
+      "signature": "pub fn cholesky_batched < T : LinalgFloat > (a : & Array < T , IxDyn >) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::decomp::cholesky::cholesky_upper",
+      "kind": "fn",
+      "signature": "pub fn cholesky_upper < T : LinalgFloat > (a : & Array < T , Ix2 >) -> FerrayResult < Array < T , Ix2 > >"
+    },
+    {
+      "path": "ferray_linalg::decomp::cholesky::cholesky_upper_batched",
+      "kind": "fn",
+      "signature": "pub fn cholesky_upper_batched < T : LinalgFloat > (a : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::decomp::cholesky_batched",
+      "kind": "reexport",
+      "signature": "pub use cholesky :: { cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched }"
+    },
+    {
+      "path": "ferray_linalg::decomp::cholesky_upper",
+      "kind": "reexport",
+      "signature": "pub use cholesky :: { cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched }"
+    },
+    {
+      "path": "ferray_linalg::decomp::cholesky_upper_batched",
+      "kind": "reexport",
+      "signature": "pub use cholesky :: { cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched }"
+    },
+    {
+      "path": "ferray_linalg::decomp::eig",
+      "kind": "reexport",
+      "signature": "pub use eigen :: { UPLO , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigen::UPLO",
+      "kind": "enum",
+      "signature": "pub enum UPLO"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigen::eig",
+      "kind": "fn",
+      "signature": "pub fn eig < T : LinalgFloat > (a : & Array < T , Ix2 > ,) -> FerrayResult < (Array < Complex < T > , Ix1 > , Array < Complex < T > , Ix2 >) > where Complex < T > : ferray_core :: dtype :: Element ,"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigen::eigh",
+      "kind": "fn",
+      "signature": "pub fn eigh < T : LinalgFloat > (a : & Array < T , Ix2 >) -> FerrayResult < (Array < T , Ix1 > , Array < T , Ix2 >) >"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigen::eigh_batched",
+      "kind": "fn",
+      "signature": "pub fn eigh_batched < T : LinalgFloat > (a : & Array < T , IxDyn > ,) -> FerrayResult < (Array < T , IxDyn > , Array < T , IxDyn >) >"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigen::eigh_batched_uplo",
+      "kind": "fn",
+      "signature": "pub fn eigh_batched_uplo < T : LinalgFloat > (a : & Array < T , IxDyn > , uplo : UPLO ,) -> FerrayResult < (Array < T , IxDyn > , Array < T , IxDyn >) >"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigen::eigh_uplo",
+      "kind": "fn",
+      "signature": "pub fn eigh_uplo < T : LinalgFloat > (a : & Array < T , Ix2 > , uplo : UPLO ,) -> FerrayResult < (Array < T , Ix1 > , Array < T , Ix2 >) >"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigen::eigvals",
+      "kind": "fn",
+      "signature": "pub fn eigvals < T : LinalgFloat > (a : & Array < T , Ix2 >) -> FerrayResult < Array < Complex < T > , Ix1 > > where Complex < T > : ferray_core :: dtype :: Element ,"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigen::eigvalsh",
+      "kind": "fn",
+      "signature": "pub fn eigvalsh < T : LinalgFloat > (a : & Array < T , Ix2 >) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigen::eigvalsh_batched",
+      "kind": "fn",
+      "signature": "pub fn eigvalsh_batched < T : LinalgFloat > (a : & Array < T , IxDyn >) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigen::eigvalsh_batched_uplo",
+      "kind": "fn",
+      "signature": "pub fn eigvalsh_batched_uplo < T : LinalgFloat > (a : & Array < T , IxDyn > , uplo : UPLO ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigen::eigvalsh_uplo",
+      "kind": "fn",
+      "signature": "pub fn eigvalsh_uplo < T : LinalgFloat > (a : & Array < T , Ix2 > , uplo : UPLO) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigh",
+      "kind": "reexport",
+      "signature": "pub use eigen :: { UPLO , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigh_batched",
+      "kind": "reexport",
+      "signature": "pub use eigen :: { UPLO , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigh_batched_uplo",
+      "kind": "reexport",
+      "signature": "pub use eigen :: { UPLO , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigh_uplo",
+      "kind": "reexport",
+      "signature": "pub use eigen :: { UPLO , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigvals",
+      "kind": "reexport",
+      "signature": "pub use eigen :: { UPLO , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigvalsh",
+      "kind": "reexport",
+      "signature": "pub use eigen :: { UPLO , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigvalsh_batched",
+      "kind": "reexport",
+      "signature": "pub use eigen :: { UPLO , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigvalsh_batched_uplo",
+      "kind": "reexport",
+      "signature": "pub use eigen :: { UPLO , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::eigvalsh_uplo",
+      "kind": "reexport",
+      "signature": "pub use eigen :: { UPLO , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , }"
+    },
+    {
+      "path": "ferray_linalg::decomp::lu",
+      "kind": "reexport",
+      "signature": "pub use lu :: lu"
+    },
+    {
+      "path": "ferray_linalg::decomp::lu::lu",
+      "kind": "fn",
+      "signature": "pub fn lu < T : LinalgFloat > (a : & Array < T , Ix2 > ,) -> FerrayResult < (Array < T , Ix2 > , Array < T , Ix2 > , Array < T , Ix2 >) >"
+    },
+    {
+      "path": "ferray_linalg::decomp::qr",
+      "kind": "reexport",
+      "signature": "pub use qr :: { QrMode , qr , qr_batched }"
+    },
+    {
+      "path": "ferray_linalg::decomp::qr::QrMode",
+      "kind": "enum",
+      "signature": "pub enum QrMode"
+    },
+    {
+      "path": "ferray_linalg::decomp::qr::qr",
+      "kind": "fn",
+      "signature": "pub fn qr < T : LinalgFloat > (a : & Array < T , Ix2 > , mode : QrMode ,) -> FerrayResult < (Array < T , Ix2 > , Array < T , Ix2 >) >"
+    },
+    {
+      "path": "ferray_linalg::decomp::qr::qr_batched",
+      "kind": "fn",
+      "signature": "pub fn qr_batched < T : LinalgFloat > (a : & Array < T , IxDyn > , mode : QrMode ,) -> FerrayResult < (Array < T , IxDyn > , Array < T , IxDyn >) >"
+    },
+    {
+      "path": "ferray_linalg::decomp::qr_batched",
+      "kind": "reexport",
+      "signature": "pub use qr :: { QrMode , qr , qr_batched }"
+    },
+    {
+      "path": "ferray_linalg::decomp::svd",
+      "kind": "reexport",
+      "signature": "pub use svd :: { svd , svd_batched , svd_hermitian , svdvals }"
+    },
+    {
+      "path": "ferray_linalg::decomp::svd::svd",
+      "kind": "fn",
+      "signature": "pub fn svd < T : LinalgFloat > (a : & Array < T , Ix2 > , full_matrices : bool ,) -> FerrayResult < (Array < T , Ix2 > , Array < T , Ix1 > , Array < T , Ix2 >) >"
+    },
+    {
+      "path": "ferray_linalg::decomp::svd::svd_batched",
+      "kind": "fn",
+      "signature": "pub fn svd_batched < T : LinalgFloat > (a : & Array < T , IxDyn > , full_matrices : bool ,) -> FerrayResult < (Array < T , IxDyn > , Array < T , IxDyn > , Array < T , IxDyn >) >"
+    },
+    {
+      "path": "ferray_linalg::decomp::svd::svd_hermitian",
+      "kind": "fn",
+      "signature": "pub fn svd_hermitian < T : LinalgFloat > (a : & Array < T , Ix2 > ,) -> FerrayResult < (Array < T , Ix2 > , Array < T , Ix1 > , Array < T , Ix2 >) >"
+    },
+    {
+      "path": "ferray_linalg::decomp::svd::svdvals",
+      "kind": "fn",
+      "signature": "pub fn svdvals < T : LinalgFloat > (a : & Array < T , Ix2 >) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_linalg::decomp::svd_batched",
+      "kind": "reexport",
+      "signature": "pub use svd :: { svd , svd_batched , svd_hermitian , svdvals }"
+    },
+    {
+      "path": "ferray_linalg::decomp::svd_hermitian",
+      "kind": "reexport",
+      "signature": "pub use svd :: { svd , svd_batched , svd_hermitian , svdvals }"
+    },
+    {
+      "path": "ferray_linalg::decomp::svdvals",
+      "kind": "reexport",
+      "signature": "pub use svd :: { svd , svd_batched , svd_hermitian , svdvals }"
+    },
+    {
+      "path": "ferray_linalg::det",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::det_batched",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::det_complex",
+      "kind": "reexport",
+      "signature": "pub use complex :: { det_complex , inv_complex , matmul_complex , solve_complex , solve_complex_vec }"
+    },
+    {
+      "path": "ferray_linalg::diagonal",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::dot",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::eig",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::eigh",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::eigh_batched",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::eigh_batched_uplo",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::eigh_uplo",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::eigvals",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::eigvalsh",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::eigvalsh_batched",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::eigvalsh_batched_uplo",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::eigvalsh_uplo",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::einsum",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::f16_support::dot_f16",
+      "kind": "fn",
+      "signature": "pub fn dot_f16 (a : & Array < f16 , IxDyn > , b : & Array < f16 , IxDyn >) -> FerrayResult < Array < f16 , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::f16_support::matmul_f16",
+      "kind": "fn",
+      "signature": "pub fn matmul_f16 (a : & Array < f16 , IxDyn > , b : & Array < f16 , IxDyn >) -> FerrayResult < Array < f16 , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::f16_support::norm_f16",
+      "kind": "fn",
+      "signature": "pub fn norm_f16 (a : & Array < f16 , IxDyn > , order : crate :: NormOrder) -> FerrayResult < f64 >"
+    },
+    {
+      "path": "ferray_linalg::f16_support::outer_f16",
+      "kind": "fn",
+      "signature": "pub fn outer_f16 (a : & Array < f16 , IxDyn > , b : & Array < f16 , IxDyn >) -> FerrayResult < Array < f16 , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::f16_support::vdot_f16",
+      "kind": "fn",
+      "signature": "pub fn vdot_f16 (a : & Array < f16 , IxDyn > , b : & Array < f16 , IxDyn >) -> FerrayResult < f16 >"
+    },
+    {
+      "path": "ferray_linalg::faer_bridge::array1_to_faer_col",
+      "kind": "fn",
+      "signature": "pub fn array1_to_faer_col < T : LinalgFloat > (a : & Array < T , Ix1 >) -> faer :: Mat < T >"
+    },
+    {
+      "path": "ferray_linalg::faer_bridge::array2_to_faer",
+      "kind": "fn",
+      "signature": "pub fn array2_to_faer < T : LinalgFloat > (a : & Array < T , Ix2 >) -> faer :: Mat < T >"
+    },
+    {
+      "path": "ferray_linalg::faer_bridge::array2_to_faer_general",
+      "kind": "fn",
+      "signature": "pub fn array2_to_faer_general < T : LinalgFloat , D : Dimension > (a : & Array < T , D > ,) -> FerrayResult < faer :: Mat < T > >"
+    },
+    {
+      "path": "ferray_linalg::faer_bridge::extract_matrix_from_batch",
+      "kind": "fn",
+      "signature": "pub fn extract_matrix_from_batch < T : LinalgFloat > (a : & Array < T , IxDyn > , batch_idx : usize ,) -> FerrayResult < faer :: Mat < T > >"
+    },
+    {
+      "path": "ferray_linalg::faer_bridge::faer_col_to_array1",
+      "kind": "fn",
+      "signature": "pub fn faer_col_to_array1 < T : LinalgFloat > (mat : & faer :: Mat < T >) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_linalg::faer_bridge::faer_to_array2",
+      "kind": "fn",
+      "signature": "pub fn faer_to_array2 < T : LinalgFloat > (mat : & faer :: Mat < T >) -> FerrayResult < Array < T , Ix2 > >"
+    },
+    {
+      "path": "ferray_linalg::faer_bridge::faer_to_arrayd",
+      "kind": "fn",
+      "signature": "pub fn faer_to_arrayd < T : LinalgFloat > (mat : & faer :: Mat < T >) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::gemm::cpu_supports_avx2_fma",
+      "kind": "fn",
+      "signature": "pub fn cpu_supports_avx2_fma () -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::cpu_supports_avx512_bw",
+      "kind": "fn",
+      "signature": "pub fn cpu_supports_avx512_bw () -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::cpu_supports_avx512_vnni",
+      "kind": "fn",
+      "signature": "pub fn cpu_supports_avx512_vnni () -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::cpu_supports_avx512f",
+      "kind": "fn",
+      "signature": "pub fn cpu_supports_avx512f () -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::cpu_supports_neon",
+      "kind": "fn",
+      "signature": "pub fn cpu_supports_neon () -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::faer_fallback::gemm_fallback_c32",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_fallback_c32 (m : usize , n : usize , k : usize , alpha_re : f32 , alpha_im : f32 , a : * const f32 , lda : usize , b : * const f32 , ldb : usize , beta_re : f32 , beta_im : f32 , c : * mut f32 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::faer_fallback::gemm_fallback_c64",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_fallback_c64 (m : usize , n : usize , k : usize , alpha_re : f64 , alpha_im : f64 , a : * const f64 , lda : usize , b : * const f64 , ldb : usize , beta_re : f64 , beta_im : f64 , c : * mut f64 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::faer_fallback::gemm_fallback_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_fallback_f32 (m : usize , n : usize , k : usize , alpha : f32 , a : * const f32 , lda : usize , b : * const f32 , ldb : usize , beta : f32 , c : * mut f32 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::faer_fallback::gemm_fallback_f64",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_fallback_f64 (m : usize , n : usize , k : usize , alpha : f64 , a : * const f64 , lda : usize , b : * const f64 , ldb : usize , beta : f64 , c : * mut f64 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::faer_fallback::gemm_fallback_i16",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_fallback_i16 (m : usize , n : usize , k : usize , a : * const i16 , lda : usize , b : * const i16 , ldb : usize , c : * mut i32 , ldc : usize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::faer_fallback::gemm_fallback_i8",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_fallback_i8 (m : usize , n : usize , k : usize , a : * const u8 , lda : usize , b : * const i8 , ldb : usize , c : * mut i32 , ldc : usize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::faer_fallback::gemm_fallback_i8s",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_fallback_i8s (m : usize , n : usize , k : usize , a : * const i8 , lda : usize , b : * const i8 , ldb : usize , c : * mut i32 , ldc : usize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::gemm_bf16_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_bf16_f32 (m : usize , n : usize , k : usize , a : * const half :: bf16 , b : * const half :: bf16 , c : * mut f32 , accumulate : bool ,) -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::gemm_c32",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_c32 (m : usize , n : usize , k : usize , alpha_re : f32 , alpha_im : f32 , a : * const f32 , b : * const f32 , beta_re : f32 , beta_im : f32 , c : * mut f32 ,) -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::gemm_c64",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_c64 (m : usize , n : usize , k : usize , alpha_re : f64 , alpha_im : f64 , a : * const f64 , b : * const f64 , beta_re : f64 , beta_im : f64 , c : * mut f64 ,) -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::gemm_f16_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_f16_f32 (m : usize , n : usize , k : usize , a : * const half :: f16 , b : * const half :: f16 , c : * mut f32 , accumulate : bool ,) -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::gemm_f32",
+      "kind": "fn",
+      "signature": "pub fn gemm_f32 (m : usize , n : usize , k : usize , alpha : f32 , a : & [f32] , b : & [f32] , beta : f32 , c : & mut [f32] ,) -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::gemm_f64",
+      "kind": "fn",
+      "signature": "pub fn gemm_f64 (m : usize , n : usize , k : usize , alpha : f64 , a : & [f64] , b : & [f64] , beta : f64 , c : & mut [f64] ,) -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::gemm_i16",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_i16 (m : usize , n : usize , k : usize , a : * const i16 , b : * const i16 , c : * mut i32 , accumulate : bool ,) -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::gemm_i8",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_i8 (m : usize , n : usize , k : usize , a : * const u8 , b : * const i8 , c : * mut i32 , accumulate : bool ,) -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::gemm_i8_signed",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_i8_signed (m : usize , n : usize , k : usize , a : * const i8 , b : * const i8 , c : * mut i32 , accumulate : bool ,) -> bool"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2::kernel_8x6",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_8x6 (kc : usize , alpha : f64 , packed_a : * const f64 , packed_b : * const f64 , beta : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2::kernel_edge",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge (m : usize , n : usize , kc : usize , alpha : f64 , packed_a : * const f64 , packed_b : * const f64 , beta : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_complex_f32::kernel_4x4_c32",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x4_c32 (kc : usize , alpha_re : f32 , alpha_im : f32 , packed_a : * const f32 , packed_b : * const f32 , beta_re : f32 , beta_im : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_complex_f32::kernel_edge_c32",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_c32 (m : usize , n : usize , kc : usize , alpha_re : f32 , alpha_im : f32 , packed_a : * const f32 , packed_b : * const f32 , beta_re : f32 , beta_im : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_complex_f64::kernel_4x2_c64",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x2_c64 (kc : usize , alpha_re : f64 , alpha_im : f64 , packed_a : * const f64 , packed_b : * const f64 , beta_re : f64 , beta_im : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_complex_f64::kernel_edge_c64",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_c64 (m : usize , n : usize , kc : usize , alpha_re : f64 , alpha_im : f64 , packed_a : * const f64 , packed_b : * const f64 , beta_re : f64 , beta_im : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_f32::kernel_4x16",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x16 (kc : usize , alpha : f32 , packed_a : * const f32 , packed_b : * const f32 , beta : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_f32::kernel_edge_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_f32 (m : usize , n : usize , kc : usize , alpha : f32 , packed_a : * const f32 , packed_b : * const f32 , beta : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_i16::kernel_4x8_i16",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x8_i16 (kc : usize , packed_a : * const i16 , packed_b : * const i16 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_i16::kernel_edge_i16",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_i16 (m : usize , n : usize , kc : usize , packed_a : * const i16 , packed_b : * const i16 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_i8::kernel_4x8_i8",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x8_i8 (kc : usize , packed_a : * const u8 , packed_b : * const i8 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_i8::kernel_edge_i8",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_i8 (m : usize , n : usize , kc : usize , packed_a : * const u8 , packed_b : * const i8 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_i8s::kernel_4x8_i8_signed",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x8_i8_signed (kc : usize , packed_a : * const i16 , packed_b : * const i8 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx2_i8s::kernel_edge_i8_signed",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_i8_signed (m : usize , n : usize , kc : usize , packed_a : * const i16 , packed_b : * const i8 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512::kernel_4x16_avx512",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x16_avx512 (kc : usize , alpha : f64 , packed_a : * const f64 , packed_b : * const f64 , beta : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512::kernel_edge_avx512",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_avx512 (m : usize , n : usize , kc : usize , alpha : f64 , packed_a : * const f64 , packed_b : * const f64 , beta : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_complex_f32::kernel_4x8_c32_avx512",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x8_c32_avx512 (kc : usize , alpha_re : f32 , alpha_im : f32 , packed_a : * const f32 , packed_b : * const f32 , beta_re : f32 , beta_im : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_complex_f32::kernel_edge_c32_avx512",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_c32_avx512 (m : usize , n : usize , kc : usize , alpha_re : f32 , alpha_im : f32 , packed_a : * const f32 , packed_b : * const f32 , beta_re : f32 , beta_im : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_complex_f64::kernel_4x4_c64_avx512",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x4_c64_avx512 (kc : usize , alpha_re : f64 , alpha_im : f64 , packed_a : * const f64 , packed_b : * const f64 , beta_re : f64 , beta_im : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_complex_f64::kernel_edge_c64_avx512",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_c64_avx512 (m : usize , n : usize , kc : usize , alpha_re : f64 , alpha_im : f64 , packed_a : * const f64 , packed_b : * const f64 , beta_re : f64 , beta_im : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_f32::kernel_4x32_avx512",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x32_avx512 (kc : usize , alpha : f32 , packed_a : * const f32 , packed_b : * const f32 , beta : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_f32::kernel_edge_avx512_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_avx512_f32 (m : usize , n : usize , kc : usize , alpha : f32 , packed_a : * const f32 , packed_b : * const f32 , beta : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_i16::KB_I16",
+      "kind": "reexport",
+      "signature": "pub use super :: kernel_avx2_i16 :: KB_I16"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_i16::kernel_4x16_i16_avx512",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x16_i16_avx512 (kc : usize , packed_a : * const i16 , packed_b : * const i16 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_i16::kernel_edge_i16_avx512",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_i16_avx512 (m : usize , n : usize , kc : usize , packed_a : * const i16 , packed_b : * const i16 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_vnni_i8::KB_I8",
+      "kind": "reexport",
+      "signature": "pub use super :: kernel_avx2_i8 :: KB_I8"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_vnni_i8::kernel_4x16_i8_avx512",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x16_i8_avx512 (kc : usize , packed_a : * const u8 , packed_b : * const i8 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avx512_vnni_i8::kernel_edge_i8_avx512",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_i8_avx512 (m : usize , n : usize , kc : usize , packed_a : * const u8 , packed_b : * const i8 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avxvnni_i8::KB_I8",
+      "kind": "reexport",
+      "signature": "pub use super :: kernel_avx2_i8 :: { KB_I8 , MR_I8 , NR_I8 }"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avxvnni_i8::MR_I8",
+      "kind": "reexport",
+      "signature": "pub use super :: kernel_avx2_i8 :: { KB_I8 , MR_I8 , NR_I8 }"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avxvnni_i8::NR_I8",
+      "kind": "reexport",
+      "signature": "pub use super :: kernel_avx2_i8 :: { KB_I8 , MR_I8 , NR_I8 }"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_avxvnni_i8::kernel_4x8_i8_vnni",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x8_i8_vnni (kc : usize , packed_a : * const u8 , packed_b : * const i8 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_complex_f32::kernel_4x4_neon_c32",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x4_neon_c32 (kc : usize , alpha_re : f32 , alpha_im : f32 , packed_a : * const f32 , packed_b : * const f32 , beta_re : f32 , beta_im : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_complex_f32::kernel_edge_neon_c32",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_neon_c32 (m : usize , n : usize , kc : usize , alpha_re : f32 , alpha_im : f32 , packed_a : * const f32 , packed_b : * const f32 , beta_re : f32 , beta_im : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_complex_f64::kernel_4x2_neon_c64",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x2_neon_c64 (kc : usize , alpha_re : f64 , alpha_im : f64 , packed_a : * const f64 , packed_b : * const f64 , beta_re : f64 , beta_im : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_complex_f64::kernel_edge_neon_c64",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_neon_c64 (m : usize , n : usize , kc : usize , alpha_re : f64 , alpha_im : f64 , packed_a : * const f64 , packed_b : * const f64 , beta_re : f64 , beta_im : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_f32::kernel_4x16_neon_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x16_neon_f32 (kc : usize , alpha : f32 , packed_a : * const f32 , packed_b : * const f32 , beta : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_f32::kernel_edge_neon_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_neon_f32 (m : usize , n : usize , kc : usize , alpha : f32 , packed_a : * const f32 , packed_b : * const f32 , beta : f32 , c : * mut f32 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_f64::kernel_4x8_neon_f64",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x8_neon_f64 (kc : usize , alpha : f64 , packed_a : * const f64 , packed_b : * const f64 , beta : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_f64::kernel_edge_neon_f64",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_neon_f64 (m : usize , n : usize , kc : usize , alpha : f64 , packed_a : * const f64 , packed_b : * const f64 , beta : f64 , c : * mut f64 , c_rs : isize , c_cs : isize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_i16::kernel_4x8_neon_i16",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x8_neon_i16 (kc : usize , packed_a : * const i16 , packed_b : * const i16 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_i16::kernel_edge_neon_i16",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_neon_i16 (m : usize , n : usize , kc : usize , packed_a : * const i16 , packed_b : * const i16 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_i8::kernel_4x8_neon_i8",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x8_neon_i8 (kc : usize , packed_a : * const u8 , packed_b : * const i8 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_i8::kernel_edge_neon_i8",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_neon_i8 (m : usize , n : usize , kc : usize , packed_a : * const u8 , packed_b : * const i8 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_i8s::kernel_4x8_neon_i8_signed",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_4x8_neon_i8_signed (kc : usize , packed_a : * const i8 , packed_b : * const i8 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::kernel_neon_i8s::kernel_edge_neon_i8_signed",
+      "kind": "fn",
+      "signature": "pub unsafe fn kernel_edge_neon_i8_signed (m : usize , n : usize , kc : usize , packed_a : * const i8 , packed_b : * const i8 , c : * mut i32 , c_rs : isize , c_cs : isize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::openblas_backend::gemm_c32_openblas",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_c32_openblas (m : usize , n : usize , k : usize , alpha_re : f32 , alpha_im : f32 , a : * const f32 , b : * const f32 , beta_re : f32 , beta_im : f32 , c : * mut f32 ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::openblas_backend::gemm_c64_openblas",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_c64_openblas (m : usize , n : usize , k : usize , alpha_re : f64 , alpha_im : f64 , a : * const f64 , b : * const f64 , beta_re : f64 , beta_im : f64 , c : * mut f64 ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::openblas_backend::gemm_f32_openblas",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_f32_openblas (m : usize , n : usize , k : usize , alpha : f32 , a : * const f32 , b : * const f32 , beta : f32 , c : * mut f32 ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::openblas_backend::gemm_f64_openblas",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_f64_openblas (m : usize , n : usize , k : usize , alpha : f64 , a : * const f64 , b : * const f64 , beta : f64 , c : * mut f64 ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx2_c32",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx2_c32 (m : usize , n : usize , k : usize , alpha_re : f32 , alpha_im : f32 , a : * const f32 , lda : usize , b : * const f32 , ldb : usize , beta_re : f32 , beta_im : f32 , c : * mut f32 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx2_c64",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx2_c64 (m : usize , n : usize , k : usize , alpha_re : f64 , alpha_im : f64 , a : * const f64 , lda : usize , b : * const f64 , ldb : usize , beta_re : f64 , beta_im : f64 , c : * mut f64 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx2_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx2_f32 (m : usize , n : usize , k : usize , alpha : f32 , a : * const f32 , lda : usize , b : * const f32 , ldb : usize , beta : f32 , c : * mut f32 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx2_f64",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx2_f64 (m : usize , n : usize , k : usize , alpha : f64 , a : * const f64 , lda : usize , b : * const f64 , ldb : usize , beta : f64 , c : * mut f64 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx2_i16",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx2_i16 (m : usize , n : usize , k : usize , a : * const i16 , lda : usize , b : * const i16 , ldb : usize , c : * mut i32 , ldc : usize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx2_i8",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx2_i8 (m : usize , n : usize , k : usize , a : * const u8 , lda : usize , b : * const i8 , ldb : usize , c : * mut i32 , ldc : usize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx2_i8s",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx2_i8s (m : usize , n : usize , k : usize , a : * const i8 , lda : usize , b : * const i8 , ldb : usize , c : * mut i32 , ldc : usize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx512_c32",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx512_c32 (m : usize , n : usize , k : usize , alpha_re : f32 , alpha_im : f32 , a : * const f32 , lda : usize , b : * const f32 , ldb : usize , beta_re : f32 , beta_im : f32 , c : * mut f32 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx512_c64",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx512_c64 (m : usize , n : usize , k : usize , alpha_re : f64 , alpha_im : f64 , a : * const f64 , lda : usize , b : * const f64 , ldb : usize , beta_re : f64 , beta_im : f64 , c : * mut f64 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx512_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx512_f32 (m : usize , n : usize , k : usize , alpha : f32 , a : * const f32 , lda : usize , b : * const f32 , ldb : usize , beta : f32 , c : * mut f32 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx512_f64",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx512_f64 (m : usize , n : usize , k : usize , alpha : f64 , a : * const f64 , lda : usize , b : * const f64 , ldb : usize , beta : f64 , c : * mut f64 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx512_i16",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx512_i16 (m : usize , n : usize , k : usize , a : * const i16 , lda : usize , b : * const i16 , ldb : usize , c : * mut i32 , ldc : usize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer::gemm_avx512_vnni_i8",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_avx512_vnni_i8 (m : usize , n : usize , k : usize , a : * const u8 , lda : usize , b : * const i8 , ldb : usize , c : * mut i32 , ldc : usize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer_neon::gemm_neon_c32",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_neon_c32 (m : usize , n : usize , k : usize , alpha_re : f32 , alpha_im : f32 , a : * const f32 , lda : usize , b : * const f32 , ldb : usize , beta_re : f32 , beta_im : f32 , c : * mut f32 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer_neon::gemm_neon_c64",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_neon_c64 (m : usize , n : usize , k : usize , alpha_re : f64 , alpha_im : f64 , a : * const f64 , lda : usize , b : * const f64 , ldb : usize , beta_re : f64 , beta_im : f64 , c : * mut f64 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer_neon::gemm_neon_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_neon_f32 (m : usize , n : usize , k : usize , alpha : f32 , a : * const f32 , lda : usize , b : * const f32 , ldb : usize , beta : f32 , c : * mut f32 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer_neon::gemm_neon_f64",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_neon_f64 (m : usize , n : usize , k : usize , alpha : f64 , a : * const f64 , lda : usize , b : * const f64 , ldb : usize , beta : f64 , c : * mut f64 , ldc : usize ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer_neon::gemm_neon_i16",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_neon_i16 (m : usize , n : usize , k : usize , a : * const i16 , lda : usize , b : * const i16 , ldb : usize , c : * mut i32 , ldc : usize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer_neon::gemm_neon_i8",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_neon_i8 (m : usize , n : usize , k : usize , a : * const u8 , lda : usize , b : * const i8 , ldb : usize , c : * mut i32 , ldc : usize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::outer_neon::gemm_neon_i8s",
+      "kind": "fn",
+      "signature": "pub unsafe fn gemm_neon_i8s (m : usize , n : usize , k : usize , a : * const i8 , lda : usize , b : * const i8 , ldb : usize , c : * mut i32 , ldc : usize , accumulate : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_a",
+      "kind": "fn",
+      "signature": "pub fn pack_a (mc : usize , kc : usize , a : * const f64 , lda : usize , packed : & mut [f64])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_a_c32",
+      "kind": "fn",
+      "signature": "pub fn pack_a_c32 (mc : usize , kc : usize , a : * const f32 , lda : usize , packed : & mut [f32])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_a_c64",
+      "kind": "fn",
+      "signature": "pub fn pack_a_c64 (mc : usize , kc : usize , a : * const f64 , lda : usize , packed : & mut [f64])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_a_f32",
+      "kind": "fn",
+      "signature": "pub fn pack_a_f32 (mc : usize , kc : usize , a : * const f32 , lda : usize , packed : & mut [f32])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_a_i16",
+      "kind": "fn",
+      "signature": "pub fn pack_a_i16 (mc : usize , k : usize , a : * const i16 , lda : usize , packed : & mut [i16])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_a_i16_mr4_avx512",
+      "kind": "fn",
+      "signature": "pub fn pack_a_i16_mr4_avx512 (mc : usize , k : usize , a : * const i16 , lda : usize , packed : & mut [i16])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_a_i8s",
+      "kind": "fn",
+      "signature": "pub fn pack_a_i8s (mc : usize , k : usize , a : * const i8 , lda : usize , packed : & mut [i16])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_a_u8",
+      "kind": "fn",
+      "signature": "pub fn pack_a_u8 (mc : usize , k : usize , a : * const u8 , lda : usize , packed : & mut [u8])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b",
+      "kind": "fn",
+      "signature": "pub fn pack_b (kc : usize , nc : usize , b : * const f64 , ldb : usize , packed : & mut [f64])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_c32",
+      "kind": "fn",
+      "signature": "pub fn pack_b_c32 (kc : usize , nc : usize , b : * const f32 , ldb : usize , packed : & mut [f32])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_c32_nr8",
+      "kind": "fn",
+      "signature": "pub fn pack_b_c32_nr8 (kc : usize , nc : usize , b : * const f32 , ldb : usize , packed : & mut [f32])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_c64",
+      "kind": "fn",
+      "signature": "pub fn pack_b_c64 (kc : usize , nc : usize , b : * const f64 , ldb : usize , packed : & mut [f64])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_c64_nr4",
+      "kind": "fn",
+      "signature": "pub fn pack_b_c64_nr4 (kc : usize , nc : usize , b : * const f64 , ldb : usize , packed : & mut [f64])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_f32",
+      "kind": "fn",
+      "signature": "pub fn pack_b_f32 (kc : usize , nc : usize , b : * const f32 , ldb : usize , packed : & mut [f32])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_f32_nr32",
+      "kind": "fn",
+      "signature": "pub fn pack_b_f32_nr32 (kc : usize , nc : usize , b : * const f32 , ldb : usize , packed : & mut [f32])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_f64_nr16",
+      "kind": "fn",
+      "signature": "pub fn pack_b_f64_nr16 (kc : usize , nc : usize , b : * const f64 , ldb : usize , packed : & mut [f64])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_i16",
+      "kind": "fn",
+      "signature": "pub fn pack_b_i16 (k : usize , nc : usize , b : * const i16 , ldb : usize , packed : & mut [i16])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_i16_nr16",
+      "kind": "fn",
+      "signature": "pub fn pack_b_i16_nr16 (k : usize , nc : usize , b : * const i16 , ldb : usize , packed : & mut [i16])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_i8",
+      "kind": "fn",
+      "signature": "pub fn pack_b_i8 (k : usize , nc : usize , b : * const i8 , ldb : usize , packed : & mut [i8])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_i8_nr16",
+      "kind": "fn",
+      "signature": "pub fn pack_b_i8_nr16 (k : usize , nc : usize , b : * const i8 , ldb : usize , packed : & mut [i8])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_b_i8s",
+      "kind": "fn",
+      "signature": "pub fn pack_b_i8s (k : usize , nc : usize , b : * const i8 , ldb : usize , packed : & mut [i8])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_kc_i16",
+      "kind": "fn",
+      "signature": "pub fn pack_kc_i16 (k : usize) -> usize"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_kc_i8",
+      "kind": "fn",
+      "signature": "pub fn pack_kc_i8 (k : usize) -> usize"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack::pack_kc_i8s",
+      "kind": "fn",
+      "signature": "pub fn pack_kc_i8s (k : usize) -> usize"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_a_neon_c32",
+      "kind": "fn",
+      "signature": "pub fn pack_a_neon_c32 (mc : usize , kc : usize , a : * const f32 , lda : usize , packed : & mut [f32])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_a_neon_c64",
+      "kind": "fn",
+      "signature": "pub fn pack_a_neon_c64 (mc : usize , kc : usize , a : * const f64 , lda : usize , packed : & mut [f64])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_a_neon_f32",
+      "kind": "fn",
+      "signature": "pub fn pack_a_neon_f32 (mc : usize , kc : usize , a : * const f32 , lda : usize , packed : & mut [f32])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_a_neon_f64",
+      "kind": "fn",
+      "signature": "pub fn pack_a_neon_f64 (mc : usize , kc : usize , a : * const f64 , lda : usize , packed : & mut [f64])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_a_neon_i16",
+      "kind": "fn",
+      "signature": "pub fn pack_a_neon_i16 (mc : usize , kc : usize , a : * const i16 , lda : usize , packed : & mut [i16])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_a_neon_i8s",
+      "kind": "fn",
+      "signature": "pub fn pack_a_neon_i8s (mc : usize , kc : usize , a : * const i8 , lda : usize , packed : & mut [i8])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_a_neon_u8",
+      "kind": "fn",
+      "signature": "pub fn pack_a_neon_u8 (mc : usize , kc : usize , a : * const u8 , lda : usize , packed : & mut [u8])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_b_neon_c32",
+      "kind": "fn",
+      "signature": "pub fn pack_b_neon_c32 (kc : usize , nc : usize , b : * const f32 , ldb : usize , packed : & mut [f32])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_b_neon_c64",
+      "kind": "fn",
+      "signature": "pub fn pack_b_neon_c64 (kc : usize , nc : usize , b : * const f64 , ldb : usize , packed : & mut [f64])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_b_neon_f32",
+      "kind": "fn",
+      "signature": "pub fn pack_b_neon_f32 (kc : usize , nc : usize , b : * const f32 , ldb : usize , packed : & mut [f32])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_b_neon_f64",
+      "kind": "fn",
+      "signature": "pub fn pack_b_neon_f64 (kc : usize , nc : usize , b : * const f64 , ldb : usize , packed : & mut [f64])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_b_neon_i16",
+      "kind": "fn",
+      "signature": "pub fn pack_b_neon_i16 (kc : usize , nc : usize , b : * const i16 , ldb : usize , packed : & mut [i16])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_b_neon_i8",
+      "kind": "fn",
+      "signature": "pub fn pack_b_neon_i8 (kc : usize , nc : usize , b : * const i8 , ldb : usize , packed : & mut [i8])"
+    },
+    {
+      "path": "ferray_linalg::gemm::pack_neon::pack_b_neon_i8s",
+      "kind": "fn",
+      "signature": "pub fn pack_b_neon_i8s (kc : usize , nc : usize , b : * const i8 , ldb : usize , packed : & mut [i8])"
+    },
+    {
+      "path": "ferray_linalg::gemm::quantized_matmul",
+      "kind": "fn",
+      "signature": "pub unsafe fn quantized_matmul (m : usize , n : usize , k : usize , a : * const u8 , a_zp : u8 , scale_a : f32 , b : * const i8 , b_zp : i8 , scale_b : f32 , c : * mut f32 , accumulate : bool ,) -> bool"
+    },
+    {
+      "path": "ferray_linalg::inner",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::inv",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::inv_batched",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::inv_complex",
+      "kind": "reexport",
+      "signature": "pub use complex :: { det_complex , inv_complex , matmul_complex , solve_complex , solve_complex_vec }"
+    },
+    {
+      "path": "ferray_linalg::kron",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::lstsq",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::lu",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::matmul",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::matmul_complex",
+      "kind": "reexport",
+      "signature": "pub use complex :: { det_complex , inv_complex , matmul_complex , solve_complex , solve_complex_vec }"
+    },
+    {
+      "path": "ferray_linalg::matrix_norm",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::matrix_power",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::matrix_power_batched",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::matrix_rank",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::matrix_rank_batched",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::matrix_transpose",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::matvec",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::multi_dot",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::norm",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::norm_axis",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::norms::NormOrder",
+      "kind": "enum",
+      "signature": "pub enum NormOrder"
+    },
+    {
+      "path": "ferray_linalg::norms::cond",
+      "kind": "fn",
+      "signature": "pub fn cond < T : LinalgFloat > (a : & Array < T , Ix2 > , p : NormOrder) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_linalg::norms::det",
+      "kind": "fn",
+      "signature": "pub fn det < T : LinalgFloat > (a : & Array < T , Ix2 >) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_linalg::norms::det_batched",
+      "kind": "fn",
+      "signature": "pub fn det_batched < T : LinalgFloat > (a : & Array < T , IxDyn >) -> FerrayResult < Array < T , Ix1 > >"
+    },
+    {
+      "path": "ferray_linalg::norms::diagonal",
+      "kind": "fn",
+      "signature": "pub fn diagonal < T > (a : & Array < T , Ix2 > , offset : isize) -> FerrayResult < Array < T , Ix1 > > where T : Element ,"
+    },
+    {
+      "path": "ferray_linalg::norms::matrix_norm",
+      "kind": "fn",
+      "signature": "pub fn matrix_norm < T : LinalgFloat > (a : & Array < T , Ix2 > , ord : NormOrder) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_linalg::norms::matrix_rank",
+      "kind": "fn",
+      "signature": "pub fn matrix_rank < T : LinalgFloat > (a : & Array < T , Ix2 > , tol : Option < T >) -> FerrayResult < usize >"
+    },
+    {
+      "path": "ferray_linalg::norms::matrix_rank_batched",
+      "kind": "fn",
+      "signature": "pub fn matrix_rank_batched < T : LinalgFloat > (a : & Array < T , IxDyn > , tol : Option < T > ,) -> FerrayResult < Array < i64 , Ix1 > >"
+    },
+    {
+      "path": "ferray_linalg::norms::matrix_transpose",
+      "kind": "fn",
+      "signature": "pub fn matrix_transpose < T : Element > (a : & Array < T , Ix2 >) -> ArrayView < '_ , T , Ix2 >"
+    },
+    {
+      "path": "ferray_linalg::norms::norm",
+      "kind": "fn",
+      "signature": "pub fn norm < T : LinalgFloat > (a : & Array < T , IxDyn > , ord : NormOrder) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_linalg::norms::norm_axis",
+      "kind": "fn",
+      "signature": "pub fn norm_axis < T : LinalgFloat > (a : & Array < T , IxDyn > , ord : NormOrder , axis : usize , keepdims : bool ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::norms::slogdet",
+      "kind": "fn",
+      "signature": "pub fn slogdet < T : LinalgFloat > (a : & Array < T , Ix2 >) -> FerrayResult < (T , T) >"
+    },
+    {
+      "path": "ferray_linalg::norms::slogdet_batched",
+      "kind": "fn",
+      "signature": "pub fn slogdet_batched < T : LinalgFloat > (a : & Array < T , IxDyn > ,) -> FerrayResult < (Array < T , Ix1 > , Array < T , Ix1 >) >"
+    },
+    {
+      "path": "ferray_linalg::norms::trace",
+      "kind": "fn",
+      "signature": "pub fn trace < T : LinalgFloat > (a : & Array < T , Ix2 >) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_linalg::norms::trace_offset",
+      "kind": "fn",
+      "signature": "pub fn trace_offset < T : LinalgFloat > (a : & Array < T , Ix2 > , offset : isize) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_linalg::norms::vector_norm",
+      "kind": "fn",
+      "signature": "pub fn vector_norm < T : LinalgFloat > (a : & Array < T , IxDyn > , ord : NormOrder , axis : Option < usize > , keepdims : bool ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::outer",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::pinv",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::pinv_batched",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::products::TensordotAxes",
+      "kind": "reexport",
+      "signature": "pub use tensordot :: { TensordotAxes , tensordot }"
+    },
+    {
+      "path": "ferray_linalg::products::cross",
+      "kind": "fn",
+      "signature": "pub fn cross < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::dot",
+      "kind": "fn",
+      "signature": "pub fn dot < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::einsum",
+      "kind": "reexport",
+      "signature": "pub use einsum :: einsum"
+    },
+    {
+      "path": "ferray_linalg::products::einsum::contraction::generic_contraction",
+      "kind": "fn",
+      "signature": "pub fn generic_contraction < T : LinalgFloat > (expr : & EinsumExpr , operands : & [& Array < T , IxDyn >] ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::einsum::einsum",
+      "kind": "fn",
+      "signature": "pub fn einsum < T : LinalgFloat > (subscripts : & str , operands : & [& Array < T , IxDyn >] ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::einsum::optimizer::EinsumStrategy",
+      "kind": "enum",
+      "signature": "pub enum EinsumStrategy"
+    },
+    {
+      "path": "ferray_linalg::products::einsum::optimizer::optimize",
+      "kind": "fn",
+      "signature": "pub fn optimize (expr : & EinsumExpr) -> EinsumStrategy"
+    },
+    {
+      "path": "ferray_linalg::products::einsum::parser::EinsumExpr",
+      "kind": "struct",
+      "signature": "pub struct EinsumExpr"
+    },
+    {
+      "path": "ferray_linalg::products::einsum::parser::Label",
+      "kind": "enum",
+      "signature": "pub enum Label"
+    },
+    {
+      "path": "ferray_linalg::products::einsum::parser::parse_subscripts",
+      "kind": "fn",
+      "signature": "pub fn parse_subscripts (subscripts : & str , operand_shapes : & [& [usize]]) -> FerrayResult < EinsumExpr >"
+    },
+    {
+      "path": "ferray_linalg::products::inner",
+      "kind": "fn",
+      "signature": "pub fn inner < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::kron",
+      "kind": "fn",
+      "signature": "pub fn kron < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::matmul",
+      "kind": "fn",
+      "signature": "pub fn matmul < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::matvec",
+      "kind": "fn",
+      "signature": "pub fn matvec < T : LinalgFloat > (m : & Array < T , IxDyn > , v : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::multi_dot",
+      "kind": "fn",
+      "signature": "pub fn multi_dot < T : LinalgFloat > (arrays : & [& Array < T , IxDyn >]) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::outer",
+      "kind": "fn",
+      "signature": "pub fn outer < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::tensordot",
+      "kind": "reexport",
+      "signature": "pub use tensordot :: { TensordotAxes , tensordot }"
+    },
+    {
+      "path": "ferray_linalg::products::tensordot::TensordotAxes",
+      "kind": "enum",
+      "signature": "pub enum TensordotAxes"
+    },
+    {
+      "path": "ferray_linalg::products::tensordot::tensordot",
+      "kind": "fn",
+      "signature": "pub fn tensordot < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > , axes : TensordotAxes ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::vdot",
+      "kind": "fn",
+      "signature": "pub fn vdot < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn >) -> FerrayResult < T >"
+    },
+    {
+      "path": "ferray_linalg::products::vecdot",
+      "kind": "fn",
+      "signature": "pub fn vecdot < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > , axis : Option < isize > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::products::vecmat",
+      "kind": "fn",
+      "signature": "pub fn vecmat < T : LinalgFloat > (v : & Array < T , IxDyn > , m : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::qr",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::qr_batched",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::scalar::LinalgFloat",
+      "kind": "trait",
+      "signature": "pub trait LinalgFloat"
+    },
+    {
+      "path": "ferray_linalg::scalar::private::Sealed",
+      "kind": "trait",
+      "signature": "pub trait Sealed"
+    },
+    {
+      "path": "ferray_linalg::slogdet",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::slogdet_batched",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::solve",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::solve::inv",
+      "kind": "fn",
+      "signature": "pub fn inv < T : LinalgFloat > (a : & Array < T , Ix2 >) -> FerrayResult < Array < T , Ix2 > >"
+    },
+    {
+      "path": "ferray_linalg::solve::inv_batched",
+      "kind": "fn",
+      "signature": "pub fn inv_batched < T : LinalgFloat > (a : & Array < T , IxDyn >) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::solve::lstsq",
+      "kind": "fn",
+      "signature": "pub fn lstsq < T : LinalgFloat > (a : & Array < T , Ix2 > , b : & Array < T , IxDyn > , rcond : Option < T > ,) -> FerrayResult < (Array < T , IxDyn > , Array < T , Ix1 > , usize , Array < T , Ix1 >) >"
+    },
+    {
+      "path": "ferray_linalg::solve::matrix_power",
+      "kind": "fn",
+      "signature": "pub fn matrix_power < T : LinalgFloat > (a : & Array < T , Ix2 > , n : i64) -> FerrayResult < Array < T , Ix2 > >"
+    },
+    {
+      "path": "ferray_linalg::solve::matrix_power_batched",
+      "kind": "fn",
+      "signature": "pub fn matrix_power_batched < T : LinalgFloat > (a : & Array < T , IxDyn > , power : i64 ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::solve::pinv",
+      "kind": "fn",
+      "signature": "pub fn pinv < T : LinalgFloat > (a : & Array < T , Ix2 > , rcond : Option < T >) -> FerrayResult < Array < T , Ix2 > >"
+    },
+    {
+      "path": "ferray_linalg::solve::pinv_batched",
+      "kind": "fn",
+      "signature": "pub fn pinv_batched < T : LinalgFloat > (a : & Array < T , IxDyn > , rcond : Option < T > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::solve::solve",
+      "kind": "fn",
+      "signature": "pub fn solve < T : LinalgFloat > (a : & Array < T , Ix2 > , b : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::solve::solve_batched",
+      "kind": "fn",
+      "signature": "pub fn solve_batched < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::solve::solve_dyn",
+      "kind": "fn",
+      "signature": "pub fn solve_dyn < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::solve::tensorinv",
+      "kind": "fn",
+      "signature": "pub fn tensorinv < T : LinalgFloat > (a : & Array < T , IxDyn > , ind : usize) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::solve::tensorsolve",
+      "kind": "fn",
+      "signature": "pub fn tensorsolve < T : LinalgFloat > (a : & Array < T , IxDyn > , b : & Array < T , IxDyn > , axes : Option < & [usize] > ,) -> FerrayResult < Array < T , IxDyn > >"
+    },
+    {
+      "path": "ferray_linalg::solve_batched",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::solve_complex",
+      "kind": "reexport",
+      "signature": "pub use complex :: { det_complex , inv_complex , matmul_complex , solve_complex , solve_complex_vec }"
+    },
+    {
+      "path": "ferray_linalg::solve_complex_vec",
+      "kind": "reexport",
+      "signature": "pub use complex :: { det_complex , inv_complex , matmul_complex , solve_complex , solve_complex_vec }"
+    },
+    {
+      "path": "ferray_linalg::solve_dyn",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::svd",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::svd_batched",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::svd_hermitian",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::svdvals",
+      "kind": "reexport",
+      "signature": "pub use decomp :: { QrMode , UPLO , cholesky , cholesky_batched , cholesky_upper , cholesky_upper_batched , eig , eigh , eigh_batched , eigh_batched_uplo , eigh_uplo , eigvals , eigvalsh , eigvalsh_batched , eigvalsh_batched_uplo , eigvalsh_uplo , lu , qr , qr_batched , svd , svd_batched , svd_hermitian , svdvals , }"
+    },
+    {
+      "path": "ferray_linalg::tensordot",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::tensorinv",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::tensorsolve",
+      "kind": "reexport",
+      "signature": "pub use solve :: { inv , inv_batched , lstsq , matrix_power , matrix_power_batched , pinv , pinv_batched , solve , solve_batched , solve_dyn , tensorinv , tensorsolve , }"
+    },
+    {
+      "path": "ferray_linalg::trace",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::trace_offset",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    },
+    {
+      "path": "ferray_linalg::trsm::trsm_left_lower_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn trsm_left_lower_f32 (m : usize , n : usize , alpha : f32 , a : * const f32 , lda : usize , b : * mut f32 , ldb : usize , unit_diag : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::trsm::trsm_left_lower_f64",
+      "kind": "fn",
+      "signature": "pub unsafe fn trsm_left_lower_f64 (m : usize , n : usize , alpha : f64 , a : * const f64 , lda : usize , b : * mut f64 , ldb : usize , unit_diag : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::trsm::trsm_left_upper_f32",
+      "kind": "fn",
+      "signature": "pub unsafe fn trsm_left_upper_f32 (m : usize , n : usize , alpha : f32 , a : * const f32 , lda : usize , b : * mut f32 , ldb : usize , unit_diag : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::trsm::trsm_left_upper_f64",
+      "kind": "fn",
+      "signature": "pub unsafe fn trsm_left_upper_f64 (m : usize , n : usize , alpha : f64 , a : * const f64 , lda : usize , b : * mut f64 , ldb : usize , unit_diag : bool ,)"
+    },
+    {
+      "path": "ferray_linalg::vdot",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::vecdot",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::vecmat",
+      "kind": "reexport",
+      "signature": "pub use products :: { TensordotAxes , cross , dot , einsum , inner , kron , matmul , matvec , multi_dot , outer , tensordot , vdot , vecdot , vecmat , }"
+    },
+    {
+      "path": "ferray_linalg::vector_norm",
+      "kind": "reexport",
+      "signature": "pub use norms :: { NormOrder , cond , det , det_batched , diagonal , matrix_norm , matrix_rank , matrix_rank_batched , matrix_transpose , norm , norm_axis , slogdet , slogdet_batched , trace , trace_offset , vector_norm , }"
+    }
+  ]
+}

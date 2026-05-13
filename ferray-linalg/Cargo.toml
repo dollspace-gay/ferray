@@ -69,3 +69,6 @@ openblas = ["dep:openblas-src", "dep:cblas-sys"]
 [dev-dependencies]
 proptest = { workspace = true }
 ferray-test-oracle = { path = "../ferray-test-oracle" }
+serde = { workspace = true }
+serde_json = "1"
+toml = "0.8"
