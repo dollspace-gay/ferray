@@ -1,0 +1,856 @@
+{
+  "crate": "ferray-strings",
+  "generated_by": "surface-inventory v1",
+  "items": [
+    {
+      "path": "ferray_strings::CompactStringArray",
+      "kind": "reexport",
+      "signature": "pub use compact :: { CompactStringArray , CompactStringIter , estimated_string_array_bytes }"
+    },
+    {
+      "path": "ferray_strings::CompactStringIter",
+      "kind": "reexport",
+      "signature": "pub use compact :: { CompactStringArray , CompactStringIter , estimated_string_array_bytes }"
+    },
+    {
+      "path": "ferray_strings::Regex",
+      "kind": "reexport",
+      "signature": "pub use regex :: Regex"
+    },
+    {
+      "path": "ferray_strings::StringArray",
+      "kind": "reexport",
+      "signature": "pub use string_array :: { StringArray , StringArray1 , StringArray2 , array }"
+    },
+    {
+      "path": "ferray_strings::StringArray1",
+      "kind": "reexport",
+      "signature": "pub use string_array :: { StringArray , StringArray1 , StringArray2 , array }"
+    },
+    {
+      "path": "ferray_strings::StringArray2",
+      "kind": "reexport",
+      "signature": "pub use string_array :: { StringArray , StringArray1 , StringArray2 , array }"
+    },
+    {
+      "path": "ferray_strings::add",
+      "kind": "reexport",
+      "signature": "pub use concat :: { add , add_same , multiply }"
+    },
+    {
+      "path": "ferray_strings::add_same",
+      "kind": "reexport",
+      "signature": "pub use concat :: { add , add_same , multiply }"
+    },
+    {
+      "path": "ferray_strings::align::center",
+      "kind": "fn",
+      "signature": "pub fn center < D : Dimension > (a : & StringArray < D > , width : usize , fillchar : char ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::align::ljust",
+      "kind": "fn",
+      "signature": "pub fn ljust < D : Dimension > (a : & StringArray < D > , width : usize) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::align::ljust_with",
+      "kind": "fn",
+      "signature": "pub fn ljust_with < D : Dimension > (a : & StringArray < D > , width : usize , fillchar : char ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::align::rjust",
+      "kind": "fn",
+      "signature": "pub fn rjust < D : Dimension > (a : & StringArray < D > , width : usize) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::align::rjust_with",
+      "kind": "fn",
+      "signature": "pub fn rjust_with < D : Dimension > (a : & StringArray < D > , width : usize , fillchar : char ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::align::zfill",
+      "kind": "fn",
+      "signature": "pub fn zfill < D : Dimension > (a : & StringArray < D > , width : usize) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::array",
+      "kind": "reexport",
+      "signature": "pub use string_array :: { StringArray , StringArray1 , StringArray2 , array }"
+    },
+    {
+      "path": "ferray_strings::capitalize",
+      "kind": "reexport",
+      "signature": "pub use case :: { capitalize , lower , title , upper }"
+    },
+    {
+      "path": "ferray_strings::case::capitalize",
+      "kind": "fn",
+      "signature": "pub fn capitalize < D : Dimension > (a : & StringArray < D >) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::case::lower",
+      "kind": "fn",
+      "signature": "pub fn lower < D : Dimension > (a : & StringArray < D >) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::case::title",
+      "kind": "fn",
+      "signature": "pub fn title < D : Dimension > (a : & StringArray < D >) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::case::upper",
+      "kind": "fn",
+      "signature": "pub fn upper < D : Dimension > (a : & StringArray < D >) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::center",
+      "kind": "reexport",
+      "signature": "pub use align :: { center , ljust , ljust_with , rjust , rjust_with , zfill }"
+    },
+    {
+      "path": "ferray_strings::classify::isalnum",
+      "kind": "fn",
+      "signature": "pub fn isalnum < D : Dimension > (a : & StringArray < D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::classify::isalpha",
+      "kind": "fn",
+      "signature": "pub fn isalpha < D : Dimension > (a : & StringArray < D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::classify::isdecimal",
+      "kind": "fn",
+      "signature": "pub fn isdecimal < D : Dimension > (a : & StringArray < D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::classify::isdigit",
+      "kind": "fn",
+      "signature": "pub fn isdigit < D : Dimension > (a : & StringArray < D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::classify::islower",
+      "kind": "fn",
+      "signature": "pub fn islower < D : Dimension > (a : & StringArray < D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::classify::isnumeric",
+      "kind": "fn",
+      "signature": "pub fn isnumeric < D : Dimension > (a : & StringArray < D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::classify::isspace",
+      "kind": "fn",
+      "signature": "pub fn isspace < D : Dimension > (a : & StringArray < D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::classify::istitle",
+      "kind": "fn",
+      "signature": "pub fn istitle < D : Dimension > (a : & StringArray < D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::classify::isupper",
+      "kind": "fn",
+      "signature": "pub fn isupper < D : Dimension > (a : & StringArray < D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray",
+      "kind": "struct",
+      "signature": "pub struct CompactStringArray"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::as_str",
+      "kind": "method",
+      "signature": "pub fn as_str (& self , i : usize) -> Option < & str >"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::data",
+      "kind": "method",
+      "signature": "pub fn data (& self) -> & [u8]"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::estimated_bytes",
+      "kind": "method",
+      "signature": "pub fn estimated_bytes (& self) -> usize"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::from_iter_str",
+      "kind": "method",
+      "signature": "pub fn from_iter_str < 'a , I > (strs : I) -> Self where I : IntoIterator < Item = & 'a str > ,"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::from_raw_parts",
+      "kind": "method",
+      "signature": "pub fn from_raw_parts (data : Vec < u8 > , offsets : Vec < usize >) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::from_string_array",
+      "kind": "method",
+      "signature": "pub fn from_string_array < D : ferray_core :: Dimension > (arr : & StringArray < D >) -> Self"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::from_strs",
+      "kind": "method",
+      "signature": "pub fn from_strs (strs : & [& str]) -> Self"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::is_empty",
+      "kind": "method",
+      "signature": "pub fn is_empty (& self) -> bool"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::iter",
+      "kind": "method",
+      "signature": "pub fn iter (& self) -> CompactStringIter < '_ >"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::len",
+      "kind": "method",
+      "signature": "pub fn len (& self) -> usize"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::offsets",
+      "kind": "method",
+      "signature": "pub fn offsets (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::to_string_array",
+      "kind": "method",
+      "signature": "pub fn to_string_array (& self) -> FerrayResult < StringArray1 >"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringArray::total_bytes",
+      "kind": "method",
+      "signature": "pub fn total_bytes (& self) -> usize"
+    },
+    {
+      "path": "ferray_strings::compact::CompactStringIter",
+      "kind": "struct",
+      "signature": "pub struct CompactStringIter < 'a >"
+    },
+    {
+      "path": "ferray_strings::compact::estimated_string_array_bytes",
+      "kind": "fn",
+      "signature": "pub fn estimated_string_array_bytes (strs : & [String]) -> usize"
+    },
+    {
+      "path": "ferray_strings::concat::add",
+      "kind": "fn",
+      "signature": "pub fn add < Da : Dimension , Db : Dimension > (a : & StringArray < Da > , b : & StringArray < Db > ,) -> FerrayResult < StringArray < IxDyn > >"
+    },
+    {
+      "path": "ferray_strings::concat::add_same",
+      "kind": "fn",
+      "signature": "pub fn add_same < D : Dimension > (a : & StringArray < D > , b : & StringArray < D > ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::concat::multiply",
+      "kind": "fn",
+      "signature": "pub fn multiply < D : Dimension > (a : & StringArray < D > , n : usize) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::count",
+      "kind": "reexport",
+      "signature": "pub use search :: { count , endswith , find , index , replace , rfind , rindex , startswith }"
+    },
+    {
+      "path": "ferray_strings::decode",
+      "kind": "reexport",
+      "signature": "pub use extras :: { decode , encode , expandtabs , mod_ , partition , rpartition , slice , translate }"
+    },
+    {
+      "path": "ferray_strings::encode",
+      "kind": "reexport",
+      "signature": "pub use extras :: { decode , encode , expandtabs , mod_ , partition , rpartition , slice , translate }"
+    },
+    {
+      "path": "ferray_strings::endswith",
+      "kind": "reexport",
+      "signature": "pub use search :: { count , endswith , find , index , replace , rfind , rindex , startswith }"
+    },
+    {
+      "path": "ferray_strings::equal",
+      "kind": "reexport",
+      "signature": "pub use str_ops :: { equal , greater , greater_equal , less , less_equal , not_equal , str_len , swapcase }"
+    },
+    {
+      "path": "ferray_strings::estimated_string_array_bytes",
+      "kind": "reexport",
+      "signature": "pub use compact :: { CompactStringArray , CompactStringIter , estimated_string_array_bytes }"
+    },
+    {
+      "path": "ferray_strings::expandtabs",
+      "kind": "reexport",
+      "signature": "pub use extras :: { decode , encode , expandtabs , mod_ , partition , rpartition , slice , translate }"
+    },
+    {
+      "path": "ferray_strings::extract",
+      "kind": "reexport",
+      "signature": "pub use regex_ops :: { extract , extract_compiled , match_ , match_compiled }"
+    },
+    {
+      "path": "ferray_strings::extract_compiled",
+      "kind": "reexport",
+      "signature": "pub use regex_ops :: { extract , extract_compiled , match_ , match_compiled }"
+    },
+    {
+      "path": "ferray_strings::extras::decode",
+      "kind": "fn",
+      "signature": "pub fn decode < D : Dimension > (byte_arrays : & [Vec < u8 >] , shape : D , encoding : & str ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::extras::encode",
+      "kind": "fn",
+      "signature": "pub fn encode < D : Dimension > (a : & StringArray < D > , encoding : & str) -> FerrayResult < Vec < Vec < u8 > > >"
+    },
+    {
+      "path": "ferray_strings::extras::expandtabs",
+      "kind": "fn",
+      "signature": "pub fn expandtabs < D : Dimension > (a : & StringArray < D > , tabsize : usize ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::extras::mod_",
+      "kind": "fn",
+      "signature": "pub fn mod_ < D : Dimension > (a : & StringArray < D > , args : & [& str]) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::extras::partition",
+      "kind": "fn",
+      "signature": "pub fn partition < D : Dimension > (a : & StringArray < D > , sep : & str ,) -> FerrayResult < Vec < (String , String , String) > >"
+    },
+    {
+      "path": "ferray_strings::extras::rpartition",
+      "kind": "fn",
+      "signature": "pub fn rpartition < D : Dimension > (a : & StringArray < D > , sep : & str ,) -> FerrayResult < Vec < (String , String , String) > >"
+    },
+    {
+      "path": "ferray_strings::extras::slice",
+      "kind": "fn",
+      "signature": "pub fn slice < D : Dimension > (a : & StringArray < D > , start : Option < isize > , stop : Option < isize > ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::extras::translate",
+      "kind": "fn",
+      "signature": "pub fn translate < D : Dimension > (a : & StringArray < D > , table : & HashMap < char , Option < char > > ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::find",
+      "kind": "reexport",
+      "signature": "pub use search :: { count , endswith , find , index , replace , rfind , rindex , startswith }"
+    },
+    {
+      "path": "ferray_strings::greater",
+      "kind": "reexport",
+      "signature": "pub use str_ops :: { equal , greater , greater_equal , less , less_equal , not_equal , str_len , swapcase }"
+    },
+    {
+      "path": "ferray_strings::greater_equal",
+      "kind": "reexport",
+      "signature": "pub use str_ops :: { equal , greater , greater_equal , less , less_equal , not_equal , str_len , swapcase }"
+    },
+    {
+      "path": "ferray_strings::index",
+      "kind": "reexport",
+      "signature": "pub use search :: { count , endswith , find , index , replace , rfind , rindex , startswith }"
+    },
+    {
+      "path": "ferray_strings::isalnum",
+      "kind": "reexport",
+      "signature": "pub use classify :: { isalnum , isalpha , isdecimal , isdigit , islower , isnumeric , isspace , istitle , isupper , }"
+    },
+    {
+      "path": "ferray_strings::isalpha",
+      "kind": "reexport",
+      "signature": "pub use classify :: { isalnum , isalpha , isdecimal , isdigit , islower , isnumeric , isspace , istitle , isupper , }"
+    },
+    {
+      "path": "ferray_strings::isdecimal",
+      "kind": "reexport",
+      "signature": "pub use classify :: { isalnum , isalpha , isdecimal , isdigit , islower , isnumeric , isspace , istitle , isupper , }"
+    },
+    {
+      "path": "ferray_strings::isdigit",
+      "kind": "reexport",
+      "signature": "pub use classify :: { isalnum , isalpha , isdecimal , isdigit , islower , isnumeric , isspace , istitle , isupper , }"
+    },
+    {
+      "path": "ferray_strings::islower",
+      "kind": "reexport",
+      "signature": "pub use classify :: { isalnum , isalpha , isdecimal , isdigit , islower , isnumeric , isspace , istitle , isupper , }"
+    },
+    {
+      "path": "ferray_strings::isnumeric",
+      "kind": "reexport",
+      "signature": "pub use classify :: { isalnum , isalpha , isdecimal , isdigit , islower , isnumeric , isspace , istitle , isupper , }"
+    },
+    {
+      "path": "ferray_strings::isspace",
+      "kind": "reexport",
+      "signature": "pub use classify :: { isalnum , isalpha , isdecimal , isdigit , islower , isnumeric , isspace , istitle , isupper , }"
+    },
+    {
+      "path": "ferray_strings::istitle",
+      "kind": "reexport",
+      "signature": "pub use classify :: { isalnum , isalpha , isdecimal , isdigit , islower , isnumeric , isspace , istitle , isupper , }"
+    },
+    {
+      "path": "ferray_strings::isupper",
+      "kind": "reexport",
+      "signature": "pub use classify :: { isalnum , isalpha , isdecimal , isdigit , islower , isnumeric , isspace , istitle , isupper , }"
+    },
+    {
+      "path": "ferray_strings::join",
+      "kind": "reexport",
+      "signature": "pub use split_join :: { join , join_array , rsplit , split , split_ragged , splitlines }"
+    },
+    {
+      "path": "ferray_strings::join_array",
+      "kind": "reexport",
+      "signature": "pub use split_join :: { join , join_array , rsplit , split , split_ragged , splitlines }"
+    },
+    {
+      "path": "ferray_strings::less",
+      "kind": "reexport",
+      "signature": "pub use str_ops :: { equal , greater , greater_equal , less , less_equal , not_equal , str_len , swapcase }"
+    },
+    {
+      "path": "ferray_strings::less_equal",
+      "kind": "reexport",
+      "signature": "pub use str_ops :: { equal , greater , greater_equal , less , less_equal , not_equal , str_len , swapcase }"
+    },
+    {
+      "path": "ferray_strings::ljust",
+      "kind": "reexport",
+      "signature": "pub use align :: { center , ljust , ljust_with , rjust , rjust_with , zfill }"
+    },
+    {
+      "path": "ferray_strings::ljust_with",
+      "kind": "reexport",
+      "signature": "pub use align :: { center , ljust , ljust_with , rjust , rjust_with , zfill }"
+    },
+    {
+      "path": "ferray_strings::lower",
+      "kind": "reexport",
+      "signature": "pub use case :: { capitalize , lower , title , upper }"
+    },
+    {
+      "path": "ferray_strings::lstrip",
+      "kind": "reexport",
+      "signature": "pub use strip :: { lstrip , rstrip , strip }"
+    },
+    {
+      "path": "ferray_strings::match_",
+      "kind": "reexport",
+      "signature": "pub use regex_ops :: { extract , extract_compiled , match_ , match_compiled }"
+    },
+    {
+      "path": "ferray_strings::match_compiled",
+      "kind": "reexport",
+      "signature": "pub use regex_ops :: { extract , extract_compiled , match_ , match_compiled }"
+    },
+    {
+      "path": "ferray_strings::mod_",
+      "kind": "reexport",
+      "signature": "pub use extras :: { decode , encode , expandtabs , mod_ , partition , rpartition , slice , translate }"
+    },
+    {
+      "path": "ferray_strings::multiply",
+      "kind": "reexport",
+      "signature": "pub use concat :: { add , add_same , multiply }"
+    },
+    {
+      "path": "ferray_strings::not_equal",
+      "kind": "reexport",
+      "signature": "pub use str_ops :: { equal , greater , greater_equal , less , less_equal , not_equal , str_len , swapcase }"
+    },
+    {
+      "path": "ferray_strings::partition",
+      "kind": "reexport",
+      "signature": "pub use extras :: { decode , encode , expandtabs , mod_ , partition , rpartition , slice , translate }"
+    },
+    {
+      "path": "ferray_strings::regex_ops::extract",
+      "kind": "fn",
+      "signature": "pub fn extract < D : Dimension > (a : & StringArray < D > , pattern : & str) -> FerrayResult < StringArray1 >"
+    },
+    {
+      "path": "ferray_strings::regex_ops::extract_compiled",
+      "kind": "fn",
+      "signature": "pub fn extract_compiled < D : Dimension > (a : & StringArray < D > , re : & Regex ,) -> FerrayResult < StringArray1 >"
+    },
+    {
+      "path": "ferray_strings::regex_ops::match_",
+      "kind": "fn",
+      "signature": "pub fn match_ < D : Dimension > (a : & StringArray < D > , pattern : & str) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::regex_ops::match_compiled",
+      "kind": "fn",
+      "signature": "pub fn match_compiled < D : Dimension > (a : & StringArray < D > , re : & Regex ,) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::replace",
+      "kind": "reexport",
+      "signature": "pub use search :: { count , endswith , find , index , replace , rfind , rindex , startswith }"
+    },
+    {
+      "path": "ferray_strings::rfind",
+      "kind": "reexport",
+      "signature": "pub use search :: { count , endswith , find , index , replace , rfind , rindex , startswith }"
+    },
+    {
+      "path": "ferray_strings::rindex",
+      "kind": "reexport",
+      "signature": "pub use search :: { count , endswith , find , index , replace , rfind , rindex , startswith }"
+    },
+    {
+      "path": "ferray_strings::rjust",
+      "kind": "reexport",
+      "signature": "pub use align :: { center , ljust , ljust_with , rjust , rjust_with , zfill }"
+    },
+    {
+      "path": "ferray_strings::rjust_with",
+      "kind": "reexport",
+      "signature": "pub use align :: { center , ljust , ljust_with , rjust , rjust_with , zfill }"
+    },
+    {
+      "path": "ferray_strings::rpartition",
+      "kind": "reexport",
+      "signature": "pub use extras :: { decode , encode , expandtabs , mod_ , partition , rpartition , slice , translate }"
+    },
+    {
+      "path": "ferray_strings::rsplit",
+      "kind": "reexport",
+      "signature": "pub use split_join :: { join , join_array , rsplit , split , split_ragged , splitlines }"
+    },
+    {
+      "path": "ferray_strings::rstrip",
+      "kind": "reexport",
+      "signature": "pub use strip :: { lstrip , rstrip , strip }"
+    },
+    {
+      "path": "ferray_strings::search::count",
+      "kind": "fn",
+      "signature": "pub fn count < D : Dimension > (a : & StringArray < D > , sub : & str) -> FerrayResult < Array < u64 , D > >"
+    },
+    {
+      "path": "ferray_strings::search::endswith",
+      "kind": "fn",
+      "signature": "pub fn endswith < D : Dimension > (a : & StringArray < D > , suffix : & str) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::search::find",
+      "kind": "fn",
+      "signature": "pub fn find < D : Dimension > (a : & StringArray < D > , sub : & str) -> FerrayResult < Array < i64 , D > >"
+    },
+    {
+      "path": "ferray_strings::search::index",
+      "kind": "fn",
+      "signature": "pub fn index < D : Dimension > (a : & StringArray < D > , sub : & str) -> FerrayResult < Array < i64 , D > >"
+    },
+    {
+      "path": "ferray_strings::search::replace",
+      "kind": "fn",
+      "signature": "pub fn replace < D : Dimension > (a : & StringArray < D > , old : & str , new : & str , max_count : Option < usize > ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::search::rfind",
+      "kind": "fn",
+      "signature": "pub fn rfind < D : Dimension > (a : & StringArray < D > , sub : & str) -> FerrayResult < Array < i64 , D > >"
+    },
+    {
+      "path": "ferray_strings::search::rindex",
+      "kind": "fn",
+      "signature": "pub fn rindex < D : Dimension > (a : & StringArray < D > , sub : & str) -> FerrayResult < Array < i64 , D > >"
+    },
+    {
+      "path": "ferray_strings::search::startswith",
+      "kind": "fn",
+      "signature": "pub fn startswith < D : Dimension > (a : & StringArray < D > , prefix : & str) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::slice",
+      "kind": "reexport",
+      "signature": "pub use extras :: { decode , encode , expandtabs , mod_ , partition , rpartition , slice , translate }"
+    },
+    {
+      "path": "ferray_strings::split",
+      "kind": "reexport",
+      "signature": "pub use split_join :: { join , join_array , rsplit , split , split_ragged , splitlines }"
+    },
+    {
+      "path": "ferray_strings::split_join::join",
+      "kind": "fn",
+      "signature": "pub fn join (sep : & str , items : & [Vec < String >]) -> FerrayResult < StringArray1 >"
+    },
+    {
+      "path": "ferray_strings::split_join::join_array",
+      "kind": "fn",
+      "signature": "pub fn join_array < D : Dimension > (sep : & str , a : & StringArray < D >) -> FerrayResult < StringArray1 >"
+    },
+    {
+      "path": "ferray_strings::split_join::rsplit",
+      "kind": "fn",
+      "signature": "pub fn rsplit < D : Dimension > (a : & StringArray < D > , sep : & str , maxsplit : Option < usize > ,) -> FerrayResult < StringArray2 >"
+    },
+    {
+      "path": "ferray_strings::split_join::split",
+      "kind": "fn",
+      "signature": "pub fn split < D : Dimension > (a : & StringArray < D > , sep : & str) -> FerrayResult < StringArray2 >"
+    },
+    {
+      "path": "ferray_strings::split_join::split_ragged",
+      "kind": "fn",
+      "signature": "pub fn split_ragged < D : Dimension > (a : & StringArray < D > , sep : & str) -> FerrayResult < Vec < Vec < String > > >"
+    },
+    {
+      "path": "ferray_strings::split_join::splitlines",
+      "kind": "fn",
+      "signature": "pub fn splitlines < D : Dimension > (a : & StringArray < D > , keepends : bool) -> FerrayResult < StringArray2 >"
+    },
+    {
+      "path": "ferray_strings::split_ragged",
+      "kind": "reexport",
+      "signature": "pub use split_join :: { join , join_array , rsplit , split , split_ragged , splitlines }"
+    },
+    {
+      "path": "ferray_strings::splitlines",
+      "kind": "reexport",
+      "signature": "pub use split_join :: { join , join_array , rsplit , split , split_ragged , splitlines }"
+    },
+    {
+      "path": "ferray_strings::startswith",
+      "kind": "reexport",
+      "signature": "pub use search :: { count , endswith , find , index , replace , rfind , rindex , startswith }"
+    },
+    {
+      "path": "ferray_strings::str_len",
+      "kind": "reexport",
+      "signature": "pub use str_ops :: { equal , greater , greater_equal , less , less_equal , not_equal , str_len , swapcase }"
+    },
+    {
+      "path": "ferray_strings::str_ops::equal",
+      "kind": "fn",
+      "signature": "pub fn equal < D : Dimension > (a : & StringArray < D > , b : & StringArray < D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::str_ops::greater",
+      "kind": "fn",
+      "signature": "pub fn greater < D : Dimension > (a : & StringArray < D > , b : & StringArray < D > ,) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::str_ops::greater_equal",
+      "kind": "fn",
+      "signature": "pub fn greater_equal < D : Dimension > (a : & StringArray < D > , b : & StringArray < D > ,) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::str_ops::less",
+      "kind": "fn",
+      "signature": "pub fn less < D : Dimension > (a : & StringArray < D > , b : & StringArray < D >) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::str_ops::less_equal",
+      "kind": "fn",
+      "signature": "pub fn less_equal < D : Dimension > (a : & StringArray < D > , b : & StringArray < D > ,) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::str_ops::not_equal",
+      "kind": "fn",
+      "signature": "pub fn not_equal < D : Dimension > (a : & StringArray < D > , b : & StringArray < D > ,) -> FerrayResult < Array < bool , D > >"
+    },
+    {
+      "path": "ferray_strings::str_ops::str_len",
+      "kind": "fn",
+      "signature": "pub fn str_len < D : Dimension > (a : & StringArray < D >) -> FerrayResult < Array < u64 , D > >"
+    },
+    {
+      "path": "ferray_strings::str_ops::swapcase",
+      "kind": "fn",
+      "signature": "pub fn swapcase < D : Dimension > (a : & StringArray < D >) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray",
+      "kind": "struct",
+      "signature": "pub struct StringArray < D : Dimension >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray1",
+      "kind": "type",
+      "signature": "# [doc = \" 1-dimensional string array.\"] pub type StringArray1 = StringArray < Ix1 > ;"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray2",
+      "kind": "type",
+      "signature": "# [doc = \" 2-dimensional string array.\"] pub type StringArray2 = StringArray < Ix2 > ;"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::as_slice",
+      "kind": "method",
+      "signature": "pub fn as_slice (& self) -> & [String]"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::as_slice_mut",
+      "kind": "method",
+      "signature": "pub fn as_slice_mut (& mut self) -> & mut [String]"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::at",
+      "kind": "method",
+      "signature": "pub fn at (& self , idx : usize) -> Option < & String >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::dim",
+      "kind": "method",
+      "signature": "pub const fn dim (& self) -> & D"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::empty",
+      "kind": "method",
+      "signature": "pub fn empty (dim : D) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::flatten",
+      "kind": "method",
+      "signature": "pub fn flatten (self) -> StringArray1"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::from_rows",
+      "kind": "method",
+      "signature": "pub fn from_rows (rows : & [& [& str]]) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::from_slice",
+      "kind": "method",
+      "signature": "pub fn from_slice (items : & [& str]) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::from_vec",
+      "kind": "method",
+      "signature": "pub fn from_vec (dim : D , data : Vec < String >) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::from_vec_dyn",
+      "kind": "method",
+      "signature": "pub fn from_vec_dyn (shape : & [usize] , data : Vec < String >) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::get",
+      "kind": "method",
+      "signature": "pub fn get (& self , idx : & [usize]) -> Option < & String >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::get_row",
+      "kind": "method",
+      "signature": "pub fn get_row (& self , idx : usize) -> FerrayResult < crate :: string_array :: StringArray1 >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::into_dyn",
+      "kind": "method",
+      "signature": "pub fn into_dyn (self) -> StringArray < IxDyn >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::into_vec",
+      "kind": "method",
+      "signature": "pub fn into_vec (self) -> Vec < String >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::is_empty",
+      "kind": "method",
+      "signature": "pub fn is_empty (& self) -> bool"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::iter",
+      "kind": "method",
+      "signature": "pub fn iter (& self) -> std :: slice :: Iter < '_ , String >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::len",
+      "kind": "method",
+      "signature": "pub fn len (& self) -> usize"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::map",
+      "kind": "method",
+      "signature": "pub fn map < F > (& self , f : F) -> FerrayResult < Self > where F : Fn (& str) -> String ,"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::map_to_vec",
+      "kind": "method",
+      "signature": "pub fn map_to_vec < T , F > (& self , f : F) -> Vec < T > where F : Fn (& str) -> T ,"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::ndim",
+      "kind": "method",
+      "signature": "pub fn ndim (& self) -> usize"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::reshape",
+      "kind": "method",
+      "signature": "pub fn reshape < D2 : Dimension > (self , new_dim : D2) -> FerrayResult < StringArray < D2 > >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::shape",
+      "kind": "method",
+      "signature": "pub fn shape (& self) -> & [usize]"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::slice_axis",
+      "kind": "method",
+      "signature": "pub fn slice_axis (& self , axis : usize , range : std :: ops :: Range < usize > ,) -> FerrayResult < StringArray < IxDyn > >"
+    },
+    {
+      "path": "ferray_strings::string_array::StringArray::transpose",
+      "kind": "method",
+      "signature": "pub fn transpose (& self) -> FerrayResult < Self >"
+    },
+    {
+      "path": "ferray_strings::string_array::array",
+      "kind": "fn",
+      "signature": "pub fn array (items : & [& str]) -> FerrayResult < StringArray1 >"
+    },
+    {
+      "path": "ferray_strings::strip",
+      "kind": "reexport",
+      "signature": "pub use strip :: { lstrip , rstrip , strip }"
+    },
+    {
+      "path": "ferray_strings::strip::lstrip",
+      "kind": "fn",
+      "signature": "pub fn lstrip < D : Dimension > (a : & StringArray < D > , chars : Option < & str > ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::strip::rstrip",
+      "kind": "fn",
+      "signature": "pub fn rstrip < D : Dimension > (a : & StringArray < D > , chars : Option < & str > ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::strip::strip",
+      "kind": "fn",
+      "signature": "pub fn strip < D : Dimension > (a : & StringArray < D > , chars : Option < & str > ,) -> FerrayResult < StringArray < D > >"
+    },
+    {
+      "path": "ferray_strings::swapcase",
+      "kind": "reexport",
+      "signature": "pub use str_ops :: { equal , greater , greater_equal , less , less_equal , not_equal , str_len , swapcase }"
+    },
+    {
+      "path": "ferray_strings::title",
+      "kind": "reexport",
+      "signature": "pub use case :: { capitalize , lower , title , upper }"
+    },
+    {
+      "path": "ferray_strings::translate",
+      "kind": "reexport",
+      "signature": "pub use extras :: { decode , encode , expandtabs , mod_ , partition , rpartition , slice , translate }"
+    },
+    {
+      "path": "ferray_strings::upper",
+      "kind": "reexport",
+      "signature": "pub use case :: { capitalize , lower , title , upper }"
+    },
+    {
+      "path": "ferray_strings::zfill",
+      "kind": "reexport",
+      "signature": "pub use align :: { center , ljust , ljust_with , rjust , rjust_with , zfill }"
+    }
+  ]
+}

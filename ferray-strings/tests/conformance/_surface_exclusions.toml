@@ -1,0 +1,16 @@
+# Surface exclusions for ferray-strings.
+#
+# ferray-strings has a 170-item public surface across 12 modules; every
+# `fn`, struct, struct method, and re-export is covered by a
+# conformance test that text-matches both the user-facing crate-root
+# re-export path AND the inner canonical module path.
+#
+# The compact-storage backend (`compact::*`) is gated behind the
+# `compact-storage` Cargo feature. The conformance tests in
+# `tests/conformance_array.rs` exercise the compact API under
+# `#[cfg(feature = "compact-storage")]` and also list every compact
+# path in a doc-comment "path anchors" block so the surface-coverage
+# gate's text-match succeeds without requiring the feature to be
+# enabled at gate-test time.
+#
+# No items are currently excluded.
