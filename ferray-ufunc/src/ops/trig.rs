@@ -61,6 +61,114 @@ where
     unary_float_op_into_compute(input, out, "cos", T::cos)
 }
 
+/// Fast elementwise sine with ≤1 ULP accuracy (≤4 ULP for `|x| ≳ 2^20`).
+///
+/// Three-part Cody-Waite reduction + Cephes DP polynomials, with a branchless
+/// quadrant select so the hot loop auto-vectorizes. The batch kernel is
+/// runtime-multiversioned (AVX2+FMA when present, libm fallback otherwise),
+/// giving ~3-4x over the default libm-based [`sin`] on contiguous f32/f64
+/// arrays. The default [`sin`] stays the correctness/large-`|x|` reference
+/// (Payne-Hanek-grade libm).
+///
+/// For f64 arrays the batch kernel is used directly; f32 promotes to f64
+/// internally (24 mantissa bits round cleanly to the correct f32 answer).
+pub fn sin_fast<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    use std::any::TypeId;
+    if TypeId::of::<T>() == TypeId::of::<f64>() {
+        // SAFETY: T is f64 — reinterpret the array reference.
+        let f64_input =
+            unsafe { &*std::ptr::from_ref::<Array<T, D>>(input).cast::<Array<f64, D>>() };
+        let n = f64_input.size();
+        let result = if let Some(slice) = f64_input.as_slice() {
+            let mut data = vec![0.0_f64; n];
+            crate::fast_trig::sin_fast_batch_f64(slice, &mut data);
+            Array::from_vec(f64_input.dim().clone(), data)?
+        } else {
+            let data: Vec<f64> = f64_input
+                .iter()
+                .map(|&x| crate::fast_trig::sin_fast_f64(x))
+                .collect();
+            Array::from_vec(f64_input.dim().clone(), data)?
+        };
+        // SAFETY: T was verified to be f64 at the top of this branch.
+        Ok(unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) })
+    } else if TypeId::of::<T>() == TypeId::of::<f32>() {
+        // SAFETY: T is f32 — reinterpret the array reference.
+        let f32_input =
+            unsafe { &*std::ptr::from_ref::<Array<T, D>>(input).cast::<Array<f32, D>>() };
+        let n = f32_input.size();
+        let result = if let Some(slice) = f32_input.as_slice() {
+            let mut data = vec![0.0_f32; n];
+            crate::fast_trig::sin_fast_batch_f32(slice, &mut data);
+            Array::from_vec(f32_input.dim().clone(), data)?
+        } else {
+            let data: Vec<f32> = f32_input
+                .iter()
+                .map(|&x| crate::fast_trig::sin_fast_f32(x))
+                .collect();
+            Array::from_vec(f32_input.dim().clone(), data)?
+        };
+        // SAFETY: T was verified to be f32 at the top of this branch.
+        Ok(unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) })
+    } else {
+        // Other float types (f16/bf16): use the default libm path.
+        unary_float_op_compute(input, T::sin)
+    }
+}
+
+/// Fast elementwise cosine. See [`sin_fast`] for the accuracy/dispatch contract.
+pub fn cos_fast<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Float,
+    D: Dimension,
+{
+    use std::any::TypeId;
+    if TypeId::of::<T>() == TypeId::of::<f64>() {
+        // SAFETY: T is f64 — reinterpret the array reference.
+        let f64_input =
+            unsafe { &*std::ptr::from_ref::<Array<T, D>>(input).cast::<Array<f64, D>>() };
+        let n = f64_input.size();
+        let result = if let Some(slice) = f64_input.as_slice() {
+            let mut data = vec![0.0_f64; n];
+            crate::fast_trig::cos_fast_batch_f64(slice, &mut data);
+            Array::from_vec(f64_input.dim().clone(), data)?
+        } else {
+            let data: Vec<f64> = f64_input
+                .iter()
+                .map(|&x| crate::fast_trig::cos_fast_f64(x))
+                .collect();
+            Array::from_vec(f64_input.dim().clone(), data)?
+        };
+        // SAFETY: T was verified to be f64 at the top of this branch.
+        Ok(unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) })
+    } else if TypeId::of::<T>() == TypeId::of::<f32>() {
+        // SAFETY: T is f32 — reinterpret the array reference.
+        let f32_input =
+            unsafe { &*std::ptr::from_ref::<Array<T, D>>(input).cast::<Array<f32, D>>() };
+        let n = f32_input.size();
+        let result = if let Some(slice) = f32_input.as_slice() {
+            let mut data = vec![0.0_f32; n];
+            crate::fast_trig::cos_fast_batch_f32(slice, &mut data);
+            Array::from_vec(f32_input.dim().clone(), data)?
+        } else {
+            let data: Vec<f32> = f32_input
+                .iter()
+                .map(|&x| crate::fast_trig::cos_fast_f32(x))
+                .collect();
+            Array::from_vec(f32_input.dim().clone(), data)?
+        };
+        // SAFETY: T was verified to be f32 at the top of this branch.
+        Ok(unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) })
+    } else {
+        // Other float types (f16/bf16): use the default libm path.
+        unary_float_op_compute(input, T::cos)
+    }
+}
+
 /// Elementwise tangent. See [`sin`] for the libm-vs-core-math accuracy note.
 pub fn tan<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where

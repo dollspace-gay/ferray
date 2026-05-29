@@ -70,8 +70,8 @@ pub mod ufunc_object;
 
 // Trigonometric
 pub use ops::trig::{
-    arccos, arccosh, arcsin, arcsinh, arctan, arctan2, arctanh, cos, cos_into, cosh, deg2rad,
-    degrees, hypot, rad2deg, radians, sin, sin_into, sinh, tan, tanh, unwrap,
+    arccos, arccosh, arcsin, arcsinh, arctan, arctan2, arctanh, cos, cos_fast, cos_into, cosh,
+    deg2rad, degrees, hypot, rad2deg, radians, sin, sin_fast, sin_into, sinh, tan, tanh, unwrap,
 };
 
 // Exponential and logarithmic
