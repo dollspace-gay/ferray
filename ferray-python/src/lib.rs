@@ -800,6 +800,21 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(aliases::common_type, m)?)?;
     m.add_function(wrap_pyfunction!(aliases::divmod, m)?)?;
 
+    // ----- top-level numpy poly1d family (numpy/lib/_polynomial_impl.py) -----
+    // The classic 1-D polynomial functions on highest-degree-first coefficient
+    // arrays: np.polyval / poly / roots / polyadd / polysub / polymul /
+    // polyder / polyint / polyfit / polydiv.
+    m.add_function(wrap_pyfunction!(polynomial::polyval, m)?)?;
+    m.add_function(wrap_pyfunction!(polynomial::poly, m)?)?;
+    m.add_function(wrap_pyfunction!(polynomial::roots, m)?)?;
+    m.add_function(wrap_pyfunction!(polynomial::polyadd, m)?)?;
+    m.add_function(wrap_pyfunction!(polynomial::polysub, m)?)?;
+    m.add_function(wrap_pyfunction!(polynomial::polymul, m)?)?;
+    m.add_function(wrap_pyfunction!(polynomial::polyder, m)?)?;
+    m.add_function(wrap_pyfunction!(polynomial::polyint, m)?)?;
+    m.add_function(wrap_pyfunction!(polynomial::polyfit, m)?)?;
+    m.add_function(wrap_pyfunction!(polynomial::polydiv, m)?)?;
+
     register_dtype_module(py, m)?;
     register_linalg_module(py, m)?;
     register_fft_module(py, m)?;

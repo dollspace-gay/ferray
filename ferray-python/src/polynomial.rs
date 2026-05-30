@@ -10,6 +10,17 @@
 //! 2. **Function-style API** — `polyval2d`, `chebgauss`, `poly2cheb`,
 //!    etc. on flat coefficient arrays. That's what we expose here.
 //!
+//! This module additionally hosts the **top-level numpy poly1d family**
+//! (`numpy.polyval` / `poly` / `roots` / `polyadd` / `polysub` / `polymul`
+//! / `polyder` / `polyint` / `polyfit` / `polydiv`, registered at the
+//! `ferray` root, NOT under `ferray.polynomial`). These are the CLASSIC 1-D
+//! polynomial functions on flat coefficient arrays in
+//! `numpy/lib/_polynomial_impl.py` — and crucially use HIGHEST-degree-first
+//! coefficient order, the opposite of `numpy.polynomial.polynomial.*`. They
+//! marshal onto ferray-polynomial's lowest-first power-basis `Polynomial`
+//! math by reversing coefficient arrays at the boundary; see the
+//! `flip`/poly1d section below.
+//!
 //! Everything is `f64`-only at the ferray layer (the `extras` module
 //! is single-precision in name only — internally f64). Callers
 //! passing `float32` arrays get them coerced to `float64` for the
@@ -641,6 +652,251 @@ macro_rules! poly_class {
             }
         }
     };
+}
+
+// ---------------------------------------------------------------------------
+// Top-level numpy poly1d family (numpy.polyval / poly / roots / polyadd /
+// polysub / polymul / polyder / polyint / polyfit / polydiv)
+// ---------------------------------------------------------------------------
+//
+// These are the CLASSIC numpy 1-D polynomial functions on flat coefficient
+// arrays (`numpy/lib/_polynomial_impl.py`), distinct from the
+// `numpy.polynomial.polynomial.*` function-style API above. The crucial
+// difference is coefficient ORDER:
+//
+//   * `numpy.polyval([1, 2, 3], x)` evaluates `x**2 + 2*x + 3` — coefficients
+//     run from HIGHEST degree to lowest (`_polynomial_impl.py:736-738`
+//     "p[0] * x**(N-1) + p[1] * x**(N-2) + ... + p[N-1]").
+//   * ferray's power-basis `Polynomial` stores coefficients LOWEST-first
+//     (`power.rs:27` "Coefficients in ascending power order: c[0], c[1], ...").
+//
+// Every binding here REVERSES the numpy highest-first input into ferray's
+// lowest-first order before calling the ferray-polynomial math, then reverses
+// the lowest-first result back to highest-first for the numpy contract.
+
+/// Reverse a numpy highest-first coefficient vector into ferray's lowest-first
+/// order (and vice-versa — reversal is its own inverse).
+fn flip(mut c: Vec<f64>) -> Vec<f64> {
+    c.reverse();
+    c
+}
+
+/// Strip leading zeros from a highest-first coefficient array, matching
+/// numpy's `trim_zeros`/`_trimseq`-style trimming after poly arithmetic.
+///
+/// `numpy/lib/_polynomial_impl.py:861` (`polyadd` returns
+/// `trim_zeros(val, 'f')`-equivalent via `poly1d`-free arithmetic). The
+/// concrete contract is verified live: `np.polyadd([1,2,3],[-1,-2]) ==
+/// [1, 1, 1]` (the leading-coefficient cancellation is trimmed). We keep at
+/// least one element so the zero polynomial stays `[0.0]`.
+fn trim_leading_highest_first(mut c: Vec<f64>) -> Vec<f64> {
+    let mut start = 0;
+    while start + 1 < c.len() && c[start] == 0.0 {
+        start += 1;
+    }
+    if start > 0 {
+        c.drain(0..start);
+    }
+    if c.is_empty() {
+        c.push(0.0);
+    }
+    c
+}
+
+/// `numpy.polyval(p, x)` — evaluate a highest-first polynomial `p` at `x`
+/// (Horner). `x` may be a scalar or any array-like; the result follows the
+/// input's shape. `numpy/lib/_polynomial_impl.py:714` `def polyval(p, x)`.
+#[pyfunction]
+pub fn polyval<'py>(
+    py: Python<'py>,
+    p: Vec<f64>,
+    x: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let poly = fp::Polynomial::new(&flip(p));
+    let (data, shape) = as_eval_input(py, x)?;
+    let result = poly.eval_many(&data).map_err(ferr_to_pyerr)?;
+    match shape {
+        None => {
+            let arr = ArrayD::<f64>::from_vec(IxDyn::new(&[]), vec![result[0]])
+                .map_err(ferr_to_pyerr)?;
+            let zerod = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+            crate::conv::scalarize(zerod)
+        }
+        Some(shape) => {
+            let arr =
+                ArrayD::<f64>::from_vec(IxDyn::new(&shape), result).map_err(ferr_to_pyerr)?;
+            Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+    }
+}
+
+/// `numpy.poly(seq_of_zeros)` — highest-first coefficients of the monic
+/// polynomial whose roots are `seq_of_zeros`.
+///
+/// `numpy/lib/_polynomial_impl.py:148-161`: starts from `[1]` and convolves
+/// `[1, -zero]` for each root (highest-first), returning `1.0` for an empty
+/// root sequence. ferray's `Polynomial::from_roots` builds the same product in
+/// LOWEST-first order, so we reverse the result to highest-first.
+#[pyfunction]
+pub fn poly<'py>(py: Python<'py>, seq_of_zeros: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
+    if seq_of_zeros.is_empty() {
+        // `numpy/lib/_polynomial_impl.py:148-149` returns the scalar `1.0`.
+        let arr =
+            ArrayD::<f64>::from_vec(IxDyn::new(&[]), vec![1.0]).map_err(ferr_to_pyerr)?;
+        let zerod = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+        return crate::conv::scalarize(zerod);
+    }
+    let lowest_first = fp::Polynomial::from_roots(&seq_of_zeros).coeffs().to_vec();
+    vec_to_pyarray1(py, flip(lowest_first))
+}
+
+/// `numpy.roots(p)` — roots of a highest-first polynomial `p` via the
+/// companion-matrix eigenvalues. `numpy/lib/_polynomial_impl.py:169-262`.
+///
+/// numpy strips leading/trailing zeros, records the trailing-zero count as
+/// roots-at-0, and tacks those zeros onto the result
+/// (`_polynomial_impl.py:230-261`). We reverse the highest-first input into
+/// ferray's lowest-first order, find the roots of the stripped polynomial, and
+/// re-append the zero roots. The result follows ferray's
+/// `complex_roots_to_pyarray` contract (real `float64` array when every
+/// imaginary part is zero, else `complex128`); roots are returned sorted —
+/// numpy returns them in raw eigenvalue order, so callers compare as a set.
+#[pyfunction]
+pub fn roots<'py>(py: Python<'py>, p: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
+    // Highest-first -> lowest-first.
+    let coeffs_lowest = flip(p);
+    // Find non-zero entries (in lowest-first order).
+    let first_nz = coeffs_lowest.iter().position(|&c| c != 0.0);
+    let Some(first_nz) = first_nz else {
+        // All zeros: numpy returns an empty array (`_polynomial_impl.py:234`).
+        return Ok(numpy::PyArray1::<f64>::from_vec(py, Vec::new()).into_any());
+    };
+    let last_nz = coeffs_lowest
+        .iter()
+        .rposition(|&c| c != 0.0)
+        .unwrap_or(first_nz);
+    // Trailing zeros in HIGHEST-first p == leading zeros in lowest-first ==
+    // entries below `first_nz` == number of roots at 0
+    // (`_polynomial_impl.py:237-238`).
+    let zero_roots = first_nz;
+    // Strip leading (lowest-first) and trailing zeros -> the core polynomial.
+    let stripped: Vec<f64> = coeffs_lowest[first_nz..=last_nz].to_vec();
+    let mut found = if stripped.len() > 1 {
+        fp::roots::find_roots_from_power_coeffs(&stripped).map_err(ferr_to_pyerr)?
+    } else {
+        Vec::new()
+    };
+    for _ in 0..zero_roots {
+        found.push(num_complex::Complex::new(0.0, 0.0));
+    }
+    complex_roots_to_pyarray(py, found)
+}
+
+/// Shared body for `polyadd` / `polysub` / `polymul`.
+fn poly_binop<'py>(
+    py: Python<'py>,
+    a: Vec<f64>,
+    b: Vec<f64>,
+    op: impl Fn(&fp::Polynomial, &fp::Polynomial) -> Result<fp::Polynomial, ferray_core::FerrayError>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let pa = fp::Polynomial::new(&flip(a));
+    let pb = fp::Polynomial::new(&flip(b));
+    let out = op(&pa, &pb).map_err(ferr_to_pyerr)?;
+    // numpy's polyadd/polysub/polymul do NOT trim — polyadd/polysub zero-pad
+    // the shorter operand to the longer length and add/subtract
+    // (`numpy/lib/_polynomial_impl.py:850-863`), and polymul is the full
+    // convolution. ferray's add/sub keep max length and mul produces
+    // len(a)+len(b)-1, both matching numpy exactly, so reverse without trim.
+    vec_to_pyarray1(py, flip(out.coeffs().to_vec()))
+}
+
+/// `numpy.polyadd(a1, a2)` — sum of two highest-first polynomials, trimmed.
+/// `numpy/lib/_polynomial_impl.py:798`.
+#[pyfunction]
+pub fn polyadd<'py>(py: Python<'py>, a1: Vec<f64>, a2: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
+    poly_binop(py, a1, a2, |x, y| x.add(y))
+}
+
+/// `numpy.polysub(a1, a2)` — difference of two highest-first polynomials.
+/// `numpy/lib/_polynomial_impl.py:867`.
+#[pyfunction]
+pub fn polysub<'py>(py: Python<'py>, a1: Vec<f64>, a2: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
+    poly_binop(py, a1, a2, |x, y| x.sub(y))
+}
+
+/// `numpy.polymul(a1, a2)` — product of two highest-first polynomials.
+/// `numpy/lib/_polynomial_impl.py:924`.
+#[pyfunction]
+pub fn polymul<'py>(py: Python<'py>, a1: Vec<f64>, a2: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
+    poly_binop(py, a1, a2, |x, y| x.mul(y))
+}
+
+/// `numpy.polyder(p, m=1)` — `m`-th derivative of a highest-first polynomial.
+/// `numpy/lib/_polynomial_impl.py:378`.
+#[pyfunction]
+#[pyo3(signature = (p, m = 1))]
+pub fn polyder<'py>(py: Python<'py>, p: Vec<f64>, m: usize) -> PyResult<Bound<'py, PyAny>> {
+    let poly = fp::Polynomial::new(&flip(p));
+    let out = poly.deriv(m).map_err(ferr_to_pyerr)?;
+    vec_to_pyarray1(py, flip(out.coeffs().to_vec()))
+}
+
+/// `numpy.polyint(p, m=1, k=None)` — `m`-th antiderivative of a highest-first
+/// polynomial with integration constants `k`. `numpy/lib/_polynomial_impl.py:270`.
+///
+/// numpy's `k` are "given in the order of integration: those corresponding to
+/// highest-order terms come first" (`_polynomial_impl.py:296-298`), which is
+/// exactly ferray's `integ` constant order, so `k` passes through unreversed.
+#[pyfunction]
+#[pyo3(signature = (p, m = 1, k = None))]
+pub fn polyint<'py>(
+    py: Python<'py>,
+    p: Vec<f64>,
+    m: usize,
+    k: Option<Vec<f64>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let poly = fp::Polynomial::new(&flip(p));
+    let k = k.unwrap_or_default();
+    let out = poly.integ(m, &k).map_err(ferr_to_pyerr)?;
+    vec_to_pyarray1(py, flip(out.coeffs().to_vec()))
+}
+
+/// `numpy.polyfit(x, y, deg)` — least-squares fit returning highest-first
+/// coefficients. `numpy/lib/_polynomial_impl.py:461`.
+///
+/// numpy builds a (highest-first) Vandermonde and solves a scaled lstsq
+/// (`_polynomial_impl.py:658,674-678`). ferray's `Poly::fit` performs the same
+/// raw power-basis least-squares (lowest-first, no domain mapping); we reverse
+/// the lowest-first coefficients to highest-first.
+#[pyfunction]
+pub fn polyfit<'py>(
+    py: Python<'py>,
+    x: Vec<f64>,
+    y: Vec<f64>,
+    deg: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_polynomial::traits::Poly;
+    let fitted = <fp::Polynomial as Poly>::fit(&x, &y, deg).map_err(ferr_to_pyerr)?;
+    vec_to_pyarray1(py, flip(fitted.coeffs().to_vec()))
+}
+
+/// `numpy.polydiv(u, v)` — polynomial division returning `(quotient,
+/// remainder)`, both highest-first. `numpy/lib/_polynomial_impl.py:992`.
+#[pyfunction]
+pub fn polydiv<'py>(
+    py: Python<'py>,
+    u: Vec<f64>,
+    v: Vec<f64>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let pu = fp::Polynomial::new(&flip(u));
+    let pv = fp::Polynomial::new(&flip(v));
+    let (q, r) = pu.divmod(&pv).map_err(ferr_to_pyerr)?;
+    // `numpy/lib/_polynomial_impl.py:1054` — quotient length is fixed at
+    // `max(m - n + 1, 1)` (no leading-zero trim). The remainder strips leading
+    // highest-first zeros down to min length 1 (`_polynomial_impl.py:1060-1061`).
+    let q_py = vec_to_pyarray1(py, flip(q.coeffs().to_vec()))?;
+    let r_py = vec_to_pyarray1(py, trim_leading_highest_first(flip(r.coeffs().to_vec())))?;
+    Ok(PyTuple::new(py, [q_py, r_py])?.into_any())
 }
 
 poly_class!(

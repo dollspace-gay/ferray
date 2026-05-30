@@ -382,6 +382,22 @@ from ._ferray import (
     hanning,
     kaiser,
 )
+
+# Top-level numpy poly1d family — classic 1-D polynomial functions on
+# highest-degree-first coefficient arrays (numpy/lib/_polynomial_impl.py).
+# Distinct from numpy.polynomial.polynomial.* (lowest-first).
+from ._ferray import (
+    poly,
+    polyadd,
+    polyder,
+    polydiv,
+    polyfit,
+    polyint,
+    polymul,
+    polysub,
+    polyval,
+    roots,
+)
 from . import autodiff as _autodiff_module
 from ._ferray import char as _char_module
 from ._ferray import strings as _strings_module
@@ -462,6 +478,9 @@ __all__ = [
     # top-level windows
     "bartlett", "blackman", "broadcast_arrays", "broadcast_shapes",
     "hamming", "hanning", "kaiser",
+    # top-level poly1d family (highest-degree-first)
+    "poly", "polyadd", "polyder", "polydiv", "polyfit", "polyint",
+    "polymul", "polysub", "polyval", "roots",
     # creation
     "abs", "arange", "array", "asanyarray", "asarray", "ascontiguousarray",
     "asfortranarray", "copy", "dtype", "empty", "eye", "full", "full_like",
