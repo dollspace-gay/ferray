@@ -310,6 +310,96 @@ fn register_ma_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> Py
     m.add_function(wrap_pyfunction!(ma::getdata, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::filled, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::compressed, &m)?)?;
+    // ----- numpy.ma expansion (refs #818) -----
+    // unary elementwise ufuncs
+    m.add_function(wrap_pyfunction!(ma::sin, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::cos, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::tan, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::arctan, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::sinh, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::cosh, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::tanh, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::arcsinh, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::exp, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::floor, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::ceil, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::negative, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::absolute, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::abs, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::fabs, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::conjugate, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::sqrt, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::log, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::log2, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::log10, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::arcsin, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::arccos, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::arccosh, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::arctanh, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::around, &m)?)?;
+    // binary elementwise ufuncs
+    m.add_function(wrap_pyfunction!(ma::add, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::subtract, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::multiply, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::divide, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::true_divide, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::floor_divide, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::power, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::arctan2, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::hypot, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::fmod, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::remainder, &m)?)?;
+    m.add("mod", wrap_pyfunction!(ma::mod_, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::maximum, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::minimum, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::bitwise_and, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::bitwise_or, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::bitwise_xor, &m)?)?;
+    // reductions
+    m.add_function(wrap_pyfunction!(ma::prod, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::median, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::ptp, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::argmin, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::argmax, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::count, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::average, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::all, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::any, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::anom, &m)?)?;
+    // creation
+    m.add_function(wrap_pyfunction!(ma::zeros, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::ones, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::empty, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::arange, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::identity, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::asarray, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::asanyarray, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::copy, &m)?)?;
+    // manipulation
+    m.add_function(wrap_pyfunction!(ma::reshape, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::ravel, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::transpose, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::squeeze, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::expand_dims, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::concatenate, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::diag, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::repeat, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::clip, &m)?)?;
+    // mask helpers + predicates
+    m.add_function(wrap_pyfunction!(ma::getmaskarray, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::make_mask, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::make_mask_none, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::mask_or, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::masked_values, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::masked_object, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::fix_invalid, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::is_mask, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::is_masked_array, &m)?)?;
+    // numpy aliases: isMA / isarray == isMaskedArray
+    m.add("isMA", wrap_pyfunction!(ma::is_masked_array, &m)?)?;
+    m.add("isarray", wrap_pyfunction!(ma::is_masked_array, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::set_fill_value, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::default_fill_value, &m)?)?;
     parent.add_submodule(&m)?;
     py.import("sys")?
         .getattr("modules")?
