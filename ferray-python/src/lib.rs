@@ -584,6 +584,7 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(complex::conj, m)?)?;
     m.add_function(wrap_pyfunction!(complex::conjugate, m)?)?;
     m.add_function(wrap_pyfunction!(complex::angle, m)?)?;
+    m.add_function(wrap_pyfunction!(complex::real_if_close, m)?)?;
     m.add_function(wrap_pyfunction!(complex::iscomplex, m)?)?;
     m.add_function(wrap_pyfunction!(complex::isreal, m)?)?;
     m.add_function(wrap_pyfunction!(complex::iscomplexobj, m)?)?;

@@ -84,6 +84,23 @@ upstream = [
 design = ".design/ferray-core.md"
 parity_ops = ["normalize_axis_index", "normalize_axis_tuple", "AxisError", "LinAlgError"]
 
+# ferray-python complex-array binding shim: marshals numpy's complex helpers
+# (real / imag / conj / conjugate / angle / real_if_close / iscomplex /
+# isreal / iscomplexobj / isrealobj) through to ferray-ufunc. Owns the
+# boundary/output-object concerns numpy-vs-ferray differ on: real-input dtype
+# PRESERVATION (real/imag/conj of a real array keep the input dtype — do NOT
+# coerce through complex128), the angle `deg=` kwarg (radians*180/pi), the
+# real_if_close top-level registration, and scalar-vs-0d collapse for scalar
+# inputs (numpy's `res[()]` / `val.real`).
+[[route]]
+crate_pattern = "ferray-python/src/complex.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/lib/_type_check_impl.py",
+  "/home/doll/numpy-ref/numpy/lib/_function_base_impl.py",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["real", "imag", "conj", "conjugate", "angle", "real_if_close", "iscomplex", "isreal", "iscomplexobj", "isrealobj"]
+
 # ferray-python numpy.fft binding shim: marshals numpy.fft.* through to the
 # ferray-fft crate. The library math (norm modes, n-padding, rfft length) is
 # numpy-correct; this route owns the boundary/ABI concerns numpy-vs-ferray
