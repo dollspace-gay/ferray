@@ -989,17 +989,26 @@ where
     binary_broadcast_op(a, b, |x, y| x * y)
 }
 
-/// Elementwise division with broadcasting.
+/// Elementwise *true* division with `NumPy` broadcasting.
+///
+/// Matches `np.divide` / `np.true_divide`, which are ALWAYS true division
+/// (`PyUFunc_TrueDivisionTypeResolver`, generate_umath.py:419-422): integer
+/// operands promote to `float64`, floats keep their float dtype (see
+/// [`TrueDivide`]). Because integer operands are cast to `f64` BEFORE the
+/// division (via [`TrueDivide::true_div`]), an integer divide-by-zero yields
+/// `inf`/`nan` and NEVER panics — exactly NumPy's RuntimeWarning-only
+/// behaviour. The output element type is `<T as TrueDivide>::Output`
+/// (i*/u* -> f64, f32 -> f32, f64 -> f64).
 pub fn divide_broadcast<T, D1, D2>(
     a: &Array<T, D1>,
     b: &Array<T, D2>,
-) -> FerrayResult<Array<T, IxDyn>>
+) -> FerrayResult<Array<<T as TrueDivide>::Output, IxDyn>>
 where
-    T: Element + std::ops::Div<Output = T> + Copy,
+    T: TrueDivide,
     D1: Dimension,
     D2: Dimension,
 {
-    binary_broadcast_op(a, b, |x, y| x / y)
+    crate::helpers::binary_broadcast_map_op(a, b, T::true_div)
 }
 
 // ---------------------------------------------------------------------------
