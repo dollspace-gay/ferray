@@ -1348,6 +1348,99 @@ impl PyMaskedArray {
         };
         Ok(Self::from_dynma(inner))
     }
+
+    // -- Binary arithmetic dunders (#862, REQ-1 R-A + REQ-6 R-F) --------------
+    //
+    // Each delegates to [`binary_op`] in either direction. `self` is always the
+    // receiver; `reflected = true` computes `other OP self` (numpy.ma's
+    // `__radd__` → `add(other, self)`, `numpy/ma/core.py:4322`). The compute,
+    // dtype promotion (NEP-50 via `numpy.result_type`), mask union, and
+    // domain masking are all done once in `binary_op` (mirroring
+    // `_MaskedBinaryOperation.__call__` / `_DomainedBinaryOperation.__call__`,
+    // `numpy/ma/core.py:1062` / `:1207`).
+
+    /// `a + b` — `numpy.ma`'s `__add__` → `add` (`numpy/ma/core.py:4313`).
+    fn __add__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::Add, false)
+    }
+    /// `b + a` — reflected `__radd__` → `add(other, self)` (`:4322`).
+    fn __radd__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::Add, true)
+    }
+    /// `a - b` — `__sub__` → `subtract` (`numpy/ma/core.py:4332`).
+    fn __sub__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::Sub, false)
+    }
+    /// `b - a` — reflected `__rsub__` → `subtract(other, self)`.
+    fn __rsub__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::Sub, true)
+    }
+    /// `a * b` — `__mul__` → `multiply` (`numpy/ma/core.py:4342`).
+    fn __mul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::Mul, false)
+    }
+    /// `b * a` — reflected `__rmul__` → `multiply(other, self)`.
+    fn __rmul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::Mul, true)
+    }
+    /// `a / b` — `__truediv__` → `true_divide` (`numpy/ma/core.py:4362`).
+    /// True (float) division: integer operands promote to float64 (NEP-50),
+    /// and divisor-zero / non-finite positions are domain-masked
+    /// (`_DomainedBinaryOperation`, `numpy/ma/core.py:1207`).
+    fn __truediv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::TrueDiv, false)
+    }
+    /// `b / a` — reflected `__rtruediv__` → `true_divide(other, self)`.
+    fn __rtruediv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::TrueDiv, true)
+    }
+    /// `a // b` — `__floordiv__` → `floor_divide` (`numpy/ma/core.py:4378`),
+    /// divisor-zero domain-masked.
+    fn __floordiv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::FloorDiv, false)
+    }
+    /// `b // a` — reflected `__rfloordiv__` → `floor_divide(other, self)`.
+    fn __rfloordiv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::FloorDiv, true)
+    }
+    /// `a % b` — `__mod__` → `remainder` (`numpy/ma/core.py:4386`),
+    /// divisor-zero domain-masked.
+    fn __mod__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::Mod, false)
+    }
+    /// `b % a` — reflected `__rmod__` → `remainder(other, self)`.
+    fn __rmod__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        binary_op(py, &self.inner, other, BinOp::Mod, true)
+    }
+    /// `a ** b` — `__pow__` → `power` (`numpy/ma/core.py:4394`). The optional
+    /// ternary-pow `modulo` argument is unsupported (numpy.ma ignores it too).
+    fn __pow__(
+        &self,
+        py: Python<'_>,
+        other: &Bound<'_, PyAny>,
+        modulo: &Bound<'_, PyAny>,
+    ) -> PyResult<Self> {
+        if !modulo.is_none() {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "pow() 3rd argument not allowed unless all arguments are integers",
+            ));
+        }
+        binary_op(py, &self.inner, other, BinOp::Pow, false)
+    }
+    /// `b ** a` — reflected `__rpow__` → `power(other, self)`.
+    fn __rpow__(
+        &self,
+        py: Python<'_>,
+        other: &Bound<'_, PyAny>,
+        modulo: &Bound<'_, PyAny>,
+    ) -> PyResult<Self> {
+        if !modulo.is_none() {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "pow() 3rd argument not allowed unless all arguments are integers",
+            ));
+        }
+        binary_op(py, &self.inner, other, BinOp::Pow, true)
+    }
 }
 
 /// Wrap a unary-op result (already in the source's native dtype `T`) back into
@@ -1367,6 +1460,422 @@ where
     let mask = fma::getmaskarray(src).map_err(ferr_to_pyerr)?;
     let out = RustMa::new(data, mask).map_err(ferr_to_pyerr)?;
     Ok(T::wrap(out))
+}
+
+/// The seven `numpy.ma` binary arithmetic operators, each delegating to the
+/// matching `ferray_ufunc` op (`numpy/ma/core.py:1290`-`:1324`). `TrueDiv`,
+/// `FloorDiv`, and `Mod` are the *domained* ops (`_DomainedBinaryOperation`):
+/// they additionally mask divisor-zero / non-finite result positions.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    TrueDiv,
+    FloorDiv,
+    Mod,
+    Pow,
+}
+
+impl BinOp {
+    /// Whether this op is *domained* (`/`, `//`, `%`) — masks the result where
+    /// the divisor is zero / the result is non-finite, and ALWAYS materializes
+    /// a real mask even from two nomask operands (`_DomainedBinaryOperation`,
+    /// `numpy/ma/core.py:1207`). The non-domained ops (`+`, `-`, `*`, `**`)
+    /// keep `nomask` when both operands are nomask (`numpy/ma/core.py:1077`).
+    fn is_domained(self) -> bool {
+        matches!(self, BinOp::TrueDiv | BinOp::FloorDiv | BinOp::Mod)
+    }
+}
+
+/// Compute one of the seven masked binary arithmetic operators, mirroring
+/// numpy.ma's `_MaskedBinaryOperation.__call__` (`numpy/ma/core.py:1062`) and,
+/// for `/`/`//`/`%`, `_DomainedBinaryOperation.__call__` (`:1207`).
+///
+/// Operands are materialized as ndarrays exactly as numpy.ma does
+/// (`getdata(b) == np.asarray(b)` — a Python scalar becomes its natural
+/// `int64`/`float64` array, NOT an NEP-50 weak scalar, so `int8_ma + 1` is
+/// `int64`, verified live numpy 2.4.5). The operand-common dtype is
+/// `numpy.result_type(left_data, right_data)` and the op computes over both
+/// operands cast to it, via the matching `ferray_ufunc` op (NEP-50 promotion
+/// to float for `/`; integer dtype kept for `//`/`%`/`**`). `reflected`
+/// computes `other OP self` (the `__r*__` dunders, `:4322`).
+///
+/// Mask: `union(getmaskarray(left), getmaskarray(right))` (broadcast),
+/// additionally OR'd with the divisor-zero / non-finite domain mask for the
+/// domained ops. Masked-position DATA is reverted to the left operand's data
+/// `da` (`np.copyto(result, da, where=m)`, `:1096` / the `result += m*da`
+/// reconstruction at `:1233`).
+fn binary_op(
+    py: Python<'_>,
+    recv: &DynMa,
+    other: &Bound<'_, PyAny>,
+    op: BinOp,
+    reflected: bool,
+) -> PyResult<PyMaskedArray> {
+    // Receiver operand as (ndarray, mask, has-real-mask).
+    let recv_data = dynma_data_pyarray(py, recv)?;
+    let recv_mask = recv.mask_bits()?;
+    let recv_real = recv.has_real_mask();
+
+    // Other operand: data as `np.asarray(other)` (native dtype, no weak
+    // scalar) + its full bool mask. A `fr.ma.MaskedArray` operand is read from
+    // its `inner` (numpy.ma's `getmaskarray` would NOT recognize it); a
+    // `numpy.ma.MaskedArray` / plain array-like uses `numpy.ma.getmaskarray`
+    // (all-False for a plain array-like, the source mask otherwise).
+    let (other_data, other_mask, other_real) = if let Ok(m) = other.extract::<PyMaskedArray>() {
+        (
+            m.data_pyarray(py)?,
+            m.inner.mask_bits()?,
+            m.inner.has_real_mask(),
+        )
+    } else {
+        let data = crate::conv::as_ndarray(py, other)?;
+        let np_ma = py.import("numpy")?.getattr("ma")?;
+        let mask_obj = np_ma.call_method1("getmaskarray", (other,))?;
+        let mask = extract_bool_array(py, &mask_obj)?;
+        let real = source_real_mask(py, other)?.is_some();
+        (data, mask, real)
+    };
+
+    // Left/right ordering: reflected ops compute `other OP self`.
+    let (ld, lm, l_real, rd, rm, r_real) = if reflected {
+        (
+            &other_data,
+            other_mask,
+            other_real,
+            &recv_data,
+            recv_mask,
+            recv_real,
+        )
+    } else {
+        (
+            &recv_data,
+            recv_mask,
+            recv_real,
+            &other_data,
+            other_mask,
+            other_real,
+        )
+    };
+
+    // Operand-common dtype = numpy.result_type(left_data, right_data)
+    // (NEP-50, matching numpy.ma materializing both operands as arrays first).
+    let operand_dt = crate::conv::binary_result_dtype(py, ld, rd)?;
+
+    // Cast each operand's data to the common dtype and wrap as a same-dtype
+    // DynMa carrying its mask. `build_dynma` rejects complex/structured.
+    let left = build_dynma(&coerce_dtype(py, ld, &operand_dt)?, Some(lm))?;
+    let right = build_dynma(&coerce_dtype(py, rd, &operand_dt)?, Some(rm))?;
+
+    // Broadcast the two operand shapes (numpy raises ValueError on mismatch).
+    let bshape = ferray_core::dimension::broadcast::broadcast_shapes(&left.shape(), &right.shape())
+        .map_err(|_| {
+            PyValueError::new_err(format!(
+                "operands could not be broadcast together with shapes {:?} {:?}",
+                left.shape(),
+                right.shape()
+            ))
+        })?;
+
+    // Compute data + the union/domain mask + the masked-position `da` revert,
+    // dispatched over the common operand dtype.
+    let computed = compute_binary(&left, &right, &bshape, op)?;
+
+    // Real-mask identity: domained ops always materialize a real mask; the
+    // additive/multiplicative ops keep nomask only when BOTH operands are
+    // nomask (`numpy/ma/core.py:1077`).
+    let want_real = op.is_domained() || l_real || r_real || computed.domain_any;
+    let inner = if want_real {
+        rewrap_dynma_with_mask(computed.data, computed.mask)?
+    } else {
+        strip_mask(computed.data)?
+    };
+    Ok(PyMaskedArray::from_dynma(inner))
+}
+
+/// The product of [`compute_binary`]: the result data (already reverted to the
+/// left operand at masked positions) and the full result mask (operand union
+/// `|` domain). `domain_any` records whether the domain contributed any masked
+/// position (so a non-domained op can still tell whether a real mask is owed).
+struct ComputedBinary {
+    data: DynMa,
+    mask: ArrayD<bool>,
+    domain_any: bool,
+}
+
+/// Broadcast both operands' data + masks to `bshape`, run `op` over the common
+/// operand dtype, and assemble the result data (masked positions reverted to
+/// the left operand) and the union/domain mask.
+///
+/// `left` and `right` are the SAME `DynMa` variant (both cast to the
+/// operand-common dtype upstream). The result dtype follows numpy: `/` promotes
+/// integer/bool operands to `float64` (`TrueDivide`); `//`/`%`/`**` keep the
+/// integer dtype (and promote `bool` to `int8`, matching numpy.ma); `+`/`-`/`*`
+/// keep the operand dtype.
+fn compute_binary(
+    left: &DynMa,
+    right: &DynMa,
+    bshape: &[usize],
+    op: BinOp,
+) -> PyResult<ComputedBinary> {
+    use ferray_core::manipulation::broadcast_to;
+    use ferray_ufunc::ops::arithmetic::{
+        add, divide, floor_divide, floor_divide_int, mod_, mod_int, multiply, power, power_int,
+        subtract,
+    };
+
+    // Broadcast the two bool masks to the result shape and union them.
+    let lmask = broadcast_to(&left.mask_bits()?, bshape).map_err(ferr_to_pyerr)?;
+    let rmask = broadcast_to(&right.mask_bits()?, bshape).map_err(ferr_to_pyerr)?;
+    let union: Vec<bool> = lmask
+        .iter()
+        .zip(rmask.iter())
+        .map(|(&a, &b)| a || b)
+        .collect();
+    let n = union.len();
+
+    // A float arm: `+`/`-`/`*` keep the float dtype; `/`/`//`/`%` are domained
+    // (divisor-zero / non-finite masked); `**` is `power`. The result variant
+    // equals the operand float variant (`numpy/ma/core.py:1290`-`:1324`).
+    macro_rules! float_arm {
+        ($l:expr, $r:expr, $T:ty, $variant:ident) => {{
+            let la: ArrayD<$T> = broadcast_to($l.data(), bshape).map_err(ferr_to_pyerr)?;
+            let ra: ArrayD<$T> = broadcast_to($r.data(), bshape).map_err(ferr_to_pyerr)?;
+            let mut out = match op {
+                BinOp::Add => add(&la, &ra).map_err(ferr_to_pyerr)?,
+                BinOp::Sub => subtract(&la, &ra).map_err(ferr_to_pyerr)?,
+                BinOp::Mul => multiply(&la, &ra).map_err(ferr_to_pyerr)?,
+                BinOp::TrueDiv => divide(&la, &ra).map_err(ferr_to_pyerr)?,
+                BinOp::FloorDiv => floor_divide(&la, &ra).map_err(ferr_to_pyerr)?,
+                BinOp::Mod => mod_(&la, &ra).map_err(ferr_to_pyerr)?,
+                BinOp::Pow => power(&la, &ra).map_err(ferr_to_pyerr)?,
+            };
+            let mut domain = vec![false; n];
+            if op.is_domained() {
+                let zero = <$T as ferray_core::Element>::zero();
+                for (i, (&div, r)) in ra.iter().zip(out.iter()).enumerate() {
+                    if div == zero || !r.is_finite() {
+                        domain[i] = true;
+                    }
+                }
+            }
+            let full = or_vecs(&union, &domain);
+            revert_masked(
+                out.as_slice_mut().ok_or_else(non_contig)?,
+                la.as_slice().ok_or_else(non_contig)?,
+                &full,
+            );
+            let data = Array::from_vec(IxDyn::new(bshape), out.iter().copied().collect())
+                .map_err(ferr_to_pyerr)?;
+            (
+                DynMa::$variant(RustMa::from_data(data).map_err(ferr_to_pyerr)?),
+                domain,
+            )
+        }};
+    }
+
+    // An integer arm: `+`/`-`/`*` wrap; `//`/`%` keep the int dtype with
+    // divisor-zero masked; `**` is `power_int`; `/` promotes to `float64`
+    // (`TrueDivide::Output == f64`) and is domain-masked on non-finite results.
+    macro_rules! int_arm {
+        ($l:expr, $r:expr, $T:ty, $variant:ident) => {{
+            let la: ArrayD<$T> = broadcast_to($l.data(), bshape).map_err(ferr_to_pyerr)?;
+            let ra: ArrayD<$T> = broadcast_to($r.data(), bshape).map_err(ferr_to_pyerr)?;
+            let zero = <$T as ferray_core::Element>::zero();
+            if op == BinOp::TrueDiv {
+                let mut out = divide(&la, &ra).map_err(ferr_to_pyerr)?;
+                let mut domain = vec![false; n];
+                for (i, (&div, r)) in ra.iter().zip(out.iter()).enumerate() {
+                    if div == zero || !r.is_finite() {
+                        domain[i] = true;
+                    }
+                }
+                let la_f64: Vec<f64> = la.iter().map(|&v| dyn_to_f64::<$T>(v)).collect();
+                let full = or_vecs(&union, &domain);
+                revert_masked(out.as_slice_mut().ok_or_else(non_contig)?, &la_f64, &full);
+                let data = Array::from_vec(IxDyn::new(bshape), out.iter().copied().collect())
+                    .map_err(ferr_to_pyerr)?;
+                (
+                    DynMa::F64(RustMa::from_data(data).map_err(ferr_to_pyerr)?),
+                    domain,
+                )
+            } else {
+                let mut domain = vec![false; n];
+                if op.is_domained() {
+                    for (i, &div) in ra.iter().enumerate() {
+                        if div == zero {
+                            domain[i] = true;
+                        }
+                    }
+                }
+                let mut out = match op {
+                    BinOp::Add => add(&la, &ra).map_err(ferr_to_pyerr)?,
+                    BinOp::Sub => subtract(&la, &ra).map_err(ferr_to_pyerr)?,
+                    BinOp::Mul => multiply(&la, &ra).map_err(ferr_to_pyerr)?,
+                    BinOp::FloorDiv => floor_divide_int(&la, &ra).map_err(ferr_to_pyerr)?,
+                    BinOp::Mod => mod_int(&la, &ra).map_err(ferr_to_pyerr)?,
+                    BinOp::Pow => power_int(&la, &ra).map_err(ferr_to_pyerr)?,
+                    BinOp::TrueDiv => add(&la, &ra).map_err(ferr_to_pyerr)?, // unreachable
+                };
+                let full = or_vecs(&union, &domain);
+                revert_masked(
+                    out.as_slice_mut().ok_or_else(non_contig)?,
+                    la.as_slice().ok_or_else(non_contig)?,
+                    &full,
+                );
+                let data = Array::from_vec(IxDyn::new(bshape), out.iter().copied().collect())
+                    .map_err(ferr_to_pyerr)?;
+                (
+                    DynMa::$variant(RustMa::from_data(data).map_err(ferr_to_pyerr)?),
+                    domain,
+                )
+            }
+        }};
+    }
+
+    let (data, domain): (DynMa, Vec<bool>) = match (left, right) {
+        (DynMa::F32(l), DynMa::F32(r)) => float_arm!(l, r, f32, F32),
+        (DynMa::F64(l), DynMa::F64(r)) => float_arm!(l, r, f64, F64),
+        (DynMa::I8(l), DynMa::I8(r)) => int_arm!(l, r, i8, I8),
+        (DynMa::I16(l), DynMa::I16(r)) => int_arm!(l, r, i16, I16),
+        (DynMa::I32(l), DynMa::I32(r)) => int_arm!(l, r, i32, I32),
+        (DynMa::I64(l), DynMa::I64(r)) => int_arm!(l, r, i64, I64),
+        (DynMa::U8(l), DynMa::U8(r)) => int_arm!(l, r, u8, U8),
+        (DynMa::U16(l), DynMa::U16(r)) => int_arm!(l, r, u16, U16),
+        (DynMa::U32(l), DynMa::U32(r)) => int_arm!(l, r, u32, U32),
+        (DynMa::U64(l), DynMa::U64(r)) => int_arm!(l, r, u64, U64),
+        (DynMa::Bool(l), DynMa::Bool(r)) => {
+            let la = broadcast_to(l.data(), bshape).map_err(ferr_to_pyerr)?;
+            let ra = broadcast_to(r.data(), bshape).map_err(ferr_to_pyerr)?;
+            match op {
+                BinOp::Add | BinOp::Mul => {
+                    let mut out: Vec<bool> = la
+                        .iter()
+                        .zip(ra.iter())
+                        .map(|(&x, &y)| if op == BinOp::Add { x || y } else { x && y })
+                        .collect();
+                    let la_slice: Vec<bool> = la.iter().copied().collect();
+                    revert_masked(&mut out, &la_slice, &union);
+                    let arr =
+                        ArrayD::<bool>::from_vec(IxDyn::new(bshape), out).map_err(ferr_to_pyerr)?;
+                    (
+                        DynMa::Bool(RustMa::from_data(arr).map_err(ferr_to_pyerr)?),
+                        vec![false; n],
+                    )
+                }
+                BinOp::Sub => {
+                    return Err(pyo3::exceptions::PyTypeError::new_err(
+                        "numpy boolean subtract, the `-` operator, is not supported, use the \
+                         bitwise_xor, the `^` operator, or the logical_xor function instead.",
+                    ));
+                }
+                BinOp::TrueDiv | BinOp::FloorDiv | BinOp::Mod | BinOp::Pow => {
+                    // Promote bool operands to int8 (numpy.ma's bool loop for
+                    // `/`/`//`/`%`/`**`), preserving the operand union mask, and
+                    // recurse through the i8 compute path. The recursion folds
+                    // union+domain into its mask; surface that as the domain so
+                    // the outer union (identical) is idempotent.
+                    let li = ArrayD::<i8>::from_vec(
+                        IxDyn::new(bshape),
+                        la.iter().map(|&v| v as i8).collect(),
+                    )
+                    .map_err(ferr_to_pyerr)?;
+                    let ri = ArrayD::<i8>::from_vec(
+                        IxDyn::new(bshape),
+                        ra.iter().map(|&v| v as i8).collect(),
+                    )
+                    .map_err(ferr_to_pyerr)?;
+                    let union_arr = ArrayD::<bool>::from_vec(IxDyn::new(bshape), union.clone())
+                        .map_err(ferr_to_pyerr)?;
+                    let lm = DynMa::I8(RustMa::new(li, union_arr.clone()).map_err(ferr_to_pyerr)?);
+                    let rm = DynMa::I8(RustMa::new(ri, union_arr).map_err(ferr_to_pyerr)?);
+                    let computed = compute_binary(&lm, &rm, bshape, op)?;
+                    let domain: Vec<bool> = computed.mask.iter().copied().collect();
+                    (computed.data, domain)
+                }
+            }
+        }
+        _ => {
+            return Err(PyValueError::new_err(
+                "internal: binary operand dtypes were not unified before compute",
+            ));
+        }
+    };
+
+    let domain_any = domain.iter().any(|&d| d);
+    let mask = ArrayD::<bool>::from_vec(IxDyn::new(bshape), or_vecs(&union, &domain))
+        .map_err(ferr_to_pyerr)?;
+    Ok(ComputedBinary {
+        data,
+        mask,
+        domain_any,
+    })
+}
+
+/// Elementwise OR of two equal-length bool slices.
+fn or_vecs(a: &[bool], b: &[bool]) -> Vec<bool> {
+    a.iter().zip(b.iter()).map(|(&x, &y)| x || y).collect()
+}
+
+/// Revert `result` to the left operand `la` at every masked position, building
+/// the masked-result data buffer numpy keeps (`np.copyto(result, da, where=m)`,
+/// `numpy/ma/core.py:1096`; the domained engine reconstructs the same via
+/// `result += m * da`, `:1233`). `la` and `result` share `bshape`.
+fn revert_masked<T: Copy>(result: &mut [T], la: &[T], mask: &[bool]) {
+    for ((r, &d), &m) in result.iter_mut().zip(la.iter()).zip(mask.iter()) {
+        if m {
+            *r = d;
+        }
+    }
+}
+
+/// Diagnostic for a non-contiguous internal buffer (broadcast results are
+/// materialized C-contiguous, so this is defensive — never hit in practice).
+fn non_contig() -> PyErr {
+    PyValueError::new_err("internal: expected a contiguous result buffer")
+}
+
+/// Egress a `DynMa`'s data buffer as a native-dtype numpy ndarray (the
+/// free-function analog of `PyMaskedArray::data_pyarray`).
+fn dynma_data_pyarray<'py>(py: Python<'py>, d: &DynMa) -> PyResult<Bound<'py, PyAny>> {
+    match_ma!(d, m, T => {
+        let arr: ArrayD<T> = fma::getdata(m).map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    })
+}
+
+/// Re-wrap a freshly-computed result `DynMa` (whose own mask is meaningless)
+/// with the supplied real bool mask, preserving the result dtype variant.
+fn rewrap_dynma_with_mask(data: DynMa, mask: ArrayD<bool>) -> PyResult<DynMa> {
+    rewrap_with_mask(&data, Some(mask))
+}
+
+/// Re-wrap a result `DynMa` with the `nomask` sentinel (a `from_data`
+/// all-False, real-mask-less array), for non-domained ops over two nomask
+/// operands (`numpy/ma/core.py:1077`).
+fn strip_mask(data: DynMa) -> PyResult<DynMa> {
+    macro_rules! strip {
+        ($sm:expr, $variant:ident) => {{
+            let d = $sm.data().clone();
+            Ok(DynMa::$variant(
+                RustMa::from_data(d).map_err(ferr_to_pyerr)?,
+            ))
+        }};
+    }
+    match &data {
+        DynMa::Bool(sm) => strip!(sm, Bool),
+        DynMa::I8(sm) => strip!(sm, I8),
+        DynMa::I16(sm) => strip!(sm, I16),
+        DynMa::I32(sm) => strip!(sm, I32),
+        DynMa::I64(sm) => strip!(sm, I64),
+        DynMa::U8(sm) => strip!(sm, U8),
+        DynMa::U16(sm) => strip!(sm, U16),
+        DynMa::U32(sm) => strip!(sm, U32),
+        DynMa::U64(sm) => strip!(sm, U64),
+        DynMa::F32(sm) => strip!(sm, F32),
+        DynMa::F64(sm) => strip!(sm, F64),
+    }
 }
 
 /// `set_mask_flat` on the active `DynMa` variant (the hard-mask clear gate is
