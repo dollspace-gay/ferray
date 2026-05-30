@@ -85,9 +85,15 @@ def test_argsort_no_mask():
     np.testing.assert_array_equal(np.asarray(g), np.asarray(e))
 
 
-def test_argsort_multidim_axis_rejected():
-    with pytest.raises(ValueError):
-        fr.ma.argsort(_fr([[1.0, 2.0], [3.0, 4.0]]), axis=1)
+def test_argsort_multidim_axis_matches_numpy():
+    # Multi-axis argsort is now backed by ferray-ma's argsort_axis (closes the
+    # #835 gap this test previously pinned as a ValueError).
+    b = _np([[3.0, 1.0, 2.0], [6.0, 5.0, 4.0]], mask=[[0, 0, 1], [0, 0, 0]])
+    fb = _fr([[3.0, 1.0, 2.0], [6.0, 5.0, 4.0]], mask=[[0, 0, 1], [0, 0, 0]])
+    for axis in (0, 1, -1):
+        g = np.asarray(fr.ma.argsort(fb, axis=axis))
+        e = np.ma.argsort(b, axis=axis)
+        np.testing.assert_array_equal(g, e)
 
 
 # ---------------------------------------------------------------------------
@@ -157,9 +163,16 @@ def test_dot_masked_positions_zero():
     assert g == pytest.approx(float(e))
 
 
-def test_dot_2d_rejected():
-    with pytest.raises(ValueError):
-        fr.ma.dot(_fr([[1.0, 2.0], [3.0, 4.0]]), _fr([[1.0, 0.0], [0.0, 1.0]]))
+def test_dot_2d_matches_numpy():
+    # The 2-D masked matrix product is now backed by ferray-ma's ma_dot_2d
+    # (closes the #835 gap this test previously pinned as a ValueError).
+    a = _fr([[1.0, 2.0], [3.0, 4.0]], mask=[[0, 1], [0, 0]])
+    e = np.ma.dot(
+        _np([[1.0, 2.0], [3.0, 4.0]], mask=[[0, 1], [0, 0]]),
+        _np([[1.0, 2.0], [3.0, 4.0]], mask=[[0, 1], [0, 0]]),
+    )
+    g = fr.ma.dot(a, a)
+    _assert_ma_equal(g, e)
 
 
 # ---------------------------------------------------------------------------

@@ -1454,11 +1454,14 @@ pub fn sort<'py>(
     }
 }
 
-/// `numpy.ma.argsort(a, axis=None)` — indices that would sort the flattened
-/// masked array, with masked positions trailing
-/// (`numpy/ma/core.py` `MaskedArray.argsort`). ferray-ma's `argsort`
-/// operates on the flattened array, matching numpy's 1-D / `axis=None`
-/// contract; the result is a numpy `intp`-style `uint64` index array.
+/// `numpy.ma.argsort(a, axis=None)` — indices that would sort a masked array,
+/// with masked positions trailing each lane
+/// (`numpy/ma/core.py` `MaskedArray.argsort`). With `axis=None` (or a 1-D
+/// array) ferray-ma flattens and returns a 1-D index array; with an explicit
+/// `axis` on a multi-dimensional array, `argsort_axis` sorts each lane
+/// independently (masked entries fill-to-max so they trail, `endwith=True`),
+/// returning an index array of the input shape. Results are numpy
+/// `intp`-style `uint64` arrays.
 #[pyfunction]
 #[pyo3(signature = (a, axis = None))]
 pub fn argsort<'py>(
@@ -1466,22 +1469,27 @@ pub fn argsort<'py>(
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    if let Some(ax) = axis {
-        // Only flat (axis=None) and the single-axis-of-a-1-D-array case are
-        // backed by ferray-ma today; reject multi-dim axis cleanly rather
-        // than silently flattening.
-        let m = coerce_to_ma(py, a)?;
-        if !(m.ndim() <= 1 && (ax == 0 || ax == -1)) {
-            return Err(PyValueError::new_err(
-                "ma.argsort with an explicit axis on a multi-dimensional array is not yet \
-                 supported (ferray-ma argsort is flat); pass axis=None",
-            ));
+    let m = coerce_to_ma(py, a)?;
+    match axis {
+        // Flat contract: numpy.ma collapses axis=None (or a 1-D input) to a
+        // single flattened argsort.
+        None => {
+            let m1 = ma_as_ix1(&m)?;
+            let idx: Array1<u64> = m1.argsort().map_err(ferr_to_pyerr)?;
+            Ok(idx.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+        Some(_) if m.ndim() <= 1 => {
+            let m1 = ma_as_ix1(&m)?;
+            let idx: Array1<u64> = m1.argsort().map_err(ferr_to_pyerr)?;
+            Ok(idx.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+        Some(ax) => {
+            let ndim = m.ndim();
+            let axis_u = crate::conv::normalize_axis(py, ax, ndim)?;
+            let idx: ArrayD<u64> = m.argsort_axis(axis_u).map_err(ferr_to_pyerr)?;
+            Ok(idx.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
         }
     }
-    let m = coerce_to_ma(py, a)?;
-    let m1 = ma_as_ix1(&m)?;
-    let idx: Array1<u64> = m1.argsort().map_err(ferr_to_pyerr)?;
-    Ok(idx.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 
 /// `numpy.ma.take(a, indices)` — gather elements at flat `indices`,
@@ -1522,25 +1530,45 @@ pub fn trace<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, offset: i64) -> PyResu
     m2.trace(offset as isize).map_err(ferr_to_pyerr)
 }
 
-/// `numpy.ma.dot(a, b)` — masked inner product. ferray-ma backs the 1-D
-/// vector inner product (`ma_dot_flat`), where masked positions on either
-/// operand contribute zero (`numpy/ma/core.py` `def dot(...)` masks both
-/// operands before the product). The 2-D matrix-multiply form of
-/// `numpy.ma.dot` is a ferray-ma library gap (tracked under #835); a 2-D
-/// operand here raises a clear `ValueError`.
+/// `numpy.ma.dot(a, b)` — masked dot product (`numpy/ma/core.py:8214`,
+/// non-strict default). Two shapes are supported:
+///
+/// - **1-D × 1-D** returns the scalar inner product as a Python float; masked
+///   positions on either operand contribute zero (`ma_dot_flat`).
+/// - **2-D × 2-D** returns a `MaskedArray` matrix product (`ma_dot_2d`): the
+///   data is `dot(filled(a,0), filled(b,0))` and `out[i,j]` is masked iff
+///   every contributing `k` has `a[i,k]` OR `b[k,j]` masked
+///   (`m = ~dot(~mask_a, ~mask_b)`).
+///
+/// Mixed 1-D/2-D operands remain a ferray-ma library gap and raise a clear
+/// `ValueError`.
 #[pyfunction]
-pub fn dot<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, b: &Bound<'py, PyAny>) -> PyResult<f64> {
+pub fn dot<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let ma = coerce_to_ma(py, a)?;
     let mb = coerce_to_ma(py, b)?;
-    if ma.ndim() > 1 || mb.ndim() > 1 {
-        return Err(PyValueError::new_err(
-            "ma.dot currently supports 1-D inner products only; 2-D matrix \
-             multiply for masked arrays is a ferray-ma library gap (#835)",
-        ));
+    match (ma.ndim(), mb.ndim()) {
+        (d, e) if d <= 1 && e <= 1 => {
+            let m1a = ma_as_ix1(&ma)?;
+            let m1b = ma_as_ix1(&mb)?;
+            let s = m1a.ma_dot_flat(&m1b).map_err(ferr_to_pyerr)?;
+            Ok(s.into_pyobject(py)?.into_any())
+        }
+        (2, 2) => {
+            let m2a = ma_as_ix2(&ma)?;
+            let m2b = ma_as_ix2(&mb)?;
+            let out = m2a.ma_dot_2d(&m2b).map_err(ferr_to_pyerr)?;
+            let py_ma = ix2_to_py(out)?;
+            Ok(Py::new(py, py_ma)?.into_bound(py).into_any())
+        }
+        (d, e) => Err(PyValueError::new_err(format!(
+            "ma.dot supports 1-D inner products and 2-D matrix products; mixed \
+             {d}-D × {e}-D operands are a ferray-ma library gap (#835)"
+        ))),
     }
-    let m1a = ma_as_ix1(&ma)?;
-    let m1b = ma_as_ix1(&mb)?;
-    m1a.ma_dot_flat(&m1b).map_err(ferr_to_pyerr)
 }
 
 /// `numpy.ma.unique(a)` — sorted unique unmasked values, with a single
@@ -1700,6 +1728,149 @@ pub fn nonzero<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'p
         );
     }
     Ok(pyo3::types::PyTuple::new(py, arrays)?.into_any())
+}
+
+// ===========================================================================
+// numpy.ma mask-structure run-length analysis (refs #835): clump_masked /
+// clump_unmasked / notmasked_contiguous / notmasked_edges /
+// flatnotmasked_contiguous / flatnotmasked_edges. The ferray-ma library returns
+// half-open `(start, stop)` index pairs; the binding materializes Python
+// `slice` objects to match numpy's observable `slice(start, stop, None)` output.
+// Every numpy.ma contract was verified live against numpy 2.4.5 (R-CHAR-3).
+// ===========================================================================
+
+/// Build a Python `slice(start, stop, None)` from a half-open index pair.
+///
+/// numpy's `_ezclump` yields `slice(start, stop)` with `step=None`; the
+/// `slice` builtin produces exactly that two-argument form (PyO3's
+/// `PySlice::new` always materializes an explicit step, which would diverge
+/// from numpy's observable `step is None`).
+fn pyslice<'py>(py: Python<'py>, (start, stop): (usize, usize)) -> PyResult<Bound<'py, PyAny>> {
+    let builtins = py.import("builtins")?;
+    builtins.getattr("slice")?.call1((start, stop))
+}
+
+/// Convert a `Vec<(usize, usize)>` into a Python list of `slice` objects.
+fn slice_list<'py>(py: Python<'py>, runs: &[(usize, usize)]) -> PyResult<Bound<'py, PyAny>> {
+    let items: Vec<Bound<'py, PyAny>> = runs
+        .iter()
+        .map(|&p| pyslice(py, p))
+        .collect::<PyResult<Vec<_>>>()?;
+    Ok(pyo3::types::PyList::new(py, items)?.into_any())
+}
+
+/// `numpy.ma.clump_masked(a)` (`numpy/ma/extras.py:2189`) — list of `slice`
+/// objects, one per contiguous run of masked elements in a 1-D masked array.
+#[pyfunction]
+pub fn clump_masked<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let m = coerce_to_ma(py, a)?;
+    let runs = fma::clump_masked(&m);
+    slice_list(py, &runs)
+}
+
+/// `numpy.ma.clump_unmasked(a)` (`numpy/ma/extras.py:2235`) — list of `slice`
+/// objects, one per contiguous run of unmasked elements.
+#[pyfunction]
+pub fn clump_unmasked<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let m = coerce_to_ma(py, a)?;
+    let runs = fma::clump_unmasked(&m);
+    slice_list(py, &runs)
+}
+
+/// `numpy.ma.flatnotmasked_contiguous(a)` (`numpy/ma/extras.py:1818`) — list of
+/// `slice` objects of contiguous unmasked regions of the flattened array.
+#[pyfunction]
+pub fn flatnotmasked_contiguous<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let m = coerce_to_ma(py, a)?;
+    let runs = fma::flatnotmasked_contiguous(&m);
+    slice_list(py, &runs)
+}
+
+/// `numpy.ma.flatnotmasked_edges(a)` (`numpy/ma/extras.py:1762`) — `[first,
+/// last]` unmasked indices as an `int64` numpy array, or `None` if every
+/// element is masked.
+#[pyfunction]
+pub fn flatnotmasked_edges<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let m = coerce_to_ma(py, a)?;
+    match fma::flatnotmasked_edges(&m) {
+        None => Ok(py.None().into_bound(py)),
+        Some([first, last]) => {
+            let arr = Array1::<i64>::from_vec(Ix1::new([2]), vec![first as i64, last as i64])
+                .map_err(ferr_to_pyerr)?;
+            Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+    }
+}
+
+/// `numpy.ma.notmasked_edges(a, axis=None)` (`numpy/ma/extras.py:1878`) — for
+/// `axis=None` or a 1-D array, the flat `[first, last]` unmasked indices (or
+/// `None` if all masked). The multi-axis coordinate-tuple form is a deferred
+/// ferray-ma extension; an explicit `axis` on a multi-dimensional array raises
+/// a clear `ValueError`.
+#[pyfunction]
+#[pyo3(signature = (a, axis = None))]
+pub fn notmasked_edges<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let m = coerce_to_ma(py, a)?;
+    if axis.is_some() && m.ndim() > 1 {
+        return Err(PyValueError::new_err(
+            "ma.notmasked_edges with an explicit axis on a multi-dimensional array is a \
+             ferray-ma library gap (#835); pass axis=None",
+        ));
+    }
+    match fma::notmasked_edges(&m) {
+        None => Ok(py.None().into_bound(py)),
+        Some([first, last]) => {
+            let arr = Array1::<i64>::from_vec(Ix1::new([2]), vec![first as i64, last as i64])
+                .map_err(ferr_to_pyerr)?;
+            Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+    }
+}
+
+/// `numpy.ma.notmasked_contiguous(a, axis=None)` (`numpy/ma/extras.py:1936`).
+///
+/// `axis=None` (or a 1-D array) returns a flat list of `slice` objects of the
+/// unmasked runs (identical to `flatnotmasked_contiguous`). For a 2-D array
+/// with an explicit `axis`, returns a list-of-lists — one slice list per lane
+/// along the orthogonal axis.
+#[pyfunction]
+#[pyo3(signature = (a, axis = None))]
+pub fn notmasked_contiguous<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let m = coerce_to_ma(py, a)?;
+    match axis {
+        None => {
+            let runs = fma::flatnotmasked_contiguous(&m);
+            slice_list(py, &runs)
+        }
+        Some(_) if m.ndim() <= 1 => {
+            let runs = fma::flatnotmasked_contiguous(&m);
+            slice_list(py, &runs)
+        }
+        Some(ax) => {
+            let m2 = ma_as_ix2(&m)?;
+            let axis_u = crate::conv::normalize_axis(py, ax, 2)?;
+            let lanes = fma::notmasked_contiguous_axis(&m2, axis_u).map_err(ferr_to_pyerr)?;
+            let lists: Vec<Bound<'py, PyAny>> = lanes
+                .iter()
+                .map(|runs| slice_list(py, runs))
+                .collect::<PyResult<Vec<_>>>()?;
+            Ok(pyo3::types::PyList::new(py, lists)?.into_any())
+        }
+    }
 }
 
 /// `numpy.ma.vander(x, n=None)` — masked Vandermonde

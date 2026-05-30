@@ -417,6 +417,13 @@ fn register_ma_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> Py
     m.add_function(wrap_pyfunction!(ma::vander, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::isin, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::in1d, &m)?)?;
+    // numpy.ma mask-structure run-length analysis (#835).
+    m.add_function(wrap_pyfunction!(ma::clump_masked, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::clump_unmasked, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::flatnotmasked_contiguous, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::flatnotmasked_edges, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::notmasked_contiguous, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::notmasked_edges, &m)?)?;
     // numpy.ma set ops + row/col suppression + masked cov/corrcoef (#835).
     m.add_function(wrap_pyfunction!(ma::intersect1d, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::union1d, &m)?)?;

@@ -1754,6 +1754,335 @@ where
 }
 
 // ===========================================================================
+// Mask-structure analysis: clump / notmasked run-length helpers
+// (numpy/ma/extras.py). Slices are returned as `(start, stop)` half-open
+// index pairs; the binding converts them to Python `slice` objects.
+// ===========================================================================
+
+/// Find the runs (clumps) of `true` values in a 1-D bool slice, returning each
+/// as a half-open `(start, stop)` index pair.
+///
+/// This is the structural core shared by `clump_masked` / `clump_unmasked` /
+/// `flatnotmasked_contiguous`, mirroring `numpy.ma.extras._ezclump`
+/// (`numpy/ma/extras.py:2105`): it walks the boolean transitions and emits one
+/// pair per contiguous run of `true`.
+fn ezclump_true(mask: &[bool]) -> Vec<(usize, usize)> {
+    let n = mask.len();
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    let mut i = 0usize;
+    while i < n {
+        if mask[i] {
+            let start = i;
+            while i < n && mask[i] {
+                i += 1;
+            }
+            runs.push((start, i));
+        } else {
+            i += 1;
+        }
+    }
+    runs
+}
+
+/// Flatten a masked array's mask into a row-major `Vec<bool>`.
+fn flat_mask<T, D>(a: &MaskedArray<T, D>) -> Vec<bool>
+where
+    T: Element,
+    D: Dimension,
+{
+    a.mask().iter().copied().collect()
+}
+
+/// `numpy.ma.clump_masked(a)` (`numpy/ma/extras.py:2189`) — the list of
+/// half-open `(start, stop)` slices, one per contiguous run of **masked**
+/// elements in a 1-D masked array. Returns an empty list when nothing is
+/// masked (numpy returns `[]` for the `nomask` case).
+#[must_use]
+pub fn clump_masked<T, D>(a: &MaskedArray<T, D>) -> Vec<(usize, usize)>
+where
+    T: Element,
+    D: Dimension,
+{
+    ezclump_true(&flat_mask(a))
+}
+
+/// `numpy.ma.clump_unmasked(a)` (`numpy/ma/extras.py:2235`) — the list of
+/// half-open `(start, stop)` slices, one per contiguous run of **unmasked**
+/// elements (numpy computes `_ezclump(~mask)`). With no mask, numpy yields the
+/// single slice `[0, size)`.
+#[must_use]
+pub fn clump_unmasked<T, D>(a: &MaskedArray<T, D>) -> Vec<(usize, usize)>
+where
+    T: Element,
+    D: Dimension,
+{
+    let inv: Vec<bool> = flat_mask(a).iter().map(|&m| !m).collect();
+    ezclump_true(&inv)
+}
+
+/// `numpy.ma.flatnotmasked_edges(a)` (`numpy/ma/extras.py:1762`) — the
+/// `[first, last]` indices of the unmasked values of a flattened masked array.
+///
+/// Returns `Some([0, size-1])` when nothing is masked, `Some([first, last])`
+/// for the partially-masked case, and `None` when every element is masked
+/// (matching numpy's `None` return).
+#[must_use]
+pub fn flatnotmasked_edges<T, D>(a: &MaskedArray<T, D>) -> Option<[usize; 2]>
+where
+    T: Element,
+    D: Dimension,
+{
+    let m = flat_mask(a);
+    let size = m.len();
+    if size == 0 {
+        return None;
+    }
+    if !m.iter().any(|&b| b) {
+        return Some([0, size - 1]);
+    }
+    let first = m.iter().position(|&b| !b)?;
+    let last = m.iter().rposition(|&b| !b)?;
+    Some([first, last])
+}
+
+/// `numpy.ma.flatnotmasked_contiguous(a)` (`numpy/ma/extras.py:1818`) — the
+/// list of half-open `(start, stop)` slices of contiguous **unmasked** regions
+/// of a flattened masked array. With no mask, numpy returns the single slice
+/// `[0, size)`; the all-masked case yields `[]`.
+#[must_use]
+pub fn flatnotmasked_contiguous<T, D>(a: &MaskedArray<T, D>) -> Vec<(usize, usize)>
+where
+    T: Element,
+    D: Dimension,
+{
+    let inv: Vec<bool> = flat_mask(a).iter().map(|&m| !m).collect();
+    ezclump_true(&inv)
+}
+
+/// `numpy.ma.notmasked_edges(a, axis=None)` (`numpy/ma/extras.py:1878`).
+///
+/// For `axis = None` (or a 1-D array) this is exactly
+/// [`flatnotmasked_edges`]. The numpy multi-axis form returns per-axis
+/// coordinate tuples; that form is a deferred extension (#835 follow-up) — this
+/// entry point covers the flattened contract used by ferray's binding.
+#[must_use]
+pub fn notmasked_edges<T, D>(a: &MaskedArray<T, D>) -> Option<[usize; 2]>
+where
+    T: Element,
+    D: Dimension,
+{
+    flatnotmasked_edges(a)
+}
+
+/// `numpy.ma.notmasked_contiguous(a, axis=None)` (`numpy/ma/extras.py:1936`).
+///
+/// `axis = None` matches [`flatnotmasked_contiguous`] (numpy delegates to it
+/// directly). For a 2-D array with an explicit `axis`, returns one slice list
+/// per lane along the orthogonal axis (a list of lists), mirroring numpy's
+/// per-lane `flatnotmasked_contiguous` sweep.
+///
+/// # Errors
+/// Returns `FerrayError::axis_out_of_bounds` if `axis >= 2`, and a
+/// shape-mismatch error if the array is not 2-D when an axis is given.
+pub fn notmasked_contiguous_axis<T>(
+    a: &MaskedArray<T, Ix2>,
+    axis: usize,
+) -> FerrayResult<Vec<Vec<(usize, usize)>>>
+where
+    T: Element,
+{
+    if axis >= 2 {
+        return Err(FerrayError::axis_out_of_bounds(axis, 2));
+    }
+    let shape = a.shape();
+    let (rows, cols) = (shape[0], shape[1]);
+    let mask: Vec<bool> = a.mask().iter().copied().collect();
+    // `other` is the axis we iterate over; for each fixed index on `other`
+    // we sweep the full lane along `axis` and collect unmasked runs.
+    let other = (axis + 1) % 2;
+    let other_len = if other == 0 { rows } else { cols };
+    let axis_len = if axis == 0 { rows } else { cols };
+    let mut result: Vec<Vec<(usize, usize)>> = Vec::with_capacity(other_len);
+    for o in 0..other_len {
+        let mut lane: Vec<bool> = Vec::with_capacity(axis_len);
+        for k in 0..axis_len {
+            let (r, c) = if axis == 0 { (k, o) } else { (o, k) };
+            lane.push(mask[r * cols + c]);
+        }
+        let inv: Vec<bool> = lane.iter().map(|&m| !m).collect();
+        result.push(ezclump_true(&inv));
+    }
+    Ok(result)
+}
+
+// ===========================================================================
+// 2-D masked matrix product (numpy/ma/core.py:8214, non-strict default)
+// ===========================================================================
+
+impl<T> MaskedArray<T, Ix2>
+where
+    T: Element + Copy + std::ops::Add<Output = T> + std::ops::Mul<Output = T> + num_traits::Zero,
+{
+    /// `numpy.ma.dot(a, b)` for 2-D operands, non-strict (the default)
+    /// (`numpy/ma/core.py:8214`).
+    ///
+    /// numpy computes `d = dot(filled(a, 0), filled(b, 0))` (masked entries
+    /// contribute zero) and masks the result where **no** valid pair
+    /// contributed: `m = ~dot(~mask_a, ~mask_b)`. Concretely `out[i, j]` is
+    /// masked iff for every `k`, `a[i, k]` is masked OR `b[k, j]` is masked.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::shape_mismatch` if `self.cols != other.rows`.
+    pub fn ma_dot_2d(&self, other: &MaskedArray<T, Ix2>) -> FerrayResult<MaskedArray<T, Ix2>> {
+        let a_shape = self.shape();
+        let b_shape = other.shape();
+        let (m, k1) = (a_shape[0], a_shape[1]);
+        let (k2, n) = (b_shape[0], b_shape[1]);
+        if k1 != k2 {
+            return Err(FerrayError::shape_mismatch(format!(
+                "ma_dot_2d: lhs.cols={k1} != rhs.rows={k2}"
+            )));
+        }
+        let a_data: Vec<T> = self.data().iter().copied().collect();
+        let a_mask: Vec<bool> = self.mask().iter().copied().collect();
+        let b_data: Vec<T> = other.data().iter().copied().collect();
+        let b_mask: Vec<bool> = other.mask().iter().copied().collect();
+        let zero = <T as num_traits::Zero>::zero();
+
+        let mut out_data = vec![zero; m * n];
+        let mut out_mask = vec![false; m * n];
+        for i in 0..m {
+            for j in 0..n {
+                let mut acc = zero;
+                // `any_valid` tracks whether at least one k-pair was unmasked
+                // on BOTH sides — mirrors `dot(~am, ~bm) != 0` (the result mask).
+                let mut any_valid = false;
+                for k in 0..k1 {
+                    let am = a_mask[i * k1 + k];
+                    let bm = b_mask[k * n + j];
+                    // numpy's data is `dot(filled(a,0), filled(b,0))`: masked
+                    // operands contribute a zero factor, but the sum still runs
+                    // over every k.
+                    let av = if am { zero } else { a_data[i * k1 + k] };
+                    let bv = if bm { zero } else { b_data[k * n + j] };
+                    acc = acc + av * bv;
+                    if !am && !bm {
+                        any_valid = true;
+                    }
+                }
+                out_data[i * n + j] = acc;
+                out_mask[i * n + j] = !any_valid;
+            }
+        }
+        let data_arr = Array::<T, Ix2>::from_vec(Ix2::new([m, n]), out_data)?;
+        let mask_arr = Array::<bool, Ix2>::from_vec(Ix2::new([m, n]), out_mask)?;
+        MaskedArray::new(data_arr, mask_arr)
+    }
+}
+
+// ===========================================================================
+// Multi-axis masked argsort (numpy.ma.argsort, numpy/ma/core.py)
+// ===========================================================================
+
+impl<T, D> MaskedArray<T, D>
+where
+    T: Element + PartialOrd + Copy,
+    D: Dimension,
+{
+    /// `numpy.ma.argsort(a, axis)` along an explicit `axis`
+    /// (`numpy/ma/core.py` `MaskedArray.argsort`).
+    ///
+    /// numpy fills masked positions with the per-dtype maximum fill value
+    /// (`endwith=True`, the default) so they sort to the **end** of each lane,
+    /// then returns the ordinary argsort of the filled data. Within a lane,
+    /// indices are returned relative to that lane (0-based), exactly like
+    /// `numpy.argsort(..., axis=axis)`. The result is a plain index array
+    /// (no mask) of the input shape.
+    ///
+    /// # Errors
+    /// Returns `FerrayError::axis_out_of_bounds` if `axis >= self.ndim()`.
+    pub fn argsort_axis(&self, axis: usize) -> FerrayResult<Array<u64, IxDyn>> {
+        let ndim = self.ndim();
+        if axis >= ndim {
+            return Err(FerrayError::axis_out_of_bounds(axis, ndim));
+        }
+        let shape = self.shape().to_vec();
+        let axis_len = shape[axis];
+        let total: usize = shape.iter().product();
+        let src_data: Vec<T> = self.data().iter().copied().collect();
+        let src_mask: Vec<bool> = self.mask().iter().copied().collect();
+
+        let mut strides = vec![1usize; ndim];
+        for i in (0..ndim.saturating_sub(1)).rev() {
+            strides[i] = strides[i + 1] * shape[i + 1];
+        }
+
+        let mut out = vec![0u64; total];
+
+        let outer_shape: Vec<usize> = shape
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &s)| if i == axis { None } else { Some(s) })
+            .collect();
+        let outer_size: usize = if outer_shape.is_empty() {
+            1
+        } else {
+            outer_shape.iter().product()
+        };
+
+        let mut outer_multi = vec![0usize; outer_shape.len()];
+        for _ in 0..outer_size {
+            // Resolve the flat index of lane position `k` for the current
+            // outer multi-index.
+            let flat_of = |k: usize| -> usize {
+                let mut flat = 0usize;
+                let mut o = 0usize;
+                for (i, &stride) in strides.iter().enumerate() {
+                    if i == axis {
+                        flat += stride * k;
+                    } else {
+                        flat += stride * outer_multi[o];
+                        o += 1;
+                    }
+                }
+                flat
+            };
+
+            // Stable argsort over lane positions: unmasked compare by value;
+            // any masked entry sorts after every unmasked one (the `endwith`
+            // fill-to-max behaviour), with masked entries keeping input order.
+            let mut order: Vec<usize> = (0..axis_len).collect();
+            order.sort_by(|&x, &y| {
+                let fx = flat_of(x);
+                let fy = flat_of(y);
+                match (src_mask[fx], src_mask[fy]) {
+                    (false, false) => src_data[fx]
+                        .partial_cmp(&src_data[fy])
+                        .unwrap_or(std::cmp::Ordering::Equal),
+                    (false, true) => std::cmp::Ordering::Less,
+                    (true, false) => std::cmp::Ordering::Greater,
+                    (true, true) => std::cmp::Ordering::Equal,
+                }
+            });
+
+            for (k, &pos) in order.iter().enumerate() {
+                out[flat_of(k)] = pos as u64;
+            }
+
+            for i in (0..outer_shape.len()).rev() {
+                outer_multi[i] += 1;
+                if outer_multi[i] < outer_shape[i] {
+                    break;
+                }
+                outer_multi[i] = 0;
+            }
+        }
+
+        Array::<u64, IxDyn>::from_vec(IxDyn::new(&shape), out)
+    }
+}
+
+// ===========================================================================
 // Tests
 // ===========================================================================
 
@@ -2202,6 +2531,138 @@ mod tests {
         for (g, e) in data.iter().zip(expect.iter()) {
             assert!((g - e).abs() < 1e-12, "corr {g} != {e}");
         }
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Mask-structure analysis: clump / notmasked run-length helpers.
+    //
+    // Oracle (numpy 2.4.5) for `m = ma.array([1,2,3,4,5,6], mask=[0,0,1,1,0,0])`:
+    //   clump_masked          -> [slice(2, 4)]
+    //   clump_unmasked        -> [slice(0, 2), slice(4, 6)]
+    //   notmasked_contiguous  -> [slice(0, 2), slice(4, 6)]
+    //   notmasked_edges       -> [0, 5]
+    //   flatnotmasked_edges   -> [0, 5]
+    // -----------------------------------------------------------------------
+    #[test]
+    fn clump_run_length_matches_numpy() {
+        let m = ma_f1(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            vec![false, false, true, true, false, false],
+        );
+        assert_eq!(clump_masked(&m), vec![(2, 4)]);
+        assert_eq!(clump_unmasked(&m), vec![(0, 2), (4, 6)]);
+        assert_eq!(flatnotmasked_contiguous(&m), vec![(0, 2), (4, 6)]);
+        assert_eq!(flatnotmasked_edges(&m), Some([0, 5]));
+        assert_eq!(notmasked_edges(&m), Some([0, 5]));
+    }
+
+    #[test]
+    fn clump_nomask_and_allmask_edges() {
+        // numpy: clump_unmasked(no mask) -> [slice(0,n)], clump_masked -> [];
+        // flatnotmasked_edges(no mask) -> [0, n-1].
+        let none = ma_f1(vec![1.0, 2.0, 3.0], vec![false, false, false]);
+        assert_eq!(clump_masked(&none), vec![]);
+        assert_eq!(clump_unmasked(&none), vec![(0, 3)]);
+        assert_eq!(flatnotmasked_edges(&none), Some([0, 2]));
+        // numpy: all masked -> clump_unmasked [], clump_masked [slice(0,n)],
+        // flatnotmasked_contiguous [], flatnotmasked_edges None.
+        let all = ma_f1(vec![1.0, 2.0, 3.0], vec![true, true, true]);
+        assert_eq!(clump_unmasked(&all), vec![]);
+        assert_eq!(clump_masked(&all), vec![(0, 3)]);
+        assert_eq!(flatnotmasked_contiguous(&all), vec![]);
+        assert_eq!(flatnotmasked_edges(&all), None);
+    }
+
+    #[test]
+    fn clump_leading_and_trailing_masked() {
+        // numpy for ma.masked_array(arange(10)); a[[0,1,2,6,8,9]] = masked:
+        //   clump_masked   -> [slice(0,3), slice(6,7), slice(8,10)]
+        //   clump_unmasked -> [slice(3,6), slice(7,8)]
+        let mut mask = vec![false; 10];
+        for &i in &[0usize, 1, 2, 6, 8, 9] {
+            mask[i] = true;
+        }
+        let data: Vec<f64> = (0..10).map(|x| x as f64).collect();
+        let m = ma_f1(data, mask);
+        assert_eq!(clump_masked(&m), vec![(0, 3), (6, 7), (8, 10)]);
+        assert_eq!(clump_unmasked(&m), vec![(3, 6), (7, 8)]);
+    }
+
+    #[test]
+    fn notmasked_contiguous_axis_2d_matches_numpy() -> FerrayResult<()> {
+        use ferray_core::Ix2;
+        // numpy:
+        //   a = arange(12).reshape(3,4); mask[1:,:-1]=1; mask[0,1]=1; mask[-1,0]=0
+        //   notmasked_contiguous(ma, axis=0) ->
+        //     [[slice(0,1), slice(2,3)], [], [slice(0,1)], [slice(0,3)]]
+        //   notmasked_contiguous(ma, axis=1) ->
+        //     [[slice(0,1), slice(2,4)], [slice(3,4)], [slice(0,1), slice(3,4)]]
+        // mask matrix (row-major):
+        //   [[0,1,0,0],[1,1,1,0],[0,1,1,0]]
+        let mask = vec![
+            false, true, false, false, true, true, true, false, false, true, true, false,
+        ];
+        let data: Vec<f64> = (0..12).map(|x| x as f64).collect();
+        let d = Array::<f64, Ix2>::from_vec(Ix2::new([3, 4]), data)?;
+        let mk = Array::<bool, Ix2>::from_vec(Ix2::new([3, 4]), mask)?;
+        let m = MaskedArray::new(d, mk)?;
+        let by0 = notmasked_contiguous_axis(&m, 0)?;
+        assert_eq!(
+            by0,
+            vec![vec![(0, 1), (2, 3)], vec![], vec![(0, 1)], vec![(0, 3)]]
+        );
+        let by1 = notmasked_contiguous_axis(&m, 1)?;
+        assert_eq!(
+            by1,
+            vec![vec![(0, 1), (2, 4)], vec![(3, 4)], vec![(0, 1), (3, 4)]]
+        );
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // 2-D masked dot. Oracle (numpy 2.4.5):
+    //   a = ma.array([[1.,2],[3,4]], mask=[[0,1],[0,0]])
+    //   ma.dot(a, a).data -> [[1, 0], [15, 16]]  (masked entries -> 0 in product)
+    //   ma.dot(a, a).mask -> [[False, True], [False, False]]
+    // -----------------------------------------------------------------------
+    #[test]
+    fn ma_dot_2d_matches_numpy() -> FerrayResult<()> {
+        use ferray_core::Ix2;
+        let d = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 2.0, 3.0, 4.0])?;
+        let mk = Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![false, true, false, false])?;
+        let a = MaskedArray::new(d, mk)?;
+        let out = a.ma_dot_2d(&a)?;
+        let data: Vec<f64> = out.data().iter().copied().collect();
+        let mask: Vec<bool> = out.mask().iter().copied().collect();
+        // out[0,0]=1*1=1 (a[0,1] masked -> 0 factor); out[0,1] masked (every
+        // contributing path traverses the masked a[0,1], data sums to 0).
+        assert_eq!(data, vec![1.0, 0.0, 15.0, 16.0]);
+        assert_eq!(mask, vec![false, true, false, false]);
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Multi-axis argsort. Oracle (numpy 2.4.5):
+    //   b = ma.array([[3,1,2],[6,5,4]], mask=[[0,0,1],[0,0,0]])
+    //   ma.argsort(b, axis=1) -> [[1,0,2],[2,1,0]]
+    //   ma.argsort(b, axis=0) -> [[0,0,1],[1,1,0]]
+    // -----------------------------------------------------------------------
+    #[test]
+    fn argsort_axis_matches_numpy() -> FerrayResult<()> {
+        use ferray_core::Ix2;
+        let d = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![3.0, 1.0, 2.0, 6.0, 5.0, 4.0])?;
+        let mk = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![false, false, true, false, false, false],
+        )?;
+        let b = MaskedArray::new(d, mk)?;
+        let by1 = b.argsort_axis(1)?;
+        let v1: Vec<u64> = by1.iter().copied().collect();
+        assert_eq!(v1, vec![1, 0, 2, 2, 1, 0]);
+        let by0 = b.argsort_axis(0)?;
+        let v0: Vec<u64> = by0.iter().copied().collect();
+        assert_eq!(v0, vec![0, 0, 1, 1, 1, 0]);
         Ok(())
     }
 }
