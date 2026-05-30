@@ -176,13 +176,6 @@ impl PyMaskedArray {
     fn all_masked(&self) -> PyResult<bool> {
         Ok(self.inner.count().map_err(ferr_to_pyerr)? == 0)
     }
-
-    /// True iff at least one element is masked. Mirrors `numpy.ma.getmask`
-    /// returning `nomask` (vs. a real bool array) precisely when no element
-    /// is masked (`numpy/ma/core.py:1468`).
-    fn any_masked(&self) -> PyResult<bool> {
-        Ok(fma::count_masked(&self.inner).map_err(ferr_to_pyerr)? > 0)
-    }
 }
 
 #[pymethods]
@@ -228,15 +221,18 @@ impl PyMaskedArray {
     }
 
     /// Mask as a `numpy.ndarray` of bool with the same shape as `data`,
-    /// or the `numpy.ma.nomask` singleton when nothing is masked.
+    /// or the `numpy.ma.nomask` singleton when the array has no real mask.
     ///
-    /// numpy's `MaskedArray.mask` getter returns `self._mask`, which is the
-    /// `nomask` constant for an array constructed without an explicit mask
-    /// (`numpy/ma/core.py:1468`), not a full `array([False, ...])`. The
-    /// binding mirrors that singleton (R-DEV-3).
+    /// numpy's `MaskedArray.mask` getter returns `self._mask`, and `getmask`
+    /// yields the `nomask` constant ONLY when `_mask is nomask`
+    /// (`numpy/ma/core.py:1468`) — i.e. keyed off the real-mask identity, not
+    /// the masked-element count. An array built with an explicit `mask=`
+    /// (even all-False, e.g. `mask=[0, 0, 0]`) carries a real bool `_mask`,
+    /// so `.mask` returns `array([False, ...])`, not the singleton. The
+    /// binding mirrors that by branching on `has_real_mask()` (R-DEV-3).
     #[getter]
     fn mask<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        if !self.any_masked()? {
+        if !self.inner.has_real_mask() {
             return ma_nomask(py);
         }
         let mask: ArrayD<bool> = fma::getmask(&self.inner).map_err(ferr_to_pyerr)?;
