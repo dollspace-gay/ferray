@@ -1003,11 +1003,6 @@ where
     match axis {
         None => {
             let n = data.len();
-            if n <= ddof {
-                return Err(FerrayError::invalid_value(
-                    "ddof >= number of elements, variance undefined",
-                ));
-            }
             let nf = T::from(n).unwrap();
             let mean_val = try_simd_pairwise_sum(&data)
                 .unwrap_or_else(|| parallel::pairwise_sum(&data, <T as Element>::zero()))
@@ -1018,7 +1013,12 @@ where
                     acc + d * d
                 })
             });
-            let var_val = sum_sq / T::from(n - ddof).unwrap();
+            // numpy/_core/_methods.py:204 — `rcount = um.maximum(rcount - ddof, 0)`,
+            // then true_divide. When ddof >= n the divisor clamps to 0 and IEEE-754
+            // float division yields +inf (sum_sq > 0) or NaN (sum_sq == 0), NOT an
+            // error. Saturating-sub keeps the divisor at 0 instead of underflowing.
+            let divisor = T::from(n.saturating_sub(ddof)).unwrap_or_else(<T as Element>::zero);
+            let var_val = sum_sq / divisor;
             make_result(&[], vec![var_val])
         }
         Some(ax) => {
@@ -1026,13 +1026,10 @@ where
             let shape = a.shape();
             let out_s = output_shape(shape, ax);
             let axis_len = shape[ax];
-            if axis_len <= ddof {
-                return Err(FerrayError::invalid_value(
-                    "ddof >= axis length, variance undefined",
-                ));
-            }
             let nf = T::from(axis_len).unwrap();
-            let denom = T::from(axis_len - ddof).unwrap();
+            // numpy/_core/_methods.py:204 clamps `rcount = max(axis_len - ddof, 0)`
+            // then true-divides: ddof >= axis_len yields +inf / NaN, never an error.
+            let denom = T::from(axis_len.saturating_sub(ddof)).unwrap_or_else(<T as Element>::zero);
             let result = reduce_axis_general(&data, shape, ax, |lane| {
                 let mean_val = try_simd_pairwise_sum(lane)
                     .unwrap_or_else(|| parallel::pairwise_sum(lane, <T as Element>::zero()))
@@ -2896,11 +2893,13 @@ mod tests {
     }
 
     #[test]
-    fn var_single_element_ddof1_errors() {
-        // ddof=1 with N=1 → ddof >= N, ferray errors instead of
-        // returning NaN (stricter than NumPy which returns NaN).
+    fn var_single_element_ddof1_nan() {
+        // ddof=1 with N=1 → divisor max(N-ddof,0)=0 and sum_sq=0, so
+        // 0.0/0.0 = NaN — matching numpy (np.var([5.0], ddof=1) == nan,
+        // numpy/_core/_methods.py:204).
         let a = arr1d(vec![5.0]);
-        assert!(var(&a, None, 1).is_err());
+        let v = var(&a, None, 1).ok().filter(|r| !r.is_empty());
+        assert!(matches!(&v, Some(r) if r.iter().all(|x| x.is_nan())));
     }
 
     #[test]
@@ -2911,12 +2910,13 @@ mod tests {
     }
 
     #[test]
-    fn std_single_element_ddof1_errors() {
-        // Same shape as var: ddof=1 with N=1 hits the same ddof >= N
-        // guard (std_ delegates to var internally). Confirms the
-        // error path is plumbed through.
+    fn std_single_element_ddof1_nan() {
+        // Same shape as var: ddof=1 with N=1 → divisor 0, sum_sq 0, so
+        // var = NaN and std = sqrt(NaN) = NaN — matching numpy
+        // (np.std([5.0], ddof=1) == nan, numpy/_core/_methods.py:217-225).
         let a = arr1d(vec![5.0]);
-        assert!(std_(&a, None, 1).is_err());
+        let s = std_(&a, None, 1).ok().filter(|r| !r.is_empty());
+        assert!(matches!(&s, Some(r) if r.iter().all(|x| x.is_nan())));
     }
 
     #[test]
@@ -2944,11 +2944,15 @@ mod tests {
     }
 
     #[test]
-    fn var_single_element_axis_ddof_too_large_errors() {
-        // 1×3 array with ddof=1 reduced along axis 0 (length 1) should error
+    fn var_single_element_axis_ddof_too_large_nan() {
+        // 1×3 array with ddof=1 reduced along axis 0 (length 1): each lane has
+        // one element, sum_sq=0, divisor max(1-1,0)=0 → 0/0 = NaN per lane,
+        // matching numpy (np.var([[1,2,3]], axis=0, ddof=1) == [nan nan nan],
+        // numpy/_core/_methods.py:204).
         use ferray_core::dimension::Ix2;
         let a = Array::<f64, Ix2>::from_vec(Ix2::new([1, 3]), vec![1.0, 2.0, 3.0]).unwrap();
-        assert!(var(&a, Some(0), 1).is_err());
+        let v = var(&a, Some(0), 1).ok().filter(|r| !r.is_empty());
+        assert!(matches!(&v, Some(r) if r.iter().all(|x| x.is_nan())));
     }
 
     // ---- *_into reductions (#467) ----
