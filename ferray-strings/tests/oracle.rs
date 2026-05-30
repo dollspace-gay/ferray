@@ -141,11 +141,11 @@ fn oracle_count() {
         let arr = make_string_array(&case.inputs["x"]);
         let sub = case.inputs["substr"].as_str().unwrap();
         let result = ferray_strings::count(&arr, sub).unwrap();
-        let expected: Vec<u64> = case.expected["data"]
+        let expected: Vec<i64> = case.expected["data"]
             .as_array()
             .unwrap()
             .iter()
-            .map(|v| v.as_u64().unwrap())
+            .map(|v| v.as_i64().unwrap())
             .collect();
         let result_slice = result.as_slice().unwrap();
         for (i, (&a, &e)) in result_slice.iter().zip(expected.iter()).enumerate() {

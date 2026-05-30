@@ -186,7 +186,7 @@ mod integration_tests {
         let c = count(&a, "o").unwrap();
         let data = c.as_slice().unwrap();
         // "hello world" has 2 'o's, "foo bar" has 2 'o's
-        assert_eq!(data, &[2_u64, 2]);
+        assert_eq!(data, &[2_i64, 2]);
     }
 
     #[test]

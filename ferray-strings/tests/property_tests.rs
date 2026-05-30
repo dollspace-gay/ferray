@@ -134,9 +134,9 @@ proptest! {
         let result = count(&a, &needle).unwrap();
         let data = result.as_slice().unwrap();
         for &val in data {
-            // u64 is always >= 0 by definition, but we verify the operation
-            // completes without error and values are sensible
-            prop_assert!(val <= s1.len() as u64 || val <= s2.len() as u64 || val <= s3.len() as u64
+            // count returns signed int64 (numpy contract); values are
+            // non-negative occurrence counts.
+            prop_assert!(val <= s1.len() as i64 || val <= s2.len() as i64 || val <= s3.len() as i64
                 || val == 0);
         }
     }
@@ -210,7 +210,7 @@ proptest! {
         let result = count(&replaced, &sub).unwrap();
         let data = result.as_slice().unwrap();
         for &val in data {
-            prop_assert_eq!(val, 0_u64, "Expected count to be 0 after replacing all occurrences");
+            prop_assert_eq!(val, 0_i64, "Expected count to be 0 after replacing all occurrences");
         }
     }
 }

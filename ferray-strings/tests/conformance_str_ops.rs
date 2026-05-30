@@ -107,8 +107,11 @@ fn swapcase_matches_numpy() {
 fn str_len_matches_python() {
     let arr = ferray_strings::array(&["", "a", "abc", "café", "🦀"]).unwrap();
     let lens = ferray_strings::str_len(&arr).unwrap();
-    // str_len returns byte length (UTF-8). "café" = 5 bytes, "🦀" = 4 bytes.
-    let expected = [0u64, 1, 3, 5, 4];
+    // str_len counts Unicode code points (signed int64), matching numpy
+    // `num_codepoints()` (string_ufuncs.cpp:118). "café" = 4 code points,
+    // "🦀" = 1 code point. numpy live:
+    //   np.strings.str_len(np.array(['','a','abc','café','🦀'])) -> [0 1 3 4 1]
+    let expected = [0i64, 1, 3, 4, 1];
     let slc = lens.as_slice().unwrap();
     assert_eq!(slc, expected);
 }

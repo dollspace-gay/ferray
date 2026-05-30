@@ -272,3 +272,25 @@ crate_pattern = "ferray-polynomial/src/roots.rs"
 upstream = ["/home/doll/numpy-ref/numpy/polynomial/polynomial.py"]
 design = ".design/ferray-polynomial.md"
 parity_ops = ["roots"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# ferray-strings — numpy.strings (vectorized elementwise string ops)
+# ─────────────────────────────────────────────────────────────────────────
+
+[[route]]
+crate_pattern = "ferray-strings/src/lib.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/strings.py"]
+design = ".design/ferray-strings.md"
+parity_ops = ["str_len", "count", "find", "replace"]
+
+[[route]]
+crate_pattern = "ferray-strings/src/str_ops.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/strings.py"]
+design = ".design/ferray-strings.md"
+parity_ops = ["str_len", "swapcase", "equal", "not_equal", "less", "greater"]
+
+[[route]]
+crate_pattern = "ferray-strings/src/search.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/strings.py"]
+design = ".design/ferray-strings.md"
+parity_ops = ["find", "rfind", "index", "rindex", "count", "startswith", "endswith", "replace"]

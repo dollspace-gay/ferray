@@ -58,11 +58,11 @@ fn count_matches_numpy() {
         let arr = make_array(&case.inputs["x"]);
         let sub = case.inputs["substr"].as_str().unwrap();
         let out = ferray_strings::count(&arr, sub).unwrap();
-        let expected: Vec<u64> = case.expected["data"]
+        let expected: Vec<i64> = case.expected["data"]
             .as_array()
             .unwrap()
             .iter()
-            .map(|v| v.as_u64().unwrap())
+            .map(|v| v.as_i64().unwrap())
             .collect();
         assert_eq!(out.as_slice().unwrap(), expected.as_slice(), "case '{}'", case.name);
     }

@@ -10,8 +10,10 @@ use crate::string_array::StringArray;
 
 /// Return the length of each string element. Matches
 /// `numpy.strings.str_len` (#518).
-pub fn str_len<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<u64, D>> {
-    let data: Vec<u64> = a.iter().map(|s| s.len() as u64).collect();
+pub fn str_len<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<i64, D>> {
+    // numpy `string_ufuncs.cpp:118`: `*(npy_intp *)out = buf.num_codepoints();`
+    // — signed `npy_intp` counting Unicode code points, NOT UTF-8 bytes.
+    let data: Vec<i64> = a.iter().map(|s| s.chars().count() as i64).collect();
     Array::from_vec(a.dim().clone(), data)
 }
 

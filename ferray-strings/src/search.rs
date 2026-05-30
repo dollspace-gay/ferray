@@ -36,12 +36,14 @@ pub fn find<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<i
 
 /// Count non-overlapping occurrences of `sub` in each string element.
 ///
-/// Returns an `Array<u64, D>` preserving the input shape.
+/// Returns an `Array<i64, D>` preserving the input shape. numpy's `count`
+/// ufunc writes a signed `npy_intp` (int64) result, so the element type is
+/// signed `i64`.
 ///
 /// # Errors
 /// Returns an error if the internal array construction fails.
-pub fn count<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<u64, D>> {
-    let data: Vec<u64> = a.map_to_vec(|s| s.matches(sub).count() as u64);
+pub fn count<D: Dimension>(a: &StringArray<D>, sub: &str) -> FerrayResult<Array<i64, D>> {
+    let data: Vec<i64> = a.map_to_vec(|s| s.matches(sub).count() as i64);
     Array::from_vec(a.dim().clone(), data)
 }
 
@@ -180,7 +182,7 @@ mod tests {
         let a = array(&["abcabc", "abc", "xyz"]).unwrap();
         let b = count(&a, "abc").unwrap();
         let data = b.as_slice().unwrap();
-        assert_eq!(data, &[2_u64, 1, 0]);
+        assert_eq!(data, &[2_i64, 1, 0]);
     }
 
     #[test]
