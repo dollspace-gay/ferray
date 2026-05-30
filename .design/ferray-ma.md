@@ -68,6 +68,48 @@ Implements `numpy.ma`: masked arrays that represent missing or invalid data inli
 - REQ-32: `numpy.ma.notmasked_contiguous`/`notmasked_edges` (`numpy/ma/extras.py:1936`/`:1878`) — `axis=None` delegates to the flat forms; 2-D `notmasked_contiguous_axis` returns one slice-list per lane along the orthogonal axis. SHIPPED — `notmasked_contiguous_axis`/`notmasked_edges` in `extras.rs`; non-test production consumers `ferray-python/src/ma.rs::notmasked_contiguous`/`notmasked_edges`. The multi-axis coordinate-tuple form of `notmasked_edges` remains a ferray-ma gap (binding raises a clear `ValueError`).
 - REQ-33: 2-D `numpy.ma.dot(a, b)`, non-strict default (`numpy/ma/core.py:8214`) — data `dot(filled(a,0), filled(b,0))`, result `out[i,j]` masked iff every contributing `k` has `a[i,k]` OR `b[k,j]` masked (`m = ~dot(~mask_a, ~mask_b)`). SHIPPED — `ma_dot_2d` on `MaskedArray<T, Ix2>` in `extras.rs`; non-test production consumer `ferray-python/src/ma.rs::dot` (1-D returns the scalar inner product; 2-D returns the masked matrix product).
 
+### Stateful mask: harden/soften/put/putmask (#835)
+
+The final four `numpy.ma` callables ferray lacks are the only ones that **mutate
+the masked array in place** and/or depend on its mutable hard-mask flag. They
+cannot be delegated like the structured-mask batch: `harden_mask`/`soften_mask`
+flip per-array state, and `put`/`putmask` perform in-place index/mask assignment
+whose behavior is *gated by* that state. This section adds them as REQ-34..REQ-37.
+
+**numpy semantics (quoted upstream):**
+
+- `harden_mask(self)` (`numpy/ma/core.py:3620`): body is `self._hardmask = True; return self`. `soften_mask(self)` (`:3638`): `self._hardmask = False; return self`. Module-level `numpy.ma.harden_mask(a)`/`soften_mask(a)` are not separate functions in 2.4.x — they are exposed via `_frommethod` wrappers that call the method and return the array; the observable contract is "flip the flag, return the (same, mutated) array".
+- The hard-mask **effect on assignment** lives in `__setmask__` (`numpy/ma/core.py:3531`: `if self._hardmask: current_mask |= mask`) and in `__setitem__` (`:3450` `elif not self._hardmask:` sets data+mask; `:3461`-`3472` the hard branch only writes data where `~mindx`, never clearing the mask). i.e. when hard, masked positions are *protected*: assignment cannot unmask them and does not overwrite their data.
+- `MaskedArray.put(self, indices, values, mode='raise')` (`numpy/ma/core.py:4837`): `self._data.flat[n] = values[n]` (values repeat if shorter); a masked `values` updates the mask, else the written positions are unmasked. The hard-mask gate (`:4899`): `if self._hardmask and self._mask is not nomask:` drops every `(index, value)` whose target position is currently masked **before** the data write — hard-masked slots are neither overwritten nor unmasked.
+- `numpy.ma.put(a, indices, values, mode='raise')` (`numpy/ma/core.py:7496`) is `return a.put(indices, values, mode=mode)` — pure delegation to the method.
+- `numpy.ma.putmask(a, mask, values)` (`numpy/ma/core.py:7537`): `np.copyto(a._data, valdata, where=mask)` for the data; the mask update branches on hard-mask (`:7581` `elif a._hardmask:` unions `valmask` into the existing mask only where `mask` is True, never clearing) vs soft (`:7586` copies `valmask` where `mask`). `values` is cycled to the array shape (numpy.putmask semantics). A masked-array `values` does NOT turn an `ndarray` `a` into a MaskedArray (binding note only).
+
+**Central data-model decision.** The ferray-ma library data model needs **NO new field**: `MaskedArray` already carries `pub(crate) hard_mask: bool` (`masked_array.rs`, the struct def) plus `harden_mask`/`soften_mask` (`mask_ops.rs`) that flip it, `is_hard_mask` to read it, and the hard-mask *assignment effect* is already implemented in `set_mask_flat` (`masked_array.rs`: `if self.hard_mask && !value { return Ok(()) }`) and `set_mask` (the hard-mask union branch). The only **net-new library work** is two flat in-place setters that respect that existing flag: a `put` (flat-indexed data+mask assignment) and a `putmask` (boolean-mask-gated data+mask assignment). Both build directly on the existing in-place mutation surface — `data_mut() -> Option<&mut [T]>`, `set_mask_flat`, and `ensure_materialized_mut`/`set_mask` — so this is roughly **80-140 LOC of library code** in a new `put.rs` (or appended to `mask_ops.rs`) plus unit tests, NOT a new dtype model and NOT a new field. The f64-only `PyMaskedArray` model is untouched at the data-model level.
+
+**Binding-shim work (the larger share).** `PyMaskedArray` is `#[pyclass(... from_py_object)] #[derive(Clone)]` with every method taking `&self` (`ferray-python/src/ma.rs`, the `#[pymethods] impl PyMaskedArray` block). harden/soften/put/putmask MUTATE, so they need `&mut self` methods on the pyclass (PyO3 supports `&mut self` receivers on a non-frozen pyclass; `PyMaskedArray` is not declared `frozen`, so this is available). Module-level `ma.harden_mask(a)`/`soften_mask(a)`/`put(a, ...)`/`putmask(a, ...)` are thin `#[pyfunction]`s that call the method on the passed `PyMaskedArray` and return it (matching numpy returning the mutated array for harden/soften; `put`/`putmask` return `None` like numpy). These four `#[pyfunction]`s plus the four `#[pymethods]` register in `register_ma_module` in `ferray-python/src/lib.rs`. This is roughly **150-220 LOC of binding code** (the in-place index/value/mask coercion across the PyO3 boundary, mode='raise'/'wrap'/'clip' handling for `put`, and `values` cycling for `putmask` are the fiddly parts).
+
+**Library REQ vs binding-shim REQ split.** REQ-34/35 (harden/soften) are **already SHIPPED at the library level** (the flag + its assignment effect) — their only gap is the binding exposure. REQ-36/37 (put/putmask) are **net-new at both levels**: the library lacks the two in-place setters and the binding lacks the four bindings.
+
+**File manifest a future acto-builder needs (≤8 files):**
+- `ferray-ma/src/put.rs` (new) — `MaskedArray::put(&mut self, indices, values, mode)` and `MaskedArray::putmask(&mut self, mask, values)`, both gating on `self.hard_mask`; built on `data_mut`/`set_mask_flat`/`ensure_materialized_mut`. Plus `#[cfg(test)]` unit tests (R-CHAR-3: expected values from a live `numpy.ma` call).
+- `ferray-ma/src/lib.rs` — `mod put;` and any re-export.
+- `ferray-python/src/ma.rs` — four `&mut self` `#[pymethods]` (`harden_mask`/`soften_mask`/`put`/`putmask`) + four module-level `#[pyfunction]`s.
+- `ferray-python/src/lib.rs` — register the four `#[pyfunction]`s in `register_ma_module`.
+- `ferray-python/tests/test_expansion_ma_batch5.py` (new) — pytest comparing `ferray.ma` vs `numpy.ma` for the hard/soft assignment-suppression behavior and put/putmask data+mask outcomes (the subtle hard-mask interaction is the test focus).
+
+**Existing in-place mutation path to build on (quoted).** ferray-ma DOES already have a real in-place mutation surface — this is not net-new plumbing. `MaskedArray::data_mut(&mut self) -> Option<&mut [T]>` (`masked_array.rs`) exposes the contiguous data slice for direct write, and `MaskedArray::set_mask_flat(&mut self, flat_idx, value)` (`masked_array.rs`) already implements the exact hard-mask suppression `put` needs: `if self.hard_mask && !value { return Ok(()) }`. `put`/`putmask` compose these; the architectural risk is low.
+
+### REQ status (this iteration — stateful mask harden/soften/put/putmask, #835)
+
+| REQ | Status | Evidence |
+|---|---|---|
+| REQ-34 (harden_mask) | NOT-STARTED | Library SHIPPED: `harden_mask` in `mask_ops.rs` flips `hard_mask` and its effect is enforced by `set_mask_flat`/`set_mask` in `masked_array.rs` (mirrors `numpy/ma/core.py:3635`, `:3531`). Gap is binding-only: `PyMaskedArray` exposes no `harden_mask` method and `register_ma_module` (`ferray-python/src/lib.rs`) registers no module-level `harden_mask`. Open prereq blocker #842 for binding exposure (`&mut self` method + `#[pyfunction]`). |
+| REQ-35 (soften_mask) | NOT-STARTED | Library SHIPPED: `soften_mask` in `mask_ops.rs` (mirrors `numpy/ma/core.py:3653`). Same binding-only gap as REQ-34; once soft, `set_mask_flat` permits clearing. Open prereq blocker #843 for binding exposure. |
+| REQ-36 (put) | NOT-STARTED | Net-new both levels. No `MaskedArray::put` exists in ferray-ma (grep `fn put` finds only `harden`/`soften`); no binding. Must mirror `numpy/ma/core.py:4837` incl. the hard-mask drop (`:4899` `if self._hardmask and self._mask is not nomask:`), values-repeat, mask update from masked `values`, and `mode` handling. Open prereq blocker #844 (library setter + binding). |
+| REQ-37 (putmask) | NOT-STARTED | Net-new both levels. No `MaskedArray::putmask` and no binding. Must mirror `numpy/ma/core.py:7537`: data via `copyto(where=mask)`, mask branch on `hard_mask` (`:7581`), `values` cycled to shape. Open prereq blocker #845 (library setter + binding). |
+
+REQ-15 (the original library-only `harden_mask`/`soften_mask` requirement) remains SHIPPED at the library level via `mask_ops.rs`; REQ-34/35 above narrow it to the *binding-exposed* contract, which is the open work.
+
 ## Acceptance Criteria
 - [ ] AC-1: `MaskedArray::new([1,2,3,4,5], [false,false,true,false,false]).mean()` returns 3.0 (skips element 3)
 - [ ] AC-2: `filled(0.0)` replaces masked elements with 0.0, leaves others unchanged
