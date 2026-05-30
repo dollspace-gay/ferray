@@ -102,6 +102,29 @@ pub fn extract_axis_tuple(obj: &Bound<'_, PyAny>) -> PyResult<Vec<isize>> {
         .map_err(|_| PyTypeError::new_err("axis must be an int or a tuple/list of ints"))
 }
 
+/// Parse a `percentile`/`quantile` `q` argument, which numpy documents as
+/// `q : array_like of float` (numpy/lib/_function_base_impl.py:4083 for
+/// `percentile`, :4284 for `quantile`).
+///
+/// Returns `Ok(Err(scalar))` for a single float `q` (numpy collapses the
+/// new leading q-axis, returning the bare reduction) and `Ok(Ok(vec))` for
+/// a sequence of floats (numpy stacks one reduction per q along a new
+/// leading axis). The binding loops the scalar-`q` library call for each
+/// entry and stacks the results, mirroring numpy's `q array_like` contract
+/// (R-DEV-2). A non-numeric / non-sequence object raises `TypeError`,
+/// matching numpy's `asarray(q)` failure.
+#[allow(clippy::type_complexity, reason = "scalar-vs-sequence sum type is clearer inline than a named enum")]
+pub fn extract_q(obj: &Bound<'_, PyAny>) -> PyResult<Result<Vec<f64>, f64>> {
+    // A scalar must be matched first: a 0-d numpy array / Python float both
+    // extract as f64, and numpy treats those as the scalar-q (collapsed) form.
+    if let Ok(scalar) = obj.extract::<f64>() {
+        return Ok(Err(scalar));
+    }
+    obj.extract::<Vec<f64>>()
+        .map(Ok)
+        .map_err(|_| PyTypeError::new_err("q must be a float or a sequence of floats"))
+}
+
 /// Normalize a single (possibly negative) `axis` for a `numpy.fft`
 /// transform, raising a plain `IndexError` (NOT `numpy.exceptions.AxisError`)
 /// when it is out of bounds or the input is 0-d.

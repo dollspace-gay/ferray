@@ -21,7 +21,9 @@ use numpy::{PyReadonlyArray1, PyReadonlyArrayDyn};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use crate::conv::{as_ndarray, coerce_dtype, dtype_name, ferr_to_pyerr};
+use crate::conv::{
+    as_ndarray, coerce_dtype, dtype_name, extract_q, ferr_to_pyerr, normalize_axis,
+};
 use crate::{match_dtype_all, match_dtype_float, match_dtype_numeric, match_dtype_orderable};
 
 // ---------------------------------------------------------------------------
@@ -65,16 +67,48 @@ fn nan_scalar_f64<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
 // Reductions: numeric (sum, prod) — accept any numeric dtype
 // ---------------------------------------------------------------------------
 
+/// Normalize a binding `axis` argument against an array's `ndim`, raising
+/// `numpy.exceptions.AxisError` (subclass of ValueError AND IndexError) for
+/// an out-of-bounds axis — matching numpy/exceptions.py:108
+/// `class AxisError(ValueError, IndexError)`. ferray's library
+/// `validate_axis` surfaces a `ValueError`, which `except IndexError` /
+/// `except np.exceptions.AxisError` would silently miss, so the binding
+/// validates at the boundary (R-DEV-2). A negative axis (valid in numpy) is
+/// folded into `[0, ndim)`; `None` passes through.
+fn norm_axis(
+    py: Python<'_>,
+    arr: &Bound<'_, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<Option<usize>> {
+    match axis {
+        None => Ok(None),
+        Some(ax) => {
+            let ndim: usize = arr.getattr("ndim")?.extract()?;
+            Ok(Some(normalize_axis(py, ax, ndim)?))
+        }
+    }
+}
+
 /// `numpy.sum(a, axis=None)`.
 #[pyfunction]
 #[pyo3(signature = (a, axis = None))]
 pub fn sum<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    axis: Option<usize>,
+    axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
+    // bool sums in the platform integer (int64) — numpy/_core/fromnumeric.py:2325
+    // ("`a` is signed then the platform integer is used"). ferray's library
+    // ReduceAcc maps bool -> i64, so dispatch bool to the same promoting path.
+    if dt.as_str() == "bool" {
+        let view: PyReadonlyArrayDyn<bool> = arr.extract()?;
+        let fa: ArrayD<bool> = view.as_ferray().map_err(ferr_to_pyerr)?;
+        let r = ferray_stats::sum(&fa, axis).map_err(ferr_to_pyerr)?;
+        return Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
+    }
     Ok(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -89,10 +123,18 @@ pub fn sum<'py>(
 pub fn prod<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    axis: Option<usize>,
+    axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
+    // bool products promote to int64 like sum — numpy/_core/fromnumeric.py:2692.
+    if dt.as_str() == "bool" {
+        let view: PyReadonlyArrayDyn<bool> = arr.extract()?;
+        let fa: ArrayD<bool> = view.as_ferray().map_err(ferr_to_pyerr)?;
+        let r = ferray_stats::prod(&fa, axis).map_err(ferr_to_pyerr)?;
+        return Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
+    }
     Ok(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -972,16 +1014,29 @@ where
 // percentile / quantile / median / cov / corrcoef (#703)
 // ---------------------------------------------------------------------------
 
-/// `numpy.percentile(a, q, axis=None)` — Linear interpolation method.
-#[pyfunction]
-#[pyo3(signature = (a, q, axis = None))]
-pub fn percentile<'py>(
+/// Whether a `percentile`/`quantile` library call computes percentages
+/// (`true`) or fractions (`false`). Picks which scalar-q library fn to call.
+enum QuantileKind {
+    Percentile,
+    Quantile,
+}
+
+/// Shared implementation for `percentile`/`quantile`, honoring numpy's
+/// `q : array_like of float` contract (numpy/lib/_function_base_impl.py:4083
+/// percentile, :4284 quantile). A scalar `q` returns the bare reduction; a
+/// sequence `q` computes one reduction per entry and stacks them along a new
+/// leading axis via `numpy.stack` (`np.percentile(x, [25,50,75])` ->
+/// shape `(3, ...)`), matching numpy exactly (R-DEV-3). The library
+/// percentile/quantile are scalar-q, so the binding loops them.
+fn quantile_dispatch<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    q: f64,
-    axis: Option<usize>,
+    q: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+    kind: QuantileKind,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
@@ -989,12 +1044,46 @@ pub fn percentile<'py>(
         "float64".to_string()
     };
     let arr = coerce_dtype(py, &arr, &real_dt)?;
-    Ok(match_dtype_float!(real_dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        let r = ferray_stats::percentile(&fa, q as T, axis).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
+
+    // Compute one scalar-q reduction, returning a `Bound` pyarray.
+    let single = |q_val: f64| -> PyResult<Bound<'py, PyAny>> {
+        Ok(match_dtype_float!(real_dt.as_str(), T => {
+            let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+            let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+            let r = match kind {
+                QuantileKind::Percentile => ferray_stats::percentile(&fa, q_val as T, axis),
+                QuantileKind::Quantile => ferray_stats::quantile(&fa, q_val as T, axis),
+            }
+            .map_err(ferr_to_pyerr)?;
+            r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        }))
+    };
+
+    match extract_q(q)? {
+        Err(scalar) => single(scalar),
+        Ok(seq) => {
+            let mut results: Vec<Bound<'py, PyAny>> = Vec::with_capacity(seq.len());
+            for q_val in seq {
+                results.push(single(q_val)?);
+            }
+            // Stack per-q results along a new leading axis (numpy's q-axis).
+            let np = py.import("numpy")?;
+            let list = pyo3::types::PyList::new(py, results)?;
+            np.call_method1("stack", (list,))
+        }
+    }
+}
+
+/// `numpy.percentile(a, q, axis=None)` — Linear interpolation method.
+#[pyfunction]
+#[pyo3(signature = (a, q, axis = None))]
+pub fn percentile<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    q: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    quantile_dispatch(py, a, q, axis, QuantileKind::Percentile)
 }
 
 /// `numpy.quantile(a, q, axis=None)` — Linear interpolation method.
@@ -1003,23 +1092,10 @@ pub fn percentile<'py>(
 pub fn quantile<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    q: f64,
-    axis: Option<usize>,
+    q: &Bound<'py, PyAny>,
+    axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let arr = as_ndarray(py, a)?;
-    let dt = dtype_name(&arr)?;
-    let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
-        dt.as_str().to_string()
-    } else {
-        "float64".to_string()
-    };
-    let arr = coerce_dtype(py, &arr, &real_dt)?;
-    Ok(match_dtype_float!(real_dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        let r = ferray_stats::quantile(&fa, q as T, axis).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
+    quantile_dispatch(py, a, q, axis, QuantileKind::Quantile)
 }
 
 /// `numpy.median(a, axis=None)`.
