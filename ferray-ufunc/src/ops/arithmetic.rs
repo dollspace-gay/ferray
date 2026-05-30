@@ -31,6 +31,17 @@
 //     dtype (NumPy `sign`/`negative`/`absolute` `TD(ints)`,
 //     generate_umath.py:496,516,534). Wrapping where NumPy wraps
 //     (e.g. `negative(i8::MIN)`).
+//   - `cumsum` / `cumprod` / `cumulative_sum` / `cumulative_prod` /
+//     `add_accumulate` narrow-int accumulator promotion: each widens every
+//     element into the NumPy reduction accumulator `ReduceAcc::Acc`
+//     (ferray-core `array/reductions.rs`, reused here) — i8/i16/i32 -> i64,
+//     u8/u16/u32 -> u64, bool -> i64, f32/f64/i64/complex unchanged — so a
+//     narrow-int cumulative never overflows and its dtype matches NumPy's
+//     promoted result (`numpy/_core/fromnumeric.py:2850-2855` cumsum,
+//     `:3424-3429` cumprod; live oracle
+//     `np.cumsum(np.array([100,100,100],dtype=np.int8)) == [100,200,300]`
+//     int64). The shared `cumulative_promoted` kernel (this file) is the
+//     consumer; `f32`/`f64` callers keep the byte-identical accumulation.
 //
 // Consumers: `divide` (public re-export, also reached via the `/` operator
 // through `operator_overloads::array_div`) consumes `TrueDivide`. The int
@@ -38,6 +49,7 @@
 // ufunc surface.
 
 use ferray_core::Array;
+use ferray_core::array::reductions::ReduceAcc;
 use ferray_core::dimension::{Dimension, Ix1, IxDyn};
 use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
@@ -1399,10 +1411,16 @@ fn nan_to_one<T: Float + Element>(x: T) -> T {
 
 /// Running (cumulative) addition along an axis.
 ///
-/// AC-2: `add_accumulate` produces running sums.
-pub fn add_accumulate<T, D>(input: &Array<T, D>, axis: usize) -> FerrayResult<Array<T, D>>
+/// AC-2: `add_accumulate` produces running sums. Like `np.add.accumulate`,
+/// the result element type is the promoted [`ReduceAcc::Acc`] (narrow ints
+/// widen so the accumulation never overflows — live oracle
+/// `np.add.accumulate(np.array([100,100,100],dtype=np.int8)).dtype == int64`).
+pub fn add_accumulate<T, D>(
+    input: &Array<T, D>,
+    axis: usize,
+) -> FerrayResult<Array<<T as ReduceAcc>::Acc, D>>
 where
-    T: Element + std::ops::Add<Output = T> + Copy,
+    T: ReduceAcc,
     D: Dimension,
 {
     cumsum(input, Some(axis))
@@ -1478,41 +1496,112 @@ where
     }
 }
 
+/// Promoted cumulative kernel: widen every input element into the NumPy
+/// reduction accumulator [`ReduceAcc::Acc`], then walk the buffer in place
+/// with `accumulate` along `axis` (or flat if `None`). The output element
+/// type is the promoted `T::Acc`, so a narrow-int cumulative can never
+/// overflow and its dtype matches NumPy's promoted result.
+///
+/// NumPy promotes any integer dtype "with a precision less than that of the
+/// default platform integer" before accumulating
+/// (`numpy/_core/fromnumeric.py:2850-2855` cumsum, `:3424-3429` cumprod),
+/// identical to the `sum`/`prod` rule (`:2321-2327`). For `f32`/`f64`/`i64`/
+/// complex, `Acc == Self`, so those paths are byte-identical to before.
+fn cumulative_promoted<T, D, Acc>(
+    input: &Array<T, D>,
+    axis: Option<usize>,
+    accumulate: Acc,
+) -> FerrayResult<Array<<T as ReduceAcc>::Acc, D>>
+where
+    T: ReduceAcc,
+    D: Dimension,
+    Acc: Fn(<T as ReduceAcc>::Acc, <T as ReduceAcc>::Acc) -> <T as ReduceAcc>::Acc,
+{
+    let mut result: Vec<<T as ReduceAcc>::Acc> = input.iter().map(|&x| x.widen()).collect();
+    if let Some(ax) = axis {
+        if ax >= input.ndim() {
+            return Err(FerrayError::axis_out_of_bounds(ax, input.ndim()));
+        }
+        let shape = input.shape().to_vec();
+        let mut stride = 1usize;
+        for d in shape.iter().skip(ax + 1) {
+            stride *= d;
+        }
+        let axis_len = shape[ax];
+        let outer_size: usize = shape[..ax].iter().product();
+        let inner_size = stride;
+
+        for outer in 0..outer_size {
+            for inner in 0..inner_size {
+                let base = outer * axis_len * inner_size + inner;
+                for k in 1..axis_len {
+                    let prev = base + (k - 1) * inner_size;
+                    let curr = base + k * inner_size;
+                    result[curr] = accumulate(result[prev], result[curr]);
+                }
+            }
+        }
+    } else {
+        for i in 1..result.len() {
+            result[i] = accumulate(result[i - 1], result[i]);
+        }
+    }
+    Array::from_vec(input.dim().clone(), result)
+}
+
 /// Cumulative sum along an axis (or flattened if axis is None).
 ///
 /// When `axis=None`, data is flattened and accumulated, but the result retains
 /// the original shape (unlike `NumPy` which returns a 1-D array). This is due to
-/// the generic return type `Array<T, D>`.
+/// the generic return type `Array<T::Acc, D>`.
+///
+/// The result element type is the NumPy reduction accumulator
+/// [`ReduceAcc::Acc`]: narrow signed ints widen to `i64`, narrow unsigned
+/// ints to `u64`, `bool` to `i64`, and `f32`/`f64`/`i64`/complex stay
+/// themselves. So a narrow-int cumsum never overflows and its dtype matches
+/// `np.cumsum`'s promoted result (`numpy/_core/fromnumeric.py:2850-2855`).
 ///
 /// AC-11: `cumsum([1,2,3,4]) == [1,3,6,10]`.
-pub fn cumsum<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
+pub fn cumsum<T, D>(
+    input: &Array<T, D>,
+    axis: Option<usize>,
+) -> FerrayResult<Array<<T as ReduceAcc>::Acc, D>>
 where
-    T: Element + std::ops::Add<Output = T> + Copy,
+    T: ReduceAcc,
     D: Dimension,
 {
-    cumulative_with_preprocess(input, axis, |x| x, |a, b| a + b)
+    cumulative_promoted(input, axis, |a, b| a + b)
 }
 
 /// Cumulative product along an axis (or flattened if axis is None).
 ///
 /// When `axis=None`, data is flattened and accumulated, but the result retains
-/// the original shape (unlike `NumPy` which returns a 1-D array). This is due to
-/// the generic return type `Array<T, D>`.
-pub fn cumprod<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
+/// the original shape (unlike `NumPy` which returns a 1-D array).
+///
+/// The result element type is the promoted [`ReduceAcc::Acc`] (same narrow-int
+/// promotion as [`cumsum`]; `numpy/_core/fromnumeric.py:3424-3429`).
+pub fn cumprod<T, D>(
+    input: &Array<T, D>,
+    axis: Option<usize>,
+) -> FerrayResult<Array<<T as ReduceAcc>::Acc, D>>
 where
-    T: Element + std::ops::Mul<Output = T> + Copy,
+    T: ReduceAcc,
     D: Dimension,
 {
-    cumulative_with_preprocess(input, axis, |x| x, |a, b| a * b)
+    cumulative_promoted(input, axis, |a, b| a * b)
 }
 
 /// Cumulative sum (Array API standard name).
 ///
 /// Alias of [`cumsum`] matching the Python Array API specification's
-/// `cumulative_sum` name (added to `numpy` in 2.0).
-pub fn cumulative_sum<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
+/// `cumulative_sum` name (added to `numpy` in 2.0). Result element type is the
+/// promoted [`ReduceAcc::Acc`], exactly as `cumsum`.
+pub fn cumulative_sum<T, D>(
+    input: &Array<T, D>,
+    axis: Option<usize>,
+) -> FerrayResult<Array<<T as ReduceAcc>::Acc, D>>
 where
-    T: Element + std::ops::Add<Output = T> + Copy,
+    T: ReduceAcc,
     D: Dimension,
 {
     cumsum(input, axis)
@@ -1521,10 +1610,14 @@ where
 /// Cumulative product (Array API standard name).
 ///
 /// Alias of [`cumprod`] matching the Python Array API specification's
-/// `cumulative_prod` name (added to `numpy` in 2.0).
-pub fn cumulative_prod<T, D>(input: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
+/// `cumulative_prod` name (added to `numpy` in 2.0). Result element type is the
+/// promoted [`ReduceAcc::Acc`], exactly as `cumprod`.
+pub fn cumulative_prod<T, D>(
+    input: &Array<T, D>,
+    axis: Option<usize>,
+) -> FerrayResult<Array<<T as ReduceAcc>::Acc, D>>
 where
-    T: Element + std::ops::Mul<Output = T> + Copy,
+    T: ReduceAcc,
     D: Dimension,
 {
     cumprod(input, axis)

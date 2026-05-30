@@ -9,6 +9,7 @@ pub mod quantile;
 
 use std::any::TypeId;
 
+use ferray_core::array::reductions::ReduceAcc;
 use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, IxDyn};
 use num_traits::Float;
@@ -477,9 +478,14 @@ pub(crate) fn reduce_axes_general<T: Copy, F: Fn(&[T]) -> T>(
 ///
 /// Equivalent to `numpy.sum`.
 ///
-/// **Note:** Unlike `NumPy`, which auto-promotes `int32` sums to `int64`,
-/// ferray returns the same type as the input. For large integer arrays
-/// this may overflow. Use [`sum_as_f64`] for overflow-safe integer summation.
+/// The result element type is the NumPy reduction accumulator
+/// [`ReduceAcc::Acc`]: narrow signed ints widen to `i64`, narrow unsigned
+/// ints to `u64`, `bool` to `i64`, and `f32`/`f64`/`i64`/complex stay
+/// themselves. So a narrow-int sum can never overflow and its dtype matches
+/// `np.sum`'s promoted result, which "uses the default platform integer ...
+/// [when] `a` has an integer dtype of less precision than the default
+/// platform integer" (`numpy/_core/fromnumeric.py:2321-2327`). `f32`/`f64`
+/// callers keep the byte-identical SIMD/pairwise fast path.
 ///
 /// # Examples
 /// ```ignore
@@ -487,25 +493,36 @@ pub(crate) fn reduce_axes_general<T: Copy, F: Fn(&[T]) -> T>(
 /// let s = sum(&a, None).unwrap();
 /// assert_eq!(s.iter().next(), Some(&10.0));
 /// ```
-pub fn sum<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
+pub fn sum<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+) -> FerrayResult<Array<<T as ReduceAcc>::Acc, IxDyn>>
 where
-    T: Element + std::ops::Add<Output = T> + Copy + Send + Sync,
+    T: ReduceAcc + Send + Sync,
+    <T as ReduceAcc>::Acc: Send + Sync + 'static,
     D: Dimension,
 {
-    let data = borrow_data(a);
+    // Widen every element into the accumulator dtype `T::Acc` up front, then
+    // run the existing SIMD/pairwise/parallel summation on the promoted slice.
+    // For `f32`/`f64`/`i64` (`Acc == Self`) the widen is the identity cast and
+    // `try_simd_pairwise_sum` still dispatches the SIMD path on the same
+    // values, so those results are byte-identical to before.
+    let widened: Vec<<T as ReduceAcc>::Acc> = a.iter().map(|&x| x.widen()).collect();
     match axis {
         None => {
-            let total = try_simd_pairwise_sum(&data)
-                .unwrap_or_else(|| parallel::parallel_sum(&data, <T as Element>::zero()));
+            let total = try_simd_pairwise_sum(&widened).unwrap_or_else(|| {
+                parallel::parallel_sum(&widened, <<T as ReduceAcc>::Acc as Element>::zero())
+            });
             make_result(&[], vec![total])
         }
         Some(ax) => {
             validate_axis(ax, a.ndim())?;
             let shape = a.shape();
             let out_s = output_shape(shape, ax);
-            let result = reduce_axis_general(&data, shape, ax, |lane| {
-                try_simd_pairwise_sum(lane)
-                    .unwrap_or_else(|| parallel::pairwise_sum(lane, <T as Element>::zero()))
+            let result = reduce_axis_general(&widened, shape, ax, |lane| {
+                try_simd_pairwise_sum(lane).unwrap_or_else(|| {
+                    parallel::pairwise_sum(lane, <<T as ReduceAcc>::Acc as Element>::zero())
+                })
             });
             make_result(&out_s, result)
         }
@@ -544,29 +561,39 @@ where
 
 /// Product of array elements over a given axis.
 ///
-/// **Note:** Unlike `NumPy`, which auto-promotes integer products,
-/// ferray returns the same type as the input. For large integer arrays
-/// this may overflow.
+/// The result element type is the promoted [`ReduceAcc::Acc`] (same numpy
+/// narrow-int promotion as [`sum`]; `numpy/_core/fromnumeric.py:3306-3312`),
+/// so a narrow-int product can never overflow and its dtype matches
+/// `np.prod`. `f32`/`f64`/`i64`/complex stay themselves.
+///
 /// Equivalent to `numpy.prod`.
-pub fn prod<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, IxDyn>>
+pub fn prod<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+) -> FerrayResult<Array<<T as ReduceAcc>::Acc, IxDyn>>
 where
-    T: Element + std::ops::Mul<Output = T> + Copy + Send + Sync,
+    T: ReduceAcc + Send + Sync,
+    <T as ReduceAcc>::Acc: Send + Sync,
     D: Dimension,
 {
-    let data = borrow_data(a);
+    // Widen every element into the accumulator dtype before multiplying. For
+    // `f32`/`f64`/`i64` the widen is the identity cast, so those products are
+    // byte-identical to before.
+    let widened: Vec<<T as ReduceAcc>::Acc> = a.iter().map(|&x| x.widen()).collect();
     match axis {
         None => {
-            let total = parallel::parallel_prod(&data, <T as Element>::one());
+            let total =
+                parallel::parallel_prod(&widened, <<T as ReduceAcc>::Acc as Element>::one());
             make_result(&[], vec![total])
         }
         Some(ax) => {
             validate_axis(ax, a.ndim())?;
             let shape = a.shape();
             let out_s = output_shape(shape, ax);
-            let result = reduce_axis_general(&data, shape, ax, |lane| {
+            let result = reduce_axis_general(&widened, shape, ax, |lane| {
                 lane.iter()
                     .copied()
-                    .fold(<T as Element>::one(), |acc, x| acc * x)
+                    .fold(<<T as ReduceAcc>::Acc as Element>::one(), |acc, x| acc * x)
             });
             make_result(&out_s, result)
         }
@@ -2356,10 +2383,16 @@ pub(crate) fn reduce_axes_general_u64<T: Copy, F: Fn(&[T]) -> u64>(
 
 /// Cumulative sum along an axis (or flattened if axis is None).
 ///
-/// Re-exported from `ferray_ufunc::cumsum` for convenience.
-pub fn cumsum<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
+/// Re-exported from `ferray_ufunc::cumsum` for convenience. The result element
+/// type is the promoted [`ReduceAcc::Acc`] (narrow ints widen so the
+/// accumulation never overflows), matching `np.cumsum`
+/// (`numpy/_core/fromnumeric.py:2850-2855`).
+pub fn cumsum<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+) -> FerrayResult<Array<<T as ReduceAcc>::Acc, D>>
 where
-    T: Element + std::ops::Add<Output = T> + Copy,
+    T: ReduceAcc,
     D: Dimension,
 {
     ferray_ufunc::cumsum(a, axis)
@@ -2367,10 +2400,15 @@ where
 
 /// Cumulative product along an axis (or flattened if axis is None).
 ///
-/// Re-exported from `ferray_ufunc::cumprod` for convenience.
-pub fn cumprod<T, D>(a: &Array<T, D>, axis: Option<usize>) -> FerrayResult<Array<T, D>>
+/// Re-exported from `ferray_ufunc::cumprod` for convenience. The result element
+/// type is the promoted [`ReduceAcc::Acc`], matching `np.cumprod`
+/// (`numpy/_core/fromnumeric.py:3424-3429`).
+pub fn cumprod<T, D>(
+    a: &Array<T, D>,
+    axis: Option<usize>,
+) -> FerrayResult<Array<<T as ReduceAcc>::Acc, D>>
 where
-    T: Element + std::ops::Mul<Output = T> + Copy,
+    T: ReduceAcc,
     D: Dimension,
 {
     ferray_ufunc::cumprod(a, axis)

@@ -470,7 +470,10 @@ pub fn cumsum<'py>(
     Ok(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        let r: ArrayD<T> = ferray_stats::cumsum(&fa, axis).map_err(ferr_to_pyerr)?;
+        // numpy cumsum promotes narrow-int accumulators to the platform int
+        // (fromnumeric.py:2853-2855); ferray_stats::cumsum now returns the
+        // promoted dtype, so let the bound type follow it.
+        let r = ferray_stats::cumsum(&fa, axis).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
 }
@@ -488,7 +491,9 @@ pub fn cumprod<'py>(
     Ok(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        let r: ArrayD<T> = ferray_stats::cumprod(&fa, axis).map_err(ferr_to_pyerr)?;
+        // numpy cumprod promotes narrow-int accumulators to the platform int;
+        // ferray_stats::cumprod now returns the promoted dtype.
+        let r = ferray_stats::cumprod(&fa, axis).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
 }
