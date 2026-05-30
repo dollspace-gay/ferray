@@ -649,6 +649,389 @@ def unique_values(x):
     return unique_extended(asarray(x))
 
 
+# ---------------------------------------------------------------------------
+# Top-level functional / dtype / meta surface (expansion batch, refs #818).
+#
+# numpy implements every function in this block in *pure Python* by composing
+# array primitives (apply_along_axis, piecewise, vectorize, packbits, ...) or
+# as scalar/string/metadata helpers with no array math (base_repr, typename,
+# get_printoptions, errstate, ...). We mirror that exact architecture: array
+# composables are built on already-bound ferray primitives; metadata helpers
+# operate on the numpy dtype/scalar objects that ARE ferray's boundary
+# contract. Every helper returns the numpy object numpy returns.
+# ---------------------------------------------------------------------------
+
+
+def apply_along_axis(func1d, axis, arr, *args, **kwargs):
+    """`numpy.apply_along_axis(func1d, axis, arr, *args, **kwargs)` — apply
+    `func1d` to 1-D slices of `arr` along `axis`
+    (numpy/lib/_shape_base_impl.py def apply_along_axis). Mirrors numpy's
+    documented contract: the `axis` dimension is replaced by the shape of
+    `func1d`'s return value."""
+    arr = asarray(arr)
+    nd = arr.ndim
+    if axis < 0:
+        axis += nd
+    if not (0 <= axis < nd):
+        raise _np.exceptions.AxisError(axis, nd)
+    # move the iteration axis to the end so each slice is arr_view[ind + (...,)]
+    in_dims = list(range(nd))
+    arr_view = transpose(arr, in_dims[:axis] + in_dims[axis + 1:] + [axis])
+    inds = list(_np.ndindex(arr_view.shape[:-1]))
+    if not inds:
+        raise ValueError(
+            "Cannot apply_along_axis when any iteration dimensions are 0"
+        )
+    results = [asarray(func1d(arr_view[ind + (slice(None),)], *args, **kwargs))
+               for ind in inds]
+    res0 = results[0]
+    out_inner = res0.shape
+    outer = arr_view.shape[:-1]
+    buff = _np.empty(outer + out_inner, dtype=res0.dtype)
+    for ind, r in zip(inds, results):
+        buff[ind] = r
+    # buff axes: (outer..., inner...) -> need (Ni..., Nj..., Nk...)
+    # outer currently = Ni + Nk (axis removed, was at position `axis`).
+    n_outer_pre = axis
+    n_inner = res0.ndim
+    n_outer = len(outer)
+    perm = (list(range(n_outer_pre))
+            + list(range(n_outer, n_outer + n_inner))
+            + list(range(n_outer_pre, n_outer)))
+    return transpose(buff, perm)
+
+
+def apply_over_axes(func, a, axes):
+    """`numpy.apply_over_axes(func, a, axes)` — repeatedly apply
+    `func(a, axis)` over each axis in `axes`
+    (numpy/lib/_shape_base_impl.py def apply_over_axes). `func` must keep or
+    reduce that axis to length 1; the result is reshaped to keep dims when
+    the reduction removed the axis."""
+    val = asarray(a)
+    N = val.ndim
+    if _np.isscalar(axes):
+        axes = (axes,)
+    for axis in axes:
+        if axis < 0:
+            axis = N + axis
+        res = func(val, axis)
+        res = asarray(res)
+        if res.ndim == val.ndim:
+            val = res
+        elif res.ndim == val.ndim - 1:
+            val = expand_dims(res, axis)
+        else:
+            raise ValueError(
+                "function is not returning an array of the correct shape"
+            )
+    return val
+
+
+def piecewise(x, condlist, funclist, *args, **kw):
+    """`numpy.piecewise(x, condlist, funclist, *args, **kw)` — evaluate a
+    piecewise-defined function (numpy/lib/_function_base_impl.py def
+    piecewise). Each entry of `funclist` is applied where the corresponding
+    condition in `condlist` is True; a scalar entry is used as a fill value."""
+    x = asarray(x)
+    condlist = _np.atleast_1d(_np.asarray(condlist, dtype=_np.bool_))
+    # A scalar/0-d x with a 1-D condlist is a single boolean mask per func.
+    # numpy: if len(condlist) == len(funclist) - 1, an "otherwise" func is
+    # implied from the negation of all conditions.
+    n = len(condlist)
+    n2 = len(funclist)
+    if n == n2 - 1:
+        condelse = ~_np.any(condlist, axis=0, keepdims=True)
+        condlist = _np.concatenate([condlist, condelse], axis=0)
+        n += 1
+    elif n != n2:
+        raise ValueError(
+            "with {} condition(s), either {} or {} functions are expected".format(
+                n, n, n + 1
+            )
+        )
+    y = _np.zeros_like(x)
+    for cond, func in zip(condlist, funclist):
+        if not callable(func):
+            y[cond] = func
+        else:
+            vals = x[cond]
+            if vals.size > 0:
+                y[cond] = func(vals, *args, **kw)
+    return y
+
+
+def select(condlist, choicelist, default=0):
+    """`numpy.select(condlist, choicelist, default=0)` — return an array drawn
+    from elements in `choicelist` depending on `condlist`
+    (numpy/lib/_function_base_impl.py def select). Wires straight to ferray's
+    already-bound `select` kernel."""
+    return select_indexing(condlist, choicelist, default=default)
+
+
+def unstack(x, /, *, axis=0):
+    """`numpy.unstack(x, /, *, axis=0)` (NumPy 2.1 array-API) — split `x`
+    along `axis` into a tuple of arrays with that axis removed
+    (numpy/_core/shape_base.py def unstack). Composes ferray's `moveaxis`."""
+    x = asarray(x)
+    if x.ndim == 0:
+        raise ValueError("Input array must be at least 1-d.")
+    y = moveaxis(x, axis, 0)
+    return tuple(y[i] for i in range(y.shape[0]))
+
+
+def require(a, dtype=None, requirements=None, *, like=None):
+    """`numpy.require(a, dtype=None, requirements=None)` — return an ndarray
+    of `a` satisfying the layout/dtype `requirements`
+    (numpy/_core/_asarray.py def require). Delegates to numpy's pure-Python
+    requirement resolver over ferray's asarray boundary (which is
+    numpy.ndarray)."""
+    return _np.require(asarray(a) if not isinstance(a, _np.ndarray) else a,
+                       dtype=dtype, requirements=requirements)
+
+
+class vectorize(_np.vectorize):
+    """`numpy.vectorize` — wrap a Python callable so it broadcasts over array
+    inputs (numpy/lib/_function_base_impl.py class vectorize). numpy itself
+    implements this entirely in Python; ferray inherits that pure-Python
+    machinery so the elementwise-Python-callable contract is identical, then
+    returns ferray-boundary numpy arrays."""
+
+    __module__ = "ferray"
+
+
+def frompyfunc(func, /, nin, nout, **kwargs):
+    """`numpy.frompyfunc(func, nin, nout)` — turn a Python function into a
+    ufunc-like object operating elementwise over object arrays
+    (numpy/_core/umath frompyfunc). This is CPython object-array machinery
+    with no ferray numeric kernel; we expose numpy's implementation so the
+    elementwise-callable surface exists at `ferray.frompyfunc`."""
+    return _np.frompyfunc(func, nin, nout, **kwargs)
+
+
+def base_repr(number, base=2, padding=0):
+    """`numpy.base_repr(number, base=2, padding=0)` — string representation of
+    an integer in the given base (numpy/_core/numeric.py def base_repr).
+    Pure-Python integer→string, exact."""
+    digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    if base > len(digits):
+        raise ValueError("Bases greater than 36 not handled in base_repr.")
+    elif base < 2:
+        raise ValueError("Bases less than 2 not handled in base_repr.")
+    num = abs(int(number))
+    res = []
+    while num:
+        res.append(digits[num % base])
+        num //= base
+    if padding:
+        res.append("0" * padding)
+    if int(number) < 0:
+        res.append("-")
+    return "".join(reversed(res or "0"))
+
+
+def binary_repr(num, width=None):
+    """`numpy.binary_repr(num, width=None)` — binary string of an integer,
+    two's-complement when `width` is given for negatives
+    (numpy/_core/numeric.py def binary_repr)."""
+    return _np.binary_repr(int(num), width=width)
+
+
+# --- dtype / typecode helpers -------------------------------------------------
+
+def mintypecode(typechars, typeset="GDFgdf", default="d"):
+    """`numpy.mintypecode(typechars, typeset='GDFgdf', default='d')` — the
+    smallest-precision typecode able to safely hold all of `typechars`
+    (numpy/lib/_type_check_impl.py def mintypecode)."""
+    return _np.mintypecode(typechars, typeset=typeset, default=default)
+
+
+def typename(char):
+    """`numpy.typename(char)` — the english description of a typecode char
+    (numpy/_core/numerictypes.py def typename)."""
+    return _np.typename(char)
+
+
+def finfo(dtype):
+    """`numpy.finfo(dtype)` — machine limits for floating-point types
+    (numpy/_core/getlimits.py class finfo). ferray's dtype boundary IS
+    numpy's dtype, so the limits object is shared."""
+    return _np.finfo(dtype)
+
+
+def iinfo(int_type):
+    """`numpy.iinfo(int_type)` — machine limits for integer types
+    (numpy/_core/getlimits.py class iinfo)."""
+    return _np.iinfo(int_type)
+
+
+# --- bit packing --------------------------------------------------------------
+
+def packbits(a, /, axis=None, bitorder="big"):
+    """`numpy.packbits(a, axis=None, bitorder='big')` — pack the elements of a
+    binary-valued array into bits in a uint8 array
+    (numpy/_core/multiarray packbits). Operates on the numpy.ndarray
+    boundary."""
+    return _np.packbits(asarray(a), axis=axis, bitorder=bitorder)
+
+
+def unpackbits(a, /, axis=None, count=None, bitorder="big"):
+    """`numpy.unpackbits(a, axis=None, count=None, bitorder='big')` — unpack
+    the bits of a uint8 array into a binary-valued output
+    (numpy/_core/multiarray unpackbits)."""
+    return _np.unpackbits(_np.asarray(a, dtype=_np.uint8), axis=axis,
+                          count=count, bitorder=bitorder)
+
+
+# --- float formatting ---------------------------------------------------------
+
+def format_float_positional(x, precision=None, unique=True, fractional=True,
+                            trim="k", sign=False, pad_left=None, pad_right=None,
+                            min_digits=None):
+    """`numpy.format_float_positional(...)` — positional (non-scientific)
+    string of a scalar float (numpy/_core/arrayprint.py def
+    format_float_positional)."""
+    return _np.format_float_positional(
+        x, precision=precision, unique=unique, fractional=fractional, trim=trim,
+        sign=sign, pad_left=pad_left, pad_right=pad_right, min_digits=min_digits)
+
+
+def format_float_scientific(x, precision=None, unique=True, trim="k",
+                            sign=False, pad_left=None, exp_digits=None,
+                            min_digits=None):
+    """`numpy.format_float_scientific(...)` — scientific-notation string of a
+    scalar float (numpy/_core/arrayprint.py def format_float_scientific)."""
+    return _np.format_float_scientific(
+        x, precision=precision, unique=unique, trim=trim, sign=sign,
+        pad_left=pad_left, exp_digits=exp_digits, min_digits=min_digits)
+
+
+# --- array string representation ---------------------------------------------
+
+def array2string(a, *args, **kwargs):
+    """`numpy.array2string(a, ...)` — the formatted string of an array
+    (numpy/_core/arrayprint.py def array2string). Operates on the
+    numpy.ndarray boundary that ferray arrays already are."""
+    return _np.array2string(asarray(a), *args, **kwargs)
+
+
+def array_repr(arr, max_line_width=None, precision=None, suppress_small=None):
+    """`numpy.array_repr(arr, ...)` — the `repr()` string of an array
+    (numpy/_core/arrayprint.py def array_repr)."""
+    return _np.array_repr(asarray(arr), max_line_width=max_line_width,
+                          precision=precision, suppress_small=suppress_small)
+
+
+def array_str(a, max_line_width=None, precision=None, suppress_small=None):
+    """`numpy.array_str(a, ...)` — the `str()` string of an array
+    (numpy/_core/arrayprint.py def array_str)."""
+    return _np.array_str(asarray(a), max_line_width=max_line_width,
+                         precision=precision, suppress_small=suppress_small)
+
+
+# --- print options / floating-point error state (config infrastructure) ------
+# These manage numpy's global formatting/FP-error state. ferray arrays ARE
+# numpy arrays at the boundary, so sharing numpy's state machinery is the
+# correct (and only coherent) behavior — a ferray-local copy would not affect
+# how the boundary numpy.ndarray prints or how its FP errors are handled.
+
+def get_printoptions():
+    """`numpy.get_printoptions()` — current array-print options dict
+    (numpy/_core/arrayprint.py def get_printoptions)."""
+    return _np.get_printoptions()
+
+
+def set_printoptions(*args, **kwargs):
+    """`numpy.set_printoptions(...)` — set array-print options
+    (numpy/_core/arrayprint.py def set_printoptions)."""
+    return _np.set_printoptions(*args, **kwargs)
+
+
+printoptions = _np.printoptions
+errstate = _np.errstate
+
+
+def geterr():
+    """`numpy.geterr()` — current floating-point error-handling state
+    (numpy/_core/_ufunc_config.py def geterr)."""
+    return _np.geterr()
+
+
+def seterr(**kwargs):
+    """`numpy.seterr(...)` — set floating-point error-handling mode
+    (numpy/_core/_ufunc_config.py def seterr)."""
+    return _np.seterr(**kwargs)
+
+
+def geterrcall():
+    """`numpy.geterrcall()` — current FP-error callback
+    (numpy/_core/_ufunc_config.py def geterrcall)."""
+    return _np.geterrcall()
+
+
+def seterrcall(func):
+    """`numpy.seterrcall(func)` — set the FP-error callback
+    (numpy/_core/_ufunc_config.py def seterrcall)."""
+    return _np.seterrcall(func)
+
+
+def getbufsize():
+    """`numpy.getbufsize()` — ufunc buffer size
+    (numpy/_core/_ufunc_config.py def getbufsize)."""
+    return _np.getbufsize()
+
+
+def setbufsize(size):
+    """`numpy.setbufsize(size)` — set the ufunc buffer size
+    (numpy/_core/_ufunc_config.py def setbufsize)."""
+    return _np.setbufsize(size)
+
+
+# --- meta / introspection -----------------------------------------------------
+
+def get_include():
+    """`numpy.get_include()` — directory of C header files. ferray exposes its
+    numpy-compatible array boundary, so the include path that compiles against
+    that ABI is numpy's own (numpy/lib/_utils_impl.py def get_include)."""
+    return _np.get_include()
+
+
+def show_config(mode="stdout"):
+    """`numpy.show_config(mode='stdout')` — print/return build configuration.
+    ferray's numeric core is the Rust workspace; the array boundary ABI is
+    numpy's (numpy/_core/_utils def show_config)."""
+    return _np.show_config(mode)
+
+
+def show_runtime():
+    """`numpy.show_runtime()` — print runtime/CPU-dispatch info
+    (numpy/lib/_utils_impl.py def show_runtime)."""
+    return _np.show_runtime()
+
+
+def info(object=None, maxwidth=76, output=None, toplevel="ferray"):
+    """`numpy.info(object, ...)` — print documentation for an object
+    (numpy/lib/_utils_impl.py def info)."""
+    return _np.info(object, maxwidth=maxwidth, output=output, toplevel=toplevel)
+
+
+def test(*args, **kwargs):
+    """`numpy.test(...)` — run the test suite. ferray's pytest suite lives at
+    `ferray-python/tests`; this meta-hook exists for numpy-API compatibility
+    and reports that the harness is external."""
+    raise NotImplementedError(
+        "ferray.test() — run the ferray test suite via "
+        "`pytest ferray-python/tests`"
+    )
+
+
+def einsum_path(*operands, optimize="greedy", einsum_call=False):
+    """`numpy.einsum_path(*operands, optimize='greedy')` — evaluate the
+    optimal contraction order for an einsum expression
+    (numpy/_core/einsumfunc.py def einsum_path). Pure-Python contraction
+    planner that complements ferray's bound `einsum`."""
+    return _np.einsum_path(*operands, optimize=optimize, einsum_call=einsum_call)
+
+
 __all__ = [
     "__version__",
     # submodules
@@ -727,4 +1110,13 @@ __all__ = [
     "triu_indices_from", "put_along_axis", "asarray_chkfinite",
     "may_share_memory", "shares_memory", "iterable",
     "unique_all", "unique_counts", "unique_inverse", "unique_values",
+    # top-level functional / dtype / meta surface (expansion, refs #818)
+    "apply_along_axis", "apply_over_axes", "piecewise", "select", "unstack",
+    "require", "vectorize", "frompyfunc", "base_repr", "binary_repr",
+    "mintypecode", "typename", "finfo", "iinfo", "packbits", "unpackbits",
+    "format_float_positional", "format_float_scientific",
+    "array2string", "array_repr", "array_str",
+    "get_printoptions", "set_printoptions", "printoptions", "errstate",
+    "geterr", "seterr", "geterrcall", "seterrcall", "getbufsize", "setbufsize",
+    "get_include", "show_config", "show_runtime", "info", "test", "einsum_path",
 ]
