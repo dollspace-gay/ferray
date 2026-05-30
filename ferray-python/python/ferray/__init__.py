@@ -384,6 +384,7 @@ from ._ferray import (
 )
 from . import autodiff as _autodiff_module
 from ._ferray import char as _char_module
+from ._ferray import strings as _strings_module
 import numpy as _np
 
 # numpy.datetime64 / numpy.timedelta64 arithmetic and predicates work
@@ -415,6 +416,7 @@ from ._ferray import window as _window_module
 
 autodiff = _autodiff_module
 char = _char_module
+strings = _strings_module
 dtype = _dtype_module
 emath = _emath_module
 # numpy aliases numpy.math to the emath module historically; numpy 2.x keeps
@@ -436,6 +438,7 @@ import sys as _sys
 
 _sys.modules["ferray.autodiff"] = _autodiff_module
 _sys.modules["ferray.char"] = _char_module
+_sys.modules["ferray.strings"] = _strings_module
 _sys.modules["ferray.dtype"] = _dtype_module
 _sys.modules["ferray.emath"] = _emath_module
 _sys.modules["ferray.fft"] = _fft_module
@@ -455,7 +458,7 @@ abs = absolute  # noqa: A001 - intentional NumPy compat shadow
 __all__ = [
     "__version__",
     # submodules
-    "autodiff", "char", "emath", "fft", "lib", "linalg", "ma", "polynomial", "random", "window",
+    "autodiff", "char", "strings", "emath", "fft", "lib", "linalg", "ma", "polynomial", "random", "window",
     # top-level windows
     "bartlett", "blackman", "broadcast_arrays", "broadcast_shapes",
     "hamming", "hanning", "kaiser",

@@ -40,6 +40,7 @@ mod polynomial;
 mod random;
 mod stats;
 mod stride_tricks;
+mod strings;
 mod ufunc;
 mod window;
 
@@ -311,35 +312,29 @@ fn register_ma_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> Py
     Ok(())
 }
 
-/// Register `ferray.char` with all phase-4-followup char-namespace bindings.
+/// Register `ferray.char` (legacy `numpy.char`) with the full shared
+/// string-op surface. `numpy.char` and `numpy.strings` are the same
+/// operations; both modules register the identical function set via
+/// [`strings::register_string_ops`].
 fn register_char_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> PyResult<()> {
     let m = PyModule::new(py, "char")?;
-    m.add_function(wrap_pyfunction!(char::lower, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::upper, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::capitalize, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::title, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::swapcase, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::strip, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::lstrip, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::rstrip, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::count, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::find, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::startswith, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::endswith, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::str_len, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::replace, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::add, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::multiply, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::equal, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::not_equal, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::less, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::less_equal, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::greater, &m)?)?;
-    m.add_function(wrap_pyfunction!(char::greater_equal, &m)?)?;
+    strings::register_string_ops(py, &m)?;
     parent.add_submodule(&m)?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("ferray._ferray.char", &m)?;
+    Ok(())
+}
+
+/// Register `ferray.strings` — the NumPy 2.0 canonical `numpy.strings`
+/// namespace — over the same shared string-op surface as `ferray.char`.
+fn register_strings_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> PyResult<()> {
+    let m = PyModule::new(py, "strings")?;
+    strings::register_string_ops(py, &m)?;
+    parent.add_submodule(&m)?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("ferray._ferray.strings", &m)?;
     Ok(())
 }
 
@@ -814,6 +809,7 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     register_polynomial_module(py, m)?;
     register_stride_tricks_module(py, m)?;
     register_char_module(py, m)?;
+    register_strings_module(py, m)?;
     register_ma_module(py, m)?;
     register_autodiff_module(py, m)?;
 

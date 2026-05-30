@@ -86,6 +86,15 @@ design = ".design/ferray-strings.md"
 parity_ops = ["str_len", "count", "find", "upper", "lower", "strip", "replace"]
 
 [[route]]
+crate_pattern = "ferray-python/src/strings.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/strings.py",
+  "/home/doll/numpy-ref/numpy/_core/defchararray.py",
+]
+design = ".design/ferray-strings.md"
+parity_ops = ["upper", "lower", "isalpha", "zfill", "partition", "split", "join"]
+
+[[route]]
 crate_pattern = "ferray-python/src/conv.rs"
 upstream = [
   "/home/doll/numpy-ref/numpy/_core/numeric.py",
