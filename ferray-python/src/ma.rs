@@ -13,9 +13,17 @@
 //! computes in f64 — matching numpy.ma's promote-to-float contract for those
 //! ops — via `PyMaskedArray::to_f64_ma`, then re-wraps as `DynMa::F64`.
 //!
-//! COMPLEX (c64/c128) and structured/datetime masked arrays are OUT OF SCOPE
-//! (the ferray-ma masked surface + interop `NpElement` set exclude them); they
-//! stay on the existing numpy.ma delegation paths.
+//! COMPLEX (c64/c128) masked arrays are now CONSTRUCTIBLE (#868): the
+//! `DynMa::Complex32`/`Complex64` variants thread through construction, dtype,
+//! `filled` (default `1e20+0j`), data/mask egress, `__repr__`, getitem/setitem,
+//! `==`/`!=` (compute), and `sum`/`prod` (the complex `ReduceAcc`). Complex
+//! data crosses the PyO3 boundary via `fft::complex_pyarray_to_ferray` /
+//! `complex_ferray_to_pyarray` (`Complex<T>` is not `NpElement`). Complex
+//! arithmetic (`+`/`-`/`*`/`/`/`**`, tracked #869), the `.real`/`.imag`/`conj`/
+//! `abs` methods (#870), and the real-collapsing reductions `mean`/`var`/`std`/
+//! `min`/`max` (#873) raise a tracked `TypeError`; complex ordering and bitwise
+//! raise permanently (numpy raises too). STRUCTURED/datetime masked arrays
+//! remain OUT OF SCOPE.
 //!
 //! The class exposes:
 //!
@@ -155,6 +163,7 @@ use ferray_numpy_interop::{AsFerray, IntoNumPy};
 use ferray_polynomial as fp_poly;
 use ferray_stats::correlation::{CorrelateMode, correlate as stats_correlate};
 use ferray_ufunc::{ConvolveMode, convolve as ufunc_convolve};
+use num_complex::Complex;
 use numpy::PyReadonlyArrayDyn;
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyIndexError, PyValueError};
@@ -181,9 +190,11 @@ use crate::conv::{coerce_dtype, ferr_to_pyerr, ma_masked_singleton, ma_nomask};
 // type alias `T`, so a single generic body is written once and Rust
 // monomorphizes it per dtype — exactly the conv.rs `match_dtype_all!` shape.
 //
-// COMPLEX (c64/c128) and structured/datetime are OUT OF SCOPE here (the
-// ferray-ma masked surface + interop `NpElement` set exclude them); those
-// stay on the existing numpy.ma delegation / f64 paths and are unaffected.
+// COMPLEX (c64/c128) is now threaded as `DynMa::Complex32`/`Complex64` (#868),
+// crossing the boundary via the `numpy::Element` complex marshaller in `fft.rs`
+// (`Complex<T>` is not `NpElement`). Real-only dispatch sites use
+// `match_ma_real!` + an explicit complex arm (compute or a tracked `TypeError`).
+// STRUCTURED/datetime remain OUT OF SCOPE (no ferray-ma masked surface).
 // ---------------------------------------------------------------------------
 
 /// A runtime-typed masked array over the 11 real numpy dtypes. Mirrors
@@ -202,6 +213,8 @@ pub enum DynMa {
     U64(RustMa<u64, IxDyn>),
     F32(RustMa<f32, IxDyn>),
     F64(RustMa<f64, IxDyn>),
+    Complex32(RustMa<Complex<f32>, IxDyn>),
+    Complex64(RustMa<Complex<f64>, IxDyn>),
 }
 
 /// Dispatch a body over the active `DynMa` variant.
@@ -268,8 +281,119 @@ macro_rules! match_ma {
                 type $T = f64;
                 $body
             }
+            DynMa::Complex32($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = Complex<f32>;
+                $body
+            }
+            DynMa::Complex64($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = Complex<f64>;
+                $body
+            }
         }
     };
+}
+
+/// Dispatch a body over the active `DynMa` variant, but ONLY the 11 REAL
+/// variants. Used at sites whose body invokes a real-only operation (a
+/// `T: IntoF64` widening, a `T: NpElement` numpy egress, a `T: PartialOrd`
+/// ordering) that does not compile for `Complex<f32>`/`Complex<f64>`. Every
+/// such site pairs this macro with an explicit
+/// `DynMa::Complex32(_) | DynMa::Complex64(_) => <raise or complex-path>` arm,
+/// so the complex variants are handled deliberately (a `TypeError` for the ops
+/// numpy leaves to a later increment, or the complex-aware helper where the op
+/// is already defined for complex). Splitting the macro keeps the real arms
+/// generic while letting complex diverge per-site.
+///
+/// The caller supplies the complex arm as `complex => $cbody:block`, so each
+/// site decides whether complex computes (via a complex-aware helper) or raises
+/// a tracked `TypeError`. The real body and the complex body must evaluate to
+/// the same type.
+macro_rules! match_ma_real {
+    ($dyn:expr, $m:ident, $T:ident => $body:block, complex => $cbody:block) => {
+        match $dyn {
+            DynMa::Bool($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = bool;
+                $body
+            }
+            DynMa::I8($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = i8;
+                $body
+            }
+            DynMa::I16($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = i16;
+                $body
+            }
+            DynMa::I32($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = i32;
+                $body
+            }
+            DynMa::I64($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = i64;
+                $body
+            }
+            DynMa::U8($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = u8;
+                $body
+            }
+            DynMa::U16($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = u16;
+                $body
+            }
+            DynMa::U32($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = u32;
+                $body
+            }
+            DynMa::U64($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = u64;
+                $body
+            }
+            DynMa::F32($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = f32;
+                $body
+            }
+            DynMa::F64($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = f64;
+                $body
+            }
+            DynMa::Complex32(_) | DynMa::Complex64(_) => $cbody,
+        }
+    };
+}
+
+/// A tracked `TypeError` for a complex masked-array reduction numpy supports
+/// but ferray defers to a later increment (`mean`/`var`/`std`/`median`/`min`/
+/// `max` over a complex variant — #873). numpy.ma computes these; the message
+/// names the tracking issue so the gap is auditable, and the `<T>` lets the
+/// helper drop into a `match_ma_real!` complex arm of any result type.
+fn complex_reduction_pending<T>(op: &str) -> PyResult<T> {
+    Err(pyo3::exceptions::PyTypeError::new_err(format!(
+        "ferray.ma {op} over a complex dtype is not yet supported (numpy.ma \
+         computes it; tracked as a follow-up under #873)"
+    )))
+}
+
+/// A tracked `TypeError` for complex masked-array arithmetic numpy supports but
+/// ferray defers to the ferray-ufunc complex-arithmetic prerequisite (#869).
+/// numpy.ma computes `+`/`-`/`*`/`/`/`**` over complex; the message names the
+/// tracking issue.
+fn complex_arith_pending<T>(op: &str) -> PyResult<T> {
+    Err(pyo3::exceptions::PyTypeError::new_err(format!(
+        "ferray.ma complex '{op}' is not yet supported (numpy.ma computes it; \
+         tracked as a follow-up under #869)"
+    )))
 }
 
 impl DynMa {
@@ -290,7 +414,17 @@ impl DynMa {
             DynMa::U64(_) => "uint64",
             DynMa::F32(_) => "float32",
             DynMa::F64(_) => "float64",
+            DynMa::Complex32(_) => "complex64",
+            DynMa::Complex64(_) => "complex128",
         }
+    }
+
+    /// Whether the active variant is one of the two complex variants
+    /// (`complex64`/`complex128`). Real-only entry points test this before
+    /// delegating to a `match_ma_real!`-bodied helper, so they can route
+    /// complex to its own compute path or a tracked `TypeError`.
+    fn is_complex(&self) -> bool {
+        matches!(self, DynMa::Complex32(_) | DynMa::Complex64(_))
     }
 
     fn shape(&self) -> Vec<usize> {
@@ -347,9 +481,11 @@ pub struct PyMaskedArray {
 /// `arr` must already be a `numpy.ndarray` (route through `as_ndarray` first).
 /// When `mask` is `Some`, the variant carries a REAL mask (`RustMa::new`);
 /// when `None`, the variant carries the `nomask` sentinel (`RustMa::from_data`).
-/// Any dtype outside the 11 real ones (complex / structured / datetime) raises
-/// a `TypeError` rather than a lossy cast (R-CODE-4) — those stay on the numpy.ma
-/// delegation paths.
+/// The 11 real dtypes + complex64/complex128 (#868) build their variant;
+/// complex data crosses the boundary via the `numpy::Element` complex
+/// marshaller (`fft::complex_pyarray_to_ferray`). Any other dtype (structured /
+/// datetime) raises a `TypeError` rather than a lossy cast (R-CODE-4) — those
+/// stay on the numpy.ma delegation paths.
 fn build_dynma(arr: &Bound<'_, PyAny>, mask: Option<ArrayD<bool>>) -> PyResult<DynMa> {
     let dt = crate::conv::dtype_name(arr)?;
     macro_rules! build {
@@ -375,10 +511,32 @@ fn build_dynma(arr: &Bound<'_, PyAny>, mask: Option<ArrayD<bool>>) -> PyResult<D
         "uint64" | "u64" => build!(u64, U64),
         "float32" | "f32" => build!(f32, F32),
         "float64" | "f64" => build!(f64, F64),
+        // Complex variants. pyo3-numpy 0.28 has no `NpElement`/`PyReadonly
+        // Array` for `Complex<T>`, so the data crosses the boundary via the
+        // shared `fft::complex_pyarray_to_ferray` helper (a
+        // `PyReadonlyArrayDyn<Complex<T>>` read keyed on `numpy::Element`,
+        // which IS impl'd for both complex widths) rather than the
+        // `view.as_ferray()` path the real arms use.
+        "complex64" | "c8" => {
+            let data_fa = crate::fft::complex_pyarray_to_ferray::<f32>(arr)?;
+            let inner = match mask {
+                Some(m) => RustMa::new(data_fa, m).map_err(ferr_to_pyerr)?,
+                None => RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?,
+            };
+            Ok(DynMa::Complex32(inner))
+        }
+        "complex128" | "c16" => {
+            let data_fa = crate::fft::complex_pyarray_to_ferray::<f64>(arr)?;
+            let inner = match mask {
+                Some(m) => RustMa::new(data_fa, m).map_err(ferr_to_pyerr)?,
+                None => RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?,
+            };
+            Ok(DynMa::Complex64(inner))
+        }
         other => Err(pyo3::exceptions::PyTypeError::new_err(format!(
             "ferray.ma does not yet support dtype {other:?} (supported: bool, \
-             int8/16/32/64, uint8/16/32/64, float32/64; complex / structured are \
-             a follow-up)"
+             int8/16/32/64, uint8/16/32/64, float32/64, complex64/128; \
+             structured / datetime are a follow-up)"
         ))),
     }
 }
@@ -430,8 +588,16 @@ impl PyMaskedArray {
         }
         let mask = self.inner.mask_bits()?;
         let has_real = self.inner.has_real_mask();
-        let data: Vec<f64> = match_ma!(&self.inner, m, T => {
+        // Real dtypes widen each element to f64 (numpy's promote-to-float for
+        // the transcendental / division surface). Complex has no real→f64
+        // collapse — numpy.ma computes `mean`/`var`/`std`/`median` over complex
+        // WITHOUT dropping the imaginary part, so routing complex through this
+        // f64 funnel would silently lose data (R-CODE-4). Complex therefore
+        // raises a tracked `TypeError` (#873) here.
+        let data: Vec<f64> = match_ma_real!(&self.inner, m, T => {
             m.data().iter().map(|&v| dyn_to_f64::<T>(v)).collect()
+        }, complex => {
+            return complex_reduction_pending("mean/var/std/median");
         });
         let shape = self.inner.shape();
         let data_fa = ArrayD::<f64>::from_vec(IxDyn::new(&shape), data).map_err(ferr_to_pyerr)?;
@@ -455,10 +621,7 @@ impl PyMaskedArray {
 
     /// Egress the data buffer as a numpy `ndarray` of the NATIVE dtype.
     fn data_pyarray<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        match_ma!(&self.inner, m, T => {
-            let d: ArrayD<T> = fma::getdata(m).map_err(ferr_to_pyerr)?;
-            Ok(d.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
-        })
+        dynma_data_pyarray(py, &self.inner)
     }
 }
 
@@ -501,6 +664,7 @@ macro_rules! impl_wrap_dyn {
 impl_wrap_dyn!(
     bool => Bool, i8 => I8, i16 => I16, i32 => I32, i64 => I64,
     u8 => U8, u16 => U16, u32 => U32, u64 => U64, f32 => F32, f64 => F64,
+    Complex<f32> => Complex32, Complex<f64> => Complex64,
 );
 
 // ---------------------------------------------------------------------------
@@ -534,6 +698,18 @@ macro_rules! impl_acc_identity {
     };
 }
 impl_acc_identity!(i64 => 0, 1; u64 => 0, 1; f32 => 0.0, 1.0; f64 => 0.0, 1.0);
+// Complex `ReduceAcc::Acc` is `Self` (complex never promotes its reduction
+// accumulator — `numpy/ma/core.py` `sum`/`prod` keep the complex dtype), so
+// the fold needs the complex additive (`0+0j`) / multiplicative (`1+0j`)
+// identities. `Complex::new` is `const`-constructible for these literals.
+impl AccIdentity for Complex<f32> {
+    const ZERO: Self = Complex::new(0.0, 0.0);
+    const ONE: Self = Complex::new(1.0, 0.0);
+}
+impl AccIdentity for Complex<f64> {
+    const ZERO: Self = Complex::new(0.0, 0.0);
+    const ONE: Self = Complex::new(1.0, 0.0);
+}
 
 /// Additive (`ZERO`) / multiplicative (`ONE`) identities in the array's NATIVE
 /// element type `T`, used to fill masked slots before a cumulative op —
@@ -553,6 +729,16 @@ impl_ma_identity!(
     u8 => 0, 1; u16 => 0, 1; u32 => 0, 1; u64 => 0, 1;
     f32 => 0.0, 1.0; f64 => 0.0, 1.0; bool => false, true;
 );
+// Complex native fill identities — `0+0j` (additive) / `1+0j` (multiplicative),
+// used to fill masked slots before a complex `cumsum`/`cumprod`.
+impl MaIdentity for Complex<f32> {
+    const ZERO: Self = Complex::new(0.0, 0.0);
+    const ONE: Self = Complex::new(1.0, 0.0);
+}
+impl MaIdentity for Complex<f64> {
+    const ZERO: Self = Complex::new(0.0, 0.0);
+    const ONE: Self = Complex::new(1.0, 0.0);
+}
 
 /// Egress a single reduction result as a **numpy scalar of element type `E`**
 /// (not a dtype-agnostic Python `int`/`float`). numpy.ma's scalar reductions
@@ -569,6 +755,66 @@ where
     let arr = ArrayD::<E>::from_vec(IxDyn::new(&[1]), vec![value]).map_err(ferr_to_pyerr)?;
     let py_arr = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
     py_arr.get_item(0)
+}
+
+/// Egress a single COMPLEX reduction result as a numpy complex scalar — the
+/// complex analog of [`scalar_pyobject`]. `Complex<T>` is not `NpElement`, so
+/// the value is wrapped into a 1-element complex ndarray via the `numpy::
+/// Element` complex marshaller and indexed `[0]` (yielding a `np.complex64`/
+/// `np.complex128` scalar whose dtype the audit reads).
+fn complex_scalar_pyobject<'py, T>(
+    py: Python<'py>,
+    value: Complex<T>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let arr =
+        ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[1]), vec![value]).map_err(ferr_to_pyerr)?;
+    let py_arr = crate::fft::complex_ferray_to_pyarray::<T>(py, arr)?;
+    py_arr.get_item(0)
+}
+
+/// Defensive fallthrough for a `match_ma_real!` complex arm at a site whose two
+/// complex variants are already peeled off into their own explicit arms — the
+/// macro arm is never reached, but must return a value of the body's type.
+/// Returns a `TypeError` rather than panicking (R-CODE-2 / R-APG-1).
+fn unreachable_complex_egress<'py>() -> PyResult<Bound<'py, PyAny>> {
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "internal: complex dtype reached a real-only egress arm",
+    ))
+}
+
+/// Egress a single masked-array element as its Python object, dispatching on
+/// the static element type `T`. The `__getitem__` scalar path is written once
+/// over the generic `T` bound by `match_ma!`, so it needs a per-type egress:
+/// the 11 real dtypes use PyO3's `IntoPyObjectExt` (a numpy scalar / Python
+/// `int`/`float`/`bool`), while `Complex<f32>`/`Complex<f64>` — which have no
+/// `IntoPyObject` — go through the `numpy::Element` complex marshaller (a
+/// 1-element complex ndarray indexed `[0]`, yielding a numpy complex scalar).
+trait MaScalarEgress: ferray_core::Element + Copy {
+    fn egress<'py>(py: Python<'py>, value: Self) -> PyResult<Bound<'py, PyAny>>;
+}
+macro_rules! impl_ma_scalar_egress_real {
+    ($($t:ty),*) => {
+        $(impl MaScalarEgress for $t {
+            fn egress<'py>(py: Python<'py>, value: Self) -> PyResult<Bound<'py, PyAny>> {
+                value.into_bound_py_any(py)
+            }
+        })*
+    };
+}
+impl_ma_scalar_egress_real!(bool, i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
+impl MaScalarEgress for Complex<f32> {
+    fn egress<'py>(py: Python<'py>, value: Self) -> PyResult<Bound<'py, PyAny>> {
+        complex_scalar_pyobject::<f32>(py, value)
+    }
+}
+impl MaScalarEgress for Complex<f64> {
+    fn egress<'py>(py: Python<'py>, value: Self) -> PyResult<Bound<'py, PyAny>> {
+        complex_scalar_pyobject::<f64>(py, value)
+    }
 }
 
 /// Sum the unmasked elements of `m`, widening each to numpy's reduction
@@ -660,6 +906,29 @@ where
     let raveled = arr.call_method0("ravel")?;
     let view: PyReadonlyArrayDyn<T> = raveled.extract()?;
     let fa = view.as_ferray().map_err(ferr_to_pyerr)?;
+    fa.iter()
+        .next()
+        .copied()
+        .ok_or_else(|| PyValueError::new_err("fill value must be a scalar (got an empty array)"))
+}
+
+/// Coerce a single Python scalar to a `Complex<T>` element, the complex analog
+/// of [`coerce_scalar`]. `Complex<T>` is not `NpElement`, so the value is read
+/// through the `numpy::Element`-keyed `fft::complex_pyarray_to_ferray` after a
+/// `numpy.asarray(value, dt)` cast (R-CODE-4 — cast to the array's complex
+/// dtype, no f64 funnel). `dt` is `"complex64"`/`"complex128"`.
+fn coerce_complex_scalar<'py, T>(
+    py: Python<'py>,
+    value: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Complex<T>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let arr = coerce_dtype(py, value, dt)?;
+    let raveled = arr.call_method0("ravel")?;
+    let fa = crate::fft::complex_pyarray_to_ferray::<T>(&raveled)?;
     fa.iter()
         .next()
         .copied()
@@ -781,9 +1050,13 @@ impl PyMaskedArray {
     /// `numpy/ma/core.py:166` — `1e20` float / `999999` int / `True` bool).
     #[getter]
     fn fill_value<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        match_ma!(&self.inner, m, T => {
-            m.fill_value().into_bound_py_any(py)
-        })
+        match &self.inner {
+            DynMa::Complex32(m) => complex_scalar_pyobject::<f32>(py, m.fill_value()),
+            DynMa::Complex64(m) => complex_scalar_pyobject::<f64>(py, m.fill_value()),
+            _ => match_ma_real!(&self.inner, m, T => {
+                m.fill_value().into_bound_py_any(py)
+            }, complex => { unreachable_complex_egress() }),
+        }
     }
 
     #[getter]
@@ -823,9 +1096,17 @@ impl PyMaskedArray {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        match_ma!(&self.inner, m, T => {
-            scalar_pyobject(py, ma_sum_acc(m))
-        })
+        // Complex `sum` IS supported: `ReduceAcc::Acc` for complex is `Self`
+        // (no promotion), so the fold computes; the complex scalar egresses via
+        // the `numpy::Element` complex marshaller (`Complex<T>` is not
+        // `NpElement`, so it cannot use `scalar_pyobject`).
+        match &self.inner {
+            DynMa::Complex32(m) => complex_scalar_pyobject::<f32>(py, ma_sum_acc(m)),
+            DynMa::Complex64(m) => complex_scalar_pyobject::<f64>(py, ma_sum_acc(m)),
+            _ => match_ma_real!(&self.inner, m, T => {
+                scalar_pyobject(py, ma_sum_acc(m))
+            }, complex => { unreachable_complex_egress() }),
+        }
     }
 
     /// Mean of unmasked elements (full reduction). All-masked reduces to the
@@ -846,12 +1127,17 @@ impl PyMaskedArray {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        match_ma!(&self.inner, m, T => {
+        // Complex `min` uses numpy's lexicographic complex ordering (not the
+        // `PartialOrd` `ma_extremum` path) — deferred to #873.
+        if self.inner.is_complex() {
+            return complex_reduction_pending("min");
+        }
+        match_ma_real!(&self.inner, m, T => {
             match ma_extremum(m, false) {
                 Some(v) => scalar_pyobject(py, v),
                 None => ma_masked_singleton(py),
             }
-        })
+        }, complex => { complex_reduction_pending("min") })
     }
 
     /// Maximum unmasked element. All-masked reduces to the `numpy.ma.masked`
@@ -861,12 +1147,16 @@ impl PyMaskedArray {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        match_ma!(&self.inner, m, T => {
+        // Complex `max` uses numpy's lexicographic complex ordering — #873.
+        if self.inner.is_complex() {
+            return complex_reduction_pending("max");
+        }
+        match_ma_real!(&self.inner, m, T => {
             match ma_extremum(m, true) {
                 Some(v) => scalar_pyobject(py, v),
                 None => ma_masked_singleton(py),
             }
-        })
+        }, complex => { complex_reduction_pending("max") })
     }
 
     /// Variance of unmasked elements. All-masked (count==0) reduces to the
@@ -927,24 +1217,55 @@ impl PyMaskedArray {
         py: Python<'py>,
         fill_value: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        match_ma!(&self.inner, m, T => {
-            let arr: ArrayD<T> = match fill_value {
-                Some(v) => {
-                    let fv = coerce_scalar::<T>(py, v, self.inner.dtype_name())?;
-                    m.filled(fv).map_err(ferr_to_pyerr)?
-                }
-                None => m.filled_default().map_err(ferr_to_pyerr)?,
-            };
-            Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
-        })
+        let dt = self.inner.dtype_name();
+        // Complex `filled` substitutes the complex default fill (`1e20+0j`,
+        // numpy `default_filler['c']`) or a coerced complex `fill_value`, then
+        // egresses through the complex marshaller (`Complex<T>` is not
+        // `NpElement`).
+        macro_rules! complex_filled {
+            ($m:expr, $T:ty) => {{
+                let arr: ArrayD<Complex<$T>> = match fill_value {
+                    Some(v) => {
+                        let fv = coerce_complex_scalar::<$T>(py, v, dt)?;
+                        $m.filled(fv).map_err(ferr_to_pyerr)?
+                    }
+                    None => $m.filled_default().map_err(ferr_to_pyerr)?,
+                };
+                crate::fft::complex_ferray_to_pyarray::<$T>(py, arr)
+            }};
+        }
+        match &self.inner {
+            DynMa::Complex32(m) => complex_filled!(m, f32),
+            DynMa::Complex64(m) => complex_filled!(m, f64),
+            _ => match_ma_real!(&self.inner, m, T => {
+                let arr: ArrayD<T> = match fill_value {
+                    Some(v) => {
+                        let fv = coerce_scalar::<T>(py, v, dt)?;
+                        m.filled(fv).map_err(ferr_to_pyerr)?
+                    }
+                    None => m.filled_default().map_err(ferr_to_pyerr)?,
+                };
+                Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+            }, complex => { unreachable_complex_egress() }),
+        }
     }
 
     /// Return a 1-D `numpy.ndarray` of unmasked elements (native dtype).
     fn compressed<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        match_ma!(&self.inner, m, T => {
-            let arr: Array1<T> = m.compressed().map_err(ferr_to_pyerr)?;
-            Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
-        })
+        match &self.inner {
+            DynMa::Complex32(m) => {
+                let arr: Array1<Complex<f32>> = m.compressed().map_err(ferr_to_pyerr)?;
+                crate::fft::complex_ferray_to_pyarray::<f32>(py, arr.into_dyn())
+            }
+            DynMa::Complex64(m) => {
+                let arr: Array1<Complex<f64>> = m.compressed().map_err(ferr_to_pyerr)?;
+                crate::fft::complex_ferray_to_pyarray::<f64>(py, arr.into_dyn())
+            }
+            _ => match_ma_real!(&self.inner, m, T => {
+                let arr: Array1<T> = m.compressed().map_err(ferr_to_pyerr)?;
+                Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+            }, complex => { unreachable_complex_egress() }),
+        }
     }
 
     fn __repr__(&self) -> String {
@@ -1052,11 +1373,27 @@ impl PyMaskedArray {
         let put_mode = fma::PutMode::parse(mode).map_err(ferr_to_pyerr)?;
         let dt = self.inner.dtype_name();
         let vmask = values_mask(py, values)?;
-        match_ma!(&mut self.inner, m, T => {
-            let vals = values_data::<T>(py, values, dt)?;
-            m.put(&idx, &vals, vmask.as_deref(), put_mode)
-                .map_err(put_err_to_pyerr)
-        })
+        match &mut self.inner {
+            DynMa::Complex32(m) => {
+                let vals = values_data_complex::<f32>(py, values, dt)?;
+                m.put(&idx, &vals, vmask.as_deref(), put_mode)
+                    .map_err(put_err_to_pyerr)
+            }
+            DynMa::Complex64(m) => {
+                let vals = values_data_complex::<f64>(py, values, dt)?;
+                m.put(&idx, &vals, vmask.as_deref(), put_mode)
+                    .map_err(put_err_to_pyerr)
+            }
+            _ => match_ma_real!(&mut self.inner, m, T => {
+                let vals = values_data::<T>(py, values, dt)?;
+                m.put(&idx, &vals, vmask.as_deref(), put_mode)
+                    .map_err(put_err_to_pyerr)
+            }, complex => {
+                Err(pyo3::exceptions::PyTypeError::new_err(
+                    "internal: complex dtype reached the real put arm",
+                ))
+            }),
+        }
     }
 
     /// `MaskedArray.putmask`-style in-place conditional assignment used by the
@@ -1073,11 +1410,27 @@ impl PyMaskedArray {
         let mask_flat: Vec<bool> = mask_arr.iter().copied().collect();
         let dt = self.inner.dtype_name();
         let vmask = values_mask(py, values)?;
-        match_ma!(&mut self.inner, m, T => {
-            let vals = values_data::<T>(py, values, dt)?;
-            m.putmask(&mask_flat, &vals, vmask.as_deref())
-                .map_err(ferr_to_pyerr)
-        })
+        match &mut self.inner {
+            DynMa::Complex32(m) => {
+                let vals = values_data_complex::<f32>(py, values, dt)?;
+                m.putmask(&mask_flat, &vals, vmask.as_deref())
+                    .map_err(ferr_to_pyerr)
+            }
+            DynMa::Complex64(m) => {
+                let vals = values_data_complex::<f64>(py, values, dt)?;
+                m.putmask(&mask_flat, &vals, vmask.as_deref())
+                    .map_err(ferr_to_pyerr)
+            }
+            _ => match_ma_real!(&mut self.inner, m, T => {
+                let vals = values_data::<T>(py, values, dt)?;
+                m.putmask(&mask_flat, &vals, vmask.as_deref())
+                    .map_err(ferr_to_pyerr)
+            }, complex => {
+                Err(pyo3::exceptions::PyTypeError::new_err(
+                    "internal: complex dtype reached the real putmask arm",
+                ))
+            }),
+        }
     }
 
     /// `MaskedArray.__getitem__(indx)` — subscripting
@@ -1114,7 +1467,11 @@ impl PyMaskedArray {
                     if masked {
                         ma_masked_singleton(py)
                     } else {
-                        data[pos].into_bound_py_any(py)
+                        // A real scalar egresses directly to its Python object;
+                        // a complex scalar has no `IntoPyObject`, so it goes
+                        // through the `numpy::Element` complex marshaller. The
+                        // `MaScalarEgress` trait selects the right path per `T`.
+                        <T as MaScalarEgress>::egress(py, data[pos])
                     }
                 }
                 ResolvedIndex::Gather { positions, shape } => {
@@ -1196,24 +1553,63 @@ impl PyMaskedArray {
         let vmask = broadcast_value_mask(py, value, &result_shape, positions.len())?;
 
         // Write the data in the array's native dtype (R-CODE-4 — the RHS is
-        // coerced to `self.dtype`, not funneled through f64).
-        match_ma!(&mut self.inner, m, T => {
-            let vals = broadcast_value_data::<T>(py, value, &result_shape, positions.len(), dt)?;
-            let buf = m
-                .data_mut()
-                .ok_or_else(|| PyValueError::new_err("masked array data is not contiguous"))?;
-            for (k, &p) in positions.iter().enumerate() {
-                if is_hard {
-                    // Hard mask: an already-masked position keeps its data.
-                    let was_masked = existing.as_ref().map(|e| e[p]).unwrap_or(false);
-                    if !was_masked {
-                        buf[p] = vals[k];
+        // coerced to `self.dtype`, not funneled through f64). The write loop is
+        // identical for real and complex; only the RHS-data extraction differs
+        // (complex has no `NpElement`, so it reads via the complex marshaller).
+        macro_rules! write_positions {
+            ($buf:expr, $vals:expr) => {{
+                for (k, &p) in positions.iter().enumerate() {
+                    if is_hard {
+                        // Hard mask: an already-masked position keeps its data.
+                        let was_masked = existing.as_ref().map(|e| e[p]).unwrap_or(false);
+                        if !was_masked {
+                            $buf[p] = $vals[k];
+                        }
+                    } else {
+                        $buf[p] = $vals[k];
                     }
-                } else {
-                    buf[p] = vals[k];
                 }
+            }};
+        }
+        match &mut self.inner {
+            DynMa::Complex32(m) => {
+                let vals = broadcast_value_data_complex::<f32>(
+                    py,
+                    value,
+                    &result_shape,
+                    positions.len(),
+                    dt,
+                )?;
+                let buf = m
+                    .data_mut()
+                    .ok_or_else(|| PyValueError::new_err("masked array data is not contiguous"))?;
+                write_positions!(buf, vals);
             }
-        });
+            DynMa::Complex64(m) => {
+                let vals = broadcast_value_data_complex::<f64>(
+                    py,
+                    value,
+                    &result_shape,
+                    positions.len(),
+                    dt,
+                )?;
+                let buf = m
+                    .data_mut()
+                    .ok_or_else(|| PyValueError::new_err("masked array data is not contiguous"))?;
+                write_positions!(buf, vals);
+            }
+            _ => match_ma_real!(&mut self.inner, m, T => {
+                let vals = broadcast_value_data::<T>(py, value, &result_shape, positions.len(), dt)?;
+                let buf = m
+                    .data_mut()
+                    .ok_or_else(|| PyValueError::new_err("masked array data is not contiguous"))?;
+                write_positions!(buf, vals);
+            }, complex => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "internal: complex dtype reached the real setitem arm",
+                ));
+            }),
+        }
 
         // Mask updates after the data write. Under a soft mask each written
         // position is unmasked unless the RHS value was itself masked; a hard
@@ -1261,6 +1657,12 @@ impl PyMaskedArray {
                      operator or the logical_not function instead",
                 ));
             }
+            // numpy negates complex; ferray's `negative` is `T: Float`-bound
+            // (no `num_traits::Float` for `Complex`), so complex negation needs
+            // the ferray-ufunc complex-arithmetic prerequisite (#869).
+            DynMa::Complex32(_) | DynMa::Complex64(_) => {
+                return complex_arith_pending("negative");
+            }
         };
         Ok(Self::from_dynma(inner))
     }
@@ -1289,6 +1691,10 @@ impl PyMaskedArray {
                     "the numpy boolean positive, the `+` operator, is not supported",
                 ));
             }
+            // `+complex` is the identity (numpy `positive` is a no-op copy);
+            // cloning the buffer is `Element`-generic, so complex computes here.
+            DynMa::Complex32(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::Complex64(m) => carry_unary_mask(m, m.data().clone())?,
         };
         Ok(Self::from_dynma(inner))
     }
@@ -1315,6 +1721,15 @@ impl PyMaskedArray {
             DynMa::U32(m) => carry_unary_mask(m, m.data().clone())?,
             DynMa::U64(m) => carry_unary_mask(m, m.data().clone())?,
             DynMa::Bool(m) => carry_unary_mask(m, m.data().clone())?,
+            // `abs(complex)` yields a REAL magnitude array (dtype change), which
+            // `carry_unary_mask`'s same-`T` contract cannot express; the complex
+            // magnitude path is the `.real`/`.imag`/`abs` method work (#870).
+            DynMa::Complex32(_) | DynMa::Complex64(_) => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "ferray.ma abs() over a complex dtype is not yet supported \
+                     (numpy.ma yields the real magnitude; tracked under #870)",
+                ));
+            }
         };
         Ok(Self::from_dynma(inner))
     }
@@ -1339,7 +1754,10 @@ impl PyMaskedArray {
             DynMa::U16(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
             DynMa::U32(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
             DynMa::U64(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
-            DynMa::F32(_) | DynMa::F64(_) => {
+            // Float AND complex have no `invert` loop — numpy raises for both
+            // (`~complex` → `ufunc 'invert' not supported`). This is a CORRECT
+            // permanent raise (bitwise NOT is integer/bool only).
+            DynMa::F32(_) | DynMa::F64(_) | DynMa::Complex32(_) | DynMa::Complex64(_) => {
                 return Err(pyo3::exceptions::PyTypeError::new_err(
                     "ufunc 'invert' not supported for the input types, and the inputs could not \
                      be safely coerced to any supported types according to the casting rule \
@@ -1670,6 +2088,29 @@ fn binary_op(
     // Operand-common dtype = numpy.result_type(left_data, right_data)
     // (NEP-50, matching numpy.ma materializing both operands as arrays first).
     let operand_dt = crate::conv::binary_result_dtype(py, ld, rd)?;
+
+    // Complex arithmetic (`+`/`-`/`*`/`/`/`//`/`%`/`**`) is a tracked gap:
+    // numpy.ma computes it, but ferray's `WrappingArith`/`TrueDivide`/`power`
+    // are not impl'd for `Complex` (the ferray-ufunc complex-arithmetic
+    // prerequisite, #869). A complex operand-common dtype therefore raises a
+    // tracked `TypeError` here (BEFORE coercion to a complex `DynMa`), so the
+    // gap is auditable rather than surfacing as the internal "dtypes not
+    // unified" error from `compute_binary`. (`//`/`%` over complex are a
+    // PERMANENT raise in numpy too — `floor_divide`/`remainder` have no complex
+    // loop — but are funneled through the same message here; #869 will split
+    // the permanent-vs-pending arms when complex arithmetic lands.)
+    if matches!(operand_dt.as_str(), "complex64" | "complex128") {
+        let name = match op {
+            BinOp::Add => "add",
+            BinOp::Sub => "subtract",
+            BinOp::Mul => "multiply",
+            BinOp::TrueDiv => "true_divide",
+            BinOp::FloorDiv => "floor_divide",
+            BinOp::Mod => "remainder",
+            BinOp::Pow => "power",
+        };
+        return complex_arith_pending(name);
+    }
 
     // Cast each operand's data to the common dtype and wrap as a same-dtype
     // DynMa carrying its mask. `build_dynma` rejects complex/structured.
@@ -2033,8 +2474,26 @@ fn compare_op(
         }
     };
 
+    // Complex ordering (`<`/`<=`/`>`/`>=`) is undefined — numpy raises
+    // `'<' not supported between ...` (Complex is not `PartialOrd`). `==`/`!=`
+    // ARE defined for complex (bounded `PartialEq`), so they fall through to
+    // `compute_compare`'s complex Eq/Ne arm and COMPUTE (matching numpy.ma).
+    if matches!(operand_dt.as_str(), "complex64" | "complex128") && !op.is_eq_ne() {
+        return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "'{}' not supported between instances of complex masked arrays",
+            match op {
+                CmpOp::Lt => "<",
+                CmpOp::Le => "<=",
+                CmpOp::Gt => ">",
+                CmpOp::Ge => ">=",
+                CmpOp::Eq => "==",
+                CmpOp::Ne => "!=",
+            },
+        )));
+    }
+
     // Cast each operand to the common dtype and wrap as a same-dtype DynMa
-    // carrying its mask (rejects complex/structured via `build_dynma`).
+    // carrying its mask.
     let left = build_dynma(&coerce_dtype(py, &recv_data, &operand_dt)?, Some(recv_mask))?;
     let right = build_dynma(
         &coerce_dtype(py, &other_data, &operand_dt)?,
@@ -2113,6 +2572,27 @@ fn compute_compare(
         }};
     }
 
+    // Complex supports ONLY `==`/`!=` (`equal`/`not_equal` are `PartialEq`-
+    // bounded; Complex is not `PartialOrd`). The four ordering ops are guarded
+    // to a `TypeError` in `compare_op` BEFORE reaching here, so this arm is only
+    // entered for `Eq`/`Ne`; an ordering op slipping through returns an error
+    // rather than calling the unavailable `less`/etc.
+    macro_rules! cmp_eq_arm {
+        ($l:expr, $r:expr, $T:ty) => {{
+            let la: ArrayD<$T> = broadcast_to($l.data(), bshape).map_err(ferr_to_pyerr)?;
+            let ra: ArrayD<$T> = broadcast_to($r.data(), bshape).map_err(ferr_to_pyerr)?;
+            match op {
+                CmpOp::Eq => equal(&la, &ra).map_err(ferr_to_pyerr)?,
+                CmpOp::Ne => not_equal(&la, &ra).map_err(ferr_to_pyerr)?,
+                _ => {
+                    return Err(pyo3::exceptions::PyTypeError::new_err(
+                        "complex masked-array ordering is not supported",
+                    ));
+                }
+            }
+        }};
+    }
+
     let check: ArrayD<bool> = match (left, right) {
         (DynMa::Bool(l), DynMa::Bool(r)) => cmp_arm!(l, r, bool),
         (DynMa::I8(l), DynMa::I8(r)) => cmp_arm!(l, r, i8),
@@ -2125,6 +2605,8 @@ fn compute_compare(
         (DynMa::U64(l), DynMa::U64(r)) => cmp_arm!(l, r, u64),
         (DynMa::F32(l), DynMa::F32(r)) => cmp_arm!(l, r, f32),
         (DynMa::F64(l), DynMa::F64(r)) => cmp_arm!(l, r, f64),
+        (DynMa::Complex32(l), DynMa::Complex32(r)) => cmp_eq_arm!(l, r, Complex<f32>),
+        (DynMa::Complex64(l), DynMa::Complex64(r)) => cmp_eq_arm!(l, r, Complex<f64>),
         _ => {
             return Err(PyValueError::new_err(
                 "internal: comparison operand dtypes were not unified before compute",
@@ -2287,9 +2769,14 @@ fn bitwise_op(
     // ndarray-inherited bitwise path numpy.ma uses.
     let result_dt = crate::conv::binary_result_dtype(py, l_obj, r_obj)?;
 
-    // Bitwise is integer/bool ONLY: a float common dtype means a float operand
-    // was present -> numpy raises `TypeError` (no float bitwise loop).
-    if matches!(result_dt.as_str(), "float16" | "float32" | "float64") {
+    // Bitwise is integer/bool ONLY: a float OR complex common dtype means a
+    // float/complex operand was present -> numpy raises `TypeError` (no float /
+    // complex bitwise loop — `np.complex128(1) & 1 → 'bitwise_and' not
+    // supported`, verified live). This is a CORRECT permanent raise.
+    if matches!(
+        result_dt.as_str(),
+        "float16" | "float32" | "float64" | "complex64" | "complex128"
+    ) {
         let name = match op {
             BitOp::And => "bitwise_and",
             BitOp::Or => "bitwise_or",
@@ -2447,10 +2934,31 @@ fn non_contig() -> PyErr {
 /// Egress a `DynMa`'s data buffer as a native-dtype numpy ndarray (the
 /// free-function analog of `PyMaskedArray::data_pyarray`).
 fn dynma_data_pyarray<'py>(py: Python<'py>, d: &DynMa) -> PyResult<Bound<'py, PyAny>> {
-    match_ma!(d, m, T => {
-        let arr: ArrayD<T> = fma::getdata(m).map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
-    })
+    // Complex egresses through `fft::complex_ferray_to_pyarray` (the
+    // `numpy::Element`-keyed complex marshaller), since `Complex<T>` is not
+    // `NpElement` and so has no `into_pyarray`. Real dtypes use the standard
+    // `IntoNumPy` path.
+    match d {
+        DynMa::Complex32(m) => {
+            let arr: ArrayD<Complex<f32>> = fma::getdata(m).map_err(ferr_to_pyerr)?;
+            crate::fft::complex_ferray_to_pyarray::<f32>(py, arr)
+        }
+        DynMa::Complex64(m) => {
+            let arr: ArrayD<Complex<f64>> = fma::getdata(m).map_err(ferr_to_pyerr)?;
+            crate::fft::complex_ferray_to_pyarray::<f64>(py, arr)
+        }
+        _ => match_ma_real!(d, m, T => {
+            let arr: ArrayD<T> = fma::getdata(m).map_err(ferr_to_pyerr)?;
+            Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }, complex => {
+            // The two complex variants are peeled off by the outer match,
+            // so this arm is never taken; return an error rather than panic
+            // (R-CODE-2 / R-APG-1).
+            Err(pyo3::exceptions::PyTypeError::new_err(
+                "internal: complex dtype reached the real data-egress arm",
+            ))
+        }),
+    }
 }
 
 /// Re-wrap a freshly-computed result `DynMa` (whose own mask is meaningless)
@@ -2483,6 +2991,8 @@ fn strip_mask(data: DynMa) -> PyResult<DynMa> {
         DynMa::U64(sm) => strip!(sm, U64),
         DynMa::F32(sm) => strip!(sm, F32),
         DynMa::F64(sm) => strip!(sm, F64),
+        DynMa::Complex32(sm) => strip!(sm, Complex32),
+        DynMa::Complex64(sm) => strip!(sm, Complex64),
     }
 }
 
@@ -2629,6 +3139,47 @@ where
     Ok(vals)
 }
 
+/// The complex DATA of a `__setitem__` right-hand side, broadcast to
+/// `result_shape` and flattened — the complex analog of
+/// [`broadcast_value_data`]. `Complex<T>` is not `NpElement`, so the
+/// cast-to-`dt` broadcast is read through the `numpy::Element` complex
+/// marshaller.
+fn broadcast_value_data_complex<'py, T>(
+    py: Python<'py>,
+    value: &Bound<'py, PyAny>,
+    result_shape: &[usize],
+    count: usize,
+    dt: &str,
+) -> PyResult<Vec<Complex<T>>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let np = py.import("numpy")?;
+    let np_ma = np.getattr("ma")?;
+    let fr_ma = value.extract::<PyMaskedArray>().ok();
+    let is_np_ma = value.is_instance(&np_ma.getattr("MaskedArray")?)?;
+    let data_obj = if let Some(ref m) = fr_ma {
+        m.data(py)?
+    } else if is_np_ma {
+        np_ma.call_method1("getdata", (value,))?
+    } else {
+        value.clone()
+    };
+    let data_t = coerce_dtype(py, &data_obj, dt)?;
+    let data_bc = np
+        .call_method1("broadcast_to", (data_t, result_shape.to_vec()))?
+        .call_method0("ravel")?;
+    let fa = crate::fft::complex_pyarray_to_ferray::<T>(&data_bc)?;
+    let vals: Vec<Complex<T>> = fa.iter().copied().collect();
+    if vals.len() != count {
+        return Err(PyValueError::new_err(format!(
+            "could not broadcast value into the {count} indexed position(s)",
+        )));
+    }
+    Ok(vals)
+}
+
 /// The MASK of a `__setitem__` right-hand side, broadcast to `result_shape`
 /// and flattened — or `None` when the RHS carries no mask. Dtype-independent.
 fn broadcast_value_mask<'py>(
@@ -2713,6 +3264,33 @@ where
         .iter()
         .copied()
         .collect())
+}
+
+/// The flat COMPLEX DATA of a `put`/`putmask`/`__setitem__` `values` argument,
+/// the complex analog of [`values_data`]. `Complex<T>` is not `NpElement`, so
+/// the cast-to-`dt` ravel is read through the `numpy::Element` complex
+/// marshaller (`fft::complex_pyarray_to_ferray`).
+fn values_data_complex<'py, T>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Vec<Complex<T>>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let data_obj = if obj.extract::<PyMaskedArray>().is_ok() {
+        obj.extract::<PyMaskedArray>()?.data(py)?
+    } else if obj.is_instance(&np_ma.getattr("MaskedArray")?)? {
+        np_ma.call_method1("getdata", (obj,))?
+    } else {
+        obj.clone()
+    };
+    let arr = coerce_dtype(py, &data_obj, dt)?;
+    let raveled = arr.call_method0("ravel")?;
+    let fa = crate::fft::complex_pyarray_to_ferray::<T>(&raveled)?;
+    Ok(fa.iter().copied().collect())
 }
 
 /// The flat MASK of a `put`/`putmask` `values` argument, or `None` when the
@@ -2810,6 +3388,8 @@ fn rewrap_with_mask(src: &DynMa, mask: Option<ArrayD<bool>>) -> PyResult<DynMa> 
         DynMa::U64(sm) => rewrap!(sm, U64),
         DynMa::F32(sm) => rewrap!(sm, F32),
         DynMa::F64(sm) => rewrap!(sm, F64),
+        DynMa::Complex32(sm) => rewrap!(sm, Complex32),
+        DynMa::Complex64(sm) => rewrap!(sm, Complex64),
     }
 }
 
@@ -3452,10 +4032,16 @@ pub fn prod<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAn
     }
     // Dtype-preserving: numpy.ma `prod` = `filled(1).prod()`
     // (`numpy/ma/core.py:5303`), result dtype = the ReduceAcc accumulator
-    // (int8→int64, uint8→uint64, bool→int64, float unchanged) (#858).
-    match_ma!(&a.inner, m, T => {
-        scalar_pyobject(py, ma_prod_acc(m))
-    })
+    // (int8→int64, uint8→uint64, bool→int64, float unchanged) (#858). Complex
+    // `ReduceAcc::Acc` is `Self`, so the product computes and egresses via the
+    // complex marshaller.
+    match &a.inner {
+        DynMa::Complex32(m) => complex_scalar_pyobject::<f32>(py, ma_prod_acc(m)),
+        DynMa::Complex64(m) => complex_scalar_pyobject::<f64>(py, ma_prod_acc(m)),
+        _ => match_ma_real!(&a.inner, m, T => {
+            scalar_pyobject(py, ma_prod_acc(m))
+        }, complex => { unreachable_complex_egress() }),
+    }
 }
 
 /// `numpy.ma.median(a)` — median of unmasked elements. All-masked reduces
@@ -3931,11 +4517,27 @@ pub fn set_fill_value(
     fill_value: &Bound<'_, PyAny>,
 ) -> PyResult<()> {
     let dt = a.inner.dtype_name();
-    match_ma!(&mut a.inner, m, T => {
-        let fv = coerce_scalar::<T>(py, fill_value, dt)?;
-        m.set_fill_value(fv);
-        Ok(())
-    })
+    match &mut a.inner {
+        DynMa::Complex32(m) => {
+            let fv = coerce_complex_scalar::<f32>(py, fill_value, dt)?;
+            m.set_fill_value(fv);
+            Ok(())
+        }
+        DynMa::Complex64(m) => {
+            let fv = coerce_complex_scalar::<f64>(py, fill_value, dt)?;
+            m.set_fill_value(fv);
+            Ok(())
+        }
+        _ => match_ma_real!(&mut a.inner, m, T => {
+            let fv = coerce_scalar::<T>(py, fill_value, dt)?;
+            m.set_fill_value(fv);
+            Ok(())
+        }, complex => {
+            Err(pyo3::exceptions::PyTypeError::new_err(
+                "internal: complex dtype reached the real set_fill_value arm",
+            ))
+        }),
+    }
 }
 
 /// `numpy.ma.default_fill_value(obj)` — the default fill value used for
@@ -5360,11 +5962,26 @@ fn ma_cumulative<'py>(
     // Fill masked slots with the reduction identity in the NATIVE dtype, egress
     // to a numpy ndarray, then run `numpy.<func>` — numpy promotes the dtype to
     // its reduction accumulator exactly as `filled(0).cumsum()` does.
-    let filled_py: Bound<'py, PyAny> = match_ma!(&dynma, m, T => {
-        let ident: T = if product { <T as MaIdentity>::ONE } else { <T as MaIdentity>::ZERO };
-        let filled: ArrayD<T> = m.filled(ident).map_err(ferr_to_pyerr)?;
-        filled.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    });
+    macro_rules! complex_fill_egress {
+        ($m:expr, $T:ty) => {{
+            let ident: Complex<$T> = if product {
+                <Complex<$T> as MaIdentity>::ONE
+            } else {
+                <Complex<$T> as MaIdentity>::ZERO
+            };
+            let filled: ArrayD<Complex<$T>> = $m.filled(ident).map_err(ferr_to_pyerr)?;
+            crate::fft::complex_ferray_to_pyarray::<$T>(py, filled)?
+        }};
+    }
+    let filled_py: Bound<'py, PyAny> = match &dynma {
+        DynMa::Complex32(m) => complex_fill_egress!(m, f32),
+        DynMa::Complex64(m) => complex_fill_egress!(m, f64),
+        _ => match_ma_real!(&dynma, m, T => {
+            let ident: T = if product { <T as MaIdentity>::ONE } else { <T as MaIdentity>::ZERO };
+            let filled: ArrayD<T> = m.filled(ident).map_err(ferr_to_pyerr)?;
+            filled.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        }, complex => { unreachable_complex_egress()? }),
+    };
     let mask_py = mask_fa
         .clone()
         .into_pyarray(py)

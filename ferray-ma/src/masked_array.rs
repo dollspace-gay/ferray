@@ -26,11 +26,11 @@ use ferray_core::error::{FerrayError, FerrayResult};
 /// then moving it into `T` through a `'static` [`Any`] downcast (sound because
 /// `Element: 'static` and the concrete value's type matches the dtype tag).
 ///
-/// Dtypes with no numeric entry in numpy's `default_filler` numeric subset
-/// (complex, structured, string, datetime, and the 128-/256-bit integers
-/// ferray adds beyond numpy's C scalar set) fall back to `T::zero()` — they
-/// have no masked-array fill-value contract honored here. (Complex masked
-/// arrays are not part of ferray-ma's surface; numpy uses `1e20 + 0j`.)
+/// Complex dtypes use numpy's `default_filler['c']` of `1e20 + 0j` (#868).
+/// Dtypes with no entry in numpy's `default_filler` (structured, string,
+/// datetime, and the 128-/256-bit integers ferray adds beyond numpy's C scalar
+/// set) fall back to `T::zero()` — they have no masked-array fill-value
+/// contract honored here.
 ///
 /// Reference: numpy 2.4.5 live oracle —
 /// `ma.array([1.,2.,3.]).fill_value == np.float64(1e+20)`.
@@ -61,6 +61,14 @@ pub(crate) fn default_fill_value<T: Element>() -> T {
         DType::U64 => Some(Box::new(999_999_u64)),
         // bool kind 'b' -> True
         DType::Bool => Some(Box::new(true)),
+        // complex kind 'c' -> 1e20 + 0j (numpy `default_filler['c']`,
+        // `numpy/ma/core.py:163`; verified live numpy 2.4.5:
+        // `np.ma.array([1+2j]).fill_value == (1e+20+0j)`). Both complex widths
+        // share the same `1e20+0j` magnitude (numpy keys `default_filler` by
+        // dtype KIND, so `'c'` covers complex64 and complex128 alike), each
+        // built in its own element width before the `Any` downcast (#868).
+        DType::Complex32 => Some(Box::new(num_complex::Complex::new(1e20_f32, 0.0_f32))),
+        DType::Complex64 => Some(Box::new(num_complex::Complex::new(1e20_f64, 0.0_f64))),
         // Dtypes numpy's numeric default_filler subset doesn't cover
         // (128-/256-bit ints, structured, string, datetime/timedelta):
         // no masked fill-value contract here -> additive identity.

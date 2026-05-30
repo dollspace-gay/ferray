@@ -110,14 +110,18 @@ lexicographic `min`/`max` require touching library/binding compute helpers.
 
 ## REQ status table
 
-All six REQs are **NOT-STARTED**: `build_dynma` (`ma.rs`) raises `TypeError` for
-every complex input today (`match dt.as_str() { ... other => Err(PyTypeError ...
-"complex / structured are a follow-up") }`), so no complex masked array can be
-constructed, and no downstream method can observe a complex variant.
+REQ-1 is **SHIPPED** (#868). The remaining REQs are **NOT-STARTED**: complex
+arithmetic (#869), `.real`/`.imag`/`conj`/`abs` methods (#870), and complex
+`mean`/`min`/`max` (#873) raise a tracked `TypeError` for now. The `==`/`!=`
+complex compute (part of REQ-4) and the complex ordering / `//`,`%` / bitwise
+RAISES (REQ-4 / REQ-5) landed early alongside #868 — they fell out of threading
+the variant through `compare_op` / `binary_op` / `bitwise_op` — but REQ-4/REQ-5
+stay NOT-STARTED until their full pinned pytest (incl. the masked-position
+override edges) is added under #871/#872.
 
 | REQ | Status | Evidence |
 |---|---|---|
-| REQ-1 (construct/dtype/filled) | NOT-STARTED | open prereq blocker #868. `build_dynma` in `ma.rs` rejects complex (`other => Err(PyTypeError::new_err("... complex / structured are a follow-up"))`); `enum DynMa` has 11 real variants only; `dtype_name`, `match_ma!`, `impl_wrap_dyn!`, `AccIdentity`, and the complex fill-default (`1e20+0j`) in `default_fill_value` (`ferray-ma/src/masked_array.rs`, complex falls to `T::zero()`) must all gain complex arms. Substrate ready: `Complex<f64>: Element` (`ferray_core::dtype::mod.rs`). |
+| REQ-1 (construct/dtype/filled) | SHIPPED | #868. `build_dynma` (`ma.rs`) maps `"complex64"\|"c8" => DynMa::Complex32`, `"complex128"\|"c16" => DynMa::Complex64` (data crossing the boundary via `fft::complex_pyarray_to_ferray`, the `numpy::Element` complex marshaller — `Complex<T>` is not `NpElement`); `enum DynMa` gains `Complex32`/`Complex64`; `dtype_name` → `"complex64"`/`"complex128"`; `match_ma!`/`impl_wrap_dyn!`/`AccIdentity`/`MaIdentity` gain complex arms; the complex fill-default `1e20+0j` is in `default_fill_value` (`ferray-ma/src/masked_array.rs`, `DType::Complex32\|Complex64 => Complex::new(1e20, 0.0)`). Non-test production consumer: `PyMaskedArray::py_new`/`fr.ma.array` → `dynma_from_input` → `build_dynma` constructs the variant; `filled`/`__array__`/`compressed`/`fill_value` egress it via `dynma_data_pyarray` + `complex_ferray_to_pyarray`. Verified: `tests/test_expansion_ma_complex_construct.py` (30 pytest vs numpy.ma) + the flipped `test_KNOWN_complex_masked_array_supported_by_numpy` pin. |
 | REQ-2 (real/imag/conj/abs) | NOT-STARTED | open prereq blocker #870. `ferray_ufunc::ops::complex` (`complex.rs`) ALREADY provides `pub fn real`/`imag`/`conj`/`conjugate`/`abs`/`angle` (bounded `T: Element + Float, Complex<T>: Element`); `carry_unary_mask` in `ma.rs` is generic over `T: Element + WrapDyn`. Binding-only: add `#[pymethods]`/free fns dispatching the new complex `DynMa` arm; blocked behind REQ-1's variants. |
 | REQ-3 (complex `+`,`-`,`*`,`/`,`**`) | NOT-STARTED | open prereq blocker #869 (LIBRARY prereq). `pub fn add`/`subtract`/`multiply` (`arithmetic.rs`) bound `T: Element + WrappingArith`; `WrappingArith` impl'd only for `i8..u128`/`f32`/`f64`/`f16` (`impl_wrapping_arith_int!`/`impl_wrapping_arith_float!`) — NO Complex. `pub fn divide` bound `T: TrueDivide` (f64/f32/ints only). `pub fn power` bound `T: Element + Float` — Float not impl for Complex. Needs `WrappingArith`+`TrueDivide` for Complex + a complex `power` arm, then the complex arms in `compute_binary`'s match. |
 | REQ-4 (`==`/`!=` compute; ordering raises) | NOT-STARTED | open prereq blocker #871. `pub fn equal`/`not_equal` (`comparison.rs`) bound `T: Element + PartialEq + Copy` → Complex OK (eq/ne compute once the complex arm is added to `compute_compare`'s `cmp_arm!` match). `pub fn less`/`less_equal`/`greater`/`greater_equal` bound `T: ... + PartialOrd` and Complex is NOT `PartialOrd` → `compare_op` must guard the four ordering ops to a `TypeError` for complex (numpy raises). |

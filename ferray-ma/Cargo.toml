@@ -16,6 +16,10 @@ ferray-core = { workspace = true }
 # ferray-ufunc and ferray-stats were listed but never imported (#272);
 # the interop module references them only in doc comments.
 num-traits = { workspace = true }
+# num-complex is needed to construct numpy's complex default fill value
+# (`1e20 + 0j`, `numpy/ma/core.py:163` `default_filler['c']`) in
+# `default_fill_value` for `Complex<f32>`/`Complex<f64>` masked arrays (#868).
+num-complex = { workspace = true }
 
 [dependencies.ferray-io]
 workspace = true
