@@ -431,6 +431,20 @@ parity_ops = ["find", "rfind", "index", "rindex", "count", "startswith", "endswi
 # (core.py:5249 `elif newmask: result = masked`).
 # ─────────────────────────────────────────────────────────────────────────
 
+# ferray-python ma binding shim: exposes the ferray-ma model through
+# numpy.ma's Python API. Owns the boundary concerns numpy-vs-ferray differ
+# on: the `fill_value` property (core.py:3793), the `np.ma.masked` singleton
+# returned by all-masked full reductions (core.py:5250), the `np.ma.nomask`
+# singleton returned by getmask/.mask of an unmasked array (core.py:1468),
+# masked_where's IndexError on a shape-mismatched condition (core.py:1885),
+# masked_equal setting fill_value to the compared value (core.py:2172), and
+# __array__ returning the underlying data verbatim (asarray(ma) == ma.data).
+[[route]]
+crate_pattern = "ferray-python/src/ma.rs"
+upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]
+design = ".design/ferray-ma.md"
+parity_ops = ["fill_value", "masked", "nomask", "masked_where", "masked_equal", "__array__"]
+
 [[route]]
 crate_pattern = "ferray-ma/src/masked_array.rs"
 upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]

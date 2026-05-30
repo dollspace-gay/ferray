@@ -16,8 +16,15 @@
 //!   `fill_value`, `dtype`.
 //! - Methods: `count`, `sum`, `mean`, `min`, `max`, `var`, `std`
 //!   (with optional axis), `filled`, `compressed`, `__repr__`,
-//!   `__array__` (NumPy protocol — converts to a regular ndarray with
-//!   masked entries replaced by the fill value).
+//!   `__array__` (NumPy protocol — returns the underlying data verbatim,
+//!   so `numpy.asarray(ma)` equals `ma.data`).
+//!
+//! Boundary conventions mapping the ferray-ma model onto numpy.ma's Python
+//! API: all-masked full reductions return the `numpy.ma.masked` singleton
+//! (not ferray-ma's NaN analog); `getmask` / `.mask` of an unmasked array
+//! return the `numpy.ma.nomask` singleton; `masked_where` with a
+//! shape-mismatched condition raises `IndexError`; `masked_equal` sets the
+//! result's `fill_value` to the compared value.
 //!
 //! Other ferray-ma surface (arithmetic, sorting, manipulation,
 //! linalg) is deferred to a sub-follow-up.
@@ -28,11 +35,11 @@ use ferray_ma as fma;
 use ferray_ma::MaskedArray as RustMa;
 use ferray_numpy_interop::{AsFerray, IntoNumPy};
 use numpy::PyReadonlyArrayDyn;
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use crate::conv::{coerce_dtype, ferr_to_pyerr};
+use crate::conv::{coerce_dtype, ferr_to_pyerr, ma_masked_singleton, ma_nomask};
 
 // ---------------------------------------------------------------------------
 // MaskedArray pyclass (f64-only main slice)
@@ -47,6 +54,24 @@ pub struct PyMaskedArray {
 impl PyMaskedArray {
     fn from_inner(inner: RustMa<f64, IxDyn>) -> Self {
         Self { inner }
+    }
+
+    /// True iff every element is masked (or the array is empty).
+    ///
+    /// numpy.ma's full reductions return the `masked` singleton in exactly
+    /// this case (`numpy/ma/core.py:5250` `elif newmask: result = masked`,
+    /// where `newmask` is the all-true reduction of the mask). The count of
+    /// unmasked elements being zero is the ferray-side analog of that
+    /// all-true `newmask`.
+    fn all_masked(&self) -> PyResult<bool> {
+        Ok(self.inner.count().map_err(ferr_to_pyerr)? == 0)
+    }
+
+    /// True iff at least one element is masked. Mirrors `numpy.ma.getmask`
+    /// returning `nomask` (vs. a real bool array) precisely when no element
+    /// is masked (`numpy/ma/core.py:1468`).
+    fn any_masked(&self) -> PyResult<bool> {
+        Ok(fma::count_masked(&self.inner).map_err(ferr_to_pyerr)? > 0)
     }
 }
 
@@ -87,11 +112,31 @@ impl PyMaskedArray {
         Ok(data.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
     }
 
-    /// Mask as a `numpy.ndarray` of bool with the same shape as `data`.
+    /// Mask as a `numpy.ndarray` of bool with the same shape as `data`,
+    /// or the `numpy.ma.nomask` singleton when nothing is masked.
+    ///
+    /// numpy's `MaskedArray.mask` getter returns `self._mask`, which is the
+    /// `nomask` constant for an array constructed without an explicit mask
+    /// (`numpy/ma/core.py:1468`), not a full `array([False, ...])`. The
+    /// binding mirrors that singleton (R-DEV-3).
     #[getter]
     fn mask<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        if !self.any_masked()? {
+            return ma_nomask(py);
+        }
         let mask: ArrayD<bool> = fma::getmask(&self.inner).map_err(ferr_to_pyerr)?;
         Ok(mask.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// The replacement value used for masked positions by `filled()`.
+    ///
+    /// numpy exposes `fill_value` as a property (`numpy/ma/core.py:3793`);
+    /// for float64 it defaults to `1e20` (`default_filler['f']`,
+    /// `numpy/ma/core.py:166`). The ferray-ma library carries the same
+    /// per-dtype default on the `MaskedArray`; the binding surfaces it.
+    #[getter]
+    fn fill_value(&self) -> f64 {
+        self.inner.fill_value()
     }
 
     #[getter]
@@ -121,38 +166,62 @@ impl PyMaskedArray {
         self.inner.count().map_err(ferr_to_pyerr)
     }
 
-    /// Sum of unmasked elements (full reduction).
+    /// Sum of unmasked elements (full reduction). An all-masked array
+    /// reduces to the `numpy.ma.masked` singleton (`numpy/ma/core.py:5250`).
     fn sum<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        if self.all_masked()? {
+            return ma_masked_singleton(py);
+        }
         let v = self.inner.sum().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
 
-    /// Mean of unmasked elements (full reduction).
+    /// Mean of unmasked elements (full reduction). All-masked reduces to the
+    /// `numpy.ma.masked` singleton (`numpy/ma/core.py:5417`).
     fn mean<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        if self.all_masked()? {
+            return ma_masked_singleton(py);
+        }
         let v = self.inner.mean().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
 
-    /// Minimum unmasked element.
+    /// Minimum unmasked element. All-masked reduces to the `numpy.ma.masked`
+    /// singleton (`numpy/ma/core.py:5942`).
     fn min<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        if self.all_masked()? {
+            return ma_masked_singleton(py);
+        }
         let v = self.inner.min().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
 
-    /// Maximum unmasked element.
+    /// Maximum unmasked element. All-masked reduces to the `numpy.ma.masked`
+    /// singleton (`numpy/ma/core.py:6047`).
     fn max<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        if self.all_masked()? {
+            return ma_masked_singleton(py);
+        }
         let v = self.inner.max().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
 
-    /// Variance of unmasked elements.
+    /// Variance of unmasked elements. All-masked (count==0) reduces to the
+    /// `numpy.ma.masked` singleton (numpy's `_var` yields `masked`).
     fn var<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        if self.all_masked()? {
+            return ma_masked_singleton(py);
+        }
         let v = self.inner.var().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
 
-    /// Standard deviation of unmasked elements.
+    /// Standard deviation of unmasked elements. All-masked (count==0) reduces
+    /// to the `numpy.ma.masked` singleton (numpy's `_var` yields `masked`).
     fn std<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        if self.all_masked()? {
+            return ma_masked_singleton(py);
+        }
         let v = self.inner.std().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
@@ -217,11 +286,15 @@ impl PyMaskedArray {
         }
     }
 
-    /// NumPy `__array__` protocol — return the data with masked entries
-    /// replaced by the default fill value. Lets `numpy.asarray(ma)`
-    /// work on a ferray MaskedArray.
+    /// NumPy `__array__` protocol — return the underlying data verbatim,
+    /// keeping the original values at masked positions (NOT the fill value).
+    ///
+    /// numpy's `MaskedArray.__array__` yields `self._data`, so
+    /// `np.asarray(ma)` equals `ma.data` — the masked slots keep their
+    /// stored values rather than being substituted. The binding mirrors that
+    /// (R-DEV-3); `filled()` is the explicit fill-substituting path.
     fn __array__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        self.filled(py, None)
+        self.data(py)
     }
 }
 
@@ -264,6 +337,14 @@ pub fn masked_array<'py>(
 }
 
 /// `numpy.ma.masked_where(condition, data)`.
+///
+/// A `condition` whose shape doesn't match `data` raises `IndexError`, not
+/// `ValueError`: numpy applies the boolean mask as a fancy index
+/// (`numpy/ma/core.py:1885`), and a boolean-index/broadcast shape mismatch
+/// surfaces as `IndexError` (confirmed live: `np.ma.masked_where([T,F],
+/// [1.,2.,3.])` raises `IndexError`). ferray-ma reports the mismatch as a
+/// `FerrayError::ShapeMismatch`, which [`ferr_to_pyerr`] would map to
+/// `ValueError`; the binding remaps it to `IndexError` here (R-DEV-2).
 #[pyfunction]
 pub fn masked_where<'py>(
     py: Python<'py>,
@@ -272,8 +353,18 @@ pub fn masked_where<'py>(
 ) -> PyResult<PyMaskedArray> {
     let cond = extract_bool_array(py, condition)?;
     let data_fa = extract_data(py, data)?;
-    let inner = fma::masked_where(&cond, &data_fa).map_err(ferr_to_pyerr)?;
+    let inner = fma::masked_where(&cond, &data_fa).map_err(shape_mismatch_to_index_error)?;
     Ok(PyMaskedArray::from_inner(inner))
+}
+
+/// Map a ferray-ma `ShapeMismatch` (from `masked_where`'s shape check) to a
+/// `IndexError`, mirroring numpy's boolean-index failure; every other
+/// `FerrayError` falls through to [`ferr_to_pyerr`].
+fn shape_mismatch_to_index_error(e: ferray_core::FerrayError) -> PyErr {
+    if matches!(e, ferray_core::FerrayError::ShapeMismatch { .. }) {
+        return PyIndexError::new_err(e.to_string());
+    }
+    ferr_to_pyerr(e)
 }
 
 /// `numpy.ma.masked_invalid(data)` — mask NaN and inf values.
@@ -299,7 +390,24 @@ macro_rules! bind_masked_compare {
     };
 }
 
-bind_masked_compare!(masked_equal, fma::masked_equal);
+/// `numpy.ma.masked_equal(x, value)` — mask where equal to `value`.
+///
+/// numpy additionally sets the result's `fill_value` to the compared value
+/// (`numpy/ma/core.py:2172` `output.fill_value = value`), so a later
+/// `filled()` substitutes that value at masked slots. The binding mirrors
+/// that by setting the ferray-ma `fill_value` after constructing the mask.
+#[pyfunction]
+pub fn masked_equal<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    value: f64,
+) -> PyResult<PyMaskedArray> {
+    let data_fa = extract_data(py, x)?;
+    let mut inner = fma::masked_equal(&data_fa, value).map_err(ferr_to_pyerr)?;
+    inner.set_fill_value(value);
+    Ok(PyMaskedArray::from_inner(inner))
+}
+
 bind_masked_compare!(masked_not_equal, fma::masked_not_equal);
 bind_masked_compare!(masked_greater, fma::masked_greater);
 bind_masked_compare!(masked_greater_equal, fma::masked_greater_equal);

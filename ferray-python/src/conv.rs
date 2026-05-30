@@ -351,6 +351,30 @@ pub fn set_readonly<'py>(arr: Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> 
     Ok(arr)
 }
 
+/// Return the `numpy.ma.masked` singleton.
+///
+/// `numpy.ma`'s all-masked full reductions don't return a finite/NaN scalar —
+/// they return the module-level `masked` constant (`numpy/ma/core.py:5250`
+/// `result = masked`, mirrored for mean/min/max/var/std), so user code can
+/// test `am.sum() is np.ma.masked`. The ferray-ma library has no Python
+/// `masked` object and surfaces the all-masked case as its `NaN` analog;
+/// the binding maps that back to the genuine singleton (R-DEV-3) so the
+/// `is`-identity contract holds across the boundary.
+pub fn ma_masked_singleton<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    py.import("numpy.ma")?.getattr("masked")
+}
+
+/// Return the `numpy.ma.nomask` singleton.
+///
+/// `numpy.ma.getmask` of an array with no mask returns the module-level
+/// `nomask` constant (`numpy/ma/core.py:1468` `return getattr(a, '_mask',
+/// nomask)`), not a full `array([False, ...])`. The `.mask` property mirrors
+/// this. The binding returns the genuine singleton so `getmask(a) is
+/// np.ma.nomask` holds (R-DEV-3).
+pub fn ma_nomask<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    py.import("numpy.ma")?.getattr("nomask")
+}
+
 /// Accept either a Python integer (1-D) or a sequence of integers
 /// (N-D). Mirrors `numpy.zeros(5)` and `numpy.zeros((3, 4))`.
 pub fn extract_shape(obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
