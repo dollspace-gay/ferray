@@ -404,6 +404,7 @@ def sub_datetime(a, b):
     datetime (returns datetime)."""
     return _np.subtract(a, b)
 from ._ferray import dtype as _dtype_module
+from ._ferray import emath as _emath_module
 from ._ferray import fft as _fft_module
 from . import lib as _lib_module
 from ._ferray import linalg as _linalg_module
@@ -415,6 +416,9 @@ from ._ferray import window as _window_module
 autodiff = _autodiff_module
 char = _char_module
 dtype = _dtype_module
+emath = _emath_module
+# numpy aliases numpy.math to the emath module historically; numpy 2.x keeps
+# only numpy.emath. Mirror just `emath` (the supported name).
 fft = _fft_module
 lib = _lib_module
 linalg = _linalg_module
@@ -433,6 +437,7 @@ import sys as _sys
 _sys.modules["ferray.autodiff"] = _autodiff_module
 _sys.modules["ferray.char"] = _char_module
 _sys.modules["ferray.dtype"] = _dtype_module
+_sys.modules["ferray.emath"] = _emath_module
 _sys.modules["ferray.fft"] = _fft_module
 _sys.modules["ferray.lib.stride_tricks"] = _lib_module.stride_tricks
 _sys.modules["ferray.linalg"] = _linalg_module
@@ -450,7 +455,7 @@ abs = absolute  # noqa: A001 - intentional NumPy compat shadow
 __all__ = [
     "__version__",
     # submodules
-    "autodiff", "char", "fft", "lib", "linalg", "ma", "polynomial", "random", "window",
+    "autodiff", "char", "emath", "fft", "lib", "linalg", "ma", "polynomial", "random", "window",
     # top-level windows
     "bartlett", "blackman", "broadcast_arrays", "broadcast_shapes",
     "hamming", "hanning", "kaiser",

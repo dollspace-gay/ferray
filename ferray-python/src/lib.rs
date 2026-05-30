@@ -30,6 +30,7 @@ mod char;
 mod complex;
 mod conv;
 mod creation;
+mod emath;
 mod fft;
 mod indexing;
 mod linalg;
@@ -162,6 +163,29 @@ fn register_fft_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> P
     py.import("sys")?
         .getattr("modules")?
         .set_item("ferray._ferray.fft", &m)?;
+    Ok(())
+}
+
+/// Register `ferray.emath` (a.k.a. `numpy.lib.scimath`) — the complex-aware
+/// sqrt/log/log2/log10/logn/power/arccos/arcsin/arctanh family. Each function
+/// returns a COMPLEX result for inputs outside the real domain (`x < 0` for
+/// sqrt/log/power-base; `|x| > 1` for arccos/arcsin/arctanh) and a REAL result
+/// otherwise, mirroring `numpy/lib/_scimath_impl.py` exactly.
+fn register_emath_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> PyResult<()> {
+    let m = PyModule::new(py, "emath")?;
+    m.add_function(wrap_pyfunction!(emath::sqrt, &m)?)?;
+    m.add_function(wrap_pyfunction!(emath::log, &m)?)?;
+    m.add_function(wrap_pyfunction!(emath::log2, &m)?)?;
+    m.add_function(wrap_pyfunction!(emath::log10, &m)?)?;
+    m.add_function(wrap_pyfunction!(emath::logn, &m)?)?;
+    m.add_function(wrap_pyfunction!(emath::power, &m)?)?;
+    m.add_function(wrap_pyfunction!(emath::arccos, &m)?)?;
+    m.add_function(wrap_pyfunction!(emath::arcsin, &m)?)?;
+    m.add_function(wrap_pyfunction!(emath::arctanh, &m)?)?;
+    parent.add_submodule(&m)?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("ferray._ferray.emath", &m)?;
     Ok(())
 }
 
@@ -784,6 +808,7 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     register_dtype_module(py, m)?;
     register_linalg_module(py, m)?;
     register_fft_module(py, m)?;
+    register_emath_module(py, m)?;
     register_random_module(py, m)?;
     register_window_module(py, m)?;
     register_polynomial_module(py, m)?;

@@ -130,6 +130,27 @@ upstream = [
 design = ".design/ferray-core.md"
 parity_ops = ["real", "imag", "conj", "conjugate", "angle", "real_if_close", "iscomplex", "isreal", "iscomplexobj", "isrealobj"]
 
+# ferray-python numpy.emath (a.k.a. numpy.lib.scimath) binding shim. The
+# emath functions are the complex-aware versions of sqrt/log/log2/log10/logn/
+# power/arccos/arcsin/arctanh: they return COMPLEX results for inputs where the
+# real-valued version would be a domain error, and REAL results otherwise. This
+# route owns the boundary domain-check mechanism numpy implements in its
+# `_fix_*` helpers: `_fix_real_lt_zero` (cast to complex if any real x < 0 —
+# sqrt/log/log2/log10/logn/power-base), `_fix_int_lt_zero` (promote exponent
+# int->float, NOT complex, if any p < 0 — power), and `_fix_real_abs_gt_1`
+# (cast to complex if any real |x| > 1 — arccos/arcsin/arctanh). In-domain real
+# inputs route to the real ferray ufunc bindings (dtype preserved); out-of-
+# domain inputs cast to complex128 and run the ferray-ufunc complex kernels
+# (sqrt_complex / ln_complex / log2_complex / log10_complex / acos_complex /
+# asin_complex / atanh_complex / powc).
+[[route]]
+crate_pattern = "ferray-python/src/emath.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/lib/_scimath_impl.py",
+]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["sqrt", "log", "log2", "log10", "logn", "power", "arccos", "arcsin", "arctanh"]
+
 # ferray-python numpy.fft binding shim: marshals numpy.fft.* through to the
 # ferray-fft crate. The library math (norm modes, n-padding, rfft length) is
 # numpy-correct; this route owns the boundary/ABI concerns numpy-vs-ferray
