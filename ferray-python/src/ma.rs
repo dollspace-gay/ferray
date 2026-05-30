@@ -1225,6 +1225,148 @@ impl PyMaskedArray {
         }
         Ok(())
     }
+
+    /// Unary negation (`-a`), `numpy.ma`'s `__neg__` → `_MaskedUnaryOperation`
+    /// over `numpy.negative` (`numpy/ma/core.py:955`, `:1010`).
+    ///
+    /// The op is applied to the FULL native-dtype data buffer (masked
+    /// positions included — numpy transforms the data under the mask:
+    /// `(-np.ma.array([-1, 2, -3], mask=[0, 1, 0])).data == [1, -2, 3]`,
+    /// verified live numpy 2.4.4), and the result carries the operand's mask
+    /// via [`carry_unary_mask`] (a REAL mask, even from a nomask source —
+    /// numpy's `getmaskarray(a)` materializes an all-False mask, so
+    /// `np.ma.getmask(-n) is np.ma.nomask` is `False`; verified live).
+    ///
+    /// Dtype is preserved (R-CODE-4): float → `negative` (Float),
+    /// signed/unsigned int → `negative_int` (C-wrapping, so `-uint8(2)`
+    /// wraps to `254`). `bool` raises `TypeError`, matching numpy 2.4
+    /// (`-np.ma.array([True]) → TypeError: boolean negative … not supported`).
+    fn __neg__(&self) -> PyResult<Self> {
+        use ferray_ufunc::ops::arithmetic::{negative, negative_int};
+        let inner = match &self.inner {
+            DynMa::F32(m) => carry_unary_mask(m, negative(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::F64(m) => carry_unary_mask(m, negative(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I8(m) => carry_unary_mask(m, negative_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I16(m) => carry_unary_mask(m, negative_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I32(m) => carry_unary_mask(m, negative_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I64(m) => carry_unary_mask(m, negative_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::U8(m) => carry_unary_mask(m, negative_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::U16(m) => carry_unary_mask(m, negative_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::U32(m) => carry_unary_mask(m, negative_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::U64(m) => carry_unary_mask(m, negative_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::Bool(_) => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "numpy boolean negative, the `-` operator, is not supported, use the `~` \
+                     operator or the logical_not function instead",
+                ));
+            }
+        };
+        Ok(Self::from_dynma(inner))
+    }
+
+    /// Unary plus (`+a`), `numpy.ma`'s `__pos__` → `numpy.positive`. Returns a
+    /// mask-preserving copy (identity transform on the data); dtype preserved.
+    ///
+    /// `bool` raises `TypeError` — numpy 2.4 has no `positive` loop for bool
+    /// (`+np.ma.array([True]) → numpy.exceptions._UFuncNoLoopError`, a
+    /// `TypeError` subclass; verified live).
+    fn __pos__(&self) -> PyResult<Self> {
+        use ferray_ufunc::ops::arithmetic::positive;
+        let inner = match &self.inner {
+            DynMa::F32(m) => carry_unary_mask(m, positive(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::F64(m) => carry_unary_mask(m, positive(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I8(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::I16(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::I32(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::I64(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::U8(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::U16(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::U32(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::U64(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::Bool(_) => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "the numpy boolean positive, the `+` operator, is not supported",
+                ));
+            }
+        };
+        Ok(Self::from_dynma(inner))
+    }
+
+    /// Absolute value (`abs(a)`), `numpy.ma`'s `__abs__` → `numpy.absolute`,
+    /// mask-preserving, dtype-preserving.
+    ///
+    /// float → `absolute` (Float SIMD path); signed int → `absolute_int`
+    /// (C-wrapping, so `abs(int8::MIN)` wraps like numpy); unsigned int →
+    /// identity (numpy `abs(uint)` is the value unchanged); `bool` → identity
+    /// (`abs(np.ma.array([True, False])).dtype == bool`; `abs(True) == True`,
+    /// verified live numpy 2.4.4).
+    fn __abs__(&self) -> PyResult<Self> {
+        use ferray_ufunc::ops::arithmetic::{absolute, absolute_int};
+        let inner = match &self.inner {
+            DynMa::F32(m) => carry_unary_mask(m, absolute(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::F64(m) => carry_unary_mask(m, absolute(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I8(m) => carry_unary_mask(m, absolute_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I16(m) => carry_unary_mask(m, absolute_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I32(m) => carry_unary_mask(m, absolute_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I64(m) => carry_unary_mask(m, absolute_int(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::U8(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::U16(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::U32(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::U64(m) => carry_unary_mask(m, m.data().clone())?,
+            DynMa::Bool(m) => carry_unary_mask(m, m.data().clone())?,
+        };
+        Ok(Self::from_dynma(inner))
+    }
+
+    /// Bitwise NOT (`~a`), `numpy.ma`'s `__invert__` → `numpy.invert`,
+    /// mask-preserving, dtype-preserving.
+    ///
+    /// Defined for integer + bool dtypes (`~int8(-1) == 0` two's-complement;
+    /// `~np.ma.array([True, False]) == [False, True]`). FLOAT dtypes raise
+    /// `TypeError` — numpy 2.4 has no `invert` loop for float
+    /// (`~np.ma.array([1.0]) → TypeError: ufunc 'invert' not supported`;
+    /// verified live).
+    fn __invert__(&self) -> PyResult<Self> {
+        use ferray_ufunc::ops::bitwise::invert;
+        let inner = match &self.inner {
+            DynMa::Bool(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I8(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I16(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I32(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::I64(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::U8(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::U16(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::U32(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::U64(m) => carry_unary_mask(m, invert(m.data()).map_err(ferr_to_pyerr)?)?,
+            DynMa::F32(_) | DynMa::F64(_) => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "ufunc 'invert' not supported for the input types, and the inputs could not \
+                     be safely coerced to any supported types according to the casting rule \
+                     ''safe''",
+                ));
+            }
+        };
+        Ok(Self::from_dynma(inner))
+    }
+}
+
+/// Wrap a unary-op result (already in the source's native dtype `T`) back into
+/// a `DynMa`, carrying the operand's mask.
+///
+/// Mirrors numpy's `_MaskedUnaryOperation.__call__` (`numpy/ma/core.py:1010`):
+/// `m = getmaskarray(a)` materializes a REAL all-False mask even for a nomask
+/// operand, so `np.ma.getmask(-n) is np.ma.nomask` is `False` (verified live
+/// numpy 2.4.4). We mirror that exactly by carrying `fma::getmaskarray(src)`
+/// (always a real mask of the operand shape) onto the transformed data via
+/// `RustMa::new`. The result data is the op applied to the WHOLE buffer
+/// (masked positions transformed too), matching numpy's data-under-the-mask.
+fn carry_unary_mask<T>(src: &RustMa<T, IxDyn>, data: ArrayD<T>) -> PyResult<DynMa>
+where
+    T: ferray_core::Element + WrapDyn,
+{
+    let mask = fma::getmaskarray(src).map_err(ferr_to_pyerr)?;
+    let out = RustMa::new(data, mask).map_err(ferr_to_pyerr)?;
+    Ok(T::wrap(out))
 }
 
 /// `set_mask_flat` on the active `DynMa` variant (the hard-mask clear gate is
