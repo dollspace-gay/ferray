@@ -42,6 +42,26 @@
 //! Consumer: `rint_promote` is the production callee for the rounding crate's
 //! integer-`rint` contract; the family is the workspace's int-accepting unary
 //! ufunc surface. Verified by `tests/divergence_unary_promote.rs`.
+//!
+//! ## REQ status — REQ-25 binary float-ufunc int/bool→float promotion
+//!
+//! SHIPPED: the binary `*_promote` family (`hypot_promote`, `arctan2_promote`,
+//! `logaddexp_promote`, `logaddexp2_promote`, `copysign_promote`,
+//! `nextafter_promote`) accepts a same-type integer/bool input PAIR and promotes
+//! to the smallest-safe-cast float, reusing the REQ-23 `PromoteFloat` trait
+//! unchanged (`PromoteFloat::Out`: i16/u16→f32, i32/i64/u32/u64→f64; bool/i8/u8
+//! →half::f16 under `f16`). The shared `fn binary_promote_float in promoted.rs`
+//! casts both operands int→compute-float, runs the EXISTING generic `T: Float`
+//! binary ufunc (`crate::hypot`/`crate::arctan2`/…) monomorphised at the compute
+//! float, and narrows — so existing f32/f64 callers are byte-identical. Mirrors
+//! NumPy's float-only loop registration (`generate_umath.py`: hypot :1057-1063,
+//! arctan2 :1030-1037, logaddexp/logaddexp2 :710-721, copysign/nextafter
+//! :1107-1119 — all `TD(flts)`, no `TD(bints)`). Mixed-width integer pairs
+//! resolve via NEP-50 then to float (`np.hypot(int16, int32)`→float64); the
+//! same-`T` binary kernels cover the same-width contract. Consumer: re-exported
+//! from `lib.rs` as the int-accepting binary-ufunc public surface (the
+//! ferray-python binary-float dispatch target). Verified by
+//! `tests/divergence_binary_promote.rs`.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
@@ -349,6 +369,160 @@ unary_promote_fn!(
     /// `arctanh` with int/bool->float promotion (REQ-23).
     arctanh_promote,
     crate::arctanh
+);
+
+// ---------------------------------------------------------------------------
+// Binary float-ufunc integer/bool input promotion (REQ-25)
+//
+// NumPy accepts integer and bool input across the binary float-ufunc family
+// hypot/arctan2/logaddexp/logaddexp2/copysign/nextafter. These ops register
+// only float loops with NO `TD(bints)` (`generate_umath.py`: `hypot`
+// :1057-1063, `arctan2` :1030-1037, `logaddexp` :710-715, `logaddexp2`
+// :716-721, `copysign` :1107-1113, `nextafter` :1114-1119), so an integer/bool
+// input pair safe-casts UP to the smallest float loop that can hold its kind —
+// the SAME smallest-safe-cast-float rule as the unary REQ-23 family:
+// bool/int8/uint8 -> float16, int16/uint16 -> float32,
+// int32/int64/uint32/uint64 -> float64.
+//
+// This reuses the existing `PromoteFloat` trait (REQ-23) unchanged: both
+// operands share the same element type `T`, so they resolve to the same
+// `T::Compute`/`T::Out`. For SAME-WIDTH integer pairs (the core contract) this
+// is exactly numpy's result kind. For MIXED-WIDTH integer pairs (e.g. int16
+// paired with int32), numpy first promotes the two integers together via NEP-50
+// `result_type` (-> int32) and then to its float loop (-> float64); confirmed
+// live: `np.hypot(np.int16([3]), np.int32([4])).dtype == float64`. The binary
+// float ufuncs ferray exposes (`crate::hypot` etc.) require same-type operands
+// `&Array<T, D>, &Array<T, D>`, so this same-`T` entry-point family covers the
+// same-width contract; a caller with genuinely mixed integer widths casts the
+// narrower operand up first (the NEP-50 integer promotion already lives in
+// ferray-core's `Promoted` table) and then calls the matching `*_promote`.
+//
+// Like the unary path, the f32/f64-output kinds run the EXISTING generic
+// `T: Float` binary ufunc unchanged (so f32/f64 callers are byte-identical and
+// this module never touches their code path), and the f16-output kinds compute
+// in f32 then narrow to `half::f16`.
+// ---------------------------------------------------------------------------
+
+/// Cast a same-type integer/bool input pair to its compute float, run a
+/// generic binary float kernel `op` (the existing `T: Float` ufunc
+/// monomorphised at the compute type), and narrow the result to the promoted
+/// output type.
+///
+/// Mirrors [`unary_promote_float`] for two operands: both inputs share the
+/// element type `T`, so they resolve to the same `T::Compute`/`T::Out`. The
+/// `op` closure receives two `&Array<Compute, D>` and returns
+/// `Array<Compute, D>`; for the f32/f64 kinds `narrow` is the identity so the
+/// existing kernel's bytes flow straight through.
+///
+/// # Errors
+/// Propagates [`FerrayError::ShapeMismatch`] from the underlying binary kernel
+/// (same-shape inputs are required, no broadcasting on the promoted path).
+#[inline]
+fn binary_promote_float<T, D>(
+    a: &Array<T, D>,
+    b: &Array<T, D>,
+    op: impl Fn(&Array<T::Compute, D>, &Array<T::Compute, D>) -> FerrayResult<Array<T::Compute, D>>,
+) -> FerrayResult<Array<<T as PromoteFloat>::Out, D>>
+where
+    T: PromoteFloat,
+    D: Dimension,
+{
+    let a_compute = cast_to_compute(a)?;
+    let b_compute = cast_to_compute(b)?;
+    let result = op(&a_compute, &b_compute)?;
+    // Narrow to the output kind (identity for f32/f64, f32->f16 for f16).
+    let out: Array<<T as PromoteFloat>::Out, D> = if let Some(slice) = result.as_slice() {
+        let data: Vec<<T as PromoteFloat>::Out> = slice.iter().map(|&c| T::narrow(c)).collect();
+        Array::from_vec(result.dim().clone(), data)?
+    } else {
+        let data: Vec<<T as PromoteFloat>::Out> = result.iter().map(|&c| T::narrow(c)).collect();
+        Array::from_vec(result.dim().clone(), data)?
+    };
+    Ok(out)
+}
+
+/// Widen one integer/bool input array to its `PromoteFloat::Compute` float,
+/// reusing the contiguous fast path. Shared by the binary promote entry points.
+#[inline]
+fn cast_to_compute<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T::Compute, D>>
+where
+    T: PromoteFloat,
+    D: Dimension,
+{
+    if let Some(slice) = input.as_slice() {
+        let data: Vec<T::Compute> = slice.iter().map(|&x| x.to_compute()).collect();
+        Array::from_vec(input.dim().clone(), data)
+    } else {
+        let data: Vec<T::Compute> = input.iter().map(|&x| x.to_compute()).collect();
+        Array::from_vec(input.dim().clone(), data)
+    }
+}
+
+/// Generate a `pub fn <name>_promote` int/bool-accepting binary entry point
+/// that promotes per REQ-25 and routes through the existing float binary ufunc
+/// `$op_path`. `$op_path` must be the crate's generic `T: Float` (or
+/// `T: Float + CrMath`) binary ufunc — it is called monomorphised at the
+/// resolved compute float, so f32/f64 results are byte-identical to a direct
+/// float call. The `T::Compute: CrMath` bound is always satisfiable (f32/f64
+/// both impl `CrMath`), keeping every entry point uniform even for the ops
+/// (`copysign`/`nextafter`) whose kernel does not itself need `CrMath`.
+macro_rules! binary_promote_fn {
+    (
+        $(#[$attr:meta])*
+        $name:ident,
+        $op_path:path
+    ) => {
+        $(#[$attr])*
+        pub fn $name<T, D>(
+            a: &Array<T, D>,
+            b: &Array<T, D>,
+        ) -> FerrayResult<Array<<T as PromoteFloat>::Out, D>>
+        where
+            T: PromoteFloat,
+            T::Compute: crate::cr_math::CrMath,
+            D: Dimension,
+        {
+            binary_promote_float(a, b, |x, y| $op_path(x, y))
+        }
+    };
+}
+
+binary_promote_fn!(
+    /// `hypot` with NumPy int/bool->float promotion (REQ-25).
+    /// `np.hypot(int64 [3,4], int64 [4,3]) -> float64 [5.0, 5.0]`;
+    /// `np.hypot(int16 [3], int16 [4]) -> float32`;
+    /// `np.hypot(uint8 ...) -> float16`.
+    hypot_promote,
+    crate::hypot
+);
+binary_promote_fn!(
+    /// `arctan2` with int/bool->float promotion (REQ-25).
+    /// `np.arctan2(int64 [1,1], int64 [1,1]) -> float64`.
+    arctan2_promote,
+    crate::arctan2
+);
+binary_promote_fn!(
+    /// `logaddexp` with int/bool->float promotion (REQ-25).
+    /// `np.logaddexp(int64 [0,0], int64 [0,0]) -> float64`.
+    logaddexp_promote,
+    crate::logaddexp
+);
+binary_promote_fn!(
+    /// `logaddexp2` with int/bool->float promotion (REQ-25).
+    logaddexp2_promote,
+    crate::logaddexp2
+);
+binary_promote_fn!(
+    /// `copysign` with int/bool->float promotion (REQ-25).
+    /// `np.copysign(int64 [1,2], int64 [-1,1]) -> float64 [-1.0, 2.0]`.
+    copysign_promote,
+    crate::copysign
+);
+binary_promote_fn!(
+    /// `nextafter` with int/bool->float promotion (REQ-25).
+    /// `np.nextafter(int64 [1], int64 [2]) -> float64`.
+    nextafter_promote,
+    crate::nextafter
 );
 
 /// Cast every element of `a` from `A` to the target type `Out`, producing

@@ -19,21 +19,20 @@
 //!     whereas NumPy raises `TypeError`.
 //!
 //!  2. **hypot / arctan2 / logaddexp / logaddexp2 / copysign / nextafter —
-//!     int input MUST promote to float; ferray is compile-gated float-only.**
-//!     NumPy registers these `TD(flts)` only (`generate_umath.py:1057-1062`
+//!     int input promotes to float (REQ-25, now SHIPPED).**
+//!     NumPy registers these `TD(flts)` only (`generate_umath.py:1057-1063`
 //!     hypot, `:1030-1037` arctan2, `:710-721` logaddexp/logaddexp2,
-//!     `:1107-1118` copysign/nextafter). Because no integer loop is
+//!     `:1107-1119` copysign/nextafter). Because no integer loop is
 //!     registered, NumPy's ufunc resolver SAFE-CASTS integer input up to the
 //!     smallest float loop: `np.hypot([3,4],[4,3]) -> float64 [5.,5.]`,
 //!     `np.hypot(int16,int16) -> float32`, `np.arctan2([1,1],[1,1]) ->
 //!     float64`. ferray's `hypot`/`arctan2`/`logaddexp`/`logaddexp2`/
-//!     `copysign`/`nextafter` are all bound `T: Element + Float` with NO
-//!     int-promoting `*_promote` sibling (the unary family has `sqrt_promote`
-//!     etc.; the binary float family has none). So `ferray_ufunc::hypot` on
-//!     an `Array<i64>` DOES NOT COMPILE. This is a MISSING COMPONENT, not a
-//!     runtime mis-value, and is documented (not pinned) below — there is no
-//!     callable entry point to assert against. A commented-out call shows the
-//!     compile gate.
+//!     `copysign`/`nextafter` are bound `T: Element + Float`; the builder added
+//!     the binary `*_promote` siblings (`hypot_promote`/`arctan2_promote`/
+//!     `logaddexp_promote`/`logaddexp2_promote`/`copysign_promote`/
+//!     `nextafter_promote`) that reuse the REQ-23 `PromoteFloat` smallest-safe-
+//!     cast-float kind rule for two same-type operands. The pins below run
+//!     those promote entry points on integer/bool input.
 //!
 //! All expected values are live-numpy 2.4.5 results (R-CHAR-3), never
 //! copied from the ferray side.
@@ -145,29 +144,170 @@ fn baseline_lcm_int_matches_numpy() {
 }
 
 // ---------------------------------------------------------------------------
-// MISSING COMPONENT (documented, not pinnable at runtime) —
-// hypot/arctan2/logaddexp/logaddexp2/copysign/nextafter int->float promotion.
-//
-// NumPy promotes integer input to float for these (TD(flts) only; the
-// resolver safe-casts int up): np.hypot([3,4],[4,3]) -> float64 [5.,5.];
-// np.arctan2([1,1],[1,1]) -> float64; np.copysign([1,2],[-1,1]) -> float64
-// [-1.,2.]; np.nextafter(int,int) -> float64. ferray's hypot/arctan2/
-// logaddexp/logaddexp2/copysign/nextafter are bound `T: Element + Float`
-// with NO `*_promote` sibling, so an `Array<i64>` argument does not compile.
-// There is no runtime entry point to assert against; the builder must add a
-// binary float-promote family (analogous to the unary `sqrt_promote` ...).
-//
-// The line below, if uncommented, fails to COMPILE — proving the gate:
-//
-//   let _ = ferray_ufunc::hypot(&ai64(vec![3, 4]), &ai64(vec![4, 3]));
-//   // error[E0277]: the trait bound `i64: num_traits::Float` is not satisfied
-//
-// A float baseline IS callable and correct (pins the preserved invariant):
+// REQ-25 — BINARY float-ufunc int/bool -> float promotion. The builder shipped
+// the `*_promote` family (hypot_promote/arctan2_promote/logaddexp_promote/
+// logaddexp2_promote/copysign_promote/nextafter_promote), reusing the REQ-23
+// `PromoteFloat` smallest-safe-cast-float kind rule for two same-type operands:
+// bool/int8/uint8 -> float16, int16/uint16 -> float32,
+// int32/int64/uint32/uint64 -> float64. These ops register only float loops
+// with NO `TD(bints)`, so numpy safe-casts integer input up:
+//   np.hypot([3,4],[4,3]) -> float64 [5.,5.]; np.arctan2([1,1],[1,1]) ->
+//   float64; np.copysign([1,2],[-1,1]) -> float64 [-1.,2.];
+//   np.nextafter(int,int) -> float64.
+// The output element type is `<T as PromoteFloat>::Out`, so the dtype below is
+// compile-time enforced by the explicitly-typed result binding AND asserted at
+// runtime via the static `Out::dtype()`. All expected values are live numpy
+// 2.4.5 (R-CHAR-3).
+// ---------------------------------------------------------------------------
+
+use ferray_core::dtype::{DType, Element};
+use ferray_ufunc::PromoteFloat;
+
+fn ai16(v: Vec<i16>) -> Array<i16, Ix1> {
+    Array::<i16, Ix1>::from_vec(Ix1::new([v.len()]), v).unwrap()
+}
+
+/// AC-19: `hypot_promote(int64 [3,4], int64 [4,3])` -> float64 `[5.0, 5.0]`
+/// (numpy: `np.hypot([3,4],[4,3]).tolist() == [5.0, 5.0]`, dtype float64;
+/// `generate_umath.py:1057-1063`, no `TD(bints)`). Was MISSING (compile-gated
+/// `T: Float`).
+#[test]
+fn divergence_hypot_int_promotes_to_f64() {
+    assert_eq!(<i64 as PromoteFloat>::Out::dtype(), DType::F64);
+    let out: Array<f64, Ix1> =
+        ferray_ufunc::hypot_promote(&ai64(vec![3, 4]), &ai64(vec![4, 3])).unwrap();
+    // np.hypot([3,4],[4,3]).tolist() == [5.0, 5.0] (live numpy 2.4.5).
+    assert_eq!(out.as_slice().unwrap(), &[5.0_f64, 5.0]);
+}
+
+/// AC-19: `copysign_promote(int64 [1,2], int64 [-1,1])` -> float64
+/// `[-1.0, 2.0]` (numpy: `np.copysign([1,2],[-1,1]).tolist() == [-1.0, 2.0]`,
+/// dtype float64; `generate_umath.py:1107-1113`).
+#[test]
+fn divergence_copysign_int_promotes_to_f64() {
+    let out: Array<f64, Ix1> =
+        ferray_ufunc::copysign_promote(&ai64(vec![1, 2]), &ai64(vec![-1, 1])).unwrap();
+    // np.copysign([1,2],[-1,1]).tolist() == [-1.0, 2.0] (live numpy 2.4.5).
+    assert_eq!(out.as_slice().unwrap(), &[-1.0_f64, 2.0]);
+}
+
+/// `arctan2_promote(int64 [1,1], int64 [1,1])` -> float64
+/// `[π/4, π/4] == [0.7853981633974483, …]` (numpy: `np.arctan2([1,1],[1,1])`
+/// dtype float64; `generate_umath.py:1030-1037`).
+#[test]
+#[allow(
+    clippy::approx_constant,
+    reason = "numpy arctan2(1,1)=π/4 oracle constant, not a std consts approximation"
+)]
+fn divergence_arctan2_int_promotes_to_f64() {
+    let out: Array<f64, Ix1> =
+        ferray_ufunc::arctan2_promote(&ai64(vec![1, 1]), &ai64(vec![1, 1])).unwrap();
+    // np.arctan2([1,1],[1,1]).tolist() == [0.7853981633974483, 0.7853981633974483]
+    let s = out.as_slice().unwrap();
+    assert!((s[0] - 0.785_398_163_397_448_3).abs() < 1e-15);
+    assert!((s[1] - 0.785_398_163_397_448_3).abs() < 1e-15);
+}
+
+/// `logaddexp_promote(int64 [0,0], int64 [0,0])` -> float64
+/// `[ln 2, ln 2] == [0.6931471805599453, …]` (numpy:
+/// `np.logaddexp([0,0],[0,0])` dtype float64; `generate_umath.py:710-715`).
+#[test]
+#[allow(
+    clippy::approx_constant,
+    reason = "numpy logaddexp(0,0)=ln2 oracle constant, not a std consts approximation"
+)]
+fn divergence_logaddexp_int_promotes_to_f64() {
+    let out: Array<f64, Ix1> =
+        ferray_ufunc::logaddexp_promote(&ai64(vec![0, 0]), &ai64(vec![0, 0])).unwrap();
+    // np.logaddexp([0,0],[0,0]).tolist() == [0.6931471805599453, 0.6931471805599453]
+    let s = out.as_slice().unwrap();
+    assert!((s[0] - 0.693_147_180_559_945_3).abs() < 1e-15);
+    assert!((s[1] - 0.693_147_180_559_945_3).abs() < 1e-15);
+}
+
+/// `logaddexp2_promote(int64 [0,0], int64 [0,0])` -> float64 `[1.0, 1.0]`
+/// (numpy: `np.logaddexp2([0,0],[0,0]).tolist() == [1.0, 1.0]`, dtype float64;
+/// `generate_umath.py:716-721`).
+#[test]
+fn divergence_logaddexp2_int_promotes_to_f64() {
+    let out: Array<f64, Ix1> =
+        ferray_ufunc::logaddexp2_promote(&ai64(vec![0, 0]), &ai64(vec![0, 0])).unwrap();
+    // np.logaddexp2([0,0],[0,0]).tolist() == [1.0, 1.0] (live numpy 2.4.5).
+    assert_eq!(out.as_slice().unwrap(), &[1.0_f64, 1.0]);
+}
+
+/// `nextafter_promote(int64 [1], int64 [2])` -> float64
+/// `[1.0000000000000002]` (numpy: `np.nextafter(np.array([1]),np.array([2]))`
+/// dtype float64; the next f64 after 1.0 towards 2.0;
+/// `generate_umath.py:1114-1119`).
+#[test]
+fn divergence_nextafter_int_promotes_to_f64() {
+    let out: Array<f64, Ix1> =
+        ferray_ufunc::nextafter_promote(&ai64(vec![1]), &ai64(vec![2])).unwrap();
+    // np.nextafter([1],[2])[0] == 1.0000000000000002 (live numpy 2.4.5).
+    assert_eq!(out.as_slice().unwrap(), &[1.000_000_000_000_000_2_f64]);
+}
+
+/// AC-20: int16 input promotes to **float32** (the REQ-23 smallest-safe-cast
+/// kind rule, now applied to two operands). `np.hypot(int16 [3], int16 [4])`
+/// dtype float32, value `[5.0]`.
+#[test]
+fn divergence_hypot_int16_promotes_to_f32() {
+    assert_eq!(<i16 as PromoteFloat>::Out::dtype(), DType::F32);
+    let out: Array<f32, Ix1> = ferray_ufunc::hypot_promote(&ai16(vec![3]), &ai16(vec![4])).unwrap();
+    // np.hypot(np.int16([3]), np.int16([4])).tolist() == [5.0], dtype float32.
+    assert_eq!(out.as_slice().unwrap(), &[5.0_f32]);
+}
+
+/// AC-20: bool/uint8 input promotes to **float16** (feature-gated: `half::f16`
+/// exists only under `f16`). `np.hypot(uint8 [3], uint8 [4])` dtype float16
+/// value `[5.0]`; `np.hypot(bool [T,F], bool [F,T])` dtype float16 `[1.0, 1.0]`.
+#[cfg(feature = "f16")]
+#[test]
+fn divergence_hypot_bool_u8_promotes_to_f16() {
+    use half::f16;
+    assert_eq!(<u8 as PromoteFloat>::Out::dtype(), DType::F16);
+    assert_eq!(<bool as PromoteFloat>::Out::dtype(), DType::F16);
+    let au8 = |v: Vec<u8>| Array::<u8, Ix1>::from_vec(Ix1::new([v.len()]), v).unwrap();
+    let out_u: Array<f16, Ix1> = ferray_ufunc::hypot_promote(&au8(vec![3]), &au8(vec![4])).unwrap();
+    // np.hypot(np.uint8([3]), np.uint8([4])).tolist() == [5.0], dtype float16.
+    let vals_u: Vec<f32> = out_u
+        .as_slice()
+        .unwrap()
+        .iter()
+        .map(|&x| x.to_f32())
+        .collect();
+    assert_eq!(vals_u, vec![5.0_f32]);
+    let ab = |v: Vec<bool>| Array::<bool, Ix1>::from_vec(Ix1::new([v.len()]), v).unwrap();
+    let out_b: Array<f16, Ix1> =
+        ferray_ufunc::hypot_promote(&ab(vec![true, false]), &ab(vec![false, true])).unwrap();
+    // np.hypot([T,F],[F,T]).tolist() == [1.0, 1.0], dtype float16.
+    let vals_b: Vec<f32> = out_b
+        .as_slice()
+        .unwrap()
+        .iter()
+        .map(|&x| x.to_f32())
+        .collect();
+    assert_eq!(vals_b, vec![1.0_f32, 1.0]);
+}
+
+/// Shape mismatch propagates as an error from the promoted binary path (the
+/// underlying same-type binary kernel requires same-shape operands).
+#[test]
+fn divergence_hypot_promote_shape_mismatch_errors() {
+    let r = ferray_ufunc::hypot_promote(&ai64(vec![1, 2, 3]), &ai64(vec![1, 2]));
+    assert!(r.is_err());
+}
+
+// ---------------------------------------------------------------------------
+// POSITIVE BASELINE (preserved invariant) — the float64-in/float64-out
+// contract the REQ-25 `*_promote` path must NOT disturb (it never touches the
+// existing `T: Float` kernels). Expected values are live numpy 2.4.5.
 // ---------------------------------------------------------------------------
 
 /// Baseline (passes): `ferray_ufunc::hypot` on f64 matches
-/// `np.hypot([3.,4.],[4.,3.]) == [5.,5.]`. The int-input promotion path that
-/// numpy provides has NO ferray entry point (missing component).
+/// `np.hypot([3.,4.],[4.,3.]) == [5.,5.]` — the float kernel is byte-identical
+/// after the promote family lands.
 #[test]
 fn baseline_hypot_f64_matches_numpy() {
     let a = af(vec![3.0, 4.0]);

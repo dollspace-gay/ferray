@@ -197,6 +197,16 @@ pub use promoted::{
     rint_promote, sin_promote, sinh_promote, sqrt_promote, tan_promote, tanh_promote,
 };
 
+// Binary float-ufunc integer/bool input promotion (REQ-25): hypot/arctan2/
+// logaddexp/logaddexp2/copysign/nextafter accept an integer/bool input pair
+// and promote to the smallest safe-cast float (same kind rule as REQ-23,
+// reusing the `PromoteFloat` trait above), matching NumPy's ufunc dtype
+// resolution. The output element type is `<T as PromoteFloat>::Out`.
+pub use promoted::{
+    arctan2_promote, copysign_promote, hypot_promote, logaddexp_promote, logaddexp2_promote,
+    nextafter_promote,
+};
+
 // First-class ufunc objects: `add_ufunc().reduce(arr, 0)` etc. The
 // [`Ufunc`] struct wraps any binary op + identity and exposes the
 // NumPy ufunc methods (.call / .reduce / .accumulate / .outer / .at).

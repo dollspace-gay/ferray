@@ -139,6 +139,57 @@ opposite ways, so they are separate REQs.
   `np.round(np.array([True,False,True])).dtype == float16` with values
   `[1.0,0.0,1.0]` (bool round/around promote, unlike floor/ceil/trunc/fix).
 
+### Binary-ufunc integer/bool input promotion (NumPy dtype-resolution parity)
+
+NumPy accepts **integer and bool** input arrays across the two-argument
+float-ufunc family the same way it does for the unary family (REQ-23):
+these ops register only float loops (`TD(flts)` — no `TD(bints)`), so an
+integer/bool input **safe-casts UP** to the smallest float loop that can
+hold its kind. ferray's binary float ops are all `T: Element + Float`-bounded
+with NO binary `*_promote` sibling (the unary family has `sqrt_promote` etc.;
+the binary float family has none), so integer input is **rejected at compile
+time** (`i64: num_traits::Float` is unsatisfied — there is no callable entry
+point, see `tests/divergence_binary_promote.rs` "MISSING COMPONENT" note and
+the commented-out `ferray_ufunc::hypot(&Array<i64>, …)` that fails to compile).
+
+- REQ-25: **Binary float-ufunc family — integer/bool input promotes to a
+  FLOATING output.** For `hypot`, `arctan2`, `logaddexp`, `logaddexp2`,
+  `copysign`, and `nextafter`, an integer or bool input pair produces a float
+  output whose kind is the **smallest float that safe-casts from the input
+  kind** — identical kind-mapping to REQ-23: `bool`/`int8`/`uint8` →
+  **float16**, `int16`/`uint16` → **float32**, all of
+  `int32`/`int64`/`uint32`/`uint64` → **float64**. These ops register only
+  float loops with no `TD(bints)`, so each integer kind safe-casts up to the
+  resolved float loop. For **same-width** integer pairs (the core contract)
+  the result kind follows the single-input kind rule above; for **mixed-width**
+  integer pairs NumPy first promotes the two integer inputs together (NEP-50
+  `result_type`) and then to float (so `int16` paired with `int32` resolves
+  via the wider `int32` → `float64`). Cites:
+  `hypot` `generate_umath.py:1057-1063` (`TD(flts, f='hypot', astype={'e':'f'})`
+  then `TD(P, …)` — no `TD(bints)`),
+  `arctan2` `generate_umath.py:1030-1037` (`TD('e', f='atan2', astype={'e':'f'})`
+  FIRST, then `TD('fd', …)`/`TD('g', …)`/`TD(P, …)` — no `TD(bints)`),
+  `logaddexp` `generate_umath.py:710-715` (`TD(flts, f="logaddexp",
+  astype={'e':'f'})` only),
+  `logaddexp2` `generate_umath.py:716-721` (`TD(flts, f="logaddexp2",
+  astype={'e':'f'})` only),
+  `copysign` `generate_umath.py:1107-1113` (`TD(flts)` only),
+  `nextafter` `generate_umath.py:1114-1119` (`TD(flts)` only).
+  Oracle (live numpy 2.4.5): `np.hypot([3,4],[4,3]).tolist() == [5.0, 5.0]`
+  with `.dtype == float64`; `np.hypot(np.int16([3]), np.int16([4])).dtype ==
+  float32`; `np.arctan2([1,1],[1,1]).dtype == float64`;
+  `np.copysign([1,2],[-1,1]).tolist() == [-1.0, 2.0]` with `.dtype == float64`;
+  `np.nextafter(np.array([1]), np.array([2])).dtype == float64`;
+  `np.logaddexp([0,0],[0,0]).dtype == float64`. This mirrors REQ-23 but for two
+  same-shape operands: the mechanism is the existing `PromoteFloat` trait in
+  `promoted.rs` (the smallest-safe-cast-float `Compute`/`Out` mapping) extended
+  with a binary `*_promote` entry-point family that casts BOTH integer/bool
+  inputs to the shared compute float, runs the EXISTING generic `T: Float`
+  binary ufunc (`crate::hypot`/`crate::arctan2`/`crate::logaddexp`/
+  `crate::logaddexp2`/`crate::copysign`/`crate::nextafter`) monomorphised at
+  the compute float, and narrows (identity for f32/f64, f32→f16 for the f16
+  kinds) — leaving the existing f32/f64 float kernels byte-identical.
+
 ## Acceptance Criteria
 - [ ] AC-1: All 100+ ufunc functions compile and produce correct results for `f32`, `f64`, and `Complex<f64>` inputs verified against NumPy fixtures
 - [ ] AC-2: `add_reduce(&a, axis=0)` computes correct column sums. `add_accumulate(&a, axis=0)` produces running sums matching `np.add.accumulate`.
@@ -179,6 +230,20 @@ opposite ways, so they are separate REQs.
   green — the float64-in/float64-out contract REQ-23 preserves (the
   `*_promote` path never touches the existing float kernels).
 
+### Acceptance Criteria — binary integer/bool input promotion
+- [x] AC-19: `hypot_promote(int64 [3,4], int64 [4,3])` produces a `float64`
+  array equal to `np.hypot([3,4],[4,3]).tolist() == [5.0, 5.0]`, and
+  `copysign_promote(int64 [1,2], int64 [-1,1])` equals `np.copysign([1,2],
+  [-1,1]).tolist() == [-1.0, 2.0]` with `.dtype == float64` (REQ-25). Pinned by
+  `divergence_hypot_int_promotes_to_f64` / `divergence_copysign_int_promotes_to_f64`
+  in `tests/divergence_binary_promote.rs`; arctan2/logaddexp/logaddexp2/nextafter
+  int→float64 pinned alongside.
+- [x] AC-20: `hypot_promote(int16 [3], int16 [4])` produces a `float32` array
+  and `bool`/`int8`/`uint8` input produces a `float16` array (under
+  `--features f16`) — the REQ-23 smallest-safe-cast-float kind rule reused via
+  `PromoteFloat::Out`, now applied to two operands (REQ-25). Pinned by
+  `divergence_hypot_int16_promotes_to_f32` and `divergence_hypot_bool_u8_promotes_to_f16`.
+
 ## REQ status
 
 This table tracks REQs that have a verifiable SHIPPED/NOT-STARTED state against
@@ -190,6 +255,7 @@ remaining REQ-1..REQ-22 describe the already-shipped float ufunc surface.
 |---|---|---|
 | REQ-23 (unary float-ufunc int/bool→float promotion) | SHIPPED | The `PromoteFloat` trait + the `*_promote` family in `promoted.rs` (`pub fn sqrt_promote`/`exp_promote`/`rint_promote`/`sin_promote`/… — 24 entry points) accept integer/bool input and promote to the smallest-safe-cast float via `PromoteFloat::Out` (`impl_promote_float_same`: i16/u16→f32, i32/i64/u32/u64→f64; `impl_promote_float_f16` feature-gated: bool/i8/u8→half::f16). The shared `fn unary_promote_float in promoted.rs` casts int→compute-float, runs the EXISTING generic `T: Float` ufunc (`crate::sqrt`/`crate::exp`/…) monomorphised at the compute float, and narrows (identity for f32/f64, f32→f16 for the f16 kinds) — so existing f32/f64 float callers are byte-identical. Re-exported from `lib.rs` (`pub use promoted::{PromoteFloat, sqrt_promote, …}`). Non-test production consumer: `pub fn rint_promote in promoted.rs` IS the production callee for the rounding crate's `rint`-on-integer contract (the REQ-24 split routes int `rint` here), and every `*_promote` is the workspace's int-accepting unary-ufunc surface (the eventual ferray-python `bind_unary_float!` dispatch target). Verified: `divergence_sqrt_int_promotes_to_f64`, `divergence_exp_int_promotes_to_f64`, `divergence_rint_int_promotes_to_f64`, `divergence_sqrt_int16_uint16_promotes_to_f32`, `divergence_sqrt_int32_promotes_to_f64`, `divergence_sin_cos_int_promote_to_f64` (12 pass default features); `divergence_sqrt_bool_promotes_to_f16` (13 pass with `--features f16`); `cargo test -p ferray-ufunc --test divergence_unary_promote` and `FERRAY_FORCE_SCALAR=1` both green; clippy `-D warnings` clean. Cites: `generate_umath.py:907-983` (`sqrt`/`exp`/`log` start at `TD('e', …)` then `TD('fdg'+cmplx)`, NO `TD(bints)`), `rint` `:1021` (`TD('e', f='rint')` FIRST, NO `TD(bints)`). |
 | REQ-24 (floor/ceil/trunc/round input-int-dtype identity; bool round/around→f16) | SHIPPED | `pub fn floor_int`/`ceil_int`/`trunc_int`/`round_int`/`fix_int`/`around_int in rounding.rs` accept `T: Element + Copy` (any int/bool) and return the input UNCHANGED in the INPUT-int-dtype via the shared `fn round_identity in rounding.rs` — `np.floor(int32)→int32`, `np.round(int64)→int64`, `np.floor(bool)→bool`. NumPy registers `TD(bints)` FIRST for floor/ceil/trunc (`generate_umath.py:1011`/`:983`/`:993`), so the integer loop is selected and int stays int. BOOL EXCEPTION: `floor`/`ceil`/`trunc`/`fix` keep bool, but `round`/`around` on bool PROMOTE to float16 (`round`/`around` dispatch to `ndarray.round`, no `TD(bints)`, same loop as `rint` `:1021`) — served by `pub fn round_bool`/`around_bool in rounding.rs` (feature `f16`), which route bool→f16 via `crate::rint_promote` so `np.round(bool [T,F,T])` is `float16 [1.0,0.0,1.0]`. The OPPOSITE of `rint` (no `TD(bints)` for ANY integer, promotes per REQ-23). The float `pub fn floor`/`ceil`/`trunc`/`round`/`rint` (`T: Float`) are untouched (f32/f64 byte-identical). Re-exported from `lib.rs` (`pub use ops::rounding::{floor_int, …, round_bool, around_bool}`). Non-test production consumer: `floor_int`/`ceil_int`/`trunc_int`/`round_int`/`round_bool` ARE the integer/bool-rounding public surface re-exported by `lib.rs` (the dtype arms the ferray-python rounding dispatch routes to, mirroring `absolute_int`/`negative_int`/`sign_int` siblings in `arithmetic.rs`). Verified: `divergence_floor_int_is_identity_int64`, `divergence_round_family_int_identity`, `divergence_floor_preserves_input_int_dtype`, `divergence_rint_vs_floor_int_contract_split`, plus `divergence_round_bool_promotes_to_f16_not_bool_identity`/`divergence_around_bool_promotes_to_f16_not_bool_identity` (`--features f16`) all green. |
+| REQ-25 (binary float-ufunc int/bool→float promotion: hypot/arctan2/logaddexp/logaddexp2/copysign/nextafter) | SHIPPED | The binary `*_promote` family in `promoted.rs` (`pub fn hypot_promote`/`arctan2_promote`/`logaddexp_promote`/`logaddexp2_promote`/`copysign_promote`/`nextafter_promote`, generated by the `binary_promote_fn!` macro) accepts a same-type integer/bool input pair and promotes to the smallest-safe-cast float, reusing the REQ-23 `PromoteFloat` trait UNCHANGED (`PromoteFloat::Out`: i16/u16→f32, i32/i64/u32/u64→f64; bool/i8/u8→half::f16 feature-gated). The shared `fn binary_promote_float in promoted.rs` casts BOTH operands int→compute-float (via `fn cast_to_compute`), runs the EXISTING generic `T: Float` binary ufunc (`crate::hypot`/`crate::arctan2`/`crate::logaddexp`/`crate::logaddexp2`/`crate::copysign`/`crate::nextafter`) monomorphised at the compute float, and narrows (identity for f32/f64, f32→f16 for the f16 kinds) — so existing f32/f64 float callers are byte-identical (this module never touches their code path). Mixed-width integer pairs resolve via NEP-50 then to float — confirmed live `np.hypot(np.int16([3]), np.int32([4])).dtype == float64`; the same-`T` binary kernels (numpy's `hypot`/etc. require same-type operands) cover the same-width contract, mixed-width callers cast the narrower operand up via ferray-core's `Promoted` table first. Re-exported from `lib.rs` (`pub use promoted::{hypot_promote, arctan2_promote, copysign_promote, logaddexp_promote, logaddexp2_promote, nextafter_promote}`). Non-test production consumer: these six re-exports ARE the int-accepting binary-float-ufunc public surface (the ferray-python binary-float dispatch target, sibling to the unary `sqrt_promote`/`rint_promote` family and the `add_promoted` mixed-type arithmetic surface). NumPy promotes int→float for all six (`TD(flts)`-only, no `TD(bints)`): `hypot` `generate_umath.py:1057-1063`, `arctan2` `:1030-1037`, `logaddexp` `:710-715`, `logaddexp2` `:716-721`, `copysign` `:1107-1113`, `nextafter` `:1114-1119`. Verified: `divergence_hypot_int_promotes_to_f64`, `divergence_copysign_int_promotes_to_f64`, `divergence_arctan2_int_promotes_to_f64`, `divergence_logaddexp_int_promotes_to_f64`, `divergence_logaddexp2_int_promotes_to_f64`, `divergence_nextafter_int_promotes_to_f64`, `divergence_hypot_int16_promotes_to_f32` (default features); `divergence_hypot_bool_u8_promotes_to_f16` (`--features f16`); plus `baseline_hypot_f64_matches_numpy`/`baseline_copysign_f64_matches_numpy` (preserved float invariant) — 18 pass `--features f16`, `FERRAY_FORCE_SCALAR=1` green; `cargo test -p ferray-ufunc --features f16` 693 pass / 0 fail; clippy `--all-targets --features f16 -D warnings` clean. |
 
 ## Architecture
 
