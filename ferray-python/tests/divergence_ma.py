@@ -1,11 +1,17 @@
-"""Adversarial divergence tests for ferray.ma vs numpy.ma (numpy 2.4.x oracle).
+"""Adversarial divergence pins: ferray.ma vs the live numpy.ma oracle.
 
-Each test pins an OBSERVABLE divergence between ferray.ma and the live
-numpy.ma oracle. The numpy result is computed inline (not hardcoded) so the
-oracle stays honest across numpy patch releases.
+numpy 2.4.x is the source of truth (goal.md verification model B). Every
+expected value here is produced by a LIVE numpy.ma call or by an identity
+check against a numpy singleton (`np.ma.masked`, `np.ma.nomask`) — never
+literal-copied from the ferray side (goal.md R-CHAR-3). Where the oracle is a
+singleton, an `is`-identity sanity assert proves non-tautology before the
+ferray assertion runs.
 
-These tests are EXPECTED TO FAIL on current ferray until the divergence is
-fixed. They are written by the critic and never carry fixes.
+Each test is EXPECTED TO FAIL against current ferray. The critic writes the
+pin; the fixer lands the fix in the owning crate (ferray-ma) and the test goes
+green (R-DEFER-3). The critic never edits production code.
+
+Upstream cites are into /home/doll/numpy-ref/numpy/ma/core.py.
 """
 
 import numpy as np
@@ -15,168 +21,148 @@ import ferray as fr
 
 
 # ---------------------------------------------------------------------------
-# 1. Default fill value (numpy float64 default is 1e20, not 0.0)
-#    numpy/ma/core.py:166  ->  'f': 1.e20  (default_filler table)
-#    numpy/ma/core.py:3857 def filled(self, fill_value=None): uses default.
+# 1. Default fill value for float64 is 1e20, not 0.0.
+#    numpy/ma/core.py:166  ->  default_filler['f'] = 1.e20
+#    numpy/ma/core.py:3857 def filled(self, fill_value=None) uses it when None.
+#    ferray's filled_default substitutes 0.0.
 # ---------------------------------------------------------------------------
 
 
 def test_filled_default_matches_numpy_float64_fill():
-    """numpy.ma fills masked float64 with 1e20 by default.
-
-    numpy/ma/core.py:166 -- default_filler['f'] = 1.e20
-    ferray substitutes 0.0, so masked positions read back wrong.
-    """
     data = np.array([1.0, 2.0, 3.0])
     mask = np.array([False, True, False])
     oracle = np.ma.masked_array(data, mask=mask).filled()
+    # Non-tautology: the masked slot must read back as numpy's 1e20 default.
+    assert oracle[1] == 1e20
     got = fr.ma.masked_array(data, mask=mask).filled()
     np.testing.assert_array_equal(got, oracle)
 
 
+def test_module_filled_default_matches_numpy_float64_fill():
+    """numpy.ma.filled(a) free function uses the same 1e20 default."""
+    data = np.array([1.0, 2.0, 3.0])
+    mask = np.array([False, True, False])
+    oracle = np.ma.filled(np.ma.masked_array(data, mask=mask))
+    assert oracle[1] == 1e20
+    got = fr.ma.filled(fr.ma.masked_array(data, mask=mask))
+    np.testing.assert_array_equal(got, oracle)
+
+
 # ---------------------------------------------------------------------------
-# 2. fill_value property is documented but absent.
-#    The module docstring lists `fill_value` as a property; numpy exposes it.
-#    numpy/ma/core.py: MaskedArray.fill_value property (default 1e20 for f8).
+# 2. fill_value property: numpy exposes it (1e20 for float64). ferray's
+#    //! doc-comment lists `fill_value` as a property but the pyclass omits it.
+#    numpy/ma/core.py:3793 @property def fill_value(self).
 # ---------------------------------------------------------------------------
 
 
 def test_fill_value_property_exists_and_matches_numpy():
-    """numpy exposes MaskedArray.fill_value (1e20 for float64).
-
-    ferray's ma.rs //! doc-comment lists `fill_value` as a property but the
-    pyclass never defines it.
-    """
     data = np.array([1.0, 2.0, 3.0])
-    oracle = np.ma.masked_array(data, mask=[False, True, False]).fill_value
-    fm = fr.ma.masked_array(data, mask=np.array([False, True, False]))
+    mask = np.array([False, True, False])
+    oracle = np.ma.masked_array(data, mask=mask).fill_value
+    assert oracle == 1e20  # non-tautology against numpy default_filler['f']
+    fm = fr.ma.masked_array(data, mask=mask)
     assert fm.fill_value == oracle
 
 
 # ---------------------------------------------------------------------------
-# 3. All-masked full reductions: numpy returns the `masked` singleton, NOT a
-#    finite/NaN scalar and NOT an exception.
-#    numpy/ma/core.py:5249-5250  elif newmask: result = masked
+# 3. masked_equal sets fill_value to the compared value.
+#    numpy/ma/core.py:2171-2172  output = masked_where(...); output.fill_value = value
 # ---------------------------------------------------------------------------
 
 
-def test_all_masked_sum_returns_masked_singleton():
-    """numpy: x.sum() on a fully masked array is `np.ma.masked`.
+def test_masked_equal_sets_fill_value_to_compared_value():
+    data = np.array([1.0, 2.0, 3.0, 2.0])
+    oracle = np.ma.masked_equal(data, 2.0).fill_value
+    assert oracle == 2.0  # non-tautology: numpy assigns the compared value
+    fm = fr.ma.masked_equal(data, 2.0)
+    assert fm.fill_value == oracle
 
-    numpy/ma/core.py:5249 -- 'elif newmask: result = masked'
-    ferray returns 0.0 instead.
-    """
+
+# ---------------------------------------------------------------------------
+# 4. All-masked full reductions return the `masked` singleton, NOT a finite/NaN
+#    scalar and NOT an exception.
+#    sum  -> numpy/ma/core.py:5250  result = masked
+#    mean -> numpy/ma/core.py:5417  result = masked
+#    min  -> numpy/ma/core.py:5942  result = masked
+#    max  -> numpy/ma/core.py:6047  result = masked
+#    var/std go through _var and yield masked when count==0.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("op", ["sum", "mean", "min", "max", "var", "std"])
+def test_all_masked_reduction_returns_masked_singleton(op):
     data = np.array([1.0, 2.0, 3.0])
     mask = np.array([True, True, True])
-    oracle = np.ma.masked_array(data, mask=mask).sum()
-    assert oracle is np.ma.masked  # sanity: oracle really is masked
-    got = fr.ma.masked_array(data, mask=mask).sum()
-    assert got is np.ma.masked
-
-
-def test_all_masked_mean_returns_masked_singleton():
-    """numpy: x.mean() on a fully masked array is `np.ma.masked` (not NaN).
-
-    numpy/ma/core.py:5376 def mean -- division yields masked when count==0.
-    ferray returns nan.
-    """
-    data = np.array([1.0, 2.0, 3.0])
-    mask = np.array([True, True, True])
-    oracle = np.ma.masked_array(data, mask=mask).mean()
+    oracle = getattr(np.ma.masked_array(data, mask=mask), op)()
+    # Non-tautology: the live numpy oracle really is the masked singleton.
     assert oracle is np.ma.masked
-    got = fr.ma.masked_array(data, mask=mask).mean()
-    assert got is np.ma.masked
-
-
-def test_all_masked_min_returns_masked_singleton():
-    """numpy: x.min() on a fully masked array is `np.ma.masked`.
-
-    numpy/ma/core.py MaskedArray.min returns `masked` when all masked.
-    ferray raises ValueError('all elements are masked').
-    """
-    data = np.array([1.0, 2.0])
-    mask = np.array([True, True])
-    oracle = np.ma.masked_array(data, mask=mask).min()
-    assert oracle is np.ma.masked
-    got = fr.ma.masked_array(data, mask=mask).min()
-    assert got is np.ma.masked
-
-
-def test_all_masked_max_returns_masked_singleton():
-    """numpy: x.max() on a fully masked array is `np.ma.masked`.
-
-    numpy/ma/core.py MaskedArray.max returns `masked` when all masked.
-    ferray raises ValueError('all elements are masked').
-    """
-    data = np.array([1.0, 2.0])
-    mask = np.array([True, True])
-    oracle = np.ma.masked_array(data, mask=mask).max()
-    assert oracle is np.ma.masked
-    got = fr.ma.masked_array(data, mask=mask).max()
+    got = getattr(fr.ma.masked_array(data, mask=mask), op)()
     assert got is np.ma.masked
 
 
 # ---------------------------------------------------------------------------
-# 4. getmask of an unmasked array: numpy returns the `nomask` scalar (False),
-#    not a full bool array. getmaskarray is the full-array variant.
+# 5. getmask of an unmasked array is the `nomask` scalar (np.False_), not a
+#    full bool ndarray. getmaskarray is the full-array variant.
 #    numpy/ma/core.py:1468  return getattr(a, '_mask', nomask)
 # ---------------------------------------------------------------------------
 
 
 def test_getmask_no_mask_returns_nomask_scalar():
-    """numpy.ma.getmask of an unmasked array is the `nomask` scalar (False).
-
-    numpy/ma/core.py:1460-1463 -- ma.getmask(b) == ma.nomask is True.
-    ferray returns a full array([False, False, False]); compare against
-    getmaskarray which is the full-array variant.
-    """
     data = np.array([1.0, 2.0, 3.0])
-    m = np.ma.masked_array(data)  # no mask -> nomask
-    oracle = np.ma.getmask(m)
-    assert oracle is np.ma.nomask
+    oracle = np.ma.getmask(np.ma.masked_array(data))
+    assert oracle is np.ma.nomask  # non-tautology: numpy returns the singleton
     got = fr.ma.getmask(fr.ma.masked_array(data))
-    # numpy returns the scalar nomask (False), ferray returns an ndarray.
-    assert got is np.ma.nomask or (np.ndim(got) == 0 and got == np.ma.nomask)
+    assert got is np.ma.nomask or (np.ndim(got) == 0 and bool(got) is False)
 
 
 # ---------------------------------------------------------------------------
-# 5. masked_where with a condition of mismatched length: numpy raises
-#    IndexError (boolean index broadcast), ferray raises ValueError.
-#    numpy/ma/core.py:1885 def masked_where -- mask = make_mask(condition)
-#    then indexing raises IndexError on shape mismatch.
+# 6. masked_where with a mismatched-shape condition raises IndexError
+#    (boolean-index broadcast failure), not ValueError.
+#    numpy/ma/core.py:1885 def masked_where(condition, a, copy=True).
 # ---------------------------------------------------------------------------
 
 
-def test_masked_where_shape_mismatch_exception_type():
-    """numpy.ma.masked_where raises IndexError on mismatched condition length.
-
-    numpy/ma/core.py:1885 def masked_where(condition, a, ...).
-    ferray raises ValueError instead.
-    """
+def test_masked_where_shape_mismatch_raises_indexerror():
     data = np.array([1.0, 2.0, 3.0])
     bad_cond = np.array([True, False])
-
+    # Non-tautology: confirm the live oracle raises IndexError on this input.
     with pytest.raises(IndexError):
-        np.ma.masked_where(bad_cond, data)  # oracle: IndexError
-
+        np.ma.masked_where(bad_cond, data)
     with pytest.raises(IndexError):
         fr.ma.masked_where(bad_cond, data)
 
 
 # ---------------------------------------------------------------------------
-# 6. masked_equal sets fill_value to the comparison value in numpy.
-#    numpy/ma/core.py:2143 def masked_equal(x, value, ...):
-#        result.fill_value = value
+# 7. The NumPy `__array__` protocol returns the underlying DATA verbatim, NOT
+#    the fill-substituted array. `np.asarray(ma)` therefore equals `ma.data`,
+#    with the original values at masked positions. ferray's __array__ calls
+#    filled() and so substitutes the fill value at masked slots.
+#    numpy/ma/core.py: MaskedArray.__array__ yields self._data (asarray==data).
 # ---------------------------------------------------------------------------
 
 
-def test_masked_equal_sets_fill_value_to_compared_value():
-    """numpy.ma.masked_equal sets fill_value to the compared value.
+def test_array_protocol_returns_data_not_filled():
+    data = np.array([1.0, 2.0, 3.0])
+    mask = np.array([False, True, False])
+    nm = np.ma.masked_array(data, mask=mask)
+    oracle = np.asarray(nm)
+    # Non-tautology: numpy's asarray equals the underlying data, keeping 2.0.
+    np.testing.assert_array_equal(oracle, nm.data)
+    assert oracle[1] == 2.0
+    got = np.asarray(fr.ma.masked_array(data, mask=mask))
+    np.testing.assert_array_equal(got, oracle)
 
-    numpy/ma/core.py: masked_equal sets `output.fill_value = value`.
-    ferray has no fill_value at all, and would not track the value.
-    """
-    data = np.array([1.0, 2.0, 3.0, 2.0])
-    oracle = np.ma.masked_equal(data, 2.0).fill_value
-    fm = fr.ma.masked_equal(data, 2.0)
-    assert fm.fill_value == oracle
+
+# ---------------------------------------------------------------------------
+# 8. The `.mask` property of an unmasked array is the `nomask` scalar, mirroring
+#    getmask. ferray returns a full array([False, ...]).
+#    numpy/ma/core.py: MaskedArray.mask getter returns self._mask (nomask here).
+# ---------------------------------------------------------------------------
+
+
+def test_mask_property_no_mask_is_nomask_scalar():
+    data = np.array([1.0, 2.0, 3.0])
+    oracle = np.ma.masked_array(data).mask
+    assert oracle is np.ma.nomask  # non-tautology against numpy singleton
+    got = fr.ma.masked_array(data).mask
+    assert got is np.ma.nomask or (np.ndim(got) == 0 and bool(got) is False)

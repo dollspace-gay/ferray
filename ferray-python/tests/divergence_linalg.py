@@ -1,11 +1,16 @@
-"""Adversarial divergence tests: ferray.linalg vs the numpy oracle.
+"""Adversarial divergence tests: ferray.linalg vs the live numpy oracle.
 
 Each test pins a CONTRACT divergence (not a ULP difference) where
-``import ferray as fr`` fails to match ``numpy`` 2.4.x. Oracle is the live
-installed numpy. Values use np.allclose; shapes/dtypes/exception types are
-exact. Upstream citations reference /home/doll/numpy-ref/numpy/linalg/_linalg.py.
+``import ferray as fr`` fails to match ``numpy`` 2.4.x. The oracle is the
+live installed numpy (R-CHAR-3 — every expected value is produced by a
+live ``np.*`` call, never literal-copied from ferray). Values use
+``np.allclose``/``np.isclose``; shapes, dtypes and exception TYPES are exact.
 
-These tests are EXPECTED TO FAIL on current ferray (they pin bugs).
+Upstream citations reference /home/doll/numpy-ref/numpy/linalg/_linalg.py.
+
+These tests are EXPECTED TO FAIL on current ferray (they pin bugs). The fix
+lives DOWN in the owning crate (ferray-linalg) or in the marshalling shim
+(ferray-python/src/linalg.rs + lib.rs registration), per goal.md.
 """
 
 import numpy as np
@@ -15,100 +20,66 @@ import ferray as fr
 
 
 # ---------------------------------------------------------------------------
-# Top-level vector/matrix product API surface.
-# numpy/linalg/_linalg.py imports `dot`, `matmul`, `outer`, `tensordot`,
-# `vecdot` into numpy._core; `np.dot`, `np.vdot`, `np.matmul`, `np.inner`,
-# `np.outer` are top-level numpy functions a drop-in replacement must expose.
-# (numpy public API: numpy.dot / numpy.vdot / numpy.matmul / numpy.inner /
-#  numpy.outer — all top-level, not under numpy.linalg.)
+# 1. Top-level vector/matrix product API surface.
+#
+# `np.dot`, `np.vdot`, `np.matmul`, `np.inner`, `np.outer` are TOP-LEVEL
+# numpy functions (numpy/_core/multiarray + numpy/__init__.pyi), not under
+# numpy.linalg. A drop-in replacement (`import ferray as np`) must expose
+# them at the package root. ferray only registers them under fr.linalg.*.
 # ---------------------------------------------------------------------------
 
 
-def test_top_level_dot_exists_and_matches():
-    """`np.dot` is a top-level numpy function; `fr.dot` must mirror it."""
+@pytest.mark.parametrize("name", ["dot", "vdot", "matmul", "inner", "outer"])
+def test_top_level_product_symbol_exists(name):
+    """`np.<name>` is top-level in numpy; `fr.<name>` must mirror it."""
+    assert hasattr(np, name)  # oracle: numpy exposes it at top level
+    assert hasattr(fr, name), f"ferray is missing top-level fr.{name}"
+
+
+def test_top_level_dot_matches_numpy():
     a = np.array([1.0, 2.0, 3.0])
     b = np.array([4.0, 5.0, 6.0])
-    assert hasattr(fr, "dot"), "ferray is missing top-level fr.dot"
-    out = float(fr.dot(a, b))
-    assert np.isclose(out, float(np.dot(a, b)))
+    expected = float(np.dot(a, b))
+    assert np.isclose(float(fr.dot(a, b)), expected)
 
 
-def test_top_level_matmul_exists_and_matches():
-    """`np.matmul` is top-level; `fr.matmul` must exist and match."""
+def test_top_level_matmul_matches_numpy():
     a = np.array([[1.0, 2.0], [3.0, 4.0]])
     b = np.array([[5.0, 6.0], [7.0, 8.0]])
-    assert hasattr(fr, "matmul"), "ferray is missing top-level fr.matmul"
-    np.testing.assert_allclose(np.asarray(fr.matmul(a, b)), np.matmul(a, b))
+    expected = np.matmul(a, b)
+    np.testing.assert_allclose(np.asarray(fr.matmul(a, b)), expected)
 
 
-def test_top_level_vdot_exists_and_matches():
-    """`np.vdot` is a top-level numpy function; `fr.vdot` must mirror it."""
+def test_top_level_vdot_matches_numpy():
     a = np.array([[1.0, 2.0], [3.0, 4.0]])
     b = np.array([[5.0, 6.0], [7.0, 8.0]])
-    assert hasattr(fr, "vdot"), "ferray is missing top-level fr.vdot"
-    assert np.isclose(float(fr.vdot(a, b)), float(np.vdot(a, b)))
+    expected = float(np.vdot(a, b))
+    assert np.isclose(float(fr.vdot(a, b)), expected)
 
 
 # ---------------------------------------------------------------------------
-# qr mode='r' contract.
-# _linalg.py:1142-1145:
-#     if mode == 'r':
-#         r = triu(a[..., :mn, :])
-#         r = r.astype(result_t, copy=False)
-#         return wrap(r)
-# mode='r' returns a SINGLE ndarray R, NOT a (Q, R) tuple.
-# ---------------------------------------------------------------------------
-
-
-def test_qr_mode_r_returns_single_r_matrix():
-    """qr(a, mode='r') must return just R (an ndarray), per _linalg.py:1142."""
-    a = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
-    expected_r = np.linalg.qr(a, mode="r")  # ndarray, shape (2, 2)
-    got = fr.linalg.qr(a, mode="r")
-    # numpy returns a bare ndarray here, not a tuple.
-    assert not isinstance(got, tuple), (
-        "qr(mode='r') must return a single R ndarray, not a (Q, R) tuple"
-    )
-    got_arr = np.asarray(got)
-    assert got_arr.shape == expected_r.shape
-    # R from QR is unique only up to row signs; compare |R| to avoid sign LARP.
-    np.testing.assert_allclose(np.abs(got_arr), np.abs(expected_r), atol=1e-10)
-
-
-# ---------------------------------------------------------------------------
-# svd compute_uv=False contract.
-# _linalg.py:1668: def svd(a, full_matrices=True, compute_uv=True, hermitian=False)
-# _linalg.py:1846-... compute_uv=False returns ONLY the singular values (1-D).
-# ---------------------------------------------------------------------------
-
-
-def test_svd_compute_uv_false_returns_singular_values_only():
-    """svd(compute_uv=False) returns the 1-D singular values, per _linalg.py:1668."""
-    a = np.array([[1.0, 2.0], [3.0, 4.0]])
-    expected_s = np.linalg.svd(a, compute_uv=False)
-    got = fr.linalg.svd(a, compute_uv=False)
-    got_arr = np.asarray(got)
-    assert got_arr.ndim == 1, "compute_uv=False must yield a 1-D singular-value array"
-    np.testing.assert_allclose(got_arr, expected_s, atol=1e-10)
-
-
-# ---------------------------------------------------------------------------
-# Singular-matrix exception type.
-# _linalg.py:115: class LinAlgError(ValueError)
-# _linalg.py:145: raise LinAlgError("Singular matrix")
-# inv/solve on a singular matrix raise numpy.linalg.LinAlgError, which a
-# drop-in replacement must expose as fr.linalg.LinAlgError and raise.
+# 2. numpy.linalg.LinAlgError must be exposed AND raised.
+#
+# _linalg.py:115:  class LinAlgError(ValueError):
+# _linalg.py:145:  raise LinAlgError("Singular matrix")
+#
+# LinAlgError IS a subclass of ValueError, so `pytest.raises(LinAlgError)`
+# will NOT catch a bare ValueError — that is exactly the divergence: ferray
+# raises bare builtins.ValueError, not numpy.linalg.LinAlgError.
 # ---------------------------------------------------------------------------
 
 
 def test_linalg_error_symbol_exists():
     """numpy.linalg.LinAlgError is public (_linalg.py:115); ferray must expose it."""
+    assert hasattr(np.linalg, "LinAlgError")  # oracle
     assert hasattr(fr.linalg, "LinAlgError"), "fr.linalg.LinAlgError is missing"
 
 
 def test_inv_singular_raises_linalgerror():
     """inv of a singular matrix raises LinAlgError, per _linalg.py:145."""
     sing = np.array([[1.0, 2.0], [2.0, 4.0]])  # rank 1, singular
+    with pytest.raises(np.linalg.LinAlgError):  # oracle: numpy raises this
+        np.linalg.inv(sing)
     with pytest.raises(np.linalg.LinAlgError):
         fr.linalg.inv(sing)
 
@@ -118,60 +89,180 @@ def test_solve_singular_raises_linalgerror():
     sing = np.array([[1.0, 2.0], [2.0, 4.0]])
     b = np.array([1.0, 2.0])
     with pytest.raises(np.linalg.LinAlgError):
+        np.linalg.solve(sing, b)
+    with pytest.raises(np.linalg.LinAlgError):
         fr.linalg.solve(sing, b)
 
 
+def test_cholesky_non_pd_raises_linalgerror():
+    """cholesky of a non-positive-definite matrix raises LinAlgError."""
+    npd = np.array([[1.0, 2.0], [2.0, 1.0]])  # symmetric, indefinite
+    with pytest.raises(np.linalg.LinAlgError):
+        np.linalg.cholesky(npd)
+    with pytest.raises(np.linalg.LinAlgError):
+        fr.linalg.cholesky(npd)
+
+
 def test_inv_nonsquare_raises_linalgerror():
-    """inv of a non-square matrix raises LinAlgError, per _linalg.py:259."""
+    """inv of a non-square matrix raises LinAlgError, not bare ValueError."""
     ns = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    with pytest.raises(np.linalg.LinAlgError):
+        np.linalg.inv(ns)
     with pytest.raises(np.linalg.LinAlgError):
         fr.linalg.inv(ns)
 
 
+def test_det_nonsquare_raises_linalgerror():
+    """det of a non-square matrix raises LinAlgError, not bare ValueError."""
+    ns = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    with pytest.raises(np.linalg.LinAlgError):
+        np.linalg.det(ns)
+    with pytest.raises(np.linalg.LinAlgError):
+        fr.linalg.det(ns)
+
+
+def test_solve_nonsquare_raises_linalgerror():
+    """solve with a non-square A raises LinAlgError, not bare ValueError."""
+    a = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    b = np.array([1.0, 2.0])
+    with pytest.raises(np.linalg.LinAlgError):
+        np.linalg.solve(a, b)
+    with pytest.raises(np.linalg.LinAlgError):
+        fr.linalg.solve(a, b)
+
+
 # ---------------------------------------------------------------------------
-# Integer-input dtype promotion.
-# _linalg.py:2356 det / det dispatch goes through _commonType, which promotes
-# integer inputs to float64. det/trace/inv of an int array must NOT raise;
-# they return float64 results.
+# 3. Integer-input dtype promotion (_commonType -> float64).
+#
+# _linalg.py _commonType promotes integer/bool inputs to float64 before any
+# LAPACK call. det/inv/norm/solve of an int array must NOT raise — they
+# return float64. ferray's match_dtype_float! macro rejects int dtypes with
+# a TypeError instead of promoting.
 # ---------------------------------------------------------------------------
 
 
 def test_det_integer_input_promotes_to_float64():
-    """det of an int matrix promotes to float64 (via _commonType), not raise."""
     ai = np.array([[1, 2], [3, 4]])
-    expected = np.linalg.det(ai)
+    expected = np.linalg.det(ai)  # oracle, float64
     got = fr.linalg.det(ai)
-    assert np.isclose(float(got), float(expected))
     assert np.asarray(got).dtype == np.float64
+    assert np.isclose(float(got), float(expected))
 
 
 def test_inv_integer_input_promotes_to_float64():
-    """inv of an int matrix promotes to float64, per _commonType."""
     ai = np.array([[1, 2], [3, 5]])  # det = -1, invertible
-    expected = np.linalg.inv(ai)
+    expected = np.linalg.inv(ai)  # oracle, float64
     got = np.asarray(fr.linalg.inv(ai))
     assert got.dtype == np.float64
     np.testing.assert_allclose(got, expected, atol=1e-10)
 
 
+def test_norm_integer_input_promotes_to_float64():
+    ai = np.array([3, 4])
+    expected = np.linalg.norm(ai)  # oracle: 5.0, float64
+    got = fr.linalg.norm(ai)
+    assert np.asarray(got).dtype == np.float64
+    assert np.isclose(float(got), float(expected))
+
+
+def test_solve_integer_input_promotes_to_float64():
+    a = np.array([[2, 1], [1, 3]])
+    b = np.array([5, 10])
+    expected = np.linalg.solve(a, b)  # oracle, float64
+    got = np.asarray(fr.linalg.solve(a, b))
+    assert got.dtype == np.float64
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
 # ---------------------------------------------------------------------------
-# Matrix norm with negative integer ord.
-# _linalg.py norm(): ord=-1 on a 2-D matrix is the MIN column abs-sum, a valid
-# matrix norm — not a vector p-norm. numpy returns a finite scalar.
+# 4. qr mode='r' returns a SINGLE R ndarray (not a (Q, R) tuple).
+#
+# _linalg.py: if mode == 'r': ... return wrap(r)  -> bare ndarray.
+# ferray maps 'r' onto Reduced and still returns (Q, R).
+# ---------------------------------------------------------------------------
+
+
+def test_qr_mode_r_returns_single_r_matrix():
+    a = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+    expected_r = np.linalg.qr(a, mode="r")  # oracle: bare ndarray, shape (2, 2)
+    assert not isinstance(expected_r, tuple)  # confirm oracle shape of contract
+    got = fr.linalg.qr(a, mode="r")
+    assert not isinstance(got, tuple), (
+        "qr(mode='r') must return a single R ndarray, not a (Q, R) tuple"
+    )
+    got_arr = np.asarray(got)
+    assert got_arr.shape == expected_r.shape
+    # R is unique only up to row signs; compare magnitudes.
+    np.testing.assert_allclose(np.abs(got_arr), np.abs(expected_r), atol=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# 5. svd(compute_uv=False) returns ONLY the 1-D singular values.
+#
+# _linalg.py: def svd(a, full_matrices=True, compute_uv=True, hermitian=False)
+# ferray's svd has no compute_uv kwarg at all (TypeError on the keyword).
+# ---------------------------------------------------------------------------
+
+
+def test_svd_compute_uv_false_returns_singular_values_only():
+    a = np.array([[1.0, 2.0], [3.0, 4.0]])
+    expected_s = np.linalg.svd(a, compute_uv=False)  # oracle: 1-D
+    got = fr.linalg.svd(a, compute_uv=False)
+    got_arr = np.asarray(got)
+    assert got_arr.ndim == 1, "compute_uv=False must yield a 1-D singular-value array"
+    np.testing.assert_allclose(got_arr, expected_s, atol=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# 6. Matrix norm with negative integer ord.
+#
+# _linalg.py norm(): for a 2-D matrix, ord=-1 is the MIN column abs-sum and
+# ord=-2 is the smallest singular value — both valid matrix norms. ferray
+# misroutes negative ints to a vector p-norm P(-1)/P(-2) and raises.
 # ---------------------------------------------------------------------------
 
 
 def test_matrix_norm_ord_neg1():
-    """norm(A, ord=-1) on a 2-D matrix = min column abs-sum (numpy norm())."""
     a = np.array([[1.0, 2.0], [3.0, 4.0]])
-    expected = np.linalg.norm(a, ord=-1)
+    expected = np.linalg.norm(a, ord=-1)  # oracle: 4.0 (min column abs-sum)
     got = float(fr.linalg.norm(a, ord=-1))
     assert np.isclose(got, float(expected))
 
 
 def test_matrix_norm_ord_neg2():
-    """norm(A, ord=-2) on a 2-D matrix = smallest singular value (numpy norm())."""
     a = np.array([[3.0, 0.0], [0.0, 1.0]])
-    expected = np.linalg.norm(a, ord=-2)
+    expected = np.linalg.norm(a, ord=-2)  # oracle: 1.0 (smallest singular value)
     got = float(fr.linalg.norm(a, ord=-2))
     assert np.isclose(got, float(expected))
+
+
+# ---------------------------------------------------------------------------
+# 7. matmul of two 1-D arrays returns a 0-D scalar (the inner product).
+#
+# numpy.matmul / `@`: for 1-D x 1-D, the result is the scalar dot product
+# (ndim 0). ferray raises ValueError "cannot multiply two 1D arrays".
+# ---------------------------------------------------------------------------
+
+
+def test_matmul_1d_1d_returns_scalar():
+    a = np.array([1.0, 2.0, 3.0])
+    b = np.array([4.0, 5.0, 6.0])
+    expected = np.matmul(a, b)  # oracle: 32.0, ndim 0
+    assert np.asarray(expected).ndim == 0
+    got = fr.linalg.matmul(a, b)
+    got_arr = np.asarray(got)
+    assert got_arr.ndim == 0, "matmul(1d, 1d) must collapse to a scalar"
+    assert np.isclose(float(got_arr), float(expected))
+
+
+# ---------------------------------------------------------------------------
+# 8. numpy.linalg.eigvals — eigenvalues of a general (non-symmetric) matrix.
+#
+# Public numpy.linalg.eigvals exists; ferray exposes only eigvalsh
+# (symmetric). A general matrix has complex eigenvalues eigvalsh cannot give.
+# ---------------------------------------------------------------------------
+
+
+def test_eigvals_symbol_exists():
+    assert hasattr(np.linalg, "eigvals")  # oracle
+    assert hasattr(fr.linalg, "eigvals"), "fr.linalg.eigvals is missing"
