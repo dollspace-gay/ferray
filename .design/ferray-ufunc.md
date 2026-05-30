@@ -113,21 +113,31 @@ opposite ways, so they are separate REQs.
   `np.rint(np.array([1,2,4], dtype=np.int64)).dtype == float64`.
 
 - REQ-24: **Rounding family `floor`/`ceil`/`trunc`/`round` (and aliases
-  `around`/`fix`) — integer input is INT64 IDENTITY.** For an integer input
-  array these ops return the input values **unchanged, still integer** (NOT
-  promoted to float). NumPy registers `TD(bints)` FIRST for these ops, so the
-  integer loop is selected and int stays int. Cites: `floor`
-  `generate_umath.py:1011-1019` (`TD(bints)` is the first registered loop),
-  `ceil` `generate_umath.py:983-991` (`TD(bints)` first), `trunc`
-  `generate_umath.py:993-1001` (`TD(bints)` first). This is the OPPOSITE of
-  REQ-23's `rint`, which has no `TD(bints)` and promotes to float. ferray
-  additionally aliases `rint = round` in `rounding.rs` (`pub fn rint`
-  delegates to `pub fn round`); that alias is correct for float input but
-  diverges from NumPy on integer input (NumPy `rint(int)`→float per REQ-23,
-  NumPy `round(int)`→int per REQ-24), so the int paths must be split.
+  `around`/`fix`) — integer input is INPUT-INT-DTYPE IDENTITY (with a bool
+  exception for round/around).** For an integer input array these ops return
+  the input values **unchanged, in the input integer dtype** (NOT promoted to
+  float) — `np.round(int64)→int64`, `np.floor(int32)→int32`. NumPy registers
+  `TD(bints)` FIRST for floor/ceil/trunc, so the integer loop is selected and
+  int stays int. **BOOL:** `floor`/`ceil`/`trunc`/`fix` keep bool as bool
+  (their `TD(bints)` loops cover bool), BUT `round`/`around` on bool **promote
+  to float16** — `round`/`around` dispatch to `ndarray.round` whose bool kernel
+  has no `TD(bints)` (`generate_umath.py:1021`, same as the `rint` ufunc), so
+  `np.round(np.array([True,False,True]))` is `float16 [1.0,0.0,1.0]`. Cites:
+  `floor` `generate_umath.py:1011-1019` (`TD(bints)` is the first registered
+  loop), `ceil` `generate_umath.py:983-991` (`TD(bints)` first), `trunc`
+  `generate_umath.py:993-1001` (`TD(bints)` first); `rint`
+  `generate_umath.py:1021-1027` (`TD('e', f='rint')` FIRST, NO `TD(bints)` —
+  the loop `round`/`around` share on bool). This is the OPPOSITE of REQ-23's
+  `rint`, which has no `TD(bints)` for ANY integer and promotes every integer
+  to float. ferray additionally aliases `rint = round` in `rounding.rs`
+  (`pub fn rint` delegates to `pub fn round`); that alias is correct for float
+  input but diverges from NumPy on integer input (NumPy `rint(int)`→float per
+  REQ-23, NumPy `round(int)`→int per REQ-24), so the int paths must be split.
   Oracle: `np.floor(np.array([1,2,4], dtype=np.int64)).tolist() == [1,2,4]`
   with `.dtype == int64`; `np.ceil(np.array([5], dtype=np.int32)).dtype ==
-  int32`; `np.floor(np.array([True])).dtype == bool` (bool identity).
+  int32`; `np.floor(np.array([True])).dtype == bool` (bool identity);
+  `np.round(np.array([True,False,True])).dtype == float16` with values
+  `[1.0,0.0,1.0]` (bool round/around promote, unlike floor/ceil/trunc/fix).
 
 ## Acceptance Criteria
 - [ ] AC-1: All 100+ ufunc functions compile and produce correct results for `f32`, `f64`, and `Complex<f64>` inputs verified against NumPy fixtures
@@ -179,7 +189,7 @@ remaining REQ-1..REQ-22 describe the already-shipped float ufunc surface.
 | REQ | Status | Evidence |
 |---|---|---|
 | REQ-23 (unary float-ufunc int/bool→float promotion) | SHIPPED | The `PromoteFloat` trait + the `*_promote` family in `promoted.rs` (`pub fn sqrt_promote`/`exp_promote`/`rint_promote`/`sin_promote`/… — 24 entry points) accept integer/bool input and promote to the smallest-safe-cast float via `PromoteFloat::Out` (`impl_promote_float_same`: i16/u16→f32, i32/i64/u32/u64→f64; `impl_promote_float_f16` feature-gated: bool/i8/u8→half::f16). The shared `fn unary_promote_float in promoted.rs` casts int→compute-float, runs the EXISTING generic `T: Float` ufunc (`crate::sqrt`/`crate::exp`/…) monomorphised at the compute float, and narrows (identity for f32/f64, f32→f16 for the f16 kinds) — so existing f32/f64 float callers are byte-identical. Re-exported from `lib.rs` (`pub use promoted::{PromoteFloat, sqrt_promote, …}`). Non-test production consumer: `pub fn rint_promote in promoted.rs` IS the production callee for the rounding crate's `rint`-on-integer contract (the REQ-24 split routes int `rint` here), and every `*_promote` is the workspace's int-accepting unary-ufunc surface (the eventual ferray-python `bind_unary_float!` dispatch target). Verified: `divergence_sqrt_int_promotes_to_f64`, `divergence_exp_int_promotes_to_f64`, `divergence_rint_int_promotes_to_f64`, `divergence_sqrt_int16_uint16_promotes_to_f32`, `divergence_sqrt_int32_promotes_to_f64`, `divergence_sin_cos_int_promote_to_f64` (12 pass default features); `divergence_sqrt_bool_promotes_to_f16` (13 pass with `--features f16`); `cargo test -p ferray-ufunc --test divergence_unary_promote` and `FERRAY_FORCE_SCALAR=1` both green; clippy `-D warnings` clean. Cites: `generate_umath.py:907-983` (`sqrt`/`exp`/`log` start at `TD('e', …)` then `TD('fdg'+cmplx)`, NO `TD(bints)`), `rint` `:1021` (`TD('e', f='rint')` FIRST, NO `TD(bints)`). |
-| REQ-24 (floor/ceil/trunc/round int→int identity) | SHIPPED | `pub fn floor_int`/`ceil_int`/`trunc_int`/`round_int`/`fix_int`/`around_int in rounding.rs` accept `T: Element + Copy` (any int/bool) and return the input UNCHANGED in the INPUT dtype via the shared `fn round_identity in rounding.rs` — `np.floor(int32)→int32`, `np.floor(bool)→bool`, `np.floor(int64)→int64`. NumPy registers `TD(bints)` FIRST for these (floor `generate_umath.py:1011`, ceil `:983`, trunc `:993`), so the integer loop is selected and int stays int — the OPPOSITE of `rint` (no `TD(bints)`, promotes to float per REQ-23, served by `rint_promote`). The float `pub fn floor`/`ceil`/`trunc`/`round`/`rint` (`T: Float`) are untouched, so f32/f64 callers are byte-identical and the `rint`/`round` contract split is now correct on integer input. Re-exported from `lib.rs` (`pub use ops::rounding::{floor_int, …}`). Non-test production consumer: `floor_int`/`ceil_int`/`trunc_int`/`round_int` ARE the integer-rounding public surface re-exported by `lib.rs` (the int-dtype arm the ferray-python rounding dispatch will route to, mirroring the existing `absolute_int`/`negative_int`/`sign_int` int-dtype siblings already wired in `arithmetic.rs`). Verified: `divergence_floor_int_is_identity_int64`, `divergence_round_family_int_identity`, `divergence_floor_preserves_input_int_dtype`, `divergence_rint_vs_floor_int_contract_split` all green. |
+| REQ-24 (floor/ceil/trunc/round input-int-dtype identity; bool round/around→f16) | SHIPPED | `pub fn floor_int`/`ceil_int`/`trunc_int`/`round_int`/`fix_int`/`around_int in rounding.rs` accept `T: Element + Copy` (any int/bool) and return the input UNCHANGED in the INPUT-int-dtype via the shared `fn round_identity in rounding.rs` — `np.floor(int32)→int32`, `np.round(int64)→int64`, `np.floor(bool)→bool`. NumPy registers `TD(bints)` FIRST for floor/ceil/trunc (`generate_umath.py:1011`/`:983`/`:993`), so the integer loop is selected and int stays int. BOOL EXCEPTION: `floor`/`ceil`/`trunc`/`fix` keep bool, but `round`/`around` on bool PROMOTE to float16 (`round`/`around` dispatch to `ndarray.round`, no `TD(bints)`, same loop as `rint` `:1021`) — served by `pub fn round_bool`/`around_bool in rounding.rs` (feature `f16`), which route bool→f16 via `crate::rint_promote` so `np.round(bool [T,F,T])` is `float16 [1.0,0.0,1.0]`. The OPPOSITE of `rint` (no `TD(bints)` for ANY integer, promotes per REQ-23). The float `pub fn floor`/`ceil`/`trunc`/`round`/`rint` (`T: Float`) are untouched (f32/f64 byte-identical). Re-exported from `lib.rs` (`pub use ops::rounding::{floor_int, …, round_bool, around_bool}`). Non-test production consumer: `floor_int`/`ceil_int`/`trunc_int`/`round_int`/`round_bool` ARE the integer/bool-rounding public surface re-exported by `lib.rs` (the dtype arms the ferray-python rounding dispatch routes to, mirroring `absolute_int`/`negative_int`/`sign_int` siblings in `arithmetic.rs`). Verified: `divergence_floor_int_is_identity_int64`, `divergence_round_family_int_identity`, `divergence_floor_preserves_input_int_dtype`, `divergence_rint_vs_floor_int_contract_split`, plus `divergence_round_bool_promotes_to_f16_not_bool_identity`/`divergence_around_bool_promotes_to_f16_not_bool_identity` (`--features f16`) all green. |
 
 ## Architecture
 

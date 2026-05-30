@@ -6,15 +6,23 @@
 //!
 //! SHIPPED: `floor_int`/`ceil_int`/`trunc_int`/`round_int`/`fix_int`/
 //! `around_int` accept `T: Element + Copy` (any int/bool) and return the input
-//! UNCHANGED in the INPUT dtype via `round_identity` — `np.floor(int32)→int32`,
-//! `np.floor(bool)→bool`. Mirrors NumPy registering `TD(bints)` FIRST for these
-//! ops (floor `generate_umath.py:1011`, ceil `:983`, trunc `:993`). This is the
-//! OPPOSITE of `rint`, which has NO `TD(bints)` and promotes integer input to
-//! float (REQ-23) — served by `rint_promote` in `promoted.rs`, NOT by a `*_int`
-//! sibling here. The float `floor`/`ceil`/`trunc`/`round`/`rint` (`T: Float`)
-//! are untouched (f32/f64 byte-identical). Consumer: the `*_int` entries are the
-//! integer-rounding public surface re-exported from `lib.rs`. Verified by
-//! `tests/divergence_unary_promote.rs`.
+//! UNCHANGED in the INPUT-int-dtype via `round_identity` — `np.floor(int32)→
+//! int32`, `np.round(int64)→int64`. Mirrors NumPy registering `TD(bints)`
+//! FIRST for floor/ceil/trunc (floor `generate_umath.py:1011`, ceil `:983`,
+//! trunc `:993`). BOOL EXCEPTION for round/around: `floor`/`ceil`/`trunc`/`fix`
+//! keep bool as bool (those `TD(bints)` loops cover bool), but `round`/`around`
+//! on bool PROMOTE to **float16** like `rint` — `round`/`around` dispatch to
+//! `ndarray.round` whose bool kernel has no `TD(bints)`
+//! (`generate_umath.py:1021`, same as `rint`), so `np.round(bool)→float16`
+//! `[1.0,0.0,1.0]`. That bool path is `round_bool`/`around_bool` here, routing
+//! through `rint_promote` (`PromoteFloat`, bool→f16). int8..uint64 round/around
+//! stay input-dtype identity. This is the OPPOSITE of `rint`, which has NO
+//! `TD(bints)` for ANY integer and promotes every integer input to float
+//! (REQ-23) — served by `rint_promote` in `promoted.rs`. The float
+//! `floor`/`ceil`/`trunc`/`round`/`rint` (`T: Float`) are untouched (f32/f64
+//! byte-identical). Consumer: the `*_int`/`*_bool` entries are the
+//! integer/bool-rounding public surface re-exported from `lib.rs`. Verified by
+//! `tests/divergence_unary_promote.rs` and `divergence_unary_promote_audit.rs`.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
@@ -205,6 +213,46 @@ where
     D: Dimension,
 {
     round_identity(input)
+}
+
+// ---------------------------------------------------------------------------
+// bool-input round/around: promote to float16 (NOT bool identity).
+//
+// Unlike floor/ceil/trunc/fix (which register `TD(bints)` FIRST, so bool stays
+// bool — handled by the `*_int` identity above), `round`/`around` dispatch to
+// `ndarray.round()` whose bool kernel promotes to float16 — the SAME promotion
+// the `rint` ufunc applies (`rint` registers `TD('e', f='rint')` FIRST with NO
+// `TD(bints)`, `generate_umath.py:1021`). Live numpy 2.4.5:
+//   np.round(np.array([True,False,True])).dtype  == float16
+//   np.round(np.array([True,False,True])).tolist() == [1.0, 0.0, 1.0]
+// So bool round/around route through the existing `PromoteFloat` machinery
+// (`crate::rint_promote`, bool->float16) rather than `round_identity`. The
+// round-half-to-even of the promoted 0.0/1.0 values is the identity, so the
+// f16 output equals numpy's `[1.0, 0.0, 1.0]`. The non-bool integer dtypes
+// (int8..uint64) keep their input-dtype identity via `round_int`/`around_int`.
+// ---------------------------------------------------------------------------
+
+/// `round` on bool input: promotes to float16 (REQ-24, bool exception).
+///
+/// `np.round(np.array([True,False,True]))` is `float16 [1.0,0.0,1.0]` — bool
+/// round has no `TD(bints)` loop and promotes like `rint`
+/// (`generate_umath.py:1021`), unlike `floor`/`ceil`/`trunc` which keep bool.
+#[cfg(feature = "f16")]
+pub fn round_bool<D>(input: &Array<bool, D>) -> FerrayResult<Array<half::f16, D>>
+where
+    D: Dimension,
+{
+    crate::rint_promote(input)
+}
+
+/// `around` (alias of `round`) on bool input: promotes to float16 (REQ-24,
+/// bool exception). See [`round_bool`].
+#[cfg(feature = "f16")]
+pub fn around_bool<D>(input: &Array<bool, D>) -> FerrayResult<Array<half::f16, D>>
+where
+    D: Dimension,
+{
+    round_bool(input)
 }
 
 /// `fix` (alias of `trunc`) on integer/bool input: int-identity (REQ-24).

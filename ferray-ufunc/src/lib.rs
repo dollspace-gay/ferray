@@ -89,6 +89,13 @@ pub use ops::rounding::{around, ceil, fix, floor, rint, round, trunc};
 // in the unary-promote family below.
 pub use ops::rounding::{around_int, ceil_int, fix_int, floor_int, round_int, trunc_int};
 
+// Rounding — bool-input round/around promote to float16 (REQ-24 bool
+// exception): `round`/`around` dispatch to `ndarray.round` (no `TD(bints)`,
+// like `rint`), so `np.round(bool)→float16`, unlike floor/ceil/trunc/fix
+// which keep bool. Feature-gated on `f16` (the promoted output type).
+#[cfg(feature = "f16")]
+pub use ops::rounding::{around_bool, round_bool};
+
 // Arithmetic
 pub use ops::arithmetic::{
     TrueDivide, WrappingArith, absolute, absolute_int, absolute_into, add, add_accumulate,
