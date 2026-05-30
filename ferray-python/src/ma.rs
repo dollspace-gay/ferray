@@ -499,6 +499,19 @@ enum Storage {
         /// getter. Chained views each carry their own overlay; the getter walks
         /// to the first `Some` or the root default.
         own_fill: Option<Py<PyAny>>,
+        /// Discriminator captured at VIEW CREATION (#882): was the base's
+        /// effective `fill_value` the per-dtype DEFAULT at the moment this view
+        /// was made? numpy's `__array_finalize__` only shares the base's
+        /// `_fill_value` by reference when it is already MATERIALIZED; a base
+        /// whose `_fill_value is None` (default) leaves the view `None`, so a
+        /// later `set_fill_value(base, v)` allocates a fresh `_fill_value` on
+        /// the base only and the view never sees it (`numpy/ma/core.py`
+        /// `__array_finalize__`). When `true` and `own_fill` is `None`, the
+        /// getter returns the per-dtype DEFAULT (INDEPENDENT — does not track
+        /// the base's later set); when `false`, the getter recurses to
+        /// `base.fill_value` (TRACKS the base's current value, matching numpy's
+        /// by-reference share of a materialized `_fill_value`).
+        base_fill_is_default: bool,
         /// The view object's OWN local mask overlay (#881). When the ROOT base
         /// is `nomask`, masking through the view (`b[i] = masked`) must NOT
         /// write the base (numpy materializes a FRESH local `_mask` on the view
@@ -521,6 +534,7 @@ impl Clone for Storage {
                 own_hard,
                 own_fill,
                 own_mask,
+                base_fill_is_default,
             } => Storage::View {
                 // `Py<T>::clone_ref` bumps the refcount; the clone shares the
                 // SAME base, so a cloned view still aliases the same buffer.
@@ -530,6 +544,7 @@ impl Clone for Storage {
                 own_hard: *own_hard,
                 own_fill: Python::attach(|py| own_fill.as_ref().map(|f| f.clone_ref(py))),
                 own_mask: own_mask.clone(),
+                base_fill_is_default: *base_fill_is_default,
             },
         }
     }
@@ -1049,6 +1064,32 @@ where
     py_arr.get_item(0)
 }
 
+/// The per-dtype DEFAULT fill_value as a Python object, keyed off `cur`'s
+/// dtype (`numpy/ma/core.py:163` `default_filler` — `1e20` float, `999999`
+/// integer, `True` bool, `1e20+0j` complex). Mirrors the egress path of the
+/// `fill_value` getter so a view that resolves to "the per-dtype default"
+/// (#882) returns the same object kind numpy's default would. The real/integer
+/// value is read back off a freshly-constructed `MaskedArray` (whose
+/// `fill_value` IS the library `default_filler`), so it originates in the
+/// shared library constant rather than being literal-copied here (R-CHAR-3).
+fn default_fill_pyobject<'py>(py: Python<'py>, cur: &DynMa) -> PyResult<Bound<'py, PyAny>> {
+    match cur {
+        DynMa::Complex32(_) => complex_scalar_pyobject::<f32>(py, Complex::new(1e20_f32, 0.0_f32)),
+        DynMa::Complex64(_) => complex_scalar_pyobject::<f64>(py, Complex::new(1e20_f64, 0.0_f64)),
+        _ => match_ma_real!(cur, _m, T => {
+            // A freshly-constructed `MaskedArray` carries the per-dtype default
+            // `fill_value` (numpy `default_filler`); reading it back yields the
+            // default without exposing ferray-ma's `pub(crate)`
+            // `default_fill_value::<T>()` helper. The value still originates in
+            // the shared library constant (R-CHAR-3), not a literal here.
+            let data_fa = ArrayD::<T>::from_vec(IxDyn::new(&[1]), vec![<T as ferray_core::Element>::zero()])
+                .map_err(ferr_to_pyerr)?;
+            let probe = RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?;
+            probe.fill_value().into_bound_py_any(py)
+        }, complex => { unreachable_complex_egress() }),
+    }
+}
+
 /// Defensive fallthrough for a `match_ma_real!` complex arm at a site whose two
 /// complex variants are already peeled off into their own explicit arms — the
 /// macro arm is never reached, but must return a value of the body's type.
@@ -1548,12 +1589,28 @@ impl PyMaskedArray {
     /// `numpy/ma/core.py:166` — `1e20` float / `999999` int / `True` bool).
     #[getter]
     fn fill_value<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        // #880: fill_value is PER-OBJECT. A view returns its OWN overlay if set;
-        // otherwise it inherits the base's effective fill_value (walking the
-        // chain to the first `own_fill` or the root default).
-        if let Storage::View { base, own_fill, .. } = &self.storage {
+        // #880/#882: fill_value is PER-OBJECT. A view returns its OWN overlay
+        // (`own_fill`) if set. Otherwise the result depends on whether the
+        // base's fill was the per-dtype DEFAULT at this view's CREATION
+        // (`base_fill_is_default`, the numpy `_fill_value is None`
+        // discriminator): a DEFAULT base leaves the view INDEPENDENT — it
+        // returns the per-dtype default forever and does NOT track the base's
+        // later `set_fill_value` (numpy never shares a `None` `_fill_value`); a
+        // MATERIALIZED base shares its `_fill_value` by reference, so the view
+        // TRACKS the base's CURRENT value (recurse to `base.fill_value`).
+        if let Storage::View {
+            base,
+            own_fill,
+            base_fill_is_default,
+            ..
+        } = &self.storage
+        {
             if let Some(f) = own_fill {
                 return Ok(f.bind(py).clone());
+            }
+            if *base_fill_is_default {
+                let cur = self.snapshot(py)?;
+                return default_fill_pyobject(py, &cur);
             }
             return base.borrow(py).fill_value(py);
         }
@@ -1804,6 +1861,20 @@ impl PyMaskedArray {
     ) -> PyResult<Bound<'py, PyAny>> {
         let cur = self.snapshot(py)?;
         let dt = cur.dtype_name();
+        // #882: when no explicit `fill_value` override is passed, `filled()`
+        // must use this object's EFFECTIVE fill (numpy `filled()` reads
+        // `self._fill_value`), NOT a blanket per-dtype default. The getter
+        // resolves the per-object overlay (`own_fill`), an inherited
+        // materialized-base value, or the per-dtype default — exactly numpy's
+        // resolution — so route the gathered snapshot through the same `Some`
+        // coercion path with that resolved object. For an OWNED array this is
+        // its stored fill_value (identical to `filled_default()`), so the
+        // owned path is unchanged.
+        let effective_fill: Option<Bound<'py, PyAny>> = match fill_value {
+            Some(_) => None,
+            None => Some(self.fill_value(py)?),
+        };
+        let fill_value: Option<&Bound<'py, PyAny>> = fill_value.or(effective_fill.as_ref());
         // Complex `filled` substitutes the complex default fill (`1e20+0j`,
         // numpy `default_filler['c']`) or a coerced complex `fill_value`, then
         // egresses through the complex marshaller (`Complex<T>` is not
@@ -2086,6 +2157,17 @@ impl PyMaskedArray {
                 positions: positions.clone(),
                 shape: shape.clone(),
             };
+            // #882: capture whether the base's CURRENT effective fill_value is
+            // the per-dtype DEFAULT at the moment the view is created. This is
+            // ferray's analog of numpy's `base._fill_value is None` test that
+            // `__array_finalize__` reads to decide whether to share the base's
+            // `_fill_value` by reference. A default base yields an INDEPENDENT
+            // view (it will return the default forever, ignoring the base's
+            // later `set_fill_value`); a materialized base yields a TRACKING
+            // view (the getter recurses to the base's current value).
+            let base_fill_now = slf.borrow().fill_value(py)?;
+            let default_fill = default_fill_pyobject(py, &cur)?;
+            let base_fill_is_default = base_fill_now.eq(&default_fill)?;
             let child = Self {
                 storage: Storage::View {
                     base: slf.clone().unbind(),
@@ -2093,6 +2175,7 @@ impl PyMaskedArray {
                     own_hard: false,
                     own_fill: None,
                     own_mask: None,
+                    base_fill_is_default,
                 },
             };
             return Ok(Py::new(py, child)?.into_bound(py).into_any());
