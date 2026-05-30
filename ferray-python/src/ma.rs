@@ -187,6 +187,26 @@ impl PyMaskedArray {
         data: &Bound<'py, PyAny>,
         mask: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Self> {
+        // A `ferray.ma.MaskedArray` source is handled directly from its `inner`
+        // (no `numpy.asarray` round-trip): numpy's `MaskedArray.__new__` copies
+        // the source `_data`/`_mask` (`numpy/ma/core.py:2820`), so a `mask=None`
+        // fr→fr round-trip must carry the source mask (and its real-mask /
+        // nomask identity) over verbatim. Routing through `coerce_dtype`
+        // (`numpy.asarray`) would both drop the mask AND invoke the f64
+        // `__array__` egress; pulling from `inner` preserves the mask faithfully.
+        if let Ok(src) = data.extract::<PyMaskedArray>() {
+            let inner = match mask {
+                None => src.inner,
+                Some(m) => {
+                    let data_fa: ArrayD<f64> = src.inner.data().clone();
+                    let m_arr = coerce_dtype(py, m, "bool")?;
+                    let m_view: PyReadonlyArrayDyn<bool> = m_arr.extract()?;
+                    let mask_fa: ArrayD<bool> = m_view.as_ferray().map_err(ferr_to_pyerr)?;
+                    RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?
+                }
+            };
+            return Ok(Self { inner });
+        }
         let data_arr = coerce_dtype(py, data, "float64")?;
         let data_view: PyReadonlyArrayDyn<f64> = data_arr.extract()?;
         let data_fa: ArrayD<f64> = data_view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -201,8 +221,23 @@ impl PyMaskedArray {
         // array zero-pads. We preserve that distinction by routing `mask=None`
         // through `MaskedArray::from_data` (the nomask sentinel, `real_mask =
         // false`) and only materializing a real mask for an explicit `mask=`.
+        //
+        // EXCEPTION (mask round-trip, #851): when `mask=None` but `data` is
+        // ITSELF a masked input carrying a REAL mask (a `numpy.ma.MaskedArray`
+        // or a `ferray.ma.MaskedArray`), numpy's `MaskedArray.__new__` copies
+        // the source `_data`/`_mask` (`numpy/ma/core.py:2820`) — it does NOT
+        // drop the mask. We mirror that: if the source's mask is not the
+        // `nomask` sentinel (i.e. `numpy.ma.getmask(data) is not nomask`,
+        // covering BOTH any-True and explicit all-False masks per #849), carry
+        // the source mask over via `MaskedArray::new` (real_mask = true). A
+        // plain ndarray / list / nomask-input source has `getmask is nomask`
+        // and stays on the `from_data` nomask path (preserving the #848/#849
+        // nomask-vs-explicit distinction).
         let inner = match mask {
-            None => RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?,
+            None => match source_real_mask(py, data, &data_fa)? {
+                Some(mask_fa) => RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
+                None => RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?,
+            },
             Some(m) => {
                 let m_arr = coerce_dtype(py, m, "bool")?;
                 let m_view: PyReadonlyArrayDyn<bool> = m_arr.extract()?;
@@ -549,6 +584,57 @@ fn extract_values_with_mask<'py>(
     // Plain array-like / scalar — flatten to f64, no mask.
     let data_fa = extract_data(py, obj)?;
     Ok((data_fa.iter().copied().collect(), None))
+}
+
+/// When a `MaskedArray` is constructed with `mask=None` from a non-ferray
+/// source, detect whether that source is ITSELF a `numpy.ma.MaskedArray`
+/// carrying a REAL mask, and if so return that mask (shaped like `data_fa`) so
+/// the constructor can carry it over via [`RustMa::new`]. Returns `None` for
+/// any source that is unmasked or carries only the `nomask` sentinel — those
+/// keep the `from_data` nomask path. (A `ferray.ma.MaskedArray` source is
+/// handled earlier in `py_new` directly from its `inner`, so it never reaches
+/// here.)
+///
+/// numpy's `MaskedArray.__new__` copies the source `_data`/`_mask` from a masked
+/// input (`numpy/ma/core.py:2820`), so `ma.array(np.ma.array(d, mask=m))`
+/// preserves `m`. The discriminator is `numpy.ma.getmask(data) is not nomask` —
+/// true for a real bool mask (including an explicit all-False one, #849) and
+/// false for the `nomask` singleton (a plain ndarray / list / `mask`-less input,
+/// #848). The `nomask`-distinction is read off the sentinel, NOT off any-True
+/// bits, so an explicit all-False source round-trips as a real all-False mask.
+///
+/// Reuses the existing mask-extraction machinery: `numpy.ma.getmask` (sentinel
+/// probe) + `numpy.ma.getmaskarray` (full bool array) — the same primitives
+/// [`extract_values_with_mask`]/[`coerce_to_ma_impl`] already use.
+fn source_real_mask<'py>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+    data_fa: &ArrayD<f64>,
+) -> PyResult<Option<ArrayD<bool>>> {
+    // A numpy.ma.MaskedArray source: `numpy.ma.getmask` returns the `nomask`
+    // sentinel (`numpy.ma.nomask`) for a mask-less array and a bool ndarray for
+    // a real mask. Probe the sentinel by identity; only materialize the full
+    // mask (via `getmaskarray`) when it is a real mask.
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    if obj.is_instance(&np_ma.getattr("MaskedArray")?)? {
+        let getmask = np_ma.call_method1("getmask", (obj,))?;
+        let nomask = np_ma.getattr("nomask")?;
+        if getmask.is(&nomask) {
+            return Ok(None);
+        }
+        let mask_obj = np_ma.call_method1("getmaskarray", (obj,))?;
+        let mask_fa = extract_bool_array(py, &mask_obj)?;
+        // The source mask shape must agree with the coerced data (a numpy.ma
+        // array and its `getmaskarray` share a shape by construction); guard so
+        // a malformed input surfaces as the library's ShapeMismatch rather than
+        // a panic.
+        if mask_fa.shape() != data_fa.shape() {
+            return Ok(None);
+        }
+        return Ok(Some(mask_fa));
+    }
+    // Plain ndarray / list / scalar — not masked, keep the nomask path.
+    Ok(None)
 }
 
 /// Map a `put` library error to the matching CPython exception: an
