@@ -261,8 +261,10 @@ fn isalnum_identifies_alphanumeric_strings() {
 /// Covers: `ferray_strings::isnumeric` and `ferray_strings::classify::isnumeric`.
 #[test]
 fn isnumeric_identifies_numeric_strings() {
-    // ferray's `isnumeric` accepts ascii digits plus `. + -`; reject
-    // alpha and empty strings.
+    // `isnumeric` is True iff every character is numeric (Unicode
+    // Numeric_Type) and the string is non-empty — matching CPython's
+    // `str.isnumeric()` per `numpy.strings.isnumeric`. `.`/`+`/`-` and
+    // alpha characters are not numeric; empty strings are False.
     let arr = ferray_strings::array(&["123", "12a", "", "0"]).unwrap();
     let out = ferray_strings::isnumeric(&arr).unwrap();
     let slc = out.as_slice().unwrap();

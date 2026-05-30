@@ -60,30 +60,31 @@ pub fn isalnum<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D>>
     classify(a, |s| !s.is_empty() && s.chars().all(char::is_alphanumeric))
 }
 
-/// Return `true` where the string could be a valid numeric literal.
-/// Matches `numpy.strings.isnumeric` (simplified — checks for
-/// ASCII digit + decimal point + sign characters).
+/// Return `true` where every character is numeric and the string is
+/// non-empty. Matches `numpy.strings.isnumeric`, which delegates per
+/// element to CPython's `str.isnumeric()` (Unicode `Numeric_Type` =
+/// Decimal, Digit, or Numeric). Rust's `char::is_numeric()` tests the
+/// Unicode `Nd`/`Nl`/`No` general categories, which coincides with that
+/// set: superscripts/fractions like `²` and `½` are numeric, while
+/// `.`, `+`, and `-` are not.
 pub fn isnumeric<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D>> {
-    classify(a, |s| {
-        !s.is_empty()
-            && s.chars()
-                .all(|c| c.is_ascii_digit() || c == '.' || c == '+' || c == '-')
-    })
+    classify(a, |s| !s.is_empty() && s.chars().all(char::is_numeric))
 }
 
 /// Return `true` where every character is a Unicode decimal digit (`Nd`
 /// general category) and the string is non-empty. Matches
-/// `numpy.strings.isdecimal` — stricter than [`isdigit`] in that
-/// superscripts (e.g. ²) and other "digit" characters that are not
-/// decimal-digit characters return `false`.
+/// `numpy.strings.isdecimal` — stricter than [`isnumeric`] in that
+/// superscripts (e.g. ²) and fractions (e.g. ½) are not decimal-digit
+/// characters and return `false`.
 pub fn isdecimal<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D>> {
     classify(a, |s| {
-        // Stricter than `isdigit`: rejects superscripts/subscripts and other
-        // non-Decimal_Number "digit" characters. Rust's std doesn't expose
-        // the full Unicode `Nd` category check without an extra crate, so
-        // we use the ASCII-digit subset — sufficient for the common case
-        // and consistent with how the rest of the classify family treats
-        // ASCII-only checks (`isalnum`, `isdigit`).
+        // Stricter than `isnumeric`: rejects superscripts/subscripts,
+        // fractions, and other non-Decimal_Number "numeric" characters.
+        // Rust's std doesn't expose the full Unicode `Nd` category check
+        // without an extra crate, so we use the ASCII-digit subset — this
+        // matches CPython's `str.isdecimal()` for the ASCII range and for
+        // the non-decimal-digit cases that distinguish it from
+        // `isnumeric`/`isdigit` (²/½ -> false, ASCII digits -> true).
         !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
     })
 }
@@ -166,5 +167,38 @@ mod tests {
         let a = array(&["Hello World", "hello world", "HELLO WORLD", ""]).unwrap();
         let r = istitle(&a).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[true, false, false, false]);
+    }
+
+    // Divergence pin for crosslink blocker #823. Expected values are the
+    // documented results of CPython's per-character `str.is*()` methods,
+    // which `numpy.strings.isnumeric`/`isdecimal`/`isalnum` mirror element
+    // by element (numpy 2.4.5 oracle confirmed):
+    //   '12.3'.isnumeric() -> False   ('²' True, '½' True, '123' True)
+    //   '²'.isdecimal()    -> False   ('123' True)
+    //   'abc1'.isalnum()   -> True    ('ab c' False)
+    //   ''.is*()           -> False   (empty string is False for all)
+
+    #[test]
+    fn test_isnumeric_python_semantics() {
+        // '.'/'+'/'-' are NOT numeric; Unicode numerics (², ½) ARE numeric.
+        let a = array(&["12.3", "²", "½", "123", ""]).unwrap();
+        let r = isnumeric(&a).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[false, true, true, true, false]);
+    }
+
+    #[test]
+    fn test_isdecimal_python_semantics() {
+        // Decimal digits only: '²' is numeric but NOT decimal; '123' is.
+        let a = array(&["12.3", "²", "½", "123", ""]).unwrap();
+        let r = isdecimal(&a).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[false, false, false, true, false]);
+    }
+
+    #[test]
+    fn test_isalnum_python_semantics() {
+        // Alphanumeric and non-empty; whitespace breaks it.
+        let a = array(&["abc1", "ab c", "²", "123", ""]).unwrap();
+        let r = isalnum(&a).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[true, false, true, true, false]);
     }
 }
