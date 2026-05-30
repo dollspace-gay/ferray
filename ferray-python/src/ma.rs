@@ -385,17 +385,6 @@ fn complex_reduction_pending<T>(op: &str) -> PyResult<T> {
     )))
 }
 
-/// A tracked `TypeError` for complex masked-array arithmetic numpy supports but
-/// ferray defers to the ferray-ufunc complex-arithmetic prerequisite (#869).
-/// numpy.ma computes `+`/`-`/`*`/`/`/`**` over complex; the message names the
-/// tracking issue.
-fn complex_arith_pending<T>(op: &str) -> PyResult<T> {
-    Err(pyo3::exceptions::PyTypeError::new_err(format!(
-        "ferray.ma complex '{op}' is not yet supported (numpy.ma computes it; \
-         tracked as a follow-up under #869)"
-    )))
-}
-
 impl DynMa {
     /// The canonical numpy dtype name of the active variant (`"int64"`,
     /// `"float64"`, `"bool"`, …) — the value `numpy.ma.array(...).dtype.name`
@@ -1669,12 +1658,14 @@ impl PyMaskedArray {
                      operator or the logical_not function instead",
                 ));
             }
-            // numpy negates complex; ferray's `negative` is `T: Float`-bound
-            // (no `num_traits::Float` for `Complex`), so complex negation needs
-            // the ferray-ufunc complex-arithmetic prerequisite (#869).
-            DynMa::Complex32(_) | DynMa::Complex64(_) => {
-                return complex_arith_pending("negative");
-            }
+            // numpy.ma negates complex elementwise, mask-preserving
+            // (`-(1+2j) == -1-2j`; `numpy/ma/core.py:955` complex `negative`).
+            // ferray-ufunc's `negative` is `T: Float`-bound (no `num_traits::
+            // Float` for `Complex`), so negate the complex buffer directly via
+            // `num_complex`'s `Neg` (`-z`). `carry_unary_mask` materializes the
+            // operand's mask exactly like the real-dtype arm above.
+            DynMa::Complex32(m) => carry_unary_mask(m, m.data().mapv(|z| -z))?,
+            DynMa::Complex64(m) => carry_unary_mask(m, m.data().mapv(|z| -z))?,
         };
         Ok(Self::from_dynma(inner))
     }

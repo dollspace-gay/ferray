@@ -269,10 +269,13 @@ def test_complex_pow_computes_869():
     _eq_ma(f, n)
 
 
-def test_complex_neg_raises_pending_869():
-    f = fr.ma.array(_data(), mask=_mask())
-    with pytest.raises(TypeError):
-        _ = -f
+def test_complex_neg_computes_869():
+    # numpy.ma computes complex unary negate, mask-preserving
+    # (numpy/ma/core.py:955); ferray matches after the Smith-division /
+    # complex-negate fix (#876). Was: asserted a TypeError (the old divergence).
+    n = -np.ma.array(_data(), mask=_mask())
+    f = -fr.ma.array(_data(), mask=_mask())
+    _eq_ma(f, n)
 
 
 # --- mean / min / max RAISE a TRACKED TypeError (pending #873) --------------

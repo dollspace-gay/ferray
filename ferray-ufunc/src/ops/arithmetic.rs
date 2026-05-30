@@ -314,12 +314,52 @@ macro_rules! impl_true_divide_int {
 
 impl_true_divide_int!(i8, i16, i32, i64, u8, u16, u32, u64);
 
+/// Smith-algorithm complex division of `a / b`, mirroring NumPy's
+/// `cdiv@c@` (`numpy/_core/src/npymath/npy_math_complex.c.src:94`).
+///
+/// `num_complex`'s `Div` uses the naive `(ac+bd)/(c²+d²)` form, whose
+/// `c²+d²` denominator OVERFLOWS for a near-subnormal divisor: e.g.
+/// `(2+0j)/(6.675e-308+0j)` → `inf + NaN·j` even though the true quotient
+/// `2.996e307+0j` is FINITE (R-DEV-1). NumPy avoids this by scaling on the
+/// larger-magnitude denominator component (Smith 1962): if `|br| >= |bi|`,
+/// `rat = bi/br; scl = 1/(br + bi*rat); re = (ar+ai*rat)*scl,
+/// im = (ai-ar*rat)*scl`, else the symmetric branch. A true-zero divisor
+/// still yields a non-finite (`inf`/`nan`) complex — matching numpy's
+/// `ar/abs_br, ai/abs_bi` divide-by-zero result — so the binding's domain
+/// mask for `complex / 0` is unaffected.
+#[inline]
+fn complex_smith_div<F>(a: Complex<F>, b: Complex<F>) -> Complex<F>
+where
+    F: num_traits::Float,
+{
+    let (ar, ai) = (a.re, a.im);
+    let (br, bi) = (b.re, b.im);
+    let abs_br = br.abs();
+    let abs_bi = bi.abs();
+    if abs_br >= abs_bi {
+        if abs_br == F::zero() && abs_bi == F::zero() {
+            // divide by zeros yields a complex inf or nan (matches numpy)
+            Complex::new(ar / abs_br, ai / abs_bi)
+        } else {
+            let rat = bi / br;
+            let scl = F::one() / (br + bi * rat);
+            Complex::new((ar + ai * rat) * scl, (ai - ar * rat) * scl)
+        }
+    } else {
+        let rat = br / bi;
+        let scl = F::one() / (bi + br * rat);
+        Complex::new((ar * rat + ai) * scl, (ai * rat - ar) * scl)
+    }
+}
+
 // Complex true-division: `complex / complex -> complex` (NEVER promoted to
 // f64 — numpy keeps the complex width, verified live numpy 2.4.5:
-// `np.ma.array([1+2j])/np.ma.array([2+0j]) -> [(0.5+1j)]`). `num_complex`'s
-// `Div` already yields `inf`/`nan` complex on a zero divisor (no panic), so
-// the divide-by-zero RuntimeWarning-only contract holds without a guard; the
-// numpy.ma DOMAIN mask for `complex / 0` is applied by the binding, not here.
+// `np.ma.array([1+2j])/np.ma.array([2+0j]) -> [(0.5+1j)]`). Uses NumPy's
+// Smith algorithm (see [`complex_smith_div`]) rather than `num_complex`'s
+// naive `Div`, so a near-subnormal divisor keeps the finite quotient numpy
+// computes instead of overflowing. A true-zero divisor still yields
+// `inf`/`nan` complex (no panic); the numpy.ma DOMAIN mask for `complex / 0`
+// is applied by the binding, not here.
 macro_rules! impl_true_divide_complex {
     ($($ty:ty),* $(,)?) => {
         $(
@@ -327,7 +367,7 @@ macro_rules! impl_true_divide_complex {
                 type Output = Complex<$ty>;
                 #[inline]
                 fn true_div(self, rhs: Complex<$ty>) -> Complex<$ty> {
-                    self / rhs
+                    complex_smith_div(self, rhs)
                 }
             }
         )*
@@ -3257,6 +3297,37 @@ mod tests {
             let z = c64(vec![Complex64::new(0.0, 0.0)])?;
             let v = first(&divide(&a, &z)?);
             assert!(!v.is_finite(), "complex /0 should be non-finite, got {v:?}");
+            Ok(())
+        }
+
+        #[test]
+        fn complex_divide_subnormal_divisor_stays_finite() -> FerrayResult<()> {
+            // Smith algorithm (numpy cdiv, npy_math_complex.c.src:94): a
+            // near-subnormal divisor must NOT overflow the way num_complex's
+            // naive (c²+d²) form does. Live numpy 2.4.4:
+            // np.divide([2+0j], [6.675e-308+0j])[0] == 2.99625468164794e+307+0j.
+            let a = c64(vec![Complex64::new(2.0, 0.0)])?;
+            let b = c64(vec![Complex64::new(6.675e-308, 0.0)])?;
+            let q = first(&divide(&a, &b)?);
+            assert!(
+                q.is_finite(),
+                "subnormal-divisor quotient must be finite, got {q:?}"
+            );
+            let expected = 2.996_254_681_647_94e307;
+            assert!(
+                (q.re - expected).abs() <= expected.abs() * 1e-12 && q.im == 0.0,
+                "{q:?} != numpy {expected:e}+0j"
+            );
+            Ok(())
+        }
+
+        #[test]
+        fn complex_divide_normal_case_smith() -> FerrayResult<()> {
+            // Normal case stays correct under Smith: (1+2j)/(3+4j) = 0.44+0.08j
+            // (live numpy: np.divide([1+2j],[3+4j])[0] == (0.44+0.08j)).
+            let a = c64(vec![Complex64::new(1.0, 2.0)])?;
+            let b = c64(vec![Complex64::new(3.0, 4.0)])?;
+            close(first(&divide(&a, &b)?), Complex64::new(0.44, 0.08));
             Ok(())
         }
 
