@@ -556,6 +556,11 @@ fn register_ma_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> Py
         let np_ma = py.import("numpy.ma")?;
         m.add("mvoid", np_ma.getattr("mvoid")?)?;
     }
+    // ----- stateful mask: harden/soften/put/putmask (#842 #843 #844 #845) -----
+    m.add_function(wrap_pyfunction!(ma::harden_mask, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::soften_mask, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::put, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::putmask, &m)?)?;
     parent.add_submodule(&m)?;
     py.import("sys")?
         .getattr("modules")?

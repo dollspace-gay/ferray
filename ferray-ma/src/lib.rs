@@ -52,6 +52,9 @@ pub mod io;
 pub mod manipulation;
 pub mod mask_ops;
 pub mod masked_array;
+/// In-place flat assignment ops (`put` / `putmask`, #835 REQ-36/37) that
+/// mutate a `MaskedArray`'s data + mask honouring the hard-mask flag.
+pub mod put;
 pub mod reductions;
 pub mod sorting;
 pub mod ufunc_support;
@@ -73,6 +76,11 @@ pub use arithmetic::{
 
 // Re-export mask manipulation functions
 pub use mask_ops::{count_masked, count_masked_axis, getdata, getmask, is_masked};
+
+// Re-export the in-place flat assignment mode enum (#835 REQ-36): the
+// `MaskedArray::put`/`putmask` methods are inherent methods on the type, so
+// only the `PutMode` mode selector needs a crate-root re-export.
+pub use put::PutMode;
 
 // Re-export MaskAware trait (#505) for downstream code that wants
 // to write functions polymorphic over Array and MaskedArray.

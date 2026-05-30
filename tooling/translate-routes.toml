@@ -573,6 +573,14 @@ upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]
 design = ".design/ferray-ma.md"
 parity_ops = ["fill_value", "default_fill_value"]
 
+# ferray-ma stateful in-place assignment (#835 REQ-36/37): put/putmask
+# compose data_mut + set_mask_flat honouring the hard-mask flag.
+[[route]]
+crate_pattern = "ferray-ma/src/put.rs"
+upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]
+design = ".design/ferray-ma.md"
+parity_ops = ["put", "putmask"]
+
 [[route]]
 crate_pattern = "ferray-ma/src/reductions.rs"
 upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]

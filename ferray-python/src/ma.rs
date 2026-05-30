@@ -406,6 +406,70 @@ impl PyMaskedArray {
     fn __array__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         self.data(py)
     }
+
+    /// `MaskedArray.harden_mask()` — force the mask hard, preventing
+    /// subsequent assignments from clearing mask bits, and return `self`.
+    ///
+    /// numpy's method sets `self._hardmask = True; return self`
+    /// (`numpy/ma/core.py:3635`). The `&mut self` receiver mutates the
+    /// underlying `MaskedArray` in the pyclass cell in place (NOT a clone),
+    /// so the caller's object becomes hard. The method returns `None`;
+    /// callers wanting the array back use the module-level
+    /// `ferray.ma.harden_mask(a)` which returns `a`.
+    fn harden_mask(&mut self) -> PyResult<()> {
+        self.inner.harden_mask().map_err(ferr_to_pyerr)
+    }
+
+    /// `MaskedArray.soften_mask()` — force the mask soft, allowing subsequent
+    /// assignments to clear mask bits (`numpy/ma/core.py:3653`). Mutates in
+    /// place via `&mut self`.
+    fn soften_mask(&mut self) -> PyResult<()> {
+        self.inner.soften_mask().map_err(ferr_to_pyerr)
+    }
+
+    /// `MaskedArray.hardmask` property — whether the mask is hard
+    /// (`numpy/ma/core.py:3656`).
+    #[getter]
+    fn hardmask(&self) -> bool {
+        self.inner.is_hard_mask()
+    }
+
+    /// `MaskedArray.put(indices, values, mode='raise')` — set flat-indexed
+    /// positions in place (`numpy/ma/core.py:4837`). Mutates `self` via
+    /// `&mut self`; returns `None` like numpy.
+    #[pyo3(signature = (indices, values, mode = "raise"))]
+    fn put<'py>(
+        &mut self,
+        py: Python<'py>,
+        indices: &Bound<'py, PyAny>,
+        values: &Bound<'py, PyAny>,
+        mode: &str,
+    ) -> PyResult<()> {
+        let idx = extract_indices(py, indices)?;
+        let (vals, vmask) = extract_values_with_mask(py, values)?;
+        let put_mode = fma::PutMode::parse(mode).map_err(ferr_to_pyerr)?;
+        self.inner
+            .put(&idx, &vals, vmask.as_deref(), put_mode)
+            .map_err(put_err_to_pyerr)
+    }
+
+    /// `MaskedArray.putmask`-style in-place conditional assignment used by the
+    /// module-level `ferray.ma.putmask(a, mask, values)`
+    /// (`numpy/ma/core.py:7537`). Mutates `self` via `&mut self`; returns
+    /// `None` like numpy.
+    fn putmask<'py>(
+        &mut self,
+        py: Python<'py>,
+        mask: &Bound<'py, PyAny>,
+        values: &Bound<'py, PyAny>,
+    ) -> PyResult<()> {
+        let mask_arr = extract_bool_array(py, mask)?;
+        let mask_flat: Vec<bool> = mask_arr.iter().copied().collect();
+        let (vals, vmask) = extract_values_with_mask(py, values)?;
+        self.inner
+            .putmask(&mask_flat, &vals, vmask.as_deref())
+            .map_err(ferr_to_pyerr)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -422,6 +486,79 @@ fn extract_bool_array<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult
     let arr = coerce_dtype(py, obj, "bool")?;
     let view: PyReadonlyArrayDyn<bool> = arr.extract()?;
     view.as_ferray().map_err(ferr_to_pyerr)
+}
+
+/// Coerce a Python index argument (scalar / list / ndarray) into a flat
+/// `Vec<isize>` in C (row-major) order, preserving negative indices so the
+/// library's `PutMode` resolution can apply numpy's from-the-end semantics.
+///
+/// numpy's `put` interprets `indices` as integers against the flattened
+/// (C-order) data (`numpy/ma/core.py:4841` `self._data.flat[n]`), so we route
+/// through `numpy.asarray(..., intp).ravel()` to flatten any-rank input the
+/// same way.
+fn extract_indices<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<Vec<isize>> {
+    let arr = coerce_dtype(py, obj, "int64")?;
+    // `ravel()` flattens in C order so a 2-D index array matches numpy's
+    // `.flat` indexing convention.
+    let raveled = arr.call_method0("ravel")?;
+    let view: PyReadonlyArrayDyn<i64> = raveled.extract()?;
+    let fa: ArrayD<i64> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(fa.iter().map(|&v| v as isize).collect())
+}
+
+/// Coerce a Python `values` argument into a flat `Vec<f64>` plus, when the
+/// object carries a mask (a `ferray.ma.MaskedArray` or a
+/// `numpy.ma.MaskedArray`), a parallel flat `Vec<bool>` of mask bits.
+///
+/// A masked `values` re-masks the written target positions in `put`/`putmask`
+/// (`numpy/ma/core.py:4918`, `:7589`); a plain array-like carries no mask, so
+/// `None` is returned and the written positions become unmasked. Values are
+/// flattened in C order to match numpy's `.flat`/`copyto` element order.
+fn extract_values_with_mask<'py>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+) -> PyResult<(Vec<f64>, Option<Vec<bool>>)> {
+    // A ferray.ma.MaskedArray operand carries its own mask.
+    if let Ok(m) = obj.extract::<PyMaskedArray>() {
+        let data: Vec<f64> = m.inner.data().iter().copied().collect();
+        let mask: Vec<bool> = m.inner.mask().iter().copied().collect();
+        let mask_opt = if mask.iter().any(|&b| b) {
+            Some(mask)
+        } else {
+            None
+        };
+        return Ok((data, mask_opt));
+    }
+    // A numpy.ma.MaskedArray operand: read its data + mask via numpy.ma so the
+    // mask survives the boundary (R-CODE-4 — don't silently drop it).
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    if obj.is_instance(&np_ma.getattr("MaskedArray")?)? {
+        let data_obj = np_ma.call_method1("getdata", (obj,))?;
+        let data_fa = extract_data(py, &data_obj)?;
+        let mask_obj = np_ma.call_method1("getmaskarray", (obj,))?;
+        let mask_fa = extract_bool_array(py, &mask_obj)?;
+        let mask: Vec<bool> = mask_fa.iter().copied().collect();
+        let mask_opt = if mask.iter().any(|&b| b) {
+            Some(mask)
+        } else {
+            None
+        };
+        return Ok((data_fa.iter().copied().collect(), mask_opt));
+    }
+    // Plain array-like / scalar — flatten to f64, no mask.
+    let data_fa = extract_data(py, obj)?;
+    Ok((data_fa.iter().copied().collect(), None))
+}
+
+/// Map a `put` library error to the matching CPython exception: an
+/// out-of-bounds index under `mode='raise'` surfaces as `IndexError`
+/// (numpy's `put` raises `IndexError`, confirmed live), every other
+/// `FerrayError` falls through to [`ferr_to_pyerr`] (→ `ValueError`).
+fn put_err_to_pyerr(e: ferray_core::FerrayError) -> PyErr {
+    if matches!(e, ferray_core::FerrayError::IndexOutOfBounds { .. }) {
+        return PyIndexError::new_err(e.to_string());
+    }
+    ferr_to_pyerr(e)
 }
 
 /// `numpy.ma.array(data, mask=None)`.
@@ -1478,6 +1615,67 @@ pub fn set_fill_value(a: &mut PyMaskedArray, fill_value: f64) {
 #[pyfunction]
 pub fn default_fill_value(_obj: &Bound<'_, PyAny>) -> f64 {
     fma::default_fill_value_f64()
+}
+
+// ---------------------------------------------------------------------------
+// Stateful mask: harden/soften/put/putmask (refs #835 #842 #843 #844 #845)
+//
+// numpy's `harden_mask`/`soften_mask`/`put`/`putmask` MUTATE the array in
+// place. The module-level functions take the pyclass by `Py<PyMaskedArray>`
+// (a reference to the SAME Python object the caller holds), borrow it mutably,
+// and mutate the wrapped `MaskedArray` in the pyclass cell — NOT a clone. The
+// `harden_mask`/`soften_mask` functions return that same object (numpy returns
+// the mutated array); `put`/`putmask` return `None` like numpy.
+// ---------------------------------------------------------------------------
+
+/// `numpy.ma.harden_mask(a)` — harden `a`'s mask in place and return `a`.
+///
+/// numpy exposes this via a `_frommethod` wrapper that calls
+/// `a.harden_mask()` and returns the (same, mutated) array
+/// (`numpy/ma/core.py:3620`). Taking `a: Py<PyMaskedArray>` and returning a
+/// new reference to the same object preserves numpy's "returns the mutated
+/// self" contract: `b = ma.harden_mask(a)` leaves `a` and `b` aliasing one
+/// hardened array.
+#[pyfunction]
+pub fn harden_mask(py: Python<'_>, a: Py<PyMaskedArray>) -> PyResult<Py<PyMaskedArray>> {
+    a.borrow_mut(py).harden_mask()?;
+    Ok(a)
+}
+
+/// `numpy.ma.soften_mask(a)` — soften `a`'s mask in place and return `a`
+/// (`numpy/ma/core.py:3638`).
+#[pyfunction]
+pub fn soften_mask(py: Python<'_>, a: Py<PyMaskedArray>) -> PyResult<Py<PyMaskedArray>> {
+    a.borrow_mut(py).soften_mask()?;
+    Ok(a)
+}
+
+/// `numpy.ma.put(a, indices, values, mode='raise')` — pure delegation to
+/// `a.put(...)` (`numpy/ma/core.py:7496` `return a.put(indices, values,
+/// mode=mode)`). Mutates `a` in place and returns `None`.
+#[pyfunction]
+#[pyo3(signature = (a, indices, values, mode = "raise"))]
+pub fn put<'py>(
+    py: Python<'py>,
+    a: Py<PyMaskedArray>,
+    indices: &Bound<'py, PyAny>,
+    values: &Bound<'py, PyAny>,
+    mode: &str,
+) -> PyResult<()> {
+    a.borrow_mut(py).put(py, indices, values, mode)
+}
+
+/// `numpy.ma.putmask(a, mask, values)` — conditional in-place assignment
+/// where `mask` is true (`numpy/ma/core.py:7537`). Mutates `a` in place and
+/// returns `None`.
+#[pyfunction]
+pub fn putmask<'py>(
+    py: Python<'py>,
+    a: Py<PyMaskedArray>,
+    mask: &Bound<'py, PyAny>,
+    values: &Bound<'py, PyAny>,
+) -> PyResult<()> {
+    a.borrow_mut(py).putmask(py, mask, values)
 }
 
 // ===========================================================================
