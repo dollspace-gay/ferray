@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.4.1] - 2026-05-29
 
 ### Changed
+- Bump workspace version 0.4.0 -> 0.4.1 to publish sin_fast/cos_fast (#761) (#762)
 - `fast_trig` sin/cos kernels are now branchless (floor-based quadrant arithmetic + an exact 2-way blend, replacing the 4-way `match` + `is_finite` early-return that blocked auto-vectorization). The batch entry points (`sin_fast_batch_f32/f64`, `cos_fast_batch_f32/f64`) are runtime-multiversioned: an `#[target_feature(enable = "avx2,fma")]` clone dispatched via `is_x86_feature_detected!` (vectorizes regardless of the consumer's baseline `target-cpu`), a libm fallback on pre-AVX2 x86 (never slower than std), and the portable loop on non-x86. ~3.7x (f64) / ~2.4x (f32) over scalar libm at 1M elements. Accuracy unchanged (≤1 ULP for `|x| ≤ 2^20`).
 
 ### Added
