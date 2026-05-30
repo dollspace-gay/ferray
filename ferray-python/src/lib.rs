@@ -401,6 +401,13 @@ fn register_ma_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> Py
     m.add("isarray", wrap_pyfunction!(ma::is_masked_array, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::set_fill_value, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::default_fill_value, &m)?)?;
+    // ----- numpy.ma specialized algorithms (refs #835) -----
+    m.add_function(wrap_pyfunction!(ma::sort, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::argsort, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::take, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::trace, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::dot, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::unique, &m)?)?;
     parent.add_submodule(&m)?;
     py.import("sys")?
         .getattr("modules")?

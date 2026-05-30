@@ -49,13 +49,22 @@
 //!   `fix_invalid`, `is_mask`, `isMaskedArray`/`isMA`/`isarray`,
 //!   `set_fill_value`, `default_fill_value`.
 //!
-//! Functions needing masked-algorithm support ferray-ma genuinely lacks
-//! (`dot`, `cov`, `corrcoef`, `polyfit`, `convolve`, `correlate`, the
-//! `compress_*`/`mask_rowcols` family, `clump_*`, `notmasked_*`) are
-//! tracked as a ferray-ma library follow-up.
+//! The specialized-algorithm slice (refs #835) binds the existing ferray-ma
+//! algorithms that match numpy.ma exactly: `sort` / `argsort` (masked
+//! values trail), `take`, `trace`, `dot` (1-D inner product), `unique`.
+//!
+//! Functions needing masked-algorithm support ferray-ma genuinely lacks or
+//! whose ferray-ma form diverges from numpy.ma's mask semantics
+//! (`vander`/`isin`/`in1d` mask handling, 2-D `dot` matmul, multi-axis
+//! `argsort`, `cov`, `corrcoef`, `polyfit`, `convolve`, `correlate`,
+//! `inner`, `outer`, `where`, `choose`, `diff`, `ediff1d`, `nonzero`,
+//! `indices`, the `compress_*`/`mask_rowcols` family, `clump_*`,
+//! `notmasked_*`, `flatnotmasked_*`, `harden_mask`/`soften_mask`) are
+//! tracked as a ferray-ma library follow-up under #835.
 
+use ferray_core::Array;
 use ferray_core::array::aliases::{Array1, ArrayD};
-use ferray_core::dimension::IxDyn;
+use ferray_core::dimension::{Ix1, Ix2, IxDyn};
 use ferray_ma as fma;
 use ferray_ma::MaskedArray as RustMa;
 use ferray_numpy_interop::{AsFerray, IntoNumPy};
@@ -1360,3 +1369,215 @@ pub fn set_fill_value(a: &mut PyMaskedArray, fill_value: f64) {
 pub fn default_fill_value(_obj: &Bound<'_, PyAny>) -> f64 {
     fma::default_fill_value_f64()
 }
+
+// ===========================================================================
+// numpy.ma specialized algorithms (refs #835): bindings over the existing
+// ferray-ma library functions (`MaskedArray::sort`/`sort_axis`/`argsort`/
+// `take`/`trace`, `ma_dot_flat`, `ma_unique`, `ma_vander`, `ma_isin`/
+// `ma_in1d`). Each numpy.ma contract was verified live against numpy 2.4.5;
+// the pytest oracle (tests/test_expansion_ma_specialized.py) constructs every
+// expected value from `numpy.ma.*` directly (R-CHAR-3).
+//
+// Masked-sort convention (numpy.ma.sort / argsort): unmasked values sort
+// ascending, masked values trail at the end of each lane
+// (`numpy/ma/core.py` `MaskedArray.sort`: "Place the masked values at the
+// end"). Default `axis=-1` (last axis), `axis=None` flattens — matching
+// numpy.ma's documented default for `sort`.
+// ===========================================================================
+
+/// Build the `f64` IxDyn data + bool IxDyn mask of a masked array as flat
+/// row-major `Vec`s plus its shape — the common entry point for the typed
+/// (Ix1 / Ix2) ferray-ma algorithms below.
+fn ma_parts(m: &RustMa<f64, IxDyn>) -> PyResult<(Vec<f64>, Vec<bool>, Vec<usize>)> {
+    let data: ArrayD<f64> = fma::getdata(m).map_err(ferr_to_pyerr)?;
+    let mask: ArrayD<bool> = fma::getmaskarray(m).map_err(ferr_to_pyerr)?;
+    let shape = data.shape().to_vec();
+    let data_v: Vec<f64> = data.iter().copied().collect();
+    let mask_v: Vec<bool> = mask.iter().copied().collect();
+    Ok((data_v, mask_v, shape))
+}
+
+/// Reinterpret a masked array as a 1-D `MaskedArray<f64, Ix1>` (flattening
+/// in row-major order). Used by the algorithms ferray-ma exposes only for
+/// the 1-D case (`vander`, the flat `dot`, `in1d`).
+fn ma_as_ix1(m: &RustMa<f64, IxDyn>) -> PyResult<RustMa<f64, Ix1>> {
+    let (data_v, mask_v, _shape) = ma_parts(m)?;
+    let n = data_v.len();
+    let data_arr = Array::<f64, Ix1>::from_vec(Ix1::new([n]), data_v).map_err(ferr_to_pyerr)?;
+    let mask_arr = Array::<bool, Ix1>::from_vec(Ix1::new([n]), mask_v).map_err(ferr_to_pyerr)?;
+    RustMa::new(data_arr, mask_arr).map_err(ferr_to_pyerr)
+}
+
+/// Reinterpret a masked array as a 2-D `MaskedArray<f64, Ix2>`. Errors with
+/// a `ValueError` if the array is not 2-D (matching the dimensionality
+/// numpy.ma.trace requires for a square 2-D trace).
+fn ma_as_ix2(m: &RustMa<f64, IxDyn>) -> PyResult<RustMa<f64, Ix2>> {
+    let (data_v, mask_v, shape) = ma_parts(m)?;
+    if shape.len() != 2 {
+        return Err(PyValueError::new_err(format!(
+            "ma operation requires a 2-D masked array, got {}-D",
+            shape.len()
+        )));
+    }
+    let dim = Ix2::new([shape[0], shape[1]]);
+    let data_arr = Array::<f64, Ix2>::from_vec(dim.clone(), data_v).map_err(ferr_to_pyerr)?;
+    let mask_arr = Array::<bool, Ix2>::from_vec(dim, mask_v).map_err(ferr_to_pyerr)?;
+    RustMa::new(data_arr, mask_arr).map_err(ferr_to_pyerr)
+}
+
+/// `numpy.ma.sort(a, axis=-1)` — sort with masked values pushed to the end
+/// of each lane. `axis=None` flattens first (numpy.ma collapses to 1-D),
+/// any other `axis` sorts each 1-D slice independently via the ferray-ma
+/// `sort_axis`. Default `axis=-1` mirrors numpy.ma.sort's documented
+/// default (`numpy/ma/core.py` `def sort(self, axis=-1, ...)`).
+#[pyfunction]
+#[pyo3(signature = (a, axis = Some(-1)))]
+pub fn sort<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<PyMaskedArray> {
+    let m = coerce_to_ma(py, a)?;
+    match axis {
+        None => {
+            // Flatten and sort (masked values last).
+            let m1 = ma_as_ix1(&m)?;
+            let out = m1.sort().map_err(ferr_to_pyerr)?;
+            Ok(PyMaskedArray::from_inner(ix1_ma_to_dyn(out)?))
+        }
+        Some(ax) => {
+            let ndim = m.ndim();
+            let axis_u = crate::conv::normalize_axis(py, ax, ndim)?;
+            let out = m.sort_axis(axis_u).map_err(ferr_to_pyerr)?;
+            Ok(PyMaskedArray::from_inner(out))
+        }
+    }
+}
+
+/// `numpy.ma.argsort(a, axis=None)` — indices that would sort the flattened
+/// masked array, with masked positions trailing
+/// (`numpy/ma/core.py` `MaskedArray.argsort`). ferray-ma's `argsort`
+/// operates on the flattened array, matching numpy's 1-D / `axis=None`
+/// contract; the result is a numpy `intp`-style `uint64` index array.
+#[pyfunction]
+#[pyo3(signature = (a, axis = None))]
+pub fn argsort<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(ax) = axis {
+        // Only flat (axis=None) and the single-axis-of-a-1-D-array case are
+        // backed by ferray-ma today; reject multi-dim axis cleanly rather
+        // than silently flattening.
+        let m = coerce_to_ma(py, a)?;
+        if !(m.ndim() <= 1 && (ax == 0 || ax == -1)) {
+            return Err(PyValueError::new_err(
+                "ma.argsort with an explicit axis on a multi-dimensional array is not yet \
+                 supported (ferray-ma argsort is flat); pass axis=None",
+            ));
+        }
+    }
+    let m = coerce_to_ma(py, a)?;
+    let m1 = ma_as_ix1(&m)?;
+    let idx: Array1<u64> = m1.argsort().map_err(ferr_to_pyerr)?;
+    Ok(idx.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// `numpy.ma.take(a, indices)` — gather elements at flat `indices`,
+/// carrying the mask of each picked position
+/// (`numpy/ma/core.py` `def take(...)`). Returns a 1-D masked array.
+#[pyfunction]
+pub fn take<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    indices: &Bound<'py, PyAny>,
+) -> PyResult<PyMaskedArray> {
+    let m = coerce_to_ma(py, a)?;
+    let idx_arr = extract_data(py, indices)?;
+    let idx: Vec<usize> = idx_arr
+        .iter()
+        .map(|&v| {
+            if v < 0.0 || v.fract() != 0.0 {
+                Err(PyValueError::new_err(
+                    "ma.take: indices must be non-negative integers",
+                ))
+            } else {
+                Ok(v as usize)
+            }
+        })
+        .collect::<PyResult<Vec<usize>>>()?;
+    let out = m.take(&idx).map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(ix1_ma_to_dyn(out)?))
+}
+
+/// `numpy.ma.trace(a, offset=0)` — sum of the (offset) diagonal of a 2-D
+/// masked array, masked diagonal entries contributing zero
+/// (`numpy/ma/core.py` `def trace(...)`). Returns a Python float.
+#[pyfunction]
+#[pyo3(signature = (a, offset = 0))]
+pub fn trace<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, offset: i64) -> PyResult<f64> {
+    let m = coerce_to_ma(py, a)?;
+    let m2 = ma_as_ix2(&m)?;
+    m2.trace(offset as isize).map_err(ferr_to_pyerr)
+}
+
+/// `numpy.ma.dot(a, b)` — masked inner product. ferray-ma backs the 1-D
+/// vector inner product (`ma_dot_flat`), where masked positions on either
+/// operand contribute zero (`numpy/ma/core.py` `def dot(...)` masks both
+/// operands before the product). The 2-D matrix-multiply form of
+/// `numpy.ma.dot` is a ferray-ma library gap (tracked under #835); a 2-D
+/// operand here raises a clear `ValueError`.
+#[pyfunction]
+pub fn dot<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, b: &Bound<'py, PyAny>) -> PyResult<f64> {
+    let ma = coerce_to_ma(py, a)?;
+    let mb = coerce_to_ma(py, b)?;
+    if ma.ndim() > 1 || mb.ndim() > 1 {
+        return Err(PyValueError::new_err(
+            "ma.dot currently supports 1-D inner products only; 2-D matrix \
+             multiply for masked arrays is a ferray-ma library gap (#835)",
+        ));
+    }
+    let m1a = ma_as_ix1(&ma)?;
+    let m1b = ma_as_ix1(&mb)?;
+    m1a.ma_dot_flat(&m1b).map_err(ferr_to_pyerr)
+}
+
+/// `numpy.ma.unique(a)` — sorted unique unmasked values, with a single
+/// trailing masked entry iff the input contained any masked element
+/// (`numpy/ma/core.py` `def unique(...)`: masked values collapse to one
+/// `masked` slot at the end). ferray-ma's `ma_unique` yields the sorted
+/// unique *unmasked* values; the binding appends the one masked entry to
+/// match numpy's observable mask.
+#[pyfunction]
+pub fn unique<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    let m = coerce_to_ma(py, a)?;
+    let uniq: Array1<f64> = fma::ma_unique(&m).map_err(ferr_to_pyerr)?;
+    let mut data: Vec<f64> = uniq.iter().copied().collect();
+    let mut mask: Vec<bool> = vec![false; data.len()];
+
+    // Mirror numpy.ma.unique: a single masked slot trails iff any input
+    // element was masked. Its data value is not observable (masked), so we
+    // reuse the first masked input value as the placeholder.
+    let (in_data, in_mask, _shape) = ma_parts(&m)?;
+    if let Some(pos) = in_mask.iter().position(|&b| b) {
+        data.push(in_data[pos]);
+        mask.push(true);
+    }
+
+    let n = data.len();
+    let data_arr = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[n]), data).map_err(ferr_to_pyerr)?;
+    let mask_arr = Array::<bool, IxDyn>::from_vec(IxDyn::new(&[n]), mask).map_err(ferr_to_pyerr)?;
+    let inner = RustMa::new(data_arr, mask_arr).map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(inner))
+}
+
+// NOTE: `numpy.ma.vander`, `numpy.ma.isin`, and `numpy.ma.in1d` are NOT
+// bound in this slice. The corresponding ferray-ma library functions
+// (`ma_vander`, `ma_isin`, `ma_in1d`) diverge from numpy.ma's mask
+// semantics: numpy.ma.vander fills masked inputs with 0 and returns
+// `nomask`, while ferray's `ma_vander` propagates the input mask across the
+// row; numpy.ma.isin/in1d return `nomask` (the membership of the underlying
+// data, ignoring the input mask), while ferray's `ma_isin`/`ma_in1d` carry
+// the input mask through. Binding them as-is would silently diverge from
+// numpy, so they are tracked as ferray-ma LIBRARY fixes under #835.
