@@ -484,7 +484,16 @@ struct ViewDesc {
 /// the view (`numpy/ma/core.py:3635`); the flag gates the view's own writeback
 /// without touching the base's flag.
 enum Storage {
-    Owned(DynMa),
+    /// An OWNED masked array root. `fill_set` is the materialization flag
+    /// mirroring numpy's `MaskedArray._fill_value is None` (#883): it starts
+    /// `false` (the per-dtype default is reported but `_fill_value` is NOT yet
+    /// materialized) and flips to `true` the first time `set_fill_value`
+    /// EXPLICITLY assigns a fill — INDEPENDENT of whether the assigned value
+    /// equals the per-dtype default (`1e20`/`999999`). A view created over a
+    /// materialized base TRACKS the base's later changes (numpy's by-reference
+    /// `_fill_value` share); a view over a never-set base returns the default
+    /// forever. The discriminator is materialization, NOT a value-compare.
+    Owned { data: DynMa, fill_set: bool },
     View {
         base: Py<PyMaskedArray>,
         desc: ViewDesc,
@@ -527,7 +536,10 @@ enum Storage {
 impl Clone for Storage {
     fn clone(&self) -> Self {
         match self {
-            Storage::Owned(d) => Storage::Owned(d.clone()),
+            Storage::Owned { data, fill_set } => Storage::Owned {
+                data: data.clone(),
+                fill_set: *fill_set,
+            },
             Storage::View {
                 base,
                 desc,
@@ -693,7 +705,12 @@ fn dynma_from_input<'py>(
 impl PyMaskedArray {
     fn from_dynma(inner: DynMa) -> Self {
         Self {
-            storage: Storage::Owned(inner),
+            // #883: a freshly-built owned array is NOT materialized — its fill
+            // is the per-dtype default until `set_fill_value` is called.
+            storage: Storage::Owned {
+                data: inner,
+                fill_set: false,
+            },
         }
     }
 
@@ -708,7 +725,7 @@ impl PyMaskedArray {
     /// a nomask base yields a nomask view (mirrors `__getitem__`'s gather).
     fn snapshot(&self, py: Python<'_>) -> PyResult<DynMa> {
         match &self.storage {
-            Storage::Owned(d) => Ok(d.clone()),
+            Storage::Owned { data, .. } => Ok(data.clone()),
             Storage::View {
                 base,
                 desc,
@@ -745,8 +762,28 @@ impl PyMaskedArray {
     /// stays view-local (nomask base).
     fn root_has_real_mask(&self, py: Python<'_>) -> bool {
         match &self.storage {
-            Storage::Owned(d) => d.has_real_mask(),
+            Storage::Owned { data, .. } => data.has_real_mask(),
             Storage::View { base, .. } => base.borrow(py).root_has_real_mask(py),
+        }
+    }
+
+    /// Whether this array's `fill_value` is MATERIALIZED — ferray's analog of
+    /// numpy's `MaskedArray._fill_value is not None` (#883). An OWNED array is
+    /// materialized iff `set_fill_value` has EXPLICITLY assigned a fill
+    /// (`fill_set`), regardless of whether the assigned value equals the
+    /// per-dtype default. A VIEW is materialized iff it carries its OWN overlay
+    /// (`own_fill.is_some()`) OR its base was materialized at this view's
+    /// creation (`!base_fill_is_default`); materialization propagates down the
+    /// chain. The discriminator captured at view creation reads this on the
+    /// base instead of value-comparing the base's effective fill to the default.
+    fn is_fill_materialized(&self) -> bool {
+        match &self.storage {
+            Storage::Owned { fill_set, .. } => *fill_set,
+            Storage::View {
+                own_fill,
+                base_fill_is_default,
+                ..
+            } => own_fill.is_some() || !*base_fill_is_default,
         }
     }
 
@@ -767,7 +804,7 @@ impl PyMaskedArray {
         f: impl FnOnce(&mut DynMa) -> PyResult<R>,
     ) -> PyResult<R> {
         match &mut self.storage {
-            Storage::Owned(d) => f(d),
+            Storage::Owned { data, .. } => f(data),
             Storage::View {
                 base,
                 desc,
@@ -839,7 +876,7 @@ impl PyMaskedArray {
     /// at construction). Cheap accessor for `ndim`/`size`/`__len__`/`shape`.
     fn shape_vec(&self) -> Vec<usize> {
         match &self.storage {
-            Storage::Owned(d) => d.shape(),
+            Storage::Owned { data, .. } => data.shape(),
             Storage::View { desc, .. } => desc.shape.clone(),
         }
     }
@@ -849,7 +886,7 @@ impl PyMaskedArray {
     /// base dtype). Cheap accessor for `dtype`/`__repr__`.
     fn dtype_name_cheap(&self) -> &'static str {
         match &self.storage {
-            Storage::Owned(d) => d.dtype_name(),
+            Storage::Owned { data, .. } => data.dtype_name(),
             Storage::View { base, .. } => Python::attach(|py| base.borrow(py).dtype_name_cheap()),
         }
     }
@@ -860,7 +897,11 @@ impl PyMaskedArray {
     /// contract for those ops — and wraps its `RustMa<f64, IxDyn>` result here.
     fn from_inner(inner: RustMa<f64, IxDyn>) -> Self {
         Self {
-            storage: Storage::Owned(DynMa::F64(inner)),
+            // #883: an op result is a fresh owned array — fill not materialized.
+            storage: Storage::Owned {
+                data: DynMa::F64(inner),
+                fill_set: false,
+            },
         }
     }
 
@@ -2001,8 +2042,8 @@ impl PyMaskedArray {
         // owned array hardens its `DynMa`; a view sets its own `own_hard` flag,
         // which gates that view's writeback without touching the base.
         match &mut self.storage {
-            Storage::Owned(d) => {
-                match_ma!(d, m, T => { m.harden_mask().map_err(ferr_to_pyerr) })
+            Storage::Owned { data, .. } => {
+                match_ma!(data, m, T => { m.harden_mask().map_err(ferr_to_pyerr) })
             }
             Storage::View { own_hard, .. } => {
                 *own_hard = true;
@@ -2016,8 +2057,8 @@ impl PyMaskedArray {
     /// place via `&mut self`.
     fn soften_mask(&mut self) -> PyResult<()> {
         match &mut self.storage {
-            Storage::Owned(d) => {
-                match_ma!(d, m, T => { m.soften_mask().map_err(ferr_to_pyerr) })
+            Storage::Owned { data, .. } => {
+                match_ma!(data, m, T => { m.soften_mask().map_err(ferr_to_pyerr) })
             }
             Storage::View { own_hard, .. } => {
                 *own_hard = false;
@@ -2032,7 +2073,7 @@ impl PyMaskedArray {
     #[getter]
     fn hardmask(&self) -> bool {
         match &self.storage {
-            Storage::Owned(d) => d.is_hard_mask(),
+            Storage::Owned { data, .. } => data.is_hard_mask(),
             Storage::View { own_hard, .. } => *own_hard,
         }
     }
@@ -2157,17 +2198,18 @@ impl PyMaskedArray {
                 positions: positions.clone(),
                 shape: shape.clone(),
             };
-            // #882: capture whether the base's CURRENT effective fill_value is
-            // the per-dtype DEFAULT at the moment the view is created. This is
-            // ferray's analog of numpy's `base._fill_value is None` test that
-            // `__array_finalize__` reads to decide whether to share the base's
-            // `_fill_value` by reference. A default base yields an INDEPENDENT
-            // view (it will return the default forever, ignoring the base's
-            // later `set_fill_value`); a materialized base yields a TRACKING
-            // view (the getter recurses to the base's current value).
-            let base_fill_now = slf.borrow().fill_value(py)?;
-            let default_fill = default_fill_pyobject(py, &cur)?;
-            let base_fill_is_default = base_fill_now.eq(&default_fill)?;
+            // #883: capture whether the base's `_fill_value` is MATERIALIZED at
+            // the moment the view is created — ferray's analog of numpy's
+            // `base._fill_value is not None` test that `__array_finalize__`
+            // reads to decide whether to share the base's `_fill_value` by
+            // reference. This is a MATERIALIZATION flag, NOT a value-compare: a
+            // base explicitly set to a value that HAPPENS to equal the default
+            // (`1e20`/`999999`) is still materialized and the view TRACKS it.
+            // A NEVER-SET base yields an INDEPENDENT view (returns the per-dtype
+            // default forever); a materialized base yields a TRACKING view (the
+            // getter recurses to the base's current value). `base_fill_is_default`
+            // stays the discriminator name the getter reads (true == not shared).
+            let base_fill_is_default = !slf.borrow().is_fill_materialized();
             let child = Self {
                 storage: Storage::View {
                     base: slf.clone().unbind(),
@@ -4010,7 +4052,7 @@ fn copy_data_through(
 ) -> PyResult<()> {
     let mut tref = target.borrow_mut();
     match &mut tref.storage {
-        Storage::Owned(d) => copy_elem_dyn(d, pos, src, src_pos),
+        Storage::Owned { data, .. } => copy_elem_dyn(data, pos, src, src_pos),
         Storage::View { base, desc, .. } => {
             let base_pos = *desc.positions.get(pos).ok_or_else(|| {
                 PyValueError::new_err("internal: view writeback position out of range")
@@ -4034,7 +4076,7 @@ fn set_mask_through(
 ) -> PyResult<()> {
     let mut tref = target.borrow_mut();
     match &mut tref.storage {
-        Storage::Owned(d) => set_mask_flat_dyn(d, pos, masked),
+        Storage::Owned { data, .. } => set_mask_flat_dyn(data, pos, masked),
         Storage::View { base, desc, .. } => {
             let base_pos = *desc.positions.get(pos).ok_or_else(|| {
                 PyValueError::new_err("internal: view writeback position out of range")
@@ -5644,10 +5686,13 @@ pub fn set_fill_value(
         // Coerce the fill to the native dtype the SAME way the getter reads it:
         // apply it to a fresh owned snapshot, then read it back as the Python
         // object the getter would return, and store that as the overlay.
-        let mut tmp = Storage::Owned(a.snapshot(py)?);
+        let mut tmp = Storage::Owned {
+            data: a.snapshot(py)?,
+            fill_set: false,
+        };
         set_fill_value_owned(py, &mut tmp, fill_value, dt)?;
         let coerced = match &tmp {
-            Storage::Owned(cur) => match cur {
+            Storage::Owned { data: cur, .. } => match cur {
                 DynMa::Complex32(m) => complex_scalar_pyobject::<f32>(py, m.fill_value())?,
                 DynMa::Complex64(m) => complex_scalar_pyobject::<f64>(py, m.fill_value())?,
                 _ => match_ma_real!(cur, m, T => {
@@ -5675,27 +5720,37 @@ fn set_fill_value_owned(
     dt: &str,
 ) -> PyResult<()> {
     match storage {
-        Storage::Owned(inner) => match inner {
-            DynMa::Complex32(m) => {
-                let fv = coerce_complex_scalar::<f32>(py, fill_value, dt)?;
-                m.set_fill_value(fv);
-                Ok(())
+        Storage::Owned {
+            data: inner,
+            fill_set,
+        } => {
+            // #883: an EXPLICIT assignment MATERIALIZES the fill (numpy's
+            // `_fill_value: None -> value`), independent of whether the value
+            // equals the per-dtype default. A view created AFTER this then
+            // tracks the base's current value (numpy by-reference share).
+            *fill_set = true;
+            match inner {
+                DynMa::Complex32(m) => {
+                    let fv = coerce_complex_scalar::<f32>(py, fill_value, dt)?;
+                    m.set_fill_value(fv);
+                    Ok(())
+                }
+                DynMa::Complex64(m) => {
+                    let fv = coerce_complex_scalar::<f64>(py, fill_value, dt)?;
+                    m.set_fill_value(fv);
+                    Ok(())
+                }
+                _ => match_ma_real!(inner, m, T => {
+                    let fv = coerce_scalar::<T>(py, fill_value, dt)?;
+                    m.set_fill_value(fv);
+                    Ok(())
+                }, complex => {
+                    Err(pyo3::exceptions::PyTypeError::new_err(
+                        "internal: complex dtype reached the real set_fill_value arm",
+                    ))
+                }),
             }
-            DynMa::Complex64(m) => {
-                let fv = coerce_complex_scalar::<f64>(py, fill_value, dt)?;
-                m.set_fill_value(fv);
-                Ok(())
-            }
-            _ => match_ma_real!(inner, m, T => {
-                let fv = coerce_scalar::<T>(py, fill_value, dt)?;
-                m.set_fill_value(fv);
-                Ok(())
-            }, complex => {
-                Err(pyo3::exceptions::PyTypeError::new_err(
-                    "internal: complex dtype reached the real set_fill_value arm",
-                ))
-            }),
-        },
+        }
         Storage::View { base, .. } => {
             let base = base.clone_ref(py);
             set_fill_value_owned(py, &mut base.borrow_mut(py).storage, fill_value, dt)
