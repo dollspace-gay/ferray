@@ -1319,13 +1319,12 @@ where
     let ax = normalize_axes(axes, a.ndim())?;
     let shape = a.shape();
     let lane_len: usize = ax.iter().map(|&i| shape[i]).product();
-    if lane_len <= ddof {
-        return Err(FerrayError::invalid_value(
-            "ddof >= reduced-axis length, variance undefined",
-        ));
-    }
-    let nf = T::from(lane_len).unwrap();
-    let denom = T::from(lane_len - ddof).unwrap();
+    let nf = T::from(lane_len).unwrap_or_else(<T as Element>::zero);
+    // numpy/_core/_methods.py:204 clamps `rcount = um.maximum(rcount - ddof, 0)`
+    // then true-divides (:208): ddof >= reduced-axis length yields +inf
+    // (sum_sq > 0) / NaN (sum_sq == 0), never an error. Mirrors the var/var_into
+    // fixes in this file (saturating_sub + IEEE-754 division).
+    let denom = T::from(lane_len.saturating_sub(ddof)).unwrap_or_else(<T as Element>::zero);
     let data = borrow_data(a);
     let (result, out_shape) = reduce_axes_general(&data, shape, &ax, keepdims, |lane| {
         let mean_val = try_simd_pairwise_sum(lane)
@@ -2780,6 +2779,57 @@ mod tests {
         assert_eq!(s.shape(), &[]);
         let v = *s.iter().next().unwrap();
         assert!((v - 5.25_f64.sqrt()).abs() < 1e-12);
+    }
+
+    #[test]
+    fn var_axes_ddof_ge_reduced_len_is_inf_or_nan_not_error() -> FerrayResult<()> {
+        // numpy clamps the divisor to 0 (max(rcount-ddof, 0)) then true-divides,
+        // so ddof >= reduced-axis length yields +inf (numerator > 0) or NaN
+        // (numerator == 0), never an error. _core/_methods.py:204,208.
+        // Live numpy (numpy 2.4):
+        //   a = [[1,2,3],[4,5,6]]
+        //   np.var(a, axis=(0,1), ddof=10) == inf
+        //   np.var(a, axis=0,     ddof=5)  == [inf inf inf]
+        //   all-equal a2 = [[2,2,2],[2,2,2]]:
+        //   np.var(a2, axis=(0,1), ddof=10) == nan
+        //   np.var(a2, axis=0,     ddof=5)  == [nan nan nan]
+        let a = arr2d(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+
+        // Multi-axis reduction over all 6 elements, ddof=10 > 6 -> +inf.
+        let v_all = var_axes(&a, Some(&[0, 1]), 10, false)?;
+        assert_eq!(v_all.shape(), &[]);
+        let got_all: f64 = v_all.iter().copied().next().unwrap_or(0.0);
+        assert!(got_all.is_infinite() && got_all.is_sign_positive());
+
+        // Reduce over axis 0 (length 2), ddof=5 > 2 -> [inf, inf, inf].
+        let v_ax0 = var_axes(&a, Some(&[0]), 5, false)?;
+        assert_eq!(v_ax0.shape(), &[3]);
+        assert!(
+            v_ax0
+                .iter()
+                .all(|x| x.is_infinite() && x.is_sign_positive())
+        );
+
+        // std_axes = sqrt(var_axes); sqrt(+inf) = +inf.
+        let s_ax0 = std_axes(&a, Some(&[0]), 5, false)?;
+        assert!(
+            s_ax0
+                .iter()
+                .all(|x| x.is_infinite() && x.is_sign_positive())
+        );
+
+        // All-equal input: numerator (sum of squared deviations) == 0, so
+        // 0/0 -> NaN for both the multi-axis and single-axis-in-list paths.
+        let a2 = arr2d(2, 3, vec![2.0, 2.0, 2.0, 2.0, 2.0, 2.0]);
+        let nan_all = var_axes(&a2, Some(&[0, 1]), 10, false)?;
+        let got_nan: f64 = nan_all.iter().copied().next().unwrap_or(0.0);
+        assert!(got_nan.is_nan());
+        let nan_ax0 = var_axes(&a2, Some(&[0]), 5, false)?;
+        assert!(nan_ax0.iter().all(|x| x.is_nan()));
+        // std of NaN variance is NaN.
+        let snan_ax0 = std_axes(&a2, Some(&[0]), 5, false)?;
+        assert!(snan_ax0.iter().all(|x| x.is_nan()));
+        Ok(())
     }
 
     #[test]
