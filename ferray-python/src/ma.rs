@@ -598,23 +598,26 @@ impl PyMaskedArray {
                 let sub_data: Vec<f64> = positions.iter().map(|&p| data[p]).collect();
                 let data_fa =
                     ArrayD::<f64>::from_vec(IxDyn::new(&shape), sub_data).map_err(ferr_to_pyerr)?;
-                // Only carry a real mask when the source has one AND at least one
-                // gathered position is masked — otherwise stay on the `from_data`
-                // nomask sentinel (preserves the #848/#849 nomask distinction:
-                // gathering from a nomask source yields a nomask sub-array).
-                let inner = match self.inner.mask_opt() {
-                    Some(m) => {
-                        let flat: Vec<bool> = m.iter().copied().collect();
-                        let sub_mask: Vec<bool> = positions.iter().map(|&p| flat[p]).collect();
-                        if sub_mask.iter().any(|&b| b) {
-                            let mask_fa = ArrayD::<bool>::from_vec(IxDyn::new(&shape), sub_mask)
-                                .map_err(ferr_to_pyerr)?;
-                            RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?
-                        } else {
-                            RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?
-                        }
-                    }
-                    None => RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?,
+                // numpy: `if _mask is not nomask: mout = _mask[indx]`
+                // (`numpy/ma/core.py:3317`). When the SOURCE carries a REAL mask,
+                // the result's mask is ALWAYS `_mask[indx]` — a real bool array of
+                // the RESULT shape (all-False when no gathered position is masked),
+                // NEVER the nomask sentinel. We therefore key the
+                // nomask-vs-real-mask decision off the source's `has_real_mask()`
+                // (the #849 pattern), not off whether any gathered bit is set.
+                // A nomask source (`real_mask = false`) stays on the `from_data`
+                // nomask path, gathering to a nomask sub-array (preserves the
+                // #848/#849 distinction). Keying off `_mask[indx].any()` instead
+                // collapsed an all-unmasked gather to a 0-d nomask scalar, which
+                // also crashed `list(result.mask)` on a diagonal/fancy gather.
+                let inner = if self.inner.has_real_mask() {
+                    let flat: Vec<bool> = self.inner.mask().iter().copied().collect();
+                    let sub_mask: Vec<bool> = positions.iter().map(|&p| flat[p]).collect();
+                    let mask_fa = ArrayD::<bool>::from_vec(IxDyn::new(&shape), sub_mask)
+                        .map_err(ferr_to_pyerr)?;
+                    RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?
+                } else {
+                    RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?
                 };
                 Ok(Py::new(py, Self { inner })?.into_bound(py).into_any())
             }
