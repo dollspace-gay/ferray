@@ -522,6 +522,26 @@ fn register_ma_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> Py
     m.add_function(wrap_pyfunction!(ma::inner, &m)?)?;
     m.add("outerproduct", wrap_pyfunction!(ma::outer, &m)?)?;
     m.add("innerproduct", wrap_pyfunction!(ma::inner, &m)?)?;
+    // numpy.ma composable batch 3 (refs #835 #818): array-of-masked
+    // constructors, masked iteration / split, whole-row/col masking, multi-axis
+    // compress, the `bool_` dtype-scalar re-export, and `ids`.
+    m.add_function(wrap_pyfunction!(ma::masked_all, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::masked_all_like, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::fromfunction, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::indices, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::apply_along_axis, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::apply_over_axes, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::ndenumerate, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::hsplit, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::mask_rows, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::mask_cols, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::compress_nd, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::ids, &m)?)?;
+    // `bool_` — the numpy bool scalar type, shared vocabulary (== fr.bool_).
+    {
+        let np = py.import("numpy")?;
+        m.add("bool_", np.getattr("bool_")?)?;
+    }
     parent.add_submodule(&m)?;
     py.import("sys")?
         .getattr("modules")?
