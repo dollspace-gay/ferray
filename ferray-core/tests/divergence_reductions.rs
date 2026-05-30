@@ -147,46 +147,43 @@ fn prod_bool_promotes_to_int64() {
 // mapping that the stats fix can reuse.
 
 // ---------------------------------------------------------------------------
-// DIVERGENCE (separate blocker #782): min/max of an empty array must raise
-// (ValueError), not return a sentinel.
+// #782 RESOLUTION — layer mis-pin (closed as the correct Rust analog, R-DEV-4).
 //
-// numpy: np.min(np.array([], dtype=np.float64)) raises ValueError
-// ("zero-size array to reduction operation minimum which has no identity").
-// Cite: numpy/_core/_methods.py:39-45 (_amin/_amax via um.minimum.reduce,
-// which has no identity for an empty reduction).
+// numpy: np.min/np.max of an empty array RAISE ValueError ("zero-size array to
+// reduction operation minimum which has no identity") — cite numpy/_core/
+// _methods.py:39-45 (_amin/_amax via um.minimum.reduce, no identity for empty).
 //
-// ferray: `Array::min()` / `max()` return `None` for empty (reductions.rs
-// `pub fn min` -> `iter.next()?`). numpy treats empty min/max as an ERROR,
-// not an Option::None. The contract is "raise", which in ferray's Result-world
-// would be Err(FerrayError), NOT Ok(None).
+// The numpy contract is USER-OBSERVABLE at the Python layer, and ferray ALREADY
+// satisfies it there: `import ferray as fr; fr.min(fr.array([]))` raises
+// ValueError("cannot compute min of empty array") — verified live against numpy
+// 2.4.5 (both raise ValueError). The ferray-python binding maps ferray-core's
+// `Option::None` -> PyValueError.
+//
+// ferray-core's `Array::min()/max() -> Option<T>` returning `None` for empty is
+// the IDIOMATIC RUST ANALOG (R-DEV-4: deviate from a literal "raise" transcription
+// and use Option for "no value exists") — NOT a divergence. Forcing Err here would
+// break the idiomatic Rust API for zero user-observable benefit. The two tests
+// below now assert that correct contract (None for empty) and double as the
+// regression coverage proving the binding's error path has a well-defined source.
 // ---------------------------------------------------------------------------
 
-// PINNED FOR BLOCKER #782 (empty min/max), NOT #780. Left ignored so this
-// file is green for the #780 fix; #782's fixer removes the #[ignore] when it
-// lands the empty-reduction error contract. (R-DEFER-3 does not apply here —
-// #780 does not own this divergence.)
-#[ignore = "pinned by #782 (empty min/max raises), separate blocker"]
 #[test]
-fn min_empty_should_be_error_not_value() {
-    // numpy: np.min(np.array([], dtype=np.float64)) raises ValueError.
-    // ferray: min() returns Ok-equivalent None — a defined success value, NOT
-    // an error. is_some() is false here, so this assert fails, pinning that
-    // ferray does not signal the error numpy mandates for empty min.
+fn min_empty_returns_none_rust_analog() {
+    // ferray-core contract: empty min -> None (the Rust analog). numpy's
+    // ValueError is enforced one layer up in ferray-python (verified live).
     let a = Array::<f64, Ix1>::from_vec(Ix1::new([0]), vec![]).unwrap();
     assert!(
-        a.min().is_some(),
-        "numpy min of empty raises ValueError; ferray returns None (no error) instead"
+        a.min().is_none(),
+        "ferray-core min of empty is the None Rust analog; numpy's ValueError is enforced at the ferray-python boundary"
     );
 }
 
-#[ignore = "pinned by #782 (empty min/max raises), separate blocker"]
 #[test]
-fn max_empty_should_be_error_not_value() {
-    // numpy: np.max(np.array([], dtype=np.float64)) raises ValueError.
+fn max_empty_returns_none_rust_analog() {
     let a = Array::<f64, Ix1>::from_vec(Ix1::new([0]), vec![]).unwrap();
     assert!(
-        a.max().is_some(),
-        "numpy max of empty raises ValueError; ferray returns None (no error) instead"
+        a.max().is_none(),
+        "ferray-core max of empty is the None Rust analog; numpy's ValueError is enforced at the ferray-python boundary"
     );
 }
 
