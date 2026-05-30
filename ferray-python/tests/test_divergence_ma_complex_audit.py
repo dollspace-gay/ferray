@@ -165,20 +165,30 @@ def test_complex_permanent_raise_matches_numpy(op):
 
 
 # ---------------------------------------------------------------------------
-# GUARD (must stay GREEN): R-CODE-4 imaginary-drop hunt. mean/var/std route
-# through `to_f64_ma`, which would drop the imaginary part. They must RAISE,
-# not silently return a real-valued result. (numpy COMPUTES these complex;
-# tracked under #873 -- a clean raise is correct-for-now, a silent real
-# collapse would be a high-severity data-loss divergence.)
+# COMPUTE (#873 landed): the complex reductions no longer route through
+# `to_f64_ma` (which would drop the imaginary part). `mean` keeps the imaginary
+# part (complex sum / count, -> complex128); `var`/`std` are the REAL
+# `mean(|x - mean|**2)` / its sqrt (-> float64), which is numpy's complex
+# variance/std (a REAL quantity, NOT an imag-drop). Was: asserted a TypeError.
+# This stays as the R-CODE-4 imag-drop guard: `mean` must match numpy's COMPLEX
+# value (not a real collapse), and var/std must match numpy's REAL value.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", ["mean", "var", "std"])
-def test_complex_real_collapsing_reduction_raises_not_silently_drops_imag(name):
+def test_complex_mean_keeps_imag_matches_numpy():
+    n = np.ma.array(_DATA_A, mask=_MASK_A)
     f = fr.ma.array(_DATA_A, mask=_MASK_A)
-    with pytest.raises(TypeError):
-        # Must raise (tracked #873), NOT return a real-valued (imag-dropped)
-        # scalar. A returned real value here would be silent data loss.
-        _ = getattr(f, name)()
+    # The imaginary part is non-zero here; a real collapse would drop it.
+    assert n.mean().imag != 0.0
+    assert complex(f.mean()) == pytest.approx(complex(n.mean()))
+
+
+@pytest.mark.parametrize("name", ["var", "std"])
+def test_complex_var_std_real_matches_numpy(name):
+    n = np.ma.array(_DATA_A, mask=_MASK_A)
+    f = fr.ma.array(_DATA_A, mask=_MASK_A)
+    # numpy complex var/std are REAL float64 (mean(|x-mean|**2) / its sqrt).
+    assert float(getattr(f, name)()) == pytest.approx(float(getattr(n, name)()))
+    assert str(np.asarray(getattr(f, name)()).dtype) == "float64"
 
 
 # ---------------------------------------------------------------------------

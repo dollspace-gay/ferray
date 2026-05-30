@@ -119,12 +119,13 @@ is **SHIPPED** (#870). The complex comparison surface of REQ-4 —
 `==`/`!=` (masked-position override) AND the four ordering ops `<`/`<=`/`>`/`>=`
 (lexicographic compute, #874) — is **SHIPPED**. REQ-3 (complex arithmetic
 `+`/`-`/`*`/`/`/`**`) is **SHIPPED** (#869 — the ferray-ufunc complex-arithmetic
-prereq + binding wiring). The remaining REQ is **NOT-STARTED**: complex
-`mean`/`min`/`max` (#873) raise a tracked `TypeError` for now (unary `-`
-negative is also still tracked there). The complex `//`,`%` / bitwise RAISES
-(REQ-5) landed alongside #868 — they fell out of threading the variant through
-`binary_op` / `bitwise_op` — but REQ-5 stays NOT-STARTED until its full pinned
-pytest is added under #872.
+prereq + binding wiring). REQ-6 (complex reductions
+`sum`/`prod`/`mean`/`min`/`max`/`var`/`std`/`median`) is **SHIPPED** (#873 —
+the complex `mean`/`min`/`max`/`var`/`std`/`median` compute paths in the binding;
+`sum`/`prod` already computed via the complex `ReduceAcc`). The complex `//`,`%`
+/ bitwise RAISES (REQ-5) landed alongside #868 — they fell out of threading the
+variant through `binary_op` / `bitwise_op` — but REQ-5 stays NOT-STARTED until
+its full pinned pytest is added under #872.
 
 NOTE (#874 correction): an earlier pass mis-classified complex ordering
 `<`/`<=`/`>`/`>=` as a PERMANENT `TypeError` ("complex is unordered"). That is
@@ -140,7 +141,7 @@ ferray now computes it directly in `compute_compare` (`Complex` is not
 | REQ-3 (complex `+`,`-`,`*`,`/`,`**`) | SHIPPED | #869. LIBRARY: `impl WrappingArith for Complex<f32>`/`Complex<f64>` (`impl_wrapping_arith_complex!`, `arithmetic.rs` — `wadd`/`wsub`/`wmul` are the native complex `+`/`-`/`*`, no wrapping for float-of-complex) makes the generic `add`/`subtract`/`multiply` accept complex; `impl TrueDivide for Complex<...>` (`impl_true_divide_complex!`, `Output = Self` — complex/complex stays complex, NOT promoted to f64; `num_complex` `Div` yields `nan`/`inf` on a zero divisor, no panic); `pub fn power_complex` (`arithmetic.rs`) mirrors `npy_cpow` (`numpy/_core/src/npymath/npy_math_complex.c.src:438`) — the real-integral-exponent fast path makes `(1+2j)**2` EXACTLY `-3+4j`, the general branch is `Complex::powc`. 10 `#[cfg(test)]` unit tests (`mod complex_arith`, `arithmetic.rs`) vs hand-computed/numpy-oracle values. Non-test production consumer: the `complex_arm!` macro in `compute_binary` (`ferray-python/src/ma.rs`) calls `add`/`subtract`/`multiply`/`divide`/`power_complex` over the `DynMa::Complex32`/`Complex64` variants (`/` domain-masks complex-zero `re==0 && im==0` / non-finite; `//`/`%` raise the numpy `floor_divide`/`remainder` TypeError in `binary_op`), reached via `fr.ma.array([1+2j]) + … / * / / ** …`. Verified: `tests/test_expansion_ma_complex_arith.py` (24 pytest vs numpy.ma — `+`/`-`/`*`/`/`/`**`, promotion, reflected, `/`-by-complex-zero domain, complex64 width, nomask vs materialize, `//`/`%` raise) + the flipped `test_complex_{add,mul,truediv,pow}_computes_869` (`test_expansion_ma_complex_construct.py`). |
 | REQ-4 (`==`/`!=` + ordering all COMPUTE) | SHIPPED | #874. `pub fn equal`/`not_equal` (`comparison.rs`) bound `T: Element + PartialEq + Copy` → Complex OK (`==`/`!=` compute with the masked-position override). The four ordering ops `<`/`<=`/`>`/`>=` ALSO compute: numpy.ma compares complex LEXICOGRAPHICALLY `(real, then imag)` via `np.less`/etc (verified live, numpy 2.4.5: `np.ma.array([1+2j]) < np.ma.array([1+3j])` → `True` — does NOT raise). `Complex` is not `PartialOrd`, so `compute_compare`'s `cmp_complex_arm!` (`ma.rs`) computes the order directly from `re`/`im`: `<` = `a.re<b.re \|\| (a.re==b.re && a.im<b.im)` (and mirrors); NaN parts make every ordering compare `false`, matching numpy's `invalid value` → `False`. Result is bool-dtype with mask = operand union; a real operand is promoted to complex via `result_type`. Verified: `tests/test_divergence_ma_complex_audit.py` (the 5 ordering pins) + `tests/test_expansion_ma_complex_construct.py`. |
 | REQ-5 (`//`,`%`,bitwise raise) | NOT-STARTED | open prereq blocker #872. `compute_binary`'s `int_arm`/`float_arm` would compute `//`/`%` — for complex they must raise (numpy: `ufunc 'floor_divide'/'remainder' not supported`). `bitwise_op` in `ma.rs` already raises on a `float16|float32|float64` common dtype (`if matches!(result_dt.as_str(), "float16"|"float32"|"float64")`) — the guard must extend to `complex64`/`complex128`. |
-| REQ-6 (sum/prod/mean/min/max) | NOT-STARTED | open prereq blocker #873. `ma_sum_acc`/`ma_prod_acc` keyed on `ReduceAcc` which IS impl'd for `Complex<f32>`/`Complex<f64>` (`reductions.rs`, `Acc=Self`) → sum/prod work once binding-local `AccIdentity` (`ma.rs`, currently i64/u64/f32/f64) gains complex arms. `mean`/`var`/`std`/`median` route through `to_f64_ma` (`ma.rs`) which collapses each element via `dyn_to_f64` → DROPS the imaginary part; `mean` needs a complex path. `ma_extremum` needs lexicographic complex compare (Complex not `PartialOrd`; numpy complex min/max is lexicographic, verified live 2.4.5). |
+| REQ-6 (sum/prod/mean/min/max/var/std/median) | SHIPPED | #873. `sum`/`prod` compute via `ma_sum_acc`/`ma_prod_acc` over the complex `ReduceAcc` (`Acc=Self`) + the complex `AccIdentity` arms (`ma.rs`, `impl AccIdentity for Complex<f32>`/`Complex<f64>` = `0+0j`/`1+0j`) — width-preserved. The remaining five reductions get binding-local complex helpers (`ma.rs`): `ma_complex_mean<T> -> Complex<f64>` (complex sum of unmasked / count — ALWAYS `complex128`, matching numpy's c64→c128 mean promotion, verified live 2.4.5); `ma_complex_extremum<T>(want_max)` (lexicographic `(real, then imag)` via `complex_lt`, reusing #874's order since `Complex` is not `PartialOrd`; width-preserved); `ma_complex_var<T> -> f64` (`mean(|x − mean|²)`, `|z|²=re²+im²` — REAL `float64` for BOTH c64/c128, verified live); `std = var.sqrt()`; `ma_complex_median<T>` (lexicographic `sort_by`, middle / `from_parts_f64` average of two middles for even — width-preserved). All-masked → `numpy.ma.masked` (the `count==0` guard + `None` from each helper). The `ComplexParts` trait (`ma.rs`) gives `re_f64`/`im_f64`/`from_parts_f64` independent of float width. Non-test production consumer: `PyMaskedArray::{mean,min,max,var,std}` (`#[pymethods]`) + the module `fr.ma.median`/`fr.ma.sum`/`fr.ma.prod` `#[pyfunction]`s dispatch the `DynMa::Complex32`/`Complex64` arms, reached by `fr.ma.array([1+2j,…]).mean()`/`.min()`/`.var()`/`fr.ma.median(...)`. Verified: `tests/test_expansion_ma_complex_reduce.py` (sum/prod/mean/min/max/var/std/median × complex64/128 × {masked, all-masked, single, even-median, lexicographic-tie} vs numpy.ma) + the flipped `test_complex_{mean,min,max}_computes_873` (`test_expansion_ma_complex_construct.py`) + the flipped `test_complex_mean_keeps_imag_matches_numpy` / `test_complex_var_std_real_matches_numpy` R-CODE-4 imag-drop guards (`test_divergence_ma_complex_audit.py`). |
 
 ## Architecture
 
@@ -204,9 +205,13 @@ generic body per variant. Adding complex means extending each of these sites:
   `divide` are `TypeId`-gated to f32/f64 and fall through to the scalar
   `binary_elementwise_op`/`binary_map_op` for any other `T`, so complex needs
   no SIMD kernel.)
-- `mean`/lexicographic `min`/`max` for complex live in the binding helpers
-  (`to_f64_ma` cannot serve complex `mean`; `ma_extremum` needs a complex
-  lexicographic compare). Tracked under #873.
+- `mean`/`var`/`std`/lexicographic `min`/`max`/`median` for complex live in the
+  binding helpers (`ma_complex_mean`/`ma_complex_var`/`ma_complex_extremum`/
+  `ma_complex_median`, `ma.rs`) — NOT in `to_f64_ma`, which would drop the
+  imaginary part. `mean`→`complex128`; `var`/`std`→REAL `float64`; `min`/`max`/
+  `median`→input width via lexicographic `complex_lt`. Shipped under #873 with
+  NO ferray-ma/ferray-core change (sum/prod `ReduceAcc` already existed; the
+  rest bind from sum/count, magnitude, and the lexicographic compare).
 
 ### numpy.ma complex semantics captured (verified live, numpy 2.4.5)
 

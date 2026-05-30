@@ -278,23 +278,25 @@ def test_complex_neg_computes_869():
     _eq_ma(f, n)
 
 
-# --- mean / min / max RAISE a TRACKED TypeError (pending #873) --------------
-# numpy.ma COMPUTES a complex mean (keeps the imaginary part) and lexicographic
-# min/max; flip these when #873 lands.
+# --- mean / min / max COMPUTE (#873 landed) --------------------------------
+# numpy.ma COMPUTES a complex mean (keeps the imaginary part, promotes to
+# complex128) and lexicographic min/max (real, then imag). #873 wired these
+# over the complex DynMa variants. Was: asserted a TypeError (the old gap).
+# Full coverage lives in test_expansion_ma_complex_reduce.py.
 
-def test_complex_mean_raises_pending_873():
+def test_complex_mean_computes_873():
+    n = np.ma.array(_data(), mask=_mask())
     f = fr.ma.array(_data(), mask=_mask())
-    with pytest.raises(TypeError):
-        _ = f.mean()
+    assert complex(f.mean()) == pytest.approx(complex(n.mean()))
 
 
-def test_complex_min_raises_pending_873():
+def test_complex_min_computes_873():
+    n = np.ma.array(_data(), mask=_mask())
     f = fr.ma.array(_data(), mask=_mask())
-    with pytest.raises(TypeError):
-        _ = f.min()
+    assert complex(f.min()) == complex(n.min())
 
 
-def test_complex_max_raises_pending_873():
+def test_complex_max_computes_873():
+    n = np.ma.array(_data(), mask=_mask())
     f = fr.ma.array(_data(), mask=_mask())
-    with pytest.raises(TypeError):
-        _ = f.max()
+    assert complex(f.max()) == complex(n.max())

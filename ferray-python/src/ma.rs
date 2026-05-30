@@ -19,11 +19,15 @@
 //! `==`/`!=` (compute), and `sum`/`prod` (the complex `ReduceAcc`). Complex
 //! data crosses the PyO3 boundary via `fft::complex_pyarray_to_ferray` /
 //! `complex_ferray_to_pyarray` (`Complex<T>` is not `NpElement`). Complex
-//! arithmetic (`+`/`-`/`*`/`/`/`**`, tracked #869), the `.real`/`.imag`/`conj`/
-//! `abs` methods (#870), and the real-collapsing reductions `mean`/`var`/`std`/
-//! `min`/`max` (#873) raise a tracked `TypeError`; complex ordering and bitwise
-//! raise permanently (numpy raises too). STRUCTURED/datetime masked arrays
-//! remain OUT OF SCOPE.
+//! arithmetic (`+`/`-`/`*`/`/`/`**`, #869), the `.real`/`.imag`/`conj`/`abs`
+//! methods (#870), the ordering comparisons (`<`/`<=`/`>`/`>=` LEXICOGRAPHIC,
+//! #874), and the reductions `sum`/`prod` (complex `ReduceAcc`) /
+//! `mean`/`min`/`max`/`var`/`std`/`median` (#873) all COMPUTE: `mean` is the
+//! complex sum / count (→`complex128`); `min`/`max`/`median` use numpy's
+//! lexicographic `(real, then imag)` ordering (width-preserved); `var`/`std`
+//! are the REAL `mean(|x − mean|²)` / its `sqrt` (→`float64`). Complex `//`/`%`/
+//! bitwise raise permanently (numpy raises too). STRUCTURED/datetime masked
+//! arrays remain OUT OF SCOPE.
 //!
 //! The class exposes:
 //!
@@ -406,14 +410,6 @@ impl DynMa {
             DynMa::Complex32(_) => "complex64",
             DynMa::Complex64(_) => "complex128",
         }
-    }
-
-    /// Whether the active variant is one of the two complex variants
-    /// (`complex64`/`complex128`). Real-only entry points test this before
-    /// delegating to a `match_ma_real!`-bodied helper, so they can route
-    /// complex to its own compute path or a tracked `TypeError`.
-    fn is_complex(&self) -> bool {
-        matches!(self, DynMa::Complex32(_) | DynMa::Complex64(_))
     }
 
     fn shape(&self) -> Vec<usize> {
@@ -894,6 +890,192 @@ where
     acc
 }
 
+/// Trait giving access to a complex element's real/imag parts as `f64`,
+/// independent of the underlying float width (`Complex<f32>`/`Complex<f64>`).
+/// Used by the complex full-reduction helpers (`mean`/`var`/`extremum`/
+/// `median`) which compute in `f64` and re-tag the result per numpy's
+/// promotion (mean/var/std egress widths verified live, numpy.ma 2.4.5).
+trait ComplexParts: Copy {
+    /// The real component widened to `f64`.
+    fn re_f64(self) -> f64;
+    /// The imaginary component widened to `f64`.
+    fn im_f64(self) -> f64;
+    /// Build a value of this complex type from `f64` real/imag parts, narrowing
+    /// back to the native width (used by the even-count median average, which
+    /// rounds to the input width — numpy.ma keeps `complex64` medians
+    /// `complex64`, verified live 2.4.5).
+    fn from_parts_f64(re: f64, im: f64) -> Self;
+}
+impl ComplexParts for Complex<f32> {
+    fn re_f64(self) -> f64 {
+        self.re as f64
+    }
+    fn im_f64(self) -> f64 {
+        self.im as f64
+    }
+    fn from_parts_f64(re: f64, im: f64) -> Self {
+        Complex::new(re as f32, im as f32)
+    }
+}
+impl ComplexParts for Complex<f64> {
+    fn re_f64(self) -> f64 {
+        self.re
+    }
+    fn im_f64(self) -> f64 {
+        self.im
+    }
+    fn from_parts_f64(re: f64, im: f64) -> Self {
+        Complex::new(re, im)
+    }
+}
+
+/// Lexicographic `<` for two complex elements — numpy.ma's complex ordering
+/// (`np.less` on complex compares `(real, then imag)`, verified live numpy
+/// 2.4.5). Mirrors `cmp_complex_arm!` in `compute_compare` (#874): a NaN part
+/// makes every comparison `false`, so the running extremum is kept (NaN never
+/// wins/loses an ordering — matching numpy's `invalid value` → `False`).
+fn complex_lt<C: ComplexParts>(a: C, b: C) -> bool {
+    let (are, aim) = (a.re_f64(), a.im_f64());
+    let (bre, bim) = (b.re_f64(), b.im_f64());
+    are < bre || (are == bre && aim < bim)
+}
+
+/// Mean of the unmasked complex elements as a `Complex<f64>` — numpy.ma's
+/// complex `mean` keeps the imaginary part and ALWAYS promotes to `complex128`
+/// (verified live numpy 2.4.5: a `complex64` masked array's `.mean().dtype` is
+/// `complex128`). Computed as the complex sum of unmasked slots divided by the
+/// unmasked count (`numpy/ma/core.py:5417` `_mean` = `sum / count`). Returns
+/// `None` when every element is masked (caller maps that to `numpy.ma.masked`).
+fn ma_complex_mean<T>(m: &RustMa<Complex<T>, IxDyn>) -> Option<Complex<f64>>
+where
+    Complex<T>: ferray_core::Element + ComplexParts,
+{
+    let mut acc = Complex::<f64>::new(0.0, 0.0);
+    let mut count: usize = 0;
+    for (&v, &mk) in m.data().iter().zip(m.mask().iter()) {
+        if mk {
+            continue;
+        }
+        acc.re += v.re_f64();
+        acc.im += v.im_f64();
+        count += 1;
+    }
+    if count == 0 {
+        return None;
+    }
+    let n = count as f64;
+    Some(Complex::new(acc.re / n, acc.im / n))
+}
+
+/// Variance of the unmasked complex elements as a REAL `f64` — numpy's complex
+/// variance is `mean(|x - mean|²)` where `|z|² = re² + im²`, a REAL quantity,
+/// and ALWAYS returns `float64` regardless of input width (verified live numpy
+/// 2.4.5: both `complex64`/`complex128` `.var().dtype` are `float64`). `ddof`
+/// matches numpy's default `0` (divisor = unmasked count). Returns `None` when
+/// every element is masked (caller maps to `numpy.ma.masked`).
+fn ma_complex_var<T>(m: &RustMa<Complex<T>, IxDyn>) -> Option<f64>
+where
+    Complex<T>: ferray_core::Element + ComplexParts,
+{
+    let mean = ma_complex_mean(m)?;
+    let mut sq_sum = 0.0f64;
+    let mut count: usize = 0;
+    for (&v, &mk) in m.data().iter().zip(m.mask().iter()) {
+        if mk {
+            continue;
+        }
+        let dr = v.re_f64() - mean.re;
+        let di = v.im_f64() - mean.im;
+        sq_sum += dr * dr + di * di;
+        count += 1;
+    }
+    // `count` is the same unmasked count `ma_complex_mean` saw as non-zero, so
+    // it is ≥ 1 here.
+    Some(sq_sum / count as f64)
+}
+
+/// Lexicographic minimum (`want_max=false`) / maximum (`want_max=true`) unmasked
+/// complex element, kept in the INPUT complex width. numpy.ma `min`/`max` on
+/// complex use the lexicographic `(real, then imag)` ordering (verified live
+/// numpy 2.4.5: `.min()`/`.max()` select by `np.minimum`/`np.maximum` which
+/// compare complex lexicographically) and KEEP the input dtype (no promotion).
+/// Returns `None` when every element is masked.
+fn ma_complex_extremum<T>(m: &RustMa<Complex<T>, IxDyn>, want_max: bool) -> Option<Complex<T>>
+where
+    Complex<T>: ferray_core::Element + ComplexParts,
+{
+    let mut acc: Option<Complex<T>> = None;
+    for (&v, &mk) in m.data().iter().zip(m.mask().iter()) {
+        if mk {
+            continue;
+        }
+        acc = Some(match acc {
+            None => v,
+            Some(a) => {
+                // `complex_lt` is false for any NaN part, so a NaN running value
+                // is kept and a NaN candidate never displaces it — matching the
+                // NaN-keeps-running behavior of the real `ma_extremum`.
+                if want_max {
+                    if complex_lt(a, v) { v } else { a }
+                } else if complex_lt(v, a) {
+                    v
+                } else {
+                    a
+                }
+            }
+        });
+    }
+    acc
+}
+
+/// Median of the unmasked complex elements, kept in the INPUT complex width —
+/// numpy.ma `median` sorts complex LEXICOGRAPHICALLY `(real, then imag)` and
+/// returns the middle element (odd count) or the complex average of the two
+/// middle elements (even count); the width is preserved (verified live numpy
+/// 2.4.5: a `complex64` masked array's `np.ma.median(...).dtype` is
+/// `complex64`, the even-count average rounds back to the input width).
+/// Returns `None` when every element is masked.
+fn ma_complex_median<T>(m: &RustMa<Complex<T>, IxDyn>) -> Option<Complex<T>>
+where
+    Complex<T>: ferray_core::Element + ComplexParts,
+{
+    let mut vals: Vec<Complex<T>> = m
+        .data()
+        .iter()
+        .zip(m.mask().iter())
+        .filter_map(|(&v, &mk)| if mk { None } else { Some(v) })
+        .collect();
+    if vals.is_empty() {
+        return None;
+    }
+    // Lexicographic sort `(real, then imag)`; NaN parts compare `false` in
+    // `complex_lt`, so the `Equal` fallback keeps them stable (numpy sorts
+    // NaN-complex to the end, but masked-array medians of all-finite data are
+    // the verified target — NaN handling stays the running-stable order).
+    vals.sort_by(|&a, &b| {
+        if complex_lt(a, b) {
+            ::std::cmp::Ordering::Less
+        } else if complex_lt(b, a) {
+            ::std::cmp::Ordering::Greater
+        } else {
+            ::std::cmp::Ordering::Equal
+        }
+    });
+    let n = vals.len();
+    if n % 2 == 1 {
+        Some(vals[n / 2])
+    } else {
+        // Even count: complex average of the two central elements, computed in
+        // `f64` then narrowed back to the input width (numpy keeps `complex64`
+        // medians `complex64`, verified live 2.4.5).
+        let lo = vals[n / 2 - 1];
+        let hi = vals[n / 2];
+        let re = (lo.re_f64() + hi.re_f64()) / 2.0;
+        let im = (lo.im_f64() + hi.im_f64()) / 2.0;
+        Some(<Complex<T> as ComplexParts>::from_parts_f64(re, im))
+    }
+}
+
 /// Coerce a single Python scalar to the masked array's element type `T` by
 /// routing it through `numpy.asarray(value, dtype)` (numpy's cast of a
 /// `fill_value` / RHS scalar to `self.dtype`, R-CODE-4 — no hard-f64 funnel),
@@ -1111,13 +1293,27 @@ impl PyMaskedArray {
     }
 
     /// Mean of unmasked elements (full reduction). All-masked reduces to the
-    /// `numpy.ma.masked` singleton (`numpy/ma/core.py:5417`). float64.
+    /// `numpy.ma.masked` singleton (`numpy/ma/core.py:5417`). Real dtypes yield
+    /// `float64`. Complex yields a `complex128` scalar (the imaginary part is
+    /// kept; numpy.ma's complex `mean` is the complex sum / count and ALWAYS
+    /// promotes to `complex128`, verified live numpy 2.4.5 — a `complex64`
+    /// array's `.mean().dtype` is `complex128`).
     fn mean<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.to_f64_ma()?.mean().map_err(ferr_to_pyerr)?;
-        Ok(v.into_pyobject(py)?.into_any())
+        let complex_mean = match &self.inner {
+            DynMa::Complex32(m) => ma_complex_mean(m),
+            DynMa::Complex64(m) => ma_complex_mean(m),
+            _ => {
+                let v = self.to_f64_ma()?.mean().map_err(ferr_to_pyerr)?;
+                return Ok(v.into_pyobject(py)?.into_any());
+            }
+        };
+        match complex_mean {
+            Some(v) => complex_scalar_pyobject::<f64>(py, v),
+            None => ma_masked_singleton(py),
+        }
     }
 
     /// Minimum unmasked element. All-masked reduces to the `numpy.ma.masked`
@@ -1128,17 +1324,29 @@ impl PyMaskedArray {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        // Complex `min` uses numpy's lexicographic complex ordering (not the
-        // `PartialOrd` `ma_extremum` path) — deferred to #873.
-        if self.inner.is_complex() {
-            return complex_reduction_pending("min");
+        // Complex `min` uses numpy's lexicographic complex ordering (`(real,
+        // then imag)`, verified live numpy 2.4.5) and keeps the input width.
+        match &self.inner {
+            DynMa::Complex32(m) => {
+                return match ma_complex_extremum(m, false) {
+                    Some(v) => complex_scalar_pyobject::<f32>(py, v),
+                    None => ma_masked_singleton(py),
+                };
+            }
+            DynMa::Complex64(m) => {
+                return match ma_complex_extremum(m, false) {
+                    Some(v) => complex_scalar_pyobject::<f64>(py, v),
+                    None => ma_masked_singleton(py),
+                };
+            }
+            _ => {}
         }
         match_ma_real!(&self.inner, m, T => {
             match ma_extremum(m, false) {
                 Some(v) => scalar_pyobject(py, v),
                 None => ma_masked_singleton(py),
             }
-        }, complex => { complex_reduction_pending("min") })
+        }, complex => { unreachable_complex_egress() })
     }
 
     /// Maximum unmasked element. All-masked reduces to the `numpy.ma.masked`
@@ -1148,37 +1356,75 @@ impl PyMaskedArray {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        // Complex `max` uses numpy's lexicographic complex ordering — #873.
-        if self.inner.is_complex() {
-            return complex_reduction_pending("max");
+        // Complex `max` uses numpy's lexicographic complex ordering (`(real,
+        // then imag)`, verified live numpy 2.4.5) and keeps the input width.
+        match &self.inner {
+            DynMa::Complex32(m) => {
+                return match ma_complex_extremum(m, true) {
+                    Some(v) => complex_scalar_pyobject::<f32>(py, v),
+                    None => ma_masked_singleton(py),
+                };
+            }
+            DynMa::Complex64(m) => {
+                return match ma_complex_extremum(m, true) {
+                    Some(v) => complex_scalar_pyobject::<f64>(py, v),
+                    None => ma_masked_singleton(py),
+                };
+            }
+            _ => {}
         }
         match_ma_real!(&self.inner, m, T => {
             match ma_extremum(m, true) {
                 Some(v) => scalar_pyobject(py, v),
                 None => ma_masked_singleton(py),
             }
-        }, complex => { complex_reduction_pending("max") })
+        }, complex => { unreachable_complex_egress() })
     }
 
     /// Variance of unmasked elements. All-masked (count==0) reduces to the
-    /// `numpy.ma.masked` singleton (numpy's `_var` yields `masked`). Computed
-    /// in f64 (numpy promotes integer/bool input to float for `var`/`std`).
+    /// `numpy.ma.masked` singleton (numpy's `_var` yields `masked`). Real
+    /// dtypes compute in f64 (numpy promotes integer/bool input to float for
+    /// `var`/`std`). Complex `var` is `mean(|x − mean|²)` — a REAL quantity —
+    /// and ALWAYS returns `float64` (verified live numpy 2.4.5: both
+    /// `complex64`/`complex128` `.var().dtype` are `float64`).
     fn var<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.to_f64_ma()?.var().map_err(ferr_to_pyerr)?;
-        Ok(v.into_pyobject(py)?.into_any())
+        let complex_var = match &self.inner {
+            DynMa::Complex32(m) => ma_complex_var(m),
+            DynMa::Complex64(m) => ma_complex_var(m),
+            _ => {
+                let v = self.to_f64_ma()?.var().map_err(ferr_to_pyerr)?;
+                return Ok(v.into_pyobject(py)?.into_any());
+            }
+        };
+        match complex_var {
+            Some(v) => Ok(v.into_pyobject(py)?.into_any()),
+            None => ma_masked_singleton(py),
+        }
     }
 
     /// Standard deviation of unmasked elements. All-masked (count==0) reduces
-    /// to the `numpy.ma.masked` singleton. Computed in f64 (promote-to-float).
+    /// to the `numpy.ma.masked` singleton. Real dtypes compute in f64
+    /// (promote-to-float). Complex `std` is `sqrt(var)` over the REAL complex
+    /// variance and ALWAYS returns `float64` (verified live numpy 2.4.5).
     fn std<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.to_f64_ma()?.std().map_err(ferr_to_pyerr)?;
-        Ok(v.into_pyobject(py)?.into_any())
+        let complex_var = match &self.inner {
+            DynMa::Complex32(m) => ma_complex_var(m),
+            DynMa::Complex64(m) => ma_complex_var(m),
+            _ => {
+                let v = self.to_f64_ma()?.std().map_err(ferr_to_pyerr)?;
+                return Ok(v.into_pyobject(py)?.into_any());
+            }
+        };
+        match complex_var {
+            Some(v) => Ok(v.sqrt().into_pyobject(py)?.into_any()),
+            None => ma_masked_singleton(py),
+        }
     }
 
     /// Sum along an axis. Returns a `MaskedArray` (mask flags axes
@@ -4257,11 +4503,30 @@ pub fn prod<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAn
 }
 
 /// `numpy.ma.median(a)` — median of unmasked elements. All-masked reduces
-/// to the `numpy.ma.masked` singleton. Computed in f64 (promote-to-float).
+/// to the `numpy.ma.masked` singleton. Real dtypes compute in f64
+/// (promote-to-float). Complex sorts LEXICOGRAPHICALLY `(real, then imag)` and
+/// returns the middle element (odd count) or the complex average of the two
+/// middles (even count), keeping the input complex width (verified live numpy
+/// 2.4.5: a `complex64` array's `np.ma.median(...).dtype` is `complex64`).
 #[pyfunction]
 pub fn median<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
     if a.all_masked()? {
         return ma_masked_singleton(py);
+    }
+    match &a.inner {
+        DynMa::Complex32(m) => {
+            return match ma_complex_median(m) {
+                Some(v) => complex_scalar_pyobject::<f32>(py, v),
+                None => ma_masked_singleton(py),
+            };
+        }
+        DynMa::Complex64(m) => {
+            return match ma_complex_median(m) {
+                Some(v) => complex_scalar_pyobject::<f64>(py, v),
+                None => ma_masked_singleton(py),
+            };
+        }
+        _ => {}
     }
     let v = a.to_f64_ma()?.median().map_err(ferr_to_pyerr)?;
     Ok(v.into_pyobject(py)?.into_any())
