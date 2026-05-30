@@ -382,3 +382,14 @@ crate_pattern = "ferray-ma/src/interop.rs"
 upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]
 design = ".design/ferray-ma.md"
 parity_ops = ["ma_apply_unary", "MaskAware"]
+
+# Window-function bindings: bartlett/blackman/hamming/hanning/kaiser etc.
+# NumPy types `M` as a signed float named `M` (def hanning(M)) and guards
+# `if M < 1: return array([], dtype=float64)`. The binding marshals M as a
+# Python object, coerces it to a signed integer count, and short-circuits the
+# empty-array case so a negative or integral-float M matches numpy.
+[[route]]
+crate_pattern = "ferray-python/src/window.rs"
+upstream = ["/home/doll/numpy-ref/numpy/lib/_function_base_impl.py"]
+design = ".design/ferray-window.md"
+parity_ops = ["bartlett", "blackman", "hamming", "hanning", "kaiser"]

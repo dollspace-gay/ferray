@@ -185,6 +185,46 @@ pub fn promote_linalg_input<'py>(
     coerce_dtype(py, &arr, "float64")
 }
 
+/// Coerce a window-length argument `M` to a signed integer count, mirroring
+/// NumPy's window functions.
+///
+/// NumPy types `M` as `_FloatLike_co` and casts it to `float64` internally —
+/// every window does `values = np.array([0.0, M]); M = values[1]`
+/// (numpy/lib/_function_base_impl.py:3346 `hanning`, :3244 `bartlett`,
+/// :3137 `blackman`, :3445 `hamming`, :3727 `kaiser`). So both an integer
+/// (`np.hanning(8)`) and an integral float (`np.hanning(8.0)`) are accepted,
+/// and a value `< 1` (e.g. `-1`, `-1.0`, `0`) routes through each window's
+/// `if M < 1: return array([], dtype=float64)` guard
+/// (:3349-3350 `hanning`, etc.; `kaiser` reaches the empty array via
+/// `n = arange(0, M)` over a non-positive `M`, :3733).
+///
+/// The ferray-window library typed `M` as a `usize` count, so a negative or
+/// float `M` was rejected at the PyO3 boundary (`OverflowError` /
+/// `TypeError`). This helper restores numpy's contract on the marshalling
+/// side: accept any int- or float-coercible object, truncate toward zero to
+/// an integer count (numpy's window math is defined on integer sample counts
+/// for the integral-`M` inputs these bindings target), and let the caller
+/// short-circuit `M < 1 -> empty float64 array`. A non-numeric object raises
+/// `TypeError`, matching numpy (`np.hanning('x')` -> TypeError).
+pub fn coerce_window_m(obj: &Bound<'_, PyAny>) -> PyResult<isize> {
+    if let Ok(n) = obj.extract::<isize>() {
+        return Ok(n);
+    }
+    if let Ok(f) = obj.extract::<f64>() {
+        if !f.is_finite() {
+            return Err(PyValueError::new_err(
+                "M must be a finite number (got a non-finite float)",
+            ));
+        }
+        // Truncate toward zero, matching `int(M)` for the integral-float
+        // inputs these bindings target.
+        return Ok(f.trunc() as isize);
+    }
+    Err(PyTypeError::new_err(
+        "M must be an integer or a float (got a non-numeric object)",
+    ))
+}
+
 /// Accept either a Python integer (1-D) or a sequence of integers
 /// (N-D). Mirrors `numpy.zeros(5)` and `numpy.zeros((3, 4))`.
 pub fn extract_shape(obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
