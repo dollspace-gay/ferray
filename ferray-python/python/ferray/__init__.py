@@ -1032,6 +1032,101 @@ def einsum_path(*operands, optimize="greedy", einsum_call=False):
     return _np.einsum_path(*operands, optimize=optimize, einsum_call=einsum_call)
 
 
+# ---------------------------------------------------------------------------
+# NumPy dtype-scalar type objects + array-protocol iterator/info classes
+# (expansion, refs #818).
+#
+# These names are the SHARED dtype/protocol vocabulary of the array boundary,
+# NOT computation that ferray translates. ferray arrays ARE numpy.ndarray at
+# the Python boundary (they marshal through the numpy crate), and ferray's
+# creation/dtype functions already accept and produce numpy dtypes. For a
+# true drop-in (`import ferray as np`), the dtype-scalar TYPE OBJECTS
+# (np.float64, np.int8, np.complex128, np.bool_, ...) and the array-protocol
+# classes (np.ndarray, np.nditer, np.ndindex, np.ndenumerate, np.broadcast,
+# np.flatiter, np.poly1d) must exist on `ferray` and BE numpy's — exactly as
+# ferray.dtype already re-exposes numpy's dtype constants. Binding each to the
+# numpy object is the correct drop-in behavior: `fr.float64 is np.float64`,
+# `isinstance(fr.zeros(3), fr.ndarray)`, `list(fr.ndindex(2,2))` all match
+# numpy because the boundary object IS the numpy object.
+# (numpy/_core/numerictypes.py — scalar type registration;
+#  numpy/__init__.pyi — public type-object surface.)
+# ---------------------------------------------------------------------------
+
+# Concrete dtype-scalar types (sized + C-named aliases).
+bool = _np.bool_  # noqa: A001 - NumPy compat: np.bool is the numpy bool scalar
+bool_ = _np.bool_
+byte = _np.byte
+bytes_ = _np.bytes_
+cdouble = _np.cdouble
+character = _np.character
+clongdouble = _np.clongdouble
+complex64 = _np.complex64
+complex128 = _np.complex128
+complex256 = _np.complex256
+csingle = _np.csingle
+datetime64 = _np.datetime64
+double = _np.double
+float16 = _np.float16
+float32 = _np.float32
+float64 = _np.float64
+float128 = _np.float128
+half = _np.half
+int8 = _np.int8
+int16 = _np.int16
+int32 = _np.int32
+int64 = _np.int64
+int_ = _np.int_
+intc = _np.intc
+intp = _np.intp
+long = _np.long
+longdouble = _np.longdouble
+longlong = _np.longlong
+object_ = _np.object_
+short = _np.short
+single = _np.single
+str_ = _np.str_
+timedelta64 = _np.timedelta64
+ubyte = _np.ubyte
+uint = _np.uint
+uint8 = _np.uint8
+uint16 = _np.uint16
+uint32 = _np.uint32
+uint64 = _np.uint64
+uintc = _np.uintc
+uintp = _np.uintp
+ulong = _np.ulong
+ulonglong = _np.ulonglong
+ushort = _np.ushort
+void = _np.void
+
+# Abstract scalar-type bases (the numpy type hierarchy).
+generic = _np.generic
+number = _np.number
+integer = _np.integer
+signedinteger = _np.signedinteger
+unsignedinteger = _np.unsignedinteger
+inexact = _np.inexact
+floating = _np.floating
+complexfloating = _np.complexfloating
+flexible = _np.flexible
+
+# Array type + array-protocol iterator/info classes. ferray arrays ARE
+# numpy.ndarray, so these operate on ferray arrays directly.
+ndarray = _np.ndarray
+broadcast = _np.broadcast
+nditer = _np.nditer
+ndindex = _np.ndindex
+ndenumerate = _np.ndenumerate
+flatiter = _np.flatiter
+
+# numpy.poly1d — the classic 1-D polynomial CLASS (highest-degree-first
+# coefficients), complementing ferray's already-bound poly* functions. numpy
+# implements poly1d in pure Python over coefficient ndarrays
+# (numpy/lib/_polynomial_impl.py class poly1d); ferray arrays are those
+# numpy.ndarray coefficient arrays, so the class is exposed directly.
+poly1d = _np.poly1d
+
+
 __all__ = [
     "__version__",
     # submodules
@@ -1119,4 +1214,17 @@ __all__ = [
     "get_printoptions", "set_printoptions", "printoptions", "errstate",
     "geterr", "seterr", "geterrcall", "seterrcall", "getbufsize", "setbufsize",
     "get_include", "show_config", "show_runtime", "info", "test", "einsum_path",
+    # dtype-scalar type objects + abstract bases (expansion, refs #818)
+    "bool", "bool_", "byte", "bytes_", "cdouble", "character", "clongdouble",
+    "complex64", "complex128", "complex256", "csingle", "datetime64", "double",
+    "float16", "float32", "float64", "float128", "half",
+    "int8", "int16", "int32", "int64", "int_", "intc", "intp",
+    "long", "longdouble", "longlong", "object_", "short", "single", "str_",
+    "timedelta64", "ubyte", "uint", "uint8", "uint16", "uint32", "uint64",
+    "uintc", "uintp", "ulong", "ulonglong", "ushort", "void",
+    "generic", "number", "integer", "signedinteger", "unsignedinteger",
+    "inexact", "floating", "complexfloating", "flexible",
+    # array type + array-protocol classes (expansion, refs #818)
+    "ndarray", "broadcast", "nditer", "ndindex", "ndenumerate", "flatiter",
+    "poly1d",
 ]
