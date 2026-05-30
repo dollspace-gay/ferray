@@ -197,21 +197,26 @@ impl PyMaskedArray {
         let data_arr = coerce_dtype(py, data, "float64")?;
         let data_view: PyReadonlyArrayDyn<f64> = data_arr.extract()?;
         let data_fa: ArrayD<f64> = data_view.as_ferray().map_err(ferr_to_pyerr)?;
-        let mask_fa: ArrayD<bool> = match mask {
-            None => {
-                // Default mask: all-false (nothing masked).
-                let n = data_fa.size();
-                let shape = data_fa.shape().to_vec();
-                ArrayD::<bool>::from_vec(IxDyn::new(&shape), vec![false; n])
-                    .map_err(ferr_to_pyerr)?
-            }
+        // numpy distinguishes `nomask` (the singleton, from `ma.array(data)`
+        // with no `mask=`) from an explicit all-False mask (`mask=[0, ...]`):
+        // `MaskedArray._mask is nomask` for the former and a real bool array
+        // for the latter (`numpy/ma/core.py:1468`). The distinction is
+        // observable in `put` — its hard-mask zero-pad branch is gated on
+        // `self._hardmask and self._mask is not nomask` (core.py:4899), so a
+        // hardened nomask array falls through to `ndarray.put` (core.py:4907)
+        // and CYCLES a short `values`, while a hardened explicit-all-False
+        // array zero-pads. We preserve that distinction by routing `mask=None`
+        // through `MaskedArray::from_data` (the nomask sentinel, `real_mask =
+        // false`) and only materializing a real mask for an explicit `mask=`.
+        let inner = match mask {
+            None => RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?,
             Some(m) => {
                 let m_arr = coerce_dtype(py, m, "bool")?;
                 let m_view: PyReadonlyArrayDyn<bool> = m_arr.extract()?;
-                m_view.as_ferray().map_err(ferr_to_pyerr)?
+                let mask_fa: ArrayD<bool> = m_view.as_ferray().map_err(ferr_to_pyerr)?;
+                RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?
             }
         };
-        let inner = RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?;
         Ok(Self { inner })
     }
 
