@@ -54,6 +54,17 @@ upstream = [
 design = ".design/ferray-stride-tricks.md"
 parity_ops = ["broadcast_arrays", "broadcast_shapes", "broadcast_to", "sliding_window_view", "as_strided"]
 
+# Library crate owning sliding_window_view semantics (the divergence
+# correctness lives here; ferray-python/src/stride_tricks.rs is the thin
+# marshalling shim over it).
+[[route]]
+crate_pattern = "ferray-stride-tricks/src/sliding_window.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/lib/_stride_tricks_impl.py",
+]
+design = ".design/ferray-stride-tricks.md"
+parity_ops = ["sliding_window_view"]
+
 [[route]]
 crate_pattern = "ferray-python/src/stats.rs"
 upstream = [

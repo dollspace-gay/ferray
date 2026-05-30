@@ -116,16 +116,23 @@ pub fn sliding_window_view<'a, T: Element, D: Dimension>(
 /// must have the same length as `axes`. Other axes are kept at their
 /// full size in the output.
 ///
-/// Output shape: `[outer_dims..., window_shape...]` where each `outer_dim`
-/// is `src_shape[i] - window_shape[axes.position(i)] + 1` for windowed
-/// axes and `src_shape[i]` for non-windowed axes. Window axes appear at
+/// `axes` may contain the SAME axis more than once (numpy passes
+/// `normalize_axis_tuple(axis, x.ndim, allow_duplicate=True)`). Each
+/// `(axis, window)` pair is processed positionally, and every use of an
+/// axis reduces that axis's remaining length by `window - 1`, so a
+/// repeated axis is trimmed once per occurrence and contributes one window
+/// dimension per occurrence (#811).
+///
+/// Output shape: `[outer_dims..., window_shape...]` where `outer_dims`
+/// starts from `src_shape` and each `(axis, window)` pair subtracts
+/// `window - 1` from `outer_dims[axis]` cumulatively. Window axes appear at
 /// the end in the order given by `axes`. This matches numpy's
 /// `sliding_window_view(x, window_shape, axis=axes)`.
 ///
 /// # Errors
 /// - `FerrayError::InvalidValue` if `axes.len() != window_shape.len()`,
 ///   any axis is out of bounds, any window dimension is 0, or any
-///   window exceeds its axis size.
+///   window exceeds its axis's remaining (cumulatively trimmed) size.
 pub fn sliding_window_view_axis<'a, T: Element, D: Dimension>(
     array: &'a Array<T, D>,
     window_shape: &[usize],
@@ -149,37 +156,54 @@ pub fn sliding_window_view_axis<'a, T: Element, D: Dimension>(
             )));
         }
     }
-    for (slot, (&ax, &w)) in axes.iter().zip(window_shape.iter()).enumerate() {
+    for (slot, &w) in window_shape.iter().enumerate() {
         if w == 0 {
             return Err(FerrayError::invalid_value(format!(
                 "window_shape[{slot}] must be >= 1, got 0"
             )));
         }
-        if w > src_shape[ax] {
-            return Err(FerrayError::invalid_value(format!(
-                "window_shape[{slot}] ({w}) exceeds array axis {ax} (size {})",
-                src_shape[ax],
-            )));
-        }
     }
 
-    // Outer (per-input-axis) shape: replace windowed axes with
-    // src - w + 1, leave others as src.
-    let mut out_shape = Vec::with_capacity(ndim + axes.len());
-    for (i, &n) in src_shape.iter().enumerate() {
-        if let Some(slot) = axes.iter().position(|&a| a == i) {
-            out_shape.push(n - window_shape[slot] + 1);
-        } else {
-            out_shape.push(n);
+    // Outer (per-input-axis) shape: mirror numpy's cumulative trimming
+    // (_stride_tricks_impl.py:436-442):
+    //
+    //   x_shape_trimmed = list(x.shape)
+    //   for ax, dim in zip(axis, window_shape):
+    //       if x_shape_trimmed[ax] < dim:
+    //           raise ValueError(...)
+    //       x_shape_trimmed[ax] -= dim - 1
+    //
+    // numpy starts from x.shape and, for each (axis, window) pair in
+    // zip(axis, window_shape), subtracts `window - 1` from THAT axis's
+    // running length. When the same axis is used several times, every use
+    // reduces the corresponding original dimension once more, so a
+    // duplicate axis is trimmed cumulatively rather than only at its first
+    // occurrence — and the size check is against the *running* (already
+    // trimmed) length, not the original size. The no-duplicate path is
+    // identical: each axis appears once, so it is trimmed exactly once and
+    // the check reduces to `w > src_shape[ax]`.
+    let mut trimmed: Vec<usize> = src_shape.to_vec();
+    for (slot, (&ax, &w)) in axes.iter().zip(window_shape.iter()).enumerate() {
+        if w > trimmed[ax] {
+            return Err(FerrayError::invalid_value(format!(
+                "window_shape[{slot}] ({w}) exceeds array axis {ax} (remaining size {})",
+                trimmed[ax],
+            )));
         }
+        trimmed[ax] -= w - 1;
     }
+    let mut out_shape = Vec::with_capacity(ndim + axes.len());
+    out_shape.extend_from_slice(&trimmed);
     // Window axes (in axes order).
     for &w in window_shape {
         out_shape.push(w);
     }
 
     // Strides: outer = original src_strides, window = src_strides for
-    // each axis in axes (preserves the within-window step).
+    // each axis in axes (preserves the within-window step). Mirrors numpy
+    // `out_strides = x.strides + tuple(x.strides[ax] for ax in axis)`
+    // (_stride_tricks_impl.py:433) — a repeated axis contributes its stride
+    // once per occurrence.
     let mut out_strides = Vec::with_capacity(ndim + axes.len());
     for &s in src_strides {
         debug_assert!(s >= 0);
@@ -224,6 +248,41 @@ mod tests {
         let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 5]), (1..=10).collect()).unwrap();
         let v = sliding_window_view_axis(&a, &[3], &[1]).unwrap();
         assert_eq!(v.shape(), &[2, 3, 3]);
+    }
+
+    #[test]
+    fn axis_duplicate_axis_trims_cumulatively() {
+        // #811: the SAME axis windowed repeatedly. numpy
+        // (_stride_tricks_impl.py:436-442) reduces the corresponding
+        // original dimension once per use.
+        //
+        // Live oracle:
+        //   x = np.arange(12).reshape(3, 4)
+        //   sliding_window_view(x, (2, 3), (1, 1)).shape == (3, 1, 2, 3)
+        //   strides (bytes) == (32, 8, 8, 8)
+        //   values[0, 0] == [[0, 1, 2], [1, 2, 3]]
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([3, 4]), (0..12).collect()).unwrap();
+        let v = sliding_window_view_axis(&a, &[2, 3], &[1, 1]).unwrap();
+        assert_eq!(v.shape(), &[3, 1, 2, 3]);
+        // Window over the first source row [0, 1, 2, 3]: trailing window
+        // dims (w0=2, w1=3) -> rows [0, 1, 2] and [1, 2, 3].
+        let data: Vec<i32> = v.iter().copied().collect();
+        assert_eq!(&data[0..6], &[0, 1, 2, 1, 2, 3]);
+        // Second outer block is source row [4, 5, 6, 7].
+        assert_eq!(&data[6..12], &[4, 5, 6, 5, 6, 7]);
+        // Third outer block is source row [8, 9, 10, 11].
+        assert_eq!(&data[12..18], &[8, 9, 10, 9, 10, 11]);
+    }
+
+    #[test]
+    fn axis_duplicate_axis_overflow_errors() {
+        // #811: validation is against the *running* trimmed length. On a
+        // size-4 axis used twice, windows (3, 3) overflow: 4 trims to 2,
+        // then 2 < 3 -> error (numpy raises ValueError here).
+        let a = Array::<i32, Ix2>::from_vec(Ix2::new([3, 4]), (0..12).collect()).unwrap();
+        assert!(sliding_window_view_axis(&a, &[3, 3], &[1, 1]).is_err());
+        // But (2, 3) is fine (4 -> 3 -> 1).
+        assert!(sliding_window_view_axis(&a, &[2, 3], &[1, 1]).is_ok());
     }
 
     #[test]
