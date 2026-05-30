@@ -68,9 +68,20 @@ crate_pattern = "ferray-python/src/conv.rs"
 upstream = [
   "/home/doll/numpy-ref/numpy/_core/numeric.py",
   "/home/doll/numpy-ref/numpy/exceptions.py",
+  "/home/doll/numpy-ref/numpy/linalg/_linalg.py",
 ]
 design = ".design/ferray-core.md"
-parity_ops = ["normalize_axis_index", "normalize_axis_tuple", "AxisError"]
+parity_ops = ["normalize_axis_index", "normalize_axis_tuple", "AxisError", "LinAlgError"]
+
+# ferray-python linalg binding shim: marshals numpy.linalg.* through to the
+# ferray-linalg crate. Owns the boundary concerns: numpy.linalg.LinAlgError
+# exception mapping, int->float64 _commonType promotion, top-level product
+# registration (dot/vdot/matmul/inner/outer), qr(mode='r') / svd(compute_uv).
+[[route]]
+crate_pattern = "ferray-python/src/linalg.rs"
+upstream = ["/home/doll/numpy-ref/numpy/linalg/_linalg.py"]
+design = ".design/ferray-linalg.md"
+parity_ops = ["dot", "vdot", "matmul", "inner", "outer", "eigvals", "norm", "det", "inv", "solve", "qr", "svd", "cholesky"]
 
 [[route]]
 crate_pattern = "ferray-python/src/manipulation.rs"

@@ -81,6 +81,15 @@ fn register_linalg_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -
     m.add_function(wrap_pyfunction!(linalg::svd, &m)?)?;
     m.add_function(wrap_pyfunction!(linalg::eigh, &m)?)?;
     m.add_function(wrap_pyfunction!(linalg::eigvalsh, &m)?)?;
+    m.add_function(wrap_pyfunction!(linalg::eigvals, &m)?)?;
+    // numpy.linalg.LinAlgError (subclass of ValueError) — expose the public
+    // exception type so `except numpy.linalg.LinAlgError` works against
+    // ferray (_linalg.py:115 `class LinAlgError(ValueError)`). It is the
+    // same object numpy raises, imported from numpy.linalg.
+    m.add(
+        "LinAlgError",
+        py.import("numpy.linalg")?.getattr("LinAlgError")?,
+    )?;
     m.add_function(wrap_pyfunction!(linalg::solve, &m)?)?;
     m.add_function(wrap_pyfunction!(linalg::inv, &m)?)?;
     m.add_function(wrap_pyfunction!(linalg::pinv, &m)?)?;
@@ -643,6 +652,16 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(stats::histogramdd, m)?)?;
     m.add_function(wrap_pyfunction!(stats::bincount, m)?)?;
     m.add_function(wrap_pyfunction!(stats::digitize, m)?)?;
+    // Top-level vector/matrix products. numpy exposes dot/vdot/matmul/inner/
+    // outer at the package root (numpy/__init__.pyi), not just under
+    // numpy.linalg, so a drop-in `import ferray as np` must mirror them.
+    m.add_function(wrap_pyfunction!(linalg::dot, m)?)?;
+    m.add_function(wrap_pyfunction!(linalg::vdot, m)?)?;
+    m.add_function(wrap_pyfunction!(linalg::matmul, m)?)?;
+    m.add_function(wrap_pyfunction!(linalg::inner, m)?)?;
+    m.add_function(wrap_pyfunction!(linalg::outer, m)?)?;
+    m.add_function(wrap_pyfunction!(linalg::tensordot, m)?)?;
+    m.add_function(wrap_pyfunction!(linalg::kron, m)?)?;
     // Top-level vector products (numpy 2.0+)
     m.add_function(wrap_pyfunction!(linalg::matvec, m)?)?;
     m.add_function(wrap_pyfunction!(linalg::vecmat, m)?)?;

@@ -116,6 +116,75 @@ pub fn ferr_to_pyerr(e: FerrayError) -> PyErr {
     }
 }
 
+/// Convert a [`FerrayError`] from a `numpy.linalg.*` operation into the
+/// closest CPython exception, raising `numpy.linalg.LinAlgError` where
+/// NumPy does.
+///
+/// NumPy's linalg functions raise `numpy.linalg.LinAlgError` (a subclass
+/// of `ValueError`) for the Linear-Algebra failure modes — singular
+/// matrix (_linalg.py:145 `raise LinAlgError("Singular matrix")`),
+/// non-positive-definite cholesky (_linalg.py:148
+/// `raise LinAlgError("Matrix is not positive definite")`), and the
+/// square-matrix-required guard (_linalg.py:259
+/// `raise LinAlgError('Last 2 dimensions of the array must be square')`).
+/// A bare `ValueError` would let `except numpy.linalg.LinAlgError`
+/// clauses silently miss those errors, so the binding must mirror the
+/// exact exception *type* (R-DEV-2).
+///
+/// ferray-linalg surfaces singular / non-convergence / numerical-
+/// instability failures via [`FerrayError::is_linalg_error`], and the
+/// non-square guard via a `ShapeMismatch` whose message names "square"
+/// (e.g. `"inv requires a square matrix, got 2x3"`). Both map onto
+/// `LinAlgError`. Everything else falls through to [`ferr_to_pyerr`].
+pub fn linalg_err_to_pyerr(py: Python<'_>, e: FerrayError) -> PyErr {
+    let is_linalg = e.is_linalg_error();
+    let is_nonsquare = matches!(&e, FerrayError::ShapeMismatch { message } if message.contains("square"));
+    if is_linalg || is_nonsquare {
+        let msg = e.to_string();
+        return match py
+            .import("numpy.linalg")
+            .and_then(|m| m.getattr("LinAlgError"))
+            .and_then(|cls| cls.call1((msg.clone(),)))
+        {
+            Ok(exc) => PyErr::from_value(exc),
+            // If numpy is somehow unavailable, fall back to a ValueError
+            // with the same message. LinAlgError subclasses ValueError, so
+            // `except ValueError` still catches both forms.
+            Err(_) => PyValueError::new_err(msg),
+        };
+    }
+    ferr_to_pyerr(e)
+}
+
+/// Coerce an integer/bool array-like to `float64` before a `numpy.linalg`
+/// call, mirroring numpy's `_commonType` (`numpy/linalg/_linalg.py`),
+/// which promotes any non-inexact (integer / bool) input to `float64`
+/// before dispatching to LAPACK. det/inv/norm/solve of an int array must
+/// therefore return `float64`, not raise. Inexact inputs (float / complex)
+/// are returned unchanged so their dtype is preserved (R-CODE-4).
+pub fn promote_linalg_input<'py>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, obj)?;
+    let dt = dtype_name(&arr)?;
+    if matches!(
+        dt.as_str(),
+        "float64"
+            | "f64"
+            | "float32"
+            | "f32"
+            | "float16"
+            | "f16"
+            | "complex64"
+            | "complex128"
+    ) {
+        return Ok(arr);
+    }
+    // Integer / bool / anything else -> float64 (numpy `_commonType`).
+    coerce_dtype(py, &arr, "float64")
+}
+
 /// Accept either a Python integer (1-D) or a sequence of integers
 /// (N-D). Mirrors `numpy.zeros(5)` and `numpy.zeros((3, 4))`.
 pub fn extract_shape(obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {

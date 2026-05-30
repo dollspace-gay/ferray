@@ -281,6 +281,14 @@ from ._ferray import (
     matvec,
     vecdot,
     vecmat,
+    # top-level vector/matrix products (numpy exposes these at the root)
+    dot,
+    vdot,
+    matmul,
+    inner,
+    outer,
+    tensordot,
+    kron,
     in1d,
     lexsort,
     partition,
@@ -434,4 +442,5 @@ __all__ = [
     "bincount", "digitize", "histogram", "histogram2d", "histogram_bin_edges", "histogramdd",
     "einsum", "matvec", "vecdot", "vecmat",
     "diagonal", "matrix_transpose",
+    "dot", "vdot", "matmul", "inner", "outer", "tensordot", "kron",
 ]
