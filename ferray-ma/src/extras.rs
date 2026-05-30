@@ -763,6 +763,565 @@ where
 }
 
 // ===========================================================================
+// Masked set operations (numpy.ma.unique / intersect1d / union1d /
+// setdiff1d / setxor1d). All operate on the *unmasked* unique values, with a
+// single trailing `masked` element iff any input element was masked — exactly
+// `numpy.ma.unique`'s observable contract (numpy/ma/extras.py:1267): masked
+// values "are considered the same element (masked)" and collapse to one slot.
+// ===========================================================================
+
+/// Sorted unique unmasked values of `ma` plus one trailing **masked** slot iff
+/// the input contained any masked element — i.e. `numpy.ma.unique(ma)`
+/// (numpy/ma/extras.py:1267).
+///
+/// The returned [`MaskedArray<T, Ix1>`] carries a mask whose only `true` entry
+/// (if present) is the final element. The data value behind that masked slot is
+/// not observable; the first masked input value is reused as a placeholder.
+///
+/// # Errors
+/// Returns an error if internal array construction fails.
+pub fn ma_unique_masked<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, Ix1>>
+where
+    T: Element + Copy + PartialOrd,
+    D: Dimension,
+{
+    let mut vals: Vec<T> = ma
+        .data()
+        .iter()
+        .zip(ma.mask().iter())
+        .filter(|(_, m)| !**m)
+        .map(|(v, _)| *v)
+        .collect();
+    vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    vals.dedup_by(|a, b| (*a).partial_cmp(&*b) == Some(std::cmp::Ordering::Equal));
+
+    let mut mask = vec![false; vals.len()];
+    // A single trailing masked slot iff any input was masked.
+    if let Some(pos) = ma.mask().iter().position(|&m| m) {
+        if let Some(placeholder) = ma.data().iter().nth(pos) {
+            vals.push(*placeholder);
+            mask.push(true);
+        }
+    }
+    let n = vals.len();
+    let data_arr = Array::<T, Ix1>::from_vec(Ix1::new([n]), vals)?;
+    let mask_arr = Array::<bool, Ix1>::from_vec(Ix1::new([n]), mask)?;
+    MaskedArray::new(data_arr, mask_arr)
+}
+
+/// Build a `MaskedArray<T, Ix1>` from explicit `(value, is_masked)` pairs.
+fn build_ma_ix1<T>(pairs: Vec<(T, bool)>) -> FerrayResult<MaskedArray<T, Ix1>>
+where
+    T: Element + Copy,
+{
+    let n = pairs.len();
+    let data: Vec<T> = pairs.iter().map(|(v, _)| *v).collect();
+    let mask: Vec<bool> = pairs.iter().map(|(_, m)| *m).collect();
+    let data_arr = Array::<T, Ix1>::from_vec(Ix1::new([n]), data)?;
+    let mask_arr = Array::<bool, Ix1>::from_vec(Ix1::new([n]), mask)?;
+    MaskedArray::new(data_arr, mask_arr)
+}
+
+/// Collect the unmasked unique values and the "any masked" flag of a
+/// `MaskedArray` (the two ingredients every masked set op consumes).
+fn unique_parts<T, D>(ma: &MaskedArray<T, D>) -> (Vec<T>, bool)
+where
+    T: Element + Copy + PartialOrd,
+    D: Dimension,
+{
+    let mut vals: Vec<T> = ma
+        .data()
+        .iter()
+        .zip(ma.mask().iter())
+        .filter(|(_, m)| !**m)
+        .map(|(v, _)| *v)
+        .collect();
+    vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    vals.dedup_by(|a, b| (*a).partial_cmp(&*b) == Some(std::cmp::Ordering::Equal));
+    let any_masked = ma.mask().iter().any(|&m| m);
+    (vals, any_masked)
+}
+
+/// `numpy.ma.intersect1d(ar1, ar2)` — sorted unique values common to both
+/// (numpy/ma/extras.py:1317). Masked values are considered equal to each other,
+/// so a masked slot appears in the result iff **both** inputs were masked.
+///
+/// numpy concatenates `unique(ar1)` and `unique(ar2)`, sorts, and keeps an
+/// element iff it equals its successor — i.e. it appears in both. With each
+/// input contributing at most one masked slot, the masked slot survives iff
+/// both contributed one.
+///
+/// # Errors
+/// Returns an error if internal array construction fails.
+pub fn ma_intersect1d<T, D>(
+    ar1: &MaskedArray<T, D>,
+    ar2: &MaskedArray<T, D>,
+) -> FerrayResult<MaskedArray<T, Ix1>>
+where
+    T: Element + Copy + PartialOrd,
+    D: Dimension,
+{
+    let (v1, m1) = unique_parts(ar1);
+    let (v2, m2) = unique_parts(ar2);
+    // Intersection of two sorted unique unmasked sequences (merge walk).
+    let mut out: Vec<(T, bool)> = Vec::new();
+    let (mut i, mut j) = (0usize, 0usize);
+    while i < v1.len() && j < v2.len() {
+        match v1[i].partial_cmp(&v2[j]) {
+            Some(std::cmp::Ordering::Equal) => {
+                out.push((v1[i], false));
+                i += 1;
+                j += 1;
+            }
+            Some(std::cmp::Ordering::Less) => i += 1,
+            Some(std::cmp::Ordering::Greater) => j += 1,
+            None => {
+                // NaN: skip the left element (NaN never equals anything).
+                i += 1;
+            }
+        }
+    }
+    // Masked slot is common iff both inputs were masked.
+    if m1 && m2 {
+        let placeholder = first_masked_value(ar1).or_else(|| first_masked_value(ar2));
+        if let Some(p) = placeholder {
+            out.push((p, true));
+        }
+    }
+    build_ma_ix1(out)
+}
+
+/// `numpy.ma.union1d(ar1, ar2)` — sorted unique union
+/// (numpy/ma/extras.py:1463): `unique(concatenate((ar1, ar2)))`. A trailing
+/// masked slot appears iff **either** input was masked.
+///
+/// # Errors
+/// Returns an error if internal array construction fails.
+pub fn ma_union1d<T, D>(
+    ar1: &MaskedArray<T, D>,
+    ar2: &MaskedArray<T, D>,
+) -> FerrayResult<MaskedArray<T, Ix1>>
+where
+    T: Element + Copy + PartialOrd,
+    D: Dimension,
+{
+    let (v1, m1) = unique_parts(ar1);
+    let (v2, m2) = unique_parts(ar2);
+    let mut vals: Vec<T> = v1;
+    vals.extend(v2);
+    vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    vals.dedup_by(|a, b| (*a).partial_cmp(&*b) == Some(std::cmp::Ordering::Equal));
+    let mut out: Vec<(T, bool)> = vals.into_iter().map(|v| (v, false)).collect();
+    if m1 || m2 {
+        let placeholder = first_masked_value(ar1).or_else(|| first_masked_value(ar2));
+        if let Some(p) = placeholder {
+            out.push((p, true));
+        }
+    }
+    build_ma_ix1(out)
+}
+
+/// `numpy.ma.setdiff1d(ar1, ar2)` — sorted unique values in `ar1` not in `ar2`
+/// (numpy/ma/extras.py:1485): `unique(ar1)[in1d(unique(ar1), unique(ar2),
+/// invert=True)]`. The masked slot of `ar1` survives iff `ar2` was **not**
+/// masked (a masked `ar2` element removes the masked `ar1` slot, since masked
+/// values are equal).
+///
+/// # Errors
+/// Returns an error if internal array construction fails.
+pub fn ma_setdiff1d<T, D>(
+    ar1: &MaskedArray<T, D>,
+    ar2: &MaskedArray<T, D>,
+) -> FerrayResult<MaskedArray<T, Ix1>>
+where
+    T: Element + Copy + PartialOrd,
+    D: Dimension,
+{
+    let (v1, m1) = unique_parts(ar1);
+    let (v2, _m2) = unique_parts(ar2);
+    let m2_masked = ar2.mask().iter().any(|&m| m);
+    let mut out: Vec<(T, bool)> = Vec::new();
+    for v in v1 {
+        let present = v2
+            .iter()
+            .any(|w| v.partial_cmp(w) == Some(std::cmp::Ordering::Equal));
+        if !present {
+            out.push((v, false));
+        }
+    }
+    if m1 && !m2_masked {
+        if let Some(p) = first_masked_value(ar1) {
+            out.push((p, true));
+        }
+    }
+    build_ma_ix1(out)
+}
+
+/// `numpy.ma.setxor1d(ar1, ar2)` — symmetric difference of the unique values
+/// (numpy/ma/extras.py:1350): elements present in exactly one input. The masked
+/// slot survives iff exactly one input was masked.
+///
+/// # Errors
+/// Returns an error if internal array construction fails.
+pub fn ma_setxor1d<T, D>(
+    ar1: &MaskedArray<T, D>,
+    ar2: &MaskedArray<T, D>,
+) -> FerrayResult<MaskedArray<T, Ix1>>
+where
+    T: Element + Copy + PartialOrd,
+    D: Dimension,
+{
+    let (v1, m1) = unique_parts(ar1);
+    let (v2, m2) = unique_parts(ar2);
+    let mut out: Vec<(T, bool)> = Vec::new();
+    // Elements in v1 not in v2.
+    for v in &v1 {
+        if !v2
+            .iter()
+            .any(|w| v.partial_cmp(w) == Some(std::cmp::Ordering::Equal))
+        {
+            out.push((*v, false));
+        }
+    }
+    // Elements in v2 not in v1.
+    for v in &v2 {
+        if !v1
+            .iter()
+            .any(|w| v.partial_cmp(w) == Some(std::cmp::Ordering::Equal))
+        {
+            out.push((*v, false));
+        }
+    }
+    out.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    // Masked slot present in exactly one input -> survives the xor.
+    if m1 ^ m2 {
+        let placeholder = first_masked_value(ar1).or_else(|| first_masked_value(ar2));
+        if let Some(p) = placeholder {
+            out.push((p, true));
+        }
+    }
+    build_ma_ix1(out)
+}
+
+/// The first underlying value at a masked position, if any.
+fn first_masked_value<T, D>(ma: &MaskedArray<T, D>) -> Option<T>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    ma.mask()
+        .iter()
+        .position(|&m| m)
+        .and_then(|pos| ma.data().iter().nth(pos).copied())
+}
+
+// ===========================================================================
+// Row/column suppression and masking (numpy.ma.compress_rowcols /
+// compress_rows / compress_cols / mask_rowcols). 2-D only — numpy raises
+// NotImplementedError otherwise (numpy/ma/extras.py:920 / :830).
+// ===========================================================================
+
+/// `numpy.ma.compress_rowcols(x, axis)` — suppress whole rows and/or columns of
+/// a 2-D masked array that contain any masked value
+/// (numpy/ma/extras.py:920, via `compress_nd`).
+///
+/// - `axis = None` → drop both rows and columns containing a masked value.
+/// - `axis = Some(0)` → drop only rows.
+/// - `axis = Some(1)` → drop only columns.
+///
+/// Returns a plain (unmasked) [`Array<T, Ix2>`] of the surviving data.
+///
+/// # Errors
+/// Returns `FerrayError::invalid_value` if the input is not 2-D (numpy raises
+/// `NotImplementedError`); or if internal array construction fails.
+pub fn ma_compress_rowcols<T>(
+    ma: &MaskedArray<T, Ix2>,
+    axis: Option<usize>,
+) -> FerrayResult<Array<T, Ix2>>
+where
+    T: Element + Copy,
+{
+    let shape = ma.data().shape();
+    let (nrows, ncols) = (shape[0], shape[1]);
+    let data: Vec<T> = ma.data().iter().copied().collect();
+    let mask: Vec<bool> = ma.mask().iter().copied().collect();
+
+    let drop_rows = matches!(axis, None | Some(0));
+    let drop_cols = matches!(axis, None | Some(1));
+
+    // Rows/cols to keep.
+    let mut keep_row = vec![true; nrows];
+    let mut keep_col = vec![true; ncols];
+    if drop_rows {
+        for (r, kr) in keep_row.iter_mut().enumerate() {
+            *kr = !(0..ncols).any(|c| mask[r * ncols + c]);
+        }
+    }
+    if drop_cols {
+        for (c, kc) in keep_col.iter_mut().enumerate() {
+            *kc = !(0..nrows).any(|r| mask[r * ncols + c]);
+        }
+    }
+
+    let kept_rows: Vec<usize> = (0..nrows).filter(|&r| keep_row[r]).collect();
+    let kept_cols: Vec<usize> = (0..ncols).filter(|&c| keep_col[c]).collect();
+
+    let mut out: Vec<T> = Vec::with_capacity(kept_rows.len() * kept_cols.len());
+    for &r in &kept_rows {
+        for &c in &kept_cols {
+            out.push(data[r * ncols + c]);
+        }
+    }
+    Array::<T, Ix2>::from_vec(Ix2::new([kept_rows.len(), kept_cols.len()]), out)
+}
+
+/// `numpy.ma.compress_rows(a)` — suppress whole rows containing masked values;
+/// equivalent to `compress_rowcols(a, 0)` (numpy/ma/extras.py:953).
+///
+/// # Errors
+/// Propagates [`ma_compress_rowcols`] errors.
+pub fn ma_compress_rows<T>(ma: &MaskedArray<T, Ix2>) -> FerrayResult<Array<T, Ix2>>
+where
+    T: Element + Copy,
+{
+    ma_compress_rowcols(ma, Some(0))
+}
+
+/// `numpy.ma.compress_cols(a)` — suppress whole columns containing masked
+/// values; equivalent to `compress_rowcols(a, 1)` (numpy/ma/extras.py:991).
+///
+/// # Errors
+/// Propagates [`ma_compress_rowcols`] errors.
+pub fn ma_compress_cols<T>(ma: &MaskedArray<T, Ix2>) -> FerrayResult<Array<T, Ix2>>
+where
+    T: Element + Copy,
+{
+    ma_compress_rowcols(ma, Some(1))
+}
+
+/// `numpy.ma.mask_rowcols(a, axis)` — mask whole rows and/or columns of a 2-D
+/// masked array that contain any masked value (numpy/ma/extras.py:830).
+///
+/// - `axis = None` → mask both rows and columns containing a masked value.
+/// - `axis = Some(0)` → mask only rows.
+/// - `axis = Some(1)` → mask only columns.
+///
+/// Returns a [`MaskedArray<T, Ix2>`] with the same data and an expanded mask.
+///
+/// # Errors
+/// Returns an error if internal array construction fails.
+pub fn ma_mask_rowcols<T>(
+    ma: &MaskedArray<T, Ix2>,
+    axis: Option<usize>,
+) -> FerrayResult<MaskedArray<T, Ix2>>
+where
+    T: Element + Copy,
+{
+    let shape = ma.data().shape();
+    let (nrows, ncols) = (shape[0], shape[1]);
+    let data: Vec<T> = ma.data().iter().copied().collect();
+    let mask: Vec<bool> = ma.mask().iter().copied().collect();
+
+    let mask_rows = matches!(axis, None | Some(0));
+    let mask_cols = matches!(axis, None | Some(1));
+
+    let row_has_mask: Vec<bool> = (0..nrows)
+        .map(|r| (0..ncols).any(|c| mask[r * ncols + c]))
+        .collect();
+    let col_has_mask: Vec<bool> = (0..ncols)
+        .map(|c| (0..nrows).any(|r| mask[r * ncols + c]))
+        .collect();
+
+    let mut new_mask = mask.clone();
+    for r in 0..nrows {
+        for c in 0..ncols {
+            if (mask_rows && row_has_mask[r]) || (mask_cols && col_has_mask[c]) {
+                new_mask[r * ncols + c] = true;
+            }
+        }
+    }
+
+    let data_arr = Array::<T, Ix2>::from_vec(Ix2::new([nrows, ncols]), data)?;
+    let mask_arr = Array::<bool, Ix2>::from_vec(Ix2::new([nrows, ncols]), new_mask)?;
+    MaskedArray::new(data_arr, mask_arr)
+}
+
+// ===========================================================================
+// Masked covariance / correlation (numpy.ma.cov / corrcoef). Common case
+// y=None, computed over the unmasked pairs (numpy/ma/extras.py:1519
+// `_covhelper`). Each row is centered by its own masked mean; the pairwise
+// normalisation `fact[i,j]` is the count of jointly-unmasked observations,
+// and an entry is masked where `fact <= 0`.
+// ===========================================================================
+
+/// `numpy.ma.cov(x, rowvar, bias, ddof)` for the `y=None` case
+/// (numpy/ma/extras.py:1547). Returns the masked covariance matrix computed
+/// over the unmasked observation pairs.
+///
+/// Each variable (row when `rowvar`, column otherwise) is centered by the mean
+/// of its own unmasked observations. The `[i,j]` entry sums the product of the
+/// centered values over the columns where **both** `i` and `j` are unmasked,
+/// divided by `fact[i,j] = (#jointly-unmasked) - ddof`. When `ddof` is `None`,
+/// it defaults to `0` if `bias`, else `1` (numpy/ma/extras.py:1648). An entry
+/// is masked iff `fact[i,j] <= 0`.
+///
+/// # Errors
+/// Returns `FerrayError::invalid_value` if the input is not 1-D or 2-D; or if
+/// internal array construction fails.
+pub fn ma_cov<D>(
+    x: &MaskedArray<f64, D>,
+    rowvar: bool,
+    bias: bool,
+    ddof: Option<usize>,
+) -> FerrayResult<MaskedArray<f64, Ix2>>
+where
+    D: Dimension,
+{
+    let ddof_val = ddof.unwrap_or(if bias { 0 } else { 1 }) as f64;
+
+    // Build the (nvars x nobs) data + not-mask matrices (rows = variables).
+    let ndim = x.ndim();
+    if ndim > 2 {
+        return Err(FerrayError::invalid_value(
+            "ma.cov requires a 1-D or 2-D masked array",
+        ));
+    }
+    let shape = x.data().shape();
+    let flat_data: Vec<f64> = x.data().iter().copied().collect();
+    let flat_mask: Vec<bool> = x.mask().iter().copied().collect();
+
+    // Build a row-major (nvars x nobs) data + mask matrix. numpy promotes 1-D
+    // input to a single row (ndmin=2); for a single row, rowvar is forced True
+    // (numpy/ma/extras.py: "if x.shape[0] == 1: rowvar = True").
+    let (nvars, nobs, mat_data, mat_mask): (usize, usize, Vec<f64>, Vec<bool>) = if ndim <= 1 {
+        let n = flat_data.len();
+        (1, n, flat_data, flat_mask)
+    } else {
+        let (r, c) = (shape[0], shape[1]);
+        let eff_rowvar = rowvar || r == 1;
+        if eff_rowvar {
+            (r, c, flat_data, flat_mask)
+        } else {
+            // Transpose so variables become rows.
+            let mut td = vec![0.0f64; r * c];
+            let mut tm = vec![false; r * c];
+            for i in 0..c {
+                for k in 0..r {
+                    td[i * r + k] = flat_data[k * c + i];
+                    tm[i * r + k] = flat_mask[k * c + i];
+                }
+            }
+            (c, r, td, tm)
+        }
+    };
+
+    // Center each variable by the mean of its own unmasked observations.
+    let mut centered = vec![0.0f64; nvars * nobs];
+    let mut notmask = vec![0.0f64; nvars * nobs];
+    for i in 0..nvars {
+        let mut sum = 0.0;
+        let mut cnt = 0.0;
+        for k in 0..nobs {
+            let idx = i * nobs + k;
+            if !mat_mask[idx] {
+                sum += mat_data[idx];
+                cnt += 1.0;
+                notmask[idx] = 1.0;
+            }
+        }
+        let mean = if cnt > 0.0 { sum / cnt } else { 0.0 };
+        for k in 0..nobs {
+            let idx = i * nobs + k;
+            // filled(x, 0): masked positions contribute 0 to the dot product.
+            centered[idx] = if mat_mask[idx] {
+                0.0
+            } else {
+                mat_data[idx] - mean
+            };
+        }
+    }
+
+    // cov[i,j] = (centered_i . centered_j) / (notmask_i . notmask_j - ddof),
+    // masked where fact <= 0.
+    let mut cov_data = vec![0.0f64; nvars * nvars];
+    let mut cov_mask = vec![false; nvars * nvars];
+    for i in 0..nvars {
+        for j in i..nvars {
+            let mut dot = 0.0;
+            let mut fact = 0.0;
+            for k in 0..nobs {
+                dot += centered[i * nobs + k] * centered[j * nobs + k];
+                fact += notmask[i * nobs + k] * notmask[j * nobs + k];
+            }
+            fact -= ddof_val;
+            let (val, masked) = if fact <= 0.0 {
+                (0.0, true)
+            } else {
+                (dot / fact, false)
+            };
+            cov_data[i * nvars + j] = val;
+            cov_data[j * nvars + i] = val;
+            cov_mask[i * nvars + j] = masked;
+            cov_mask[j * nvars + i] = masked;
+        }
+    }
+
+    let data_arr = Array::<f64, Ix2>::from_vec(Ix2::new([nvars, nvars]), cov_data)?;
+    let mask_arr = Array::<bool, Ix2>::from_vec(Ix2::new([nvars, nvars]), cov_mask)?;
+    MaskedArray::new(data_arr, mask_arr)
+}
+
+/// `numpy.ma.corrcoef(x, rowvar)` for the `y=None` case
+/// (numpy/ma/extras.py:1672). The covariance matrix (computed with the default
+/// `bias=False`, `ddof=None` normalisation) divided by the outer product of the
+/// per-variable standard deviations `sqrt(diag(cov))`.
+///
+/// A `corr[i,j]` is masked iff `cov[i,j]` is masked or either `std[i]`/`std[j]`
+/// is masked (numpy propagates the masked covariance through the division).
+///
+/// # Errors
+/// Returns an error if [`ma_cov`] fails or internal array construction fails.
+pub fn ma_corrcoef<D>(x: &MaskedArray<f64, D>, rowvar: bool) -> FerrayResult<MaskedArray<f64, Ix2>>
+where
+    D: Dimension,
+{
+    let cov = ma_cov(x, rowvar, false, None)?;
+    let n = cov.data().shape()[0];
+    let cov_data: Vec<f64> = cov.data().iter().copied().collect();
+    let cov_mask: Vec<bool> = cov.mask().iter().copied().collect();
+
+    // Per-variable std = sqrt(diag(cov)); masked iff the diagonal is masked.
+    let mut std = vec![0.0f64; n];
+    let mut std_masked = vec![false; n];
+    for i in 0..n {
+        std_masked[i] = cov_mask[i * n + i];
+        std[i] = cov_data[i * n + i].sqrt();
+    }
+
+    let mut corr_data = vec![0.0f64; n * n];
+    let mut corr_mask = vec![false; n * n];
+    for i in 0..n {
+        for j in 0..n {
+            let d = std[i] * std[j];
+            let masked = cov_mask[i * n + j] || std_masked[i] || std_masked[j] || d == 0.0;
+            if masked {
+                corr_mask[i * n + j] = true;
+                corr_data[i * n + j] = 0.0;
+            } else {
+                // Clamp to [-1, 1] for numerical stability (matches the
+                // ferray-stats corrcoef convention).
+                let v = cov_data[i * n + j] / d;
+                corr_data[i * n + j] = v.clamp(-1.0, 1.0);
+            }
+        }
+    }
+
+    let data_arr = Array::<f64, Ix2>::from_vec(Ix2::new([n, n]), corr_data)?;
+    let mask_arr = Array::<bool, Ix2>::from_vec(Ix2::new([n, n]), corr_mask)?;
+    MaskedArray::new(data_arr, mask_arr)
+}
+
+// ===========================================================================
 // Functional helpers: apply_along_axis / apply_over_axes / vander
 // ===========================================================================
 
@@ -1487,5 +2046,162 @@ mod tests {
         .unwrap();
         let v: Vec<f64> = result.data().iter().copied().collect();
         assert_eq!(v, vec![6.0, 15.0]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Masked set ops (numpy.ma.intersect1d/union1d/setdiff1d/setxor1d).
+    // Expected values from the numpy 2.4.5 oracle (R-CHAR-3):
+    //   a = ma([1,2,3,4], mask=[0,1,0,0]); b = ma([3,4,5], mask=[0,0,1])
+    //   intersect -> data[3,4,--] mask[F,F,T]
+    //   union     -> data[1,3,4,--] mask[F,F,F,T]
+    //   setdiff   -> data[1] mask[F]
+    //   setxor    -> data[1] mask[F]
+    //   unique(a) -> data[1,3,4,--] mask[F,F,F,T]
+    // -----------------------------------------------------------------------
+    fn ab() -> (MaskedArray<f64, Ix1>, MaskedArray<f64, Ix1>) {
+        (
+            ma_f1(vec![1.0, 2.0, 3.0, 4.0], vec![false, true, false, false]),
+            ma_f1(vec![3.0, 4.0, 5.0], vec![false, false, true]),
+        )
+    }
+
+    fn data_mask(m: &MaskedArray<f64, Ix1>) -> (Vec<f64>, Vec<bool>) {
+        (
+            m.data().iter().copied().collect(),
+            m.mask().iter().copied().collect(),
+        )
+    }
+
+    #[test]
+    fn ma_unique_masked_trails_one_masked_slot() -> FerrayResult<()> {
+        let (a, _) = ab();
+        let (data, mask) = data_mask(&ma_unique_masked(&a)?);
+        // numpy: unmasked uniques [1,3,4] then one trailing masked slot.
+        assert_eq!(&data[..3], &[1.0, 3.0, 4.0]);
+        assert_eq!(mask, vec![false, false, false, true]);
+        Ok(())
+    }
+
+    #[test]
+    fn ma_intersect1d_common_with_both_masked() -> FerrayResult<()> {
+        let (a, b) = ab();
+        let (data, mask) = data_mask(&ma_intersect1d(&a, &b)?);
+        assert_eq!(&data[..2], &[3.0, 4.0]);
+        assert_eq!(mask, vec![false, false, true]);
+        Ok(())
+    }
+
+    #[test]
+    fn ma_union1d_all_uniques_plus_masked() -> FerrayResult<()> {
+        let (a, b) = ab();
+        let (data, mask) = data_mask(&ma_union1d(&a, &b)?);
+        assert_eq!(&data[..3], &[1.0, 3.0, 4.0]);
+        assert_eq!(mask, vec![false, false, false, true]);
+        Ok(())
+    }
+
+    #[test]
+    fn ma_setdiff1d_drops_masked_when_rhs_masked() -> FerrayResult<()> {
+        let (a, b) = ab();
+        let (data, mask) = data_mask(&ma_setdiff1d(&a, &b)?);
+        // a's masked slot is removed because b is also masked.
+        assert_eq!(data, vec![1.0]);
+        assert_eq!(mask, vec![false]);
+        Ok(())
+    }
+
+    #[test]
+    fn ma_setxor1d_symmetric_difference() -> FerrayResult<()> {
+        let (a, b) = ab();
+        let (data, mask) = data_mask(&ma_setxor1d(&a, &b)?);
+        // both masked -> masked slot cancels; only unmasked-unique-once is 1.
+        assert_eq!(data, vec![1.0]);
+        assert_eq!(mask, vec![false]);
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // compress_rowcols / mask_rowcols (numpy.ma.extras).
+    // Oracle: m = ma([[1,2,3],[4,5,6]], mask=[[0,0,1],[0,0,0]])
+    //   compress_rowcols(None) -> [[4,5]]
+    //   compress_rows          -> [[4,5,6]]
+    //   compress_cols          -> [[1,2],[4,5]]
+    //   mask_rowcols(None)     -> mask[[T,T,T],[F,F,T]]
+    // -----------------------------------------------------------------------
+    fn m23() -> FerrayResult<MaskedArray<f64, Ix2>> {
+        let data =
+            Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])?;
+        let mask = Array::<bool, Ix2>::from_vec(
+            Ix2::new([2, 3]),
+            vec![false, false, true, false, false, false],
+        )?;
+        MaskedArray::new(data, mask)
+    }
+
+    #[test]
+    fn ma_compress_rowcols_both() -> FerrayResult<()> {
+        let r = ma_compress_rowcols(&m23()?, None)?;
+        assert_eq!(r.shape(), &[1, 2]);
+        let v: Vec<f64> = r.iter().copied().collect();
+        assert_eq!(v, vec![4.0, 5.0]);
+        Ok(())
+    }
+
+    #[test]
+    fn ma_compress_rows_and_cols() -> FerrayResult<()> {
+        let rows = ma_compress_rows(&m23()?)?;
+        assert_eq!(rows.shape(), &[1, 3]);
+        assert_eq!(
+            rows.iter().copied().collect::<Vec<f64>>(),
+            vec![4.0, 5.0, 6.0]
+        );
+        let cols = ma_compress_cols(&m23()?)?;
+        assert_eq!(cols.shape(), &[2, 2]);
+        assert_eq!(
+            cols.iter().copied().collect::<Vec<f64>>(),
+            vec![1.0, 2.0, 4.0, 5.0]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ma_mask_rowcols_masks_whole_row_and_col() -> FerrayResult<()> {
+        let r = ma_mask_rowcols(&m23()?, None)?;
+        let mask: Vec<bool> = r.mask().iter().copied().collect();
+        // row 0 and col 2 both masked: [[T,T,T],[F,F,T]]
+        assert_eq!(mask, vec![true, true, true, false, false, true]);
+        let data: Vec<f64> = r.data().iter().copied().collect();
+        assert_eq!(data, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Masked cov / corrcoef (numpy.ma.cov / corrcoef).
+    // Oracle: m = ma([[1,2,3],[4,5,6]], mask=[[0,0,1],[0,0,0]])
+    //   cov      -> [[0.5,0.5],[0.5,1.0]]
+    //   corrcoef -> [[1.0, 0.70710678...],[0.70710678..., 1.0]]
+    // -----------------------------------------------------------------------
+    #[test]
+    fn ma_cov_unmasked_pairs() -> FerrayResult<()> {
+        let c = ma_cov(&m23()?, true, false, None)?;
+        let data: Vec<f64> = c.data().iter().copied().collect();
+        let mask: Vec<bool> = c.mask().iter().copied().collect();
+        let expect = [0.5, 0.5, 0.5, 1.0];
+        for (g, e) in data.iter().zip(expect.iter()) {
+            assert!((g - e).abs() < 1e-12, "cov {g} != {e}");
+        }
+        assert_eq!(mask, vec![false; 4]);
+        Ok(())
+    }
+
+    #[test]
+    fn ma_corrcoef_normalized() -> FerrayResult<()> {
+        let c = ma_corrcoef(&m23()?, true)?;
+        let data: Vec<f64> = c.data().iter().copied().collect();
+        let expect = [1.0, 0.7071067811865475, 0.7071067811865475, 1.0];
+        for (g, e) in data.iter().zip(expect.iter()) {
+            assert!((g - e).abs() < 1e-12, "corr {g} != {e}");
+        }
+        Ok(())
     }
 }

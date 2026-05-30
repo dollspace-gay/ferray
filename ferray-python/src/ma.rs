@@ -1755,3 +1755,200 @@ pub fn in1d<'py>(
     let data = fma::getdata(&out).map_err(ferr_to_pyerr)?;
     Ok(data.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
+
+// ===========================================================================
+// numpy.ma set operations, row/col suppression, and masked cov/corrcoef
+// (refs #835). Each binds the matching ferray-ma library function added this
+// iteration; every numpy.ma contract was verified live against numpy 2.4.5 and
+// the pytest oracle (tests/test_expansion_ma_lib2.py) constructs every expected
+// value from `numpy.ma.*` directly (R-CHAR-3).
+// ===========================================================================
+
+/// Promote a 1-D `MaskedArray<f64, Ix1>` produced by the masked set ops into
+/// the dynamic-dimension wrapper the `PyMaskedArray` class holds.
+fn ix1_to_py(m: RustMa<f64, Ix1>) -> PyResult<PyMaskedArray> {
+    Ok(PyMaskedArray::from_inner(ix1_ma_to_dyn(m)?))
+}
+
+/// Promote a 2-D `MaskedArray<f64, Ix2>` into the dynamic-dimension wrapper.
+fn ix2_to_py(m: RustMa<f64, Ix2>) -> PyResult<PyMaskedArray> {
+    let data = fma::getdata(&m).map_err(ferr_to_pyerr)?.into_dyn();
+    let mask = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?.into_dyn();
+    let inner = RustMa::new(data, mask).map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(inner))
+}
+
+/// `numpy.ma.intersect1d(ar1, ar2)` — sorted unique common values, with a
+/// trailing masked slot iff both inputs were masked
+/// (`numpy/ma/extras.py:1317`).
+#[pyfunction]
+pub fn intersect1d<'py>(
+    py: Python<'py>,
+    ar1: &Bound<'py, PyAny>,
+    ar2: &Bound<'py, PyAny>,
+) -> PyResult<PyMaskedArray> {
+    let a = ma_as_ix1(&coerce_to_ma(py, ar1)?)?;
+    let b = ma_as_ix1(&coerce_to_ma(py, ar2)?)?;
+    ix1_to_py(fma::ma_intersect1d(&a, &b).map_err(ferr_to_pyerr)?)
+}
+
+/// `numpy.ma.union1d(ar1, ar2)` — sorted unique union, masked slot iff either
+/// input was masked (`numpy/ma/extras.py:1463`).
+#[pyfunction]
+pub fn union1d<'py>(
+    py: Python<'py>,
+    ar1: &Bound<'py, PyAny>,
+    ar2: &Bound<'py, PyAny>,
+) -> PyResult<PyMaskedArray> {
+    let a = ma_as_ix1(&coerce_to_ma(py, ar1)?)?;
+    let b = ma_as_ix1(&coerce_to_ma(py, ar2)?)?;
+    ix1_to_py(fma::ma_union1d(&a, &b).map_err(ferr_to_pyerr)?)
+}
+
+/// `numpy.ma.setdiff1d(ar1, ar2)` — sorted unique values of `ar1` not in `ar2`
+/// (`numpy/ma/extras.py:1485`).
+#[pyfunction]
+pub fn setdiff1d<'py>(
+    py: Python<'py>,
+    ar1: &Bound<'py, PyAny>,
+    ar2: &Bound<'py, PyAny>,
+) -> PyResult<PyMaskedArray> {
+    let a = ma_as_ix1(&coerce_to_ma(py, ar1)?)?;
+    let b = ma_as_ix1(&coerce_to_ma(py, ar2)?)?;
+    ix1_to_py(fma::ma_setdiff1d(&a, &b).map_err(ferr_to_pyerr)?)
+}
+
+/// `numpy.ma.setxor1d(ar1, ar2)` — symmetric difference of the unique values
+/// (`numpy/ma/extras.py:1350`).
+#[pyfunction]
+pub fn setxor1d<'py>(
+    py: Python<'py>,
+    ar1: &Bound<'py, PyAny>,
+    ar2: &Bound<'py, PyAny>,
+) -> PyResult<PyMaskedArray> {
+    let a = ma_as_ix1(&coerce_to_ma(py, ar1)?)?;
+    let b = ma_as_ix1(&coerce_to_ma(py, ar2)?)?;
+    ix1_to_py(fma::ma_setxor1d(&a, &b).map_err(ferr_to_pyerr)?)
+}
+
+/// `numpy.ma.compress_rowcols(x, axis)` — suppress whole rows/cols containing
+/// masked values; returns a plain ndarray (`numpy/ma/extras.py:920`). 2-D only.
+#[pyfunction]
+#[pyo3(signature = (x, axis = None))]
+pub fn compress_rowcols<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let m = ma_as_ix2(&coerce_to_ma(py, x)?)?;
+    let ax = match axis {
+        None => None,
+        Some(0) => Some(0usize),
+        Some(1) | Some(-1) => Some(1usize),
+        Some(other) => {
+            return Err(PyValueError::new_err(format!(
+                "ma.compress_rowcols: axis must be None, 0, 1 or -1, got {other}"
+            )));
+        }
+    };
+    let out = fma::ma_compress_rowcols(&m, ax).map_err(ferr_to_pyerr)?;
+    Ok(out.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// `numpy.ma.compress_rows(a)` — suppress whole rows containing masked values
+/// (`numpy/ma/extras.py:953`).
+#[pyfunction]
+pub fn compress_rows<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let m = ma_as_ix2(&coerce_to_ma(py, a)?)?;
+    let out = fma::ma_compress_rows(&m).map_err(ferr_to_pyerr)?;
+    Ok(out.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// `numpy.ma.compress_cols(a)` — suppress whole columns containing masked
+/// values (`numpy/ma/extras.py:991`).
+#[pyfunction]
+pub fn compress_cols<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let m = ma_as_ix2(&coerce_to_ma(py, a)?)?;
+    let out = fma::ma_compress_cols(&m).map_err(ferr_to_pyerr)?;
+    Ok(out.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// `numpy.ma.mask_rowcols(a, axis)` — mask whole rows/cols containing a masked
+/// value (`numpy/ma/extras.py:830`). 2-D only; returns a masked array.
+#[pyfunction]
+#[pyo3(signature = (a, axis = None))]
+pub fn mask_rowcols<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<PyMaskedArray> {
+    let m = ma_as_ix2(&coerce_to_ma(py, a)?)?;
+    let ax = match axis {
+        None => None,
+        Some(0) => Some(0usize),
+        Some(1) | Some(-1) => Some(1usize),
+        Some(other) => {
+            return Err(PyValueError::new_err(format!(
+                "ma.mask_rowcols: axis must be None, 0, 1 or -1, got {other}"
+            )));
+        }
+    };
+    let out = fma::ma_mask_rowcols(&m, ax).map_err(ferr_to_pyerr)?;
+    ix2_to_py(out)
+}
+
+/// `numpy.ma.cov(x, y=None, rowvar=True, bias=False, ddof=None)` — masked
+/// covariance over the unmasked observation pairs (`numpy/ma/extras.py:1547`).
+/// The `y` argument (a second variable set) is a ferray-ma library gap; passing
+/// it raises a clear `ValueError`.
+#[pyfunction]
+#[pyo3(signature = (x, y = None, rowvar = true, bias = false, allow_masked = true, ddof = None))]
+#[allow(
+    clippy::fn_params_excessive_bools,
+    reason = "mirrors numpy.ma.cov's keyword surface (rowvar/bias/allow_masked)"
+)]
+pub fn cov<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    y: Option<&Bound<'py, PyAny>>,
+    rowvar: bool,
+    bias: bool,
+    allow_masked: bool,
+    ddof: Option<usize>,
+) -> PyResult<PyMaskedArray> {
+    if y.is_some() {
+        return Err(PyValueError::new_err(
+            "ma.cov with a second variable set `y` is a ferray-ma library gap (#835); \
+             pass a single 2-D masked array",
+        ));
+    }
+    let _ = allow_masked; // ferray-ma always processes the masked pairs.
+    let m = coerce_to_ma(py, x)?;
+    let out = fma::ma_cov(&m, rowvar, bias, ddof).map_err(ferr_to_pyerr)?;
+    ix2_to_py(out)
+}
+
+/// `numpy.ma.corrcoef(x, y=None, rowvar=True)` — masked Pearson correlation
+/// (`numpy/ma/extras.py:1672`): the masked covariance normalized by the outer
+/// product of the per-variable standard deviations. The `y` argument is a
+/// ferray-ma library gap; passing it raises a clear `ValueError`.
+#[pyfunction]
+#[pyo3(signature = (x, y = None, rowvar = true, allow_masked = true))]
+pub fn corrcoef<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    y: Option<&Bound<'py, PyAny>>,
+    rowvar: bool,
+    allow_masked: bool,
+) -> PyResult<PyMaskedArray> {
+    if y.is_some() {
+        return Err(PyValueError::new_err(
+            "ma.corrcoef with a second variable set `y` is a ferray-ma library gap (#835); \
+             pass a single 2-D masked array",
+        ));
+    }
+    let _ = allow_masked;
+    let m = coerce_to_ma(py, x)?;
+    let out = fma::ma_corrcoef(&m, rowvar).map_err(ferr_to_pyerr)?;
+    ix2_to_py(out)
+}

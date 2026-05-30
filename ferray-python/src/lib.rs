@@ -417,6 +417,17 @@ fn register_ma_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> Py
     m.add_function(wrap_pyfunction!(ma::vander, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::isin, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::in1d, &m)?)?;
+    // numpy.ma set ops + row/col suppression + masked cov/corrcoef (#835).
+    m.add_function(wrap_pyfunction!(ma::intersect1d, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::union1d, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::setdiff1d, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::setxor1d, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::compress_rowcols, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::compress_rows, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::compress_cols, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::mask_rowcols, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::cov, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::corrcoef, &m)?)?;
     parent.add_submodule(&m)?;
     py.import("sys")?
         .getattr("modules")?
