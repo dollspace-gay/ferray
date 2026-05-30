@@ -16,9 +16,13 @@ Implements `numpy.ma`: masked arrays that represent missing or invalid data inli
 - REQ-3: `ma.data()` returns the underlying data array, `ma.mask()` returns the mask
 
 ### Masked Reductions
-- REQ-4: `ma.mean()`, `ma.sum()`, `ma.min()`, `ma.max()`, `ma.var()`, `ma.std()`, `ma.count()` — all skip masked elements
-- REQ-5: `ma.filled(fill_value)` — return a regular array with masked positions replaced by fill_value
+- REQ-4: `ma.mean()`, `ma.sum()`, `ma.min()`, `ma.max()`, `ma.var()`, `ma.std()`, `ma.count()` — all skip masked elements. **All-masked semantics** match `numpy.ma` (`numpy/ma/core.py:5249` `elif newmask: result = masked`): an all-masked `sum()` is NOT the additive identity `0.0` but the `masked` singleton; ferray has no Python `masked` and surfaces this as `NaN` (consistent with `mean`/`var`/`std`).
+- REQ-5: `ma.filled(fill_value)` — return a regular array with masked positions replaced by fill_value. The **default** `fill_value` (used by `filled_default` / arithmetic / ufunc result-masking) follows numpy's per-dtype `default_filler` (`numpy/ma/core.py:163`): `1e20` for float, `999999` for integer, `true` for bool — NOT `T::zero()`.
 - REQ-6: `ma.compressed()` — return a 1D array of unmasked elements only
+
+### REQ status (this iteration — numpy.ma fill-value + all-masked semantics)
+- REQ-4 SHIPPED — all-masked `sum` returns NaN (not 0.0) via `sum` in `reductions.rs`; consumer: pinned divergence `divergence_all_masked_sum_is_masked_not_zero` + `ma.sum` is called by the `MaskAware`/ufunc reduction surface. Cite `numpy/ma/core.py:5249`.
+- REQ-5 SHIPPED — per-dtype default fill via `default_fill_value` in `masked_array.rs`, wired into `MaskedArray::new` / `from_data`; non-test production consumers: `filled_default` in `filled.rs`, masked-position filling in `masked_unary`/`masked_binary` (`ufunc_support.rs`) and `ma_apply_unary` (`interop.rs`). Cite `numpy/ma/core.py:163`.
 
 ### Masking Constructors
 - REQ-7: `ma::masked_where(&condition, &a)` — mask where condition is true

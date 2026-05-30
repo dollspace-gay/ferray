@@ -1,11 +1,75 @@
 // ferray-ma: MaskedArray<T, D> type (REQ-1, REQ-2, REQ-3)
 
+use std::any::Any;
 use std::sync::{Arc, OnceLock};
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
-use ferray_core::dtype::Element;
+use ferray_core::dtype::{DType, Element};
 use ferray_core::error::{FerrayError, FerrayResult};
+
+/// Default fill value for an element type, mirroring numpy's
+/// `default_filler` dict (`numpy/ma/core.py:163-174`):
+///
+/// ```text
+/// default_filler = {'b': True,            # bool
+///                   'f': 1.e20,           # float
+///                   'i': 999999,          # signed integer
+///                   'u': 999999,          # unsigned integer
+///                   ...}
+/// ```
+///
+/// numpy keys `default_filler` by dtype *kind* (`'b'`/`'f'`/`'i'`/`'u'`),
+/// so every float width shares `1e20`, every integer width shares `999999`,
+/// and bool is `True`. We reproduce that by dispatching on [`Element::dtype`]
+/// (the runtime [`DType`] tag) and constructing the concrete numpy default,
+/// then moving it into `T` through a `'static` [`Any`] downcast (sound because
+/// `Element: 'static` and the concrete value's type matches the dtype tag).
+///
+/// Dtypes with no numeric entry in numpy's `default_filler` numeric subset
+/// (complex, structured, string, datetime, and the 128-/256-bit integers
+/// ferray adds beyond numpy's C scalar set) fall back to `T::zero()` — they
+/// have no masked-array fill-value contract honored here. (Complex masked
+/// arrays are not part of ferray-ma's surface; numpy uses `1e20 + 0j`.)
+///
+/// Reference: numpy 2.4.5 live oracle —
+/// `ma.array([1.,2.,3.]).fill_value == np.float64(1e+20)`.
+pub(crate) fn default_fill_value<T: Element>() -> T {
+    // Build the concrete numpy default keyed by dtype kind, then downcast
+    // the boxed `dyn Any` back into `T`. The `unwrap_or_else(T::zero)`
+    // closes both the "downcast type mismatch can't happen" branch and the
+    // "dtype has no numpy default" branch into the additive-identity
+    // fallback, so this never panics and needs no `unwrap`.
+    fn coerce<T: Element>(boxed: Box<dyn Any>) -> Option<T> {
+        boxed.downcast::<T>().ok().map(|b| *b)
+    }
+    let boxed: Option<Box<dyn Any>> = match T::dtype() {
+        // float kind 'f' -> 1e20
+        DType::F32 => Some(Box::new(1e20_f32)),
+        DType::F64 => Some(Box::new(1e20_f64)),
+        // signed integer kind 'i' -> 999999 (numpy casts 999999 into the
+        // target width with numpy cast rules; for i8/i16 that wraps the
+        // same way numpy's `np.array(999999).astype(int8)` does).
+        DType::I8 => Some(Box::new(999_999_i32 as i8)),
+        DType::I16 => Some(Box::new(999_999_i32 as i16)),
+        DType::I32 => Some(Box::new(999_999_i32)),
+        DType::I64 => Some(Box::new(999_999_i64)),
+        // unsigned integer kind 'u' -> 999999
+        DType::U8 => Some(Box::new(999_999_u32 as u8)),
+        DType::U16 => Some(Box::new(999_999_u32 as u16)),
+        DType::U32 => Some(Box::new(999_999_u32)),
+        DType::U64 => Some(Box::new(999_999_u64)),
+        // bool kind 'b' -> True
+        DType::Bool => Some(Box::new(true)),
+        // Dtypes numpy's numeric default_filler subset doesn't cover
+        // (128-/256-bit ints, structured, string, datetime/timedelta):
+        // no masked fill-value contract here -> additive identity.
+        _ => None,
+    };
+    boxed
+        .and_then(coerce::<T>)
+        .unwrap_or_else(<T as Element>::zero)
+}
 
 /// A masked array that pairs data with a boolean mask.
 ///
@@ -18,7 +82,9 @@ use ferray_core::error::{FerrayError, FerrayResult};
 ///
 /// The `fill_value` field is the replacement value for masked positions when
 /// the masked array participates in operations or when [`MaskedArray::filled`]
-/// is called without an explicit override. It defaults to `T::zero()`.
+/// is called without an explicit override. It defaults to numpy's per-dtype
+/// `default_filler` (`numpy/ma/core.py:163`): `1e20` for float, `999999` for
+/// integer, `true` for bool — see [`default_fill_value`].
 ///
 /// # Nomask sentinel (#506)
 ///
@@ -59,7 +125,8 @@ pub struct MaskedArray<T: Element, D: Dimension> {
     /// Whether the mask is hardened (cannot be cleared by assignment).
     pub(crate) hard_mask: bool,
     /// Replacement value for masked positions during operations and filling.
-    /// Defaults to `T::zero()`.
+    /// Defaults to numpy's per-dtype `default_filler` (`1e20` float / `999999`
+    /// int / `true` bool); see [`default_fill_value`].
     pub(crate) fill_value: T,
 }
 
@@ -98,8 +165,10 @@ impl<T: Element + Clone, D: Dimension> Clone for MaskedArray<T, D> {
 impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// Create a new masked array from data and mask arrays.
     ///
-    /// The `fill_value` defaults to `T::zero()`. Use [`MaskedArray::with_fill_value`]
-    /// to set a custom replacement value.
+    /// The `fill_value` defaults to numpy's per-dtype `default_filler`
+    /// (`numpy/ma/core.py:163`): `1e20` for float, `999999` for integer,
+    /// `true` for bool (see [`default_fill_value`]). Use
+    /// [`MaskedArray::with_fill_value`] to set a custom replacement value.
     ///
     /// # Errors
     /// Returns `FerrayError::ShapeMismatch` if data and mask shapes differ.
@@ -113,12 +182,13 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
         }
         let lock = OnceLock::new();
         let _ = lock.set(mask);
+        let fill_value = default_fill_value::<T>();
         Ok(Self {
             data,
             mask: Arc::new(lock),
             real_mask: true,
             hard_mask: false,
-            fill_value: T::zero(),
+            fill_value,
         })
     }
 
@@ -134,12 +204,13 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     /// Always returns `Ok` — the `FerrayResult` is preserved for API
     /// parity with the previous eager implementation.
     pub fn from_data(data: Array<T, D>) -> FerrayResult<Self> {
+        let fill_value = default_fill_value::<T>();
         Ok(Self {
             data,
             mask: Arc::new(OnceLock::new()),
             real_mask: false,
             hard_mask: false,
-            fill_value: T::zero(),
+            fill_value,
         })
     }
 

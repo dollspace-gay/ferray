@@ -236,19 +236,31 @@ where
 {
     /// Compute the sum of unmasked elements.
     ///
-    /// Returns zero if all elements are masked.
+    /// When **every** element is masked the result is `NaN`, not the bare
+    /// additive identity `0.0`. numpy's `MaskedArray.sum` returns the
+    /// `masked` singleton in this case (`numpy/ma/core.py:5249`
+    /// `elif newmask: result = masked`) — an all-masked sum has no defined
+    /// numeric value, so `0.0` (the fold's neutral element) would be a
+    /// wrong observable. ferray has no Python `masked` singleton, so we
+    /// surface the "no defined value" status as `NaN`, consistent with
+    /// [`MaskedArray::mean`]'s all-masked behavior. Live oracle (numpy
+    /// 2.4.5): `ma.array([1.,2.,3.,4.], mask=[1,1,1,1]).sum() is ma.masked`.
     ///
     /// # Errors
     /// Returns an error only for internal failures.
     pub fn sum(&self) -> FerrayResult<T> {
         let zero = num_traits::zero::<T>();
+        let mut any = false;
         let s = self
             .data()
             .iter()
             .zip(self.mask().iter())
             .filter(|(_, m)| !**m)
-            .fold(zero, |acc, (v, _)| acc + *v);
-        Ok(s)
+            .fold(zero, |acc, (v, _)| {
+                any = true;
+                acc + *v
+            });
+        if any { Ok(s) } else { Ok(T::nan()) }
     }
 
     /// Compute the mean of unmasked elements.
@@ -712,11 +724,13 @@ mod tests {
     // ---- #501: fill_value ----
 
     #[test]
-    fn fill_value_default_is_zero() {
+    fn fill_value_default_is_numpy_default_filler_1e20() {
+        // numpy/ma/core.py:166 `default_filler['f'] = 1.e20`; live oracle
+        // numpy 2.4.5: `ma.array([1.,2.,3.]).fill_value == np.float64(1e+20)`.
         let d = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let m = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false; 3]).unwrap();
         let ma = MaskedArray::new(d, m).unwrap();
-        assert_eq!(ma.fill_value(), 0.0);
+        assert_eq!(ma.fill_value(), 1e20);
     }
 
     #[test]
@@ -809,8 +823,9 @@ mod tests {
 
     // ---- #276: all-masked whole-array reductions ----
     //
-    // Pin the current semantics when every element is masked:
-    //   sum   -> 0 (neutral element of the fold)
+    // Semantics when every element is masked (matching numpy.ma):
+    //   sum   -> NaN (numpy returns the `masked` singleton, core.py:5249;
+    //            NOT the additive identity 0.0)
     //   mean  -> NaN
     //   var   -> NaN
     //   std   -> NaN
@@ -824,9 +839,11 @@ mod tests {
     }
 
     #[test]
-    fn sum_all_masked_returns_zero() {
+    fn sum_all_masked_returns_nan_not_zero() {
+        // numpy/ma/core.py:5249: an all-masked sum is the `masked`
+        // singleton, NOT 0.0. ferray surfaces that as NaN.
         let ma = all_masked_ma1d(4);
-        assert_eq!(ma.sum().unwrap(), 0.0);
+        assert!(ma.sum().unwrap_or(0.0).is_nan());
     }
 
     #[test]
@@ -862,9 +879,9 @@ mod tests {
         let d = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![9.0; 6]).unwrap();
         let m = Array::<bool, Ix2>::from_vec(Ix2::new([2, 3]), vec![true; 6]).unwrap();
         let ma = MaskedArray::new(d, m).unwrap();
-        assert_eq!(ma.sum().unwrap(), 0.0);
-        assert!(ma.var().unwrap().is_nan());
-        assert!(ma.std().unwrap().is_nan());
+        assert!(ma.sum().unwrap_or(0.0).is_nan());
+        assert!(ma.var().unwrap_or(0.0).is_nan());
+        assert!(ma.std().unwrap_or(0.0).is_nan());
     }
 
     #[test]

@@ -303,3 +303,39 @@ crate_pattern = "ferray-strings/src/search.rs"
 upstream = ["/home/doll/numpy-ref/numpy/_core/strings.py"]
 design = ".design/ferray-strings.md"
 parity_ops = ["find", "rfind", "index", "rindex", "count", "startswith", "endswith", "replace"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# ferray-ma — numpy.ma (masked arrays): per-dtype default fill_value
+# (default_filler, core.py:166) and all-masked reduction semantics
+# (core.py:5249 `elif newmask: result = masked`).
+# ─────────────────────────────────────────────────────────────────────────
+
+[[route]]
+crate_pattern = "ferray-ma/src/masked_array.rs"
+upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]
+design = ".design/ferray-ma.md"
+parity_ops = ["fill_value", "default_fill_value"]
+
+[[route]]
+crate_pattern = "ferray-ma/src/reductions.rs"
+upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]
+design = ".design/ferray-ma.md"
+parity_ops = ["sum", "mean", "min", "max", "var", "std", "count"]
+
+[[route]]
+crate_pattern = "ferray-ma/src/io.rs"
+upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]
+design = ".design/ferray-ma.md"
+parity_ops = ["filled", "load", "save"]
+
+[[route]]
+crate_pattern = "ferray-ma/src/ufunc_support.rs"
+upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]
+design = ".design/ferray-ma.md"
+parity_ops = ["sin", "cos", "exp", "log", "sqrt", "power", "log_domain", "sqrt_domain"]
+
+[[route]]
+crate_pattern = "ferray-ma/src/interop.rs"
+upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]
+design = ".design/ferray-ma.md"
+parity_ops = ["ma_apply_unary", "MaskAware"]

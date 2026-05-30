@@ -746,8 +746,9 @@ mod tests {
         let ma = make_ma(vec![1.0, 2.0, 3.0, 4.0], vec![false, true, false, false]);
         let r = masked_unary(&ma, |x| x.mul_add(10.0, 1.0)).unwrap();
         let d: Vec<f64> = r.data().iter().copied().collect();
-        // Position 1 is masked → retains the fill_value (default: 0.0).
-        assert_eq!(d, vec![11.0, 0.0, 31.0, 41.0]);
+        // Position 1 is masked → retains the fill_value (numpy default
+        // 1e20, default_filler['f'] core.py:166).
+        assert_eq!(d, vec![11.0, 1e20, 31.0, 41.0]);
         // Mask is preserved identically.
         let m: Vec<bool> = r.mask().iter().copied().collect();
         assert_eq!(m, vec![false, true, false, false]);
@@ -812,10 +813,11 @@ mod tests {
         assert!((sd[0] - 0.0).abs() < 1e-12);
         assert!((cd[0] - 1.0).abs() < 1e-12);
         assert!((td[0] - 0.0).abs() < 1e-12);
-        // Position 1 masked → fill value (0.0).
-        assert_eq!(sd[1], 0.0);
-        assert_eq!(cd[1], 0.0);
-        assert_eq!(td[1], 0.0);
+        // Position 1 masked → numpy default fill value (1e20,
+        // default_filler['f'] core.py:166).
+        assert_eq!(sd[1], 1e20);
+        assert_eq!(cd[1], 1e20);
+        assert_eq!(td[1], 1e20);
         assert!((sd[2] - (-1.0_f64).sinh()).abs() < 1e-12);
     }
 
@@ -853,9 +855,9 @@ mod tests {
         let a = arcsinh(&ma).unwrap();
         let ad: Vec<f64> = a.data().iter().copied().collect();
         assert!((ad[0] - 0.0_f64.asinh()).abs() < 1e-12);
-        // Masked → 0.0 fill
-        assert_eq!(ad[1], 0.0);
-        assert_eq!(ad[3], 0.0);
+        // Masked → numpy default fill (1e20, default_filler['f'] core.py:166)
+        assert_eq!(ad[1], 1e20);
+        assert_eq!(ad[3], 1e20);
 
         // arccosh needs x >= 1, so use a different input for that test.
         let ma2 = make_ma(vec![1.0, 2.0, 5.0], vec![false, false, false]);
@@ -914,9 +916,10 @@ mod tests {
         assert!((d[0] - 0.0).abs() < 1e-12);
         assert!((d[1] - 2.0_f64.ln()).abs() < 1e-12);
         assert!((d[4] - 3.0_f64.ln()).abs() < 1e-12);
-        // Masked positions carry the fill value (0.0 default).
-        assert_eq!(d[2], 0.0);
-        assert_eq!(d[3], 0.0);
+        // Masked positions carry the fill value (numpy default 1e20,
+        // default_filler['f'] core.py:166).
+        assert_eq!(d[2], 1e20);
+        assert_eq!(d[3], 1e20);
     }
 
     #[test]
@@ -939,8 +942,9 @@ mod tests {
         let dd: Vec<f64> = domain.data().iter().copied().collect();
         // Plain: position 1 is NaN.
         assert!(pd[1].is_nan());
-        // Domain: position 1 is the fill value, and the mask is set.
-        assert_eq!(dd[1], 0.0);
+        // Domain: position 1 is the fill value (numpy default 1e20,
+        // default_filler['f'] core.py:166), and the mask is set.
+        assert_eq!(dd[1], 1e20);
         assert!(domain.mask().as_slice().unwrap()[1]);
     }
 

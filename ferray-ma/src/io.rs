@@ -65,10 +65,11 @@ where
 /// `MaskedArray::new` — mismatches surface as
 /// `FerrayError::ShapeMismatch`.
 ///
-/// The returned `MaskedArray` has the default `fill_value`
-/// (`T::zero()`) and a soft mask. Apply [`MaskedArray::with_fill_value`]
-/// / [`mask_ops::harden_mask`] afterwards if you need different
-/// defaults.
+/// The returned `MaskedArray` has the numpy per-dtype default
+/// `fill_value` (`numpy/ma/core.py:163` `default_filler`: `1e20` float /
+/// `999999` int / `true` bool) and a soft mask. Apply
+/// [`MaskedArray::with_fill_value`] / [`mask_ops::harden_mask`] afterwards
+/// if you need different defaults.
 ///
 /// # Errors
 /// - `FerrayError::IoError` on I/O failures for either file.
@@ -161,9 +162,11 @@ mod tests {
     }
 
     #[test]
-    fn load_masked_defaults_soft_mask_and_zero_fill() {
+    fn load_masked_defaults_soft_mask_and_default_filler_fill() {
         // The binary format doesn't persist fill_value or hard_mask;
-        // a freshly loaded MaskedArray should have the defaults.
+        // a freshly loaded MaskedArray should have the numpy per-dtype
+        // defaults: fill_value = default_filler['f'] = 1e20 (core.py:166),
+        // soft mask.
         let d = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let m = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
         let mut ma = MaskedArray::new(d, m).unwrap();
@@ -176,7 +179,7 @@ mod tests {
         save_masked(&data_path, &mask_path, &ma).unwrap();
 
         let loaded: MaskedArray<f64, Ix1> = load_masked(&data_path, &mask_path).unwrap();
-        assert_eq!(loaded.fill_value(), 0.0);
+        assert_eq!(loaded.fill_value(), 1e20);
         assert!(!loaded.is_hard_mask());
 
         let _ = std::fs::remove_file(&data_path);

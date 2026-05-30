@@ -614,10 +614,11 @@ mod mask_aware_tests {
             result.mask().iter().copied().collect::<Vec<_>>(),
             vec![false, true, false]
         );
-        // Masked position was overwritten with fill_value (0.0 default).
+        // Masked position was overwritten with fill_value (numpy default
+        // 1e20, default_filler['f'] core.py:166).
         let d: Vec<f64> = result.data().iter().copied().collect();
         assert_eq!(d[0], 2.0);
-        assert_eq!(d[1], 0.0); // masked → fill value
+        assert_eq!(d[1], 1e20); // masked → numpy default fill value
         assert_eq!(d[2], 6.0);
     }
 
