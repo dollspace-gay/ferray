@@ -102,6 +102,119 @@ pub fn extract_axis_tuple(obj: &Bound<'_, PyAny>) -> PyResult<Vec<isize>> {
         .map_err(|_| PyTypeError::new_err("axis must be an int or a tuple/list of ints"))
 }
 
+/// Normalize a single (possibly negative) `axis` for a `numpy.fft`
+/// transform, raising a plain `IndexError` (NOT `numpy.exceptions.AxisError`)
+/// when it is out of bounds or the input is 0-d.
+///
+/// `numpy.fft` does NOT route axis validation through `AxisError`. The
+/// front-end (`numpy/fft/_pocketfft.py:213` `n = a.shape[axis]`) indexes the
+/// shape tuple directly to default `n`, and `_raw_fft` later calls
+/// `normalize_axis_index(axis, a.ndim)` (`_pocketfft.py:88`). Both surface a
+/// plain `IndexError` ("tuple index out of range") for an out-of-range axis,
+/// and the shape-index path raises `IndexError` for a 0-d input (`a.shape[-1]`
+/// on an empty shape tuple). Confirmed live against numpy 2.4:
+/// `type(np.fft.fft(np.float64(3.0)).exception) is IndexError`. ferray's
+/// `resolve_axis` returns a `FerrayError::InvalidValue` that
+/// [`ferr_to_pyerr`] would map to `ValueError`, so the binding must normalize
+/// at the boundary to mirror numpy's exception *type* (R-DEV-2).
+pub fn fft_normalize_axis(py: Python<'_>, axis: isize, ndim: usize) -> PyResult<usize> {
+    let n = ndim as isize;
+    if ndim == 0 || axis < -n || axis >= n {
+        let _ = py; // keep signature uniform with the other axis helpers
+        return Err(pyo3::exceptions::PyIndexError::new_err(
+            "tuple index out of range",
+        ));
+    }
+    Ok(if axis < 0 {
+        (axis + n) as usize
+    } else {
+        axis as usize
+    })
+}
+
+/// Validate a `numpy.fft` transform-length `n`, raising numpy's exact
+/// `ValueError` when `n < 1`.
+///
+/// `numpy/fft/_pocketfft.py:59` — `if n < 1: raise ValueError(f"Invalid
+/// number of FFT data points ({n}) specified.")`. ferray binds `n` as a bare
+/// `usize`, so a negative Python int raises `OverflowError` at the PyO3
+/// boundary before any length check runs. Binding `n` signed and validating
+/// here mirrors numpy's exception *type* and message. `None` (the default)
+/// passes through unchanged so the transform uses the input length.
+pub fn validate_fft_n(n: Option<isize>) -> PyResult<Option<usize>> {
+    match n {
+        None => Ok(None),
+        Some(v) => {
+            if v < 1 {
+                return Err(PyValueError::new_err(format!(
+                    "Invalid number of FFT data points ({v}) specified."
+                )));
+            }
+            Ok(Some(v as usize))
+        }
+    }
+}
+
+/// Resolve a `numpy.fft` N-D `s` (shape) sequence against the input shape,
+/// honoring the numpy 2.0 `s[i] == -1` "use the whole input axis" sentinel.
+///
+/// `numpy/fft/_pocketfft.py:736-737` (`_cook_nd_args`) — `# use the whole
+/// input array along axis 'i' if s[i] == -1` / `s = [a.shape[_a] if _s == -1
+/// else _s for _s, _a in zip(s, axes)]`. ferray binds `s` as
+/// `Option<Vec<usize>>`, so a `-1` entry raises `OverflowError` at the PyO3
+/// boundary instead of being honored. Binding `s` signed lets the boundary
+/// substitute `shape[axes[i]]` for each `-1` and validate every other entry
+/// (`s[i] >= 1`, else numpy's `ValueError`). `axes` is the *already
+/// normalized* axis list these `s` entries pair with; `None` `s` passes
+/// through unchanged.
+pub fn resolve_fft_s(
+    s: Option<Vec<isize>>,
+    axes: &[usize],
+    shape: &[usize],
+) -> PyResult<Option<Vec<usize>>> {
+    let Some(s) = s else { return Ok(None) };
+    if s.len() != axes.len() {
+        return Err(PyValueError::new_err(
+            "Shape and axes have different lengths.",
+        ));
+    }
+    let mut out = Vec::with_capacity(s.len());
+    for (&si, &ax) in s.iter().zip(axes.iter()) {
+        if si == -1 {
+            out.push(shape[ax]);
+        } else if si < 1 {
+            return Err(PyValueError::new_err(format!(
+                "Invalid number of FFT data points ({si}) specified."
+            )));
+        } else {
+            out.push(si as usize);
+        }
+    }
+    Ok(Some(out))
+}
+
+/// Reject a complex-dtype input to a real-input FFT transform with the
+/// numpy `TypeError`.
+///
+/// numpy's real transforms (`rfft`, `rfft2`, `rfftn`, `ihfft`) dispatch to
+/// real-only ufuncs with no complex loop (`numpy/fft/_pocketfft.py:81`
+/// `pfu.rfft_n_even` / `pfu.rfft_n_odd`), so a complex input raises
+/// `TypeError: ufunc 'rfft_n_even' not supported for the input types ...`.
+/// ferray instead silently coerces complex → float (discarding the imaginary
+/// part) — a silent lossy round-trip across the boundary (R-CODE-4). This
+/// guard detects a complex dtype (`name` starting `"complex"`) and raises the
+/// matching `TypeError` before any cast (R-DEV-2). `dt` is the input's numpy
+/// dtype name (from [`dtype_name`]).
+pub fn reject_complex_for_real_fft(dt: &str, func: &str) -> PyResult<()> {
+    if dt.starts_with("complex") {
+        return Err(PyTypeError::new_err(format!(
+            "ufunc '{func}' not supported for the input types, and the inputs \
+             could not be safely coerced to any supported types"
+        )));
+    }
+    Ok(())
+}
+
 /// Convert a [`FerrayError`] into the closest CPython exception.
 ///
 /// Most ferray failure modes correspond to `ValueError` (bad shape,
@@ -138,7 +251,8 @@ pub fn ferr_to_pyerr(e: FerrayError) -> PyErr {
 /// `LinAlgError`. Everything else falls through to [`ferr_to_pyerr`].
 pub fn linalg_err_to_pyerr(py: Python<'_>, e: FerrayError) -> PyErr {
     let is_linalg = e.is_linalg_error();
-    let is_nonsquare = matches!(&e, FerrayError::ShapeMismatch { message } if message.contains("square"));
+    let is_nonsquare =
+        matches!(&e, FerrayError::ShapeMismatch { message } if message.contains("square"));
     if is_linalg || is_nonsquare {
         let msg = e.to_string();
         return match py
@@ -170,14 +284,7 @@ pub fn promote_linalg_input<'py>(
     let dt = dtype_name(&arr)?;
     if matches!(
         dt.as_str(),
-        "float64"
-            | "f64"
-            | "float32"
-            | "f32"
-            | "float16"
-            | "f16"
-            | "complex64"
-            | "complex128"
+        "float64" | "f64" | "float32" | "f32" | "float16" | "f16" | "complex64" | "complex128"
     ) {
         return Ok(arr);
     }
@@ -264,9 +371,7 @@ pub fn extract_signed_shape(obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
     let mut out = Vec::with_capacity(signed.len());
     for d in signed {
         if d < 0 {
-            return Err(PyValueError::new_err(
-                "negative dimensions are not allowed",
-            ));
+            return Err(PyValueError::new_err("negative dimensions are not allowed"));
         }
         out.push(d as usize);
     }
@@ -282,9 +387,7 @@ pub fn extract_signed_shape(obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
 /// `zeros((N, M))` / `eye` -> `zeros`), not `OverflowError`.
 pub fn validate_dim(n: isize) -> PyResult<usize> {
     if n < 0 {
-        return Err(PyValueError::new_err(
-            "negative dimensions are not allowed",
-        ));
+        return Err(PyValueError::new_err("negative dimensions are not allowed"));
     }
     Ok(n as usize)
 }
