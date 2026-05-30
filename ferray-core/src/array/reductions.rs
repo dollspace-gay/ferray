@@ -12,7 +12,19 @@
 // matches NumPy's `arr.sum()` ergonomics so users don't need to import a
 // separate crate just to compute a sum.
 //
-// See: https://github.com/dollspace-gay/ferray/issues/368
+// ## REQ status (reductions, NumPy parity)
+//  - sum / prod / sum_axis / prod_axis accumulator promotion — SHIPPED (#780):
+//    the `ReduceAcc` trait (this file) maps narrow signed ints → i64, narrow
+//    unsigned ints → u64, and bool → i64 before reducing, so narrow-int
+//    reductions never overflow and the result dtype matches numpy
+//    (numpy/_core/fromnumeric.py:2321-2327). Consumers: `Array::sum`/`prod`/
+//    `sum_axis`/`prod_axis` and the `ArrayView` mirrors (all in this file).
+//  - min / max / mean / var / std / any / all — SHIPPED (#368), NaN-propagating.
+//  - empty-array min/max raising ValueError — NOT-STARTED (open blocker #782).
+//  - cumsum / cumprod live as ferray-stats free functions; their narrow-int
+//    promotion is a separate ferray-stats blocker that reuses `ReduceAcc`.
+//
+// See: https://github.com/dollspace-gay/ferray/issues/368, /issues/780
 
 use num_traits::Float;
 
@@ -21,6 +33,95 @@ use crate::array::view::ArrayView;
 use crate::dimension::{Axis, Dimension, IxDyn};
 use crate::dtype::Element;
 use crate::error::FerrayResult;
+
+// ---------------------------------------------------------------------------
+// ReduceAcc — NumPy's sum/prod/cumsum/cumprod accumulator-and-result dtype.
+// ---------------------------------------------------------------------------
+
+/// Maps an element type `T` to the type NumPy uses to *accumulate* (and
+/// return) `sum` / `prod` / `cumsum` / `cumprod` over it.
+///
+/// NumPy promotes any integer dtype of *less precision than the default
+/// platform integer* before reducing, so a narrow-int reduction can never
+/// overflow and the result dtype is the platform integer:
+///
+/// > "The dtype of `a` is used by default unless `a` has an integer dtype of
+/// > less precision than the default platform integer.  In that case, if `a`
+/// > is signed then the platform integer is used while if `a` is unsigned then
+/// > an unsigned integer of the same precision as the platform integer is
+/// > used."
+/// > — `numpy/_core/fromnumeric.py:2321-2327` (sum), `:3306-3312` (prod)
+///
+/// The reduction itself is `umr_sum = um.add.reduce` /
+/// `umr_prod = um.multiply.reduce` (`numpy/_core/_methods.py:20-21`), i.e. the
+/// add/multiply ufunc whose *loop dtype* is the promoted accumulator.
+///
+/// The mapping (platform integer = 64-bit, matching ferray's `intp`/`int64`):
+///   - `i8 / i16 / i32 → i64`,  `i64 → i64`,  `i128 → i128`
+///   - `u8 / u16 / u32 → u64`,  `u64 → u64`,  `u128 → u128`
+///   - `bool → i64` (NumPy reduces bool as the platform integer, counting `true`)
+///   - `f32 → f32`, `f64 → f64`, complex stays itself (no promotion)
+///
+/// Wider-or-equal dtypes map to themselves, so existing `f64`/`i64`/complex
+/// reductions are unchanged — only narrow-int callers observe the promoted
+/// return type.
+pub trait ReduceAcc: Element + Copy {
+    /// The accumulator-and-result element type for reductions over `Self`.
+    type Acc: Element + Copy + std::ops::Add<Output = Self::Acc> + std::ops::Mul<Output = Self::Acc>;
+
+    /// Widen one element into the accumulator type before reducing, matching
+    /// NumPy's promotion of the loop dtype (`true → 1` for `bool`).
+    fn widen(self) -> Self::Acc;
+}
+
+macro_rules! impl_reduce_acc {
+    ($($t:ty => $acc:ty),* $(,)?) => {
+        $(
+            impl ReduceAcc for $t {
+                type Acc = $acc;
+                #[inline]
+                fn widen(self) -> $acc {
+                    self as $acc
+                }
+            }
+        )*
+    };
+}
+
+// Narrow signed ints promote to i64; i64/i128 stay themselves.
+impl_reduce_acc! {
+    i8 => i64, i16 => i64, i32 => i64, i64 => i64, i128 => i128,
+    u8 => u64, u16 => u64, u32 => u64, u64 => u64, u128 => u128,
+    f32 => f32, f64 => f64,
+}
+
+// bool reduces as the platform integer, counting `true` (numpy:
+// `np.sum(np.array([True, True, True])).dtype == int64`). `as i64` maps
+// false→0, true→1.
+impl ReduceAcc for bool {
+    type Acc = i64;
+    #[inline]
+    fn widen(self) -> i64 {
+        i64::from(self)
+    }
+}
+
+// Complex stays itself — numpy never promotes a complex reduction.
+impl ReduceAcc for num_complex::Complex<f32> {
+    type Acc = num_complex::Complex<f32>;
+    #[inline]
+    fn widen(self) -> Self {
+        self
+    }
+}
+
+impl ReduceAcc for num_complex::Complex<f64> {
+    type Acc = num_complex::Complex<f64>;
+    #[inline]
+    fn widen(self) -> Self {
+        self
+    }
+}
 
 /// Generic min/max fold step that propagates NaN per `NumPy` semantics.
 ///
@@ -56,7 +157,14 @@ where
 {
     /// Sum of all elements (whole-array reduction).
     ///
-    /// Returns `Element::zero()` for an empty array.
+    /// The result type is the NumPy reduction accumulator
+    /// [`ReduceAcc::Acc`]: narrow signed ints widen to `i64`, narrow unsigned
+    /// ints to `u64`, `bool` to `i64`, and `f32`/`f64`/complex stay
+    /// themselves. This means a narrow-int sum can never overflow and its
+    /// dtype matches `np.sum`'s promoted result
+    /// (`numpy/_core/fromnumeric.py:2321-2327`).
+    ///
+    /// Returns `Acc::zero()` for an empty array.
     ///
     /// # Examples
     /// ```
@@ -64,51 +172,63 @@ where
     /// # use ferray_core::dimension::Ix1;
     /// let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
     /// assert_eq!(a.sum(), 6.0);
+    /// // i8 sums promote to i64 and never overflow (numpy parity):
+    /// let b = Array::<i8, Ix1>::from_vec(Ix1::new([3]), vec![100, 100, 100]).unwrap();
+    /// assert_eq!(b.sum(), 300_i64);
     /// ```
-    pub fn sum(&self) -> T
+    pub fn sum(&self) -> <T as ReduceAcc>::Acc
     where
-        T: std::ops::Add<Output = T>,
+        T: ReduceAcc,
     {
-        let mut acc = T::zero();
+        let mut acc = <T as ReduceAcc>::Acc::zero();
         for &x in self.iter() {
-            acc = acc + x;
+            acc = acc + x.widen();
         }
         acc
     }
 
-    /// Sum along the given axis. Returns an array with one fewer dimension.
+    /// Sum along the given axis. Returns an array with one fewer dimension,
+    /// whose element type is the promoted [`ReduceAcc::Acc`] (same numpy
+    /// narrow-int promotion as the whole-array [`Array::sum`]).
     ///
     /// # Errors
     /// Returns `FerrayError::AxisOutOfBounds` if `axis >= ndim`.
-    pub fn sum_axis(&self, axis: Axis) -> FerrayResult<Array<T, IxDyn>>
+    pub fn sum_axis(&self, axis: Axis) -> FerrayResult<Array<<T as ReduceAcc>::Acc, IxDyn>>
     where
-        T: std::ops::Add<Output = T>,
+        T: ReduceAcc,
         D::NdarrayDim: ndarray::RemoveAxis,
     {
-        self.fold_axis(axis, T::zero(), |acc, &x| *acc + x)
+        let widened = self.map_to::<<T as ReduceAcc>::Acc>(ReduceAcc::widen);
+        widened.fold_axis(axis, <T as ReduceAcc>::Acc::zero(), |acc, &x| *acc + x)
     }
 
     /// Product of all elements.
     ///
-    /// Returns `Element::one()` for an empty array.
-    pub fn prod(&self) -> T
+    /// The result type is the promoted [`ReduceAcc::Acc`] (same numpy
+    /// narrow-int promotion as [`Array::sum`]; see
+    /// `numpy/_core/fromnumeric.py:3306-3312`).
+    ///
+    /// Returns `Acc::one()` for an empty array.
+    pub fn prod(&self) -> <T as ReduceAcc>::Acc
     where
-        T: std::ops::Mul<Output = T>,
+        T: ReduceAcc,
     {
-        let mut acc = T::one();
+        let mut acc = <T as ReduceAcc>::Acc::one();
         for &x in self.iter() {
-            acc = acc * x;
+            acc = acc * x.widen();
         }
         acc
     }
 
-    /// Product along the given axis.
-    pub fn prod_axis(&self, axis: Axis) -> FerrayResult<Array<T, IxDyn>>
+    /// Product along the given axis. Element type is the promoted
+    /// [`ReduceAcc::Acc`].
+    pub fn prod_axis(&self, axis: Axis) -> FerrayResult<Array<<T as ReduceAcc>::Acc, IxDyn>>
     where
-        T: std::ops::Mul<Output = T>,
+        T: ReduceAcc,
         D::NdarrayDim: ndarray::RemoveAxis,
     {
-        self.fold_axis(axis, T::one(), |acc, &x| *acc * x)
+        let widened = self.map_to::<<T as ReduceAcc>::Acc>(ReduceAcc::widen);
+        widened.fold_axis(axis, <T as ReduceAcc>::Acc::one(), |acc, &x| *acc * x)
     }
 }
 
@@ -247,6 +367,7 @@ where
     /// Mean along an axis.
     pub fn mean_axis(&self, axis: Axis) -> FerrayResult<Array<T, IxDyn>>
     where
+        T: ReduceAcc<Acc = T>,
         D::NdarrayDim: ndarray::RemoveAxis,
     {
         let ndim = self.ndim();
@@ -316,26 +437,28 @@ where
     T: Element + Copy,
     D: Dimension,
 {
-    /// Sum of all elements. See [`Array::sum`].
-    pub fn sum(&self) -> T
+    /// Sum of all elements. See [`Array::sum`] — returns the promoted
+    /// [`ReduceAcc::Acc`].
+    pub fn sum(&self) -> <T as ReduceAcc>::Acc
     where
-        T: std::ops::Add<Output = T>,
+        T: ReduceAcc,
     {
-        let mut acc = T::zero();
+        let mut acc = <T as ReduceAcc>::Acc::zero();
         for &x in self.iter() {
-            acc = acc + x;
+            acc = acc + x.widen();
         }
         acc
     }
 
-    /// Product of all elements. See [`Array::prod`].
-    pub fn prod(&self) -> T
+    /// Product of all elements. See [`Array::prod`] — returns the promoted
+    /// [`ReduceAcc::Acc`].
+    pub fn prod(&self) -> <T as ReduceAcc>::Acc
     where
-        T: std::ops::Mul<Output = T>,
+        T: ReduceAcc,
     {
-        let mut acc = T::one();
+        let mut acc = <T as ReduceAcc>::Acc::one();
         for &x in self.iter() {
-            acc = acc * x;
+            acc = acc * x.widen();
         }
         acc
     }
