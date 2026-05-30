@@ -45,6 +45,15 @@ Implements `numpy.ma`: masked arrays that represent missing or invalid data inli
 - REQ-16: `ma::getmask(&ma)` — return mask array (or `nomask` sentinel if no mask). `ma::getdata(&ma)` — return underlying data.
 - REQ-17: `ma::is_masked(&ma)` — return true if any element is masked. `ma::count_masked(&ma, axis)` — count masked elements.
 
+### Specialized Masked Algorithms (numpy/ma/core.py, numpy/ma/extras.py)
+- REQ-18: `ma_where(condition, x, y)` — masked select (`numpy.ma.where`). `data = where(filled(cond,False), x, y)`; result masked where the chosen source is masked OR the condition is masked. SHIPPED — `ma_where` in `algorithms.rs`; consumer `ferray-python/src/ma.rs::where_`.
+- REQ-19: `ma_choose(indices, choices)` — masked choose (`numpy.ma.choose`). Masked index filled with 0; result masked where the chosen source OR the index is masked. SHIPPED — `ma_choose` in `algorithms.rs`; consumer `ferray-python/src/ma.rs::choose`.
+- REQ-20: `ma_diff(a, n, axis)` — masked adjacent difference (`numpy.ma.diff`). `out[i]=a[i+1]-a[i]` masked iff either operand is masked; recurses for `n>1`. SHIPPED — `ma_diff` in `algorithms.rs`; consumer `ferray-python/src/ma.rs::diff`.
+- REQ-21: `ma_ediff1d(ary, to_begin, to_end)` — flattened first difference (`numpy.ma.ediff1d`); `to_begin`/`to_end` always unmasked. SHIPPED — `ma_ediff1d` in `algorithms.rs`; consumer `ferray-python/src/ma.rs::ediff1d`.
+- REQ-22: `ma_nonzero(a)` — indices of non-zero UNMASKED elements (`MaskedArray.nonzero` = `filled(self,0).nonzero()`). SHIPPED — `ma_nonzero` in `algorithms.rs`; consumer `ferray-python/src/ma.rs::nonzero`.
+- REQ-23: `ma_vander` matches `numpy.ma.vander` — masked inputs fill the data with 0 and the result carries NO mask (nomask). SHIPPED — `ma_vander` in `extras.rs`; consumer `ferray-python/src/ma.rs::vander`.
+- REQ-24: `ma_isin`/`ma_in1d` match `numpy.ma.isin`/`in1d` — membership over the underlying data, result carries NO mask (nomask). SHIPPED — `ma_isin`/`ma_in1d` in `extras.rs`; consumers `ferray-python/src/ma.rs::isin`/`in1d`.
+
 ## Acceptance Criteria
 - [ ] AC-1: `MaskedArray::new([1,2,3,4,5], [false,false,true,false,false]).mean()` returns 3.0 (skips element 3)
 - [ ] AC-2: `filled(0.0)` replaces masked elements with 0.0, leaves others unchanged

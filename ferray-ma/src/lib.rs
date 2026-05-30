@@ -36,6 +36,7 @@
     clippy::match_same_arms
 )]
 
+pub mod algorithms;
 pub mod arithmetic;
 pub mod constructors;
 pub mod extras;
@@ -89,6 +90,11 @@ pub use ufunc_support::{
     arccos_domain, arccosh_domain, arcsin_domain, arctanh_domain, divide_domain, log_domain,
     log2_domain, log10_domain, masked_binary_domain, masked_unary_domain, sqrt_domain,
 };
+
+// numpy.ma specialized algorithms (#835): masked where/choose/diff/
+// ediff1d/nonzero — each mirrors its unmasked numpy counterpart with
+// explicit mask propagation. See algorithms.rs.
+pub use algorithms::{ma_choose, ma_diff, ma_ediff1d, ma_nonzero, ma_where};
 
 // numpy.ma extras: full reductions, constructors, mask manipulation,
 // linalg-lite, set ops, fill-value protocol, comparison/logical ufuncs,

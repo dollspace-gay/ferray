@@ -701,12 +701,25 @@ where
     Array::from_vec(Ix1::new([n]), vals)
 }
 
-/// Per-element membership test against `test_values`: true where `ma[i]`
-/// equals any value in `test_values` AND `ma[i]` is not masked.
+/// Per-element membership test against `test_values`, matching
+/// `numpy.ma.isin` / `numpy.ma.in1d` (`numpy/ma/extras.py:1434` / `:1387`).
 ///
-/// Equivalent to `numpy.ma.isin(ma, test_values)`. The output mask follows
-/// the input's mask (positions where the input was masked are also masked
-/// in the result, so the boolean is meaningful for unmasked positions).
+/// numpy.ma.in1d routes through `ma.unique(ar1, return_inverse=True)`, which
+/// collapses every masked input to a single trailing **masked** unique
+/// element whose membership is `False`. The result therefore:
+/// - **carries the input mask** (masked input positions stay masked), and
+/// - at every masked position the underlying boolean is **`False`** (a masked
+///   value is never reported as a member).
+///
+/// Live oracle (numpy 2.4.5):
+/// `np.ma.isin(np.ma.array([1.,2,3,4],mask=[0,1,0,0]),[2,3])` → underlying data
+/// `[False, False, True, False]`, mask `[F, T, F, F]`. Position 1 (masked
+/// input value `2`, which *is* in the test set) still reports `False` because
+/// numpy treats the masked element as the masked-unique slot.
+///
+/// The prior ferray implementation reported the raw-value membership
+/// (`True`) at masked positions; this corrects the masked-position data to
+/// `False` to match numpy's `unique`-based path (R-HONEST-4).
 ///
 /// # Errors
 /// Returns an error if internal array construction fails.
@@ -718,14 +731,18 @@ where
     T: Element + Copy + PartialEq,
     D: Dimension,
 {
+    let mask: Vec<bool> = ma.mask().iter().copied().collect();
     let data: Vec<bool> = ma
         .data()
         .iter()
-        .map(|v| test_values.iter().any(|t| t == v))
+        .zip(mask.iter())
+        .map(|(v, &m)| {
+            // A masked input is the masked-unique element -> never a member.
+            !m && test_values.iter().any(|t| t == v)
+        })
         .collect();
     let data_arr = Array::from_vec(ma.data().dim().clone(), data)?;
-    let mask_arr: Array<bool, D> =
-        Array::from_vec(ma.mask().dim().clone(), ma.mask().iter().copied().collect())?;
+    let mask_arr: Array<bool, D> = Array::from_vec(ma.mask().dim().clone(), mask)?;
     MaskedArray::new(data_arr, mask_arr)
 }
 
@@ -868,14 +885,27 @@ where
     Ok(result)
 }
 
-/// Vandermonde matrix from a 1-D masked input. Masked rows propagate to
-/// the corresponding row of the result.
+/// Vandermonde matrix from a 1-D masked input, matching `numpy.ma.vander`.
+///
+/// numpy.ma.vander (`numpy/ma/extras.py:2216`):
+/// ```text
+/// _vander = np.vander(x, n)
+/// m = getmask(x)
+/// if m is not nomask:
+///     _vander[m] = 0
+/// return _vander
+/// ```
+/// The plain (unmasked) Vandermonde of the raw data is built first, then
+/// **every masked row is set to all-zeros**, and the result carries **no
+/// mask** (it is a plain ndarray returned through the `ma` namespace). Live
+/// oracle (numpy 2.4.5): `np.ma.vander(np.ma.array([1.,2,3],mask=[0,1,0]),3)` →
+/// `[[1,1,1],[0,0,0],[9,3,1]]`, `getmaskarray(...) == all False`.
 ///
 /// # Errors
 /// Returns `FerrayError::InvalidValue` if `x` is empty.
 pub fn ma_vander<T>(x: &MaskedArray<T, Ix1>, n: Option<usize>) -> FerrayResult<MaskedArray<T, Ix2>>
 where
-    T: Element + Copy + std::ops::Mul<Output = T> + num_traits::One,
+    T: Element + Copy + std::ops::Mul<Output = T> + num_traits::One + num_traits::Zero,
 {
     let m = x.size();
     if m == 0 {
@@ -886,10 +916,12 @@ where
     let cols = n.unwrap_or(m);
     let xs: Vec<T> = x.data().iter().copied().collect();
     let xmask: Vec<bool> = x.mask().iter().copied().collect();
+    let zero = num_traits::zero::<T>();
     let one = num_traits::one::<T>();
     let mut data = vec![one; m * cols];
-    let mut mask = vec![false; m * cols];
     for (i, &xi) in xs.iter().enumerate() {
+        // Build the plain Vandermonde row from the RAW data (numpy builds
+        // `np.vander(x)` before masking, so unmasked rows use the true value).
         let mut acc = one;
         let mut powers = Vec::with_capacity(cols);
         for _ in 0..cols {
@@ -899,12 +931,17 @@ where
         for (j, p) in powers.iter().enumerate() {
             // NumPy's vander defaults to decreasing powers (left-to-right).
             data[i * cols + (cols - 1 - j)] = *p;
-            mask[i * cols + (cols - 1 - j)] = xmask[i];
+        }
+        // numpy then zeros the ENTIRE row of any masked input (`_vander[m]=0`).
+        if xmask[i] {
+            for slot in data[i * cols..(i + 1) * cols].iter_mut() {
+                *slot = zero;
+            }
         }
     }
     let data_arr = Array::from_vec(Ix2::new([m, cols]), data)?;
-    let mask_arr = Array::from_vec(Ix2::new([m, cols]), mask)?;
-    MaskedArray::new(data_arr, mask_arr)
+    // nomask result — masked-array constructed from data only.
+    MaskedArray::from_data(data_arr)
 }
 
 // ===========================================================================

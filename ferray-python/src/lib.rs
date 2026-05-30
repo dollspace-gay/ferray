@@ -408,6 +408,15 @@ fn register_ma_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> Py
     m.add_function(wrap_pyfunction!(ma::trace, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::dot, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::unique, &m)?)?;
+    // ----- numpy.ma specialized algorithms (refs #835) -----
+    m.add_function(wrap_pyfunction!(ma::where_, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::choose, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::diff, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::ediff1d, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::nonzero, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::vander, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::isin, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::in1d, &m)?)?;
     parent.add_submodule(&m)?;
     py.import("sys")?
         .getattr("modules")?

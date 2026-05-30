@@ -186,15 +186,22 @@ def test_unique_multiple_masked_collapse_to_one():
 
 
 # ---------------------------------------------------------------------------
-# vander / isin / in1d are intentionally NOT bound in this slice: the
-# underlying ferray-ma library functions diverge from numpy.ma's mask
-# semantics (vander fills masked->0 + nomask; isin/in1d return nomask).
-# Tracked as ferray-ma library fixes under #835. Asserting they are absent
-# guards against a premature re-binding that would silently diverge.
+# vander / isin / in1d ARE now bound (#835), with mask semantics corrected to
+# match numpy.ma: vander zeros masked rows + nomask; isin/in1d preserve the
+# input mask and report masked positions as False. Full parity coverage lives
+# in test_expansion_ma_lib.py; this guards the binding surface stays present.
 # ---------------------------------------------------------------------------
 
 
-def test_vander_isin_in1d_not_yet_bound():
-    assert not hasattr(fr.ma, "vander")
-    assert not hasattr(fr.ma, "isin")
-    assert not hasattr(fr.ma, "in1d")
+def test_vander_isin_in1d_now_bound_and_match_numpy():
+    assert hasattr(fr.ma, "vander")
+    assert hasattr(fr.ma, "isin")
+    assert hasattr(fr.ma, "in1d")
+    # vander: masked rows -> all zeros, nomask (numpy/ma/extras.py:2216).
+    got = fr.ma.vander(
+        fr.ma.masked_array(np.array([1.0, 2.0, 3.0]), mask=np.array([0, 1, 0], dtype=bool)),
+        3,
+    )
+    exp = np.ma.vander(np.ma.array([1.0, 2.0, 3.0], mask=[0, 1, 0]), 3)
+    np.testing.assert_allclose(np.asarray(got.data), np.asarray(exp))
+    assert not np.asarray(got.mask, dtype=bool).any()

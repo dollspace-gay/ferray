@@ -1572,12 +1572,186 @@ pub fn unique<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<PyMaskedA
     Ok(PyMaskedArray::from_inner(inner))
 }
 
-// NOTE: `numpy.ma.vander`, `numpy.ma.isin`, and `numpy.ma.in1d` are NOT
-// bound in this slice. The corresponding ferray-ma library functions
-// (`ma_vander`, `ma_isin`, `ma_in1d`) diverge from numpy.ma's mask
-// semantics: numpy.ma.vander fills masked inputs with 0 and returns
-// `nomask`, while ferray's `ma_vander` propagates the input mask across the
-// row; numpy.ma.isin/in1d return `nomask` (the membership of the underlying
-// data, ignoring the input mask), while ferray's `ma_isin`/`ma_in1d` carry
-// the input mask through. Binding them as-is would silently diverge from
-// numpy, so they are tracked as ferray-ma LIBRARY fixes under #835.
+// ===========================================================================
+// numpy.ma specialized masked algorithms (refs #835): where/choose/diff/
+// ediff1d/nonzero, plus the now-corrected vander/isin/in1d. Each binds the
+// matching ferray-ma library function; every numpy.ma contract was verified
+// live against numpy 2.4.5 and the pytest oracle constructs expected values
+// from `numpy.ma.*` directly (R-CHAR-3).
+// ===========================================================================
+
+/// Coerce a Python object into a 1-/N-D bool `MaskedArray<bool, IxDyn>`.
+///
+/// A `ferray.ma.MaskedArray` is reinterpreted by thresholding its float data
+/// at `!= 0.0` (numpy treats any non-zero as `True`), preserving its mask; any
+/// other array-like is routed through `numpy.asarray(..., bool)` with a
+/// `nomask` mask.
+fn coerce_to_bool_ma<'py>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+) -> PyResult<RustMa<bool, IxDyn>> {
+    if let Ok(m) = obj.extract::<PyMaskedArray>() {
+        let (data, mask, shape) = ma_parts(&m.inner)?;
+        let bdata: Vec<bool> = data.iter().map(|&v| v != 0.0).collect();
+        let data_arr =
+            ArrayD::<bool>::from_vec(IxDyn::new(&shape), bdata).map_err(ferr_to_pyerr)?;
+        let mask_arr = ArrayD::<bool>::from_vec(IxDyn::new(&shape), mask).map_err(ferr_to_pyerr)?;
+        return RustMa::new(data_arr, mask_arr).map_err(ferr_to_pyerr);
+    }
+    let data = extract_bool_array(py, obj)?;
+    let n = data.size();
+    let shape = data.shape().to_vec();
+    let mask =
+        ArrayD::<bool>::from_vec(IxDyn::new(&shape), vec![false; n]).map_err(ferr_to_pyerr)?;
+    RustMa::new(data, mask).map_err(ferr_to_pyerr)
+}
+
+/// `numpy.ma.where(condition, x, y)` — masked elementwise select
+/// (`numpy/ma/core.py:7915`). Result masked where the chosen source is masked
+/// OR the condition is masked; a masked condition picks the `y` branch.
+/// Bound as `where_` to avoid colliding with the Rust keyword; registered
+/// under the Python name `where`.
+#[pyfunction]
+#[pyo3(name = "where")]
+pub fn where_<'py>(
+    py: Python<'py>,
+    condition: &Bound<'py, PyAny>,
+    x: &Bound<'py, PyAny>,
+    y: &Bound<'py, PyAny>,
+) -> PyResult<PyMaskedArray> {
+    let cond = coerce_to_bool_ma(py, condition)?;
+    let mx = coerce_to_ma(py, x)?;
+    let my = coerce_to_ma(py, y)?;
+    let out = fma::ma_where(&cond, &mx, &my).map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(out))
+}
+
+/// `numpy.ma.choose(indices, choices)` — masked choose
+/// (`numpy/ma/core.py:8007`). A masked index is filled with 0; the result is
+/// masked where the chosen source OR the index is masked.
+#[pyfunction]
+pub fn choose<'py>(
+    py: Python<'py>,
+    indices: &Bound<'py, PyAny>,
+    choices: &Bound<'py, PyAny>,
+) -> PyResult<PyMaskedArray> {
+    let idx = coerce_to_ma(py, indices)?;
+    let seq = choices.try_iter()?;
+    let mut chs: Vec<RustMa<f64, IxDyn>> = Vec::new();
+    for item in seq {
+        chs.push(coerce_to_ma(py, &item?)?);
+    }
+    let out = fma::ma_choose(&idx, &chs).map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(out))
+}
+
+/// `numpy.ma.diff(a, n=1, axis=-1)` — masked adjacent difference
+/// (`numpy/ma/core.py:7774`); result masked iff either operand is masked.
+#[pyfunction]
+#[pyo3(signature = (a, n = 1, axis = -1))]
+pub fn diff<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    n: usize,
+    axis: isize,
+) -> PyResult<PyMaskedArray> {
+    let m = coerce_to_ma(py, a)?;
+    let out = fma::ma_diff(&m, n, axis).map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(out))
+}
+
+/// `numpy.ma.ediff1d(ary, to_end=None, to_begin=None)` — flattened first
+/// difference (`numpy/ma/extras.py:1229`); `to_begin`/`to_end` always unmasked.
+#[pyfunction]
+#[pyo3(signature = (ary, to_end = None, to_begin = None))]
+pub fn ediff1d<'py>(
+    py: Python<'py>,
+    ary: &Bound<'py, PyAny>,
+    to_end: Option<&Bound<'py, PyAny>>,
+    to_begin: Option<&Bound<'py, PyAny>>,
+) -> PyResult<PyMaskedArray> {
+    let m = coerce_to_ma(py, ary)?;
+    let begin: Option<Vec<f64>> = match to_begin {
+        Some(o) => Some(extract_data(py, o)?.iter().copied().collect()),
+        None => None,
+    };
+    let end: Option<Vec<f64>> = match to_end {
+        Some(o) => Some(extract_data(py, o)?.iter().copied().collect()),
+        None => None,
+    };
+    let out = fma::ma_ediff1d(&m, begin.as_deref(), end.as_deref()).map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(ix1_ma_to_dyn(out)?))
+}
+
+/// `numpy.ma.nonzero(a)` — tuple of per-dimension index arrays of the non-zero
+/// UNMASKED elements (masked treated as zero; `numpy/ma/core.py:5049`). Returns
+/// a Python tuple of `int64` numpy arrays, matching numpy's layout.
+#[pyfunction]
+pub fn nonzero<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let m = coerce_to_ma(py, a)?;
+    let coords = fma::ma_nonzero(&m).map_err(ferr_to_pyerr)?;
+    let mut arrays: Vec<Bound<'py, PyAny>> = Vec::with_capacity(coords.len());
+    for axis_coords in coords {
+        arrays.push(
+            axis_coords
+                .into_pyarray(py)
+                .map_err(ferr_to_pyerr)?
+                .into_any(),
+        );
+    }
+    Ok(pyo3::types::PyTuple::new(py, arrays)?.into_any())
+}
+
+/// `numpy.ma.vander(x, n=None)` — masked Vandermonde
+/// (`numpy/ma/extras.py:2216`). Masked input rows become all-zeros and the
+/// result carries no mask (nomask).
+#[pyfunction]
+#[pyo3(signature = (x, n = None))]
+pub fn vander<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    n: Option<usize>,
+) -> PyResult<PyMaskedArray> {
+    let m = coerce_to_ma(py, x)?;
+    let m1 = ma_as_ix1(&m)?;
+    let out = fma::ma_vander(&m1, n).map_err(ferr_to_pyerr)?;
+    let data = fma::getdata(&out).map_err(ferr_to_pyerr)?.into_dyn();
+    let mask = fma::getmaskarray(&out).map_err(ferr_to_pyerr)?.into_dyn();
+    let inner = RustMa::new(data, mask).map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(inner))
+}
+
+/// `numpy.ma.isin(element, test_elements)` — masked membership
+/// (`numpy/ma/extras.py:1434`). Carries the input mask; masked positions are
+/// reported `False` (a masked value is never a member).
+#[pyfunction]
+pub fn isin<'py>(
+    py: Python<'py>,
+    element: &Bound<'py, PyAny>,
+    test_elements: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let m = coerce_to_ma(py, element)?;
+    let tests: Vec<f64> = extract_data(py, test_elements)?.iter().copied().collect();
+    let out = fma::ma_isin(&m, &tests).map_err(ferr_to_pyerr)?;
+    // Return a plain numpy bool ndarray of the underlying membership data,
+    // matching numpy.ma.isin's observable (the boolean result shape of
+    // `element`); masked positions read `False`.
+    let data = fma::getdata(&out).map_err(ferr_to_pyerr)?;
+    Ok(data.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// `numpy.ma.in1d(ar1, ar2)` — flattened masked membership
+/// (`numpy/ma/extras.py:1387`). 1-D `isin`.
+#[pyfunction]
+pub fn in1d<'py>(
+    py: Python<'py>,
+    ar1: &Bound<'py, PyAny>,
+    ar2: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let m = coerce_to_ma(py, ar1)?;
+    let m1 = ma_as_ix1(&m)?;
+    let tests: Vec<f64> = extract_data(py, ar2)?.iter().copied().collect();
+    let out = fma::ma_in1d(&m1, &tests).map_err(ferr_to_pyerr)?;
+    let data = fma::getdata(&out).map_err(ferr_to_pyerr)?;
+    Ok(data.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}

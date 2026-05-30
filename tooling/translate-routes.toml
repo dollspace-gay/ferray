@@ -561,6 +561,36 @@ upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]
 design = ".design/ferray-ma.md"
 parity_ops = ["ma_apply_unary", "MaskAware"]
 
+# ferray-ma specialized masked algorithms (refs #835): where/choose/diff
+# (numpy/ma/core.py) and ediff1d/nonzero (numpy/ma/extras.py). Each mirrors
+# its unmasked numpy counterpart with explicit mask propagation.
+[[route]]
+crate_pattern = "ferray-ma/src/algorithms.rs"
+upstream = [
+    "/home/doll/numpy-ref/numpy/ma/core.py",
+    "/home/doll/numpy-ref/numpy/ma/extras.py",
+]
+design = ".design/ferray-ma.md"
+parity_ops = ["where", "choose", "diff", "ediff1d", "nonzero"]
+
+# ferray-ma crate root: re-exports the masked-array surface (numpy.ma).
+[[route]]
+crate_pattern = "ferray-ma/src/lib.rs"
+upstream = ["/home/doll/numpy-ref/numpy/ma/core.py"]
+design = ".design/ferray-ma.md"
+parity_ops = ["__all__"]
+
+# ferray-ma extras (numpy.ma.extras): vander/isin/in1d mask semantics
+# (numpy.ma.vander fills masked->0 returning nomask; isin/in1d return nomask).
+[[route]]
+crate_pattern = "ferray-ma/src/extras.rs"
+upstream = [
+    "/home/doll/numpy-ref/numpy/ma/core.py",
+    "/home/doll/numpy-ref/numpy/ma/extras.py",
+]
+design = ".design/ferray-ma.md"
+parity_ops = ["vander", "isin", "in1d", "ediff1d", "count_masked"]
+
 # Window-function bindings: bartlett/blackman/hamming/hanning/kaiser etc.
 # NumPy types `M` as a signed float named `M` (def hanning(M)) and guards
 # `if M < 1: return array([], dtype=float64)`. The binding marshals M as a
