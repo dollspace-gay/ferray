@@ -490,6 +490,24 @@ enum Storage {
         desc: ViewDesc,
         /// The view object's own hard-mask flag (per-object, not shared).
         own_hard: bool,
+        /// The view object's OWN per-object fill_value overlay (#880). numpy's
+        /// `_fill_value` is per-object: `set_fill_value(view, v)` materializes
+        /// the view's own `_fill_value` and leaves the base unchanged
+        /// (`numpy/ma/core.py` `fill_value.setter`). `None` means "inherit the
+        /// base's effective fill_value" (the default until overridden); `Some`
+        /// is the view's own dtype-coerced fill object returned verbatim by the
+        /// getter. Chained views each carry their own overlay; the getter walks
+        /// to the first `Some` or the root default.
+        own_fill: Option<Py<PyAny>>,
+        /// The view object's OWN local mask overlay (#881). When the ROOT base
+        /// is `nomask`, masking through the view (`b[i] = masked`) must NOT
+        /// write the base (numpy materializes a FRESH local `_mask` on the view
+        /// via `make_mask_none`, base stays `nomask`). `None` means "no local
+        /// mask materialized yet — read the gathered base mask". `Some` is a
+        /// view-local bool mask (view shape, C-order flat) that OVERRIDES the
+        /// gathered snapshot's mask on READ while DATA is still read from the
+        /// shared base buffer.
+        own_mask: Option<Vec<bool>>,
     },
 }
 
@@ -501,6 +519,8 @@ impl Clone for Storage {
                 base,
                 desc,
                 own_hard,
+                own_fill,
+                own_mask,
             } => Storage::View {
                 // `Py<T>::clone_ref` bumps the refcount; the clone shares the
                 // SAME base, so a cloned view still aliases the same buffer.
@@ -508,6 +528,8 @@ impl Clone for Storage {
                 base: Python::attach(|py| base.clone_ref(py)),
                 desc: desc.clone(),
                 own_hard: *own_hard,
+                own_fill: Python::attach(|py| own_fill.as_ref().map(|f| f.clone_ref(py))),
+                own_mask: own_mask.clone(),
             },
         }
     }
@@ -546,6 +568,23 @@ fn gather_view(base: &DynMa, desc: &ViewDesc) -> PyResult<DynMa> {
             _ => T::wrap(RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?),
         };
         Ok(inner)
+    })
+}
+
+/// Replace `gathered`'s mask with a view-local `local` bool mask (#881),
+/// keeping the gathered DATA verbatim. Used by [`PyMaskedArray::snapshot`] for a
+/// view over a NOMASK base that has been masked locally: numpy materializes a
+/// FRESH `_mask` on the view (via `make_mask_none`) while the base stays
+/// `nomask`, so the view reads its OWN mask over the shared base data. The
+/// result carries a REAL mask (`RustMa::new`), mirroring numpy's materialized
+/// per-view `_mask`.
+fn override_mask(gathered: DynMa, local: &[bool]) -> PyResult<DynMa> {
+    let shape = gathered.shape();
+    let mask_fa =
+        ArrayD::<bool>::from_vec(IxDyn::new(&shape), local.to_vec()).map_err(ferr_to_pyerr)?;
+    match_ma!(gathered, m, T => {
+        let data_fa: ArrayD<T> = m.data().to_owned();
+        Ok(T::wrap(RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?))
     })
 }
 
@@ -655,9 +694,22 @@ impl PyMaskedArray {
     fn snapshot(&self, py: Python<'_>) -> PyResult<DynMa> {
         match &self.storage {
             Storage::Owned(d) => Ok(d.clone()),
-            Storage::View { base, desc, .. } => {
+            Storage::View {
+                base,
+                desc,
+                own_mask,
+                ..
+            } => {
                 let bd = base.borrow(py).snapshot(py)?;
-                gather_view(&bd, desc)
+                let gathered = gather_view(&bd, desc)?;
+                match own_mask {
+                    // #881: a view over a NOMASK base that has been masked
+                    // locally READS its own_mask (view-local) while DATA still
+                    // comes from the shared base buffer (gathered above). The
+                    // own_mask OVERRIDES the gathered (all-False) mask.
+                    Some(local) => override_mask(gathered, local),
+                    None => Ok(gathered),
+                }
             }
         }
     }
@@ -667,6 +719,20 @@ impl PyMaskedArray {
     /// (`to_f64_ma`/`all_masked`/`__repr__`).
     fn snapshot_gil(&self) -> PyResult<DynMa> {
         Python::attach(|py| self.snapshot(py))
+    }
+
+    /// Whether the ROOT owned base carries a REAL mask buffer (#881). Walks the
+    /// view chain to the `Owned` root and reads its `has_real_mask`. A view's
+    /// OWN local mask overlay (`own_mask`) does NOT count — numpy gates the
+    /// mask write-through on the BASE's `_mask is nomask` state, not the view's
+    /// materialized local mask. Used by [`PyMaskedArray::with_buffer_mut`] to
+    /// decide whether a mask-bit write scatters to the base (real-mask base) or
+    /// stays view-local (nomask base).
+    fn root_has_real_mask(&self, py: Python<'_>) -> bool {
+        match &self.storage {
+            Storage::Owned(d) => d.has_real_mask(),
+            Storage::View { base, .. } => base.borrow(py).root_has_real_mask(py),
+        }
     }
 
     /// Apply a BUFFER-mutating operation, writing through to the base when the
@@ -691,19 +757,36 @@ impl PyMaskedArray {
                 base,
                 desc,
                 own_hard,
+                own_mask,
+                ..
             } => {
                 let own_hard = *own_hard;
                 let base_bound = base.bind(py).clone();
                 let desc = desc.clone();
-                // Snapshot the view's current state, apply the mutation locally,
-                // then scatter every position back to the base buffer.
+                // Whether the ROOT base has a REAL mask gates the mask
+                // write-through (#881): a real-mask base shares its mask buffer
+                // (scatter through), a nomask base keeps the view's mask LOCAL.
+                let root_real = base_bound.borrow().root_has_real_mask(py);
+                // Snapshot the view's CURRENT state (data gathered from base +
+                // this view's own local mask overlay, if any), apply the
+                // mutation locally, then write back.
                 let mut local = {
                     let bd = base_bound.borrow().snapshot(py)?;
-                    gather_view(&bd, &desc)?
+                    let gathered = gather_view(&bd, &desc)?;
+                    match own_mask.as_ref() {
+                        Some(lm) => override_mask(gathered, lm)?,
+                        None => gathered,
+                    }
                 };
                 let before_mask: Vec<bool> = local.mask_bits()?.iter().copied().collect();
                 let r = f(&mut local)?;
                 let after_mask: Vec<bool> = local.mask_bits()?.iter().copied().collect();
+
+                // The view-local mask overlay we will end up storing for a
+                // nomask-base view. Seeded from the existing overlay (so a
+                // soft-unmask `b[i] = value` clears the view's local bit).
+                let mut new_own: Option<Vec<bool>> = own_mask.clone();
+
                 for (k, &p) in desc.positions.iter().enumerate() {
                     // Under a hard view, a position masked BEFORE the op keeps
                     // its base data + mask (numpy: a hard mask never clears and
@@ -711,7 +794,25 @@ impl PyMaskedArray {
                     if own_hard && before_mask.get(k).copied().unwrap_or(false) {
                         continue;
                     }
-                    set_flat_through(py, &base_bound, p, &local, k, after_mask[k])?;
+                    // DATA always scatters to the base (shared `_data` buffer).
+                    copy_data_through(py, &base_bound, p, &local, k)?;
+                    if root_real {
+                        // Real-mask base: the mask buffer is shared — scatter
+                        // the bit through to the base (KEEP #857 behavior).
+                        set_mask_through(py, &base_bound, p, after_mask[k])?;
+                    } else if after_mask[k] || new_own.is_some() {
+                        // Nomask base: materialize a FRESH view-local mask
+                        // (numpy's `make_mask_none` on the view) and set the
+                        // bit; the base stays nomask. Once materialized, keep it
+                        // (a soft-unmask writes `false`, not removes the mask).
+                        let buf = new_own.get_or_insert_with(|| vec![false; desc.positions.len()]);
+                        buf[k] = after_mask[k];
+                    }
+                }
+
+                // Persist the view-local mask overlay (nomask base only).
+                if let Storage::View { own_mask, .. } = &mut self.storage {
+                    *own_mask = new_own;
                 }
                 Ok(r)
             }
@@ -1447,6 +1548,15 @@ impl PyMaskedArray {
     /// `numpy/ma/core.py:166` — `1e20` float / `999999` int / `True` bool).
     #[getter]
     fn fill_value<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        // #880: fill_value is PER-OBJECT. A view returns its OWN overlay if set;
+        // otherwise it inherits the base's effective fill_value (walking the
+        // chain to the first `own_fill` or the root default).
+        if let Storage::View { base, own_fill, .. } = &self.storage {
+            if let Some(f) = own_fill {
+                return Ok(f.bind(py).clone());
+            }
+            return base.borrow(py).fill_value(py);
+        }
         let cur = self.snapshot(py)?;
         match &cur {
             DynMa::Complex32(m) => complex_scalar_pyobject::<f32>(py, m.fill_value()),
@@ -1981,6 +2091,8 @@ impl PyMaskedArray {
                     base: slf.clone().unbind(),
                     desc,
                     own_hard: false,
+                    own_fill: None,
+                    own_mask: None,
                 },
             };
             return Ok(Py::new(py, child)?.into_bound(py).into_any());
@@ -3801,37 +3913,52 @@ fn copy_elem_dyn(dst: &mut DynMa, dst_pos: usize, src: &DynMa, src_pos: usize) -
     }
 }
 
-/// Write ONE element (data from `src[src_pos]` + a mask bit) into `target`'s
-/// ROOT buffer at flat position `pos`, recursing through any view chain so a
-/// chained view propagates to the real owner (numpy's shared-buffer write).
-///
-/// `Owned`: copy the element and set the mask bit in place. `View`: map `pos`
-/// through the view's descriptor (`desc.positions[pos]`) to the next-level base
-/// position and recurse. The recursion bottoms out at the `Owned` root.
-fn set_flat_through(
+/// Write ONE DATA element through to the ROOT buffer at flat position `pos`,
+/// recursing through any view chain, WITHOUT touching the mask (#881). The
+/// data buffer is ALWAYS shared by a view (numpy's view shares `_data`
+/// unconditionally), so a data write always propagates to the base; the MASK
+/// write-through is gated separately on the base's mask state.
+fn copy_data_through(
     py: Python<'_>,
     target: &Bound<'_, PyMaskedArray>,
     pos: usize,
     src: &DynMa,
     src_pos: usize,
-    masked: bool,
 ) -> PyResult<()> {
     let mut tref = target.borrow_mut();
     match &mut tref.storage {
-        Storage::Owned(d) => {
-            copy_elem_dyn(d, pos, src, src_pos)?;
-            set_mask_flat_dyn(d, pos, masked)
-        }
+        Storage::Owned(d) => copy_elem_dyn(d, pos, src, src_pos),
         Storage::View { base, desc, .. } => {
             let base_pos = *desc.positions.get(pos).ok_or_else(|| {
                 PyValueError::new_err("internal: view writeback position out of range")
             })?;
             let base_bound = base.bind(py).clone();
-            // Drop the borrow before recursing into the base (avoid a nested
-            // borrow of a distinct object would be fine, but releasing keeps
-            // the borrow window minimal).
             drop(tref);
-            set_flat_through(py, &base_bound, base_pos, src, src_pos, masked)
+            copy_data_through(py, &base_bound, base_pos, src, src_pos)
+        }
+    }
+}
+
+/// Write ONE MASK bit through to the ROOT buffer at flat position `pos`,
+/// recursing through any view chain, WITHOUT touching the data (#881). Used
+/// only when the ROOT base carries a REAL mask (shared mask buffer): masking
+/// through a view of a nomask base stays view-local (see `with_buffer_mut`).
+fn set_mask_through(
+    py: Python<'_>,
+    target: &Bound<'_, PyMaskedArray>,
+    pos: usize,
+    masked: bool,
+) -> PyResult<()> {
+    let mut tref = target.borrow_mut();
+    match &mut tref.storage {
+        Storage::Owned(d) => set_mask_flat_dyn(d, pos, masked),
+        Storage::View { base, desc, .. } => {
+            let base_pos = *desc.positions.get(pos).ok_or_else(|| {
+                PyValueError::new_err("internal: view writeback position out of range")
+            })?;
+            let base_bound = base.bind(py).clone();
+            drop(tref);
+            set_mask_through(py, &base_bound, base_pos, masked)
         }
     }
 }
@@ -5426,10 +5553,32 @@ pub fn set_fill_value(
     fill_value: &Bound<'_, PyAny>,
 ) -> PyResult<()> {
     let dt = a.dtype_name_cheap();
-    // The fill value lives on the OWNED storage. A view's fill is set on the
-    // ROOT owner it aliases (numpy keeps it per-object; a view writing through
-    // to its base is the conservative, R-CODE-safe choice — no extra per-view
-    // metadata to drift). `set_fill_value_owned` recurses to the root.
+    // #880: fill_value is PER-OBJECT (numpy/ma/core.py `fill_value.setter`
+    // assigns the VIEW's own `_fill_value`, never the base's). An Owned array
+    // sets the fill on its `DynMa`; a VIEW sets its OWN per-object `own_fill`
+    // overlay ONLY — the base is left untouched (mirrors the `own_hard` flag).
+    if matches!(a.storage, Storage::View { .. }) {
+        // Coerce the fill to the native dtype the SAME way the getter reads it:
+        // apply it to a fresh owned snapshot, then read it back as the Python
+        // object the getter would return, and store that as the overlay.
+        let mut tmp = Storage::Owned(a.snapshot(py)?);
+        set_fill_value_owned(py, &mut tmp, fill_value, dt)?;
+        let coerced = match &tmp {
+            Storage::Owned(cur) => match cur {
+                DynMa::Complex32(m) => complex_scalar_pyobject::<f32>(py, m.fill_value())?,
+                DynMa::Complex64(m) => complex_scalar_pyobject::<f64>(py, m.fill_value())?,
+                _ => match_ma_real!(cur, m, T => {
+                    m.fill_value().into_bound_py_any(py)?
+                }, complex => { unreachable_complex_egress()? }),
+            },
+            // `tmp` was built as `Owned` above; this arm is unreachable.
+            Storage::View { .. } => unreachable_complex_egress()?,
+        };
+        if let Storage::View { own_fill, .. } = &mut a.storage {
+            *own_fill = Some(coerced.unbind());
+        }
+        return Ok(());
+    }
     set_fill_value_owned(py, &mut a.storage, fill_value, dt)
 }
 
