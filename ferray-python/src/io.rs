@@ -288,8 +288,7 @@ pub fn savetxt(
             let shape = fa.shape();
             let (r, c) = (shape[0], shape[1]);
             let data: Vec<f64> = fa.iter().copied().collect();
-            let a2 =
-                Array::<f64, Ix2>::from_vec(Ix2::new([r, c]), data).map_err(ferr_to_pyerr)?;
+            let a2 = Array::<f64, Ix2>::from_vec(Ix2::new([r, c]), data).map_err(ferr_to_pyerr)?;
             ferray::io::savetxt(&path, &a2, &opts).map_err(ferr_to_pyerr)
         }
         n => Err(PyValueError::new_err(format!(
@@ -322,8 +321,7 @@ pub fn loadtxt<'py>(
     // splits on whitespace when given a space delimiter.
     let delim_char = delimiter.map_or(' ', |d| single_char(d, ' '));
 
-    let arr2 =
-        ferray::io::loadtxt::<f64, _>(&path, delim_char, skiprows).map_err(ferr_to_pyerr)?;
+    let arr2 = ferray::io::loadtxt::<f64, _>(&path, delim_char, skiprows).map_err(ferr_to_pyerr)?;
     let shape = arr2.shape();
     let (r, c) = (shape[0], shape[1]);
     let data: Vec<f64> = arr2.iter().copied().collect();

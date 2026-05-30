@@ -646,9 +646,7 @@ pub fn dynarray_to_pyarray<'py>(
     use ferray_numpy_interop::IntoNumPy;
 
     macro_rules! from_dyn {
-        ($inner:expr) => {{
-            Ok($inner.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
-        }};
+        ($inner:expr) => {{ Ok($inner.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()) }};
     }
 
     match arr {

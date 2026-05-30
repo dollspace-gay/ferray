@@ -16,9 +16,9 @@
 use ferray_core::dimension::IxDyn;
 use ferray_ma::MaskedArray;
 use ferray_test_oracle::{
-    assert_f64_slice_ulp, assert_f64_ulp, fixtures_dir, load_fixture, make_bool_array,
-    make_f64_array, parse_bool_data, parse_f64_data, parse_f64_value, should_skip_f64,
-    MIN_ULP_TOLERANCE,
+    MIN_ULP_TOLERANCE, assert_f64_slice_ulp, assert_f64_ulp, fixtures_dir, load_fixture,
+    make_bool_array, make_f64_array, parse_bool_data, parse_f64_data, parse_f64_value,
+    should_skip_f64,
 };
 
 fn ma_fx(name: &str) -> std::path::PathBuf {
@@ -27,9 +27,7 @@ fn ma_fx(name: &str) -> std::path::PathBuf {
 
 /// Build a `MaskedArray<f64, IxDyn>` from a fixture case's `data` +
 /// `mask` inputs. Used by every reduction / mask-op test below.
-fn make_masked_array(
-    inputs: &ferray_test_oracle::serde_json::Value,
-) -> MaskedArray<f64, IxDyn> {
+fn make_masked_array(inputs: &ferray_test_oracle::serde_json::Value) -> MaskedArray<f64, IxDyn> {
     let data = make_f64_array(&inputs["data"]);
     let mask = make_bool_array(&inputs["mask"]);
     MaskedArray::new(data, mask).unwrap()
@@ -161,14 +159,14 @@ fn getmask_and_getdata_match_numpy() {
         // getmask: returns the mask array.
         let mask = ferray_ma::getmask(&ma).unwrap();
         let expected_mask = parse_bool_data(&case.expected["mask"]["data"]);
-        for (i, (&actual, &expected)) in
-            mask.as_slice().unwrap().iter().zip(expected_mask.iter()).enumerate()
+        for (i, (&actual, &expected)) in mask
+            .as_slice()
+            .unwrap()
+            .iter()
+            .zip(expected_mask.iter())
+            .enumerate()
         {
-            assert_eq!(
-                actual, expected,
-                "getmask case '{}' element {i}",
-                case.name
-            );
+            assert_eq!(actual, expected, "getmask case '{}' element {i}", case.name);
         }
     }
 }
@@ -192,9 +190,7 @@ fn masked_invalid_matches_numpy() {
         let result = ferray_ma::masked_invalid(&arr).unwrap();
         let expected_mask = parse_bool_data(&case.expected["mask"]["data"]);
         let mask_slice = result.mask().as_slice().unwrap();
-        for (i, (&actual, &expected)) in
-            mask_slice.iter().zip(expected_mask.iter()).enumerate()
-        {
+        for (i, (&actual, &expected)) in mask_slice.iter().zip(expected_mask.iter()).enumerate() {
             assert_eq!(
                 actual, expected,
                 "masked_invalid case '{}' element {i}",
@@ -245,12 +241,11 @@ fn filled_matches_numpy() {
         let ma = make_masked_array(&case.inputs);
 
         // Determine the fill value and the corresponding expected key.
-        let (fill_value, expected_key) =
-            if let Some(fv) = case.inputs.get("fill_value") {
-                (parse_f64_value(fv), "filled")
-            } else {
-                (0.0_f64, "filled_0")
-            };
+        let (fill_value, expected_key) = if let Some(fv) = case.inputs.get("fill_value") {
+            (parse_f64_value(fv), "filled")
+        } else {
+            (0.0_f64, "filled_0")
+        };
 
         let result = ma.filled(fill_value).unwrap();
         let expected = parse_f64_data(&case.expected[expected_key]["data"]);
