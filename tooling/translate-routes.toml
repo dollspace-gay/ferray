@@ -42,6 +42,15 @@ upstream = [
 design = ".design/ferray-stats.md"
 parity_ops = ["mean", "median", "std", "var", "percentile", "quantile", "average", "nanmean", "nanstd", "nanvar", "nanmedian", "ptp", "cov", "corrcoef"]
 
+[[route]]
+crate_pattern = "ferray-python/src/char.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/strings.py",
+  "/home/doll/numpy-ref/numpy/_core/defchararray.py",
+]
+design = ".design/ferray-strings.md"
+parity_ops = ["str_len", "count", "find", "upper", "lower", "strip", "replace"]
+
 # ─────────────────────────────────────────────────────────────────────────
 # ferray-core — the foundational crate (dependency order: FIRST)
 # Verified Rust-side via cargo test + numpy oracle (ferray-test-oracle /
