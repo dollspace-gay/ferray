@@ -238,6 +238,104 @@ pub fn extract_shape(obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
     })
 }
 
+/// Accept a Python int (1-D) or a sequence of ints (N-D) as a *signed*
+/// shape, then validate every dimension is non-negative — raising
+/// `ValueError("negative dimensions are not allowed")` for a negative one.
+///
+/// NumPy rejects a negative dimension with a `ValueError`, not a
+/// `TypeError`/`OverflowError`: the shape is parsed into a signed
+/// `npy_intp` array and then checked (`PyArray_IntpFromSequence` ->
+/// the dimension-validation loop in `numpy/_core/src/multiarray/ctors.c`),
+/// e.g. `np.zeros(-1)` -> `ValueError: negative dimensions are not
+/// allowed`. Binding `shape` as `usize` would instead surface a
+/// `TypeError`/`OverflowError` at PyO3 extraction, before ferray's own
+/// check runs — so we extract signed and validate here to mirror numpy's
+/// exception *type* (R-DEV-2).
+pub fn extract_signed_shape(obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
+    let signed: Vec<isize> = if let Ok(n) = obj.extract::<isize>() {
+        vec![n]
+    } else {
+        obj.extract::<Vec<isize>>().map_err(|_| {
+            PyTypeError::new_err(
+                "shape must be an int or a sequence of ints (got a non-coercible object)",
+            )
+        })?
+    };
+    let mut out = Vec::with_capacity(signed.len());
+    for d in signed {
+        if d < 0 {
+            return Err(PyValueError::new_err(
+                "negative dimensions are not allowed",
+            ));
+        }
+        out.push(d as usize);
+    }
+    Ok(out)
+}
+
+/// Validate a single (possibly negative) dimension count `n` and return it
+/// as `usize`, raising `ValueError("negative dimensions are not allowed")`
+/// when negative.
+///
+/// Used by `eye`/`identity` whose `n`/`m` are scalar counts. `np.eye(-1)`
+/// and `np.identity(-2)` raise `ValueError` (they route through
+/// `zeros((N, M))` / `eye` -> `zeros`), not `OverflowError`.
+pub fn validate_dim(n: isize) -> PyResult<usize> {
+    if n < 0 {
+        return Err(PyValueError::new_err(
+            "negative dimensions are not allowed",
+        ));
+    }
+    Ok(n as usize)
+}
+
+/// Validate a `num`/`num_samples` argument for `linspace`/`logspace`/
+/// `geomspace`, raising numpy's exact message on a negative value.
+///
+/// `numpy/_core/function_base.py:122-126` linspace:
+/// `num = operator.index(num); if num < 0: raise ValueError(
+/// f"Number of samples, {num}, must be non-negative.")`. Binding `num` as
+/// `usize` would raise `OverflowError` at PyO3 extraction; we bind it
+/// signed and validate here to mirror numpy's `ValueError` type + message.
+pub fn validate_num_samples(num: isize) -> PyResult<usize> {
+    if num < 0 {
+        return Err(PyValueError::new_err(format!(
+            "Number of samples, {num}, must be non-negative."
+        )));
+    }
+    Ok(num as usize)
+}
+
+/// Infer the default numpy dtype name for a Python scalar passed to a
+/// creation function (`arange`, `full`), keying off the operand's *type*
+/// rather than its numeric value.
+///
+/// NumPy's `np.full` defaults `dtype` to `np.array(fill_value).dtype`
+/// (`numpy/_core/numeric.py:382-384`), and `np.arange` likewise dispatches
+/// on the operand type — so the dtype follows the *Python type*, not
+/// whether the value happens to be integral:
+///   - a Python `bool` (`True`/`False`)            -> `"bool"`
+///   - a Python `int`                              -> `"int64"`
+///   - a Python `float` (even an integral `1.0`)   -> `"float64"`
+///
+/// `bool` is checked before `int` because `bool` is a subclass of `int`
+/// in CPython (`isinstance(True, int)` is `True`). A non-numeric object
+/// returns `None` so the caller can fall back / error. Returning `&'static
+/// str` keeps the dtype-string contract the dispatch macros consume.
+pub fn pyscalar_default_dtype(obj: &Bound<'_, PyAny>) -> Option<&'static str> {
+    // `bool` first: it subclasses `int`, so the `int` check would shadow it.
+    if obj.is_instance_of::<pyo3::types::PyBool>() {
+        return Some("bool");
+    }
+    if obj.is_instance_of::<pyo3::types::PyInt>() {
+        return Some("int64");
+    }
+    if obj.is_instance_of::<pyo3::types::PyFloat>() {
+        return Some("float64");
+    }
+    None
+}
+
 /// Normalise any array-like Python object (numpy.ndarray, list, tuple,
 /// nested sequence) to a `numpy.ndarray` by routing through
 /// `numpy.asarray`. The returned object's `.dtype` is then queryable

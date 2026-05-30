@@ -73,6 +73,21 @@ upstream = [
 design = ".design/ferray-core.md"
 parity_ops = ["normalize_axis_index", "normalize_axis_tuple", "AxisError", "LinAlgError"]
 
+# ferray-python array-creation binding shim. Owns the marshalling-side
+# boundary concerns numpy-vs-ferray differ on: Python-scalar dtype
+# inference (arange/full key off the operand *type*, not its value),
+# negative-dimension -> ValueError (signed extraction + validate), the
+# linspace retstep/integer-dtype/negative-num kwarg surface, and the
+# arange zero-step -> ZeroDivisionError exception type.
+[[route]]
+crate_pattern = "ferray-python/src/creation.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/numeric.py",
+  "/home/doll/numpy-ref/numpy/_core/function_base.py",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["zeros", "ones", "empty", "full", "eye", "identity", "arange", "linspace", "logspace", "geomspace"]
+
 # ferray-python linalg binding shim: marshals numpy.linalg.* through to the
 # ferray-linalg crate. Owns the boundary concerns: numpy.linalg.LinAlgError
 # exception mapping, int->float64 _commonType promotion, top-level product
