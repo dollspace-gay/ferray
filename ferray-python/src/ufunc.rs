@@ -324,6 +324,142 @@ bind_unary_numeric_split!(fix, ferray_ufunc::fix, ferray_ufunc::fix_int);
 // int loops); float route is `ferray_ufunc::round`.
 bind_unary_numeric_split!(round, ferray_ufunc::round, ferray_ufunc::round_int);
 
+/// `numpy.around(a, decimals=0)` / `numpy.round(a, decimals=0)` — round to
+/// `decimals` places with half-to-even (banker's) rounding.
+///
+/// numpy/_core/fromnumeric.py:3343 `around` documents "For values exactly
+/// halfway between rounded decimal values, NumPy rounds to the nearest even
+/// value", implemented as `multiply(a, 10**decimals)`, round-half-even, then
+/// `divide` back (numpy/_core/src/multiarray/calculation.c `_round`). The
+/// `decimals == 0` case is the existing `round`/`rint` half-to-even kernel;
+/// for `decimals != 0` the binding scales by `10**decimals`, applies the
+/// half-to-even `ferray_ufunc::rint`, and unscales — matching numpy's
+/// `np.rint(a * 10**d) / 10**d`. Integer input with `decimals >= 0` is
+/// returned unchanged (numpy: rounding an int to >= 0 places is the
+/// identity, dtype preserved). The scaled-round path computes in float64.
+#[pyfunction]
+#[pyo3(signature = (a, decimals = 0))]
+pub fn around<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    decimals: i32,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, a)?;
+    let dt = dtype_name(&arr)?;
+    let is_int = !matches!(
+        dt.as_str(),
+        "float64" | "f64" | "float32" | "f32" | "float16" | "f16"
+    );
+    // Integer input rounded to >= 0 decimal places is the identity.
+    if is_int && decimals >= 0 {
+        return Ok(arr);
+    }
+    // decimals == 0 on a float keeps the float dtype and is exactly rint.
+    if decimals == 0 && !is_int {
+        return Ok(match_dtype_float!(dt.as_str(), T => {
+            let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+            let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+            let r: ArrayD<T> = ferray_ufunc::rint(&fa).map_err(ferr_to_pyerr)?;
+            r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        }));
+    }
+    // General path: scale by 10**decimals, half-to-even round, unscale.
+    // Integer input with negative decimals also flows here; numpy returns the
+    // input dtype, so we narrow the float64 result back at the end.
+    let arr_f = coerce_dtype(py, &arr, "float64")?;
+    let view: PyReadonlyArrayDyn<f64> = arr_f.extract()?;
+    let fa: ArrayD<f64> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    let scale = 10f64.powi(decimals);
+    let scaled: Vec<f64> = fa.iter().map(|&x| x * scale).collect();
+    let shape = fa.shape().to_vec();
+    let scaled_arr =
+        ArrayD::<f64>::from_vec(ferray_core::dimension::IxDyn::new(&shape), scaled)
+            .map_err(ferr_to_pyerr)?;
+    let rounded: ArrayD<f64> = ferray_ufunc::rint(&scaled_arr).map_err(ferr_to_pyerr)?;
+    let unscaled: Vec<f64> = rounded.iter().map(|&x| x / scale).collect();
+    let out = ArrayD::<f64>::from_vec(ferray_core::dimension::IxDyn::new(&shape), unscaled)
+        .map_err(ferr_to_pyerr)?;
+    let result = out.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    // Integer input keeps its integer dtype (numpy narrows back).
+    if is_int {
+        coerce_dtype(py, &result, dt.as_str())
+    } else if !matches!(dt.as_str(), "float64" | "f64") {
+        // float32 input keeps float32.
+        coerce_dtype(py, &result, dt.as_str())
+    } else {
+        Ok(result)
+    }
+}
+
+/// `numpy.nan_to_num(x, nan=0.0, posinf=None, neginf=None)` — replace NaN
+/// with `nan`, +Inf with `posinf` (default the dtype's largest finite), and
+/// -Inf with `neginf` (default the most negative finite)
+/// (numpy/lib/_type_check_impl.py:382). The library
+/// `ferray_ufunc::nan_to_num` takes the same three optional replacements.
+/// Integer input has no NaN/Inf, so it is returned unchanged (numpy returns
+/// the input dtype). Float input keeps its float dtype.
+#[pyfunction]
+#[pyo3(signature = (x, nan = 0.0, posinf = None, neginf = None))]
+pub fn nan_to_num<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    nan: f64,
+    posinf: Option<f64>,
+    neginf: Option<f64>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, x)?;
+    let dt = dtype_name(&arr)?;
+    // Integer / bool input has no NaN or Inf — numpy returns it unchanged.
+    if !matches!(
+        dt.as_str(),
+        "float64" | "f64" | "float32" | "f32" | "float16" | "f16"
+    ) {
+        return Ok(arr);
+    }
+    Ok(match_dtype_float!(dt.as_str(), T => {
+        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+        // `T` is a concrete `f32`/`f64` alias in each arm, so the `as` cast
+        // is the exact narrowing numpy applies when the replacement is stored
+        // in the output dtype.
+        let nan_t = nan as T;
+        let posinf_t = posinf.map(|v| v as T);
+        let neginf_t = neginf.map(|v| v as T);
+        let r: ArrayD<T> =
+            ferray_ufunc::nan_to_num(&fa, Some(nan_t), posinf_t, neginf_t).map_err(ferr_to_pyerr)?;
+        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    }))
+}
+
+/// `numpy.unwrap(p, discont=None, axis=-1, period=2*pi)` — unwrap a phase
+/// angle by changing deltas greater than `discont` to their `2*pi`
+/// complement (numpy/lib/_function_base_impl.py:1734). The library
+/// `ferray_ufunc::unwrap` is the 1-D unwrap with `discont` defaulting to pi.
+/// Integer/bool input promotes to `float64` (numpy computes in inexact).
+#[pyfunction]
+#[pyo3(signature = (p, discont = None))]
+pub fn unwrap<'py>(
+    py: Python<'py>,
+    p: &Bound<'py, PyAny>,
+    discont: Option<f64>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, p)?;
+    let dt = dtype_name(&arr)?;
+    let real_dt = if matches!(dt.as_str(), "float32" | "f32") {
+        "float32"
+    } else {
+        "float64"
+    };
+    let arr = coerce_dtype(py, &arr, real_dt)?;
+    Ok(match_dtype_float!(real_dt, T => {
+        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+        let d: Option<T> = discont.map(|v| v as T);
+        let r: ArrayD<T> = ferray_ufunc::unwrap(&fa, d).map_err(ferr_to_pyerr)?;
+        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    }))
+}
+
 /// `positive` / `square` / `reciprocal` keep the integer dtype but have no
 /// int kernel in ferray-ufunc; numpy's integer semantics are: `positive` =
 /// identity, `square` = `x*x` (wrapping), `reciprocal` = `1 // x`

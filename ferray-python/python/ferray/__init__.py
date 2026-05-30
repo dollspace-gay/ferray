@@ -177,7 +177,10 @@ from ._ferray import (
     maximum,
     minimum,
     rint,
-    round,
+    round as _round_no_decimals,
+    around,
+    nan_to_num,
+    unwrap,
     trunc,
     # ufunc — predicates
     isfinite,
@@ -238,10 +241,20 @@ from ._ferray import (
     logical_xor,
     not_equal,
     # stats — reductions
+    all,
+    any,
+    average,
     argmax,
     argmin,
     cumprod,
     cumsum,
+    nancumprod,
+    nancumsum,
+    nanpercentile,
+    nanquantile,
+    sort_complex,
+    cross,
+    trace,
     diff,
     max,
     mean,
@@ -341,6 +354,13 @@ amax = max
 amin = min
 cumulative_sum = cumsum
 cumulative_prod = cumprod
+
+# numpy.round / numpy.round_ are aliases of numpy.around (both take a
+# `decimals` kwarg). The bare-decimals ufunc binding is kept available as
+# `_round_no_decimals` but the public `round` must accept `decimals`, so it
+# is the `around` binding. numpy/_core/fromnumeric.py:3754 `round = around`.
+round = around  # noqa: A001 - intentional NumPy compat shadow of builtin round
+round_ = around
 
 # numpy.divmod ufunc — (floor_divide, mod) tuple, integer + float kernels.
 from ._ferray import divmod as _divmod_ufunc
@@ -461,7 +481,8 @@ __all__ = [
     "divide", "fabs", "multiply", "negative", "positive", "power", "reciprocal",
     "remainder", "mod", "true_divide", "floor_divide", "float_power",
     "sign", "sqrt", "square", "subtract", "ceil", "clip", "copysign", "fix",
-    "fmax", "fmin", "floor", "maximum", "minimum", "rint", "round", "trunc",
+    "fmax", "fmin", "floor", "maximum", "minimum", "rint", "round", "round_",
+    "around", "nan_to_num", "unwrap", "trunc",
     "isfinite", "isinf", "isnan", "isneginf", "isposinf", "signbit", "equal",
     "greater", "greater_equal", "less", "less_equal", "logical_and",
     "logical_not", "logical_or", "logical_xor", "not_equal",
@@ -475,6 +496,8 @@ __all__ = [
     "convolve", "correlate", "ediff1d", "gradient", "i0", "interp", "sinc", "trapezoid",
     "add_datetime", "isnat", "sub_datetime",
     # stats
+    "all", "any", "average", "nancumprod", "nancumsum",
+    "nanpercentile", "nanquantile", "sort_complex", "cross", "trace",
     "argmax", "argmin", "cumprod", "cumsum", "diff", "max", "mean", "min",
     "prod", "ptp", "std", "sum", "var", "nanargmax", "nanargmin", "nanmax",
     "nanmean", "nanmedian", "nanmin", "nanprod", "nanstd", "nansum", "nanvar",

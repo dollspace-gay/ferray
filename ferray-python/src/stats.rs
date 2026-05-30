@@ -27,6 +27,85 @@ use crate::conv::{
 use crate::{match_dtype_all, match_dtype_float, match_dtype_numeric, match_dtype_orderable};
 
 // ---------------------------------------------------------------------------
+// Boolean reductions: all / any
+// ---------------------------------------------------------------------------
+
+/// `numpy.all(a, axis=None)` — test whether all elements are truthy.
+///
+/// `axis=None` returns a numpy `bool_` scalar (0-D bool array); an integer
+/// `axis` collapses that axis, returning a bool ndarray
+/// (numpy/_core/fromnumeric.py:2585 `all`, dispatching to
+/// `numpy/_core/_methods.py:67` `_all` which `reduce`s `logical_and`). The
+/// library `ferray_ufunc::all` is the whole-array fold; `all_axis` collapses
+/// one axis. The whole-array `bool` is returned as a 0-D bool array (numpy's
+/// `bool_` scalar and a 0-D bool array are interchangeable; `.item()` drops
+/// to a Python bool if needed).
+#[pyfunction]
+#[pyo3(signature = (a, axis = None))]
+pub fn all<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, a)?;
+    let axis = norm_axis(py, &arr, axis)?;
+    let dt = dtype_name(&arr)?;
+    Ok(match_dtype_all!(dt.as_str(), T => {
+        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+        match axis {
+            None => {
+                let r = ferray_ufunc::all(&fa);
+                ArrayD::<bool>::from_vec(IxDyn::new(&[]), vec![r])
+                    .map_err(ferr_to_pyerr)?
+                    .into_pyarray(py)
+                    .map_err(ferr_to_pyerr)?
+                    .into_any()
+            }
+            Some(ax) => {
+                let r = ferray_ufunc::all_axis(&fa, ax).map_err(ferr_to_pyerr)?;
+                r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+            }
+        }
+    }))
+}
+
+/// `numpy.any(a, axis=None)` — test whether any element is truthy.
+///
+/// Mirrors [`all`]: `axis=None` returns a 0-D bool, an integer `axis`
+/// returns a bool ndarray (numpy/_core/fromnumeric.py:2479 `any` ->
+/// `_methods.py:62` `_any` reducing `logical_or`).
+#[pyfunction]
+#[pyo3(signature = (a, axis = None))]
+pub fn any<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, a)?;
+    let axis = norm_axis(py, &arr, axis)?;
+    let dt = dtype_name(&arr)?;
+    Ok(match_dtype_all!(dt.as_str(), T => {
+        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+        match axis {
+            None => {
+                let r = ferray_ufunc::any(&fa);
+                ArrayD::<bool>::from_vec(IxDyn::new(&[]), vec![r])
+                    .map_err(ferr_to_pyerr)?
+                    .into_pyarray(py)
+                    .map_err(ferr_to_pyerr)?
+                    .into_any()
+            }
+            Some(ax) => {
+                let r = ferray_ufunc::any_axis(&fa, ax).map_err(ferr_to_pyerr)?;
+                r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+            }
+        }
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -1205,6 +1284,260 @@ pub fn where_fn<'py>(
         let fx: ArrayD<T> = vx.as_ferray().map_err(ferr_to_pyerr)?;
         let fy: ArrayD<T> = vy.as_ferray().map_err(ferr_to_pyerr)?;
         let r: ArrayD<T> = ferray_stats::where_(&cond_fa, &fx, &fy).map_err(ferr_to_pyerr)?;
+        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// nan-aware cumulative reductions
+// ---------------------------------------------------------------------------
+
+macro_rules! bind_nan_cumulative {
+    ($name:ident, $ferr_path:path) => {
+        #[pyfunction]
+        #[pyo3(signature = (a, axis = None))]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            a: &Bound<'py, PyAny>,
+            axis: Option<usize>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let arr = as_ndarray(py, a)?;
+            let dt = dtype_name(&arr)?;
+            let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
+                arr
+            } else {
+                coerce_dtype(py, &arr, "float64")?
+            };
+            let dt = dtype_name(&arr)?;
+            Ok(match_dtype_float!(dt.as_str(), T => {
+                let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+                let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+                let r = $ferr_path(&fa, axis).map_err(ferr_to_pyerr)?;
+                r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+            }))
+        }
+    };
+}
+
+// `numpy.nancumsum` treats NaN as 0, `nancumprod` treats NaN as 1
+// (numpy/lib/_nanfunctions_impl.py:825 nancumsum, :915 nancumprod). The
+// library re-exports the ferray-ufunc cumulative-with-nan-skip kernels.
+bind_nan_cumulative!(nancumsum, ferray_stats::nancumsum);
+bind_nan_cumulative!(nancumprod, ferray_stats::nancumprod);
+
+// ---------------------------------------------------------------------------
+// nan-aware percentile / quantile
+// ---------------------------------------------------------------------------
+
+/// Shared scalar-or-sequence dispatch for `nanpercentile`/`nanquantile`,
+/// mirroring the `q : array_like of float` contract numpy documents for
+/// `numpy.nanpercentile` (numpy/lib/_nanfunctions_impl.py:1156) and
+/// `numpy.nanquantile` (:1382). A scalar `q` returns the bare reduction; a
+/// sequence stacks one reduction per `q` along a new leading axis (matching
+/// the non-nan `percentile`/`quantile` dispatch in [`quantile_dispatch`]).
+/// The library `nanpercentile`/`nanquantile` are scalar-q, so the binding
+/// loops them.
+fn nan_quantile_dispatch<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    q: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+    kind: QuantileKind,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, a)?;
+    let axis = norm_axis(py, &arr, axis)?;
+    let dt = dtype_name(&arr)?;
+    let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
+        dt.as_str().to_string()
+    } else {
+        "float64".to_string()
+    };
+    let arr = coerce_dtype(py, &arr, &real_dt)?;
+
+    let single = |q_val: f64| -> PyResult<Bound<'py, PyAny>> {
+        Ok(match_dtype_float!(real_dt.as_str(), T => {
+            let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+            let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+            let r = match kind {
+                QuantileKind::Percentile => ferray_stats::nanpercentile(&fa, q_val as T, axis),
+                QuantileKind::Quantile => ferray_stats::nanquantile(&fa, q_val as T, axis),
+            }
+            .map_err(ferr_to_pyerr)?;
+            r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        }))
+    };
+
+    match extract_q(q)? {
+        Err(scalar) => single(scalar),
+        Ok(seq) => {
+            let mut results: Vec<Bound<'py, PyAny>> = Vec::with_capacity(seq.len());
+            for q_val in seq {
+                results.push(single(q_val)?);
+            }
+            let np = py.import("numpy")?;
+            let list = pyo3::types::PyList::new(py, results)?;
+            np.call_method1("stack", (list,))
+        }
+    }
+}
+
+/// `numpy.nanpercentile(a, q, axis=None)` — percentile ignoring NaNs.
+#[pyfunction]
+#[pyo3(signature = (a, q, axis = None))]
+pub fn nanpercentile<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    q: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    nan_quantile_dispatch(py, a, q, axis, QuantileKind::Percentile)
+}
+
+/// `numpy.nanquantile(a, q, axis=None)` — quantile ignoring NaNs.
+#[pyfunction]
+#[pyo3(signature = (a, q, axis = None))]
+pub fn nanquantile<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    q: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    nan_quantile_dispatch(py, a, q, axis, QuantileKind::Quantile)
+}
+
+// ---------------------------------------------------------------------------
+// average (weighted mean)
+// ---------------------------------------------------------------------------
+
+/// `numpy.average(a, axis=None, weights=None)`.
+///
+/// numpy/lib/_function_base_impl.py:560 `average` — with no `weights` this
+/// is the plain `mean`; with `weights` it is `sum(a*w)/sum(w)` along `axis`.
+/// Integer/bool input promotes to `float64` (numpy computes the weighted
+/// average in inexact arithmetic). The library `ferray_stats::average`
+/// requires `weights.shape() == a.shape()`, so the binding broadcasts a
+/// 1-D `weights` against `a` via numpy before dispatch when an `axis` is
+/// given, matching numpy's `weights` along a single axis.
+#[pyfunction]
+#[pyo3(signature = (a, axis = None, weights = None))]
+pub fn average<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+    weights: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, a)?;
+    let arr = coerce_dtype(py, &arr, "float64")?;
+    let view: PyReadonlyArrayDyn<f64> = arr.extract()?;
+    let fa: ArrayD<f64> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    let r = match weights {
+        None => ferray_stats::average(&fa, None, axis).map_err(ferr_to_pyerr)?,
+        Some(w) => {
+            let warr = coerce_dtype(py, w, "float64")?;
+            // numpy broadcasts a 1-D `weights` against the reduced axis.
+            // When `weights` already matches `a`'s shape, broadcast is a
+            // no-op; otherwise reshape it onto `axis` then broadcast.
+            let np = py.import("numpy")?;
+            let target_shape = arr.getattr("shape")?;
+            let wshape: Vec<usize> = warr.getattr("shape")?.extract()?;
+            let ashape: Vec<usize> = arr.getattr("shape")?.extract()?;
+            let warr_b = if wshape == ashape {
+                warr
+            } else if let Some(ax) = axis {
+                // Reshape 1-D weights to broadcast along `axis`, then expand.
+                let ndim = ashape.len();
+                let mut newshape = vec![1usize; ndim];
+                if ax < ndim {
+                    newshape[ax] = wshape.iter().product();
+                }
+                let reshaped = np.call_method1("reshape", (&warr, newshape))?;
+                np.call_method1("broadcast_to", (reshaped, target_shape))?
+            } else {
+                np.call_method1("broadcast_to", (&warr, target_shape))?
+            };
+            let wview: PyReadonlyArrayDyn<f64> = warr_b.extract()?;
+            let fw: ArrayD<f64> = wview.as_ferray().map_err(ferr_to_pyerr)?;
+            ferray_stats::average(&fa, Some(&fw), axis).map_err(ferr_to_pyerr)?
+        }
+    };
+    Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+// ---------------------------------------------------------------------------
+// sort_complex
+// ---------------------------------------------------------------------------
+
+/// `numpy.sort_complex(a)` — sort a complex array lexicographically by real
+/// part then imaginary part (numpy/lib/_function_base_impl.py:638). A real
+/// input is upcast to complex first (numpy: `b = array(a, copy=True);
+/// b.sort(); ... if not issubclass(b.dtype.type, complexfloating): ... return
+/// b.astype(complex)` — a real array's result is the complex-typed sorted
+/// values). The library `ferray_stats::sort_complex` operates on
+/// `Complex<f64>` / `Complex<f32>`; the binding coerces the input to
+/// `complex128` (or keeps `complex64`) before dispatch.
+#[pyfunction]
+pub fn sort_complex<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    use crate::fft::{complex_ferray_to_pyarray, complex_pyarray_to_ferray};
+    let arr = as_ndarray(py, a)?;
+    let dt = dtype_name(&arr)?;
+    let target = if dt.as_str() == "complex64" {
+        "complex64"
+    } else {
+        "complex128"
+    };
+    let arr = coerce_dtype(py, &arr, target)?;
+    // The library `sort_complex` is Ix1 over the flattened input. Extract the
+    // complex data into a 1-D ferray array, sort, and return as a fresh numpy
+    // complex array via the same materialiser the fft bindings use.
+    if target == "complex64" {
+        let fa = complex_pyarray_to_ferray::<f32>(&arr)?;
+        let n = fa.size();
+        let flat: Vec<num_complex::Complex<f32>> = fa.iter().copied().collect();
+        let a1 = Array1::<num_complex::Complex<f32>>::from_vec(Ix1::new([n]), flat)
+            .map_err(ferr_to_pyerr)?;
+        let r = ferray_stats::sort_complex(&a1).map_err(ferr_to_pyerr)?;
+        let data: Vec<num_complex::Complex<f32>> = r.iter().copied().collect();
+        let rd = ArrayD::<num_complex::Complex<f32>>::from_vec(IxDyn::new(&[n]), data)
+            .map_err(ferr_to_pyerr)?;
+        complex_ferray_to_pyarray(py, rd)
+    } else {
+        let fa = complex_pyarray_to_ferray::<f64>(&arr)?;
+        let n = fa.size();
+        let flat: Vec<num_complex::Complex<f64>> = fa.iter().copied().collect();
+        let a1 = Array1::<num_complex::Complex<f64>>::from_vec(Ix1::new([n]), flat)
+            .map_err(ferr_to_pyerr)?;
+        let r = ferray_stats::sort_complex(&a1).map_err(ferr_to_pyerr)?;
+        let data: Vec<num_complex::Complex<f64>> = r.iter().copied().collect();
+        let rd = ArrayD::<num_complex::Complex<f64>>::from_vec(IxDyn::new(&[n]), data)
+            .map_err(ferr_to_pyerr)?;
+        complex_ferray_to_pyarray(py, rd)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// cross (1-D 3-vector)
+// ---------------------------------------------------------------------------
+
+/// `numpy.cross(a, b)` for two 3-element 1-D vectors
+/// (numpy/_core/numeric.py:1454). The library `ferray_ufunc::cross` is the
+/// 3-vector cross product; stacked / 2-component cross is not yet in the
+/// library, so this binding handles the 1-D 3-vector case (numpy's most
+/// common usage). Integer inputs keep their dtype (numpy's int loop).
+#[pyfunction]
+pub fn cross<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr_a = as_ndarray(py, a)?;
+    let dt = dtype_name(&arr_a)?;
+    let arr_b = coerce_dtype(py, b, dt.as_str())?;
+    Ok(match_dtype_numeric!(dt.as_str(), T => {
+        let va: PyReadonlyArray1<T> = arr_a.extract()?;
+        let vb: PyReadonlyArray1<T> = arr_b.extract()?;
+        let fa: Array1<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
+        let fb: Array1<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+        let r: Array1<T> = ferray_ufunc::cross(&fa, &fb).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
 }

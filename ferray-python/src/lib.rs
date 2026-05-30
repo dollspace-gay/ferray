@@ -533,6 +533,11 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ufunc::floor, m)?)?;
     m.add_function(wrap_pyfunction!(ufunc::ceil, m)?)?;
     m.add_function(wrap_pyfunction!(ufunc::round, m)?)?;
+    // numpy.around / numpy.round both accept a `decimals` kwarg; `around`
+    // is the canonical fromnumeric.py name (round_ is its alias).
+    m.add_function(wrap_pyfunction!(ufunc::around, m)?)?;
+    m.add_function(wrap_pyfunction!(ufunc::nan_to_num, m)?)?;
+    m.add_function(wrap_pyfunction!(ufunc::unwrap, m)?)?;
     m.add_function(wrap_pyfunction!(ufunc::trunc, m)?)?;
     m.add_function(wrap_pyfunction!(ufunc::rint, m)?)?;
     m.add_function(wrap_pyfunction!(ufunc::fix, m)?)?;
@@ -639,6 +644,10 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(stats::std, m)?)?;
     m.add_function(wrap_pyfunction!(stats::argmin, m)?)?;
     m.add_function(wrap_pyfunction!(stats::argmax, m)?)?;
+    // boolean reductions
+    m.add_function(wrap_pyfunction!(stats::all, m)?)?;
+    m.add_function(wrap_pyfunction!(stats::any, m)?)?;
+    m.add_function(wrap_pyfunction!(stats::average, m)?)?;
     // nan-aware
     m.add_function(wrap_pyfunction!(stats::nansum, m)?)?;
     m.add_function(wrap_pyfunction!(stats::nanprod, m)?)?;
@@ -650,9 +659,13 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(stats::nanmedian, m)?)?;
     m.add_function(wrap_pyfunction!(stats::nanargmin, m)?)?;
     m.add_function(wrap_pyfunction!(stats::nanargmax, m)?)?;
+    m.add_function(wrap_pyfunction!(stats::nanpercentile, m)?)?;
+    m.add_function(wrap_pyfunction!(stats::nanquantile, m)?)?;
     // cumulative
     m.add_function(wrap_pyfunction!(stats::cumsum, m)?)?;
     m.add_function(wrap_pyfunction!(stats::cumprod, m)?)?;
+    m.add_function(wrap_pyfunction!(stats::nancumsum, m)?)?;
+    m.add_function(wrap_pyfunction!(stats::nancumprod, m)?)?;
     m.add_function(wrap_pyfunction!(stats::diff, m)?)?;
     // sort/search
     m.add_function(wrap_pyfunction!(stats::sort, m)?)?;
@@ -661,6 +674,11 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(stats::partition, m)?)?;
     m.add_function(wrap_pyfunction!(stats::argpartition, m)?)?;
     m.add_function(wrap_pyfunction!(stats::lexsort, m)?)?;
+    m.add_function(wrap_pyfunction!(stats::sort_complex, m)?)?;
+    m.add_function(wrap_pyfunction!(stats::cross, m)?)?;
+    // numpy.trace lives at the package root (numpy/__init__.pyi); reuse the
+    // existing linalg trace binding.
+    m.add_function(wrap_pyfunction!(linalg::trace, m)?)?;
     // unique / count
     m.add_function(wrap_pyfunction!(stats::unique, m)?)?;
     m.add_function(wrap_pyfunction!(stats::unique_extended, m)?)?;
