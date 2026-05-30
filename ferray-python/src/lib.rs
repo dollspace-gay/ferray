@@ -331,6 +331,12 @@ fn register_stride_tricks_module<'py>(
     st_m.add_function(wrap_pyfunction!(stride_tricks::broadcast_arrays, &st_m)?)?;
     st_m.add_function(wrap_pyfunction!(stride_tricks::broadcast_shapes, &st_m)?)?;
     st_m.add_function(wrap_pyfunction!(stride_tricks::sliding_window_view, &st_m)?)?;
+    // numpy/lib/_stride_tricks_impl.py:39 — exposed on
+    // `numpy.lib.stride_tricks.as_strided`.
+    st_m.add_function(wrap_pyfunction!(stride_tricks::as_strided, &st_m)?)?;
+    // broadcast_to lives on `numpy.lib.stride_tricks` too (it is defined in
+    // _stride_tricks_impl.py); expose it here for namespace parity.
+    st_m.add_function(wrap_pyfunction!(stride_tricks::broadcast_to, &st_m)?)?;
     lib_m.add_submodule(&st_m)?;
     parent.add_submodule(&lib_m)?;
     let sys_modules = py.import("sys")?.getattr("modules")?;
@@ -711,6 +717,12 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Top-level stride_tricks aliases.
     m.add_function(wrap_pyfunction!(stride_tricks::broadcast_arrays, m)?)?;
     m.add_function(wrap_pyfunction!(stride_tricks::broadcast_shapes, m)?)?;
+    // Override the manipulation-module `broadcast_to` with the stride_tricks
+    // binding so the top-level `numpy.broadcast_to` contract holds: a
+    // read-only view (_stride_tricks_impl.py:517 `readonly=True`) plus the
+    // `subok` kwarg (:475). Registered AFTER manipulation::broadcast_to so it
+    // wins.
+    m.add_function(wrap_pyfunction!(stride_tricks::broadcast_to, m)?)?;
 
     register_dtype_module(py, m)?;
     register_linalg_module(py, m)?;

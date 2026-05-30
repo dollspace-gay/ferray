@@ -332,6 +332,25 @@ pub fn coerce_window_m(obj: &Bound<'_, PyAny>) -> PyResult<isize> {
     ))
 }
 
+/// Clear the `WRITEABLE` flag on a numpy `ndarray`, making it read-only,
+/// then return it.
+///
+/// NumPy's `broadcast_to` (numpy/lib/_stride_tricks_impl.py:517
+/// `_broadcast_to(array, shape, subok=subok, readonly=True)`) and
+/// `sliding_window_view` (`:181 writeable=False` default) return read-only
+/// views whose `flags.writeable` is `False`. ferray materialises an owned
+/// copy at the boundary, which numpy-pyarray creates writeable; to honor
+/// numpy's output-object contract (R-DEV-3) the binding sets
+/// `result.flags.writeable = False` — the same mechanism numpy itself uses
+/// internally (`result.flags.writeable = True/False`). Assigning the flag
+/// is numpy's public, supported API for toggling writeability on an array
+/// the caller owns.
+pub fn set_readonly<'py>(arr: Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let flags = arr.getattr("flags")?;
+    flags.setattr("writeable", false)?;
+    Ok(arr)
+}
+
 /// Accept either a Python integer (1-D) or a sequence of integers
 /// (N-D). Mirrors `numpy.zeros(5)` and `numpy.zeros((3, 4))`.
 pub fn extract_shape(obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
