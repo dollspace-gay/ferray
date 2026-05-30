@@ -64,13 +64,41 @@
 //!   into one variable matrix (numpy's `_covhelper`) before the masked
 //!   covariance / correlation.
 //!
+//! The composable manipulation/elementwise/alias/error-class batch
+//! (refs #835 #818) adds, each composed at the binding by applying the matching
+//! `numpy.<name>` op to the masked array's data and bool mask independently and
+//! recombining (the generalized `diag` pattern, `np_data_mask_op`):
+//!
+//! - **Mask-propagating manipulation**: `atleast_1d`/`atleast_2d`/`atleast_3d`,
+//!   `column_stack`, `dstack`, `vstack`/`hstack`/`stack`/`row_stack`,
+//!   `diagonal`, `diagflat`, `swapaxes`, `resize`, `compress` (1-arg masked),
+//!   `append` (flatten / axis), `empty_like`/`ones_like`/`zeros_like`
+//!   (input mask preserved), `cumsum`/`cumprod` (masked → reduction identity,
+//!   then accumulate, mask kept), `round`/`round_`.
+//! - **Masked comparisons / logical ops**: `equal`, `not_equal`, `greater`,
+//!   `greater_equal`, `less`, `less_equal`, `logical_and`/`logical_or`/
+//!   `logical_xor` (mask = OR of operand masks), `logical_not`.
+//! - **Reductions as free functions + aliases**: `max`/`amax`, `min`/`amin`,
+//!   `sum`, `mean`, `std`, `var`, `product` (→`prod`), `alltrue` (→`all`),
+//!   `sometrue` (→`any`), `anomalies` (→`anom`).
+//! - **Inner/outer products**: `outer`/`outerproduct`, `inner`/`innerproduct`.
+//! - **Shape inspectors**: `ndim`, `shape`, `size`. **Masked `angle`** (real).
+//! - **Predicates / fill-value helpers**: `allequal`, `allclose`,
+//!   `maximum_fill_value`, `minimum_fill_value`, `common_fill_value`.
+//! - **Shared vocabulary** (re-exported from numpy.ma): the `MAError` /
+//!   `MaskError` exception classes, the `MaskType` (numpy bool) type, and the
+//!   `masked` / `masked_singleton` / `nomask` sentinel constants.
+//!
 //! Functions still needing masked-algorithm support ferray-ma genuinely lacks
 //! or whose ferray-ma form diverges from numpy.ma's mask semantics
 //! (`vander`/`isin`/`in1d` mask handling, 2-D `dot` matmul, multi-axis
-//! `argsort`, `inner`, `outer`, `where`, `choose`, `diff`, `ediff1d`,
+//! `argsort`, `where`, `choose`, `diff`, `ediff1d`,
 //! `nonzero`, `indices`, `clump_*`, `notmasked_*`, `flatnotmasked_*`,
-//! `harden_mask`/`soften_mask`) are tracked as a ferray-ma library follow-up
-//! under #835.
+//! `harden_mask`/`soften_mask` state, `put`/`putmask` in-place, `left_shift`/
+//! `right_shift` (need integer-dtype masked data), `mask_rows`/`mask_cols`,
+//! `apply_along_axis`, `masked_all`/`masked_all_like`, `compress_nd`,
+//! `mvoid`/`ids`/`ndenumerate`, structured-mask `flatten_mask`/`make_mask_descr`)
+//! are tracked as a ferray-ma library / integer-masked follow-up under #835.
 
 use ferray_core::Array;
 use ferray_core::array::aliases::{Array1, ArrayD};
@@ -2415,6 +2443,864 @@ fn ma_from_flat(data: Vec<f64>, mask: Vec<bool>) -> PyResult<PyMaskedArray> {
     Ok(PyMaskedArray::from_inner(
         RustMa::new(data_arr, mask_arr).map_err(ferr_to_pyerr)?,
     ))
+}
+
+// ===========================================================================
+// numpy.ma manipulation / elementwise / aliases / fill-value helpers
+// (refs #835 #818): the COMPOSABLE residual surface — each function applies
+// the matching `numpy.<name>` (or top-level ferray) op to the masked array's
+// DATA and BOOL MASK independently, then rebuilds the masked array, mirroring
+// numpy.ma's own `_frommethod` / mask-propagation wrappers
+// (`numpy/ma/core.py`, `numpy/ma/extras.py`). Every contract was verified live
+// against numpy 2.4.5; the pytest oracle (tests/test_expansion_ma_batch2.py)
+// constructs every expected value from `numpy.ma.*` directly (R-CHAR-3).
+// ===========================================================================
+
+/// Apply `numpy.<func>(data, *args)` and `numpy.<func>(mask, *args)`
+/// independently, then rebuild a `PyMaskedArray`.
+///
+/// This is the generalization of the existing `diag` binding: numpy.ma's
+/// shape-only manipulation functions (`atleast_*`, `column_stack`, `dstack`,
+/// `diagonal`, `diagflat`, `swapaxes`, `resize`, `compress`) act on the data
+/// and the mask with the *identical* structural transform, so applying the
+/// same `numpy.<func>` to each buffer and recombining reproduces numpy.ma's
+/// observable `(data, mask)` exactly. The mask buffer is carried as `bool`,
+/// so `numpy.<func>` preserves the all-False (`nomask`) case as all-False.
+fn np_data_mask_op<'py>(
+    py: Python<'py>,
+    func: &str,
+    m: &RustMa<f64, IxDyn>,
+    extra: &Bound<'py, pyo3::types::PyTuple>,
+) -> PyResult<PyMaskedArray> {
+    use pyo3::types::PyTuple;
+    let np = py.import("numpy")?;
+    let data: ArrayD<f64> = fma::getdata(m).map_err(ferr_to_pyerr)?;
+    let mask: ArrayD<bool> = fma::getmaskarray(m).map_err(ferr_to_pyerr)?;
+    let data_py = data.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let mask_py = mask.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let func_obj = np.getattr(func)?;
+    // Build `(array, *extra)` argument tuples for the data and mask calls.
+    let mut data_items: Vec<Bound<'py, PyAny>> = vec![data_py];
+    data_items.extend(extra.iter());
+    let mut mask_items: Vec<Bound<'py, PyAny>> = vec![mask_py];
+    mask_items.extend(extra.iter());
+    let data_args = PyTuple::new(py, data_items)?;
+    let mask_args = PyTuple::new(py, mask_items)?;
+    let data_res = coerce_dtype(py, &func_obj.call1(data_args)?, "float64")?;
+    let mask_res = coerce_dtype(py, &func_obj.call1(mask_args)?, "bool")?;
+    let data_fa: ArrayD<f64> = data_res
+        .extract::<PyReadonlyArrayDyn<f64>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    let mask_fa: ArrayD<bool> = mask_res
+        .extract::<PyReadonlyArrayDyn<bool>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+/// `numpy.ma.atleast_1d(a)` — view `a` with at least one dimension, mask
+/// reshaped identically (`numpy/ma/extras.py` `atleast_1d = _fromnxfunction_*`).
+#[pyfunction]
+pub fn atleast_1d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    let extra = pyo3::types::PyTuple::empty(py);
+    np_data_mask_op(py, "atleast_1d", &coerce_to_ma(py, a)?, &extra)
+}
+
+/// `numpy.ma.atleast_2d(a)` — at least two dimensions, mask reshaped alongside.
+#[pyfunction]
+pub fn atleast_2d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    let extra = pyo3::types::PyTuple::empty(py);
+    np_data_mask_op(py, "atleast_2d", &coerce_to_ma(py, a)?, &extra)
+}
+
+/// `numpy.ma.atleast_3d(a)` — at least three dimensions, mask reshaped alongside.
+#[pyfunction]
+pub fn atleast_3d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    let extra = pyo3::types::PyTuple::empty(py);
+    np_data_mask_op(py, "atleast_3d", &coerce_to_ma(py, a)?, &extra)
+}
+
+/// `numpy.ma.diagflat(a)` — 2-D array with the flattened `a` on its diagonal,
+/// mask placed on the same diagonal (off-diagonal fills are unmasked zeros).
+#[pyfunction]
+#[pyo3(signature = (a, k = 0))]
+pub fn diagflat<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, k: i64) -> PyResult<PyMaskedArray> {
+    let extra = pyo3::types::PyTuple::new(py, [k])?;
+    np_data_mask_op(py, "diagflat", &coerce_to_ma(py, a)?, &extra)
+}
+
+/// `numpy.ma.diagonal(a, offset=0, ...)` — the requested diagonal of `a`, mask
+/// carried element-wise (`numpy/ma/core.py` `diagonal = _frommethod`).
+#[pyfunction]
+#[pyo3(signature = (a, offset = 0))]
+pub fn diagonal<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, offset: i64) -> PyResult<PyMaskedArray> {
+    let extra = pyo3::types::PyTuple::new(py, [offset])?;
+    np_data_mask_op(py, "diagonal", &coerce_to_ma(py, a)?, &extra)
+}
+
+/// `numpy.ma.swapaxes(a, axis1, axis2)` — swap two axes of data + mask.
+#[pyfunction]
+pub fn swapaxes<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis1: isize,
+    axis2: isize,
+) -> PyResult<PyMaskedArray> {
+    let extra = pyo3::types::PyTuple::new(py, [axis1, axis2])?;
+    np_data_mask_op(py, "swapaxes", &coerce_to_ma(py, a)?, &extra)
+}
+
+/// `numpy.ma.resize(a, new_shape)` — resize data + mask to `new_shape`
+/// (repeating data as numpy does), the mask resized in lockstep.
+#[pyfunction]
+pub fn resize<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    new_shape: &Bound<'py, PyAny>,
+) -> PyResult<PyMaskedArray> {
+    let shape = crate::conv::extract_shape(new_shape)?;
+    let shape_t = pyo3::types::PyTuple::new(py, shape)?;
+    let extra = pyo3::types::PyTuple::new(py, [shape_t])?;
+    np_data_mask_op(py, "resize", &coerce_to_ma(py, a)?, &extra)
+}
+
+/// `numpy.ma.empty_like(a)` — an uninitialized masked array shaped like `a`,
+/// PRESERVING `a`'s mask (`numpy/ma/core.py` `empty_like` carries the input
+/// mask). numpy returns arbitrary data; ferray returns the deterministic zero
+/// buffer, a valid `empty_like` for the data (R-DEV-7).
+#[pyfunction]
+pub fn empty_like<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    like_const(py, a, 0.0)
+}
+
+/// `numpy.ma.ones_like(a)` / `zeros_like(a)` share the same shape-only path;
+/// build a constant-filled masked array shaped like `a`, PRESERVING `a`'s mask
+/// (numpy.ma's `*_like` functions carry the input mask through).
+fn like_const<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, fill: f64) -> PyResult<PyMaskedArray> {
+    let m = coerce_to_ma(py, a)?;
+    let data: ArrayD<f64> = fma::getdata(&m).map_err(ferr_to_pyerr)?;
+    let mask: ArrayD<bool> = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
+    let n = data.size();
+    let shape = data.shape().to_vec();
+    let buf = ArrayD::<f64>::from_vec(IxDyn::new(&shape), vec![fill; n]).map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(buf, mask).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+/// `numpy.ma.ones_like(a)` — masked array of ones shaped like `a` (nomask).
+#[pyfunction]
+pub fn ones_like<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    like_const(py, a, 1.0)
+}
+
+/// `numpy.ma.zeros_like(a)` — masked array of zeros shaped like `a` (nomask).
+#[pyfunction]
+pub fn zeros_like<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    like_const(py, a, 0.0)
+}
+
+/// `numpy.ma.column_stack(tup)` — stack 1-D/2-D masked arrays as columns,
+/// stacking their masks alongside (`numpy/ma/extras.py` `column_stack`).
+#[pyfunction]
+pub fn column_stack<'py>(py: Python<'py>, tup: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    stack_family(py, "column_stack", tup)
+}
+
+/// `numpy.ma.dstack(tup)` — stack masked arrays depth-wise (3rd axis), masks
+/// stacked alongside (`numpy/ma/extras.py` `dstack`).
+#[pyfunction]
+pub fn dstack<'py>(py: Python<'py>, tup: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    stack_family(py, "dstack", tup)
+}
+
+/// `numpy.ma.vstack(tup)` / `row_stack` — stack masked arrays row-wise.
+#[pyfunction]
+pub fn vstack<'py>(py: Python<'py>, tup: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    stack_family(py, "vstack", tup)
+}
+
+/// `numpy.ma.hstack(tup)` — stack masked arrays column-wise (horizontally).
+#[pyfunction]
+pub fn hstack<'py>(py: Python<'py>, tup: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    stack_family(py, "hstack", tup)
+}
+
+/// `numpy.ma.stack(tup)` — join masked arrays along a new leading axis.
+#[pyfunction]
+pub fn stack<'py>(py: Python<'py>, tup: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    stack_family(py, "stack", tup)
+}
+
+/// Apply a numpy *sequence* stack op (`column_stack`/`dstack`) to a list of
+/// masked arrays: collect each operand's data and mask, call `numpy.<func>` on
+/// the data list and the mask list independently, recombine.
+fn stack_family<'py>(
+    py: Python<'py>,
+    func: &str,
+    tup: &Bound<'py, PyAny>,
+) -> PyResult<PyMaskedArray> {
+    let seq: Vec<Bound<'py, PyAny>> = tup.extract()?;
+    if seq.is_empty() {
+        return Err(PyValueError::new_err(format!(
+            "ma.{func}: need at least one array"
+        )));
+    }
+    let np = py.import("numpy")?;
+    let mut datas: Vec<Bound<'py, PyAny>> = Vec::with_capacity(seq.len());
+    let mut masks: Vec<Bound<'py, PyAny>> = Vec::with_capacity(seq.len());
+    for item in &seq {
+        let m = coerce_to_ma(py, item)?;
+        let d: ArrayD<f64> = fma::getdata(&m).map_err(ferr_to_pyerr)?;
+        let k: ArrayD<bool> = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
+        datas.push(d.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
+        masks.push(k.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
+    }
+    let data_list = pyo3::types::PyList::new(py, datas)?;
+    let mask_list = pyo3::types::PyList::new(py, masks)?;
+    let data_res = coerce_dtype(py, &np.getattr(func)?.call1((data_list,))?, "float64")?;
+    let mask_res = coerce_dtype(py, &np.getattr(func)?.call1((mask_list,))?, "bool")?;
+    let data_fa: ArrayD<f64> = data_res
+        .extract::<PyReadonlyArrayDyn<f64>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    let mask_fa: ArrayD<bool> = mask_res
+        .extract::<PyReadonlyArrayDyn<bool>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+/// `numpy.ma.append(a, b, axis=None)` — append `b` to `a`, concatenating the
+/// masks alongside the data (`numpy/ma/core.py:8470`). `axis=None` flattens.
+#[pyfunction]
+#[pyo3(signature = (a, b, axis = None))]
+pub fn append<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<PyMaskedArray> {
+    let np = py.import("numpy")?;
+    let ma = coerce_to_ma(py, a)?;
+    let mb = coerce_to_ma(py, b)?;
+    let (ad, am) = (
+        fma::getdata(&ma).map_err(ferr_to_pyerr)?,
+        fma::getmaskarray(&ma).map_err(ferr_to_pyerr)?,
+    );
+    let (bd, bm) = (
+        fma::getdata(&mb).map_err(ferr_to_pyerr)?,
+        fma::getmaskarray(&mb).map_err(ferr_to_pyerr)?,
+    );
+    let ad_py = ad.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let am_py = am.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let bd_py = bd.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let bm_py = bm.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let (data_res, mask_res) = match axis {
+        None => (
+            np.call_method1("append", (ad_py, bd_py))?,
+            np.call_method1("append", (am_py, bm_py))?,
+        ),
+        Some(ax) => (
+            np.call_method1("append", (ad_py, bd_py, ax))?,
+            np.call_method1("append", (am_py, bm_py, ax))?,
+        ),
+    };
+    let data_res = coerce_dtype(py, &data_res, "float64")?;
+    let mask_res = coerce_dtype(py, &mask_res, "bool")?;
+    let data_fa: ArrayD<f64> = data_res
+        .extract::<PyReadonlyArrayDyn<f64>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    let mask_fa: ArrayD<bool> = mask_res
+        .extract::<PyReadonlyArrayDyn<bool>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+/// `numpy.ma.compress(condition, a, axis=None)` — select entries of `a` where
+/// `condition` is true, the mask compressed alongside the data
+/// (`numpy/ma/core.py` `compress`). Mirrors `numpy.compress` on data + mask.
+#[pyfunction]
+#[pyo3(signature = (condition, a, axis = None))]
+pub fn compress<'py>(
+    py: Python<'py>,
+    condition: &Bound<'py, PyAny>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<PyMaskedArray> {
+    let np = py.import("numpy")?;
+    let m = coerce_to_ma(py, a)?;
+    let data: ArrayD<f64> = fma::getdata(&m).map_err(ferr_to_pyerr)?;
+    let mask: ArrayD<bool> = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
+    let data_py = data.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let mask_py = mask.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let (data_res, mask_res) = match axis {
+        None => (
+            np.call_method1("compress", (condition, &data_py))?,
+            np.call_method1("compress", (condition, &mask_py))?,
+        ),
+        Some(ax) => (
+            np.call_method1("compress", (condition, &data_py, ax))?,
+            np.call_method1("compress", (condition, &mask_py, ax))?,
+        ),
+    };
+    let data_res = coerce_dtype(py, &data_res, "float64")?;
+    let mask_res = coerce_dtype(py, &mask_res, "bool")?;
+    let data_fa: ArrayD<f64> = data_res
+        .extract::<PyReadonlyArrayDyn<f64>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    let mask_fa: ArrayD<bool> = mask_res
+        .extract::<PyReadonlyArrayDyn<bool>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Masked cumulative ops (mask → reduction identity, then accumulate)
+// ---------------------------------------------------------------------------
+
+/// `numpy.ma.cumsum(a)` / `cumprod(a)`: numpy.ma fills the masked positions
+/// with the reduction identity (0 for sum, 1 for prod) BEFORE the cumulative
+/// op, runs `numpy.<func>` on that filled data, and keeps the original mask
+/// (`numpy/ma/core.py` `cumsum`/`cumprod`: "fills masked data with the
+/// identity, then accumulates"). The binding reproduces that exactly.
+fn ma_cumulative<'py>(
+    py: Python<'py>,
+    func: &str,
+    identity: f64,
+    a: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<PyMaskedArray> {
+    let np = py.import("numpy")?;
+    let m = coerce_to_ma(py, a)?;
+    let data: ArrayD<f64> = fma::getdata(&m).map_err(ferr_to_pyerr)?;
+    let mask: ArrayD<bool> = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
+    // Fill masked slots with the identity in the data buffer.
+    let shape = data.shape().to_vec();
+    let filled: Vec<f64> = data
+        .iter()
+        .zip(mask.iter())
+        .map(|(&v, &mk)| if mk { identity } else { v })
+        .collect();
+    let filled = ArrayD::<f64>::from_vec(IxDyn::new(&shape), filled).map_err(ferr_to_pyerr)?;
+    let filled_py = filled.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let mask_py = mask.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let (data_res, mask_res) = match axis {
+        None => (
+            np.call_method1(func, (filled_py,))?,
+            // numpy.ma keeps the original mask; cumsum of a 1-D bool reshape is
+            // not what we want — carry the mask flattened to match numpy's
+            // axis=None flattening of the data.
+            np.call_method1("ravel", (mask_py,))?,
+        ),
+        Some(ax) => (np.call_method1(func, (filled_py, ax))?, mask_py),
+    };
+    let data_res = coerce_dtype(py, &data_res, "float64")?;
+    let mask_res = coerce_dtype(py, &mask_res, "bool")?;
+    let data_fa: ArrayD<f64> = data_res
+        .extract::<PyReadonlyArrayDyn<f64>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    let mask_fa: ArrayD<bool> = mask_res
+        .extract::<PyReadonlyArrayDyn<bool>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+/// `numpy.ma.cumsum(a, axis=None)` — cumulative sum, masked slots contribute 0
+/// and stay masked in the output.
+#[pyfunction]
+#[pyo3(signature = (a, axis = None))]
+pub fn cumsum<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<PyMaskedArray> {
+    ma_cumulative(py, "cumsum", 0.0, a, axis)
+}
+
+/// `numpy.ma.cumprod(a, axis=None)` — cumulative product, masked slots
+/// contribute 1 and stay masked in the output.
+#[pyfunction]
+#[pyo3(signature = (a, axis = None))]
+pub fn cumprod<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+) -> PyResult<PyMaskedArray> {
+    ma_cumulative(py, "cumprod", 1.0, a, axis)
+}
+
+// ---------------------------------------------------------------------------
+// Masked rounding (numpy.round on data, mask preserved)
+// ---------------------------------------------------------------------------
+
+/// `numpy.ma.round(a, decimals=0)` / `round_` — round unmasked data to
+/// `decimals` places, mask preserved (`numpy/ma/core.py` `round`).
+#[pyfunction]
+#[pyo3(signature = (a, decimals = 0))]
+pub fn round<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, decimals: i64) -> PyResult<PyMaskedArray> {
+    let np = py.import("numpy")?;
+    let m = coerce_to_ma(py, a)?;
+    let data: ArrayD<f64> = fma::getdata(&m).map_err(ferr_to_pyerr)?;
+    let mask: ArrayD<bool> = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
+    let data_py = data.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let rounded = coerce_dtype(py, &np.call_method1("round", (data_py, decimals))?, "float64")?;
+    let data_fa: ArrayD<f64> = rounded
+        .extract::<PyReadonlyArrayDyn<f64>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(data_fa, mask).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Masked comparisons (data = numpy comparison, mask = OR of operand masks)
+// ---------------------------------------------------------------------------
+
+/// Apply a numpy comparison ufunc over two masked operands: the result data is
+/// `numpy.<func>(adata, bdata)`, the result mask is the elementwise OR of the
+/// (broadcast) operand masks — matching numpy.ma's comparison wrappers
+/// (`numpy/ma/core.py` `_extrema_operation` / `_DomainedBinaryOperation`,
+/// "the result is masked wherever either operand is masked").
+fn ma_compare<'py>(
+    py: Python<'py>,
+    func: &str,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<PyMaskedArray> {
+    let np = py.import("numpy")?;
+    let ma = coerce_to_ma(py, a)?;
+    let mb = coerce_to_ma(py, b)?;
+    let ad = fma::getdata(&ma).map_err(ferr_to_pyerr)?;
+    let am = fma::getmaskarray(&ma).map_err(ferr_to_pyerr)?;
+    let bd = fma::getdata(&mb).map_err(ferr_to_pyerr)?;
+    let bm = fma::getmaskarray(&mb).map_err(ferr_to_pyerr)?;
+    let ad_py = ad.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let am_py = am.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let bd_py = bd.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let bm_py = bm.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    // Comparison result data (bool) → stored as float64 (0.0/1.0) in the
+    // f64-only masked wrapper, matching numpy.ma.<cmp>'s boolean data values.
+    let data_res = coerce_dtype(py, &np.getattr(func)?.call1((ad_py, bd_py))?, "float64")?;
+    let mask_res = coerce_dtype(py, &np.call_method1("logical_or", (am_py, bm_py))?, "bool")?;
+    let data_fa: ArrayD<f64> = data_res
+        .extract::<PyReadonlyArrayDyn<f64>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    let mask_fa: ArrayD<bool> = mask_res
+        .extract::<PyReadonlyArrayDyn<bool>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+macro_rules! ma_cmp {
+    ($name:ident, $np:literal, $doc:literal) => {
+        #[doc = $doc]
+        #[pyfunction]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            a: &Bound<'py, PyAny>,
+            b: &Bound<'py, PyAny>,
+        ) -> PyResult<PyMaskedArray> {
+            ma_compare(py, $np, a, b)
+        }
+    };
+}
+
+ma_cmp!(equal, "equal", "`numpy.ma.equal(a, b)` — masked elementwise `==`.");
+ma_cmp!(
+    not_equal,
+    "not_equal",
+    "`numpy.ma.not_equal(a, b)` — masked elementwise `!=`."
+);
+ma_cmp!(
+    greater,
+    "greater",
+    "`numpy.ma.greater(a, b)` — masked elementwise `>`."
+);
+ma_cmp!(
+    greater_equal,
+    "greater_equal",
+    "`numpy.ma.greater_equal(a, b)` — masked elementwise `>=`."
+);
+ma_cmp!(less, "less", "`numpy.ma.less(a, b)` — masked elementwise `<`.");
+ma_cmp!(
+    less_equal,
+    "less_equal",
+    "`numpy.ma.less_equal(a, b)` — masked elementwise `<=`."
+);
+
+// ---------------------------------------------------------------------------
+// Masked angle (numpy.angle on data, mask preserved)
+// ---------------------------------------------------------------------------
+
+/// `numpy.ma.angle(z, deg=False)` — angle of the (real, f64) masked data, mask
+/// preserved. The f64-only wrapper carries real data, so this is `numpy.angle`
+/// of the real buffer (0 for positives, π for negatives); genuine complex
+/// masked angle needs the complex `PyMaskedArray` wrapper tracked under #835.
+#[pyfunction]
+#[pyo3(signature = (z, deg = false))]
+pub fn angle<'py>(py: Python<'py>, z: &Bound<'py, PyAny>, deg: bool) -> PyResult<PyMaskedArray> {
+    let np = py.import("numpy")?;
+    let m = coerce_to_ma(py, z)?;
+    let data: ArrayD<f64> = fma::getdata(&m).map_err(ferr_to_pyerr)?;
+    let mask: ArrayD<bool> = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
+    let data_py = data.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let kwargs = pyo3::types::PyDict::new(py);
+    kwargs.set_item("deg", deg)?;
+    let res = coerce_dtype(
+        py,
+        &np.getattr("angle")?.call((data_py,), Some(&kwargs))?,
+        "float64",
+    )?;
+    let data_fa: ArrayD<f64> = res
+        .extract::<PyReadonlyArrayDyn<f64>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(data_fa, mask).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Reduction free-functions + aliases mirroring the MaskedArray methods
+// ---------------------------------------------------------------------------
+
+/// `numpy.ma.max(a)` / `amax(a)` — maximum unmasked element. All-masked
+/// reduces to the `numpy.ma.masked` singleton.
+#[pyfunction]
+pub fn max<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
+    a.max(py)
+}
+
+/// `numpy.ma.min(a)` / `amin(a)` — minimum unmasked element.
+#[pyfunction]
+pub fn min<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
+    a.min(py)
+}
+
+/// `numpy.ma.sum(a)` — sum of unmasked elements.
+#[pyfunction]
+pub fn sum<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
+    a.sum(py)
+}
+
+/// `numpy.ma.mean(a)` — mean of unmasked elements.
+#[pyfunction]
+pub fn mean<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
+    a.mean(py)
+}
+
+/// `numpy.ma.std(a)` — standard deviation of unmasked elements.
+#[pyfunction]
+pub fn std<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
+    a.std(py)
+}
+
+/// `numpy.ma.var(a)` — variance of unmasked elements.
+#[pyfunction]
+pub fn var<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
+    a.var(py)
+}
+
+/// `numpy.ma.anomalies(a)` — alias of [`anom`] (deviation from the unmasked
+/// mean; `numpy/ma/core.py`: `anomalies = anom`).
+#[pyfunction]
+pub fn anomalies(a: &PyMaskedArray) -> PyResult<PyMaskedArray> {
+    anom(a)
+}
+
+// ---------------------------------------------------------------------------
+// Predicates / fill-value helpers
+// ---------------------------------------------------------------------------
+
+/// `numpy.ma.allequal(a, b, fill_value=True)` — true iff `a` and `b` have
+/// equal UNMASKED elements (`numpy/ma/core.py` `allequal`). With the default
+/// `fill_value=True`, masked positions in either operand are treated as equal.
+#[pyfunction]
+#[pyo3(signature = (a, b, fill_value = true))]
+pub fn allequal<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    fill_value: bool,
+) -> PyResult<bool> {
+    let ma = coerce_to_ma(py, a)?;
+    let mb = coerce_to_ma(py, b)?;
+    let ad = fma::getdata(&ma).map_err(ferr_to_pyerr)?;
+    let am = fma::getmaskarray(&ma).map_err(ferr_to_pyerr)?;
+    let bd = fma::getdata(&mb).map_err(ferr_to_pyerr)?;
+    let bm = fma::getmaskarray(&mb).map_err(ferr_to_pyerr)?;
+    if ad.shape() != bd.shape() {
+        return Ok(false);
+    }
+    let zipped = ad
+        .iter()
+        .zip(am.iter())
+        .zip(bd.iter().zip(bm.iter()));
+    for ((&av, &amk), (&bv, &bmk)) in zipped {
+        let either_masked = amk || bmk;
+        if either_masked {
+            // With fill_value=True a masked pair counts as equal; with
+            // fill_value=False any masked position makes the arrays unequal.
+            if !fill_value {
+                return Ok(false);
+            }
+        } else if av != bv {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// `numpy.ma.allclose(a, b, masked_equal=True, rtol=1e-5, atol=1e-8)` — true
+/// iff the UNMASKED elements of `a` and `b` are close within tolerance
+/// (`numpy/ma/core.py` `allclose`). Masked positions are ignored when
+/// `masked_equal` is true (the default).
+#[pyfunction]
+#[pyo3(signature = (a, b, masked_equal = true, rtol = 1e-5, atol = 1e-8))]
+pub fn allclose<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    masked_equal: bool,
+    rtol: f64,
+    atol: f64,
+) -> PyResult<bool> {
+    let ma = coerce_to_ma(py, a)?;
+    let mb = coerce_to_ma(py, b)?;
+    let ad = fma::getdata(&ma).map_err(ferr_to_pyerr)?;
+    let am = fma::getmaskarray(&ma).map_err(ferr_to_pyerr)?;
+    let bd = fma::getdata(&mb).map_err(ferr_to_pyerr)?;
+    let bm = fma::getmaskarray(&mb).map_err(ferr_to_pyerr)?;
+    if ad.shape() != bd.shape() {
+        return Ok(false);
+    }
+    let zipped = ad
+        .iter()
+        .zip(am.iter())
+        .zip(bd.iter().zip(bm.iter()));
+    for ((&av, &amk), (&bv, &bmk)) in zipped {
+        let either_masked = amk || bmk;
+        if either_masked {
+            if !masked_equal {
+                return Ok(false);
+            }
+        } else {
+            // numpy.allclose criterion: |a - b| <= atol + rtol*|b|.
+            let close = (av - bv).abs() <= atol + rtol * bv.abs();
+            if !close {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
+}
+
+/// `numpy.ma.maximum_fill_value(obj)` — the value used to fill masked slots so
+/// they never win a maximum reduction: `-inf` for float64
+/// (`numpy/ma/core.py` `maximum_fill_value`).
+#[pyfunction]
+pub fn maximum_fill_value(_obj: &Bound<'_, PyAny>) -> f64 {
+    f64::NEG_INFINITY
+}
+
+/// `numpy.ma.minimum_fill_value(obj)` — the value used to fill masked slots so
+/// they never win a minimum reduction: `+inf` for float64
+/// (`numpy/ma/core.py` `minimum_fill_value`).
+#[pyfunction]
+pub fn minimum_fill_value(_obj: &Bound<'_, PyAny>) -> f64 {
+    f64::INFINITY
+}
+
+/// `numpy.ma.common_fill_value(a, b)` — the shared fill value of `a` and `b`
+/// if they agree, else `None` (`numpy/ma/core.py` `common_fill_value`).
+#[pyfunction]
+pub fn common_fill_value<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let fa = coerce_to_ma(py, a)?.fill_value();
+    let fb = coerce_to_ma(py, b)?.fill_value();
+    if fa == fb {
+        Ok(fa.into_pyobject(py)?.into_any())
+    } else {
+        Ok(py.None().into_bound(py))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shape inspectors (numpy.ma.ndim / shape / size — free-function form)
+// ---------------------------------------------------------------------------
+
+/// `numpy.ma.ndim(a)` — number of dimensions of `a`.
+#[pyfunction]
+pub fn ndim<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<usize> {
+    Ok(coerce_to_ma(py, a)?.ndim())
+}
+
+/// `numpy.ma.shape(a)` — shape tuple of `a`.
+#[pyfunction]
+pub fn shape<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let m = coerce_to_ma(py, a)?;
+    let s: Vec<usize> = m.shape().to_vec();
+    Ok(pyo3::types::PyTuple::new(py, s)?.into_any())
+}
+
+/// `numpy.ma.size(a)` — total number of elements of `a`.
+#[pyfunction]
+pub fn size<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<usize> {
+    Ok(coerce_to_ma(py, a)?.size())
+}
+
+// ---------------------------------------------------------------------------
+// Masked logical ops + bit shifts (data = numpy op, mask = OR of masks)
+// ---------------------------------------------------------------------------
+
+macro_rules! ma_binop_orm {
+    ($name:ident, $np:literal, $doc:literal) => {
+        #[doc = $doc]
+        #[pyfunction]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            a: &Bound<'py, PyAny>,
+            b: &Bound<'py, PyAny>,
+        ) -> PyResult<PyMaskedArray> {
+            ma_compare(py, $np, a, b)
+        }
+    };
+}
+
+ma_binop_orm!(
+    logical_and,
+    "logical_and",
+    "`numpy.ma.logical_and(a, b)` — masked elementwise logical AND."
+);
+ma_binop_orm!(
+    logical_or,
+    "logical_or",
+    "`numpy.ma.logical_or(a, b)` — masked elementwise logical OR."
+);
+ma_binop_orm!(
+    logical_xor,
+    "logical_xor",
+    "`numpy.ma.logical_xor(a, b)` — masked elementwise logical XOR."
+);
+
+/// `numpy.ma.logical_not(a)` — masked elementwise logical NOT, mask preserved.
+#[pyfunction]
+pub fn logical_not<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    let np = py.import("numpy")?;
+    let m = coerce_to_ma(py, a)?;
+    let data: ArrayD<f64> = fma::getdata(&m).map_err(ferr_to_pyerr)?;
+    let mask: ArrayD<bool> = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
+    let data_py = data.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let res = coerce_dtype(py, &np.call_method1("logical_not", (data_py,))?, "float64")?;
+    let data_fa: ArrayD<f64> = res
+        .extract::<PyReadonlyArrayDyn<f64>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(data_fa, mask).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Masked inner / outer products (data op + mask propagation)
+// ---------------------------------------------------------------------------
+
+/// `numpy.ma.outer(a, b)` / `outerproduct` — outer product of the flattened
+/// operands; the result is masked wherever either contributing operand element
+/// is masked (`numpy/ma/extras.py` `outer`).
+#[pyfunction]
+pub fn outer<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<PyMaskedArray> {
+    let np = py.import("numpy")?;
+    let ma = coerce_to_ma(py, a)?;
+    let mb = coerce_to_ma(py, b)?;
+    let ad = fma::getdata(&ma).map_err(ferr_to_pyerr)?;
+    let am = fma::getmaskarray(&ma).map_err(ferr_to_pyerr)?;
+    let bd = fma::getdata(&mb).map_err(ferr_to_pyerr)?;
+    let bm = fma::getmaskarray(&mb).map_err(ferr_to_pyerr)?;
+    let ad_py = ad.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let am_py = am.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let bd_py = bd.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let bm_py = bm.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let data_res = coerce_dtype(py, &np.call_method1("outer", (ad_py, bd_py))?, "float64")?;
+    // mask = outer(am, ones) OR outer(ones, bm): masked iff either source slot
+    // is masked. numpy.ma builds this via `mask = logical_or.outer(am, bm)`.
+    let mask_res = coerce_dtype(
+        py,
+        &np.getattr("logical_or")?
+            .getattr("outer")?
+            .call1((am_py, bm_py))?,
+        "bool",
+    )?;
+    let data_fa: ArrayD<f64> = data_res
+        .extract::<PyReadonlyArrayDyn<f64>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    let mask_fa: ArrayD<bool> = mask_res
+        .extract::<PyReadonlyArrayDyn<bool>>()?
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+/// `numpy.ma.inner(a, b)` / `innerproduct` — inner product over the unmasked
+/// elements of the flattened operands (`numpy/ma/extras.py` `inner`: masked
+/// slots are filled with 0 before the dot). Returns a scalar.
+#[pyfunction]
+pub fn inner<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let ma = coerce_to_ma(py, a)?;
+    let mb = coerce_to_ma(py, b)?;
+    let ad = fma::getdata(&ma).map_err(ferr_to_pyerr)?;
+    let am = fma::getmaskarray(&ma).map_err(ferr_to_pyerr)?;
+    let bd = fma::getdata(&mb).map_err(ferr_to_pyerr)?;
+    let bm = fma::getmaskarray(&mb).map_err(ferr_to_pyerr)?;
+    let mut acc = 0.0f64;
+    for (((&av, &amk), &bv), &bmk) in ad
+        .iter()
+        .zip(am.iter())
+        .zip(bd.iter())
+        .zip(bm.iter())
+    {
+        let a_eff = if amk { 0.0 } else { av };
+        let b_eff = if bmk { 0.0 } else { bv };
+        acc += a_eff * b_eff;
+    }
+    Ok(acc.into_pyobject(py)?.into_any())
 }
 
 /// `numpy.ma.convolve(a, v, mode='full', propagate_mask=True)` — masked

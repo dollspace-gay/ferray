@@ -439,6 +439,89 @@ fn register_ma_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> Py
     m.add_function(wrap_pyfunction!(ma::polyfit, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::convolve, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::correlate, &m)?)?;
+    // ----- numpy.ma composable manipulation/elementwise/aliases batch
+    // (refs #835 #818) -----
+    // mask-propagating manipulation
+    m.add_function(wrap_pyfunction!(ma::atleast_1d, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::atleast_2d, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::atleast_3d, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::column_stack, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::dstack, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::vstack, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::hstack, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::stack, &m)?)?;
+    m.add("row_stack", wrap_pyfunction!(ma::vstack, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::diagonal, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::diagflat, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::swapaxes, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::resize, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::compress, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::append, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::empty_like, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::ones_like, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::zeros_like, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::cumsum, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::cumprod, &m)?)?;
+    // rounding + alias
+    m.add_function(wrap_pyfunction!(ma::round, &m)?)?;
+    m.add("round_", wrap_pyfunction!(ma::round, &m)?)?;
+    // masked comparisons
+    m.add_function(wrap_pyfunction!(ma::equal, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::not_equal, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::greater, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::greater_equal, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::less, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::less_equal, &m)?)?;
+    // masked angle
+    m.add_function(wrap_pyfunction!(ma::angle, &m)?)?;
+    // reduction free-functions + numpy.ma aliases
+    m.add_function(wrap_pyfunction!(ma::max, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::min, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::sum, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::mean, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::std, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::var, &m)?)?;
+    m.add("amax", wrap_pyfunction!(ma::max, &m)?)?;
+    m.add("amin", wrap_pyfunction!(ma::min, &m)?)?;
+    m.add("product", wrap_pyfunction!(ma::prod, &m)?)?;
+    m.add("alltrue", wrap_pyfunction!(ma::all, &m)?)?;
+    m.add("sometrue", wrap_pyfunction!(ma::any, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::anomalies, &m)?)?;
+    // predicates / fill-value helpers
+    m.add_function(wrap_pyfunction!(ma::allequal, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::allclose, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::maximum_fill_value, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::minimum_fill_value, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::common_fill_value, &m)?)?;
+    // numpy.ma shared exception/type vocabulary — re-export numpy's own
+    // `MAError` / `MaskError` exception classes and the `MaskType` (== numpy
+    // bool scalar), matching `numpy/ma/core.py` so `except numpy.ma.MAError`
+    // catches ferray.ma errors of the same provenance.
+    {
+        let np_ma = py.import("numpy.ma")?;
+        m.add("MAError", np_ma.getattr("MAError")?)?;
+        m.add("MaskError", np_ma.getattr("MaskError")?)?;
+        m.add("MaskType", np_ma.getattr("MaskType")?)?;
+        // numpy.ma module-level singletons / constants: the `masked`
+        // singleton, `nomask`, and `masked_singleton` (== masked) come from
+        // numpy's own canonical objects so `x is ferray.ma.masked` matches
+        // `numpy/ma/core.py`'s shared sentinels.
+        m.add("masked", np_ma.getattr("masked")?)?;
+        m.add("masked_singleton", np_ma.getattr("masked")?)?;
+        m.add("nomask", np_ma.getattr("nomask")?)?;
+    }
+    // shape inspectors + masked logical / shift / product surface
+    m.add_function(wrap_pyfunction!(ma::ndim, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::shape, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::size, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::logical_and, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::logical_or, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::logical_xor, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::logical_not, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::outer, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::inner, &m)?)?;
+    m.add("outerproduct", wrap_pyfunction!(ma::outer, &m)?)?;
+    m.add("innerproduct", wrap_pyfunction!(ma::inner, &m)?)?;
     parent.add_submodule(&m)?;
     py.import("sys")?
         .getattr("modules")?
