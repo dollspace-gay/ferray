@@ -82,9 +82,12 @@ lexicographic `min`/`max` require touching library/binding compute helpers.
 - REQ-3 (complex arithmetic `+`,`-`,`*`,`/`,`**`): compute over the complex
   variant via `ferray-ufunc` (needs the complex-arithmetic prereq); mask =
   operand union; `/` masks divisor-zero / non-finite per numpy.ma's domained op.
-- REQ-4 (`==`/`!=` compute; `<`,`>`,`<=`,`>=` raise `TypeError`): complex
+- REQ-4 (`==`/`!=` compute; `<`,`>`,`<=`,`>=` compute LEXICOGRAPHICALLY): complex
   `==`/`!=` compute (with the masked-position override); the four ordering ops
-  raise `TypeError` like numpy (complex is not ordered).
+  ALSO compute — numpy.ma compares complex LEXICOGRAPHICALLY `(real, then imag)`
+  via `np.less`/etc and does NOT raise (verified live, numpy 2.4.5:
+  `np.ma.array([1+2j]) < np.ma.array([1+3j])` → `True`). #874 corrected the
+  earlier mis-spec that froze ordering as a permanent `TypeError`.
 - REQ-5 (`//`,`%`,bitwise raise `TypeError`): complex `//`,`%`,`&`,`|`,`^`,
   `<<`,`>>` raise `TypeError` matching numpy's "ufunc not supported" message.
 - REQ-6 (complex reductions `sum`/`prod`/`mean`/`min`/`max`): `sum`/`prod`
@@ -102,7 +105,8 @@ lexicographic `min`/`max` require touching library/binding compute helpers.
 - AC-3 (REQ-3): `(c_ma + c_ma)`, `* `, `- `, `/ 2`, `** 2` equal the numpy.ma
   results elementwise (data + mask) for masked complex inputs.
 - AC-4 (REQ-4): `c_ma == c_ma` matches numpy.ma (masked-position override);
-  `c_ma < c_ma` raises `TypeError`.
+  `c_ma < c_ma` (and `<=`/`>`/`>=`) computes the LEXICOGRAPHIC ordering matching
+  numpy.ma (data + mask union), NOT a `TypeError`.
 - AC-5 (REQ-5): `c_ma // 2`, `c_ma % 2`, `c_ma & 1` each raise `TypeError` with
   numpy's "not supported" wording.
 - AC-6 (REQ-6): `c_ma.sum()`, `.prod()`, `.mean()`, `.min()`, `.max()` equal the
@@ -110,21 +114,28 @@ lexicographic `min`/`max` require touching library/binding compute helpers.
 
 ## REQ status table
 
-REQ-1 is **SHIPPED** (#868). The remaining REQs are **NOT-STARTED**: complex
-arithmetic (#869), `.real`/`.imag`/`conj`/`abs` methods (#870), and complex
-`mean`/`min`/`max` (#873) raise a tracked `TypeError` for now. The `==`/`!=`
-complex compute (part of REQ-4) and the complex ordering / `//`,`%` / bitwise
-RAISES (REQ-4 / REQ-5) landed early alongside #868 — they fell out of threading
-the variant through `compare_op` / `binary_op` / `bitwise_op` — but REQ-4/REQ-5
-stay NOT-STARTED until their full pinned pytest (incl. the masked-position
-override edges) is added under #871/#872.
+REQ-1 is **SHIPPED** (#868). The complex comparison surface of REQ-4 —
+`==`/`!=` (masked-position override) AND the four ordering ops `<`/`<=`/`>`/`>=`
+(lexicographic compute, #874) — is **SHIPPED**. The remaining REQs are
+**NOT-STARTED**: complex arithmetic (#869), `.real`/`.imag`/`conj`/`abs` methods
+(#870), and complex `mean`/`min`/`max` (#873) raise a tracked `TypeError` for
+now. The complex `//`,`%` / bitwise RAISES (REQ-5) landed alongside #868 — they
+fell out of threading the variant through `binary_op` / `bitwise_op` — but REQ-5
+stays NOT-STARTED until its full pinned pytest is added under #872.
+
+NOTE (#874 correction): an earlier pass mis-classified complex ordering
+`<`/`<=`/`>`/`>=` as a PERMANENT `TypeError` ("complex is unordered"). That is
+WRONG against the live oracle — numpy.ma COMPUTES complex ordering
+LEXICOGRAPHICALLY `(real, then imag)` via `np.less`/etc and does NOT raise.
+ferray now computes it directly in `compute_compare` (`Complex` is not
+`PartialOrd`, so the order is taken from the `re`/`im` parts).
 
 | REQ | Status | Evidence |
 |---|---|---|
 | REQ-1 (construct/dtype/filled) | SHIPPED | #868. `build_dynma` (`ma.rs`) maps `"complex64"\|"c8" => DynMa::Complex32`, `"complex128"\|"c16" => DynMa::Complex64` (data crossing the boundary via `fft::complex_pyarray_to_ferray`, the `numpy::Element` complex marshaller — `Complex<T>` is not `NpElement`); `enum DynMa` gains `Complex32`/`Complex64`; `dtype_name` → `"complex64"`/`"complex128"`; `match_ma!`/`impl_wrap_dyn!`/`AccIdentity`/`MaIdentity` gain complex arms; the complex fill-default `1e20+0j` is in `default_fill_value` (`ferray-ma/src/masked_array.rs`, `DType::Complex32\|Complex64 => Complex::new(1e20, 0.0)`). Non-test production consumer: `PyMaskedArray::py_new`/`fr.ma.array` → `dynma_from_input` → `build_dynma` constructs the variant; `filled`/`__array__`/`compressed`/`fill_value` egress it via `dynma_data_pyarray` + `complex_ferray_to_pyarray`. Verified: `tests/test_expansion_ma_complex_construct.py` (30 pytest vs numpy.ma) + the flipped `test_KNOWN_complex_masked_array_supported_by_numpy` pin. |
 | REQ-2 (real/imag/conj/abs) | NOT-STARTED | open prereq blocker #870. `ferray_ufunc::ops::complex` (`complex.rs`) ALREADY provides `pub fn real`/`imag`/`conj`/`conjugate`/`abs`/`angle` (bounded `T: Element + Float, Complex<T>: Element`); `carry_unary_mask` in `ma.rs` is generic over `T: Element + WrapDyn`. Binding-only: add `#[pymethods]`/free fns dispatching the new complex `DynMa` arm; blocked behind REQ-1's variants. |
 | REQ-3 (complex `+`,`-`,`*`,`/`,`**`) | NOT-STARTED | open prereq blocker #869 (LIBRARY prereq). `pub fn add`/`subtract`/`multiply` (`arithmetic.rs`) bound `T: Element + WrappingArith`; `WrappingArith` impl'd only for `i8..u128`/`f32`/`f64`/`f16` (`impl_wrapping_arith_int!`/`impl_wrapping_arith_float!`) — NO Complex. `pub fn divide` bound `T: TrueDivide` (f64/f32/ints only). `pub fn power` bound `T: Element + Float` — Float not impl for Complex. Needs `WrappingArith`+`TrueDivide` for Complex + a complex `power` arm, then the complex arms in `compute_binary`'s match. |
-| REQ-4 (`==`/`!=` compute; ordering raises) | NOT-STARTED | open prereq blocker #871. `pub fn equal`/`not_equal` (`comparison.rs`) bound `T: Element + PartialEq + Copy` → Complex OK (eq/ne compute once the complex arm is added to `compute_compare`'s `cmp_arm!` match). `pub fn less`/`less_equal`/`greater`/`greater_equal` bound `T: ... + PartialOrd` and Complex is NOT `PartialOrd` → `compare_op` must guard the four ordering ops to a `TypeError` for complex (numpy raises). |
+| REQ-4 (`==`/`!=` + ordering all COMPUTE) | SHIPPED | #874. `pub fn equal`/`not_equal` (`comparison.rs`) bound `T: Element + PartialEq + Copy` → Complex OK (`==`/`!=` compute with the masked-position override). The four ordering ops `<`/`<=`/`>`/`>=` ALSO compute: numpy.ma compares complex LEXICOGRAPHICALLY `(real, then imag)` via `np.less`/etc (verified live, numpy 2.4.5: `np.ma.array([1+2j]) < np.ma.array([1+3j])` → `True` — does NOT raise). `Complex` is not `PartialOrd`, so `compute_compare`'s `cmp_complex_arm!` (`ma.rs`) computes the order directly from `re`/`im`: `<` = `a.re<b.re \|\| (a.re==b.re && a.im<b.im)` (and mirrors); NaN parts make every ordering compare `false`, matching numpy's `invalid value` → `False`. Result is bool-dtype with mask = operand union; a real operand is promoted to complex via `result_type`. Verified: `tests/test_divergence_ma_complex_audit.py` (the 5 ordering pins) + `tests/test_expansion_ma_complex_construct.py`. |
 | REQ-5 (`//`,`%`,bitwise raise) | NOT-STARTED | open prereq blocker #872. `compute_binary`'s `int_arm`/`float_arm` would compute `//`/`%` — for complex they must raise (numpy: `ufunc 'floor_divide'/'remainder' not supported`). `bitwise_op` in `ma.rs` already raises on a `float16|float32|float64` common dtype (`if matches!(result_dt.as_str(), "float16"|"float32"|"float64")`) — the guard must extend to `complex64`/`complex128`. |
 | REQ-6 (sum/prod/mean/min/max) | NOT-STARTED | open prereq blocker #873. `ma_sum_acc`/`ma_prod_acc` keyed on `ReduceAcc` which IS impl'd for `Complex<f32>`/`Complex<f64>` (`reductions.rs`, `Acc=Self`) → sum/prod work once binding-local `AccIdentity` (`ma.rs`, currently i64/u64/f32/f64) gains complex arms. `mean`/`var`/`std`/`median` route through `to_f64_ma` (`ma.rs`) which collapses each element via `dyn_to_f64` → DROPS the imaginary part; `mean` needs a complex path. `ma_extremum` needs lexicographic complex compare (Complex not `PartialOrd`; numpy complex min/max is lexicographic, verified live 2.4.5). |
 
@@ -160,13 +171,18 @@ generic body per variant. Adding complex means extending each of these sites:
    any `T: NpElement + Copy`; needs `Complex` in `NpElement` (the interop
    boundary egress set) to round-trip a complex fill.
 
+### Complex comparison COMPUTES (not a raise — #874 correction)
+
+- **`compare_op` / `compute_compare`** — ALL six comparison ops compute for
+  complex. `==`/`!=` use `PartialEq`-bounded `equal`/`not_equal`; the four
+  ordering ops `<`/`<=`/`>`/`>=` compute LEXICOGRAPHICALLY in
+  `compute_compare`'s `cmp_complex_arm!` (`Complex` is not `PartialOrd`, so the
+  order is taken from `re`/`im`). numpy.ma does NOT raise — `np.less`/etc on
+  complex perform the `(real, then imag)` compare (verified live, numpy 2.4.5).
+  An earlier pass mis-classified this as a permanent `TypeError`; #874 fixed it.
+
 ### Where complex must RAISE (matching numpy's "no loop" TypeError)
 
-- **`compare_op`** — for a complex receiver, the four ordering ops
-  (`Lt`/`Le`/`Gt`/`Ge`) must return `TypeError` (Complex is not `PartialOrd`,
-  and numpy raises). `compute_compare`'s `cmp_arm!` macro must add complex arms
-  ONLY for the `Eq`/`Ne` paths (`equal`/`not_equal` are `PartialEq`-bounded),
-  with ordering arms guarded out before the macro is reached.
 - **`compute_binary`** — complex `FloorDiv`/`Mod` must raise `TypeError`
   (numpy: `ufunc 'floor_divide'/'remainder' not supported`). Only
   `Add`/`Sub`/`Mul`/`TrueDiv`/`Pow` get a complex arm.
@@ -201,7 +217,7 @@ generic body per variant. Adding complex means extending each of these sites:
 | `+`,`-`,`*`,`/`,`**` | complex compute | live: `/2 → [(0.5+1j)]`, `**2 → [-3+4j]` |
 | `//`,`%` | `TypeError` ('floor_divide'/'remainder' not supported) | live |
 | `==`,`!=` | complex equality + masked-position override | live: `[True --]` |
-| `<`,`>`,`<=`,`>=` | `TypeError` ('<' not supported) | live |
+| `<`,`>`,`<=`,`>=` | LEXICOGRAPHIC compute `(real, then imag)` + mask union; NaN→False | live: `[1+2j]<[1+3j] → [True]` |
 | `&`,`|`,`^`,`<<`,`>>` | `TypeError` ('bitwise_and' not supported) | live |
 | `sum`/`prod`/`mean` | complex scalar | live: `sum→(1+11j)`, `prod→(2+4j)`, `mean→(2+3j)` |
 | `min`/`max` | complex scalar (LEXICOGRAPHIC ordering) | live: `min→(1+2j)`, `max→(1+2j)` |
@@ -229,8 +245,9 @@ Each group is a separate builder→critic cycle under epic #850 / #867.
    `ferray_ufunc::ops::complex` fns.
    - Manifest: `ferray-python/src/ma.rs`,
      `ferray-python/tests/test_divergence_ma_*.py`.
-4. **R-4 (#871) — `==`/`!=` compute + ordering raises.** Complex `Eq`/`Ne` arm
-   in `compute_compare`; ordering guard in `compare_op`.
+4. **R-4 (#871/#874) — all six comparisons COMPUTE.** Complex `Eq`/`Ne` arm in
+   `compute_compare`; the four ordering ops compute LEXICOGRAPHICALLY in the same
+   `cmp_complex_arm!` (NOT a raise — #874 corrected the earlier mis-spec).
    - Manifest: `ferray-python/src/ma.rs`,
      `ferray-python/tests/test_divergence_ma_*.py`.
 5. **R-5 (#872) — `//`/`%`/bitwise raise.** Guards in `compute_binary` /
@@ -262,6 +279,7 @@ values from the live numpy.ma oracle, R-CHAR-3):
 - R-1: `dtype == "complex128"`, `.filled()` equals numpy, `np.asarray` equals.
 - R-2: `.real`/`.imag`/`abs()`/`.conjugate()` equal numpy.
 - R-3: `+`/`-`/`*`/`/`/`**` data+mask equal numpy.ma.
-- R-4: `==`/`!=` equal numpy.ma; `<` raises `TypeError`.
+- R-4: `==`/`!=` equal numpy.ma; `<`/`<=`/`>`/`>=` compute the LEXICOGRAPHIC
+  order equal to numpy.ma (data + mask), NOT a `TypeError`.
 - R-5: `//`/`%`/`&` raise `TypeError`.
 - R-6: `sum`/`prod`/`mean`/`min`/`max` equal numpy.ma complex scalars.

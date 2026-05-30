@@ -7,9 +7,11 @@ numpy.ma call (R-CHAR-3), never literal-copied from the ferray side.
 Scope of #868 (this build): construction, `.dtype`, `.filled()` (default
 `1e20+0j` + custom), `.data`/`__array__`, `.mask`, `__repr__`, `__getitem__`
 (masked-scalar return), `__setitem__`, `==`/`!=` (compute), `sum`/`prod`
-(compute via the complex `ReduceAcc`). Ordering (`<`/`>`/`<=`/`>=`) and bitwise
-(`&`/`|`/`^`) RAISE `TypeError` (numpy raises too — complex is unordered / not
-integer). Complex arithmetic (`+`/`-`/`*`/`/`/`**`) and the real-collapsing
+(compute via the complex `ReduceAcc`). Ordering (`<`/`>`/`<=`/`>=`) COMPUTES
+LEXICOGRAPHICALLY (numpy.ma does NOT raise — `np.less`/etc on complex compare
+`(real, then imag)`; #874). Bitwise (`&`/`|`/`^`) RAISE `TypeError` (numpy
+raises too — complex is not integer). Complex arithmetic (`+`/`-`/`*`/`/`/`**`)
+and the real-collapsing
 reductions (`mean`/`var`/`std`/`min`/`max`) RAISE a tracked `TypeError` for now
 — numpy.ma SUPPORTS these, so the asserts below assert the CURRENT
 (intentionally-incomplete) TypeError; they FLIP to value-equality assertions
@@ -187,19 +189,35 @@ def test_complex_prod():
     assert complex(fr.ma.prod(f)) == complex(n.prod())  # (5+10j)
 
 
-# --- ordering RAISES TypeError (numpy raises: complex is unordered) ---------
+# --- ordering COMPUTES lexicographically (numpy.ma does NOT raise) ----------
+# numpy.ma compares complex LEXICOGRAPHICALLY `(real, then imag)` via `np.less`/
+# etc; it does NOT raise (verified live, numpy 2.4.5:
+# `np.ma.array([1+2j]) < np.ma.array([1+3j])` -> `[True]`). The four ordering
+# ops are fully covered by `test_divergence_ma_complex_audit.py` (#874); these
+# two assert the value (data + mask union) against the live numpy.ma oracle.
 
-def test_complex_lt_raises():
+def test_complex_lt_computes_lexicographically():
+    n = np.ma.array(_data(), mask=_mask())
+    nr = n < n
+    exp_data = np.asarray(np.ma.getdata(nr)).tolist()
+    exp_mask = np.asarray(np.ma.getmaskarray(nr)).tolist()
+
     f = fr.ma.array(_data(), mask=_mask())
-    # numpy: `np.ma.array([1+2j]) < np.ma.array([3+4j])` -> TypeError.
-    with pytest.raises(TypeError):
-        _ = f < f
+    fr_res = f < f
+    assert np.asarray(fr_res.data).tolist() == exp_data
+    assert np.asarray(fr_res.mask).tolist() == exp_mask
 
 
-def test_complex_gt_raises():
+def test_complex_gt_computes_lexicographically():
+    n = np.ma.array(_data(), mask=_mask())
+    nr = n > n
+    exp_data = np.asarray(np.ma.getdata(nr)).tolist()
+    exp_mask = np.asarray(np.ma.getmaskarray(nr)).tolist()
+
     f = fr.ma.array(_data(), mask=_mask())
-    with pytest.raises(TypeError):
-        _ = f > f
+    fr_res = f > f
+    assert np.asarray(fr_res.data).tolist() == exp_data
+    assert np.asarray(fr_res.mask).tolist() == exp_mask
 
 
 # --- bitwise RAISES TypeError (numpy raises: complex is not integer) --------

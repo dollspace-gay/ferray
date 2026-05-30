@@ -2474,23 +2474,13 @@ fn compare_op(
         }
     };
 
-    // Complex ordering (`<`/`<=`/`>`/`>=`) is undefined — numpy raises
-    // `'<' not supported between ...` (Complex is not `PartialOrd`). `==`/`!=`
-    // ARE defined for complex (bounded `PartialEq`), so they fall through to
-    // `compute_compare`'s complex Eq/Ne arm and COMPUTE (matching numpy.ma).
-    if matches!(operand_dt.as_str(), "complex64" | "complex128") && !op.is_eq_ne() {
-        return Err(pyo3::exceptions::PyTypeError::new_err(format!(
-            "'{}' not supported between instances of complex masked arrays",
-            match op {
-                CmpOp::Lt => "<",
-                CmpOp::Le => "<=",
-                CmpOp::Gt => ">",
-                CmpOp::Ge => ">=",
-                CmpOp::Eq => "==",
-                CmpOp::Ne => "!=",
-            },
-        )));
-    }
+    // Complex ordering (`<`/`<=`/`>`/`>=`) COMPUTES in numpy.ma: `np.less`/etc on
+    // complex data performs a LEXICOGRAPHIC `(real, then imag)` compare (verified
+    // live, numpy 2.4.5: `np.ma.array([1+2j]) < np.ma.array([1+3j])` -> `True`).
+    // It does NOT raise. `==`/`!=` are likewise defined (`PartialEq`). All six
+    // therefore fall through to `compute_compare`, whose complex arm computes the
+    // lexicographic ordering / equality directly (`Complex` is not `PartialOrd`,
+    // so the `ferray_ufunc` ordering ops can't be used). #874.
 
     // Cast each operand to the common dtype and wrap as a same-dtype DynMa
     // carrying its mask.
@@ -2572,22 +2562,34 @@ fn compute_compare(
         }};
     }
 
-    // Complex supports ONLY `==`/`!=` (`equal`/`not_equal` are `PartialEq`-
-    // bounded; Complex is not `PartialOrd`). The four ordering ops are guarded
-    // to a `TypeError` in `compare_op` BEFORE reaching here, so this arm is only
-    // entered for `Eq`/`Ne`; an ordering op slipping through returns an error
-    // rather than calling the unavailable `less`/etc.
-    macro_rules! cmp_eq_arm {
+    // Complex comparison. `==`/`!=` use the `PartialEq`-bounded `equal`/
+    // `not_equal`. The four ordering ops COMPUTE lexicographically, mirroring
+    // numpy's `np.less`/etc on complex (`(real, then imag)` order; verified live,
+    // numpy 2.4.5). `Complex` is NOT `PartialOrd`, so the ordering is computed
+    // directly from the `re`/`im` parts. NaN parts make every ordering compare
+    // `false` (matching `f32`/`f64` NaN semantics, which is exactly numpy's
+    // `invalid value encountered in less` -> `False`). #874.
+    macro_rules! cmp_complex_arm {
         ($l:expr, $r:expr, $T:ty) => {{
-            let la: ArrayD<$T> = broadcast_to($l.data(), bshape).map_err(ferr_to_pyerr)?;
-            let ra: ArrayD<$T> = broadcast_to($r.data(), bshape).map_err(ferr_to_pyerr)?;
+            let la: ArrayD<Complex<$T>> = broadcast_to($l.data(), bshape).map_err(ferr_to_pyerr)?;
+            let ra: ArrayD<Complex<$T>> = broadcast_to($r.data(), bshape).map_err(ferr_to_pyerr)?;
             match op {
                 CmpOp::Eq => equal(&la, &ra).map_err(ferr_to_pyerr)?,
                 CmpOp::Ne => not_equal(&la, &ra).map_err(ferr_to_pyerr)?,
-                _ => {
-                    return Err(pyo3::exceptions::PyTypeError::new_err(
-                        "complex masked-array ordering is not supported",
-                    ));
+                CmpOp::Lt | CmpOp::Le | CmpOp::Gt | CmpOp::Ge => {
+                    let out: Vec<bool> = la
+                        .iter()
+                        .zip(ra.iter())
+                        .map(|(a, b)| match op {
+                            CmpOp::Lt => a.re < b.re || (a.re == b.re && a.im < b.im),
+                            CmpOp::Le => a.re < b.re || (a.re == b.re && a.im <= b.im),
+                            CmpOp::Gt => a.re > b.re || (a.re == b.re && a.im > b.im),
+                            CmpOp::Ge => a.re > b.re || (a.re == b.re && a.im >= b.im),
+                            // unreachable: outer match guards to ordering ops.
+                            CmpOp::Eq | CmpOp::Ne => false,
+                        })
+                        .collect();
+                    ArrayD::<bool>::from_vec(IxDyn::new(bshape), out).map_err(ferr_to_pyerr)?
                 }
             }
         }};
@@ -2605,8 +2607,8 @@ fn compute_compare(
         (DynMa::U64(l), DynMa::U64(r)) => cmp_arm!(l, r, u64),
         (DynMa::F32(l), DynMa::F32(r)) => cmp_arm!(l, r, f32),
         (DynMa::F64(l), DynMa::F64(r)) => cmp_arm!(l, r, f64),
-        (DynMa::Complex32(l), DynMa::Complex32(r)) => cmp_eq_arm!(l, r, Complex<f32>),
-        (DynMa::Complex64(l), DynMa::Complex64(r)) => cmp_eq_arm!(l, r, Complex<f64>),
+        (DynMa::Complex32(l), DynMa::Complex32(r)) => cmp_complex_arm!(l, r, f32),
+        (DynMa::Complex64(l), DynMa::Complex64(r)) => cmp_complex_arm!(l, r, f64),
         _ => {
             return Err(PyValueError::new_err(
                 "internal: comparison operand dtypes were not unified before compute",
