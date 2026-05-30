@@ -46,6 +46,32 @@ def test_matrix_norm_keepdims():
     assert np.allclose(a, b)
 
 
+def test_norm_2d_default_is_frobenius():
+    # numpy.linalg.norm(x) with ord=None on a 2-D matrix is the Frobenius
+    # norm, NOT the ord=2 largest-singular-value (_linalg.py:2650 norm
+    # table: "None -> Frobenius norm / 2-norm"). Regression for #826:
+    # ferray previously returned the ord=2 spectral norm (~5.465) as the
+    # default instead of Frobenius (~5.477).
+    x = [[1.0, 2.0], [3.0, 4.0]]
+    assert np.allclose(fr.linalg.norm(x), np.linalg.norm(x))
+    # Frobenius (default) and the explicit ord=2 spectral norm must differ.
+    assert not np.allclose(fr.linalg.norm(x), fr.linalg.norm(x, 2))
+    assert np.allclose(fr.linalg.norm(x, 2), np.linalg.norm(x, 2))
+
+
+def test_norm_1d_default_is_2norm():
+    # For a 1-D vector ord=None stays the 2-norm (unchanged by #826).
+    x = [3.0, 4.0]
+    assert np.allclose(fr.linalg.norm(x), np.linalg.norm(x))
+
+
+def test_norm_2d_default_int_input_frobenius():
+    # Integer 2-D input is promoted to float64 (_commonType) and still
+    # defaults to Frobenius.
+    x = [[1, 2], [3, 4]]
+    assert np.allclose(fr.linalg.norm(x), np.linalg.norm(x))
+
+
 def test_vector_norm_default_flatten():
     x = [3.0, 4.0]
     assert np.allclose(fr.linalg.vector_norm(x), np.linalg.vector_norm(x))

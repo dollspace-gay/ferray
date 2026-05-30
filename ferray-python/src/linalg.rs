@@ -142,7 +142,20 @@ pub fn norm<'py>(
     let dt = dtype_name(&arr)?;
     let ord_value = match ord {
         Some(o) => parse_norm_order(o)?,
-        None => fl::NormOrder::L2,
+        // numpy: `ord=None` is the Frobenius norm for a 2-D matrix and the
+        // 2-norm for a vector (`_linalg.py:2650` norm table: "None →
+        // Frobenius norm / 2-norm"). The default therefore depends on the
+        // input rank, which only the binding knows from the live `ndim`.
+        // For 2-D inputs route to `Fro`; everything else (1-D, and N-D which
+        // the library flattens for `ord=None`) keeps the 2-norm.
+        None => {
+            let ndim: usize = arr.getattr("ndim")?.extract()?;
+            if ndim == 2 {
+                fl::NormOrder::Fro
+            } else {
+                fl::NormOrder::L2
+            }
+        }
     };
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
