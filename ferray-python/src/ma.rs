@@ -177,6 +177,43 @@ use pyo3::types::PyAny;
 
 use crate::conv::{coerce_dtype, ferr_to_pyerr, ma_masked_singleton, ma_nomask};
 
+/// Tri-state of the `mask=` kwarg for `ma.array`/`masked_array`/
+/// `MaskedArray(...)`. PyO3's `Option<_>` collapses an ABSENT `mask=` and an
+/// explicit `mask=None` to the same Rust `None`, but numpy distinguishes them
+/// (verified live numpy 2.4.5): `ma.array(d)` and `ma.array(d, mask=nomask)`
+/// yield `_mask is nomask`, whereas `ma.array(d, mask=None)` yields a REAL
+/// all-False `_mask` (`make_mask_none`, `numpy/ma/core.py:2904`).
+///
+/// The `mask=` parameter is typed as `MaskArg` with a `#[pyo3(from_py_with)]`
+/// extractor and a default of `MaskArg::Absent`. PyO3 only runs the extractor
+/// when the argument is SUPPLIED, so an omitted `mask=` lands on `Absent`, while
+/// a supplied `None`/`nomask`/array is classified by [`parse_mask_arg`].
+pub(crate) enum MaskArg<'py> {
+    /// `mask=` omitted entirely → `nomask`.
+    Absent,
+    /// `mask=numpy.ma.nomask` (the sentinel) → `nomask`.
+    Nomask,
+    /// `mask=None` (explicit Python `None`) → a real all-False mask.
+    ExplicitNone,
+    /// `mask=<array-like>` → an explicit (real) mask.
+    Mask(Bound<'py, PyAny>),
+}
+
+/// `#[pyo3(from_py_with)]` extractor for a SUPPLIED `mask=` argument. Classifies
+/// the object by identity (`numpy.ma.nomask`), `None`, or an array-like mask.
+/// Never runs for an omitted `mask=` (that lands on the `MaskArg::Absent`
+/// default), which is exactly what lets the binding tell absent from `None`.
+pub(crate) fn parse_mask_arg<'py>(obj: &Bound<'py, PyAny>) -> PyResult<MaskArg<'py>> {
+    let nomask = ma_nomask(obj.py())?;
+    if obj.is(&nomask) {
+        return Ok(MaskArg::Nomask);
+    }
+    if obj.is_none() {
+        return Ok(MaskArg::ExplicitNone);
+    }
+    Ok(MaskArg::Mask(obj.clone()))
+}
+
 // ---------------------------------------------------------------------------
 // MaskedArray pyclass (f64-only main slice)
 // ---------------------------------------------------------------------------
@@ -1575,97 +1612,131 @@ where
         .ok_or_else(|| PyValueError::new_err("fill value must be a scalar (got an empty array)"))
 }
 
+/// Shared `MaskedArray` constructor body on the resolved tri-state mask
+/// contract: `None` is the `nomask` path, `Some(_)` an explicit (real) mask.
+/// Called by [`PyMaskedArray::py_new`] after it disambiguates absent / `nomask`
+/// / explicit `None` / a mask array. A free function (not a `#[pymethods]`
+/// member) so it is not exposed on the Python class surface.
+fn construct_masked<'py>(
+    py: Python<'py>,
+    data: &Bound<'py, PyAny>,
+    mask: Option<&Bound<'py, PyAny>>,
+    dtype: Option<&Bound<'py, PyAny>>,
+) -> PyResult<PyMaskedArray> {
+    // Optional explicit `dtype=` (`fr.ma.array([1,2,3], dtype=np.int32)`),
+    // normalized to a canonical numpy dtype name (mirrors numpy's
+    // `array(data, dtype=...)`).
+    let dt_name: Option<String> = crate::conv::normalize_opt_dtype(py, dtype)?;
+    let dt_ref: Option<&str> = dt_name.as_deref();
+
+    // A `ferray.ma.MaskedArray` source is handled directly from its `inner`
+    // (no `numpy.asarray` round-trip): numpy's `MaskedArray.__new__` copies
+    // the source `_data`/`_mask` (`numpy/ma/core.py:2820`), so a `mask=None`
+    // fr→fr round-trip must carry the source mask (and its real-mask /
+    // nomask identity AND its native dtype) over verbatim.
+    if let Ok(src) = data.extract::<PyMaskedArray>() {
+        // Snapshot the source (a VIEW materializes its current base state —
+        // numpy's `MaskedArray.__new__` copies the source `_data`/`_mask`,
+        // `numpy/ma/core.py:2820`; a view copies the values it currently
+        // aliases).
+        let src_inner = src.snapshot(py)?;
+        // An explicit `dtype=` re-casts the source data; without it the
+        // source's native dtype variant is preserved.
+        if dt_ref.is_some() || mask.is_some() {
+            // Combine the explicit mask (if any) with the source mask
+            // (keep_mask=True default, `numpy/ma/core.py:3008`).
+            let src_mask_opt = src_inner.mask_opt_bits();
+            let combined_mask: Option<ArrayD<bool>> = match mask {
+                None => src_mask_opt
+                    .map(|bits| ArrayD::<bool>::from_vec(IxDyn::new(&src_inner.shape()), bits))
+                    .transpose()
+                    .map_err(ferr_to_pyerr)?,
+                Some(m) => {
+                    let mask_fa = extract_bool_array(py, m)?;
+                    Some(match src_mask_opt {
+                        Some(bits) => {
+                            let src_fa =
+                                ArrayD::<bool>::from_vec(IxDyn::new(&src_inner.shape()), bits)
+                                    .map_err(ferr_to_pyerr)?;
+                            or_masks(&mask_fa, &src_fa)?
+                        }
+                        None => mask_fa,
+                    })
+                }
+            };
+            let inner = match dt_ref {
+                // Re-cast through numpy: egress source data → asarray(dt).
+                Some(_) => dynma_from_input(py, &src.data_pyarray(py)?, dt_ref, combined_mask)?,
+                // Keep native dtype: re-wrap the source variant with the
+                // (possibly combined) mask.
+                None => rewrap_with_mask(&src_inner, combined_mask)?,
+            };
+            return Ok(PyMaskedArray::from_dynma(inner));
+        }
+        // `mask=None`, no `dtype=`: a plain `fr.ma.array(src)` materializes
+        // the source's current data+mask into an OWNED copy (numpy copies;
+        // a view source is snapshotted, not re-aliased).
+        return Ok(PyMaskedArray::from_dynma(src_inner));
+    }
+
+    // numpy distinguishes `nomask` (the singleton, from `ma.array(data)`
+    // with no `mask=`) from an explicit all-False mask (`mask=[0, ...]`):
+    // `MaskedArray._mask is nomask` for the former and a real bool array
+    // for the latter (`numpy/ma/core.py:1468`). We preserve that by routing
+    // `mask=None` through the `from_data` nomask sentinel and only
+    // materializing a real mask for an explicit `mask=` or a masked source.
+    //
+    // EXCEPTION (mask round-trip, #851): when `mask=None` but `data` is
+    // ITSELF a masked input carrying a REAL mask (a `numpy.ma.MaskedArray`),
+    // numpy's `MaskedArray.__new__` copies the source `_mask`
+    // (`numpy/ma/core.py:2820`). We mirror that via `source_real_mask`.
+    let mask_arg: Option<ArrayD<bool>> = match mask {
+        None => source_real_mask(py, data)?,
+        Some(m) => {
+            let mask_fa = extract_bool_array(py, m)?;
+            // keep_mask=True default: OR an explicit mask with the source's
+            // own mask when `data` is a masked source (`core.py:3008`).
+            Some(match source_real_mask(py, data)? {
+                Some(src_mask) => or_masks(&mask_fa, &src_mask)?,
+                None => mask_fa,
+            })
+        }
+    };
+    let inner = dynma_from_input(py, data, dt_ref, mask_arg)?;
+    Ok(PyMaskedArray::from_dynma(inner))
+}
+
 #[pymethods]
 impl PyMaskedArray {
     #[new]
-    #[pyo3(signature = (data, mask = None, dtype = None))]
+    #[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None))]
     fn py_new<'py>(
         py: Python<'py>,
         data: &Bound<'py, PyAny>,
-        mask: Option<&Bound<'py, PyAny>>,
+        #[pyo3(from_py_with = parse_mask_arg)] mask: MaskArg<'py>,
         dtype: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Self> {
-        // Optional explicit `dtype=` (`fr.ma.array([1,2,3], dtype=np.int32)`),
-        // normalized to a canonical numpy dtype name (mirrors numpy's
-        // `array(data, dtype=...)`).
-        let dt_name: Option<String> = crate::conv::normalize_opt_dtype(py, dtype)?;
-        let dt_ref: Option<&str> = dt_name.as_deref();
-
-        // A `ferray.ma.MaskedArray` source is handled directly from its `inner`
-        // (no `numpy.asarray` round-trip): numpy's `MaskedArray.__new__` copies
-        // the source `_data`/`_mask` (`numpy/ma/core.py:2820`), so a `mask=None`
-        // fr→fr round-trip must carry the source mask (and its real-mask /
-        // nomask identity AND its native dtype) over verbatim.
-        if let Ok(src) = data.extract::<PyMaskedArray>() {
-            // Snapshot the source (a VIEW materializes its current base state —
-            // numpy's `MaskedArray.__new__` copies the source `_data`/`_mask`,
-            // `numpy/ma/core.py:2820`; a view copies the values it currently
-            // aliases).
-            let src_inner = src.snapshot(py)?;
-            // An explicit `dtype=` re-casts the source data; without it the
-            // source's native dtype variant is preserved.
-            if dt_ref.is_some() || mask.is_some() {
-                // Combine the explicit mask (if any) with the source mask
-                // (keep_mask=True default, `numpy/ma/core.py:3008`).
-                let src_mask_opt = src_inner.mask_opt_bits();
-                let combined_mask: Option<ArrayD<bool>> = match mask {
-                    None => src_mask_opt
-                        .map(|bits| ArrayD::<bool>::from_vec(IxDyn::new(&src_inner.shape()), bits))
-                        .transpose()
-                        .map_err(ferr_to_pyerr)?,
-                    Some(m) => {
-                        let mask_fa = extract_bool_array(py, m)?;
-                        Some(match src_mask_opt {
-                            Some(bits) => {
-                                let src_fa =
-                                    ArrayD::<bool>::from_vec(IxDyn::new(&src_inner.shape()), bits)
-                                        .map_err(ferr_to_pyerr)?;
-                                or_masks(&mask_fa, &src_fa)?
-                            }
-                            None => mask_fa,
-                        })
-                    }
-                };
-                let inner = match dt_ref {
-                    // Re-cast through numpy: egress source data → asarray(dt).
-                    Some(_) => dynma_from_input(py, &src.data_pyarray(py)?, dt_ref, combined_mask)?,
-                    // Keep native dtype: re-wrap the source variant with the
-                    // (possibly combined) mask.
-                    None => rewrap_with_mask(&src_inner, combined_mask)?,
-                };
-                return Ok(Self::from_dynma(inner));
+        // Resolve numpy's `mask=` tri-state ([`MaskArg`]) into the shared
+        // [`construct_masked`] body's `Option<&Bound>` contract (`None` = nomask
+        // path; `Some(_)` = explicit real mask):
+        //   * Absent / Nomask  → `None`  (nomask path, UNCHANGED, #848/#849/#851)
+        //   * ExplicitNone     → a real all-False mask of `data`'s shape, routed
+        //                        as an explicit mask so a masked source still ORs
+        //                        its own mask in (keep_mask=True, #855/#851):
+        //                        all-False OR src == src
+        //   * Mask(m)          → `Some(&m)` (explicit mask, UNCHANGED)
+        match mask {
+            MaskArg::Absent | MaskArg::Nomask => construct_masked(py, data, None, dtype),
+            MaskArg::ExplicitNone => {
+                // numpy's `make_mask_none(data.shape)` (`numpy/ma/core.py:2904`):
+                // an all-False bool mask shaped like `data`.
+                let shape = crate::conv::as_ndarray(py, data)?.getattr("shape")?;
+                let np = py.import("numpy")?;
+                let all_false = np.call_method1("zeros", (shape, np.getattr("bool_")?))?;
+                construct_masked(py, data, Some(&all_false), dtype)
             }
-            // `mask=None`, no `dtype=`: a plain `fr.ma.array(src)` materializes
-            // the source's current data+mask into an OWNED copy (numpy copies;
-            // a view source is snapshotted, not re-aliased).
-            return Ok(Self::from_dynma(src_inner));
+            MaskArg::Mask(m) => construct_masked(py, data, Some(&m), dtype),
         }
-
-        // numpy distinguishes `nomask` (the singleton, from `ma.array(data)`
-        // with no `mask=`) from an explicit all-False mask (`mask=[0, ...]`):
-        // `MaskedArray._mask is nomask` for the former and a real bool array
-        // for the latter (`numpy/ma/core.py:1468`). We preserve that by routing
-        // `mask=None` through the `from_data` nomask sentinel and only
-        // materializing a real mask for an explicit `mask=` or a masked source.
-        //
-        // EXCEPTION (mask round-trip, #851): when `mask=None` but `data` is
-        // ITSELF a masked input carrying a REAL mask (a `numpy.ma.MaskedArray`),
-        // numpy's `MaskedArray.__new__` copies the source `_mask`
-        // (`numpy/ma/core.py:2820`). We mirror that via `source_real_mask`.
-        let mask_arg: Option<ArrayD<bool>> = match mask {
-            None => source_real_mask(py, data)?,
-            Some(m) => {
-                let mask_fa = extract_bool_array(py, m)?;
-                // keep_mask=True default: OR an explicit mask with the source's
-                // own mask when `data` is a masked source (`core.py:3008`).
-                Some(match source_real_mask(py, data)? {
-                    Some(src_mask) => or_masks(&mask_fa, &src_mask)?,
-                    None => mask_fa,
-                })
-            }
-        };
-        let inner = dynma_from_input(py, data, dt_ref, mask_arg)?;
-        Ok(Self::from_dynma(inner))
     }
 
     /// Underlying data buffer as a `numpy.ndarray` of the NATIVE dtype.
@@ -4701,12 +4772,16 @@ fn put_err_to_pyerr(e: ferray_core::FerrayError) -> PyErr {
 }
 
 /// `numpy.ma.array(data, mask=None, dtype=None)`.
+///
+/// `mask=` defaults to [`MaskArg::Absent`] (not `None`) so an ABSENT `mask=`
+/// and an explicit `mask=None` stay distinguishable through to
+/// [`PyMaskedArray::py_new`]'s tri-state resolution.
 #[pyfunction]
-#[pyo3(signature = (data, mask = None, dtype = None))]
+#[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None))]
 pub fn array<'py>(
     py: Python<'py>,
     data: &Bound<'py, PyAny>,
-    mask: Option<&Bound<'py, PyAny>>,
+    #[pyo3(from_py_with = parse_mask_arg)] mask: MaskArg<'py>,
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<PyMaskedArray> {
     PyMaskedArray::py_new(py, data, mask, dtype)
@@ -4714,11 +4789,11 @@ pub fn array<'py>(
 
 /// `numpy.ma.masked_array(data, mask=None, dtype=None)` — alias for `array`.
 #[pyfunction]
-#[pyo3(signature = (data, mask = None, dtype = None))]
+#[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None))]
 pub fn masked_array<'py>(
     py: Python<'py>,
     data: &Bound<'py, PyAny>,
-    mask: Option<&Bound<'py, PyAny>>,
+    #[pyo3(from_py_with = parse_mask_arg)] mask: MaskArg<'py>,
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<PyMaskedArray> {
     PyMaskedArray::py_new(py, data, mask, dtype)

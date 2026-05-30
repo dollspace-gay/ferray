@@ -48,11 +48,19 @@ INT_DTYPES = [
 ]
 
 
+# `mask=None` (explicit) builds a REAL all-False mask in both numpy and ferray
+# (#886); these helpers intend a genuine *nomask* array when no mask is given, so
+# they OMIT `mask=` entirely (the absent path -> nomask) rather than forwarding
+# `mask=None`.
 def _fr(data, mask=None, dtype=None):
+    if mask is None:
+        return fr.ma.array(data, dtype=dtype)
     return fr.ma.array(data, mask=mask, dtype=dtype)
 
 
 def _np(data, mask=None, dtype=None):
+    if mask is None:
+        return np.ma.array(data, dtype=dtype)
     return np.ma.array(data, mask=mask, dtype=dtype)
 
 
