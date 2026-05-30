@@ -954,39 +954,57 @@ where
 // ---------------------------------------------------------------------------
 
 /// Elementwise addition with broadcasting.
+///
+/// Integer dtypes wrap on overflow (NumPy fixed-width contract —
+/// `np.add(int8([100,100]), int8([100])) == [-56,-56]`), via
+/// [`WrappingArith`]; floats are unchanged. Mirrors the same-shape [`add`]
+/// (#88). NumPy registers fixed-width integer `add` loops at
+/// `generate_umath.py:355` (`TD(no_bool_times_obj, ..., ('loops_autovec', ints))`).
 pub fn add_broadcast<T, D1, D2>(a: &Array<T, D1>, b: &Array<T, D2>) -> FerrayResult<Array<T, IxDyn>>
 where
-    T: Element + std::ops::Add<Output = T> + Copy,
+    T: Element + WrappingArith,
     D1: Dimension,
     D2: Dimension,
 {
-    binary_broadcast_op(a, b, |x, y| x + y)
+    binary_broadcast_op(a, b, WrappingArith::wadd)
 }
 
 /// Elementwise subtraction with broadcasting.
+///
+/// Integer dtypes wrap on overflow (NumPy fixed-width contract —
+/// `np.subtract(int8([-100,-100]), int8([100])) == [56,56]`), via
+/// [`WrappingArith`]; floats are unchanged. Mirrors the same-shape
+/// [`subtract`] (#88). NumPy registers fixed-width integer `subtract` loops
+/// at `generate_umath.py:371`.
 pub fn subtract_broadcast<T, D1, D2>(
     a: &Array<T, D1>,
     b: &Array<T, D2>,
 ) -> FerrayResult<Array<T, IxDyn>>
 where
-    T: Element + std::ops::Sub<Output = T> + Copy,
+    T: Element + WrappingArith,
     D1: Dimension,
     D2: Dimension,
 {
-    binary_broadcast_op(a, b, |x, y| x - y)
+    binary_broadcast_op(a, b, WrappingArith::wsub)
 }
 
 /// Elementwise multiplication with broadcasting.
+///
+/// Integer dtypes wrap on overflow (NumPy fixed-width contract —
+/// `np.multiply(int8([100,100]), int8([100])) == [16,16]`), via
+/// [`WrappingArith`]; floats are unchanged. Mirrors the same-shape
+/// [`multiply`] (#88). NumPy registers fixed-width integer `multiply` loops
+/// at `generate_umath.py:386`.
 pub fn multiply_broadcast<T, D1, D2>(
     a: &Array<T, D1>,
     b: &Array<T, D2>,
 ) -> FerrayResult<Array<T, IxDyn>>
 where
-    T: Element + std::ops::Mul<Output = T> + Copy,
+    T: Element + WrappingArith,
     D1: Dimension,
     D2: Dimension,
 {
-    binary_broadcast_op(a, b, |x, y| x * y)
+    binary_broadcast_op(a, b, WrappingArith::wmul)
 }
 
 /// Elementwise *true* division with `NumPy` broadcasting.
