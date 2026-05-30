@@ -944,8 +944,15 @@ fn complex_lt<C: ComplexParts>(a: C, b: C) -> bool {
 /// complex `mean` keeps the imaginary part and ALWAYS promotes to `complex128`
 /// (verified live numpy 2.4.5: a `complex64` masked array's `.mean().dtype` is
 /// `complex128`). Computed as the complex sum of unmasked slots divided by the
-/// unmasked count (`numpy/ma/core.py:5417` `_mean` = `sum / count`). Returns
-/// `None` when every element is masked (caller maps that to `numpy.ma.masked`).
+/// unmasked count: `numpy/ma/core.py:5419` evaluates `result = dsum * 1. / cnt`,
+/// i.e. the complex scalar `dsum` divided by the REAL count `cnt` through
+/// numpy's complex-division umath loop, NOT a per-component real divide. With a
+/// purely-real divisor `cnt = (n, 0)` that loop reduces (Smith's algorithm,
+/// `complex_smith_div` in ferray-ufunc/src/ops/arithmetic.rs, added #875) to
+/// `re*(1/n)` / `im*(1/n)` — a reciprocal-MULTIPLY, which rounds to the same
+/// last bit as numpy and one ULP below the naive `re/n` (verified hex-exact vs
+/// `np.ma.array([1+2j,3-1j,2+0j,4+4j],mask=[0,1,0,0]).mean()`). Returns `None`
+/// when every element is masked (caller maps that to `numpy.ma.masked`).
 fn ma_complex_mean<T>(m: &RustMa<Complex<T>, IxDyn>) -> Option<Complex<f64>>
 where
     Complex<T>: ferray_core::Element + ComplexParts,
@@ -963,16 +970,25 @@ where
     if count == 0 {
         return None;
     }
-    let n = count as f64;
-    Some(Complex::new(acc.re / n, acc.im / n))
+    // Smith complex-division of `acc / (n + 0j)`: with the imaginary divisor
+    // component zero and `n > 0`, `rat = 0`, `scl = 1/n`, so each component is
+    // `acc.re * scl` / `acc.im * scl` — the reciprocal-MULTIPLY numpy's complex
+    // `dsum / cnt` performs, bit-identical to numpy (not the naive `acc.re/n`).
+    let scl = 1.0 / count as f64;
+    Some(Complex::new(acc.re * scl, acc.im * scl))
 }
 
 /// Variance of the unmasked complex elements as a REAL `f64` — numpy's complex
-/// variance is `mean(|x - mean|²)` where `|z|² = re² + im²`, a REAL quantity,
-/// and ALWAYS returns `float64` regardless of input width (verified live numpy
-/// 2.4.5: both `complex64`/`complex128` `.var().dtype` are `float64`). `ddof`
-/// matches numpy's default `0` (divisor = unmasked count). Returns `None` when
-/// every element is masked (caller maps to `numpy.ma.masked`).
+/// variance is `mean(|x - mean|²)`, a REAL quantity, and ALWAYS returns
+/// `float64` regardless of input width (verified live numpy 2.4.5: both
+/// `complex64`/`complex128` `.var().dtype` are `float64`). `numpy/ma/core.py:5513`
+/// computes `danom = umath.absolute(danom) ** 2`, i.e. `|z|² = hypot(re, im)²`
+/// (the f64 `hypot` THEN squared) — which rounds to a different last bit than
+/// the naive `re² + im²` (verified hex-exact vs `np.ma.array([1.5+2.5j,3.5-1.5j,
+/// 0.5+0.5j,4.5+4.5j],mask=[0,1,0,0]).var()` only with `hypot`). The mean it
+/// subtracts is the corrected reciprocal-multiply mean (`ma_complex_mean`, the
+/// two divergences are coupled). `ddof` matches numpy's default `0` (divisor =
+/// unmasked count). Returns `None` when every element is masked.
 fn ma_complex_var<T>(m: &RustMa<Complex<T>, IxDyn>) -> Option<f64>
 where
     Complex<T>: ferray_core::Element + ComplexParts,
@@ -986,7 +1002,9 @@ where
         }
         let dr = v.re_f64() - mean.re;
         let di = v.im_f64() - mean.im;
-        sq_sum += dr * dr + di * di;
+        // |x - mean|² as `hypot(dr, di)²`, matching numpy's
+        // `umath.absolute(danom) ** 2` (NOT the naive `dr*dr + di*di`).
+        sq_sum += dr.hypot(di).powi(2);
         count += 1;
     }
     // `count` is the same unmasked count `ma_complex_mean` saw as non-zero, so
@@ -1400,7 +1418,12 @@ impl PyMaskedArray {
             }
         };
         match complex_var {
-            Some(v) => Ok(v.into_pyobject(py)?.into_any()),
+            // Egress as `np.float64` (not a bare Python `float`): numpy's complex
+            // `var` returns an `np.float64` scalar (R-DEV-3 output-object
+            // contract). `scalar_pyobject` wraps the `f64` in a 1-element ndarray
+            // and indexes `[0]`, preserving the numpy dtype across the boundary
+            // (R-CODE-4), where `into_pyobject` would drop it to a Python float.
+            Some(v) => scalar_pyobject(py, v),
             None => ma_masked_singleton(py),
         }
     }
@@ -1422,7 +1445,9 @@ impl PyMaskedArray {
             }
         };
         match complex_var {
-            Some(v) => Ok(v.sqrt().into_pyobject(py)?.into_any()),
+            // `std = sqrt(var)`, egressed as `np.float64` (numpy's complex `std`
+            // returns an `np.float64` scalar — same R-DEV-3 contract as `var`).
+            Some(v) => scalar_pyobject(py, v.sqrt()),
             None => ma_masked_singleton(py),
         }
     }
