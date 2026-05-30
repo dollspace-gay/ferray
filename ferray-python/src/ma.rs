@@ -1478,6 +1478,63 @@ impl PyMaskedArray {
         };
         compare_op(py, &self.inner, other, cmp)
     }
+
+    // -- Bitwise / shift dunders (#865, REQ-3 R-C) ----------------------------
+    //
+    // `&`/`|`/`^`/`<<`/`>>` and their reflected forms. Unlike `numpy.ma`'s
+    // arithmetic operators (overridden to delegate to `add`/`subtract`/… on the
+    // `_MaskedBinaryOperation` engine), `numpy.ma.MaskedArray` does NOT override
+    // the bitwise/shift dunders at all — they are inherited from `ndarray` and
+    // routed through `numpy.bitwise_and` / `numpy.left_shift` etc. on the
+    // subclass, which (a) preserves NEP-50 *weak* scalar promotion
+    // (`int8 & 1 -> int8`, not the int64 that arithmetic's `np.asarray(1)`
+    // funnel would give — verified live numpy 2.4.5) and (b) propagates the
+    // operand-union mask (`(a & b).mask == a.mask | b.mask`, verified live).
+    //
+    // Bitwise ops are defined for INTEGER + BOOL dtypes only; a float operand
+    // raises `TypeError` (numpy has no `bitwise_and`/`left_shift` float loop).
+    // All of this is funneled through [`bitwise_op`].
+
+    /// `a & b` — `numpy.bitwise_and` (inherited `ndarray.__and__`).
+    fn __and__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        bitwise_op(py, &self.inner, other, BitOp::And, false)
+    }
+    /// `b & a` — reflected `__rand__`.
+    fn __rand__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        bitwise_op(py, &self.inner, other, BitOp::And, true)
+    }
+    /// `a | b` — `numpy.bitwise_or` (inherited `ndarray.__or__`).
+    fn __or__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        bitwise_op(py, &self.inner, other, BitOp::Or, false)
+    }
+    /// `b | a` — reflected `__ror__`.
+    fn __ror__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        bitwise_op(py, &self.inner, other, BitOp::Or, true)
+    }
+    /// `a ^ b` — `numpy.bitwise_xor` (inherited `ndarray.__xor__`).
+    fn __xor__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        bitwise_op(py, &self.inner, other, BitOp::Xor, false)
+    }
+    /// `b ^ a` — reflected `__rxor__`.
+    fn __rxor__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        bitwise_op(py, &self.inner, other, BitOp::Xor, true)
+    }
+    /// `a << n` — `numpy.left_shift` (inherited `ndarray.__lshift__`).
+    fn __lshift__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        bitwise_op(py, &self.inner, other, BitOp::Lshift, false)
+    }
+    /// `n << a` — reflected `__rlshift__`.
+    fn __rlshift__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        bitwise_op(py, &self.inner, other, BitOp::Lshift, true)
+    }
+    /// `a >> n` — `numpy.right_shift` (inherited `ndarray.__rshift__`).
+    fn __rshift__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        bitwise_op(py, &self.inner, other, BitOp::Rshift, false)
+    }
+    /// `n >> a` — reflected `__rrshift__`.
+    fn __rrshift__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        bitwise_op(py, &self.inner, other, BitOp::Rshift, true)
+    }
 }
 
 /// Wrap a unary-op result (already in the source's native dtype `T`) back into
@@ -2085,6 +2142,272 @@ fn compute_compare(
     let data = ArrayD::<bool>::from_vec(IxDyn::new(bshape), out).map_err(ferr_to_pyerr)?;
     let mask = ArrayD::<bool>::from_vec(IxDyn::new(bshape), union).map_err(ferr_to_pyerr)?;
     Ok((data, mask))
+}
+
+/// The five `numpy.ma` bitwise / shift operators. `numpy.ma` inherits these
+/// from `ndarray` (no override), so each maps directly onto the matching
+/// `numpy.*` ufunc: `bitwise_and`/`bitwise_or`/`bitwise_xor` (`numpy/ma/core.py:1311`-`:1313`)
+/// and `left_shift`/`right_shift` (`numpy/ma/core.py:7411`/`:7459`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BitOp {
+    And,
+    Or,
+    Xor,
+    Lshift,
+    Rshift,
+}
+
+impl BitOp {
+    /// Whether this op is a shift (`<<`/`>>`). Shifts promote `bool` to an
+    /// integer result and accept negative / overflowing counts (numpy clamps
+    /// to 0), so their data is computed by numpy's C ufunc loop rather than the
+    /// `ferray_ufunc` `left_shift`/`right_shift` (whose `u32` count signature
+    /// cannot represent numpy's negative shift counts, and whose `x << s`
+    /// would panic for `s >= bit-width` — R-CODE-2).
+    fn is_shift(self) -> bool {
+        matches!(self, BitOp::Lshift | BitOp::Rshift)
+    }
+}
+
+/// Compute one of the five masked bitwise / shift operators.
+///
+/// `numpy.ma.MaskedArray` does NOT override `__and__`/`__or__`/`__xor__`/
+/// `__lshift__`/`__rshift__`; they are inherited from `ndarray` and routed
+/// through the corresponding `numpy.*` ufunc on the masked subclass. The
+/// observable contract (verified live, numpy 2.4.5):
+///
+/// * **dtype** — NEP-50 *weak* scalar promotion: `int8 & 1 -> int8` (a Python
+///   scalar stays weak, unlike arithmetic's `np.asarray(1) -> int64` funnel).
+///   `bool & bool -> bool`; `bool & 1 -> int64`; `bool & int8 -> int8`. Shifts
+///   promote `bool` operands to an integer result (`bool << bool -> int8`,
+///   `bool << 1 -> int64`). The common dtype is `numpy.result_type(recv, other)`
+///   with the raw (un-asarray'd) `other`, so a Python scalar is weak.
+/// * **domain** — bitwise ops are defined for integer + bool ONLY. A FLOAT
+///   operand raises `TypeError` (numpy has no float `bitwise_and`/`left_shift`
+///   loop): `np.ma.array([1.0]) & 1 -> TypeError`.
+/// * **mask** — operand union: `(a & b).mask == getmaskarray(a) |
+///   getmaskarray(b)` (broadcast). Two nomask operands keep the `nomask`
+///   sentinel (`np.ma.getmask(np.ma.array([1,2]) & 1) is np.ma.nomask`,
+///   verified live) — bitwise is NON-domained, like `+`/`-`/`*`.
+/// * **data** — the raw ufunc result over the underlying data (numpy does NOT
+///   revert masked positions for the ndarray-inherited path; masked-position
+///   data is "don't care" anyway).
+///
+/// `reflected` computes `other OP self` (the `__r*__` dunders).
+fn bitwise_op(
+    py: Python<'_>,
+    recv: &DynMa,
+    other: &Bound<'_, PyAny>,
+    op: BitOp,
+    reflected: bool,
+) -> PyResult<Py<PyAny>> {
+    // Receiver operand as (ndarray, mask, has-real-mask).
+    let recv_data = dynma_data_pyarray(py, recv)?;
+    let recv_mask = recv.mask_bits()?;
+    let recv_real = recv.has_real_mask();
+
+    // Other operand: a `fr.ma`/`numpy.ma`/plain array-like/scalar. We carry:
+    //   * `other_obj` — the operand to feed `numpy.result_type` for NEP-50
+    //     promotion. For a Python `int`/`bool` scalar this is the RAW object so
+    //     it stays a *weak* scalar (`int8 & 1 -> int8`); for any array-like it
+    //     is the materialized ndarray (a raw Python list would be mis-parsed by
+    //     `result_type` as a structured-dtype descriptor).
+    //   * `other_data` — the materialized data ndarray (native dtype).
+    //   * the operand's full bool mask + real-mask flag.
+    let (other_obj, other_data, other_mask, other_real): (
+        Bound<'_, PyAny>,
+        Bound<'_, PyAny>,
+        ArrayD<bool>,
+        bool,
+    ) = if let Ok(m) = other.extract::<PyMaskedArray>() {
+        let d = m.data_pyarray(py)?;
+        (d.clone(), d, m.inner.mask_bits()?, m.inner.has_real_mask())
+    } else {
+        let data = crate::conv::as_ndarray(py, other)?;
+        let np_ma = py.import("numpy")?.getattr("ma")?;
+        let mask_obj = np_ma.call_method1("getmaskarray", (other,))?;
+        let mask = extract_bool_array(py, &mask_obj)?;
+        let real = source_real_mask(py, other)?.is_some();
+        // A bare Python int/bool stays weak for `result_type`; anything else
+        // (list, ndarray, numpy scalar) uses the materialized strong array.
+        let is_py_scalar = (other.is_instance_of::<pyo3::types::PyInt>()
+            || other.is_instance_of::<pyo3::types::PyBool>())
+            && !other.hasattr("dtype")?;
+        let weak = if is_py_scalar {
+            other.clone()
+        } else {
+            data.clone()
+        };
+        (weak, data, mask, real)
+    };
+
+    // Left / right ordering: reflected ops compute `other OP self`.
+    let (l_obj, l_data, lm, l_real, r_obj, r_data, rm, r_real) = if reflected {
+        (
+            &other_obj,
+            &other_data,
+            other_mask,
+            other_real,
+            &recv_data,
+            &recv_data,
+            recv_mask,
+            recv_real,
+        )
+    } else {
+        (
+            &recv_data,
+            &recv_data,
+            recv_mask,
+            recv_real,
+            &other_obj,
+            &other_data,
+            other_mask,
+            other_real,
+        )
+    };
+
+    // NEP-50 weak-aware common dtype: `result_type(left_raw, right_raw)`. A
+    // Python scalar operand stays weak here (`int8 & 1 -> int8`), matching the
+    // ndarray-inherited bitwise path numpy.ma uses.
+    let result_dt = crate::conv::binary_result_dtype(py, l_obj, r_obj)?;
+
+    // Bitwise is integer/bool ONLY: a float common dtype means a float operand
+    // was present -> numpy raises `TypeError` (no float bitwise loop).
+    if matches!(result_dt.as_str(), "float16" | "float32" | "float64") {
+        let name = match op {
+            BitOp::And => "bitwise_and",
+            BitOp::Or => "bitwise_or",
+            BitOp::Xor => "bitwise_xor",
+            BitOp::Lshift => "left_shift",
+            BitOp::Rshift => "right_shift",
+        };
+        return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "ufunc '{name}' not supported for the input types, and the inputs could not be \
+             safely coerced to any supported types according to the casting rule ''safe''"
+        )));
+    }
+
+    // Compute the result DATA + result-variant dtype, and the broadcast result
+    // shape (numpy raises ValueError on a broadcast mismatch). Shifts get the
+    // RAW operands so numpy preserves weak-scalar promotion (`int32 << 1 ->
+    // int32`, not the int64 `np.asarray(1)` would force); `&`/`|`/`^` use the
+    // materialized data cast to the NEP-50 `result_dt`.
+    let (data, bshape) = compute_bitwise(py, l_obj, r_obj, l_data, r_data, &result_dt, op)?;
+
+    // Broadcast both operand masks to the result shape and union them.
+    let lmask = ferray_core::manipulation::broadcast_to(&lm, &bshape).map_err(ferr_to_pyerr)?;
+    let rmask = ferray_core::manipulation::broadcast_to(&rm, &bshape).map_err(ferr_to_pyerr)?;
+    let union: Vec<bool> = lmask
+        .iter()
+        .zip(rmask.iter())
+        .map(|(&a, &b)| a || b)
+        .collect();
+    let union_arr = ArrayD::<bool>::from_vec(IxDyn::new(&bshape), union).map_err(ferr_to_pyerr)?;
+
+    // Non-domained: keep the `nomask` sentinel when BOTH operands are nomask
+    // (`np.ma.getmask(np.ma.array([1,2]) & 1) is np.ma.nomask`, verified live),
+    // else materialize the real union mask.
+    let want_real = l_real || r_real;
+    let inner = if want_real {
+        rewrap_dynma_with_mask(data, union_arr)?
+    } else {
+        strip_mask(data)?
+    };
+    Ok(Py::new(py, PyMaskedArray::from_dynma(inner))?.into_any())
+}
+
+/// Compute the data buffer of a masked bitwise / shift op over two array-likes,
+/// returning the result `DynMa` (in the NEP-50 result dtype) and the broadcast
+/// result shape.
+///
+/// * `&`/`|`/`^`: both operands are cast to `result_dt` (the NEP-50 common
+///   dtype) and the data is computed by the matching `ferray_ufunc` op
+///   (`bitwise_and`/`bitwise_or`/`bitwise_xor`), which is generic over
+///   `i8..i64, u8..u64, bool` (`ferray-ufunc/src/ops/bitwise.rs`,
+///   `impl_bitwise_ops!`). `result_dt` already encodes numpy's promotion
+///   (`bool & bool -> bool`, `int8 & int16 -> int16`).
+/// * `<<`/`>>`: the data is computed by numpy's `left_shift`/`right_shift`
+///   ufunc directly. numpy's shift edge-cases — `bool` promotion, negative
+///   shift counts (clamp to 0), and counts `>= bit-width` (`<<` -> 0; `>>` ->
+///   sign-fill for signed, 0 for unsigned) — are faithfully produced by the C
+///   loop; the `ferray_ufunc` `left_shift`/`right_shift` take a `u32` count
+///   (cannot represent a negative count) and would panic for `s >= bit-width`
+///   (`x << s`), so they are unsuitable here (R-CODE-2: no panics).
+fn compute_bitwise<'py>(
+    py: Python<'py>,
+    l_obj: &Bound<'py, PyAny>,
+    r_obj: &Bound<'py, PyAny>,
+    l_data: &Bound<'py, PyAny>,
+    r_data: &Bound<'py, PyAny>,
+    result_dt: &str,
+    op: BitOp,
+) -> PyResult<(DynMa, Vec<usize>)> {
+    use ferray_core::manipulation::broadcast_to;
+    use ferray_ufunc::ops::bitwise::{bitwise_and, bitwise_or, bitwise_xor};
+
+    if op.is_shift() {
+        // Delegate the shift compute to numpy's ufunc on the RAW operands (so a
+        // Python scalar stays a weak NEP-50 scalar: `int32 << 1 -> int32`),
+        // faithful for every edge case (negative / overflow counts, bool
+        // promotion), then ingest the native-dtype ndarray as a `DynMa`.
+        let np = py.import("numpy")?;
+        let fname = if op == BitOp::Lshift {
+            "left_shift"
+        } else {
+            "right_shift"
+        };
+        let out = np.getattr(fname)?.call1((l_obj, r_obj))?;
+        let dynma = build_dynma(&out, None)?;
+        let shape = dynma.shape();
+        return Ok((dynma, shape));
+    }
+
+    // `&`/`|`/`^`: cast both operands to the NEP-50 common dtype and compose
+    // the matching `ferray_ufunc` op over the unified variant.
+    let left = build_dynma(&coerce_dtype(py, l_data, result_dt)?, None)?;
+    let right = build_dynma(&coerce_dtype(py, r_data, result_dt)?, None)?;
+
+    let bshape = ferray_core::dimension::broadcast::broadcast_shapes(&left.shape(), &right.shape())
+        .map_err(|_| {
+            PyValueError::new_err(format!(
+                "operands could not be broadcast together with shapes {:?} {:?}",
+                left.shape(),
+                right.shape()
+            ))
+        })?;
+
+    macro_rules! bit_arm {
+        ($l:expr, $r:expr, $T:ty, $variant:ident) => {{
+            let la: ArrayD<$T> = broadcast_to($l.data(), &bshape).map_err(ferr_to_pyerr)?;
+            let ra: ArrayD<$T> = broadcast_to($r.data(), &bshape).map_err(ferr_to_pyerr)?;
+            let out = match op {
+                BitOp::And => bitwise_and(&la, &ra).map_err(ferr_to_pyerr)?,
+                BitOp::Or => bitwise_or(&la, &ra).map_err(ferr_to_pyerr)?,
+                BitOp::Xor => bitwise_xor(&la, &ra).map_err(ferr_to_pyerr)?,
+                // Shifts are handled above; unreachable in this arm.
+                BitOp::Lshift | BitOp::Rshift => bitwise_and(&la, &ra).map_err(ferr_to_pyerr)?,
+            };
+            DynMa::$variant(RustMa::from_data(out).map_err(ferr_to_pyerr)?)
+        }};
+    }
+
+    let data = match (&left, &right) {
+        (DynMa::Bool(l), DynMa::Bool(r)) => bit_arm!(l, r, bool, Bool),
+        (DynMa::I8(l), DynMa::I8(r)) => bit_arm!(l, r, i8, I8),
+        (DynMa::I16(l), DynMa::I16(r)) => bit_arm!(l, r, i16, I16),
+        (DynMa::I32(l), DynMa::I32(r)) => bit_arm!(l, r, i32, I32),
+        (DynMa::I64(l), DynMa::I64(r)) => bit_arm!(l, r, i64, I64),
+        (DynMa::U8(l), DynMa::U8(r)) => bit_arm!(l, r, u8, U8),
+        (DynMa::U16(l), DynMa::U16(r)) => bit_arm!(l, r, u16, U16),
+        (DynMa::U32(l), DynMa::U32(r)) => bit_arm!(l, r, u32, U32),
+        (DynMa::U64(l), DynMa::U64(r)) => bit_arm!(l, r, u64, U64),
+        _ => {
+            return Err(PyValueError::new_err(
+                "internal: bitwise operand dtypes were not unified before compute",
+            ));
+        }
+    };
+    Ok((data, bshape))
 }
 
 /// Revert `result` to the left operand `la` at every masked position, building
