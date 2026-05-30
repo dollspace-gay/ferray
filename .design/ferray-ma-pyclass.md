@@ -95,11 +95,12 @@ pyclass, dispatched at each method.
 | REQ | Status | Evidence |
 |---|---|---|
 | REQ-1 (subscripting) | NOT-STARTED | No `__getitem__`/`__setitem__` on `PyMaskedArray` (`grep '__getitem__\|__setitem__' ma.rs` → empty). Live: `fr.ma.array([1,2,3])[0]` raises `TypeError: not subscriptable`; `a[0]=5` raises `TypeError: does not support item assignment`. The library primitives exist (`pub fn data`, `pub fn data_mut`, `pub fn mask`, `pub fn set_mask_flat`, `pub fn put` in `masked_array.rs`/`put.rs`); only the binding `#[pymethods]` are absent. Open prereq blocker #852. |
-| REQ-2 (dtype preservation) | NOT-STARTED | `PyMaskedArray { inner: RustMa<f64, IxDyn> }` and `fn dtype` returns the literal `"float64"`; every constructor routes through `fn coerce_dtype` = `numpy.asarray(obj,"float64")`, a lossy int→f64 cast at the boundary (R-CODE-4 violation). Live: `fr.ma.array([1,2,3]).filled().dtype` is `float64`, numpy `int64`. Library is generic (`MaskedArray<T: Element, D>`), so this is binding marshalling. Open prereq blocker #853. |
+| REQ-2 (dtype preservation) | SHIPPED | `PyMaskedArray { inner: DynMa }` where `enum DynMa` (`ma.rs`) holds one `RustMa<T, IxDyn>` per real dtype (the conv.rs `DynArray` shape), dispatched by the `match_ma!` macro (`ma.rs`). Construction infers the input dtype via `fn build_dynma`/`fn dynma_from_input` (`numpy.asarray` + `dtype_name`, NO `"float64"` cast); `fn dtype` returns `DynMa::dtype_name` (the native name). Non-test production consumers: the `#[pymethods] fn data`/`fn filled`/`fn dtype`/`fn __getitem__`/`fn __setitem__`/`fn put`/`fn fill_value` registrations on `PyMaskedArray` and the `#[pyfunction] fn array`/`fn masked_array`/`fn filled`/`fn put`/`fn putmask`/`fn count`/`fn set_fill_value` free functions in `ma.rs` (all dispatch the active variant). Live now: `fr.ma.array([1,2,3]).dtype == "int64"`, `.filled().dtype == int64`; `fr.ma.array([True,False],mask=[1,0]).dtype == "bool"`; `fr.ma.array([1,2,3],dtype=np.int32).dtype == "int32"`. Verified by `tests/test_expansion_ma_dtype.py` (109 cases vs numpy.ma oracle). COMPLEX/structured remain on the delegation/f64 paths (follow-up). Closed #853. |
 | REQ-3 (mask round-trip) | NOT-STARTED | `fn py_new` with `mask=None` routes the input (incl. a `numpy.ma.MaskedArray`) through `coerce_dtype(..,"float64")` = `numpy.asarray(...)`, which DROPS the `_mask`, then `RustMa::from_data` → nomask sentinel. Live: `fr.ma.array(np.ma.array([1,2,3],mask=[1,0,0])).mask` returns `False` (scalar nomask), numpy returns `array([True,False,False])`. Note `fn extract_values_with_mask in ma.rs` ALREADY reads a numpy.ma mask via `numpy.ma.getmaskarray` for the `put`/`putmask` value path — the same read can feed the constructor. Open prereq blocker #851. |
 
-All three NOT-STARTED — this is a scoping doc for unbuilt work; no SHIPPED claims are
-made (R-HONEST-3, honest underclaim).
+REQ-2 (dtype preservation) is now SHIPPED (#853, the `DynMa` enum refactor of
+`ma.rs`); REQ-1 (subscripting) and REQ-3 (mask round-trip) were shipped earlier
+(#852 / #851) and re-verified against the dtype-preserving boundary.
 
 ## Architecture
 
