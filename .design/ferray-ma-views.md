@@ -75,7 +75,7 @@ actually allow. It is a SCOPING doc — it proposes no `.rs` edits.
 | REQ-1 (index-kind taxonomy) | SHIPPED | numpy classifies in `__getitem__` (`numpy/ma/core.py:3287` `dout = self.data[indx]`; `:3358` `dout = dout.view(type(self))`): `self.data[indx]` uses `ndarray.__getitem__`, which returns a VIEW for basic indexing and a COPY for advanced. ferray's `fn __getitem__` in `ma.rs` resolves every index via `resolve_index` (`ma.rs`) into a single `ResolvedIndex::Gather { positions, shape }` and rebuilds a fresh `RustMa` with `ArrayD::<T>::from_vec(...)` — a COPY for ALL kinds. The COPY cases MATCH numpy: pins `test_getitem_fancy_realmask_source_keeps_real_mask_array` and `test_getitem_diagonal_gather_realmask_mask_is_array` (advanced indexing) are GREEN. Consumer: `PyMaskedArray::__getitem__` is the registered `#[pymethods]` dunder consumed by every `fr.ma` subscript. |
 | REQ-2 (storage-model finding) | SHIPPED | `pub struct MaskedArray<T: Element, D: Dimension>` in `masked_array.rs` stores `data: Array<T, D>` — an OWNED array. `pub struct Array<T,D>` in `array/owned.rs` wraps `inner: ndarray::Array<T, D::NdarrayDim>` (ndarray's `OwnedRepr`, owns its `Vec`). The type is NOT generic over ownership; there is no `MaskedArrayView`. Consumer: `DynMa` variants in `ma.rs` each wrap `RustMa<T, IxDyn>` (= `MaskedArray<T,IxDyn>`), and `PyMaskedArray { inner: DynMa }` holds it by value. |
 | REQ-3 (PyO3 option analysis) | SHIPPED | A/B/C/D each analyzed below against `ndarray 0.17` (`Array` owned, `ArcArray` is `Arc<Vec<T>>` COPY-ON-WRITE in `array/arc.rs`, `ArrayViewMut<'a,...>` lifetime-bound in `array/view_mut.rs`) and `PyO3 0.28` (`#[pyclass]` requires `'static`; `Py<T>` for keepalive; no safe lifetime erasure). Verdict: A/B both require a ferray-ma library rearchitecture; C is unsound; D is the recommendation. |
-| REQ-4 (decision + prerequisite) | NOT-STARTED | DECISION: DEFER. The fix is NOT a binding tweak — it needs a writeback-capable shared/view storage model in the ferray-ma LIBRARY (owned `Array` cannot share a buffer; `ArcArray` is copy-on-write, the OPPOSITE of view-writeback). Open prereq blocker #879 (filed this session) for the ferray-ma shared-buffer `MaskedArrayView` prerequisite. Magnitude quantified in "Decision" below: library + binding rearchitecture, multi-session. |
+| REQ-4 (decision + prerequisite) | SHIPPED | DECISION (REVISED): BUILD via Option B (base-object reference, binding-only, safe PyO3). The earlier DEFER verdict UNDER-SCOPED Option B (R-HONEST-4): a view does NOT need the base's buffer aliased in Rust — it RE-GATHERS the base's current snapshot on every read and WRITES THROUGH on mutation, all in safe PyO3 (no `RefCell`/`unsafe`/`Arc`-COW; ferray-ma UNTOUCHED, so prereq #879 is OBSOLETE). Impl: `enum Storage { Owned(DynMa), View { base: Py<PyMaskedArray>, desc: ViewDesc, own_hard } }` + `fn snapshot` (the single read accessor) + `fn with_buffer_mut` / `fn set_flat_through` (write-through) + `fn index_is_basic` (basic→view, advanced→copy classifier) in `ferray-python/src/ma.rs`. Non-test production consumer: `PyMaskedArray::__getitem__` (the registered `#[pymethods]` dunder) returns a `Storage::View` child for a basic sub-array index, and `__setitem__`/`put`/`putmask` route through `with_buffer_mut`. Verification: `tests/test_divergence_ma_subscript_audit.py::test_getitem_slice_is_view_writeback_KNOWN_copy_divergence` is GREEN; `tests/test_expansion_ma_views.py` (24 view cases vs numpy.ma) GREEN; all 2462 tests pass. |
 
 ## Architecture
 
@@ -254,10 +254,39 @@ child slice differs. File the prerequisite as a blocker.
 
 ### REQ-4 — Decision
 
-**DECISION: DEFER, with a tracked ferray-ma library prerequisite.**
+**DECISION (REVISED, #857): BUILD via Option B — base-object reference,
+binding-only, safe PyO3.** (Supersedes the earlier DEFER verdict, retained below
+for the audit trail per R-HONEST-4.)
 
-View-writeback for `fr.ma.MaskedArray` is NOT tractable as a binding change at
-acceptable risk. The fix demands a writeback-capable shared/view storage model
+The earlier analysis UNDER-SCOPED Option B by assuming a view must alias the
+base's Rust buffer (`&mut` into a `Py<>`, with borrow-flag hazards). The shipped
+design avoids aliasing entirely: a `Storage::View` stores `Py<PyMaskedArray>`
+base + a `ViewDesc` (the flat C-order base positions `resolve_index` already
+produces for a basic index) and:
+
+- READS go through `fn snapshot(&self, py)` — `Owned` clones its `DynMa`; `View`
+  re-gathers the base's CURRENT snapshot through the descriptor (so base
+  mutations are visible; a view-of-a-view composes by recursion). Every read
+  accessor (`data`/`mask`/`dtype`/reductions/operators/`__getitem__` read path,
+  ~30 sites) routes through `snapshot`.
+- WRITES go through `fn with_buffer_mut` → `fn set_flat_through`: the mutation is
+  applied to a fresh local snapshot, then each element+mask bit is scattered
+  back into the base's ROOT buffer (recursing through the view chain).
+  `__setitem__`/`put`/`putmask` write through; `harden_mask`/`soften_mask` set a
+  per-view `own_hard` flag (numpy keeps these per-object, not shared).
+- `fn index_is_basic` classifies the index: basic (int/slice/ellipsis/newaxis/
+  tuples thereof) → VIEW child; advanced (int-array/bool-mask/list) → OWNED copy
+  (numpy copies these; ferray already matched).
+
+This is SAFE PyO3: no `unsafe`, no lifetime `transmute`, no `RefCell`/`Arc`-COW
+(R-APG-1 / R-CODE-1 respected). **ferray-ma is UNTOUCHED**, so the library
+prerequisite (#879) is OBSOLETE — view-writeback needed no shared/view storage
+model in the library, only a binding-level base-reference + re-gather/scatter.
+
+#### Superseded analysis (retained for audit)
+
+The original DEFER reasoning held that view-writeback for `fr.ma.MaskedArray` was
+NOT tractable as a binding change at acceptable risk. The fix demands a writeback-capable shared/view storage model
 in the ferray-ma LIBRARY, because:
 
 - the owned `Array<T,D>` data buffer cannot be shared (REQ-2);
@@ -291,11 +320,11 @@ blocker #879 this session). The dependent REQ-4 stays NOT-STARTED until that
 library prerequisite lands; only then does the binding-side basic-index view
 become buildable.
 
-Until then, the divergence pin
-`test_getitem_slice_is_view_writeback_KNOWN_copy_divergence` documents the
-narrow, builder-disclosed gap (basic-slice writeback only). It MUST NOT be
-xfail/skip-escaped (R-DEFER-3); it remains a tracked-RED pin under #857 referencing
-the prerequisite blocker.
+The divergence pin
+`test_getitem_slice_is_view_writeback_KNOWN_copy_divergence` is now GREEN: the
+basic-slice writeback ships, so `b = a[1:3]; b[0] = 99` sets `a[1] == 99`
+exactly as numpy. The pin is permanent regression coverage; `#879` is closed as
+obsolete (the build needed no library change).
 
 ## Verification
 
@@ -310,10 +339,12 @@ basic-index VIEW writeback (the one RED pin). Commands:
     `test_getitem_diagonal_gather_realmask_mask_is_array`,
     `test_getitem_empty_index_realmask_source_keeps_empty_mask_array`,
     `test_getitem_slice_realmask_source_keeps_real_mask_array`.
-  - RED (the deferred basic-index VIEW writeback gap, REQ-4):
-    `test_getitem_slice_is_view_writeback_KNOWN_copy_divergence` — stays RED
-    until prerequisite blocker #879 lands; it is the contract for the future
-    builder.
+  - GREEN (the SHIPPED basic-index VIEW writeback, REQ-4 via Option B):
+    `test_getitem_slice_is_view_writeback_KNOWN_copy_divergence` and the 24-case
+    `tests/test_expansion_ma_views.py` (writeback, read-reflects-base, 2-D
+    row/column, scalar-not-view, fancy/bool copies, step/negative/chained
+    slices, newaxis/ellipsis, masked views, hard-view writeback, view
+    reductions/operators reflecting the base).
 - numpy oracle (live, R-CHAR-3) establishing the taxonomy in REQ-1:
   - `python3 -c "import numpy as np; a=np.ma.array([1.,2,3,4]); b=a[1:3]; b[0]=99; print(a[1])"` → `99.0` (basic slice is a VIEW).
   - `python3 -c "import numpy as np; a=np.ma.array([1.,2,3,4]); b=a[[1,2]]; b[0]=99; print(a[1])"` → `2.0` (fancy index is a COPY — ferray already matches).
