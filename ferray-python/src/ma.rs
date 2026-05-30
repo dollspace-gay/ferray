@@ -1706,15 +1706,43 @@ fn construct_masked<'py>(
     Ok(PyMaskedArray::from_dynma(inner))
 }
 
+/// Build a dtype-preserving OWNED [`PyMaskedArray`] from a `numpy.ma.MaskedArray`
+/// result `r` — the egress side of the "delegate-to-numpy.ma" object methods
+/// (`copy`/`reshape`/`flatten`/`ravel`/`transpose`/`T`/`astype`).
+///
+/// numpy.ma is the oracle for these methods (R-CHAR-3): the binding builds the
+/// equivalent `numpy.ma` array ([`PyMaskedArray::as_numpy_ma`]), invokes
+/// numpy.ma's own method, and rebuilds a native-dtype `PyMaskedArray` from the
+/// result's `.data` + `.mask`. Routing the result's data (native dtype, no
+/// f64 collapse — R-CODE-4) and its mask through [`construct_masked`] preserves
+/// BOTH the native dtype AND numpy's nomask-vs-real-mask identity: when
+/// `numpy.ma.getmask(r) is nomask` (e.g. a `copy` of a nomask array) the rebuilt
+/// array stays nomask; a real `_mask` rebuilds a real bool mask. The result is
+/// always OWNED — a numpy.ma method result is a fresh array, and the pins check
+/// VALUES not view-identity (a faithful copy with correct data+mask suffices).
+fn from_numpy_ma<'py>(py: Python<'py>, r: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let data = r.getattr("data")?;
+    let getmask = np_ma.call_method1("getmask", (r,))?;
+    let nomask = np_ma.getattr("nomask")?;
+    if getmask.is(&nomask) {
+        construct_masked(py, &data, None, None)
+    } else {
+        let mask = np_ma.call_method1("getmaskarray", (r,))?;
+        construct_masked(py, &data, Some(&mask), None)
+    }
+}
+
 #[pymethods]
 impl PyMaskedArray {
     #[new]
-    #[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None))]
+    #[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None, fill_value = None))]
     fn py_new<'py>(
         py: Python<'py>,
         data: &Bound<'py, PyAny>,
         #[pyo3(from_py_with = parse_mask_arg)] mask: MaskArg<'py>,
         dtype: Option<&Bound<'py, PyAny>>,
+        fill_value: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Self> {
         // Resolve numpy's `mask=` tri-state ([`MaskArg`]) into the shared
         // [`construct_masked`] body's `Option<&Bound>` contract (`None` = nomask
@@ -1725,18 +1753,29 @@ impl PyMaskedArray {
         //                        its own mask in (keep_mask=True, #855/#851):
         //                        all-False OR src == src
         //   * Mask(m)          → `Some(&m)` (explicit mask, UNCHANGED)
-        match mask {
-            MaskArg::Absent | MaskArg::Nomask => construct_masked(py, data, None, dtype),
+        let mut out = match mask {
+            MaskArg::Absent | MaskArg::Nomask => construct_masked(py, data, None, dtype)?,
             MaskArg::ExplicitNone => {
                 // numpy's `make_mask_none(data.shape)` (`numpy/ma/core.py:2904`):
                 // an all-False bool mask shaped like `data`.
                 let shape = crate::conv::as_ndarray(py, data)?.getattr("shape")?;
                 let np = py.import("numpy")?;
                 let all_false = np.call_method1("zeros", (shape, np.getattr("bool_")?))?;
-                construct_masked(py, data, Some(&all_false), dtype)
+                construct_masked(py, data, Some(&all_false), dtype)?
             }
-            MaskArg::Mask(m) => construct_masked(py, data, Some(&m), dtype),
+            MaskArg::Mask(m) => construct_masked(py, data, Some(&m), dtype)?,
+        };
+        // #887: `fill_value=` kwarg. numpy's `MaskedArray.__new__` stores the
+        // explicit `fill_value` (`numpy/ma/core.py:2914` —
+        // `if fill_value is not None: _data._fill_value = ...`), MATERIALIZING
+        // `_fill_value`. ferray mirrors this by calling the same dtype-coercing
+        // `set_fill_value` the module fn / `.fill_value` setter use, which flips
+        // `fill_set: true` (#883) so the value crosses the boundary verbatim and
+        // later carry paths (#885 binary-op, #880 slice) propagate it.
+        if let Some(fv) = fill_value {
+            set_fill_value(py, &mut out, fv)?;
         }
+        Ok(out)
     }
 
     /// Underlying data buffer as a `numpy.ndarray` of the NATIVE dtype.
@@ -1763,6 +1802,77 @@ impl PyMaskedArray {
         }
         let mask = cur.mask_bits()?;
         Ok(mask.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `MaskedArray.mask` SETTER — assign a new mask (#890).
+    ///
+    /// numpy's `mask.setter` routes through `__setmask__` (`numpy/ma/core.py:
+    /// 3494`): `a.mask = True` masks EVERY element, `a.mask = False` UNMASKS
+    /// every element to a REAL all-False `_mask` (NOT nomask — verified live
+    /// numpy 2.4.4: `a.mask=False` ⇒ `a.mask` is `array([False, ...])`),
+    /// `a.mask = nomask` leaves `_mask` as the `nomask` sentinel (verified
+    /// live: `a.mask=nomask` ⇒ `a.mask is np.ma.nomask`), and a list/array sets
+    /// the mask element-wise (broadcasting True/False over the shape). Under a
+    /// HARDMASK the setter only ADDS masks (`current_mask |= mask`,
+    /// `numpy/ma/core.py:3531`) — it never clears an already-masked slot.
+    ///
+    /// The binding classifies the value, computes the per-element target mask
+    /// vector via numpy.ma's own `__setmask__` over an equivalent snapshot (the
+    /// oracle — so True/False/list/broadcast all match exactly, R-CHAR-3), and
+    /// materializes it: an OWNED array rewraps its `DynMa` with the new real
+    /// mask (or the nomask sentinel for `mask=nomask`); a VIEW writes each bit
+    /// through to its base (numpy's shared-buffer write). Hardmask OR-only is
+    /// honoured by feeding the CURRENT mask into numpy's `__setmask__` (which
+    /// applies the `|=` itself) before reading the result back.
+    #[setter]
+    fn set_mask(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let np_ma = py.import("numpy")?.getattr("ma")?;
+        let nomask = np_ma.getattr("nomask")?;
+        let is_hard = self.hardmask();
+
+        // `a.mask = nomask`: numpy leaves `_mask` as the nomask sentinel. For an
+        // OWNED array, drop to nomask (unless hardmask, where numpy keeps the
+        // existing mask — `|=` with an all-False from nomask is a no-op). For a
+        // VIEW, materialize the equivalent (a nomask assignment cannot remove a
+        // shared base mask through a view; fall through to the bitwise path with
+        // an all-False target, which under a soft view clears the view's bits).
+        if value.is(&nomask) && !is_hard && matches!(self.storage, Storage::Owned { .. }) {
+            if let Storage::Owned { data, .. } = &mut self.storage {
+                let stripped = strip_mask(data.clone())?;
+                *data = stripped;
+            }
+            return Ok(());
+        }
+
+        // Compute the target per-element mask via numpy.ma's own `__setmask__`
+        // over this array's equivalent snapshot, so True/False/list/broadcast
+        // (and the hardmask `|=`) resolve exactly as numpy does.
+        let tmp = self.as_numpy_ma(py)?;
+        if is_hard {
+            tmp.call_method0("harden_mask")?;
+        }
+        tmp.setattr("mask", value)?;
+        let target_obj = np_ma.call_method1("getmaskarray", (&tmp,))?;
+        let target = extract_bool_array(py, &target_obj)?;
+        let flat: Vec<bool> = target.iter().copied().collect();
+
+        if let Storage::Owned { data, .. } = &mut self.storage {
+            let mask_fa =
+                ArrayD::<bool>::from_vec(IxDyn::new(&data.shape()), flat).map_err(ferr_to_pyerr)?;
+            let rewrapped = rewrap_dynma_with_mask(data.clone(), mask_fa)?;
+            *data = rewrapped;
+            return Ok(());
+        }
+        // VIEW: set each computed mask bit on the view's current snapshot and
+        // let `with_buffer_mut` scatter the result back to the base (numpy's
+        // shared-buffer write; a real-mask base writes through, a nomask base
+        // keeps a view-local overlay — the same path `__setitem__` uses).
+        self.with_buffer_mut(py, |inner| {
+            for (k, &bit) in flat.iter().enumerate() {
+                set_mask_flat_dyn(inner, k, bit)?;
+            }
+            Ok(())
+        })
     }
 
     /// The replacement value used for masked positions by `filled()`, in the
@@ -1805,6 +1915,21 @@ impl PyMaskedArray {
         }
     }
 
+    /// `MaskedArray.fill_value` SETTER — assign the fill value (#890).
+    ///
+    /// numpy's `fill_value.setter` casts the value to `self.dtype` and stores
+    /// it in `_fill_value`, MATERIALIZING it (`numpy/ma/core.py`
+    /// `fill_value.setter`). The binding mirrors the module-level
+    /// [`set_fill_value`] exactly: an OWNED array sets the fill on its `DynMa`
+    /// and flips `fill_set: true` (#883); a VIEW sets its OWN per-object
+    /// `own_fill` overlay (#880), leaving the base untouched. Once materialized,
+    /// the value crosses the boundary verbatim and the binary-op (#885) / slice
+    /// (#880) carry paths propagate it.
+    #[setter(fill_value)]
+    fn set_fill_value_attr(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        set_fill_value(py, self, value)
+    }
+
     #[getter]
     fn shape<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         Ok(pyo3::types::PyTuple::new(py, self.shape_vec())?.into_any())
@@ -1827,9 +1952,149 @@ impl PyMaskedArray {
         Ok(self.dtype_name_cheap())
     }
 
-    /// Number of unmasked elements.
-    fn count(&self) -> PyResult<usize> {
-        self.snapshot_gil()?.count()
+    /// Number of unmasked elements, optionally along an axis (#888).
+    ///
+    /// `axis=None` (the default) counts every unmasked element and returns a
+    /// scalar `int` (numpy `MaskedArray.count()` → a Python int / 0-d). With
+    /// `axis=` numpy counts unmasked elements along that axis and returns an
+    /// integer ndarray (`numpy/ma/core.py:4900` — `count` sums `~mask` along
+    /// the axis). The axis path delegates to numpy.ma's own `count` over this
+    /// array's equivalent numpy.ma snapshot (the oracle), so multi-axis /
+    /// negative-axis / per-shape behaviour matches exactly (R-CHAR-3); the
+    /// no-axis path keeps the cheap native scalar count.
+    #[pyo3(signature = (axis = None))]
+    fn count<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        match axis {
+            None => Ok(self.snapshot(py)?.count()?.into_pyobject(py)?.into_any()),
+            Some(ax) => {
+                let kwargs = pyo3::types::PyDict::new(py);
+                kwargs.set_item("axis", ax)?;
+                self.as_numpy_ma(py)?
+                    .call_method("count", (), Some(&kwargs))
+            }
+        }
+    }
+
+    /// `MaskedArray.copy()` — an independent deep copy (data + mask), owned.
+    ///
+    /// numpy returns a fresh array carrying the same data and mask
+    /// (`numpy/ma/core.py` `copy`); a copy of a VIEW is an owned snapshot of the
+    /// view's current data+mask (numpy materializes the aliased values). The
+    /// binding snapshots this array (a view materializes its current state) and
+    /// rebuilds an OWNED native-dtype array, preserving nomask-vs-real-mask.
+    fn copy(&self, py: Python<'_>) -> PyResult<Self> {
+        from_numpy_ma(py, &self.as_numpy_ma(py)?)
+    }
+
+    /// `MaskedArray.reshape(*shape)` — reshape data + mask, accepting both
+    /// `a.reshape(2, 3)` (varargs) and `a.reshape((2, 3))` (a single tuple).
+    ///
+    /// numpy's `reshape` reshapes the data and the mask alike
+    /// (`numpy/ma/core.py:4564`). The binding delegates to numpy.ma's own
+    /// `reshape` over the equivalent snapshot (the oracle) and rebuilds a
+    /// native-dtype array — preserving dtype and the nomask-vs-real-mask
+    /// identity. A single sequence arg is forwarded verbatim; multiple int args
+    /// are forwarded as the varargs tuple numpy accepts.
+    #[pyo3(signature = (*shape))]
+    fn reshape<'py>(
+        &self,
+        py: Python<'py>,
+        shape: &Bound<'py, pyo3::types::PyTuple>,
+    ) -> PyResult<Self> {
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method1("reshape", shape.clone())?;
+        from_numpy_ma(py, &r)
+    }
+
+    /// `MaskedArray.flatten()` — a 1-D COPY of data + mask (#888).
+    ///
+    /// numpy's `flatten` always returns a fresh C-order 1-D copy
+    /// (`numpy/ma/core.py` delegates to `ndarray.flatten`), mask flattened
+    /// alongside. Delegated to numpy.ma and rebuilt native-dtype/owned.
+    fn flatten(&self, py: Python<'_>) -> PyResult<Self> {
+        let r = self.as_numpy_ma(py)?.call_method0("flatten")?;
+        from_numpy_ma(py, &r)
+    }
+
+    /// `MaskedArray.ravel()` — a 1-D view-if-possible of data + mask (#888).
+    ///
+    /// numpy's `ravel` returns a 1-D array (a view when the data is contiguous,
+    /// else a copy), mask raveled alongside (`numpy/ma/core.py:4530`). ferray
+    /// returns an owned 1-D array with the same data+mask VALUES — the pins
+    /// check values, not view-identity, and a faithful copy is acceptable
+    /// (matching numpy VALUES). Delegated to numpy.ma's `ravel`.
+    fn ravel(&self, py: Python<'_>) -> PyResult<Self> {
+        let r = self.as_numpy_ma(py)?.call_method0("ravel")?;
+        from_numpy_ma(py, &r)
+    }
+
+    /// `MaskedArray.transpose(*axes)` — permute axes of data + mask (#888).
+    ///
+    /// numpy's `transpose` reverses axes by default, or permutes by an explicit
+    /// `axes` order (`numpy/ma/core.py` delegates to `ndarray.transpose`), the
+    /// mask transposed alongside. Accepts `a.transpose()` (reverse),
+    /// `a.transpose(1, 0)` (varargs), and `a.transpose((1, 0))` (tuple) — the
+    /// captured varargs tuple is forwarded verbatim to numpy.ma.
+    #[pyo3(signature = (*axes))]
+    fn transpose<'py>(
+        &self,
+        py: Python<'py>,
+        axes: &Bound<'py, pyo3::types::PyTuple>,
+    ) -> PyResult<Self> {
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method1("transpose", axes.clone())?;
+        from_numpy_ma(py, &r)
+    }
+
+    /// `MaskedArray.T` — the transpose of data + mask (the reverse-axes
+    /// `transpose()`), as a property (#888).
+    #[getter(T)]
+    fn t_property(&self, py: Python<'_>) -> PyResult<Self> {
+        let r = self.as_numpy_ma(py)?.getattr("T")?;
+        from_numpy_ma(py, &r)
+    }
+
+    /// `MaskedArray.astype(dtype)` — cast data to `dtype`, mask preserved (#888).
+    ///
+    /// numpy's `astype` returns a fresh array of the requested dtype with the
+    /// mask carried over (`numpy/ma/core.py` delegates to `ndarray.astype`).
+    /// Delegated to numpy.ma's `astype` so numpy's casting rules apply verbatim
+    /// — including the `ComplexWarning` numpy emits when casting complex→real
+    /// (it discards the imaginary part rather than raising; verified live numpy
+    /// 2.4.4). Rebuilt native-(new-)dtype/owned with the mask preserved.
+    fn astype<'py>(&self, py: Python<'py>, dtype: &Bound<'py, PyAny>) -> PyResult<Self> {
+        let r = self.as_numpy_ma(py)?.call_method1("astype", (dtype,))?;
+        from_numpy_ma(py, &r)
+    }
+
+    /// `MaskedArray.tolist()` — a nested Python list with MASKED elements as
+    /// `None` (#888).
+    ///
+    /// numpy's `tolist` returns the data as a nested list but substitutes `None`
+    /// for every masked position (`numpy/ma/core.py:6395` — `result[idx] = None`
+    /// for masked entries; verified live: `np.ma.array([1,2,3],mask=[0,1,0])
+    /// .tolist()` → `[1, None, 3]`). Delegated to numpy.ma's own `tolist` over
+    /// the equivalent snapshot so the None-substitution and nesting match
+    /// exactly (R-CHAR-3).
+    fn tolist<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        self.as_numpy_ma(py)?.call_method0("tolist")
+    }
+
+    /// `MaskedArray.set_fill_value(value)` — set the fill in place (#890).
+    ///
+    /// numpy.ma exposes BOTH the `.fill_value` attribute setter AND a
+    /// `set_fill_value(value)` method (verified live: `np.ma.MaskedArray` has
+    /// `set_fill_value`; `numpy/ma/core.py` `set_fill_value`). Both materialize
+    /// `_fill_value`; the binding routes both through the same per-object
+    /// [`set_fill_value`] (Owned flips `fill_set`; a View sets its own overlay).
+    fn set_fill_value(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        set_fill_value(py, self, value)
     }
 
     /// Sum of unmasked elements (full reduction). An all-masked array
@@ -4777,26 +5042,29 @@ fn put_err_to_pyerr(e: ferray_core::FerrayError) -> PyErr {
 /// and an explicit `mask=None` stay distinguishable through to
 /// [`PyMaskedArray::py_new`]'s tri-state resolution.
 #[pyfunction]
-#[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None))]
+#[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None, fill_value = None))]
 pub fn array<'py>(
     py: Python<'py>,
     data: &Bound<'py, PyAny>,
     #[pyo3(from_py_with = parse_mask_arg)] mask: MaskArg<'py>,
     dtype: Option<&Bound<'py, PyAny>>,
+    fill_value: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<PyMaskedArray> {
-    PyMaskedArray::py_new(py, data, mask, dtype)
+    PyMaskedArray::py_new(py, data, mask, dtype, fill_value)
 }
 
-/// `numpy.ma.masked_array(data, mask=None, dtype=None)` — alias for `array`.
+/// `numpy.ma.masked_array(data, mask=None, dtype=None, fill_value=None)` —
+/// alias for `array`.
 #[pyfunction]
-#[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None))]
+#[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None, fill_value = None))]
 pub fn masked_array<'py>(
     py: Python<'py>,
     data: &Bound<'py, PyAny>,
     #[pyo3(from_py_with = parse_mask_arg)] mask: MaskArg<'py>,
     dtype: Option<&Bound<'py, PyAny>>,
+    fill_value: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<PyMaskedArray> {
-    PyMaskedArray::py_new(py, data, mask, dtype)
+    PyMaskedArray::py_new(py, data, mask, dtype, fill_value)
 }
 
 /// `numpy.ma.masked_where(condition, data)`.
