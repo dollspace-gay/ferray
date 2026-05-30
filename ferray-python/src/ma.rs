@@ -202,6 +202,17 @@ impl PyMaskedArray {
                     let m_arr = coerce_dtype(py, m, "bool")?;
                     let m_view: PyReadonlyArrayDyn<bool> = m_arr.extract()?;
                     let mask_fa: ArrayD<bool> = m_view.as_ferray().map_err(ferr_to_pyerr)?;
+                    // keep_mask=True (numpy's default): when the source ALREADY
+                    // carries a REAL mask, numpy ORs the explicit mask with it
+                    // (`numpy/ma/core.py:3008` `_data._mask =
+                    // np.logical_or(mask, _data._mask)`) rather than replacing
+                    // (core.py:2992 replaces only when `not keep_mask`). A nomask
+                    // source keeps the explicit mask alone (core.py:2989).
+                    let mask_fa = if src.inner.has_real_mask() {
+                        or_masks(&mask_fa, src.inner.mask())?
+                    } else {
+                        mask_fa
+                    };
                     RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?
                 }
             };
@@ -242,6 +253,18 @@ impl PyMaskedArray {
                 let m_arr = coerce_dtype(py, m, "bool")?;
                 let m_view: PyReadonlyArrayDyn<bool> = m_arr.extract()?;
                 let mask_fa: ArrayD<bool> = m_view.as_ferray().map_err(ferr_to_pyerr)?;
+                // keep_mask=True (numpy's default): when `data` is ITSELF a
+                // masked source carrying a REAL mask (a `numpy.ma.MaskedArray`),
+                // numpy ORs the explicit mask with the source mask
+                // (`numpy/ma/core.py:3008`) rather than replacing it
+                // (core.py:2992 replaces only when `not keep_mask`). Reuse the
+                // #851 `source_real_mask` discriminator (`numpy.ma.getmask(data)
+                // is not nomask`); an unmasked source keeps the explicit mask
+                // alone (core.py:2989).
+                let mask_fa = match source_real_mask(py, data, &data_fa)? {
+                    Some(src_mask) => or_masks(&mask_fa, &src_mask)?,
+                    None => mask_fa,
+                };
                 RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?
             }
         };
@@ -439,8 +462,37 @@ impl PyMaskedArray {
     /// `np.asarray(ma)` equals `ma.data` — the masked slots keep their
     /// stored values rather than being substituted. The binding mirrors that
     /// (R-DEV-3); `filled()` is the explicit fill-substituting path.
-    fn __array__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        self.data(py)
+    ///
+    /// numpy 2.x (NEP 56) passes `dtype=` and `copy=` keyword arguments when
+    /// driving an object through the `__array__` protocol — `np.array(obj)`
+    /// / `np.asarray(obj, dtype=...)` call `obj.__array__(dtype=None,
+    /// copy=None)`. The signature accepts both so numpy interop egress
+    /// succeeds (verified live: `numpy.ma.MaskedArray.__array__` accepts the
+    /// same kwargs). `dtype` casts the returned ndarray (numpy `astype`);
+    /// `copy=True` forces an independent copy. The no-arg / bare
+    /// `np.asarray(ma)` path is unchanged (still `self._data`).
+    #[pyo3(signature = (dtype = None, copy = None))]
+    fn __array__<'py>(
+        &self,
+        py: Python<'py>,
+        dtype: Option<&Bound<'py, PyAny>>,
+        copy: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let mut out = self.data(py)?;
+        if let Some(dt) = dtype {
+            // `astype(dtype)` returns a fresh, correctly-typed ndarray (and is
+            // itself a copy), so the `copy=` request is already satisfied.
+            out = out.call_method1("astype", (dt,))?;
+            return Ok(out);
+        }
+        // No dtype: honour `copy=True` by returning an independent copy;
+        // `copy=False`/`None` may alias (a freshly-built ndarray is fine).
+        if let Some(c) = copy
+            && c.is_truthy()?
+        {
+            out = out.call_method0("copy")?;
+        }
+        Ok(out)
     }
 
     /// `MaskedArray.harden_mask()` — force the mask hard, preventing
@@ -635,6 +687,28 @@ fn source_real_mask<'py>(
     }
     // Plain ndarray / list / scalar — not masked, keep the nomask path.
     Ok(None)
+}
+
+/// Elementwise OR of an explicit mask with a source mask, mirroring numpy's
+/// `keep_mask=True` default (`numpy/ma/core.py:3008` `np.logical_or(mask,
+/// _data._mask)`). Both masks share the data's shape by construction (the
+/// explicit `mask=` is coerced to the data shape and `source_real_mask` only
+/// returns a shape-matched source mask); a length mismatch surfaces as the
+/// library's `ShapeMismatch` rather than a panic.
+fn or_masks(explicit: &ArrayD<bool>, source: &ArrayD<bool>) -> PyResult<ArrayD<bool>> {
+    if explicit.shape() != source.shape() {
+        return Err(PyValueError::new_err(format!(
+            "mask shape {:?} does not match source mask shape {:?}",
+            explicit.shape(),
+            source.shape(),
+        )));
+    }
+    let combined: Vec<bool> = explicit
+        .iter()
+        .zip(source.iter())
+        .map(|(&a, &b)| a || b)
+        .collect();
+    ArrayD::<bool>::from_vec(IxDyn::new(explicit.shape()), combined).map_err(ferr_to_pyerr)
 }
 
 /// Map a `put` library error to the matching CPython exception: an
