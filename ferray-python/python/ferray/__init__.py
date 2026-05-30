@@ -501,6 +501,49 @@ _sys.modules["ferray.ma"] = _ma_module
 _sys.modules["ferray.polynomial"] = _polynomial_module
 _sys.modules["ferray.random"] = _random_module
 _sys.modules["ferray.window"] = _window_module
+
+# ---------------------------------------------------------------------------
+# numpy.rec submodule — structured (record) array constructors (#833, refs
+# #818). numpy.rec is a genuine submodule whose callables (array, fromarrays,
+# fromrecords, fromstring, fromfile, find_duplicate, format_parser, recarray,
+# record) PRODUCE/MANIPULATE numpy structured arrays. The structured dtype +
+# recarray data model is part of numpy's SHARED boundary representation that
+# ferray already uses (ferray arrays/dtypes ARE numpy's), so these are the
+# data-model VOCABULARY ferray operates over — NOT the array computation ferray
+# translates. This is the same rationale as the dtype-scalar types (#829) and
+# the ufunc/matrix/memmap vocabulary (#839): re-exposing numpy's callables
+# under a `ferray.rec` submodule is the correct drop-in behavior, so
+# `import ferray as fr; fr.rec.fromarrays(...)` matches numpy exactly
+# (numpy/_core/records.py — the rec module; numpy/__init__.py `from . import
+# rec`).
+import types as _types
+
+_rec_module = _types.ModuleType("ferray.rec")
+_rec_module.__doc__ = (
+    "ferray.rec — structured (record) array constructors, re-exposing "
+    "numpy.rec. The structured-array data model is numpy's shared boundary "
+    "representation that ferray operates over (refs #833)."
+)
+for _rec_name in (
+    "array",
+    "fromarrays",
+    "fromrecords",
+    "fromstring",
+    "fromfile",
+    "find_duplicate",
+    "format_parser",
+    "recarray",
+    "record",
+):
+    setattr(_rec_module, _rec_name, getattr(_np.rec, _rec_name))
+_rec_module.__all__ = [
+    "array", "fromarrays", "fromrecords", "fromstring", "fromfile",
+    "find_duplicate", "format_parser", "recarray", "record",
+]
+rec = _rec_module
+_sys.modules["ferray.rec"] = _rec_module
+del _rec_name, _types
+
 del _sys
 
 # `np.abs` is a long-standing alias for `np.absolute`. The Rust ufunc
@@ -1193,6 +1236,20 @@ bmat = _np.bmat
 # (numpy/_core/memmap.py class memmap).
 memmap = _np.memmap
 
+# numpy.recarray / numpy.record / numpy.void — the structured-array (record)
+# data-model TYPES. ferray's arrays/dtypes ARE numpy's at the boundary, so the
+# structured dtype + recarray model is part of the SHARED data-model
+# representation ferray operates over — NOT computation that ferray translates,
+# exactly like the dtype-scalar types (#829) and the ufunc/matrix/memmap
+# vocabulary (#839). A recarray is a numpy.ndarray subclass whose fields are
+# accessible as attributes; record is its structured scalar; void is the
+# generic structured scalar (already exposed above). Re-exposing numpy's
+# objects IS the correct drop-in behavior (numpy/_core/records.py class
+# recarray / class record; numpy/__init__.pyi `recarray` / `record`).
+recarray = _np.recarray
+record = _np.record
+# `void` is already bound above (the structured scalar; numpy.void).
+
 # numpy.nested_iters — construct nested nditers over an array. Pure
 # array-protocol iterator machinery over the shared ndarray
 # (numpy/_core/multiarray nested_iters).
@@ -1243,7 +1300,7 @@ polynomial.set_default_printstyle = _np.polynomial.set_default_printstyle
 __all__ = [
     "__version__",
     # submodules
-    "autodiff", "char", "strings", "emath", "fft", "lib", "linalg", "ma", "polynomial", "random", "window",
+    "autodiff", "char", "strings", "emath", "fft", "lib", "linalg", "ma", "polynomial", "random", "rec", "window",
     # top-level windows
     "bartlett", "blackman", "broadcast_arrays", "broadcast_shapes",
     "hamming", "hanning", "kaiser",
@@ -1349,4 +1406,6 @@ __all__ = [
     # (expansion, refs #818)
     "ufunc", "matrix", "asmatrix", "bmat", "memmap", "nested_iters",
     "__array_namespace_info__", "fromregex", "from_dlpack", "busdaycalendar",
+    # structured-array (record) data-model vocabulary (#833, refs #818)
+    "recarray", "record",
 ]
