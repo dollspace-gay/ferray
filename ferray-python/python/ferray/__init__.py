@@ -1163,6 +1163,83 @@ flatiter = _np.flatiter
 poly1d = _np.poly1d
 
 
+# ---------------------------------------------------------------------------
+# Remaining NumPy drop-in vocabulary (expansion, refs #818).
+#
+# These are SHARED-VOCABULARY types/iterators of the array boundary, pure
+# text-parse / protocol-import helpers, and array-protocol inspection — NOT
+# computation that ferray translates. ferray arrays ARE numpy.ndarray at the
+# Python boundary (they marshal through the numpy crate), so re-exposing
+# numpy's object IS the correct drop-in behavior, exactly as the dtype-scalar
+# type batch above (refs #818). The computation ferray owns is the array math;
+# these are the boundary vocabulary.
+
+# numpy.ufunc — the type of every universal function. ferray's ufuncs marshal
+# through numpy at the boundary; `isinstance(np.add, np.ufunc)` holds, so the
+# TYPE object is numpy's (numpy/_core/umath ufunc; numpy/__init__.pyi `ufunc`).
+ufunc = _np.ufunc
+
+# numpy.matrix / asmatrix / bmat — the deprecated 2-D matrix CLASS (a
+# numpy.ndarray subclass) and its constructors. Deprecated but still in
+# numpy's __all__; they operate on the shared ndarray representation
+# (numpy/_core/matrix_impl is removed; numpy/matrixlib/defmatrix.py class
+# matrix / def asmatrix / def bmat).
+matrix = _np.matrix
+asmatrix = _np.asmatrix
+bmat = _np.bmat
+
+# numpy.memmap — the memory-mapped ndarray subclass. Operates on the shared
+# numpy.ndarray representation backed by an on-disk buffer
+# (numpy/_core/memmap.py class memmap).
+memmap = _np.memmap
+
+# numpy.nested_iters — construct nested nditers over an array. Pure
+# array-protocol iterator machinery over the shared ndarray
+# (numpy/_core/multiarray nested_iters).
+nested_iters = _np.nested_iters
+
+# numpy.__array_namespace_info__ — the array-API inspection object. Re-expose
+# numpy's; ferray's boundary IS numpy's dtype/device/namespace contract
+# (numpy/_core/_array_api_info.py class __array_namespace_info__).
+__array_namespace_info__ = _np.__array_namespace_info__
+
+# numpy.fromregex(file, regexp, dtype, encoding=None) — parse a text file with
+# a regex into a structured/array. Pure text parsing producing a numpy array;
+# re-exposing numpy's behavior is the correct drop-in
+# (numpy/lib/_npyio_impl.py def fromregex).
+fromregex = _np.fromregex
+
+# numpy.from_dlpack(x, /, *, device=None, copy=None) — import a DLPack-
+# producing object into a numpy.ndarray. Protocol import over objects with
+# __dlpack__; re-expose numpy's (numpy/_core/multiarray from_dlpack).
+from_dlpack = _np.from_dlpack
+
+# numpy.busdaycalendar(weekmask='1111100', holidays=None) — a small class
+# holding the weekmask + holidays consumed by the busday_* functions (which
+# ferray ships natively from src/datetime.rs, refs #831). Re-expose numpy's
+# busdaycalendar so `fr.busday_offset(d, n, busdaycal=fr.busdaycalendar(...))`
+# pairs with the native busday kernels; the object exposes `.weekmask`,
+# `.holidays`, `.busdaycount` (numpy/_core/multiarray busdaycalendar).
+busdaycalendar = _np.busdaycalendar
+
+
+# numpy.char.chararray / char.array / char.asarray — the legacy string-array
+# CLASS (a numpy.ndarray subclass) and its constructors over the shared
+# ndarray representation (numpy/_core/defchararray.py class chararray / def
+# array / def asarray). ferray.char already re-exposes numpy's string ufuncs;
+# attach the class + constructors onto the same module object so
+# `fr.char.array([...])` / `fr.char.chararray((2,))` match numpy.
+char.chararray = _np.char.chararray
+char.array = _np.char.array
+char.asarray = _np.char.asarray
+
+# numpy.polynomial.set_default_printstyle(style) — pure-Python config setting
+# the repr style ('ascii' | 'unicode') for the polynomial classes
+# (numpy/polynomial/__init__.py def set_default_printstyle). Attach onto
+# ferray's polynomial module object.
+polynomial.set_default_printstyle = _np.polynomial.set_default_printstyle
+
+
 __all__ = [
     "__version__",
     # submodules
@@ -1268,4 +1345,8 @@ __all__ = [
     # array type + array-protocol classes (expansion, refs #818)
     "ndarray", "broadcast", "nditer", "ndindex", "ndenumerate", "flatiter",
     "poly1d",
+    # remaining shared-vocabulary types/iterators + protocol helpers
+    # (expansion, refs #818)
+    "ufunc", "matrix", "asmatrix", "bmat", "memmap", "nested_iters",
+    "__array_namespace_info__", "fromregex", "from_dlpack", "busdaycalendar",
 ]
