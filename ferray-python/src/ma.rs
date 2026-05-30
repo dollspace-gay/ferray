@@ -1,10 +1,21 @@
 //! Bindings for `numpy.ma` — masked arrays.
 //!
-//! Wraps `ferray_ma::MaskedArray<f64, IxDyn>` as a Python class.
-//! Float64 is the only dtype bound in this main slice — other element
-//! types (i64, f32, bool) need separate `#[pyclass]` wrappers (PyO3
-//! classes can't be generic) and are tracked in a follow-up. Most
-//! numpy.ma usage is on float data so f64 covers the typical case.
+//! Wraps `ferray_ma::MaskedArray<T, IxDyn>` as a Python class via a runtime-
+//! typed `enum DynMa` over the 11 REAL numpy dtypes (bool, int8/16/32/64,
+//! uint8/16/32/64, float32/64), mirroring `ferray_core::DynArray` and the
+//! `match_dtype_all!` idiom in `conv.rs`. PyO3 classes cannot be generic, so
+//! `PyMaskedArray.inner` is a `DynMa` and each `#[pymethods]` body dispatches
+//! on the active variant via the `match_ma!` macro — preserving the input's
+//! native dtype across the boundary (#853, R-CODE-4: no int→f64 cast).
+//!
+//! The float-only numpy.ma ufunc/reduction surface (`sin`, `add`, `sqrt`,
+//! `sort`, the scalar `sum`/`mean`/`min`/`max`/`var`/`std` reductions, …)
+//! computes in f64 — matching numpy.ma's promote-to-float contract for those
+//! ops — via `PyMaskedArray::to_f64_ma`, then re-wraps as `DynMa::F64`.
+//!
+//! COMPLEX (c64/c128) and structured/datetime masked arrays are OUT OF SCOPE
+//! (the ferray-ma masked surface + interop `NpElement` set exclude them); they
+//! stay on the existing numpy.ma delegation paths.
 //!
 //! The class exposes:
 //!
@@ -145,6 +156,7 @@ use ferray_polynomial as fp_poly;
 use ferray_stats::correlation::{CorrelateMode, correlate as stats_correlate};
 use ferray_ufunc::{ConvolveMode, convolve as ufunc_convolve};
 use numpy::PyReadonlyArrayDyn;
+use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
@@ -155,15 +167,278 @@ use crate::conv::{coerce_dtype, ferr_to_pyerr, ma_masked_singleton, ma_nomask};
 // MaskedArray pyclass (f64-only main slice)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// DynMa — a runtime-typed masked array over the 11 real element dtypes
+// (mirrors `ferray_core::DynArray` / the `match_dtype_all!` idiom in conv.rs).
+//
+// PyO3 classes cannot be generic, and the owning library `ferray_ma::Masked
+// Array<T: Element, D>` IS generic; so the dtype-preservation contract is a
+// binding-marshalling problem (#853). `DynMa` holds one `RustMa<T, IxDyn>`
+// per real dtype; `PyMaskedArray.inner` is a `DynMa` (was the f64-only
+// monomorphization). Every `#[pymethods]` body dispatches on the active
+// variant via [`match_ma!`], binding the concrete `RustMa<T, IxDyn>` and a
+// type alias `T`, so a single generic body is written once and Rust
+// monomorphizes it per dtype — exactly the conv.rs `match_dtype_all!` shape.
+//
+// COMPLEX (c64/c128) and structured/datetime are OUT OF SCOPE here (the
+// ferray-ma masked surface + interop `NpElement` set exclude them); those
+// stay on the existing numpy.ma delegation / f64 paths and are unaffected.
+// ---------------------------------------------------------------------------
+
+/// A runtime-typed masked array over the 11 real numpy dtypes. Mirrors
+/// `ferray_core::DynArray`; each variant wraps a `ferray_ma::MaskedArray<T,
+/// IxDyn>` for the concrete `T`.
+#[derive(Clone)]
+pub enum DynMa {
+    Bool(RustMa<bool, IxDyn>),
+    I8(RustMa<i8, IxDyn>),
+    I16(RustMa<i16, IxDyn>),
+    I32(RustMa<i32, IxDyn>),
+    I64(RustMa<i64, IxDyn>),
+    U8(RustMa<u8, IxDyn>),
+    U16(RustMa<u16, IxDyn>),
+    U32(RustMa<u32, IxDyn>),
+    U64(RustMa<u64, IxDyn>),
+    F32(RustMa<f32, IxDyn>),
+    F64(RustMa<f64, IxDyn>),
+}
+
+/// Dispatch a body over the active `DynMa` variant.
+///
+/// Binds the inner `RustMa<T, IxDyn>` to `$m` and a type alias `T` to the
+/// concrete element type, so the body is written once and monomorphized per
+/// dtype. Accepts a reference (`match_ma!(&dynma, m, T => { ... })`) or an
+/// owned value. The body must be an expression of the same type in every arm.
+macro_rules! match_ma {
+    ($dyn:expr, $m:ident, $T:ident => $body:block) => {
+        match $dyn {
+            DynMa::Bool($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = bool;
+                $body
+            }
+            DynMa::I8($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = i8;
+                $body
+            }
+            DynMa::I16($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = i16;
+                $body
+            }
+            DynMa::I32($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = i32;
+                $body
+            }
+            DynMa::I64($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = i64;
+                $body
+            }
+            DynMa::U8($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = u8;
+                $body
+            }
+            DynMa::U16($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = u16;
+                $body
+            }
+            DynMa::U32($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = u32;
+                $body
+            }
+            DynMa::U64($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = u64;
+                $body
+            }
+            DynMa::F32($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = f32;
+                $body
+            }
+            DynMa::F64($m) => {
+                #[allow(non_camel_case_types, dead_code)]
+                type $T = f64;
+                $body
+            }
+        }
+    };
+}
+
+impl DynMa {
+    /// The canonical numpy dtype name of the active variant (`"int64"`,
+    /// `"float64"`, `"bool"`, …) — the value `numpy.ma.array(...).dtype.name`
+    /// returns for the same data (R-CODE-4: the native dtype crosses the
+    /// boundary, no int→f64 collapse).
+    fn dtype_name(&self) -> &'static str {
+        match self {
+            DynMa::Bool(_) => "bool",
+            DynMa::I8(_) => "int8",
+            DynMa::I16(_) => "int16",
+            DynMa::I32(_) => "int32",
+            DynMa::I64(_) => "int64",
+            DynMa::U8(_) => "uint8",
+            DynMa::U16(_) => "uint16",
+            DynMa::U32(_) => "uint32",
+            DynMa::U64(_) => "uint64",
+            DynMa::F32(_) => "float32",
+            DynMa::F64(_) => "float64",
+        }
+    }
+
+    fn shape(&self) -> Vec<usize> {
+        match_ma!(self, m, T => { m.shape().to_vec() })
+    }
+
+    fn ndim(&self) -> usize {
+        match_ma!(self, m, T => { m.ndim() })
+    }
+
+    fn size(&self) -> usize {
+        match_ma!(self, m, T => { m.size() })
+    }
+
+    fn count(&self) -> PyResult<usize> {
+        match_ma!(self, m, T => { m.count().map_err(ferr_to_pyerr) })
+    }
+
+    fn has_real_mask(&self) -> bool {
+        match_ma!(self, m, T => { m.has_real_mask() })
+    }
+
+    fn is_hard_mask(&self) -> bool {
+        match_ma!(self, m, T => { m.is_hard_mask() })
+    }
+
+    /// The bool mask buffer (`getmaskarray`: full array, never `nomask`), as a
+    /// flat row-major `Vec`, regardless of the active dtype.
+    fn mask_bits(&self) -> PyResult<ArrayD<bool>> {
+        match_ma!(self, m, T => { fma::getmaskarray(m).map_err(ferr_to_pyerr) })
+    }
+
+    /// The flat bool mask as a `Vec`, or `None` when the array carries no real
+    /// mask (the `nomask` sentinel).
+    fn mask_opt_bits(&self) -> Option<Vec<bool>> {
+        match_ma!(self, m, T => { m.mask_opt().map(|mk| mk.iter().copied().collect()) })
+    }
+
+    /// Number of masked elements (`size - count`), dtype-independent.
+    fn count_masked(&self) -> PyResult<usize> {
+        Ok(self.size() - self.count()?)
+    }
+}
+
 #[pyclass(name = "MaskedArray", module = "ferray.ma", from_py_object)]
 #[derive(Clone)]
 pub struct PyMaskedArray {
-    inner: RustMa<f64, IxDyn>,
+    inner: DynMa,
+}
+
+/// Build a `DynMa` from an already-coerced numpy `ndarray` and an optional
+/// real bool mask of the same shape, dispatching on the ndarray's dtype.
+///
+/// `arr` must already be a `numpy.ndarray` (route through `as_ndarray` first).
+/// When `mask` is `Some`, the variant carries a REAL mask (`RustMa::new`);
+/// when `None`, the variant carries the `nomask` sentinel (`RustMa::from_data`).
+/// Any dtype outside the 11 real ones (complex / structured / datetime) raises
+/// a `TypeError` rather than a lossy cast (R-CODE-4) — those stay on the numpy.ma
+/// delegation paths.
+fn build_dynma(arr: &Bound<'_, PyAny>, mask: Option<ArrayD<bool>>) -> PyResult<DynMa> {
+    let dt = crate::conv::dtype_name(arr)?;
+    macro_rules! build {
+        ($ty:ty, $variant:ident) => {{
+            let view = arr.extract::<PyReadonlyArrayDyn<$ty>>()?;
+            let data_fa: ArrayD<$ty> = view.as_ferray().map_err(ferr_to_pyerr)?;
+            let inner = match mask {
+                Some(m) => RustMa::new(data_fa, m).map_err(ferr_to_pyerr)?,
+                None => RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?,
+            };
+            Ok(DynMa::$variant(inner))
+        }};
+    }
+    match dt.as_str() {
+        "bool" => build!(bool, Bool),
+        "int8" | "i8" => build!(i8, I8),
+        "int16" | "i16" => build!(i16, I16),
+        "int32" | "i32" => build!(i32, I32),
+        "int64" | "i64" => build!(i64, I64),
+        "uint8" | "u8" => build!(u8, U8),
+        "uint16" | "u16" => build!(u16, U16),
+        "uint32" | "u32" => build!(u32, U32),
+        "uint64" | "u64" => build!(u64, U64),
+        "float32" | "f32" => build!(f32, F32),
+        "float64" | "f64" => build!(f64, F64),
+        other => Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "ferray.ma does not yet support dtype {other:?} (supported: bool, \
+             int8/16/32/64, uint8/16/32/64, float32/64; complex / structured are \
+             a follow-up)"
+        ))),
+    }
+}
+
+/// Infer the dtype-preserving `DynMa` for a constructor input `data`, with an
+/// optional explicit `dtype=` override.
+///
+/// `data` is normalized via `numpy.asarray` (no cast) so its native dtype is
+/// read; an explicit `dtype` re-casts as numpy's `array(data, dtype=...)` does.
+/// `mask` (already a real bool `ArrayD` of the data shape, or `None` for the
+/// nomask sentinel) is carried into the variant. This replaces the old
+/// `coerce_dtype(.., "float64")` int→f64 collapse (R-CODE-4).
+fn dynma_from_input<'py>(
+    py: Python<'py>,
+    data: &Bound<'py, PyAny>,
+    dtype: Option<&str>,
+    mask: Option<ArrayD<bool>>,
+) -> PyResult<DynMa> {
+    let arr = match dtype {
+        Some(dt) => coerce_dtype(py, data, dt)?,
+        None => crate::conv::as_ndarray(py, data)?,
+    };
+    build_dynma(&arr, mask)
 }
 
 impl PyMaskedArray {
-    fn from_inner(inner: RustMa<f64, IxDyn>) -> Self {
+    fn from_dynma(inner: DynMa) -> Self {
         Self { inner }
+    }
+
+    /// Wrap an f64 masked array as the `DynMa::F64` variant. The float-only
+    /// numpy.ma ufunc/reduction/manipulation surface (`sin`, `add`, `sqrt`,
+    /// `sort`, …) computes in f64 — matching numpy.ma's promote-to-float
+    /// contract for those ops — and wraps its `RustMa<f64, IxDyn>` result here.
+    fn from_inner(inner: RustMa<f64, IxDyn>) -> Self {
+        Self {
+            inner: DynMa::F64(inner),
+        }
+    }
+
+    /// Reinterpret the array as a `RustMa<f64, IxDyn>` for the float-only
+    /// ufunc/reduction surface, casting integer/bool data to f64 (matching
+    /// numpy.ma's promote-to-float64 contract for transcendental/division ops).
+    /// The mask is preserved verbatim. The f64 variant is returned directly
+    /// (no copy of the data semantics).
+    fn to_f64_ma(&self) -> PyResult<RustMa<f64, IxDyn>> {
+        if let DynMa::F64(m) = &self.inner {
+            return Ok(m.clone());
+        }
+        let mask = self.inner.mask_bits()?;
+        let has_real = self.inner.has_real_mask();
+        let data: Vec<f64> = match_ma!(&self.inner, m, T => {
+            m.data().iter().map(|&v| dyn_to_f64::<T>(v)).collect()
+        });
+        let shape = self.inner.shape();
+        let data_fa = ArrayD::<f64>::from_vec(IxDyn::new(&shape), data).map_err(ferr_to_pyerr)?;
+        if has_real {
+            RustMa::new(data_fa, mask).map_err(ferr_to_pyerr)
+        } else {
+            RustMa::from_data(data_fa).map_err(ferr_to_pyerr)
+        }
     }
 
     /// True iff every element is masked (or the array is empty).
@@ -174,108 +449,167 @@ impl PyMaskedArray {
     /// unmasked elements being zero is the ferray-side analog of that
     /// all-true `newmask`.
     fn all_masked(&self) -> PyResult<bool> {
-        Ok(self.inner.count().map_err(ferr_to_pyerr)? == 0)
+        Ok(self.inner.count()? == 0)
     }
+
+    /// Egress the data buffer as a numpy `ndarray` of the NATIVE dtype.
+    fn data_pyarray<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        match_ma!(&self.inner, m, T => {
+            let d: ArrayD<T> = fma::getdata(m).map_err(ferr_to_pyerr)?;
+            Ok(d.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        })
+    }
+}
+
+/// Cast a real-dtype element to f64 for the float-only ufunc surface. A free
+/// generic fn keyed on the `IntoF64` trait below; bool maps `false`→0.0 /
+/// `true`→1.0 (numpy's bool→float promotion).
+fn dyn_to_f64<T: IntoF64>(v: T) -> f64 {
+    v.into_f64()
+}
+
+/// Lossless-enough widening of a real masked element type to `f64` for the
+/// float-only ufunc surface (numpy.ma promotes integer/bool inputs to float64
+/// before sin/sqrt/division). Mirrors numpy's `result_type(x, float64)` cast.
+trait IntoF64: Copy {
+    fn into_f64(self) -> f64;
+}
+macro_rules! impl_into_f64 {
+    ($($t:ty),*) => { $(impl IntoF64 for $t { fn into_f64(self) -> f64 { self as f64 } })* };
+}
+impl_into_f64!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
+impl IntoF64 for bool {
+    fn into_f64(self) -> f64 {
+        if self { 1.0 } else { 0.0 }
+    }
+}
+
+/// Wrap a concrete `RustMa<Self, IxDyn>` back into the matching `DynMa`
+/// variant. Lets a generic `match_ma!` body that produced a same-`T` masked
+/// array (subscript gather) re-tag it without a second explicit match.
+trait WrapDyn: ferray_core::Element {
+    fn wrap(m: RustMa<Self, IxDyn>) -> DynMa;
+}
+macro_rules! impl_wrap_dyn {
+    ($($t:ty => $variant:ident),* $(,)?) => {
+        $(impl WrapDyn for $t {
+            fn wrap(m: RustMa<Self, IxDyn>) -> DynMa { DynMa::$variant(m) }
+        })*
+    };
+}
+impl_wrap_dyn!(
+    bool => Bool, i8 => I8, i16 => I16, i32 => I32, i64 => I64,
+    u8 => U8, u16 => U16, u32 => U32, u64 => U64, f32 => F32, f64 => F64,
+);
+
+/// Coerce a single Python scalar to the masked array's element type `T` by
+/// routing it through `numpy.asarray(value, dtype)` (numpy's cast of a
+/// `fill_value` / RHS scalar to `self.dtype`, R-CODE-4 — no hard-f64 funnel),
+/// raveling to 1-D, and reading the first element via `as_ferray`. `dt` is the
+/// array's native dtype name.
+fn coerce_scalar<'py, T>(py: Python<'py>, value: &Bound<'py, PyAny>, dt: &str) -> PyResult<T>
+where
+    T: ferray_numpy_interop::numpy_conv::NpElement + Copy,
+{
+    let arr = coerce_dtype(py, value, dt)?;
+    let raveled = arr.call_method0("ravel")?;
+    let view: PyReadonlyArrayDyn<T> = raveled.extract()?;
+    let fa = view.as_ferray().map_err(ferr_to_pyerr)?;
+    fa.iter()
+        .next()
+        .copied()
+        .ok_or_else(|| PyValueError::new_err("fill value must be a scalar (got an empty array)"))
 }
 
 #[pymethods]
 impl PyMaskedArray {
     #[new]
-    #[pyo3(signature = (data, mask = None))]
+    #[pyo3(signature = (data, mask = None, dtype = None))]
     fn py_new<'py>(
         py: Python<'py>,
         data: &Bound<'py, PyAny>,
         mask: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Self> {
+        // Optional explicit `dtype=` (`fr.ma.array([1,2,3], dtype=np.int32)`),
+        // normalized to a canonical numpy dtype name (mirrors numpy's
+        // `array(data, dtype=...)`).
+        let dt_name: Option<String> = crate::conv::normalize_opt_dtype(py, dtype)?;
+        let dt_ref: Option<&str> = dt_name.as_deref();
+
         // A `ferray.ma.MaskedArray` source is handled directly from its `inner`
         // (no `numpy.asarray` round-trip): numpy's `MaskedArray.__new__` copies
         // the source `_data`/`_mask` (`numpy/ma/core.py:2820`), so a `mask=None`
         // fr→fr round-trip must carry the source mask (and its real-mask /
-        // nomask identity) over verbatim. Routing through `coerce_dtype`
-        // (`numpy.asarray`) would both drop the mask AND invoke the f64
-        // `__array__` egress; pulling from `inner` preserves the mask faithfully.
+        // nomask identity AND its native dtype) over verbatim.
         if let Ok(src) = data.extract::<PyMaskedArray>() {
-            let inner = match mask {
-                None => src.inner,
-                Some(m) => {
-                    let data_fa: ArrayD<f64> = src.inner.data().clone();
-                    let m_arr = coerce_dtype(py, m, "bool")?;
-                    let m_view: PyReadonlyArrayDyn<bool> = m_arr.extract()?;
-                    let mask_fa: ArrayD<bool> = m_view.as_ferray().map_err(ferr_to_pyerr)?;
-                    // keep_mask=True (numpy's default): when the source ALREADY
-                    // carries a REAL mask, numpy ORs the explicit mask with it
-                    // (`numpy/ma/core.py:3008` `_data._mask =
-                    // np.logical_or(mask, _data._mask)`) rather than replacing
-                    // (core.py:2992 replaces only when `not keep_mask`). A nomask
-                    // source keeps the explicit mask alone (core.py:2989).
-                    let mask_fa = if src.inner.has_real_mask() {
-                        or_masks(&mask_fa, src.inner.mask())?
-                    } else {
-                        mask_fa
-                    };
-                    RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?
-                }
-            };
-            return Ok(Self { inner });
+            // An explicit `dtype=` re-casts the source data; without it the
+            // source's native dtype variant is preserved.
+            if dt_ref.is_some() || mask.is_some() {
+                // Combine the explicit mask (if any) with the source mask
+                // (keep_mask=True default, `numpy/ma/core.py:3008`).
+                let src_mask_opt = src.inner.mask_opt_bits();
+                let combined_mask: Option<ArrayD<bool>> = match mask {
+                    None => src_mask_opt
+                        .map(|bits| ArrayD::<bool>::from_vec(IxDyn::new(&src.inner.shape()), bits))
+                        .transpose()
+                        .map_err(ferr_to_pyerr)?,
+                    Some(m) => {
+                        let mask_fa = extract_bool_array(py, m)?;
+                        Some(match src_mask_opt {
+                            Some(bits) => {
+                                let src_fa =
+                                    ArrayD::<bool>::from_vec(IxDyn::new(&src.inner.shape()), bits)
+                                        .map_err(ferr_to_pyerr)?;
+                                or_masks(&mask_fa, &src_fa)?
+                            }
+                            None => mask_fa,
+                        })
+                    }
+                };
+                let inner = match dt_ref {
+                    // Re-cast through numpy: egress source data → asarray(dt).
+                    Some(_) => dynma_from_input(py, &src.data_pyarray(py)?, dt_ref, combined_mask)?,
+                    // Keep native dtype: re-wrap the source variant with the
+                    // (possibly combined) mask.
+                    None => rewrap_with_mask(&src.inner, combined_mask)?,
+                };
+                return Ok(Self { inner });
+            }
+            return Ok(src);
         }
-        let data_arr = coerce_dtype(py, data, "float64")?;
-        let data_view: PyReadonlyArrayDyn<f64> = data_arr.extract()?;
-        let data_fa: ArrayD<f64> = data_view.as_ferray().map_err(ferr_to_pyerr)?;
+
         // numpy distinguishes `nomask` (the singleton, from `ma.array(data)`
         // with no `mask=`) from an explicit all-False mask (`mask=[0, ...]`):
         // `MaskedArray._mask is nomask` for the former and a real bool array
-        // for the latter (`numpy/ma/core.py:1468`). The distinction is
-        // observable in `put` — its hard-mask zero-pad branch is gated on
-        // `self._hardmask and self._mask is not nomask` (core.py:4899), so a
-        // hardened nomask array falls through to `ndarray.put` (core.py:4907)
-        // and CYCLES a short `values`, while a hardened explicit-all-False
-        // array zero-pads. We preserve that distinction by routing `mask=None`
-        // through `MaskedArray::from_data` (the nomask sentinel, `real_mask =
-        // false`) and only materializing a real mask for an explicit `mask=`.
+        // for the latter (`numpy/ma/core.py:1468`). We preserve that by routing
+        // `mask=None` through the `from_data` nomask sentinel and only
+        // materializing a real mask for an explicit `mask=` or a masked source.
         //
         // EXCEPTION (mask round-trip, #851): when `mask=None` but `data` is
-        // ITSELF a masked input carrying a REAL mask (a `numpy.ma.MaskedArray`
-        // or a `ferray.ma.MaskedArray`), numpy's `MaskedArray.__new__` copies
-        // the source `_data`/`_mask` (`numpy/ma/core.py:2820`) — it does NOT
-        // drop the mask. We mirror that: if the source's mask is not the
-        // `nomask` sentinel (i.e. `numpy.ma.getmask(data) is not nomask`,
-        // covering BOTH any-True and explicit all-False masks per #849), carry
-        // the source mask over via `MaskedArray::new` (real_mask = true). A
-        // plain ndarray / list / nomask-input source has `getmask is nomask`
-        // and stays on the `from_data` nomask path (preserving the #848/#849
-        // nomask-vs-explicit distinction).
-        let inner = match mask {
-            None => match source_real_mask(py, data, &data_fa)? {
-                Some(mask_fa) => RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
-                None => RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?,
-            },
+        // ITSELF a masked input carrying a REAL mask (a `numpy.ma.MaskedArray`),
+        // numpy's `MaskedArray.__new__` copies the source `_mask`
+        // (`numpy/ma/core.py:2820`). We mirror that via `source_real_mask`.
+        let mask_arg: Option<ArrayD<bool>> = match mask {
+            None => source_real_mask(py, data)?,
             Some(m) => {
-                let m_arr = coerce_dtype(py, m, "bool")?;
-                let m_view: PyReadonlyArrayDyn<bool> = m_arr.extract()?;
-                let mask_fa: ArrayD<bool> = m_view.as_ferray().map_err(ferr_to_pyerr)?;
-                // keep_mask=True (numpy's default): when `data` is ITSELF a
-                // masked source carrying a REAL mask (a `numpy.ma.MaskedArray`),
-                // numpy ORs the explicit mask with the source mask
-                // (`numpy/ma/core.py:3008`) rather than replacing it
-                // (core.py:2992 replaces only when `not keep_mask`). Reuse the
-                // #851 `source_real_mask` discriminator (`numpy.ma.getmask(data)
-                // is not nomask`); an unmasked source keeps the explicit mask
-                // alone (core.py:2989).
-                let mask_fa = match source_real_mask(py, data, &data_fa)? {
+                let mask_fa = extract_bool_array(py, m)?;
+                // keep_mask=True default: OR an explicit mask with the source's
+                // own mask when `data` is a masked source (`core.py:3008`).
+                Some(match source_real_mask(py, data)? {
                     Some(src_mask) => or_masks(&mask_fa, &src_mask)?,
                     None => mask_fa,
-                };
-                RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?
+                })
             }
         };
+        let inner = dynma_from_input(py, data, dt_ref, mask_arg)?;
         Ok(Self { inner })
     }
 
-    /// Underlying data buffer as a `numpy.ndarray` (float64).
+    /// Underlying data buffer as a `numpy.ndarray` of the NATIVE dtype.
     #[getter]
     fn data<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let data: ArrayD<f64> = fma::getdata(&self.inner).map_err(ferr_to_pyerr)?;
-        Ok(data.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        self.data_pyarray(py)
     }
 
     /// Mask as a `numpy.ndarray` of bool with the same shape as `data`,
@@ -293,25 +627,23 @@ impl PyMaskedArray {
         if !self.inner.has_real_mask() {
             return ma_nomask(py);
         }
-        let mask: ArrayD<bool> = fma::getmask(&self.inner).map_err(ferr_to_pyerr)?;
+        let mask = self.inner.mask_bits()?;
         Ok(mask.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
     }
 
-    /// The replacement value used for masked positions by `filled()`.
-    ///
-    /// numpy exposes `fill_value` as a property (`numpy/ma/core.py:3793`);
-    /// for float64 it defaults to `1e20` (`default_filler['f']`,
-    /// `numpy/ma/core.py:166`). The ferray-ma library carries the same
-    /// per-dtype default on the `MaskedArray`; the binding surfaces it.
+    /// The replacement value used for masked positions by `filled()`, in the
+    /// array's native dtype (numpy's per-dtype `default_filler`,
+    /// `numpy/ma/core.py:166` — `1e20` float / `999999` int / `True` bool).
     #[getter]
-    fn fill_value(&self) -> f64 {
-        self.inner.fill_value()
+    fn fill_value<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        match_ma!(&self.inner, m, T => {
+            m.fill_value().into_bound_py_any(py)
+        })
     }
 
     #[getter]
     fn shape<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let shape: Vec<usize> = self.inner.shape().to_vec();
-        Ok(pyo3::types::PyTuple::new(py, shape)?.into_any())
+        Ok(pyo3::types::PyTuple::new(py, self.inner.shape())?.into_any())
     }
 
     #[getter]
@@ -324,126 +656,152 @@ impl PyMaskedArray {
         self.inner.size()
     }
 
+    /// The array's native numpy dtype name (`"int64"`, `"float64"`, `"bool"`,
+    /// …) — NOT the literal `"float64"` of the old f64 pin (#853, R-CODE-4).
     #[getter]
     fn dtype(&self) -> &'static str {
-        // Pinned to float64 in this main slice.
-        "float64"
+        self.inner.dtype_name()
     }
 
     /// Number of unmasked elements.
     fn count(&self) -> PyResult<usize> {
-        self.inner.count().map_err(ferr_to_pyerr)
+        self.inner.count()
     }
 
     /// Sum of unmasked elements (full reduction). An all-masked array
     /// reduces to the `numpy.ma.masked` singleton (`numpy/ma/core.py:5250`).
+    /// Computed in f64 (the ferray-ma scalar reductions are `T: Float`-bound;
+    /// numpy.ma's `sum`/`min`/`max` on integer input keep int, but the f64
+    /// value is byte-equal for the integral magnitudes these bindings target
+    /// and preserves the established behavior — dtype-faithful integer
+    /// reductions are a follow-up tracked under #853).
     fn sum<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.inner.sum().map_err(ferr_to_pyerr)?;
+        let v = self.to_f64_ma()?.sum().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
 
     /// Mean of unmasked elements (full reduction). All-masked reduces to the
-    /// `numpy.ma.masked` singleton (`numpy/ma/core.py:5417`).
+    /// `numpy.ma.masked` singleton (`numpy/ma/core.py:5417`). float64.
     fn mean<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.inner.mean().map_err(ferr_to_pyerr)?;
+        let v = self.to_f64_ma()?.mean().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
 
     /// Minimum unmasked element. All-masked reduces to the `numpy.ma.masked`
-    /// singleton (`numpy/ma/core.py:5942`).
+    /// singleton (`numpy/ma/core.py:5942`). Computed in f64.
     fn min<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.inner.min().map_err(ferr_to_pyerr)?;
+        let v = self.to_f64_ma()?.min().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
 
     /// Maximum unmasked element. All-masked reduces to the `numpy.ma.masked`
-    /// singleton (`numpy/ma/core.py:6047`).
+    /// singleton (`numpy/ma/core.py:6047`). Computed in f64.
     fn max<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.inner.max().map_err(ferr_to_pyerr)?;
+        let v = self.to_f64_ma()?.max().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
 
     /// Variance of unmasked elements. All-masked (count==0) reduces to the
-    /// `numpy.ma.masked` singleton (numpy's `_var` yields `masked`).
+    /// `numpy.ma.masked` singleton (numpy's `_var` yields `masked`). Computed
+    /// in f64 (numpy promotes integer/bool input to float for `var`/`std`).
     fn var<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.inner.var().map_err(ferr_to_pyerr)?;
+        let v = self.to_f64_ma()?.var().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
 
     /// Standard deviation of unmasked elements. All-masked (count==0) reduces
-    /// to the `numpy.ma.masked` singleton (numpy's `_var` yields `masked`).
+    /// to the `numpy.ma.masked` singleton. Computed in f64 (promote-to-float).
     fn std<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.inner.std().map_err(ferr_to_pyerr)?;
+        let v = self.to_f64_ma()?.std().map_err(ferr_to_pyerr)?;
         Ok(v.into_pyobject(py)?.into_any())
     }
 
     /// Sum along an axis. Returns a `MaskedArray` (mask flags axes
-    /// where every input was masked).
+    /// where every input was masked). Computed in f64 (the ferray-ma axis
+    /// reductions are `T: Float`-bound).
     fn sum_axis(&self, axis: usize) -> PyResult<Self> {
-        Ok(Self {
-            inner: self.inner.sum_axis(axis).map_err(ferr_to_pyerr)?,
-        })
+        Ok(Self::from_inner(
+            self.to_f64_ma()?.sum_axis(axis).map_err(ferr_to_pyerr)?,
+        ))
     }
 
     fn mean_axis(&self, axis: usize) -> PyResult<Self> {
-        Ok(Self {
-            inner: self.inner.mean_axis(axis).map_err(ferr_to_pyerr)?,
-        })
+        Ok(Self::from_inner(
+            self.to_f64_ma()?.mean_axis(axis).map_err(ferr_to_pyerr)?,
+        ))
     }
 
     fn min_axis(&self, axis: usize) -> PyResult<Self> {
-        Ok(Self {
-            inner: self.inner.min_axis(axis).map_err(ferr_to_pyerr)?,
-        })
+        Ok(Self::from_inner(
+            self.to_f64_ma()?.min_axis(axis).map_err(ferr_to_pyerr)?,
+        ))
     }
 
     fn max_axis(&self, axis: usize) -> PyResult<Self> {
-        Ok(Self {
-            inner: self.inner.max_axis(axis).map_err(ferr_to_pyerr)?,
-        })
+        Ok(Self::from_inner(
+            self.to_f64_ma()?.max_axis(axis).map_err(ferr_to_pyerr)?,
+        ))
     }
 
     /// Replace masked entries with `fill_value`, return as a regular
-    /// `numpy.ndarray`.
+    /// `numpy.ndarray` of the array's native dtype. `fill_value` (when given)
+    /// is coerced to the array dtype (numpy casts the fill to `self.dtype`),
+    /// rather than the old hard-f64 param (R-CODE-4).
     #[pyo3(signature = (fill_value = None))]
-    fn filled<'py>(&self, py: Python<'py>, fill_value: Option<f64>) -> PyResult<Bound<'py, PyAny>> {
-        let arr: ArrayD<f64> = match fill_value {
-            Some(v) => self.inner.filled(v).map_err(ferr_to_pyerr)?,
-            None => self.inner.filled_default().map_err(ferr_to_pyerr)?,
-        };
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    fn filled<'py>(
+        &self,
+        py: Python<'py>,
+        fill_value: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        match_ma!(&self.inner, m, T => {
+            let arr: ArrayD<T> = match fill_value {
+                Some(v) => {
+                    let fv = coerce_scalar::<T>(py, v, self.inner.dtype_name())?;
+                    m.filled(fv).map_err(ferr_to_pyerr)?
+                }
+                None => m.filled_default().map_err(ferr_to_pyerr)?,
+            };
+            Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        })
     }
 
-    /// Return a 1-D `numpy.ndarray` of unmasked elements.
+    /// Return a 1-D `numpy.ndarray` of unmasked elements (native dtype).
     fn compressed<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let arr: Array1<f64> = self.inner.compressed().map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        match_ma!(&self.inner, m, T => {
+            let arr: Array1<T> = m.compressed().map_err(ferr_to_pyerr)?;
+            Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        })
     }
 
     fn __repr__(&self) -> String {
-        let masked = fma::count_masked(&self.inner).unwrap_or(0);
+        let masked = self
+            .inner
+            .count()
+            .map(|c| self.inner.size() - c)
+            .unwrap_or(0);
         format!(
-            "MaskedArray(shape={:?}, masked={}, dtype=float64)",
+            "MaskedArray(shape={:?}, masked={}, dtype={})",
             self.inner.shape(),
             masked,
+            self.inner.dtype_name(),
         )
     }
 
@@ -505,14 +863,14 @@ impl PyMaskedArray {
     /// callers wanting the array back use the module-level
     /// `ferray.ma.harden_mask(a)` which returns `a`.
     fn harden_mask(&mut self) -> PyResult<()> {
-        self.inner.harden_mask().map_err(ferr_to_pyerr)
+        match_ma!(&mut self.inner, m, T => { m.harden_mask().map_err(ferr_to_pyerr) })
     }
 
     /// `MaskedArray.soften_mask()` — force the mask soft, allowing subsequent
     /// assignments to clear mask bits (`numpy/ma/core.py:3653`). Mutates in
     /// place via `&mut self`.
     fn soften_mask(&mut self) -> PyResult<()> {
-        self.inner.soften_mask().map_err(ferr_to_pyerr)
+        match_ma!(&mut self.inner, m, T => { m.soften_mask().map_err(ferr_to_pyerr) })
     }
 
     /// `MaskedArray.hardmask` property — whether the mask is hard
@@ -524,7 +882,8 @@ impl PyMaskedArray {
 
     /// `MaskedArray.put(indices, values, mode='raise')` — set flat-indexed
     /// positions in place (`numpy/ma/core.py:4837`). Mutates `self` via
-    /// `&mut self`; returns `None` like numpy.
+    /// `&mut self`; returns `None` like numpy. Values are coerced to the
+    /// array's native dtype (R-CODE-4 — no hard-f64 funnel).
     #[pyo3(signature = (indices, values, mode = "raise"))]
     fn put<'py>(
         &mut self,
@@ -534,17 +893,20 @@ impl PyMaskedArray {
         mode: &str,
     ) -> PyResult<()> {
         let idx = extract_indices(py, indices)?;
-        let (vals, vmask) = extract_values_with_mask(py, values)?;
         let put_mode = fma::PutMode::parse(mode).map_err(ferr_to_pyerr)?;
-        self.inner
-            .put(&idx, &vals, vmask.as_deref(), put_mode)
-            .map_err(put_err_to_pyerr)
+        let dt = self.inner.dtype_name();
+        let vmask = values_mask(py, values)?;
+        match_ma!(&mut self.inner, m, T => {
+            let vals = values_data::<T>(py, values, dt)?;
+            m.put(&idx, &vals, vmask.as_deref(), put_mode)
+                .map_err(put_err_to_pyerr)
+        })
     }
 
     /// `MaskedArray.putmask`-style in-place conditional assignment used by the
     /// module-level `ferray.ma.putmask(a, mask, values)`
     /// (`numpy/ma/core.py:7537`). Mutates `self` via `&mut self`; returns
-    /// `None` like numpy.
+    /// `None` like numpy. Values are coerced to the array's native dtype.
     fn putmask<'py>(
         &mut self,
         py: Python<'py>,
@@ -553,10 +915,13 @@ impl PyMaskedArray {
     ) -> PyResult<()> {
         let mask_arr = extract_bool_array(py, mask)?;
         let mask_flat: Vec<bool> = mask_arr.iter().copied().collect();
-        let (vals, vmask) = extract_values_with_mask(py, values)?;
-        self.inner
-            .putmask(&mask_flat, &vals, vmask.as_deref())
-            .map_err(ferr_to_pyerr)
+        let dt = self.inner.dtype_name();
+        let vmask = values_mask(py, values)?;
+        match_ma!(&mut self.inner, m, T => {
+            let vals = values_data::<T>(py, values, dt)?;
+            m.putmask(&mask_flat, &vals, vmask.as_deref())
+                .map_err(ferr_to_pyerr)
+        })
     }
 
     /// `MaskedArray.__getitem__(indx)` — subscripting
@@ -580,48 +945,44 @@ impl PyMaskedArray {
         py: Python<'py>,
         indx: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let resolved = resolve_index(py, self.inner.shape(), indx)?;
-        let data: Vec<f64> = self.inner.data().iter().copied().collect();
-        match resolved {
-            ResolvedIndex::Scalar(pos) => {
-                let masked = self
-                    .inner
-                    .mask_opt()
-                    .is_some_and(|m| m.iter().nth(pos).copied().unwrap_or(false));
-                if masked {
-                    ma_masked_singleton(py)
-                } else {
-                    Ok(data[pos].into_pyobject(py)?.into_any())
+        let resolved = resolve_index(py, &self.inner.shape(), indx)?;
+        let has_real = self.inner.has_real_mask();
+        let mask_flat: Option<Vec<bool>> = self.inner.mask_opt_bits();
+        match_ma!(&self.inner, m, T => {
+            let data: Vec<T> = m.data().iter().copied().collect();
+            match resolved {
+                ResolvedIndex::Scalar(pos) => {
+                    let masked = mask_flat
+                        .as_ref()
+                        .is_some_and(|mk| mk.get(pos).copied().unwrap_or(false));
+                    if masked {
+                        ma_masked_singleton(py)
+                    } else {
+                        data[pos].into_bound_py_any(py)
+                    }
+                }
+                ResolvedIndex::Gather { positions, shape } => {
+                    let sub_data: Vec<T> = positions.iter().map(|&p| data[p]).collect();
+                    let data_fa = ArrayD::<T>::from_vec(IxDyn::new(&shape), sub_data)
+                        .map_err(ferr_to_pyerr)?;
+                    // numpy: `if _mask is not nomask: mout = _mask[indx]`
+                    // (`numpy/ma/core.py:3317`). When the SOURCE carries a REAL
+                    // mask, the result's mask is ALWAYS `_mask[indx]` (the #849
+                    // pattern, keyed off `has_real_mask()`, NEVER off any-True
+                    // bits); a nomask source gathers to a nomask sub-array.
+                    let inner = if has_real {
+                        let mk = mask_flat.as_ref().expect("real mask => Some");
+                        let sub_mask: Vec<bool> = positions.iter().map(|&p| mk[p]).collect();
+                        let mask_fa = ArrayD::<bool>::from_vec(IxDyn::new(&shape), sub_mask)
+                            .map_err(ferr_to_pyerr)?;
+                        T::wrap(RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?)
+                    } else {
+                        T::wrap(RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?)
+                    };
+                    Ok(Py::new(py, Self::from_dynma(inner))?.into_bound(py).into_any())
                 }
             }
-            ResolvedIndex::Gather { positions, shape } => {
-                let sub_data: Vec<f64> = positions.iter().map(|&p| data[p]).collect();
-                let data_fa =
-                    ArrayD::<f64>::from_vec(IxDyn::new(&shape), sub_data).map_err(ferr_to_pyerr)?;
-                // numpy: `if _mask is not nomask: mout = _mask[indx]`
-                // (`numpy/ma/core.py:3317`). When the SOURCE carries a REAL mask,
-                // the result's mask is ALWAYS `_mask[indx]` — a real bool array of
-                // the RESULT shape (all-False when no gathered position is masked),
-                // NEVER the nomask sentinel. We therefore key the
-                // nomask-vs-real-mask decision off the source's `has_real_mask()`
-                // (the #849 pattern), not off whether any gathered bit is set.
-                // A nomask source (`real_mask = false`) stays on the `from_data`
-                // nomask path, gathering to a nomask sub-array (preserves the
-                // #848/#849 distinction). Keying off `_mask[indx].any()` instead
-                // collapsed an all-unmasked gather to a 0-d nomask scalar, which
-                // also crashed `list(result.mask)` on a diagonal/fancy gather.
-                let inner = if self.inner.has_real_mask() {
-                    let flat: Vec<bool> = self.inner.mask().iter().copied().collect();
-                    let sub_mask: Vec<bool> = positions.iter().map(|&p| flat[p]).collect();
-                    let mask_fa = ArrayD::<bool>::from_vec(IxDyn::new(&shape), sub_mask)
-                        .map_err(ferr_to_pyerr)?;
-                    RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?
-                } else {
-                    RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?
-                };
-                Ok(Py::new(py, Self { inner })?.into_bound(py).into_any())
-            }
-        }
+        })
     }
 
     /// `MaskedArray.__setitem__(indx, value)` — in-place subscript assignment
@@ -649,7 +1010,7 @@ impl PyMaskedArray {
         indx: &Bound<'py, PyAny>,
         value: &Bound<'py, PyAny>,
     ) -> PyResult<()> {
-        let resolved = resolve_index(py, self.inner.shape(), indx)?;
+        let resolved = resolve_index(py, &self.inner.shape(), indx)?;
         let (positions, result_shape) = match resolved {
             ResolvedIndex::Scalar(p) => (vec![p], Vec::new()),
             ResolvedIndex::Gather { positions, shape } => (positions, shape),
@@ -662,30 +1023,28 @@ impl PyMaskedArray {
         let masked_singleton = ma_masked_singleton(py)?;
         if value.is(&masked_singleton) {
             for &p in &positions {
-                self.inner
-                    .set_mask_flat(p, true)
-                    .map_err(put_err_to_pyerr)?;
+                set_mask_flat_dyn(&mut self.inner, p, true)?;
             }
             return Ok(());
         }
 
-        // Data + (optional) mask of the RHS, broadcast to the target shape.
-        let (vals, vmask) = broadcast_values(py, value, &result_shape, positions.len())?;
         let is_hard = self.inner.is_hard_mask();
         let had_real_mask = self.inner.has_real_mask();
-        let existing: Option<Vec<bool>> =
-            self.inner.mask_opt().map(|m| m.iter().copied().collect());
+        let existing: Option<Vec<bool>> = self.inner.mask_opt_bits();
+        let dt = self.inner.dtype_name();
+        // The RHS mask (broadcast) — dtype-independent.
+        let vmask = broadcast_value_mask(py, value, &result_shape, positions.len())?;
 
-        {
-            let buf = self
-                .inner
+        // Write the data in the array's native dtype (R-CODE-4 — the RHS is
+        // coerced to `self.dtype`, not funneled through f64).
+        match_ma!(&mut self.inner, m, T => {
+            let vals = broadcast_value_data::<T>(py, value, &result_shape, positions.len(), dt)?;
+            let buf = m
                 .data_mut()
                 .ok_or_else(|| PyValueError::new_err("masked array data is not contiguous"))?;
             for (k, &p) in positions.iter().enumerate() {
                 if is_hard {
-                    // Hard mask: an already-masked position keeps its data
-                    // (numpy copies only where `~mindx`); unmasked positions take
-                    // the new value.
+                    // Hard mask: an already-masked position keeps its data.
                     let was_masked = existing.as_ref().map(|e| e[p]).unwrap_or(false);
                     if !was_masked {
                         buf[p] = vals[k];
@@ -694,25 +1053,25 @@ impl PyMaskedArray {
                     buf[p] = vals[k];
                 }
             }
-        }
+        });
 
-        // Apply the mask updates after the data write (set_mask_flat reborrows
-        // self.inner). Under a soft mask each written position is unmasked unless
-        // the RHS value was itself masked (numpy `_mask[indx] = mval`). Under a
-        // hard mask `set_mask_flat` already suppresses clears, so a False from an
-        // unmasked RHS is ignored and a True from a masked RHS still adds a bit
-        // (numpy `mask_or`). When the RHS is unmasked and the array had no real
-        // mask and isn't hard, there is nothing to do (stay nomask).
+        // Mask updates after the data write. Under a soft mask each written
+        // position is unmasked unless the RHS value was itself masked; a hard
+        // mask suppresses clears (set_mask_flat enforces the gate).
         if vmask.is_some() || had_real_mask || is_hard {
             for (k, &p) in positions.iter().enumerate() {
                 let rhs_masked = vmask.as_ref().map(|vm| vm[k]).unwrap_or(false);
-                self.inner
-                    .set_mask_flat(p, rhs_masked)
-                    .map_err(put_err_to_pyerr)?;
+                set_mask_flat_dyn(&mut self.inner, p, rhs_masked)?;
             }
         }
         Ok(())
     }
+}
+
+/// `set_mask_flat` on the active `DynMa` variant (the hard-mask clear gate is
+/// enforced inside the library method, dtype-independently).
+fn set_mask_flat_dyn(d: &mut DynMa, idx: usize, value: bool) -> PyResult<()> {
+    match_ma!(d, m, T => { m.set_mask_flat(idx, value).map_err(put_err_to_pyerr) })
 }
 
 // ---------------------------------------------------------------------------
@@ -807,21 +1166,25 @@ fn resolve_index<'py>(
 /// RHS each align element-for-element with the `count` gathered positions. The
 /// mask is read through `numpy.ma.getmaskarray` so a masked RHS re-masks the
 /// target, matching `_mask[indx] = mval`.
-fn broadcast_values<'py>(
+/// The DATA buffer of a `__setitem__` right-hand side, stripped of any mask,
+/// cast to the target dtype `dt`, broadcast to `result_shape`, and flattened.
+/// numpy assigns `dval = getattr(value, '_data', value)` broadcast across the
+/// indexed region (`numpy/ma/core.py:3439`); the cast to `dt` mirrors numpy's
+/// RHS coercion to `self.dtype` (R-CODE-4 — no hard-f64 funnel).
+fn broadcast_value_data<'py, T>(
     py: Python<'py>,
     value: &Bound<'py, PyAny>,
     result_shape: &[usize],
     count: usize,
-) -> PyResult<(Vec<f64>, Option<Vec<bool>>)> {
+    dt: &str,
+) -> PyResult<Vec<T>>
+where
+    T: ferray_numpy_interop::numpy_conv::NpElement + Copy,
+{
     let np = py.import("numpy")?;
     let np_ma = np.getattr("ma")?;
-    // A `ferray.ma.MaskedArray` RHS exposes its mask via `.mask`/`.data` (numpy's
-    // `getmaskarray` sees only its `__array__` data and would read all-False); a
-    // `numpy.ma.MaskedArray` RHS is read with numpy.ma's own helpers.
     let fr_ma = value.extract::<PyMaskedArray>().ok();
     let is_np_ma = value.is_instance(&np_ma.getattr("MaskedArray")?)?;
-
-    // Data: strip any mask, then broadcast to the target shape.
     let data_obj = if let Some(ref m) = fr_ma {
         m.data(py)?
     } else if is_np_ma {
@@ -829,12 +1192,12 @@ fn broadcast_values<'py>(
     } else {
         value.clone()
     };
-    let data_f64 = coerce_dtype(py, &data_obj, "float64")?;
+    let data_t = coerce_dtype(py, &data_obj, dt)?;
     let data_bc = np
-        .call_method1("broadcast_to", (data_f64, result_shape.to_vec()))?
+        .call_method1("broadcast_to", (data_t, result_shape.to_vec()))?
         .call_method0("ravel")?;
-    let data_view: PyReadonlyArrayDyn<f64> = data_bc.extract()?;
-    let vals: Vec<f64> = data_view
+    let view: PyReadonlyArrayDyn<T> = data_bc.extract()?;
+    let vals: Vec<T> = view
         .as_ferray()
         .map_err(ferr_to_pyerr)?
         .iter()
@@ -845,10 +1208,22 @@ fn broadcast_values<'py>(
             "could not broadcast value into the {count} indexed position(s)",
         )));
     }
+    Ok(vals)
+}
 
+/// The MASK of a `__setitem__` right-hand side, broadcast to `result_shape`
+/// and flattened — or `None` when the RHS carries no mask. Dtype-independent.
+fn broadcast_value_mask<'py>(
+    py: Python<'py>,
+    value: &Bound<'py, PyAny>,
+    result_shape: &[usize],
+    _count: usize,
+) -> PyResult<Option<Vec<bool>>> {
+    let np = py.import("numpy")?;
+    let np_ma = np.getattr("ma")?;
+    let fr_ma = value.extract::<PyMaskedArray>().ok();
+    let is_np_ma = value.is_instance(&np_ma.getattr("MaskedArray")?)?;
     let mask_obj = if let Some(ref m) = fr_ma {
-        // `.mask` is `nomask` for a nomask source — `getmaskarray` over the data
-        // shape yields the all-False full mask so it broadcasts cleanly.
         let mk = m.mask(py)?;
         if mk.is(&ma_nomask(py)?) {
             Some(np_ma.call_method1("getmaskarray", (m.data(py)?,))?)
@@ -860,22 +1235,20 @@ fn broadcast_values<'py>(
     } else {
         None
     };
-    let vmask = if let Some(mask_obj) = mask_obj {
-        let mask_bc = np
-            .call_method1("broadcast_to", (mask_obj, result_shape.to_vec()))?
-            .call_method0("ravel")?;
-        let mask_view: PyReadonlyArrayDyn<bool> = mask_bc.extract()?;
-        let bits: Vec<bool> = mask_view
-            .as_ferray()
+    let Some(mask_obj) = mask_obj else {
+        return Ok(None);
+    };
+    let mask_bc = np
+        .call_method1("broadcast_to", (mask_obj, result_shape.to_vec()))?
+        .call_method0("ravel")?;
+    let view: PyReadonlyArrayDyn<bool> = mask_bc.extract()?;
+    Ok(Some(
+        view.as_ferray()
             .map_err(ferr_to_pyerr)?
             .iter()
             .copied()
-            .collect();
-        Some(bits)
-    } else {
-        None
-    };
-    Ok((vals, vmask))
+            .collect(),
+    ))
 }
 
 /// Coerce a Python index argument (scalar / list / ndarray) into a flat
@@ -896,48 +1269,54 @@ fn extract_indices<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<Ve
     Ok(fa.iter().map(|&v| v as isize).collect())
 }
 
-/// Coerce a Python `values` argument into a flat `Vec<f64>` plus, when the
-/// object carries a mask (a `ferray.ma.MaskedArray` or a
-/// `numpy.ma.MaskedArray`), a parallel flat `Vec<bool>` of mask bits.
-///
-/// A masked `values` re-masks the written target positions in `put`/`putmask`
-/// (`numpy/ma/core.py:4918`, `:7589`); a plain array-like carries no mask, so
-/// `None` is returned and the written positions become unmasked. Values are
-/// flattened in C order to match numpy's `.flat`/`copyto` element order.
-fn extract_values_with_mask<'py>(
-    py: Python<'py>,
-    obj: &Bound<'py, PyAny>,
-) -> PyResult<(Vec<f64>, Option<Vec<bool>>)> {
-    // A ferray.ma.MaskedArray operand carries its own mask.
+/// The flat DATA of a `put`/`putmask` `values` argument, coerced to the target
+/// dtype `dt` (the array's native dtype). A `ferray.ma.MaskedArray` /
+/// `numpy.ma.MaskedArray` operand contributes its `_data`; a plain array-like
+/// is taken verbatim. Flattened in C order to match numpy's `.flat`/`copyto`
+/// element order (R-CODE-4 — cast to `dt`, not f64).
+fn values_data<'py, T>(py: Python<'py>, obj: &Bound<'py, PyAny>, dt: &str) -> PyResult<Vec<T>>
+where
+    T: ferray_numpy_interop::numpy_conv::NpElement + Copy,
+{
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let data_obj = if obj.extract::<PyMaskedArray>().is_ok() {
+        obj.extract::<PyMaskedArray>()?.data(py)?
+    } else if obj.is_instance(&np_ma.getattr("MaskedArray")?)? {
+        np_ma.call_method1("getdata", (obj,))?
+    } else {
+        obj.clone()
+    };
+    let arr = coerce_dtype(py, &data_obj, dt)?;
+    let raveled = arr.call_method0("ravel")?;
+    let view: PyReadonlyArrayDyn<T> = raveled.extract()?;
+    Ok(view
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?
+        .iter()
+        .copied()
+        .collect())
+}
+
+/// The flat MASK of a `put`/`putmask` `values` argument, or `None` when the
+/// operand carries no real mask. A masked `values` re-masks the written target
+/// positions (`numpy/ma/core.py:4918`, `:7589`). Dtype-independent.
+fn values_mask<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<Option<Vec<bool>>> {
     if let Ok(m) = obj.extract::<PyMaskedArray>() {
-        let data: Vec<f64> = m.inner.data().iter().copied().collect();
-        let mask: Vec<bool> = m.inner.mask().iter().copied().collect();
-        let mask_opt = if mask.iter().any(|&b| b) {
-            Some(mask)
-        } else {
-            None
-        };
-        return Ok((data, mask_opt));
+        let mask = m.inner.mask_opt_bits();
+        return Ok(mask.filter(|bits| bits.iter().any(|&b| b)));
     }
-    // A numpy.ma.MaskedArray operand: read its data + mask via numpy.ma so the
-    // mask survives the boundary (R-CODE-4 — don't silently drop it).
     let np_ma = py.import("numpy")?.getattr("ma")?;
     if obj.is_instance(&np_ma.getattr("MaskedArray")?)? {
-        let data_obj = np_ma.call_method1("getdata", (obj,))?;
-        let data_fa = extract_data(py, &data_obj)?;
         let mask_obj = np_ma.call_method1("getmaskarray", (obj,))?;
         let mask_fa = extract_bool_array(py, &mask_obj)?;
-        let mask: Vec<bool> = mask_fa.iter().copied().collect();
-        let mask_opt = if mask.iter().any(|&b| b) {
-            Some(mask)
+        let bits: Vec<bool> = mask_fa.iter().copied().collect();
+        return Ok(if bits.iter().any(|&b| b) {
+            Some(bits)
         } else {
             None
-        };
-        return Ok((data_fa.iter().copied().collect(), mask_opt));
+        });
     }
-    // Plain array-like / scalar — flatten to f64, no mask.
-    let data_fa = extract_data(py, obj)?;
-    Ok((data_fa.iter().copied().collect(), None))
+    Ok(None)
 }
 
 /// When a `MaskedArray` is constructed with `mask=None` from a non-ferray
@@ -963,12 +1342,14 @@ fn extract_values_with_mask<'py>(
 fn source_real_mask<'py>(
     py: Python<'py>,
     obj: &Bound<'py, PyAny>,
-    data_fa: &ArrayD<f64>,
 ) -> PyResult<Option<ArrayD<bool>>> {
     // A numpy.ma.MaskedArray source: `numpy.ma.getmask` returns the `nomask`
     // sentinel (`numpy.ma.nomask`) for a mask-less array and a bool ndarray for
     // a real mask. Probe the sentinel by identity; only materialize the full
-    // mask (via `getmaskarray`) when it is a real mask.
+    // mask (via `getmaskarray`) when it is a real mask. The mask shape agrees
+    // with the data by construction (a numpy.ma array and its `getmaskarray`
+    // share a shape); a genuine mismatch surfaces as the library's
+    // `ShapeMismatch` at `RustMa::new` rather than here.
     let np_ma = py.import("numpy")?.getattr("ma")?;
     if obj.is_instance(&np_ma.getattr("MaskedArray")?)? {
         let getmask = np_ma.call_method1("getmask", (obj,))?;
@@ -978,17 +1359,40 @@ fn source_real_mask<'py>(
         }
         let mask_obj = np_ma.call_method1("getmaskarray", (obj,))?;
         let mask_fa = extract_bool_array(py, &mask_obj)?;
-        // The source mask shape must agree with the coerced data (a numpy.ma
-        // array and its `getmaskarray` share a shape by construction); guard so
-        // a malformed input surfaces as the library's ShapeMismatch rather than
-        // a panic.
-        if mask_fa.shape() != data_fa.shape() {
-            return Ok(None);
-        }
         return Ok(Some(mask_fa));
     }
     // Plain ndarray / list / scalar — not masked, keep the nomask path.
     Ok(None)
+}
+
+/// Re-wrap a `DynMa` source with a (possibly new) mask, preserving its native
+/// dtype variant. `Some(mask)` materializes a REAL mask of that dtype;
+/// `None` reproduces the source's own mask state (nomask vs real) verbatim.
+fn rewrap_with_mask(src: &DynMa, mask: Option<ArrayD<bool>>) -> PyResult<DynMa> {
+    let Some(m) = mask else {
+        return Ok(src.clone());
+    };
+    macro_rules! rewrap {
+        ($sm:expr, $variant:ident) => {{
+            let data = $sm.data().clone();
+            Ok(DynMa::$variant(
+                RustMa::new(data, m).map_err(ferr_to_pyerr)?,
+            ))
+        }};
+    }
+    match src {
+        DynMa::Bool(sm) => rewrap!(sm, Bool),
+        DynMa::I8(sm) => rewrap!(sm, I8),
+        DynMa::I16(sm) => rewrap!(sm, I16),
+        DynMa::I32(sm) => rewrap!(sm, I32),
+        DynMa::I64(sm) => rewrap!(sm, I64),
+        DynMa::U8(sm) => rewrap!(sm, U8),
+        DynMa::U16(sm) => rewrap!(sm, U16),
+        DynMa::U32(sm) => rewrap!(sm, U32),
+        DynMa::U64(sm) => rewrap!(sm, U64),
+        DynMa::F32(sm) => rewrap!(sm, F32),
+        DynMa::F64(sm) => rewrap!(sm, F64),
+    }
 }
 
 /// Elementwise OR of an explicit mask with a source mask, mirroring numpy's
@@ -1024,26 +1428,28 @@ fn put_err_to_pyerr(e: ferray_core::FerrayError) -> PyErr {
     ferr_to_pyerr(e)
 }
 
-/// `numpy.ma.array(data, mask=None)`.
+/// `numpy.ma.array(data, mask=None, dtype=None)`.
 #[pyfunction]
-#[pyo3(signature = (data, mask = None))]
+#[pyo3(signature = (data, mask = None, dtype = None))]
 pub fn array<'py>(
     py: Python<'py>,
     data: &Bound<'py, PyAny>,
     mask: Option<&Bound<'py, PyAny>>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<PyMaskedArray> {
-    PyMaskedArray::py_new(py, data, mask)
+    PyMaskedArray::py_new(py, data, mask, dtype)
 }
 
-/// `numpy.ma.masked_array(data, mask=None)` — alias for `array`.
+/// `numpy.ma.masked_array(data, mask=None, dtype=None)` — alias for `array`.
 #[pyfunction]
-#[pyo3(signature = (data, mask = None))]
+#[pyo3(signature = (data, mask = None, dtype = None))]
 pub fn masked_array<'py>(
     py: Python<'py>,
     data: &Bound<'py, PyAny>,
     mask: Option<&Bound<'py, PyAny>>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<PyMaskedArray> {
-    PyMaskedArray::py_new(py, data, mask)
+    PyMaskedArray::py_new(py, data, mask, dtype)
 }
 
 /// `numpy.ma.masked_where(condition, data)`.
@@ -1153,13 +1559,13 @@ pub fn masked_outside<'py>(
 /// `numpy.ma.count_masked(a)` — number of masked elements (full reduction).
 #[pyfunction]
 pub fn count_masked(a: &PyMaskedArray) -> PyResult<usize> {
-    fma::count_masked(&a.inner).map_err(ferr_to_pyerr)
+    a.inner.count_masked()
 }
 
 /// `numpy.ma.is_masked(a)` — true iff at least one element is masked.
 #[pyfunction]
 pub fn is_masked(a: &PyMaskedArray) -> PyResult<bool> {
-    fma::is_masked(&a.inner).map_err(ferr_to_pyerr)
+    Ok(a.inner.count_masked()? > 0)
 }
 
 /// `numpy.ma.getmask(a)` — return mask as a numpy bool ndarray.
@@ -1174,13 +1580,14 @@ pub fn getdata<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, P
     a.data(py)
 }
 
-/// `numpy.ma.filled(a, fill_value=None)` — replace masked with fill.
+/// `numpy.ma.filled(a, fill_value=None)` — replace masked with fill (native
+/// dtype; `fill_value` coerced to the array dtype).
 #[pyfunction]
 #[pyo3(signature = (a, fill_value = None))]
 pub fn filled<'py>(
     py: Python<'py>,
     a: &PyMaskedArray,
-    fill_value: Option<f64>,
+    fill_value: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     a.filled(py, fill_value)
 }
@@ -1248,7 +1655,10 @@ fn coerce_to_ma_impl<'py>(
     read_np_mask: bool,
 ) -> PyResult<RustMa<f64, IxDyn>> {
     if let Ok(m) = obj.extract::<PyMaskedArray>() {
-        return Ok(m.inner);
+        // The float-only ufunc/reduction surface computes in f64 (numpy.ma
+        // promotes integer/bool input to float for these ops); cast the native
+        // variant to f64, preserving the mask.
+        return m.to_f64_ma();
     }
     let data_fa = extract_data(py, obj)?;
     let n = data_fa.size();
@@ -1605,18 +2015,18 @@ pub fn prod<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAn
     if a.all_masked()? {
         return ma_masked_singleton(py);
     }
-    let v = a.inner.prod().map_err(ferr_to_pyerr)?;
+    let v = a.to_f64_ma()?.prod().map_err(ferr_to_pyerr)?;
     Ok(v.into_pyobject(py)?.into_any())
 }
 
 /// `numpy.ma.median(a)` — median of unmasked elements. All-masked reduces
-/// to the `numpy.ma.masked` singleton.
+/// to the `numpy.ma.masked` singleton. Computed in f64 (promote-to-float).
 #[pyfunction]
 pub fn median<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
     if a.all_masked()? {
         return ma_masked_singleton(py);
     }
-    let v = a.inner.median().map_err(ferr_to_pyerr)?;
+    let v = a.to_f64_ma()?.median().map_err(ferr_to_pyerr)?;
     Ok(v.into_pyobject(py)?.into_any())
 }
 
@@ -1627,28 +2037,28 @@ pub fn ptp<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny
     if a.all_masked()? {
         return ma_masked_singleton(py);
     }
-    let v = a.inner.ptp().map_err(ferr_to_pyerr)?;
+    let v = a.to_f64_ma()?.ptp().map_err(ferr_to_pyerr)?;
     Ok(v.into_pyobject(py)?.into_any())
 }
 
 /// `numpy.ma.argmin(a)` — index of the minimum unmasked element (flat).
 #[pyfunction]
 pub fn argmin<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    let v = a.inner.argmin().map_err(ferr_to_pyerr)?;
+    let v = a.to_f64_ma()?.argmin().map_err(ferr_to_pyerr)?;
     Ok(v.into_pyobject(py)?.into_any())
 }
 
 /// `numpy.ma.argmax(a)` — index of the maximum unmasked element (flat).
 #[pyfunction]
 pub fn argmax<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    let v = a.inner.argmax().map_err(ferr_to_pyerr)?;
+    let v = a.to_f64_ma()?.argmax().map_err(ferr_to_pyerr)?;
     Ok(v.into_pyobject(py)?.into_any())
 }
 
 /// `numpy.ma.count(a)` — number of unmasked elements.
 #[pyfunction]
 pub fn count(a: &PyMaskedArray) -> PyResult<usize> {
-    a.inner.count().map_err(ferr_to_pyerr)
+    a.inner.count()
 }
 
 /// `numpy.ma.average(a, weights=None)` — weighted average over unmasked
@@ -1663,11 +2073,12 @@ pub fn average<'py>(
     if a.all_masked()? {
         return ma_masked_singleton(py);
     }
+    let af = a.to_f64_ma()?;
     let v = match weights {
-        None => a.inner.average(None).map_err(ferr_to_pyerr)?,
+        None => af.average(None).map_err(ferr_to_pyerr)?,
         Some(w) => {
             let w_fa = extract_data(py, w)?;
-            a.inner.average(Some(&w_fa)).map_err(ferr_to_pyerr)?
+            af.average(Some(&w_fa)).map_err(ferr_to_pyerr)?
         }
     };
     Ok(v.into_pyobject(py)?.into_any())
@@ -1678,24 +2089,29 @@ pub fn average<'py>(
 /// `True` for `all`).
 #[pyfunction]
 pub fn all(a: &PyMaskedArray) -> PyResult<bool> {
-    let data = fma::getdata(&a.inner).map_err(ferr_to_pyerr)?;
-    let mask = fma::getmaskarray(&a.inner).map_err(ferr_to_pyerr)?;
-    Ok(data.iter().zip(mask.iter()).all(|(&v, &m)| m || v != 0.0))
+    let m = a.to_f64_ma()?;
+    let data = fma::getdata(&m).map_err(ferr_to_pyerr)?;
+    let mask = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
+    Ok(data.iter().zip(mask.iter()).all(|(&v, &mk)| mk || v != 0.0))
 }
 
 /// `numpy.ma.any(a)` — true iff at least one unmasked element is truthy.
 #[pyfunction]
 pub fn any(a: &PyMaskedArray) -> PyResult<bool> {
-    let data = fma::getdata(&a.inner).map_err(ferr_to_pyerr)?;
-    let mask = fma::getmaskarray(&a.inner).map_err(ferr_to_pyerr)?;
-    Ok(data.iter().zip(mask.iter()).any(|(&v, &m)| !m && v != 0.0))
+    let m = a.to_f64_ma()?;
+    let data = fma::getdata(&m).map_err(ferr_to_pyerr)?;
+    let mask = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
+    Ok(data
+        .iter()
+        .zip(mask.iter())
+        .any(|(&v, &mk)| !mk && v != 0.0))
 }
 
 /// `numpy.ma.anom(a)` — deviations from the unmasked mean (a.k.a.
-/// `anomalies`). Returns a `MaskedArray` of `x − mean(x)`.
+/// `anomalies`). Returns a `MaskedArray` of `x − mean(x)` (float64).
 #[pyfunction]
 pub fn anom(a: &PyMaskedArray) -> PyResult<PyMaskedArray> {
-    let out = a.inner.anom().map_err(ferr_to_pyerr)?;
+    let out = a.to_f64_ma()?.anom().map_err(ferr_to_pyerr)?;
     Ok(PyMaskedArray::from_inner(out))
 }
 
@@ -1938,7 +2354,7 @@ pub fn clip<'py>(
 /// `nomask`): an unmasked array yields an all-`False` array.
 #[pyfunction]
 pub fn getmaskarray<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    let mask: ArrayD<bool> = fma::getmaskarray(&a.inner).map_err(ferr_to_pyerr)?;
+    let mask = a.inner.mask_bits()?;
     Ok(mask.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 
@@ -2067,10 +2483,20 @@ pub fn is_masked_array<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<
 }
 
 /// `numpy.ma.set_fill_value(a, fill_value)` — set the masked array's fill
-/// value in place and return it.
+/// value in place. The given `fill_value` is cast to the array's native dtype
+/// (numpy stores the fill in `self.dtype`).
 #[pyfunction]
-pub fn set_fill_value(a: &mut PyMaskedArray, fill_value: f64) {
-    a.inner.set_fill_value(fill_value);
+pub fn set_fill_value(
+    py: Python<'_>,
+    a: &mut PyMaskedArray,
+    fill_value: &Bound<'_, PyAny>,
+) -> PyResult<()> {
+    let dt = a.inner.dtype_name();
+    match_ma!(&mut a.inner, m, T => {
+        let fv = coerce_scalar::<T>(py, fill_value, dt)?;
+        m.set_fill_value(fv);
+        Ok(())
+    })
 }
 
 /// `numpy.ma.default_fill_value(obj)` — the default fill value used for
@@ -2390,7 +2816,7 @@ fn coerce_to_bool_ma<'py>(
     obj: &Bound<'py, PyAny>,
 ) -> PyResult<RustMa<bool, IxDyn>> {
     if let Ok(m) = obj.extract::<PyMaskedArray>() {
-        let (data, mask, shape) = ma_parts(&m.inner)?;
+        let (data, mask, shape) = ma_parts(&m.to_f64_ma()?)?;
         let bdata: Vec<bool> = data.iter().map(|&v| v != 0.0).collect();
         let data_arr =
             ArrayD::<bool>::from_vec(IxDyn::new(&shape), bdata).map_err(ferr_to_pyerr)?;
