@@ -27,6 +27,21 @@
 //! int64` work and overflow wraps like NumPy's fixed-width integers.
 //! `divide_promoted` stays float-output (NumPy true-division): integer
 //! true-division is the same-type `divide` via `TrueDivide`.
+//!
+//! ## REQ status — REQ-23 unary float-ufunc int/bool→float promotion
+//!
+//! SHIPPED: the `PromoteFloat` trait + the `*_promote` family (`sqrt_promote`,
+//! `exp_promote`, `rint_promote`, `sin_promote`, … 24 entry points generated
+//! by `unary_promote_fn!`) accept integer/bool input and promote to the
+//! smallest-safe-cast float (`PromoteFloat::Out`: i16/u16→f32, i32/i64/u32/
+//! u64→f64; bool/i8/u8→half::f16 under the `f16` feature). `unary_promote_float`
+//! casts int→compute-float, runs the existing `T: Float` ufunc unchanged, and
+//! narrows. f32/f64 float callers are byte-identical (the existing kernels are
+//! never modified). Mirrors NumPy's float-only loop registration
+//! (`generate_umath.py:907-1027`: `sqrt`/`exp`/`rint` register no `TD(bints)`).
+//! Consumer: `rint_promote` is the production callee for the rounding crate's
+//! integer-`rint` contract; the family is the workspace's int-accepting unary
+//! ufunc surface. Verified by `tests/divergence_unary_promote.rs`.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
@@ -37,6 +52,304 @@ use num_traits::Float;
 
 use crate::helpers::binary_elementwise_op;
 use crate::ops::arithmetic::WrappingArith;
+
+// ---------------------------------------------------------------------------
+// Unary float-ufunc integer/bool input promotion (REQ-23)
+//
+// NumPy accepts integer and bool input across the entire unary float-ufunc
+// family (exp/log/sqrt/sin/.../rint). These ops register only float loops
+// (`generate_umath.py`: e.g. `sqrt` starts at `TD('e', ...)` then
+// `TD('fdg'+cmplx)`, with NO `TD(bints)`), so an integer/bool input
+// safe-casts UP to the smallest float loop that can hold its kind. NumPy
+// resolves that to: bool/int8/uint8 -> float16, int16/uint16 -> float32,
+// int32/int64/uint32/uint64 -> float64
+// (numpy/_core/code_generators/generate_umath.py:907-1027). This mirrors
+// ferray-core's `Promoted` int+float table (e.g. `i16 + f32 -> f32`,
+// `i32 + f32 -> f64`) projected onto the "promote against the smallest
+// float" rule.
+//
+// `PromoteFloat` carries that mapping at the type level. The f32/f64-output
+// kinds cast the integer up to the compute float and run the EXISTING
+// generic `T: Float` ufunc unchanged, so existing f32/f64 callers are
+// byte-identical (this module never touches their code path). The
+// f16-output kinds (bool/int8/uint8) compute the math in f32 and narrow the
+// result to `half::f16` — exactly how NumPy's float16 ufunc loop works
+// (`astype={'e': 'f'}` in the `TD('e', ...)` entries) and how ferray's
+// existing `*_f16` ops behave; `half::f16` additionally lacks a `CrMath`
+// impl, so routing through the f32 kernel is also the only correct option
+// for the transcendentals.
+// ---------------------------------------------------------------------------
+
+/// Type-level mapping from an integer/bool input element to the floating
+/// output kind NumPy promotes it to for unary float ufuncs (REQ-23).
+///
+/// `Compute` is the float type the kernel actually runs in (f32 for the
+/// f16- and f32-output kinds, f64 for the f64-output kind); `Out` is the
+/// element type of the returned array. For the f32/f64 kinds `Out ==
+/// Compute`; for the f16 kinds the f32 result is narrowed via
+/// [`narrow`](PromoteFloat::narrow).
+///
+/// This trait is implemented only for the integer and bool element types —
+/// floats are intentionally excluded so the public `*_promote` entry points
+/// reject `f32`/`f64` input (those callers use the existing `sqrt`/`exp`/…
+/// directly, with no promotion).
+pub trait PromoteFloat: Element + Copy {
+    /// The float type the kernel computes in.
+    type Compute: Element + Copy + Float;
+    /// The element type of the promoted output array (`f16`/`f32`/`f64`).
+    type Out: Element + Copy;
+
+    /// Widen one input element to the compute float.
+    fn to_compute(self) -> Self::Compute;
+    /// Narrow one computed element to the output type.
+    fn narrow(c: Self::Compute) -> Self::Out;
+}
+
+/// f32/f64-output kinds: `Out == Compute`, narrow is the identity.
+macro_rules! impl_promote_float_same {
+    ($int:ty => $flt:ty) => {
+        impl PromoteFloat for $int {
+            type Compute = $flt;
+            type Out = $flt;
+            #[inline]
+            fn to_compute(self) -> $flt {
+                <$int as PromoteTo<$flt>>::promote(self)
+            }
+            #[inline]
+            fn narrow(c: $flt) -> $flt {
+                c
+            }
+        }
+    };
+}
+
+// int16/uint16 -> float32 (numpy: `i16 + f32 -> f32`).
+impl_promote_float_same!(i16 => f32);
+impl_promote_float_same!(u16 => f32);
+// int32/int64/uint32/uint64 -> float64 (numpy: `i32 + f32 -> f64`, etc.).
+impl_promote_float_same!(i32 => f64);
+impl_promote_float_same!(i64 => f64);
+impl_promote_float_same!(u32 => f64);
+impl_promote_float_same!(u64 => f64);
+
+/// f16-output kinds (bool/int8/uint8): compute in f32, narrow to `half::f16`.
+/// Feature-gated because `half::f16` only exists under the `f16` feature.
+#[cfg(feature = "f16")]
+macro_rules! impl_promote_float_f16 {
+    ($int:ty) => {
+        impl PromoteFloat for $int {
+            type Compute = f32;
+            type Out = half::f16;
+            #[inline]
+            fn to_compute(self) -> f32 {
+                <$int as PromoteTo<f32>>::promote(self)
+            }
+            #[inline]
+            fn narrow(c: f32) -> half::f16 {
+                half::f16::from_f32(c)
+            }
+        }
+    };
+}
+
+#[cfg(feature = "f16")]
+impl_promote_float_f16!(bool);
+#[cfg(feature = "f16")]
+impl_promote_float_f16!(i8);
+#[cfg(feature = "f16")]
+impl_promote_float_f16!(u8);
+
+/// Cast an integer/bool input array to its compute float, run a generic
+/// unary float kernel `op` (the existing `T: Float` ufunc monomorphised at
+/// the compute type), and narrow the result to the promoted output type.
+///
+/// Shared by every `*_promote` entry point in this module so the int->float
+/// promotion logic lives in exactly one place. The `op` closure receives a
+/// `&Array<Compute, D>` and returns `Array<Compute, D>`; for the f32/f64
+/// kinds `narrow` is the identity so the existing kernel's bytes flow
+/// straight through.
+#[inline]
+fn unary_promote_float<T, D>(
+    input: &Array<T, D>,
+    op: impl Fn(&Array<T::Compute, D>) -> FerrayResult<Array<T::Compute, D>>,
+) -> FerrayResult<Array<<T as PromoteFloat>::Out, D>>
+where
+    T: PromoteFloat,
+    D: Dimension,
+{
+    // Cast int/bool -> compute float, reusing the contiguous fast path.
+    let compute: Array<T::Compute, D> = if let Some(slice) = input.as_slice() {
+        let data: Vec<T::Compute> = slice.iter().map(|&x| x.to_compute()).collect();
+        Array::from_vec(input.dim().clone(), data)?
+    } else {
+        let data: Vec<T::Compute> = input.iter().map(|&x| x.to_compute()).collect();
+        Array::from_vec(input.dim().clone(), data)?
+    };
+    let result = op(&compute)?;
+    // Narrow to the output kind (identity for f32/f64, f32->f16 for f16).
+    let out: Array<<T as PromoteFloat>::Out, D> = if let Some(slice) = result.as_slice() {
+        let data: Vec<<T as PromoteFloat>::Out> = slice.iter().map(|&c| T::narrow(c)).collect();
+        Array::from_vec(result.dim().clone(), data)?
+    } else {
+        let data: Vec<<T as PromoteFloat>::Out> = result.iter().map(|&c| T::narrow(c)).collect();
+        Array::from_vec(result.dim().clone(), data)?
+    };
+    Ok(out)
+}
+
+/// Generate a `pub fn <name>_promote` int/bool-accepting entry point that
+/// promotes per REQ-23 and routes through the existing float ufunc
+/// `$op_path`. `$op_path` must be the crate's generic `T: Float` (or
+/// `T: Float + CrMath`) unary ufunc — it is called monomorphised at the
+/// resolved compute float, so f32/f64 results are byte-identical to a direct
+/// float call.
+macro_rules! unary_promote_fn {
+    (
+        $(#[$attr:meta])*
+        $name:ident,
+        $op_path:path
+    ) => {
+        $(#[$attr])*
+        pub fn $name<T, D>(
+            input: &Array<T, D>,
+        ) -> FerrayResult<Array<<T as PromoteFloat>::Out, D>>
+        where
+            T: PromoteFloat,
+            T::Compute: crate::cr_math::CrMath,
+            D: Dimension,
+        {
+            unary_promote_float(input, |c| $op_path(c))
+        }
+    };
+}
+
+// exp / log family (need CrMath on the compute float — f32 and f64 both
+// impl CrMath, so the `T::Compute: CrMath` bound is always satisfiable).
+unary_promote_fn!(
+    /// `exp` with NumPy int/bool->float promotion (REQ-23). `np.exp(int64
+    /// [1,2,4]) -> float64`; `np.exp(uint8 [1]) -> float16`.
+    exp_promote,
+    crate::exp
+);
+unary_promote_fn!(
+    /// `exp2` with int/bool->float promotion (REQ-23).
+    exp2_promote,
+    crate::exp2
+);
+unary_promote_fn!(
+    /// `expm1` with int/bool->float promotion (REQ-23).
+    expm1_promote,
+    crate::expm1
+);
+unary_promote_fn!(
+    /// `log` with int/bool->float promotion (REQ-23).
+    log_promote,
+    crate::log
+);
+unary_promote_fn!(
+    /// `log2` with int/bool->float promotion (REQ-23).
+    log2_promote,
+    crate::log2
+);
+unary_promote_fn!(
+    /// `log10` with int/bool->float promotion (REQ-23).
+    log10_promote,
+    crate::log10
+);
+unary_promote_fn!(
+    /// `log1p` with int/bool->float promotion (REQ-23).
+    log1p_promote,
+    crate::log1p
+);
+
+// The remaining REQ-23 ops route through generic `T: Float` ufuncs that do
+// not need `CrMath`; they still satisfy the macro's bound because f32/f64
+// both impl CrMath. Using one macro keeps every entry point uniform.
+unary_promote_fn!(
+    /// `sqrt` with int/bool->float promotion (REQ-23). `np.sqrt(int64
+    /// [1,2,4]) -> float64 [1.0, √2, 2.0]`; `np.sqrt(bool [T,F,T]) ->
+    /// float16 [1.0, 0.0, 1.0]`.
+    sqrt_promote,
+    crate::sqrt
+);
+unary_promote_fn!(
+    /// `cbrt` with int/bool->float promotion (REQ-23).
+    cbrt_promote,
+    crate::cbrt
+);
+unary_promote_fn!(
+    /// `fabs` with int/bool->float promotion (REQ-23).
+    fabs_promote,
+    crate::fabs
+);
+unary_promote_fn!(
+    /// `rint` with int/bool->float promotion (REQ-23). Unlike
+    /// floor/ceil/trunc/round (REQ-24, int identity), `rint` registers NO
+    /// `TD(bints)` (`generate_umath.py:1021`), so int input promotes to
+    /// float: `np.rint(int64 [1,2,4]) -> float64 [1.0,2.0,4.0]`.
+    rint_promote,
+    crate::rint
+);
+unary_promote_fn!(
+    /// `sin` with int/bool->float promotion (REQ-23).
+    sin_promote,
+    crate::sin
+);
+unary_promote_fn!(
+    /// `cos` with int/bool->float promotion (REQ-23).
+    cos_promote,
+    crate::cos
+);
+unary_promote_fn!(
+    /// `tan` with int/bool->float promotion (REQ-23).
+    tan_promote,
+    crate::tan
+);
+unary_promote_fn!(
+    /// `arcsin` with int/bool->float promotion (REQ-23).
+    arcsin_promote,
+    crate::arcsin
+);
+unary_promote_fn!(
+    /// `arccos` with int/bool->float promotion (REQ-23).
+    arccos_promote,
+    crate::arccos
+);
+unary_promote_fn!(
+    /// `arctan` with int/bool->float promotion (REQ-23).
+    arctan_promote,
+    crate::arctan
+);
+unary_promote_fn!(
+    /// `sinh` with int/bool->float promotion (REQ-23).
+    sinh_promote,
+    crate::sinh
+);
+unary_promote_fn!(
+    /// `cosh` with int/bool->float promotion (REQ-23).
+    cosh_promote,
+    crate::cosh
+);
+unary_promote_fn!(
+    /// `tanh` with int/bool->float promotion (REQ-23).
+    tanh_promote,
+    crate::tanh
+);
+unary_promote_fn!(
+    /// `arcsinh` with int/bool->float promotion (REQ-23).
+    arcsinh_promote,
+    crate::arcsinh
+);
+unary_promote_fn!(
+    /// `arccosh` with int/bool->float promotion (REQ-23).
+    arccosh_promote,
+    crate::arccosh
+);
+unary_promote_fn!(
+    /// `arctanh` with int/bool->float promotion (REQ-23).
+    arctanh_promote,
+    crate::arctanh
+);
 
 /// Cast every element of `a` from `A` to the target type `Out`, producing
 /// a fresh array. This is the tiny bridge that lets a mixed-type op

@@ -1,6 +1,20 @@
-// ferray-ufunc: Rounding functions
-//
-// round (banker's rounding!), floor, ceil, trunc, fix, rint, around
+//! ferray-ufunc: Rounding functions
+//!
+//! round (banker's rounding!), floor, ceil, trunc, fix, rint, around
+//!
+//! ## REQ status — REQ-24 floor/ceil/trunc/round integer-input identity
+//!
+//! SHIPPED: `floor_int`/`ceil_int`/`trunc_int`/`round_int`/`fix_int`/
+//! `around_int` accept `T: Element + Copy` (any int/bool) and return the input
+//! UNCHANGED in the INPUT dtype via `round_identity` — `np.floor(int32)→int32`,
+//! `np.floor(bool)→bool`. Mirrors NumPy registering `TD(bints)` FIRST for these
+//! ops (floor `generate_umath.py:1011`, ceil `:983`, trunc `:993`). This is the
+//! OPPOSITE of `rint`, which has NO `TD(bints)` and promotes integer input to
+//! float (REQ-23) — served by `rint_promote` in `promoted.rs`, NOT by a `*_int`
+//! sibling here. The float `floor`/`ceil`/`trunc`/`round`/`rint` (`T: Float`)
+//! are untouched (f32/f64 byte-identical). Consumer: the `*_int` entries are the
+//! integer-rounding public surface re-exported from `lib.rs`. Verified by
+//! `tests/divergence_unary_promote.rs`.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
@@ -108,6 +122,98 @@ where
     D: Dimension,
 {
     trunc(input)
+}
+
+// ---------------------------------------------------------------------------
+// Integer-input rounding (REQ-24): floor/ceil/trunc/round/fix/around are
+// INT-IDENTITY on integer/bool input.
+//
+// NumPy registers `TD(bints)` FIRST for floor/ceil/trunc (and the rounding
+// resolver routes round/around/fix the same way), so an integer or bool
+// input array selects the integer loop and is returned UNCHANGED, in the
+// INPUT dtype — `np.floor(int64)->int64`, `np.ceil(int32)->int32`,
+// `np.floor(bool)->bool`
+// (numpy/_core/code_generators/generate_umath.py:983 ceil, :993 trunc,
+// :1011 floor — `TD(bints)` is the first registered loop). This is the
+// OPPOSITE of `rint`, which has NO `TD(bints)` (`generate_umath.py:1021`)
+// and promotes integer input to float (REQ-23, `rint_promote`). ferray's
+// float `floor`/`ceil`/`trunc`/`round` above are `T: Float` and reject
+// integer input at compile time, so these `*_int` siblings carry the
+// integer contract; the float entry points are untouched (f32/f64
+// byte-identical).
+//
+// `T: Element + Copy` (no `Float`) accepts every integer and bool element
+// type. The op is a pure identity copy preserving shape, layout, and dtype.
+// ---------------------------------------------------------------------------
+
+/// Identity copy preserving the input dtype/shape — the shared kernel for
+/// the integer-input rounding ops (REQ-24).
+#[inline]
+fn round_identity<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    let data: Vec<T> = input.iter().copied().collect();
+    Array::from_vec(input.dim().clone(), data)
+}
+
+/// `floor` on integer/bool input: returns the values unchanged in the input
+/// dtype (REQ-24, `TD(bints)` first). `np.floor(int64 [1,2,4]) == [1,2,4]`
+/// with `.dtype == int64`; `np.floor(bool [T,F]).dtype == bool`.
+pub fn floor_int<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    round_identity(input)
+}
+
+/// `ceil` on integer/bool input: int-identity (REQ-24).
+/// `np.ceil(int32 [5]).dtype == int32`.
+pub fn ceil_int<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    round_identity(input)
+}
+
+/// `trunc` on integer/bool input: int-identity (REQ-24).
+pub fn trunc_int<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    round_identity(input)
+}
+
+/// `round` on integer/bool input: int-identity (REQ-24). Unlike `rint`
+/// (REQ-23 float-promote), `round`/`around` keep integer input integer.
+pub fn round_int<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    round_identity(input)
+}
+
+/// `around` (alias of `round`) on integer/bool input: int-identity (REQ-24).
+pub fn around_int<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    round_identity(input)
+}
+
+/// `fix` (alias of `trunc`) on integer/bool input: int-identity (REQ-24).
+pub fn fix_int<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+{
+    round_identity(input)
 }
 
 // ---------------------------------------------------------------------------

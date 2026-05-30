@@ -82,6 +82,13 @@ pub use ops::explog::{
 // Rounding
 pub use ops::rounding::{around, ceil, fix, floor, rint, round, trunc};
 
+// Rounding — integer/bool input identity (REQ-24): floor/ceil/trunc/round/
+// fix/around register `TD(bints)` first in NumPy, so integer input is
+// returned unchanged in the input dtype (NOT promoted to float). `rint` has
+// no `TD(bints)` and instead promotes to float — that path is `rint_promote`
+// in the unary-promote family below.
+pub use ops::rounding::{around_int, ceil_int, fix_int, floor_int, round_int, trunc_int};
+
 // Arithmetic
 pub use ops::arithmetic::{
     TrueDivide, WrappingArith, absolute, absolute_int, absolute_into, add, add_accumulate,
@@ -169,6 +176,19 @@ pub use ufunc_methods::{
 // Uses ferray-core's `Promoted` trait to resolve the output type at
 // compile time and `PromoteTo` to cast both operands.
 pub use promoted::{add_promoted, divide_promoted, multiply_promoted, subtract_promoted};
+
+// Unary float-ufunc integer/bool input promotion (REQ-23): the entire
+// transcendental / trig / sqrt / rint family accepts integer and bool input
+// and promotes to the smallest safe-cast float (bool/int8/uint8 -> float16,
+// int16/uint16 -> float32, int32/int64/uint32/uint64 -> float64), matching
+// NumPy's ufunc dtype resolution. The output element type is
+// `<T as PromoteFloat>::Out`.
+pub use promoted::{
+    PromoteFloat, arccos_promote, arccosh_promote, arcsin_promote, arcsinh_promote, arctan_promote,
+    arctanh_promote, cbrt_promote, cos_promote, cosh_promote, exp_promote, exp2_promote,
+    expm1_promote, fabs_promote, log_promote, log1p_promote, log2_promote, log10_promote,
+    rint_promote, sin_promote, sinh_promote, sqrt_promote, tan_promote, tanh_promote,
+};
 
 // First-class ufunc objects: `add_ufunc().reduce(arr, 0)` etc. The
 // [`Ufunc`] struct wraps any binary op + identity and exposes the
