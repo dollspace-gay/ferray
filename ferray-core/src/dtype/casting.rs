@@ -73,12 +73,21 @@ fn is_safe_cast(from: DType, to: DType) -> bool {
     }
 }
 
-/// Check if `from` and `to` are the same "kind" (integer, float, complex).
+/// Check if `from` can be cast to `to` under NumPy's `'same_kind'` rule.
+///
+/// NumPy's casting lattice is ordered `no < equiv < safe < same_kind < unsafe`
+/// (`PyArray_MinCastSafety` in `numpy/_core/src/multiarray/convert_datatype.c`),
+/// so any cast allowed under `'safe'` is ALSO allowed under `'same_kind'`. On
+/// top of that, `'same_kind'` additionally permits casts that stay within the
+/// same kind category (e.g. `i64 -> i32`, `f64 -> f32`) even though they may
+/// narrow / lose information.
+///
+/// `bool` is the bottom of numpy's kind ordering (`dtype_kind_to_ordering`
+/// maps `'b'` to 0), so `bool -> <numeric>` is a safe cast and is therefore
+/// covered by the `is_safe_cast` subsumption below.
 fn is_same_kind(from: DType, to: DType) -> bool {
-    if from == to {
-        return true;
-    }
-    dtype_kind(from) == dtype_kind(to)
+    // safe ⊆ same_kind (lattice subsumption), then the kind-equality fallback.
+    is_safe_cast(from, to) || dtype_kind(from) == dtype_kind(to)
 }
 
 /// Return a "kind" category for a `DType`.
