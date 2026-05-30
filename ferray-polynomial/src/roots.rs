@@ -91,6 +91,12 @@ pub fn find_roots_from_power_coeffs(coeffs: &[f64]) -> Result<Vec<Complex<f64>>,
             for root in &mut eigenvalues {
                 newton_polish(&coeffs[..n], root);
             }
+            // numpy `polyroots` sorts the companion-matrix eigenvalues with
+            // `r.sort()` (numpy/polynomial/polynomial.py:1603), which on a
+            // complex array is lexicographic by (real, then imaginary) part.
+            // Mirror that ordering. `total_cmp` is panic-free (R-CODE-2): it
+            // gives a total order on f64 without unwrapping on NaN.
+            eigenvalues.sort_by(|a, b| a.re.total_cmp(&b.re).then(a.im.total_cmp(&b.im)));
             Ok(eigenvalues)
         }
     }

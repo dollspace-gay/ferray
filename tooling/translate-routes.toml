@@ -172,3 +172,103 @@ upstream = [
 ]
 design = ".design/ferray-ufunc.md"
 parity_ops = ["public_reexport"]
+
+[[route]]
+crate_pattern = "ferray-ufunc/src/ops/explog.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py"]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["exp", "exp2", "expm1", "log", "log2", "log10", "log1p"]
+
+[[route]]
+crate_pattern = "ferray-ufunc/src/ops/trig.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py"]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["sin", "cos", "tan", "arcsin", "arccos", "arctan", "sinh", "cosh", "tanh"]
+
+[[route]]
+crate_pattern = "ferray-ufunc/src/ops/rounding.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py"]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["floor", "ceil", "trunc", "round", "rint"]
+
+[[route]]
+crate_pattern = "ferray-ufunc/src/helpers.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py"]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["unary_dispatch"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# ferray-stats — statistical reductions (depends on ferray-core, ferray-ufunc)
+# ─────────────────────────────────────────────────────────────────────────
+
+[[route]]
+crate_pattern = "ferray-stats/src/reductions/mod.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/fromnumeric.py",
+  "/home/doll/numpy-ref/numpy/_core/_methods.py",
+]
+design = ".design/ferray-stats.md"
+parity_ops = ["cumsum", "cumprod", "sum", "prod"]
+
+[[route]]
+crate_pattern = "ferray-stats/src/reductions/quantile.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/lib/_function_base_impl.py",
+]
+design = ".design/ferray-stats.md"
+parity_ops = ["percentile", "quantile", "median"]
+
+[[route]]
+crate_pattern = "ferray-stats/src/descriptive.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/_methods.py",
+  "/home/doll/numpy-ref/numpy/lib/_function_base_impl.py",
+]
+design = ".design/ferray-stats.md"
+parity_ops = ["mean", "var", "std", "average", "ptp"]
+
+[[route]]
+crate_pattern = "ferray-stats/src/parallel.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/_methods.py",
+]
+design = ".design/ferray-stats.md"
+parity_ops = ["parallel_sum", "parallel_prod"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# ferray-linalg — linear algebra (faer-backed; depends on ferray-core)
+# ─────────────────────────────────────────────────────────────────────────
+
+[[route]]
+crate_pattern = "ferray-linalg/src/norms.rs"
+upstream = ["/home/doll/numpy-ref/numpy/linalg/_linalg.py"]
+design = ".design/ferray-linalg.md"
+parity_ops = ["norm"]
+
+[[route]]
+crate_pattern = "ferray-linalg/src/decomp/qr.rs"
+upstream = ["/home/doll/numpy-ref/numpy/linalg/_linalg.py"]
+design = ".design/ferray-linalg.md"
+parity_ops = ["qr"]
+
+[[route]]
+crate_pattern = "ferray-linalg/src/decomp/svd.rs"
+upstream = ["/home/doll/numpy-ref/numpy/linalg/_linalg.py"]
+design = ".design/ferray-linalg.md"
+parity_ops = ["svd"]
+
+[[route]]
+crate_pattern = "ferray-linalg/src/solve.rs"
+upstream = ["/home/doll/numpy-ref/numpy/linalg/_linalg.py"]
+design = ".design/ferray-linalg.md"
+parity_ops = ["solve", "inv", "det", "slogdet"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# ferray-polynomial — numpy.polynomial (power/Chebyshev/Legendre/... bases)
+# ─────────────────────────────────────────────────────────────────────────
+
+[[route]]
+crate_pattern = "ferray-polynomial/src/roots.rs"
+upstream = ["/home/doll/numpy-ref/numpy/polynomial/polynomial.py"]
+design = ".design/ferray-polynomial.md"
+parity_ops = ["roots"]
