@@ -108,6 +108,7 @@ from ._ferray import (
     mask_indices,
     nonzero,
     place,
+    put,
     putmask,
     ravel_multi_index,
     select as select_indexing,
@@ -408,7 +409,7 @@ __all__ = [
     # indexing
     "argwhere", "diag_indices", "flatnonzero", "indices", "mask_indices",
     "nonzero", "ravel_multi_index", "tril_indices", "triu_indices", "unravel_index",
-    "choose", "compress", "extract", "place", "putmask", "take", "take_along_axis",
+    "choose", "compress", "extract", "place", "put", "putmask", "take", "take_along_axis",
     "select_indexing",
     # ufunc
     "arccos", "arccosh", "arcsin", "arcsinh", "arctan", "arctan2", "arctanh",

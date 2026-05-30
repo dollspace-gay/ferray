@@ -32,16 +32,19 @@ design = ".design/ferray-ufunc.md"
 parity_ops = ["add", "subtract", "multiply", "divide", "power", "mod", "clip", "maximum", "minimum", "sign", "abs", "exp", "log", "sqrt", "sin", "cos"]
 
 # ferray-python module entry point: registers every #[pyfunction] on the
-# extension module. Touched only to register newly-added top-level ufunc
-# aliases (true_divide / floor_divide / remainder / mod / float_power).
+# extension module. Touched to register newly-added top-level ufunc aliases
+# (true_divide / floor_divide / remainder / mod / float_power) and missing
+# top-level functions from other surfaces (e.g. indexing `put`,
+# numpy/_core/fromnumeric.py:489).
 [[route]]
 crate_pattern = "ferray-python/src/lib.rs"
 upstream = [
   "/home/doll/numpy-ref/numpy/_core/umath.py",
   "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+  "/home/doll/numpy-ref/numpy/_core/fromnumeric.py",
 ]
 design = ".design/ferray-ufunc.md"
-parity_ops = ["true_divide", "floor_divide", "remainder", "mod", "float_power"]
+parity_ops = ["true_divide", "floor_divide", "remainder", "mod", "float_power", "put"]
 
 [[route]]
 crate_pattern = "ferray-python/src/stats.rs"
@@ -125,6 +128,24 @@ upstream = [
 ]
 design = ".design/ferray-core.md"
 parity_ops = ["reshape", "transpose", "swapaxes", "moveaxis", "roll", "squeeze", "expand_dims", "flip", "concatenate", "stack", "repeat", "rot90", "delete"]
+
+# ferray-python indexing binding shim: marshals numpy's index/gather surface
+# (take / take_along_axis / compress / indices / nonzero / put / putmask / …)
+# through to ferray-core's indexing::extended module. Owns the boundary
+# concerns: take/compress default axis=None -> flattened array, take `mode`
+# {'raise','wrap','clip'} index arithmetic, N-d index-shape preservation,
+# scalar-index -> 0-d scalar return, IndexError vs AxisError vs ValueError
+# exception typing, indices dtype=/sparse= kwargs, nonzero 0-d ValueError,
+# top-level `put` registration, and putmask global-flat value cycling.
+[[route]]
+crate_pattern = "ferray-python/src/indexing.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/fromnumeric.py",
+  "/home/doll/numpy-ref/numpy/_core/numeric.py",
+  "/home/doll/numpy-ref/numpy/lib/_index_tricks_impl.py",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["take", "take_along_axis", "compress", "indices", "nonzero", "put", "putmask", "choose", "select", "place", "extract"]
 
 # ─────────────────────────────────────────────────────────────────────────
 # ferray-core — the foundational crate (dependency order: FIRST)

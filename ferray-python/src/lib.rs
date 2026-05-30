@@ -698,6 +698,7 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(indexing::select, m)?)?;
     m.add_function(wrap_pyfunction!(indexing::place, m)?)?;
     m.add_function(wrap_pyfunction!(indexing::putmask, m)?)?;
+    m.add_function(wrap_pyfunction!(indexing::put, m)?)?;
     m.add_function(wrap_pyfunction!(indexing::extract, m)?)?;
 
     // Top-level window aliases (numpy puts these at top level).
