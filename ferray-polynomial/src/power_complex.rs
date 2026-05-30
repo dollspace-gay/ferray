@@ -14,6 +14,14 @@
 //! complex-coefficient polynomial requires a complex companion-
 //! matrix eigensolver, which ferray-linalg does not yet expose.
 //! Real-input fitting also stays out of scope here.
+//!
+//! ## REQ status
+//!
+//! Two states only (SHIPPED / NOT-STARTED), per goal.md.
+//!
+//! | REQ | Status | Evidence |
+//! | --- | --- | --- |
+//! | REQ-POLY-COMPLEX (`numpy.poly` complex roots, #836) | SHIPPED | Impl: `poly_from_roots` returns [`PolyCoeffs::Real`] when the roots are conjugate-closed (`roots_are_conjugate_closed`, mirroring `numpy/lib/_polynomial_impl.py:156-160` `a.real.copy()`), else [`PolyCoeffs::Complex`]. Consumer: `ferray-python/src/polynomial.rs::poly` accepts a complex root sequence and marshals through `poly_from_roots`, returning a `float64` array when imag cancels else `complex128`. |
 
 use ferray_core::error::{FerrayError, FerrayResult};
 use num_complex::Complex;
@@ -158,6 +166,7 @@ impl ComplexPolynomial {
 
     /// Construct a complex polynomial whose roots are exactly
     /// `roots` (mirroring [`crate::power::Polynomial::from_roots`]).
+    /// Coefficients are produced in ascending (lowest-first) order.
     #[must_use]
     pub fn from_roots(roots: &[Complex<f64>]) -> Self {
         let mut coeffs = vec![Complex::new(1.0, 0.0)];
@@ -207,6 +216,73 @@ impl ComplexPolynomial {
             coeffs: self.coeffs[..len].to_vec(),
         })
     }
+}
+
+/// Coefficients of the monic polynomial whose roots are `roots`, in ascending
+/// (lowest-first) order. Either real (when the imaginary parts cancel) or
+/// complex, matching `numpy.poly`'s dtype contract.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PolyCoeffs {
+    /// Every imaginary part cancelled — numpy returns a real (`float64`) array.
+    Real(Vec<f64>),
+    /// At least one root is not part of a conjugate pair — `complex128`.
+    Complex(Vec<Complex<f64>>),
+}
+
+/// Build the coefficients of the monic polynomial whose zeros are `roots`,
+/// mirroring `numpy.poly(seq_of_zeros)`
+/// (`numpy/lib/_polynomial_impl.py:poly`).
+///
+/// numpy convolves `[1, -zero]` for each root, then — if the accumulated
+/// coefficients are complex — checks whether the roots are conjugate-closed
+/// (`NX.all(NX.sort(roots) == NX.sort(roots.conjugate()))`,
+/// `_polynomial_impl.py:156-160`); if so it returns `a.real.copy()`. This
+/// function reproduces that decision, returning [`PolyCoeffs::Real`] for the
+/// conjugate-closed case and [`PolyCoeffs::Complex`] otherwise. Coefficients
+/// are ascending (lowest-first); callers wanting numpy's highest-first layout
+/// reverse the result.
+///
+/// An empty `roots` slice yields the constant polynomial `[1.0]`
+/// (`_polynomial_impl.py:148-149`).
+#[must_use]
+pub fn poly_from_roots(roots: &[Complex<f64>]) -> PolyCoeffs {
+    let complex_coeffs = ComplexPolynomial::from_roots(roots).coeffs().to_vec();
+
+    if roots_are_conjugate_closed(roots) {
+        // Imaginary parts cancel: numpy takes `a.real.copy()`.
+        PolyCoeffs::Real(complex_coeffs.iter().map(|c| c.re).collect())
+    } else {
+        PolyCoeffs::Complex(complex_coeffs)
+    }
+}
+
+/// `true` when sorting `roots` and sorting their conjugates yields the same
+/// sequence — numpy's `NX.all(NX.sort(roots) == NX.sort(roots.conjugate()))`
+/// test for "all complex roots are complex conjugates"
+/// (`numpy/lib/_polynomial_impl.py:159`).
+fn roots_are_conjugate_closed(roots: &[Complex<f64>]) -> bool {
+    // numpy sorts complex arrays lexicographically by (real, imag) and then
+    // compares the two sorted arrays with `==`, under which `-0.0 == +0.0`.
+    // `total_cmp` distinguishes signed zeros, which would mis-order a root
+    // like `-0.0 - 1j` (numpy's `astype(complex)` produces a `-0.0` real part
+    // for `-1j`). Normalize `-0.0` to `+0.0` (via `+ 0.0`) before ordering so
+    // the sort agrees with numpy's `==` semantics, while keeping `total_cmp`'s
+    // deterministic NaN handling (no panic).
+    let norm = |v: f64| v + 0.0;
+    let cmp = |x: &Complex<f64>, y: &Complex<f64>| {
+        norm(x.re)
+            .total_cmp(&norm(y.re))
+            .then(norm(x.im).total_cmp(&norm(y.im)))
+    };
+
+    let mut sorted: Vec<Complex<f64>> = roots.to_vec();
+    sorted.sort_by(cmp);
+    let mut sorted_conj: Vec<Complex<f64>> = roots.iter().map(Complex::conj).collect();
+    sorted_conj.sort_by(cmp);
+
+    // `Complex<f64>` `PartialEq` uses `f64` equality, so `-0.0 == +0.0` here,
+    // matching numpy's element-wise `==`.
+    sorted == sorted_conj
 }
 
 #[cfg(test)]
@@ -307,5 +383,64 @@ mod tests {
         let p = ComplexPolynomial::new(&[c(1.0, 0.0), c(2.0, 0.0), c(3.0, 0.0)]);
         let t = p.truncate(2).unwrap();
         assert_eq!(t.coeffs(), &[c(1.0, 0.0), c(2.0, 0.0)]);
+    }
+
+    // ---- poly_from_roots (#836) ------------------------------------------
+    // Expected coefficients from the live numpy 2.4.5 oracle:
+    //   np.poly([1+2j, 1-2j])  -> array([ 1., -2.,  5.])   (highest-first)
+    //   np.poly([1j, -1j])     -> array([1., 0., 1.])
+    //   np.poly([1, 2, 3])     -> array([ 1., -6., 11., -6.])
+    // poly_from_roots returns LOWEST-first, so reverse to compare.
+
+    #[test]
+    fn poly_from_roots_conjugate_pair_is_real() {
+        // np.poly([1+2j, 1-2j]) == [1, -2, 5] (highest-first) => lowest [5,-2,1]
+        let roots = vec![c(1.0, 2.0), c(1.0, -2.0)];
+        let coeffs = poly_from_roots(&roots);
+        assert_eq!(coeffs, PolyCoeffs::Real(vec![5.0, -2.0, 1.0]));
+    }
+
+    #[test]
+    fn poly_from_roots_imaginary_conjugates_real() {
+        // np.poly([1j, -1j]) == [1, 0, 1] => lowest-first [1, 0, 1]
+        let roots = vec![c(0.0, 1.0), c(0.0, -1.0)];
+        let coeffs = poly_from_roots(&roots);
+        assert_eq!(coeffs, PolyCoeffs::Real(vec![1.0, 0.0, 1.0]));
+    }
+
+    #[test]
+    fn poly_from_roots_real_roots_stay_real() {
+        // np.poly([1,2,3]) == [1, -6, 11, -6] => lowest-first [-6, 11, -6, 1]
+        let roots = vec![c(1.0, 0.0), c(2.0, 0.0), c(3.0, 0.0)];
+        let coeffs = poly_from_roots(&roots);
+        assert_eq!(coeffs, PolyCoeffs::Real(vec![-6.0, 11.0, -6.0, 1.0]));
+    }
+
+    #[test]
+    fn poly_from_roots_unpaired_complex_stays_complex() {
+        // np.poly([1+2j]) == [1, -(1+2j)] => lowest-first [-(1+2j), 1]
+        let roots = vec![c(1.0, 2.0)];
+        let coeffs = poly_from_roots(&roots);
+        assert_eq!(
+            coeffs,
+            PolyCoeffs::Complex(vec![c(-1.0, -2.0), c(1.0, 0.0)])
+        );
+    }
+
+    #[test]
+    fn poly_from_roots_empty_is_constant_one() {
+        // np.poly([]) == 1.0
+        let coeffs = poly_from_roots(&[]);
+        assert_eq!(coeffs, PolyCoeffs::Real(vec![1.0]));
+    }
+
+    #[test]
+    fn poly_from_roots_signed_zero_real_part_still_conjugate_closed() {
+        // numpy's `np.asarray([1j,-1j]).astype(complex)` yields a `-0.0` real
+        // part for `-1j`; the pair is still conjugate-closed and numpy returns
+        // a REAL [1, 0, 1]. total_cmp must not let the signed zero break it.
+        let roots = vec![c(0.0, 1.0), c(-0.0, -1.0)];
+        let coeffs = poly_from_roots(&roots);
+        assert_eq!(coeffs, PolyCoeffs::Real(vec![1.0, 0.0, 1.0]));
     }
 }

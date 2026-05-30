@@ -452,6 +452,16 @@ upstream = ["/home/doll/numpy-ref/numpy/linalg/_linalg.py"]
 design = ".design/ferray-linalg.md"
 parity_ops = ["solve", "inv", "det", "slogdet"]
 
+# Matrix/vector products: dot, vdot, inner, outer, matmul, kron, multi_dot,
+# vecdot, tensordot, einsum, and cross. `cross` follows numpy's legacy
+# top-level `numpy.cross` (`numpy/_core/numeric.py:cross`): stacked (...,3)
+# vectors along the last axis, plus the legacy 2-component scalar z form.
+[[route]]
+crate_pattern = "ferray-linalg/src/products/mod.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/numeric.py"]
+design = ".design/ferray-linalg.md"
+parity_ops = ["cross", "dot", "vdot", "inner", "outer", "matmul", "kron", "multi_dot", "tensordot"]
+
 # ─────────────────────────────────────────────────────────────────────────
 # ferray-polynomial — numpy.polynomial (power/Chebyshev/Legendre/... bases)
 # ─────────────────────────────────────────────────────────────────────────
@@ -461,6 +471,16 @@ crate_pattern = "ferray-polynomial/src/roots.rs"
 upstream = ["/home/doll/numpy-ref/numpy/polynomial/polynomial.py"]
 design = ".design/ferray-polynomial.md"
 parity_ops = ["roots"]
+
+# Complex-coefficient power-basis polynomial. Backs `numpy.poly(seq_of_zeros)`
+# for COMPLEX roots: convolve (x - r_i) over complex, then return REAL coeffs
+# when the roots are conjugate-closed, else complex
+# (`numpy/lib/_polynomial_impl.py:poly`, lines 156-161 `a.real.copy()`).
+[[route]]
+crate_pattern = "ferray-polynomial/src/power_complex.rs"
+upstream = ["/home/doll/numpy-ref/numpy/lib/_polynomial_impl.py"]
+design = ".design/ferray-polynomial.md"
+parity_ops = ["poly"]
 
 # ferray-python numpy.polynomial class-API binding shim: marshals the
 # numpy.polynomial.Polynomial / Chebyshev / Legendre / Hermite / HermiteE /

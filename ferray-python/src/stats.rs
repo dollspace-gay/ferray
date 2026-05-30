@@ -16,12 +16,16 @@
 
 use ferray_core::array::aliases::{Array1, ArrayD};
 use ferray_core::dimension::{Ix1, IxDyn};
+use ferray_linalg as fl;
 use ferray_numpy_interop::{AsFerray, IntoNumPy};
 use numpy::{PyReadonlyArray1, PyReadonlyArrayDyn};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use crate::conv::{as_ndarray, coerce_dtype, dtype_name, extract_q, ferr_to_pyerr, normalize_axis};
+use crate::conv::{
+    as_ndarray, coerce_dtype, dtype_name, extract_q, ferr_to_pyerr, normalize_axis,
+    promote_linalg_input,
+};
 use crate::{match_dtype_all, match_dtype_float, match_dtype_numeric, match_dtype_orderable};
 
 // ---------------------------------------------------------------------------
@@ -1516,26 +1520,35 @@ pub fn sort_complex<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bou
 // cross (1-D 3-vector)
 // ---------------------------------------------------------------------------
 
-/// `numpy.cross(a, b)` for two 3-element 1-D vectors
-/// (numpy/_core/numeric.py:1454). The library `ferray_ufunc::cross` is the
-/// 3-vector cross product; stacked / 2-component cross is not yet in the
-/// library, so this binding handles the 1-D 3-vector case (numpy's most
-/// common usage). Integer inputs keep their dtype (numpy's int loop).
+/// `numpy.cross(a, b)` — the legacy top-level cross product
+/// (`numpy/_core/numeric.py:cross`).
+///
+/// Routes through `ferray_linalg::cross`, which computes the cross product
+/// along the last axis and supports:
+/// - **3-component** vectors `(...,3) × (...,3) → (...,3)`, including stacked
+///   inputs that broadcast over their leading batch axes (#836);
+/// - **2-component** vectors `(...,2) × (...,2)`, returning the scalar
+///   z-component (the legacy form numpy 2.4.5 still allows with a
+///   `DeprecationWarning`).
+///
+/// Integer inputs are promoted to `float64` via `promote_linalg_input`
+/// (the library cross is float-typed); numpy's documented contract is the
+/// numerical cross-product value, which is preserved.
 #[pyfunction]
 pub fn cross<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     b: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let arr_a = as_ndarray(py, a)?;
+    let arr_a = promote_linalg_input(py, a)?;
     let dt = dtype_name(&arr_a)?;
     let arr_b = coerce_dtype(py, b, dt.as_str())?;
-    Ok(match_dtype_numeric!(dt.as_str(), T => {
-        let va: PyReadonlyArray1<T> = arr_a.extract()?;
-        let vb: PyReadonlyArray1<T> = arr_b.extract()?;
-        let fa: Array1<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
-        let fb: Array1<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
-        let r: Array1<T> = ferray_ufunc::cross(&fa, &fb).map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_float!(dt.as_str(), T => {
+        let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
+        let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
+        let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
+        let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+        let r: ArrayD<T> = fl::cross(&fa, &fb).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
 }

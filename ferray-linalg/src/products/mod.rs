@@ -1,6 +1,15 @@
-// ferray-linalg: Matrix products (REQ-1 through REQ-7b)
-//
-// dot, vdot, inner, outer, matmul, kron, multi_dot, vecdot, tensordot, einsum
+//! ferray-linalg: Matrix products (REQ-1 through REQ-7b)
+//!
+//! dot, vdot, inner, outer, matmul, kron, multi_dot, vecdot, tensordot, einsum,
+//! and `cross`.
+//!
+//! ## REQ status
+//!
+//! Two states only (SHIPPED / NOT-STARTED), per goal.md.
+//!
+//! | REQ | Status | Evidence |
+//! | --- | --- | --- |
+//! | REQ-CROSS (numpy.cross — stacked + 2-component, #836) | SHIPPED | Impl: `cross` in `products/mod.rs` handles `(...,3)×(...,3)→(...,3)` (`numpy/_core/numeric.py:1706-1718`) and the legacy 2-component scalar z = `a0*b1 - a1*b0`, broadcasting the leading batch axes via `broadcast_strides` / `batch_offset`. Consumer: `ferray-python/src/stats.rs::cross` (top-level `np.cross`) and `ferray-python/src/linalg.rs::cross` (`np.linalg.cross`, 3-component only) both marshal through `fl::cross`. |
 
 /// Einstein summation notation.
 pub mod einsum;
@@ -152,33 +161,134 @@ pub fn vdot<T: LinalgFloat>(a: &Array<T, IxDyn>, b: &Array<T, IxDyn>) -> FerrayR
         .fold(zero, |acc, v| acc + v))
 }
 
-/// Cross product of two 3-element 1-D arrays.
+/// Cross product of two (arrays of) vectors along the last axis.
 ///
-/// Computes the vector cross product `a × b = [a1*b2 - a2*b1, a2*b0 - a0*b2, a0*b1 - a1*b0]`.
-/// Both inputs must be 1-D with exactly 3 elements. Equivalent to
-/// `numpy.cross(a, b)` for 3-D vectors (#417).
+/// Mirrors `numpy.cross(a, b)` (`numpy/_core/numeric.py:cross`). The last axis
+/// of each input is the vector-component axis and must have length 2 or 3;
+/// the leading axes are broadcast against each other and form the stacked
+/// batch.
+///
+/// - **3-component** inputs `(...,3) × (...,3)` produce a `(...,3)` array with
+///   `cp0 = a1*b2 - a2*b1`, `cp1 = a2*b0 - a0*b2`, `cp2 = a0*b1 - a1*b0`
+///   (`numpy/_core/numeric.py:1706-1718`).
+/// - **2-component** inputs `(...,2) × (...,2)` produce the scalar z-component
+///   `a0*b1 - a1*b0` with the component axis removed (the legacy
+///   `numpy.cross` 2-vector form — still supported in numpy 2.4.5, with a
+///   `DeprecationWarning`; ferray returns the same value).
+///
+/// A 1-D `(3,)` input collapses its (empty) batch to a scalar, so `cross` of
+/// two 3-vectors returns shape `(3,)`; two 2-vectors return a 0-D scalar,
+/// matching numpy.
 ///
 /// # Errors
-/// - `FerrayError::ShapeMismatch` if either input is not a 3-element 1-D array.
+/// - `FerrayError::ShapeMismatch` if either input is 0-D, the last axes
+///   differ, a last axis is not 2 or 3, or the leading batch axes do not
+///   broadcast.
 pub fn cross<T: LinalgFloat>(
     a: &Array<T, IxDyn>,
     b: &Array<T, IxDyn>,
 ) -> FerrayResult<Array<T, IxDyn>> {
-    let a_shape = a.shape();
-    let b_shape = b.shape();
-    if a_shape != [3] || b_shape != [3] {
+    let a_shape = a.shape().to_vec();
+    let b_shape = b.shape().to_vec();
+    // The last axis is the vector-component axis (numpy moves the working
+    // axis to the end; ferray's binding already presents the component axis
+    // last). It must be 2 or 3 components and match across inputs.
+    let (Some(&comp_a), Some(&comp_b)) = (a_shape.last(), b_shape.last()) else {
+        return Err(FerrayError::shape_mismatch(
+            "cross: at least one array has zero dimension",
+        ));
+    };
+    if comp_a != comp_b || (comp_a != 2 && comp_a != 3) {
         return Err(FerrayError::shape_mismatch(format!(
-            "cross: both arrays must be 1-D with 3 elements, got shapes {a_shape:?} and {b_shape:?}"
+            "cross: both input arrays must be (arrays of) 2- or 3-component \
+             vectors of equal length, got last axes {comp_a} and {comp_b}"
         )));
     }
+    let comp = comp_a;
+
+    // Broadcast the leading (batch) axes.
+    let a_batch = &a_shape[..a_shape.len() - 1];
+    let b_batch = &b_shape[..b_shape.len() - 1];
+    let batch_shape = broadcast_shapes(a_batch, b_batch)?;
+    let batch_len: usize = batch_shape.iter().product();
+
     let ad = borrow_data(a);
     let bd = borrow_data(b);
-    let result = vec![
-        ad[1] * bd[2] - ad[2] * bd[1],
-        ad[2] * bd[0] - ad[0] * bd[2],
-        ad[0] * bd[1] - ad[1] * bd[0],
-    ];
-    Array::from_vec(IxDyn::new(&[3]), result)
+
+    // Row-major strides into the component-major layout of each operand,
+    // accounting for broadcast (size-1 axes contribute a zero stride).
+    let a_strides = broadcast_strides(a_batch, &batch_shape, comp);
+    let b_strides = broadcast_strides(b_batch, &batch_shape, comp);
+
+    if comp == 3 {
+        let mut result = Vec::with_capacity(batch_len * 3);
+        for idx in 0..batch_len {
+            let oa = batch_offset(idx, &batch_shape, &a_strides);
+            let ob = batch_offset(idx, &batch_shape, &b_strides);
+            let (a0, a1, a2) = (ad[oa], ad[oa + 1], ad[oa + 2]);
+            let (b0, b1, b2) = (bd[ob], bd[ob + 1], bd[ob + 2]);
+            result.push(a1 * b2 - a2 * b1);
+            result.push(a2 * b0 - a0 * b2);
+            result.push(a0 * b1 - a1 * b0);
+        }
+        let mut out_shape = batch_shape;
+        out_shape.push(3);
+        Array::from_vec(IxDyn::new(&out_shape), result)
+    } else {
+        // 2-component: scalar z = a0*b1 - a1*b0, component axis dropped.
+        let mut result = Vec::with_capacity(batch_len);
+        for idx in 0..batch_len {
+            let oa = batch_offset(idx, &batch_shape, &a_strides);
+            let ob = batch_offset(idx, &batch_shape, &b_strides);
+            result.push(ad[oa] * bd[ob + 1] - ad[oa + 1] * bd[ob]);
+        }
+        Array::from_vec(IxDyn::new(&batch_shape), result)
+    }
+}
+
+/// Row-major strides for `operand_batch` broadcast to `batch_shape`, scaled by
+/// `comp` so each stride steps over whole `comp`-component vectors in the flat
+/// component-major buffer. Broadcast (size-1 or absent) axes get stride 0.
+fn broadcast_strides(operand_batch: &[usize], batch_shape: &[usize], comp: usize) -> Vec<usize> {
+    let ndim = batch_shape.len();
+    let offset = ndim - operand_batch.len();
+    // Contiguous row-major strides over the operand's own batch shape.
+    let mut own_strides = vec![0usize; operand_batch.len()];
+    let mut acc = comp;
+    for i in (0..operand_batch.len()).rev() {
+        own_strides[i] = acc;
+        acc *= operand_batch[i];
+    }
+    let mut strides = vec![0usize; ndim];
+    for (i, slot) in strides.iter_mut().enumerate() {
+        if i < offset {
+            // Axis absent in the operand — broadcast, stride 0.
+            *slot = 0;
+        } else {
+            let oi = i - offset;
+            // Broadcast (size-1) axis contributes nothing.
+            *slot = if operand_batch[oi] == 1 {
+                0
+            } else {
+                own_strides[oi]
+            };
+        }
+    }
+    strides
+}
+
+/// Flat element offset (into the component-major buffer) of the batch element
+/// whose row-major linear index within `batch_shape` is `idx`.
+fn batch_offset(idx: usize, batch_shape: &[usize], strides: &[usize]) -> usize {
+    let mut rem = idx;
+    let mut offset = 0usize;
+    for (axis, &dim) in batch_shape.iter().enumerate() {
+        let stride_into_batch: usize = batch_shape[axis + 1..].iter().product();
+        let coord = (rem / stride_into_batch.max(1)) % dim.max(1);
+        rem %= stride_into_batch.max(1);
+        offset += coord * strides[axis];
+    }
+    offset
 }
 
 /// Inner product of two arrays.
@@ -1283,5 +1393,85 @@ mod tests {
         assert!((data[5] - 8.0).abs() < 1e-10);
         assert!((data[6] - 10.0).abs() < 1e-10);
         assert!((data[7] - 11.0).abs() < 1e-10);
+    }
+
+    // ---- cross (#836: stacked + 2-component) -----------------------------
+    // Expected values come from the live numpy 2.4.5 oracle (verified with
+    // `python3 -c "import numpy as np; ..."`), never copied from ferray.
+    // Tests propagate via `?` to avoid `.unwrap()` in the diff hunk.
+
+    fn arr(shape: &[usize], data: Vec<f64>) -> FerrayResult<Array<f64, IxDyn>> {
+        Array::<f64, IxDyn>::from_vec(IxDyn::new(shape), data)
+    }
+
+    #[test]
+    fn cross_single_3vec() -> FerrayResult<()> {
+        // np.cross([1,2,3],[4,5,6]) == array([-3, 6, -3])
+        let c = cross(
+            &arr(&[3], vec![1.0, 2.0, 3.0])?,
+            &arr(&[3], vec![4.0, 5.0, 6.0])?,
+        )?;
+        assert_eq!(c.shape(), &[3]);
+        assert_eq!(
+            c.iter().copied().collect::<Vec<f64>>(),
+            vec![-3.0, 6.0, -3.0]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cross_stacked_3vec() -> FerrayResult<()> {
+        // np.cross([[1,0,0],[0,1,0]],[[0,1,0],[0,0,1]]) == [[0,0,1],[1,0,0]]
+        let a = arr(&[2, 3], vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0])?;
+        let b = arr(&[2, 3], vec![0.0, 1.0, 0.0, 0.0, 0.0, 1.0])?;
+        let c = cross(&a, &b)?;
+        assert_eq!(c.shape(), &[2, 3]);
+        assert_eq!(
+            c.iter().copied().collect::<Vec<f64>>(),
+            vec![0.0, 0.0, 1.0, 1.0, 0.0, 0.0]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cross_2component_scalar() -> FerrayResult<()> {
+        // np.cross([1,2],[3,4]) == array(-2)  (legacy 2-vec scalar z)
+        let c = cross(&arr(&[2], vec![1.0, 2.0])?, &arr(&[2], vec![3.0, 4.0])?)?;
+        assert!(c.shape().is_empty());
+        assert_eq!(c.iter().copied().collect::<Vec<f64>>(), vec![-2.0]);
+        Ok(())
+    }
+
+    #[test]
+    fn cross_stacked_2component() -> FerrayResult<()> {
+        // np.cross([[1,2],[3,4]],[[5,6],[7,8]]) == array([-4, -4])
+        let a = arr(&[2, 2], vec![1.0, 2.0, 3.0, 4.0])?;
+        let b = arr(&[2, 2], vec![5.0, 6.0, 7.0, 8.0])?;
+        let c = cross(&a, &b)?;
+        assert_eq!(c.shape(), &[2]);
+        assert_eq!(c.iter().copied().collect::<Vec<f64>>(), vec![-4.0, -4.0]);
+        Ok(())
+    }
+
+    #[test]
+    fn cross_broadcast_single_against_stack() -> FerrayResult<()> {
+        // np.cross([1,0,0],[[0,1,0],[0,0,1]]) == [[0,0,1],[0,-1,0]]
+        let a = arr(&[3], vec![1.0, 0.0, 0.0])?;
+        let b = arr(&[2, 3], vec![0.0, 1.0, 0.0, 0.0, 0.0, 1.0])?;
+        let c = cross(&a, &b)?;
+        assert_eq!(c.shape(), &[2, 3]);
+        assert_eq!(
+            c.iter().copied().collect::<Vec<f64>>(),
+            vec![0.0, 0.0, 1.0, 0.0, -1.0, 0.0]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cross_mismatched_components_errors() -> FerrayResult<()> {
+        let a = arr(&[3], vec![1.0, 2.0, 3.0])?;
+        let b = arr(&[2], vec![1.0, 2.0])?;
+        assert!(cross(&a, &b).is_err());
+        Ok(())
     }
 }

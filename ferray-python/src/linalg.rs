@@ -42,7 +42,7 @@
 //! | eigvals (general eigenvalues) | SHIPPED | Impl: `eigvals` `#[pyfunction]` in `linalg.rs` (routes to `fl::eigvals`, complex result). Consumer: registered in `lib.rs` `register_linalg_module`. |
 //! | matrix_norm / vector_norm (NumPy 2.0 array-API) | SHIPPED | Impl: `matrix_norm` (default `ord='fro'`, routes to `fl::norm` matrix path) + `vector_norm` (axis=None flattens, axis routes to `fl::norm_axis`) `#[pyfunction]`s in `linalg.rs`. Consumer: registered in `lib.rs` `register_linalg_module`. |
 //! | svdvals (NumPy 2.0 array-API) | SHIPPED | Impl: `svdvals` `#[pyfunction]` in `linalg.rs` (routes to `fl::svdvals`). Consumer: registered in `lib.rs` `register_linalg_module`. |
-//! | linalg.cross (NumPy 2.0 array-API) | SHIPPED | Impl: `cross` `#[pyfunction]` in `linalg.rs` (1-D 3-component, routes to `fl::cross`; stacked input raises ValueError — library lacks the batched path). Consumer: registered in `lib.rs` `register_linalg_module`. |
+//! | linalg.cross (NumPy 2.0 array-API) | SHIPPED | Impl: `cross` `#[pyfunction]` in `linalg.rs` (3-component, stacked `(...,3)` along `axis`, routes to `fl::cross` after moving the component axis last; #836). Consumer: registered in `lib.rs` `register_linalg_module`. |
 
 use ferray_core::array::aliases::{Array1, Array2, ArrayD};
 use ferray_core::dimension::IxDyn;
@@ -279,10 +279,10 @@ pub fn svdvals<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'p
 /// `numpy.linalg.cross(a, b, axis=-1)` (NumPy 2.0 array-API) — the cross
 /// product of two 3-component vectors along `axis`. NumPy 2.0's
 /// `linalg.cross` REQUIRES exactly 3 components (unlike the legacy
-/// top-level `numpy.cross` which also did 2-vectors). ferray-linalg's
-/// `cross` is the 1-D 3-element form; this binding handles the 1-D case.
-/// Stacked (>1-D) inputs are NOT yet supported by the library and raise
-/// `ValueError`.
+/// top-level `numpy.cross` which also did 2-vectors). Stacked `(...,3)`
+/// inputs are supported: the component axis is moved to the end, `fl::cross`
+/// computes the batched cross along the last axis, and the result is moved
+/// back to `axis` (#836).
 #[pyfunction]
 #[pyo3(signature = (a, b, axis = -1))]
 pub fn cross<'py>(
@@ -294,22 +294,94 @@ pub fn cross<'py>(
     let arr_a = promote_linalg_input(py, a)?;
     let dt = dtype_name(&arr_a)?;
     let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
-    // The library cross only supports 1-D 3-element vectors; reject stacked
-    // input rather than silently producing a wrong result.
+    // numpy 2.0's `linalg.cross` REQUIRES exactly 3 components along `axis`
+    // (numpy/linalg/_linalg.py:cross). The library `fl::cross` operates on
+    // the LAST axis, so move the component axis to the end, compute, then move
+    // it back via metadata-only transposes (no compute delegation).
     let ndim_a: usize = arr_a.getattr("ndim")?.extract()?;
-    if ndim_a != 1 || (axis != -1 && axis != 0) {
+    let axisn = normalize_cross_axis(axis, ndim_a)?;
+    let arr_a = move_axis_to_last(py, &arr_a, axisn)?;
+    let arr_b = move_axis_to_last(py, &arr_b, axisn)?;
+    // linalg.cross is 3-component only.
+    let comp: usize = arr_a
+        .getattr("shape")?
+        .get_item(ndim_a - 1)?
+        .extract()
+        .unwrap_or(0);
+    if comp != 3 {
         return Err(PyValueError::new_err(
-            "linalg.cross: only 1-D 3-component vectors are supported (stacked cross is deferred)",
+            "linalg.cross: input arrays must have exactly 3 components along the cross axis",
         ));
     }
-    Ok(match_dtype_float!(dt.as_str(), T => {
+    let out = match_dtype_float!(dt.as_str(), T => {
         let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
         let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
         let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
         let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
         let r: ArrayD<T> = fl::cross(&fa, &fb).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
+    });
+    // Move the component axis (currently last) back to `axisn`.
+    move_last_to_axis(py, &out, axisn)
+}
+
+/// Normalize a (possibly negative) cross `axis` to `[0, ndim)`, raising the
+/// numpy `AxisError`-equivalent (ValueError) when out of bounds.
+fn normalize_cross_axis(axis: isize, ndim: usize) -> PyResult<usize> {
+    let n = ndim as isize;
+    let resolved = if axis < 0 { axis + n } else { axis };
+    if resolved < 0 || resolved >= n {
+        return Err(PyValueError::new_err(format!(
+            "cross: axis {axis} is out of bounds for array of dimension {ndim}"
+        )));
+    }
+    Ok(resolved as usize)
+}
+
+/// Build the permutation that moves `axis` to the last position and apply it
+/// via the ndarray `.transpose(perm)` method (a metadata-only view).
+fn move_axis_to_last<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let ndim: usize = arr.getattr("ndim")?.extract()?;
+    if axis + 1 == ndim {
+        return Ok(arr.clone());
+    }
+    let mut perm: Vec<usize> = (0..ndim).filter(|&i| i != axis).collect();
+    perm.push(axis);
+    let perm = pyo3::types::PyTuple::new(py, perm)?;
+    arr.call_method1("transpose", (perm,))
+}
+
+/// Inverse of [`move_axis_to_last`]: the input has its working axis last; move
+/// it back to position `axis`.
+fn move_last_to_axis<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let ndim: usize = arr.getattr("ndim")?.extract()?;
+    if axis + 1 == ndim {
+        return Ok(arr.clone());
+    }
+    // Current layout: [non-axis axes in order..., working]. Insert `working`
+    // (the last axis) at position `axis`.
+    let mut perm: Vec<usize> = Vec::with_capacity(ndim);
+    let last = ndim - 1;
+    let others: Vec<usize> = (0..last).collect();
+    let mut oi = 0;
+    for pos in 0..ndim {
+        if pos == axis {
+            perm.push(last);
+        } else {
+            perm.push(others[oi]);
+            oi += 1;
+        }
+    }
+    let perm = pyo3::types::PyTuple::new(py, perm)?;
+    arr.call_method1("transpose", (perm,))
 }
 
 /// `numpy.linalg.det(a)` — determinant of a square matrix.

@@ -734,18 +734,60 @@ pub fn polyval<'py>(
 ///
 /// `numpy/lib/_polynomial_impl.py:148-161`: starts from `[1]` and convolves
 /// `[1, -zero]` for each root (highest-first), returning `1.0` for an empty
-/// root sequence. ferray's `Polynomial::from_roots` builds the same product in
-/// LOWEST-first order, so we reverse the result to highest-first.
+/// root sequence. When the roots are complex, numpy convolves over complex and
+/// — if the roots are conjugate-closed — returns `a.real.copy()`
+/// (`_polynomial_impl.py:156-160`); otherwise it stays complex.
+///
+/// COMPLEX roots route through `ferray_polynomial::poly_from_roots`, which
+/// reproduces that real-vs-complex decision. REAL roots use the real
+/// `Polynomial::from_roots`. Both build the product LOWEST-first, so we reverse
+/// to numpy's highest-first layout.
 #[pyfunction]
-pub fn poly<'py>(py: Python<'py>, seq_of_zeros: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
+pub fn poly<'py>(py: Python<'py>, seq_of_zeros: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, seq_of_zeros)?;
+    let dt = crate::conv::dtype_name(&arr)?;
+    let is_complex = dt == "complex128" || dt == "complex64" || dt == "complex";
+
+    if is_complex {
+        // Extract complex roots and route through the complex poly builder.
+        let view: PyReadonlyArrayDyn<num_complex::Complex<f64>> =
+            arr.call_method1("astype", ("complex128",))?.extract()?;
+        let roots: Vec<num_complex::Complex<f64>> = view.as_array().iter().copied().collect();
+        if roots.is_empty() {
+            return empty_poly_scalar(py);
+        }
+        return match fp::power_complex::poly_from_roots(&roots) {
+            // Imaginary parts cancel: numpy returns a real (float64) array.
+            fp::power_complex::PolyCoeffs::Real(lowest_first) => {
+                vec_to_pyarray1(py, flip(lowest_first))
+            }
+            // Genuinely complex coefficients: numpy returns complex128.
+            fp::power_complex::PolyCoeffs::Complex(mut lowest_first) => {
+                lowest_first.reverse();
+                Ok(
+                    numpy::PyArray1::<num_complex::Complex<f64>>::from_vec(py, lowest_first)
+                        .into_any(),
+                )
+            }
+        };
+    }
+
+    // Real path: coerce to f64 and use the real Polynomial::from_roots.
+    let view: PyReadonlyArrayDyn<f64> = arr.call_method1("astype", ("float64",))?.extract()?;
+    let seq_of_zeros: Vec<f64> = view.as_array().iter().copied().collect();
     if seq_of_zeros.is_empty() {
-        // `numpy/lib/_polynomial_impl.py:148-149` returns the scalar `1.0`.
-        let arr = ArrayD::<f64>::from_vec(IxDyn::new(&[]), vec![1.0]).map_err(ferr_to_pyerr)?;
-        let zerod = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-        return crate::conv::scalarize(zerod);
+        return empty_poly_scalar(py);
     }
     let lowest_first = fp::Polynomial::from_roots(&seq_of_zeros).coeffs().to_vec();
     vec_to_pyarray1(py, flip(lowest_first))
+}
+
+/// `numpy.poly([])` returns the scalar `1.0`
+/// (`numpy/lib/_polynomial_impl.py:148-149`).
+fn empty_poly_scalar<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    let arr = ArrayD::<f64>::from_vec(IxDyn::new(&[]), vec![1.0]).map_err(ferr_to_pyerr)?;
+    let zerod = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    crate::conv::scalarize(zerod)
 }
 
 /// `numpy.roots(p)` — roots of a highest-first polynomial `p` via the
