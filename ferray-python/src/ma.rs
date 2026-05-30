@@ -786,6 +786,18 @@ fn unreachable_complex_egress<'py>() -> PyResult<Bound<'py, PyAny>> {
     ))
 }
 
+/// `DynMa`-typed sibling of [`unreachable_complex_egress`] for the
+/// `match_ma_real!` complex arm at sites whose body produces a `DynMa` and
+/// whose two complex variants are already peeled off into explicit arms
+/// (`real`/`imag`/`conjugate`). The macro arm is unreachable, but must return
+/// a value of the body's type; it raises a `TypeError` rather than panicking
+/// (R-CODE-2 / R-APG-1).
+fn unreachable_complex_egress_ma() -> PyResult<DynMa> {
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "internal: complex dtype reached a real-only egress arm",
+    ))
+}
+
 /// Egress a single masked-array element as its Python object, dispatching on
 /// the static element type `T`. The `__getitem__` scalar path is written once
 /// over the generic `T` bound by `match_ma!`, so it needs a per-type egress:
@@ -1721,17 +1733,122 @@ impl PyMaskedArray {
             DynMa::U32(m) => carry_unary_mask(m, m.data().clone())?,
             DynMa::U64(m) => carry_unary_mask(m, m.data().clone())?,
             DynMa::Bool(m) => carry_unary_mask(m, m.data().clone())?,
-            // `abs(complex)` yields a REAL magnitude array (dtype change), which
-            // `carry_unary_mask`'s same-`T` contract cannot express; the complex
-            // magnitude path is the `.real`/`.imag`/`abs` method work (#870).
-            DynMa::Complex32(_) | DynMa::Complex64(_) => {
-                return Err(pyo3::exceptions::PyTypeError::new_err(
-                    "ferray.ma abs() over a complex dtype is not yet supported \
-                     (numpy.ma yields the real magnitude; tracked under #870)",
-                ));
+            // `abs(complex)` yields a REAL magnitude array (dtype change):
+            // complex128 → float64, complex64 → float32 (verified live numpy
+            // 2.4.5). `ferray_ufunc::ops::complex::abs` returns the real
+            // `Array<T, _>` magnitude; `carry_mask_into` re-tags it as the real
+            // `DynMa` variant while MATERIALIZING the operand mask (numpy's
+            // `absolute` is a ufunc, so a nomask operand gains a real all-False
+            // mask — `abs(np.ma.array([1+2j])).mask is np.ma.nomask` is `False`).
+            DynMa::Complex32(m) => {
+                let mag = ferray_ufunc::ops::complex::abs(m.data()).map_err(ferr_to_pyerr)?;
+                carry_mask_into(m, mag)?
+            }
+            DynMa::Complex64(m) => {
+                let mag = ferray_ufunc::ops::complex::abs(m.data()).map_err(ferr_to_pyerr)?;
+                carry_mask_into(m, mag)?
             }
         };
         Ok(Self::from_dynma(inner))
+    }
+
+    /// `a.real` — the real part as a REAL-dtype masked array, mask preserved.
+    ///
+    /// numpy's `MaskedArray.real` is a property *view* (`numpy/ma/core.py`
+    /// `real = property(...)` → `self._data.real` re-wrapped with `self._mask`),
+    /// NOT a ufunc call: it does NOT materialize a mask, so a `nomask` operand
+    /// stays `nomask` and a real-mask operand carries its mask through verbatim
+    /// (verified live numpy 2.4.5). For a complex operand it extracts the real
+    /// part (complex128 → float64, complex64 → float32) via
+    /// `ferray_ufunc::ops::complex::real`; for a real-dtype operand numpy
+    /// returns the array itself (`np.ma.array([1,2]).real` is the int64 array),
+    /// so ferray clones the data at the SAME dtype. Mask preserved either way.
+    #[getter]
+    fn real(&self) -> PyResult<Self> {
+        let inner = match &self.inner {
+            DynMa::Complex32(m) => {
+                let re = ferray_ufunc::ops::complex::real(m.data()).map_err(ferr_to_pyerr)?;
+                carry_mask_preserve(m, re)?
+            }
+            DynMa::Complex64(m) => {
+                let re = ferray_ufunc::ops::complex::real(m.data()).map_err(ferr_to_pyerr)?;
+                carry_mask_preserve(m, re)?
+            }
+            // Real dtype: `.real` is the array itself (numpy returns a view of
+            // the same array), same dtype, mask preserved.
+            _ => match_ma_real!(&self.inner, m, T => {
+                carry_mask_preserve(m, m.data().clone())?
+            }, complex => { unreachable_complex_egress_ma()? }),
+        };
+        Ok(Self::from_dynma(inner))
+    }
+
+    /// `a.imag` — the imaginary part as a REAL-dtype masked array, mask preserved.
+    ///
+    /// numpy's `MaskedArray.imag` is a property *view* (same non-materializing
+    /// semantics as [`real`]): for a complex operand it extracts the imaginary
+    /// part (complex128 → float64, complex64 → float32) via
+    /// `ferray_ufunc::ops::complex::imag`; for a real-dtype operand numpy
+    /// returns an all-zeros array of the SAME dtype
+    /// (`np.ma.array([1,2]).imag` → `[0, 0]` int64; `[1.5].imag` → `[0.0]`
+    /// float64 — verified live numpy 2.4.5). Mask preserved (nomask stays
+    /// nomask).
+    #[getter]
+    fn imag(&self) -> PyResult<Self> {
+        let inner = match &self.inner {
+            DynMa::Complex32(m) => {
+                let im = ferray_ufunc::ops::complex::imag(m.data()).map_err(ferr_to_pyerr)?;
+                carry_mask_preserve(m, im)?
+            }
+            DynMa::Complex64(m) => {
+                let im = ferray_ufunc::ops::complex::imag(m.data()).map_err(ferr_to_pyerr)?;
+                carry_mask_preserve(m, im)?
+            }
+            // Real dtype: `.imag` is an all-zeros array of the same dtype.
+            _ => match_ma_real!(&self.inner, m, T => {
+                let zeros: Vec<T> = vec![<T as ferray_core::Element>::zero(); m.size()];
+                let data_fa = ArrayD::<T>::from_vec(IxDyn::new(&self.inner.shape()), zeros)
+                    .map_err(ferr_to_pyerr)?;
+                carry_mask_preserve(m, data_fa)?
+            }, complex => { unreachable_complex_egress_ma()? }),
+        };
+        Ok(Self::from_dynma(inner))
+    }
+
+    /// `a.conjugate()` — the complex conjugate, mask-preserving, dtype-preserving.
+    ///
+    /// numpy's `MaskedArray.conjugate` is a ufunc call (`numpy.conjugate` /
+    /// `_MaskedUnaryOperation`), so it MATERIALIZES a real all-False mask even
+    /// from a nomask operand (`np.ma.array([1+2j]).conjugate().mask is
+    /// np.ma.nomask` is `False`, verified live numpy 2.4.5). For a complex
+    /// operand it negates the imaginary part KEEPING the same complex width via
+    /// `ferray_ufunc::ops::complex::conj`; for a real-dtype operand numpy's
+    /// conjugate is the identity (`np.ma.array([1,2]).conjugate()` is the
+    /// array, same dtype), so ferray clones the data at the same dtype. Mask
+    /// materialized either way.
+    fn conjugate(&self) -> PyResult<Self> {
+        let inner = match &self.inner {
+            DynMa::Complex32(m) => {
+                let c = ferray_ufunc::ops::complex::conj(m.data()).map_err(ferr_to_pyerr)?;
+                carry_mask_into(m, c)?
+            }
+            DynMa::Complex64(m) => {
+                let c = ferray_ufunc::ops::complex::conj(m.data()).map_err(ferr_to_pyerr)?;
+                carry_mask_into(m, c)?
+            }
+            // Real dtype: conjugate is the identity, same dtype. numpy's
+            // `conjugate` ufunc still materializes the mask.
+            _ => match_ma_real!(&self.inner, m, T => {
+                carry_unary_mask(m, m.data().clone())?
+            }, complex => { unreachable_complex_egress_ma()? }),
+        };
+        Ok(Self::from_dynma(inner))
+    }
+
+    /// `a.conj()` — alias for [`conjugate`] (numpy's `MaskedArray.conj` is the
+    /// same method).
+    fn conj(&self) -> PyResult<Self> {
+        self.conjugate()
     }
 
     /// Bitwise NOT (`~a`), `numpy.ma`'s `__invert__` → `numpy.invert`,
@@ -1972,6 +2089,52 @@ where
     let mask = fma::getmaskarray(src).map_err(ferr_to_pyerr)?;
     let out = RustMa::new(data, mask).map_err(ferr_to_pyerr)?;
     Ok(T::wrap(out))
+}
+
+/// Wrap a unary-op result of a DIFFERENT element type `R` (a dtype-CHANGING
+/// op — complex `abs`/`conjugate` egress, complex→real `.real`/`.imag` of the
+/// ufunc-style ops) back into a `DynMa`, MATERIALIZING the source's mask.
+///
+/// Same contract as [`carry_unary_mask`] (numpy's `_MaskedUnaryOperation.
+/// __call__`, `numpy/ma/core.py:1010`, `m = getmaskarray(a)` materializes a
+/// real all-False mask even from a nomask operand — verified live numpy 2.4.5:
+/// `abs(np.ma.array([1+2j])).mask is np.ma.nomask` is `False`, and likewise
+/// `.conjugate()`), except the result element type `R` differs from the
+/// operand type `T`: `abs(complex128)` → `f64`, `conjugate` keeps the complex
+/// width (`R == T`). The source mask (over the operand's `T`) is read via
+/// `getmaskarray`, which is dtype-independent, and applied to the `R`-typed
+/// result buffer.
+fn carry_mask_into<T, R>(src: &RustMa<T, IxDyn>, data: ArrayD<R>) -> PyResult<DynMa>
+where
+    T: ferray_core::Element,
+    R: ferray_core::Element + WrapDyn,
+{
+    let mask = fma::getmaskarray(src).map_err(ferr_to_pyerr)?;
+    let out = RustMa::new(data, mask).map_err(ferr_to_pyerr)?;
+    Ok(R::wrap(out))
+}
+
+/// Wrap an attribute-VIEW result of a (possibly different) element type `R`
+/// back into a `DynMa`, PRESERVING the source's mask state verbatim — a real
+/// mask is copied, the `nomask` sentinel stays `nomask`.
+///
+/// This is the `.real`/`.imag` contract: numpy's `MaskedArray.real`/`.imag`
+/// are property *views*, NOT ufunc calls, so they do NOT materialize a mask —
+/// `np.ma.array([1+2j]).real.mask is np.ma.nomask` is `True` for a nomask
+/// operand, while a real-mask operand carries its mask through unchanged
+/// (verified live numpy 2.4.5). The result element type `R` may differ from
+/// the operand's `T` (complex→real for `.real`/`.imag`; `R == T` for the
+/// real-dtype `.real` identity / `.imag` zeros).
+fn carry_mask_preserve<T, R>(src: &RustMa<T, IxDyn>, data: ArrayD<R>) -> PyResult<DynMa>
+where
+    T: ferray_core::Element,
+    R: ferray_core::Element + WrapDyn,
+{
+    let out = match src.mask_opt() {
+        Some(mask) => RustMa::new(data, mask.clone()).map_err(ferr_to_pyerr)?,
+        None => RustMa::from_data(data).map_err(ferr_to_pyerr)?,
+    };
+    Ok(R::wrap(out))
 }
 
 /// The seven `numpy.ma` binary arithmetic operators, each delegating to the
