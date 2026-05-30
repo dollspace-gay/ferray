@@ -168,6 +168,11 @@ def test_cov_no_mask_matches_plain():
     _assert_ma_equal(got, np.ma.cov(x))
 
 
-def test_y_argument_unsupported():
-    with pytest.raises((ValueError, Exception)):
-        fma.cov(_frm(M), _frm(M))
+def test_cov_two_variable_y_form():
+    # The two-variable `y` form is now shipped (refs #837): x and y are
+    # stacked per numpy's _covhelper before the masked covariance.
+    x = np.ma.array([1.0, 2.0, 3.0, 4.0], mask=[0, 1, 0, 0])
+    y = np.ma.array([1.0, 3.0, 2.0, 5.0], mask=[0, 0, 0, 1])
+    got = np.asarray(fma.cov(_frm(x), _frm(y)).data)
+    want = np.ma.cov(x, y)
+    np.testing.assert_allclose(got, np.asarray(want.data), rtol=1e-9)

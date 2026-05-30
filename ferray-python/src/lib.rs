@@ -436,6 +436,9 @@ fn register_ma_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> Py
     m.add_function(wrap_pyfunction!(ma::mask_rowcols, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::cov, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::corrcoef, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::polyfit, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::convolve, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::correlate, &m)?)?;
     parent.add_submodule(&m)?;
     py.import("sys")?
         .getattr("modules")?

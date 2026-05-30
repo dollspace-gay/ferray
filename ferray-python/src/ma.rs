@@ -53,19 +53,32 @@
 //! algorithms that match numpy.ma exactly: `sort` / `argsort` (masked
 //! values trail), `take`, `trace`, `dot` (1-D inner product), `unique`.
 //!
-//! Functions needing masked-algorithm support ferray-ma genuinely lacks or
-//! whose ferray-ma form diverges from numpy.ma's mask semantics
+//! The residual numpy.ma slice (refs #837) adds, composed at the binding:
+//!
+//! - **`polyfit`** — least-squares fit dropping any masked `(x, y)` pair, then
+//!   delegating to the ferray-polynomial `Poly::fit` (highest-first coeffs).
+//! - **`convolve` / `correlate`** — masked 1-D convolution / cross-correlation
+//!   over `ferray_ufunc::convolve` / `ferray_stats::correlate`, with the mask
+//!   propagated per numpy's `_convolve_or_correlate` (`propagate_mask`).
+//! - **`cov` / `corrcoef` two-variable `y` form** — `x` and `y` are stacked
+//!   into one variable matrix (numpy's `_covhelper`) before the masked
+//!   covariance / correlation.
+//!
+//! Functions still needing masked-algorithm support ferray-ma genuinely lacks
+//! or whose ferray-ma form diverges from numpy.ma's mask semantics
 //! (`vander`/`isin`/`in1d` mask handling, 2-D `dot` matmul, multi-axis
-//! `argsort`, `cov`, `corrcoef`, `polyfit`, `convolve`, `correlate`,
-//! `inner`, `outer`, `where`, `choose`, `diff`, `ediff1d`, `nonzero`,
-//! `indices`, the `compress_*`/`mask_rowcols` family, `clump_*`,
-//! `notmasked_*`, `flatnotmasked_*`, `harden_mask`/`soften_mask`) are
-//! tracked as a ferray-ma library follow-up under #835.
+//! `argsort`, `inner`, `outer`, `where`, `choose`, `diff`, `ediff1d`,
+//! `nonzero`, `indices`, `clump_*`, `notmasked_*`, `flatnotmasked_*`,
+//! `harden_mask`/`soften_mask`) are tracked as a ferray-ma library follow-up
+//! under #835.
 
 use ferray_core::Array;
 use ferray_core::array::aliases::{Array1, ArrayD};
 use ferray_core::dimension::{Ix1, Ix2, IxDyn};
 use ferray_ma as fma;
+use ferray_polynomial as fp_poly;
+use ferray_stats::correlation::{CorrelateMode, correlate as stats_correlate};
+use ferray_ufunc::{ConvolveMode, convolve as ufunc_convolve};
 use ferray_ma::MaskedArray as RustMa;
 use ferray_numpy_interop::{AsFerray, IntoNumPy};
 use numpy::PyReadonlyArrayDyn;
@@ -547,14 +560,48 @@ fn require_ma<'py>(obj: &Bound<'py, PyAny>) -> PyResult<()> {
 /// `extract_data` path and lets the elementwise/binary ufuncs accept the
 /// same operands `numpy.ma.add(ma, 3)` / `numpy.ma.sqrt([4., 9.])` do.
 fn coerce_to_ma<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<RustMa<f64, IxDyn>> {
+    coerce_to_ma_impl(py, obj, false)
+}
+
+/// Like [`coerce_to_ma`] but, for a `numpy.ma.MaskedArray` operand, reads its
+/// mask via `numpy.ma.getmaskarray` rather than discarding it.
+///
+/// The #818/#835 elementwise bindings predate masked-input support and wrap a
+/// numpy.ma operand with `nomask` (the `coerce_to_ma` convention). The residual
+/// `convolve`/`correlate`/`polyfit`/`cov`/`corrcoef` slice (refs #837) must
+/// honour the incoming mask to match numpy.ma exactly, so it uses this
+/// mask-preserving variant. A `ferray.ma.MaskedArray` (already carrying its
+/// mask) and any non-masked array-like behave identically to `coerce_to_ma`.
+fn coerce_to_ma_npmask<'py>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+) -> PyResult<RustMa<f64, IxDyn>> {
+    coerce_to_ma_impl(py, obj, true)
+}
+
+fn coerce_to_ma_impl<'py>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+    read_np_mask: bool,
+) -> PyResult<RustMa<f64, IxDyn>> {
     if let Ok(m) = obj.extract::<PyMaskedArray>() {
         return Ok(m.inner);
     }
     let data_fa = extract_data(py, obj)?;
     let n = data_fa.size();
     let shape = data_fa.shape().to_vec();
-    let mask_fa =
-        ArrayD::<bool>::from_vec(IxDyn::new(&shape), vec![false; n]).map_err(ferr_to_pyerr)?;
+    let mask_fa = if read_np_mask {
+        // `numpy.ma.getmaskarray(obj)` returns a full bool array of `obj`'s
+        // shape (all-False for a plain ndarray / nomask input), so the mask
+        // of a numpy.ma operand is carried across the boundary.
+        let np_ma = py.import("numpy")?.getattr("ma")?;
+        let mask_obj = np_ma.call_method1("getmaskarray", (obj,))?;
+        let mask_arr = coerce_dtype(py, &mask_obj, "bool")?;
+        let mask_view: PyReadonlyArrayDyn<bool> = mask_arr.extract()?;
+        mask_view.as_ferray().map_err(ferr_to_pyerr)?
+    } else {
+        ArrayD::<bool>::from_vec(IxDyn::new(&shape), vec![false; n]).map_err(ferr_to_pyerr)?
+    };
     RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)
 }
 
@@ -2069,9 +2116,9 @@ pub fn mask_rowcols<'py>(
 }
 
 /// `numpy.ma.cov(x, y=None, rowvar=True, bias=False, ddof=None)` — masked
-/// covariance over the unmasked observation pairs (`numpy/ma/extras.py:1547`).
-/// The `y` argument (a second variable set) is a ferray-ma library gap; passing
-/// it raises a clear `ValueError`.
+/// covariance over the unmasked observation pairs (`numpy/ma/extras.py:1580`).
+/// A second variable set `y` is stacked with `x` per numpy's `_covhelper`
+/// (`numpy/ma/extras.py:1521`) before the masked covariance.
 #[pyfunction]
 #[pyo3(signature = (x, y = None, rowvar = true, bias = false, allow_masked = true, ddof = None))]
 #[allow(
@@ -2087,22 +2134,27 @@ pub fn cov<'py>(
     allow_masked: bool,
     ddof: Option<usize>,
 ) -> PyResult<PyMaskedArray> {
-    if y.is_some() {
-        return Err(PyValueError::new_err(
-            "ma.cov with a second variable set `y` is a ferray-ma library gap (#835); \
-             pass a single 2-D masked array",
-        ));
-    }
     let _ = allow_masked; // ferray-ma always processes the masked pairs.
-    let m = coerce_to_ma(py, x)?;
-    let out = fma::ma_cov(&m, rowvar, bias, ddof).map_err(ferr_to_pyerr)?;
-    ix2_to_py(out)
+    match y {
+        None => {
+            let m = coerce_to_ma_npmask(py, x)?;
+            let out = fma::ma_cov(&m, rowvar, bias, ddof).map_err(ferr_to_pyerr)?;
+            ix2_to_py(out)
+        }
+        Some(yv) => {
+            // numpy stacks x and y into one variable matrix (`_covhelper`),
+            // then runs the masked covariance with variables in rows.
+            let stacked = stack_xy(py, x, yv, rowvar)?;
+            let out = fma::ma_cov(&stacked, true, bias, ddof).map_err(ferr_to_pyerr)?;
+            ix2_to_py(out)
+        }
+    }
 }
 
 /// `numpy.ma.corrcoef(x, y=None, rowvar=True)` — masked Pearson correlation
 /// (`numpy/ma/extras.py:1672`): the masked covariance normalized by the outer
-/// product of the per-variable standard deviations. The `y` argument is a
-/// ferray-ma library gap; passing it raises a clear `ValueError`.
+/// product of the per-variable standard deviations. A second variable set `y`
+/// is stacked with `x` per numpy's `_covhelper` (`numpy/ma/extras.py:1521`).
 #[pyfunction]
 #[pyo3(signature = (x, y = None, rowvar = true, allow_masked = true))]
 pub fn corrcoef<'py>(
@@ -2112,14 +2164,323 @@ pub fn corrcoef<'py>(
     rowvar: bool,
     allow_masked: bool,
 ) -> PyResult<PyMaskedArray> {
-    if y.is_some() {
+    let _ = allow_masked;
+    match y {
+        None => {
+            let m = coerce_to_ma_npmask(py, x)?;
+            let out = fma::ma_corrcoef(&m, rowvar).map_err(ferr_to_pyerr)?;
+            ix2_to_py(out)
+        }
+        Some(yv) => {
+            let stacked = stack_xy(py, x, yv, rowvar)?;
+            let out = fma::ma_corrcoef(&stacked, true).map_err(ferr_to_pyerr)?;
+            ix2_to_py(out)
+        }
+    }
+}
+
+// ===========================================================================
+// numpy.ma residual (refs #837): polyfit / convolve / correlate composed at
+// the binding over the existing ferray crates, plus the two-variable `y` form
+// of cov / corrcoef. Every contract was verified live against numpy 2.4.5.
+// ===========================================================================
+
+/// Mirror numpy.ma's `_covhelper` stacking (`numpy/ma/extras.py:1521`) for the
+/// two-variable `cov`/`corrcoef` form: promote `x` and `y` to a single row each
+/// (numpy `ndmin=2`; a 1-D input becomes one variable), apply the pairwise
+/// common mask when both have the same shape, then concatenate the variables
+/// into one `(nvars x nobs)` masked array on which the existing `ma_cov` /
+/// `ma_corrcoef` operate with `rowvar=True`.
+///
+/// numpy forces `rowvar=True` whenever the promoted `x` has a single row
+/// (`numpy/ma/extras.py:1532` `if x.shape[0] == 1: rowvar = True`); for two
+/// 1-D inputs that is always the case, so the stacked array always has one row
+/// per input variable and `rowvar` only selects the concatenation axis for
+/// genuinely 2-D inputs.
+fn stack_xy<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    y: &Bound<'py, PyAny>,
+    rowvar: bool,
+) -> PyResult<RustMa<f64, IxDyn>> {
+    let (xd, xm, xs) = ma_parts(&coerce_to_ma_npmask(py, x)?)?;
+    let (yd, ym, ys) = ma_parts(&coerce_to_ma_npmask(py, y)?)?;
+
+    // Promote each input to a (rows x cols) variable matrix (ndmin=2: a 1-D
+    // input is a single variable row). numpy forces rowvar=True for a single
+    // row, so we keep variables in rows and observations in columns.
+    let promote = |shape: &[usize], data: Vec<f64>, mask: Vec<bool>| -> (usize, usize, Vec<f64>, Vec<bool>) {
+        match shape.len() {
+            0 | 1 => (1, data.len(), data, mask),
+            _ => {
+                let (r, c) = (shape[0], shape[1]);
+                if rowvar {
+                    (r, c, data, mask)
+                } else {
+                    // rowvar=False: variables are columns; transpose to rows.
+                    let mut td = vec![0.0f64; r * c];
+                    let mut tm = vec![false; r * c];
+                    for i in 0..r {
+                        for j in 0..c {
+                            td[j * r + i] = data[i * c + j];
+                            tm[j * r + i] = mask[i * c + j];
+                        }
+                    }
+                    (c, r, td, tm)
+                }
+            }
+        }
+    };
+
+    let (xr, xc, xdata, mut xmask) = promote(&xs, xd, xm);
+    let (yr, yc, ydata, mut ymask) = promote(&ys, yd, ym);
+
+    if xc != yc {
+        return Err(PyValueError::new_err(format!(
+            "ma.cov/corrcoef: x and y must have the same number of observations, got {xc} and {yc}"
+        )));
+    }
+    let nobs = xc;
+
+    // numpy applies a pairwise common mask only when the two promoted arrays
+    // have identical shape (`numpy/ma/extras.py:1557`): if either is masked at
+    // a position, both become masked there.
+    if xr == yr && xc == yc && (xmask.iter().any(|&b| b) || ymask.iter().any(|&b| b)) {
+        for k in 0..xmask.len() {
+            let common = xmask[k] || ymask[k];
+            xmask[k] = common;
+            ymask[k] = common;
+        }
+    }
+
+    let nvars = xr + yr;
+    let mut data = vec![0.0f64; nvars * nobs];
+    let mut mask = vec![false; nvars * nobs];
+    data[..xr * nobs].copy_from_slice(&xdata);
+    mask[..xr * nobs].copy_from_slice(&xmask);
+    data[xr * nobs..].copy_from_slice(&ydata);
+    mask[xr * nobs..].copy_from_slice(&ymask);
+
+    let data_arr =
+        Array::<f64, IxDyn>::from_vec(IxDyn::new(&[nvars, nobs]), data).map_err(ferr_to_pyerr)?;
+    let mask_arr =
+        Array::<bool, IxDyn>::from_vec(IxDyn::new(&[nvars, nobs]), mask).map_err(ferr_to_pyerr)?;
+    RustMa::new(data_arr, mask_arr).map_err(ferr_to_pyerr)
+}
+
+/// `numpy.ma.polyfit(x, y, deg)` — least-squares polynomial fit ignoring any
+/// `(x, y)` pair where either coordinate is masked
+/// (`numpy/ma/extras.py:2231`). numpy unions the `x` and `y` masks, drops the
+/// masked rows, then delegates to `numpy.polyfit`; the binding composes the
+/// same drop over [`coerce_to_ma`] and the existing `Poly::fit`, returning the
+/// highest-degree-first coefficients `numpy.polyfit` produces.
+///
+/// Only a 1-D `y` is supported (the common masked-fit case); a 2-D `y` raises
+/// a clear `ValueError`, mirroring numpy's `TypeError` for non-1D/2D `y` in
+/// spirit while the multi-column path stays a follow-up.
+#[pyfunction]
+pub fn polyfit<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    y: &Bound<'py, PyAny>,
+    deg: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_polynomial::traits::Poly;
+
+    let (xd, xm, xs) = ma_parts(&coerce_to_ma_npmask(py, x)?)?;
+    let (yd, ym, ys) = ma_parts(&coerce_to_ma_npmask(py, y)?)?;
+    if xs.len() > 1 || ys.len() > 1 {
         return Err(PyValueError::new_err(
-            "ma.corrcoef with a second variable set `y` is a ferray-ma library gap (#835); \
-             pass a single 2-D masked array",
+            "ma.polyfit: only 1-D x and y are supported in this binding",
         ));
     }
-    let _ = allow_masked;
-    let m = coerce_to_ma(py, x)?;
-    let out = fma::ma_corrcoef(&m, rowvar).map_err(ferr_to_pyerr)?;
-    ix2_to_py(out)
+    if xd.len() != yd.len() {
+        return Err(PyValueError::new_err(format!(
+            "ma.polyfit: x and y must have the same length, got {} and {}",
+            xd.len(),
+            yd.len()
+        )));
+    }
+
+    // Union the per-pair masks and keep only the unmasked coordinates.
+    let mut xs_kept = Vec::with_capacity(xd.len());
+    let mut ys_kept = Vec::with_capacity(yd.len());
+    for k in 0..xd.len() {
+        if !(xm[k] || ym[k]) {
+            xs_kept.push(xd[k]);
+            ys_kept.push(yd[k]);
+        }
+    }
+
+    let fitted = <fp_poly::Polynomial as Poly>::fit(&xs_kept, &ys_kept, deg).map_err(ferr_to_pyerr)?;
+    let mut coeffs = fitted.coeffs().to_vec();
+    coeffs.reverse(); // lowest-first -> highest-first (numpy.polyfit order)
+    let arr = Array::<f64, Ix1>::from_vec(Ix1::new([coeffs.len()]), coeffs).map_err(ferr_to_pyerr)?;
+    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// Apply a 1-D `f(a, v, mode)` over the data and over the boolean masks to
+/// realise numpy.ma's `_convolve_or_correlate` (`numpy/ma/core.py:8337`).
+///
+/// With `propagate_mask=True` a result element is masked if *any* masked input
+/// element contributes to it: the mask is the union of `f(mask(a), ones(v))`
+/// and `f(ones(a), mask(v))` (a position is masked iff that convolution/
+/// correlation sum is non-zero). The data is `f(data(a), data(v))` — masked
+/// output positions are overwritten by the mask, so the stored data there is
+/// immaterial.
+///
+/// With `propagate_mask=False` a result element is masked only when *no* valid
+/// pair contributes: `mask = ~f(~mask(a), ~mask(v))` and the data is computed
+/// from the zero-filled inputs.
+fn masked_convolve_or_correlate<F>(
+    a_data: &[f64],
+    a_mask: &[bool],
+    v_data: &[f64],
+    v_mask: &[bool],
+    propagate_mask: bool,
+    f: F,
+) -> PyResult<(Vec<f64>, Vec<bool>)>
+where
+    F: Fn(&[f64], &[f64]) -> PyResult<Vec<f64>>,
+{
+    let ones_a = vec![1.0f64; a_data.len()];
+    let ones_v = vec![1.0f64; v_data.len()];
+
+    if propagate_mask {
+        let am: Vec<f64> = a_mask.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect();
+        let vm: Vec<f64> = v_mask.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect();
+        let left = f(&am, &ones_v)?;
+        let right = f(&ones_a, &vm)?;
+        let mask: Vec<bool> = left
+            .iter()
+            .zip(right.iter())
+            .map(|(&l, &r)| l != 0.0 || r != 0.0)
+            .collect();
+        let data = f(a_data, v_data)?;
+        Ok((data, mask))
+    } else {
+        let not_am: Vec<f64> = a_mask.iter().map(|&b| if b { 0.0 } else { 1.0 }).collect();
+        let not_vm: Vec<f64> = v_mask.iter().map(|&b| if b { 0.0 } else { 1.0 }).collect();
+        let overlap = f(&not_am, &not_vm)?;
+        let mask: Vec<bool> = overlap.iter().map(|&v| v == 0.0).collect();
+        let a_filled: Vec<f64> = a_data
+            .iter()
+            .zip(a_mask.iter())
+            .map(|(&d, &m)| if m { 0.0 } else { d })
+            .collect();
+        let v_filled: Vec<f64> = v_data
+            .iter()
+            .zip(v_mask.iter())
+            .map(|(&d, &m)| if m { 0.0 } else { d })
+            .collect();
+        let data = f(&a_filled, &v_filled)?;
+        Ok((data, mask))
+    }
+}
+
+/// Parse a convolution/correlation `mode` string into a closure-friendly tag.
+fn parse_mode(mode: &str) -> PyResult<u8> {
+    match mode {
+        "full" => Ok(0),
+        "same" => Ok(1),
+        "valid" => Ok(2),
+        other => Err(PyValueError::new_err(format!(
+            "mode must be one of 'full', 'same', 'valid', got '{other}'"
+        ))),
+    }
+}
+
+/// Extract the flat 1-D data + mask of an operand, erroring on non-1-D input.
+fn ma_flat_1d<'py>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+    who: &str,
+) -> PyResult<(Vec<f64>, Vec<bool>)> {
+    let (d, m, s) = ma_parts(&coerce_to_ma_npmask(py, obj)?)?;
+    if s.len() > 1 {
+        return Err(PyValueError::new_err(format!(
+            "ma.{who}: inputs must be 1-D"
+        )));
+    }
+    Ok((d, m))
+}
+
+/// Build a 1-D `PyMaskedArray` from a flat data + mask pair.
+fn ma_from_flat(data: Vec<f64>, mask: Vec<bool>) -> PyResult<PyMaskedArray> {
+    let n = data.len();
+    let data_arr =
+        Array::<f64, IxDyn>::from_vec(IxDyn::new(&[n]), data).map_err(ferr_to_pyerr)?;
+    let mask_arr =
+        Array::<bool, IxDyn>::from_vec(IxDyn::new(&[n]), mask).map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(
+        RustMa::new(data_arr, mask_arr).map_err(ferr_to_pyerr)?,
+    ))
+}
+
+/// `numpy.ma.convolve(a, v, mode='full', propagate_mask=True)` — masked
+/// convolution (`numpy/ma/core.py:8415`). Composes the existing
+/// `ferray_ufunc::convolve` over both the data and the boolean masks per
+/// numpy's `_convolve_or_correlate` semantics.
+#[pyfunction]
+#[pyo3(signature = (a, v, mode = "full", propagate_mask = true))]
+pub fn convolve<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    v: &Bound<'py, PyAny>,
+    mode: &str,
+    propagate_mask: bool,
+) -> PyResult<PyMaskedArray> {
+    let mode_tag = parse_mode(mode)?;
+    let (ad, am) = ma_flat_1d(py, a, "convolve")?;
+    let (vd, vm) = ma_flat_1d(py, v, "convolve")?;
+    let conv = |x: &[f64], y: &[f64]| -> PyResult<Vec<f64>> {
+        let xa = Array::<f64, Ix1>::from_vec(Ix1::new([x.len()]), x.to_vec())
+            .map_err(ferr_to_pyerr)?;
+        let ya = Array::<f64, Ix1>::from_vec(Ix1::new([y.len()]), y.to_vec())
+            .map_err(ferr_to_pyerr)?;
+        let m = match mode_tag {
+            0 => ConvolveMode::Full,
+            1 => ConvolveMode::Same,
+            _ => ConvolveMode::Valid,
+        };
+        let r = ufunc_convolve(&xa, &ya, m).map_err(ferr_to_pyerr)?;
+        Ok(r.iter().copied().collect())
+    };
+    let (data, mask) =
+        masked_convolve_or_correlate(&ad, &am, &vd, &vm, propagate_mask, conv)?;
+    ma_from_flat(data, mask)
+}
+
+/// `numpy.ma.correlate(a, v, mode='valid', propagate_mask=True)` — masked
+/// cross-correlation (`numpy/ma/core.py:8356`; note the default mode is
+/// `'valid'`, unlike convolve's `'full'`). Composes the existing
+/// `ferray_stats::correlate` over both the data and the boolean masks.
+#[pyfunction]
+#[pyo3(signature = (a, v, mode = "valid", propagate_mask = true))]
+pub fn correlate<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    v: &Bound<'py, PyAny>,
+    mode: &str,
+    propagate_mask: bool,
+) -> PyResult<PyMaskedArray> {
+    let mode_tag = parse_mode(mode)?;
+    let (ad, am) = ma_flat_1d(py, a, "correlate")?;
+    let (vd, vm) = ma_flat_1d(py, v, "correlate")?;
+    let corr = |x: &[f64], y: &[f64]| -> PyResult<Vec<f64>> {
+        let xa = Array::<f64, Ix1>::from_vec(Ix1::new([x.len()]), x.to_vec())
+            .map_err(ferr_to_pyerr)?;
+        let ya = Array::<f64, Ix1>::from_vec(Ix1::new([y.len()]), y.to_vec())
+            .map_err(ferr_to_pyerr)?;
+        let m = match mode_tag {
+            0 => CorrelateMode::Full,
+            1 => CorrelateMode::Same,
+            _ => CorrelateMode::Valid,
+        };
+        let r = stats_correlate(&xa, &ya, m).map_err(ferr_to_pyerr)?;
+        Ok(r.iter().copied().collect())
+    };
+    let (data, mask) =
+        masked_convolve_or_correlate(&ad, &am, &vd, &vm, propagate_mask, corr)?;
+    ma_from_flat(data, mask)
 }
