@@ -28,6 +28,14 @@ pub enum NormOrder {
     /// L2 norm / spectral norm: largest singular value (for matrices),
     /// Euclidean norm (for vectors).
     L2,
+    /// numpy `ord=-1` (matrices only): min column abs-sum,
+    /// `min(sum(abs(x), axis=0))`. Distinct from `NegInf` (min *row*
+    /// abs-sum). Mirror of [`NormOrder::L1`] (max column abs-sum).
+    NegL1,
+    /// numpy `ord=-2` (matrices only): smallest singular value,
+    /// `min(svd(x, compute_uv=False))`. Distinct from [`NormOrder::L2`]
+    /// (largest singular value).
+    NegL2,
     /// General p-norm (for vectors): (sum |`x_i|^p)^(1/p`).
     P(f64),
 }
@@ -188,9 +196,10 @@ pub fn vector_norm<T: LinalgFloat>(
 /// Compute the matrix norm of a 2-D matrix.
 ///
 /// `NumPy` 2.0 Array API standard entry point (`numpy.linalg.matrix_norm`).
-/// Supports `Fro`, `Nuc`, `L1`, `L2`, `Inf`, and `NegInf` orders. The
-/// `P(_)` vector-only orders return [`FerrayError::InvalidValue`] because
-/// they are not defined on matrices.
+/// Supports `Fro`, `Nuc`, `L1`, `L2`, `NegL1`, `NegL2`, `Inf`, and
+/// `NegInf` orders (matching numpy `ord` values `'fro'`, `'nuc'`, `1`,
+/// `2`, `-1`, `-2`, `inf`, `-inf`). The `P(_)` vector-only orders return
+/// [`FerrayError::InvalidValue`] because they are not defined on matrices.
 ///
 /// For the batched (N-D input with matrix axes) version, see #412; this
 /// entry point currently operates on rank-2 inputs only.
@@ -237,6 +246,10 @@ fn vector_norm_from_slice<T: LinalgFloat>(data: &[T], ord: NormOrder) -> FerrayR
         }
         NormOrder::Nuc => Err(FerrayError::invalid_value(
             "nuclear norm is not defined for 1-D axis reductions",
+        )),
+        NormOrder::NegL1 | NormOrder::NegL2 => Err(FerrayError::invalid_value(
+            "matrix norm orders -1 (min column-sum) and -2 (smallest singular \
+             value) are not defined for 1-D axis reductions; use L1/L2/Inf/P",
         )),
         NormOrder::P(p) => {
             if p == 0.0 {
@@ -305,6 +318,14 @@ fn vector_norm_scalar<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> Fe
             // returning the L1 norm (issue #197).
             Err(FerrayError::invalid_value(
                 "nuclear norm is not defined for 1-D arrays; use L1/L2/Inf/P for vectors",
+            ))
+        }
+        NormOrder::NegL1 | NormOrder::NegL2 => {
+            // numpy's ord=-1 / ord=-2 are matrix-only orders (the vector
+            // column "as below" entry has no -1/-2 row); reject on vectors.
+            Err(FerrayError::invalid_value(
+                "matrix norm orders -1 (min column-sum) and -2 (smallest \
+                 singular value) are not defined for 1-D arrays; use L1/L2/Inf/P",
             ))
         }
         NormOrder::P(p) => {
@@ -412,12 +433,43 @@ fn matrix_norm_scalar<T: LinalgFloat>(a: &Array<T, IxDyn>, ord: NormOrder) -> Fe
             }
             Ok(max_sum)
         }
+        NormOrder::NegL1 => {
+            // numpy ord=-1: min(sum(abs(x), axis=0)) — min absolute column
+            // sum (_linalg.py:2657, :2833-2836). Transpose of the L1 logic
+            // (max column sum). Distinct from NegInf (min *row* sum).
+            let mut min_sum = <T as num_traits::Float>::infinity();
+            for j in 0..n {
+                let mut col_sum = T::from_f64_const(0.0);
+                for i in 0..m {
+                    col_sum += data[i * n + j].abs();
+                }
+                if col_sum < min_sum {
+                    min_sum = col_sum;
+                }
+            }
+            Ok(min_sum)
+        }
+        NormOrder::NegL2 => {
+            // numpy ord=-2: smallest singular value
+            // (_linalg.py:2659, :2823-2824 -> _multi_svd_norm(..., amin)).
+            // faer returns singular values in descending order, so the
+            // smallest is the last entry — the mirror of L2 (svals[0]).
+            let a2 = Array::<T, Ix2>::from_vec(Ix2::new([m, n]), data)?;
+            let (_u, s, _vt) = crate::decomp::svd(&a2, false)?;
+            let svals = s
+                .as_slice()
+                .ok_or_else(|| FerrayError::invalid_value("singular values are not contiguous"))?;
+            Ok(match svals.last() {
+                Some(&last) => last,
+                None => T::from_f64_const(0.0),
+            })
+        }
         NormOrder::P(p) => {
             // Only specific p-norms are defined for matrices.
             // NumPy raises ValueError for unsupported orders.
             Err(FerrayError::invalid_value(format!(
                 "invalid norm order P({p}) for matrices; \
-                 use Fro, Nuc, L1, L2, Inf, or NegInf"
+                 use Fro, Nuc, L1, L2, NegL1, NegL2, Inf, or NegInf"
             )))
         }
     }

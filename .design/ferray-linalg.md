@@ -42,7 +42,7 @@ Implements the full `numpy.linalg` surface: matrix products (dot, matmul, einsum
 - REQ-18c: `linalg::tensorinv(&a, ind)` — compute inverse of N-dimensional array
 
 ### Norms and Measures (Section 8.4)
-- REQ-19: `linalg::norm(&a, ord)` with `NormOrder` enum: `Fro`, `Nuc`, `Inf`, `NegInf`, `L1`, `L2`, `P(f64)`
+- REQ-19: `linalg::norm(&a, ord)` with `NormOrder` enum: `Fro`, `Nuc`, `Inf`, `NegInf`, `L1`, `L2`, `NegL1`, `NegL2`, `P(f64)`. The full numpy matrix-norm `ord` set is covered: `'fro'`→`Fro`, `'nuc'`→`Nuc`, `inf`→`Inf`, `-inf`→`NegInf`, `1`→`L1` (max column abs-sum), `-1`→`NegL1` (min column abs-sum), `2`→`L2` (largest singular value), `-2`→`NegL2` (smallest singular value). `NegL1`/`NegL2` are matrix-only and reject 1-D input (matching numpy's matrix-only `-1`/`-2` rows).
 - REQ-20: `linalg::cond(&a, p)` — condition number
 - REQ-21: `linalg::det(&a)` and `linalg::slogdet(&a)` → (sign, logdet)
 - REQ-22: `linalg::matrix_rank(&a, tol)` and `linalg::trace(&a)`
@@ -103,6 +103,16 @@ All heavy computation delegates to `faer`. The `faer_bridge` module converts bet
 ## Open Questions
 
 *None — all design decisions resolved.*
+
+## REQ status
+
+Two states only (SHIPPED / NOT-STARTED), per goal.md. This table tracks the
+norms-and-measures matrix-norm-order surface (REQ-19). Other REQs are tracked
+by their owning module's `//!` doc REQ tables.
+
+| REQ | Status | Evidence |
+| --- | --- | --- |
+| REQ-19 (norm — full numpy matrix `ord` set) | SHIPPED | Impl: `NormOrder::{Fro,Nuc,Inf,NegInf,L1,L2,NegL1,NegL2,P}` + `matrix_norm_scalar` in `norms.rs` (the `NegL1` min-column-sum and `NegL2` smallest-singular-value arms close numpy `ord=-1`/`-2`, _linalg.py:2657/2659). Consumer: `cond` in `norms.rs` routes every non-L2/Fro `NormOrder` through `norm` → `matrix_norm_scalar` (its `_ =>` arm calls `norm(&a_dyn, p)`), exercising the new arms in production. Verified by `divergence_norm_matrix_ord_neg1_unrepresentable` / `_neg2_unrepresentable` against the live numpy 2.4.5 oracle (1.0 and 1.2679491924311228). |
 
 ## Out of Scope
 - Sparse matrix linear algebra (future ferray-sparse crate)
