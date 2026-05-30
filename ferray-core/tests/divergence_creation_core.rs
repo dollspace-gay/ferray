@@ -51,6 +51,63 @@ fn divergence_arange_float_fill_matches_numpy_start_plus_i_step() {
 }
 
 // ---------------------------------------------------------------------------
+// DIVERGENCE 1b: arange float last element must match numpy's @@fill@@ delta.
+//
+// numpy's arange @@fill@@ loop (numpy/_core/src/multiarray/arraytypes.c.src)
+// sets buffer[0]=start, buffer[1]=start+step, computes
+// `delta = buffer[1] - buffer[0]` (the *rounded* (start+step)-start, NOT the
+// raw step) and fills `buffer[i] = start + i*delta`. For arange(1.0,2.0,0.3),
+// `delta == 0.30000000000000004` and the last element is
+// `1.0 + 3*delta == 1.9000000000000001`. Filling with the raw `step`
+// (`i*0.3 + 1.0 == 1.9`) diverges in the last ULP.
+//
+// Oracle (numpy 2.4.5):
+//   >>> np.arange(1.0, 2.0, 0.3)[-1]  ->  1.9000000000000001
+//   >>> np.arange(1.0, 2.0, 0.3)      ->  [1.0, 1.3, 1.6, 1.9000000000000001]
+// ---------------------------------------------------------------------------
+#[test]
+fn divergence_arange_float_last_element_matches_numpy() {
+    let a = creation::arange(1.0_f64, 2.0, 0.3).unwrap();
+    let data = a.as_slice().unwrap();
+    assert_eq!(a.shape(), &[4], "arange(1.0,2.0,0.3) length");
+    assert_eq!(data[0], 1.0, "arange(1.0,2.0,0.3)[0]");
+    assert_eq!(data[1], 1.3, "arange(1.0,2.0,0.3)[1]");
+    assert_eq!(data[2], 1.6, "arange(1.0,2.0,0.3)[2]");
+    assert_eq!(
+        data[3], 1.9000000000000001,
+        "arange(1.0,2.0,0.3)[-1]: numpy==1.9000000000000001, raw-step==1.9"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DIVERGENCE 1c: geomspace with negative real endpoints must be bit-exact.
+//
+// numpy/_core/function_base.py:432-446 rotates start to a positive real
+// (`out_sign = sign(start); start /= out_sign; stop /= out_sign`), computes in
+// log10/base-10 space, then forces the endpoints back exactly
+// (`result[0] = start`, `result[-1] = stop`) before undoing the rotation
+// (`result *= out_sign`). So np.geomspace(-1,-1000,4) is EXACTLY
+// [-1, -10, -100, -1000] — the interior -10.0 requires log10 (natural log/exp
+// yields -9.999999999999998).
+//
+// Oracle (numpy 2.4.5):
+//   >>> np.geomspace(-1.0, -1000.0, 4) -> [-1.0, -10.0, -100.0, -1000.0]
+// ---------------------------------------------------------------------------
+#[test]
+fn divergence_geomspace_negative_endpoints_exact() {
+    let a = creation::geomspace::<f64>(-1.0, -1000.0, 4, true).unwrap();
+    let data = a.as_slice().unwrap();
+    assert_eq!(a.shape(), &[4], "geomspace(-1,-1000,4) length");
+    assert_eq!(data[0], -1.0, "geomspace start pinned exactly");
+    assert_eq!(data[3], -1000.0, "geomspace stop pinned exactly");
+    assert_eq!(
+        data[1], -10.0,
+        "geomspace(-1,-1000,4)[1]: numpy==-10.0 (log10), ln/exp==-9.999999999999998"
+    );
+    assert_eq!(data[2], -100.0, "geomspace(-1,-1000,4)[2]: numpy==-100.0");
+}
+
+// ---------------------------------------------------------------------------
 // DIVERGENCE 2: linspace interior values use fma (single rounding) vs numpy's
 // `arange(0,num)*step + start` (two roundings).
 //

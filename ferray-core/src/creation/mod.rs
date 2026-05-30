@@ -404,13 +404,22 @@ pub fn arange<T: ArangeNum>(start: T, stop: T, step: T) -> FerrayResult<Array<T,
     let n = ((stop_f - start_f) / step_f).ceil();
     let n = if n < 0.0 { 0 } else { n as usize };
 
+    // numpy's @@fill@@ loop (numpy/_core/src/multiarray/arraytypes.c.src) sets
+    // buffer[0]=start, buffer[1]=start+step, then computes
+    // `delta = buffer[1] - buffer[0]` and fills `buffer[i] = start + i*delta`.
+    // The crucial detail is that `delta` is the *rounded* `(start+step)-start`,
+    // NOT the raw `step`: for step=0.3, `(1.0+0.3)-1.0 == 0.30000000000000004`,
+    // so `1.0 + 3*delta == 1.9000000000000001` — bit-exact to
+    // `np.arange(1.0,2.0,0.3)[-1]` (and it also reproduces
+    // `arange(0.1,1.0,0.1)[5] == 0.6`). Using the raw `step` (or a fused
+    // `mul_add`, which rounds once) diverges in the last ULP. We keep the two
+    // separate roundings: the product `i*delta` rounds, then the `+ start`
+    // rounds. For integer dtypes `(start+step)-start == step` exactly, so this
+    // reformulation is value-preserving there.
+    let delta = (start_f + step_f) - start_f;
     let mut data = Vec::with_capacity(n);
     for i in 0..n {
-        // numpy fills `start + i*step` with TWO separate roundings — the
-        // product `i*step` rounds, then the `+ start` rounds. We must NOT
-        // use a fused multiply-add (`mul_add`), which rounds once and so
-        // diverges from numpy in the last ULP (e.g. arange(0.1,2.0,0.1)[5]).
-        data.push(T::from_f64(i as f64 * step_f + start_f));
+        data.push(T::from_f64(i as f64 * delta + start_f));
     }
     let dim = Ix1::new([data.len()]);
     Array::from_vec(dim, data)
@@ -551,9 +560,21 @@ pub fn geomspace<T: LinspaceNum>(
     if num == 1 {
         return Array::from_vec(Ix1::new([1]), vec![start]);
     }
-    let log_start = start_f.abs().ln();
-    let log_stop = stop_f.abs().ln();
-    let sign = if start_f < 0.0 { -1.0 } else { 1.0 };
+    // numpy/_core/function_base.py:432-448 rotates `start` to a positive real
+    // (`out_sign = sign(start); start /= out_sign; stop /= out_sign`), computes
+    // the sequence in **log10** space via `logspace(..., base=10.0)`, then
+    // forces the endpoints back exactly (`result[0] = start`,
+    // `result[-1] = stop`) before undoing the rotation (`result *= out_sign`).
+    // We must use log10/base-10 rather than natural log/exp: for
+    // `geomspace(-1,-1000,4)` the interior `result[1]` is exactly `-10.0` only
+    // under log10 — `ln`+`exp` yields `-9.999999999999998`. The endpoint
+    // pinning mirrors linspace (numpy function_base.py:175-176) since
+    // `10**log10(x)` is not necessarily bit-equal to `x`.
+    let out_sign = if start_f < 0.0 { -1.0 } else { 1.0 };
+    let rot_start = start_f / out_sign;
+    let rot_stop = stop_f / out_sign;
+    let log_start = rot_start.log10();
+    let log_stop = rot_stop.log10();
     let divisor = if endpoint {
         (num - 1) as f64
     } else {
@@ -562,10 +583,20 @@ pub fn geomspace<T: LinspaceNum>(
     let step = (log_stop - log_start) / divisor;
     let mut data = Vec::with_capacity(num);
     for i in 0..num {
-        let log_val = (i as f64).mul_add(step, log_start);
-        data.push(T::from_f64(sign * log_val.exp()));
+        let log_val = i as f64 * step + log_start;
+        data.push(10.0_f64.powf(log_val));
     }
-    Array::from_vec(Ix1::new([num]), data)
+    // Pin the endpoints to the (rotated) start/stop exactly, matching numpy.
+    data[0] = rot_start;
+    if num > 1 && endpoint {
+        data[num - 1] = rot_stop;
+    }
+    // Undo the sign rotation.
+    let out: Vec<T> = data
+        .into_iter()
+        .map(|v| T::from_f64(v * out_sign))
+        .collect();
+    Array::from_vec(Ix1::new([num]), out)
 }
 
 /// Return coordinate arrays from coordinate vectors.
