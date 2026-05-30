@@ -887,6 +887,25 @@ macro_rules! match_dtype_float_or_int {
     };
 }
 
+/// Coerce a `numpy.char.multiply` / `numpy.strings.multiply` repeat count
+/// to a non-negative `usize`, clamping a negative count to `0`.
+///
+/// `numpy/_core/strings.py:155` documents "Values in ``i`` of less than 0
+/// are treated as 0 (which yields an empty string)", implemented at
+/// `:195` as `i = np.maximum(i, 0)`. So `np.char.multiply(['ab'], -2)`
+/// returns `['']`, it does NOT raise. The binding previously typed the
+/// count as a bare PyO3 `usize`, which raises `OverflowError` at extraction
+/// for any negative Python int — surfacing the wrong exception and never
+/// reaching numpy's clamp. Binding the count signed and clamping here
+/// mirrors numpy's contract (R-DEV-2). A non-integer raises `TypeError`,
+/// matching numpy's `raise TypeError(... for operand 'i')` (`:194`).
+pub fn coerce_multiply_count(obj: &Bound<'_, PyAny>) -> PyResult<usize> {
+    let n: i64 = obj
+        .extract::<i64>()
+        .map_err(|_| PyTypeError::new_err("unsupported type for operand 'i' (expected integer)"))?;
+    Ok(if n < 0 { 0 } else { n as usize })
+}
+
 /// Coerce a Python array-like to a `numpy.ndarray` of the requested
 /// dtype. Used by binary ufuncs to align two inputs to a common dtype
 /// before extracting typed views — the alternative (extract both then
