@@ -403,6 +403,26 @@ upstream = ["/home/doll/numpy-ref/numpy/polynomial/polynomial.py"]
 design = ".design/ferray-polynomial.md"
 parity_ops = ["roots"]
 
+# ferray-python numpy.polynomial class-API binding shim: marshals the
+# numpy.polynomial.Polynomial / Chebyshev / Legendre / Hermite / HermiteE /
+# Laguerre class wrappers through to the ferray-polynomial crate. Owns the
+# boundary/output-object concerns numpy-vs-ferray differ on: roots() returns
+# a REAL (float64) array when every imaginary part is zero
+# (_to_real_if_imag_zero), scalar __call__ returns a numpy scalar (np.float64,
+# not a bare Python float), `degree()` is a callable method returning
+# len(coef)-1 (no trailing-zero trim), builtin `divmod` via __divmod__, the
+# domain/window/symbol constructor kwargs + .symbol attribute, the
+# `Polynomial([...], domain=[...], window=[...], symbol='x')` __repr__ format,
+# and fit() storing coef in the mapped (domain->window) basis.
+[[route]]
+crate_pattern = "ferray-python/src/polynomial.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/polynomial/_polybase.py",
+  "/home/doll/numpy-ref/numpy/polynomial/polynomial.py",
+]
+design = ".design/ferray-polynomial.md"
+parity_ops = ["roots", "degree", "fit", "divmod", "domain", "window", "symbol"]
+
 # ─────────────────────────────────────────────────────────────────────────
 # ferray-strings — numpy.strings (vectorized elementwise string ops)
 # ─────────────────────────────────────────────────────────────────────────

@@ -1009,3 +1009,40 @@ pub fn scalarize<'py>(result: Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> 
     }
     Ok(result)
 }
+
+/// Sort `roots` then build a `complex128` ndarray, down-converting it to a
+/// REAL (`float64`) array when every imaginary part is exactly zero —
+/// mirroring numpy's `polyroots` sort + real-cast.
+///
+/// `numpy.polynomial.polynomial.polyroots` sorts the companion-matrix
+/// eigenvalues (`numpy/polynomial/polynomial.py:1603` `r.sort()`) and then
+/// routes them through `numpy.linalg._linalg._to_real_if_imag_zero`
+/// (`polynomial.py:1606-1607`). `r.sort()` on a complex array is
+/// lexicographic by (real, then imaginary) part — so `x^2 - 5x + 6` yields
+/// `[2., 3.]`, not the eigen-/quadratic-solver emit order. That post-sort is
+/// a polyroots-level (Python-API) step, so the binding — which IS the analog
+/// of `polyroots` for the class `roots()` method — applies it here at the
+/// boundary. `_to_real_if_imag_zero` (`numpy/linalg/_linalg.py:190`) then
+/// returns `w.real` when the input's expected result type is non-complex and
+/// `all(w.imag == 0.0)` — so the roots of a real polynomial whose roots are
+/// all real come back as a `float64` array, only staying `complex128` when
+/// some root has a non-zero imaginary part. The coefficient input here is
+/// always real (`f64`), so `t.dtype` is non-complex and the real-cast hinges
+/// solely on `all(w.imag == 0.0)`. `total_cmp` gives a panic-free total order
+/// on the `f64` real/imag parts (R-CODE-2). The ferray binding previously
+/// hard-coded an unsorted `complex128`; this restores numpy's ordering +
+/// dtype contract across the boundary (R-DEV-3).
+pub fn complex_roots_to_pyarray<'py>(
+    py: Python<'py>,
+    mut roots: Vec<num_complex::Complex<f64>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    roots.sort_by(|a, b| a.re.total_cmp(&b.re).then(a.im.total_cmp(&b.im)));
+    let all_real = roots.iter().all(|c| c.im == 0.0);
+    if all_real {
+        let reals: Vec<f64> = roots.iter().map(|c| c.re).collect();
+        let arr = numpy::PyArray1::<f64>::from_vec(py, reals);
+        return Ok(arr.into_any());
+    }
+    let arr = numpy::PyArray1::<num_complex::Complex<f64>>::from_vec(py, roots);
+    Ok(arr.into_any())
+}
