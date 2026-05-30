@@ -1600,7 +1600,9 @@ where
 ///
 /// `ddof` is the delta degrees of freedom. See [`sum_into`] for the
 /// contract on `out`. Returns `FerrayError::InvalidValue` for empty
-/// inputs or when `ddof >= n`.
+/// inputs. When `ddof >= n` the divisor clamps to 0 and the result is
+/// `+inf` (or `NaN` when the sum-of-squares is 0), matching
+/// `numpy.var` (`numpy/_core/_methods.py:204`); no error is raised.
 pub fn var_into<T, D>(
     a: &Array<T, D>,
     axis: Option<usize>,
@@ -1620,11 +1622,6 @@ where
     match axis {
         None => {
             let n = data.len();
-            if n <= ddof {
-                return Err(FerrayError::invalid_value(
-                    "ddof >= number of elements, variance undefined",
-                ));
-            }
             let dst = check_out_shape(out, &[], "var")?;
             let nf = T::from(n).unwrap();
             let mean_val = try_simd_pairwise_sum(&data)
@@ -1636,21 +1633,23 @@ where
                     acc + d * d
                 })
             });
-            dst[0] = sum_sq / T::from(n - ddof).unwrap();
+            // numpy/_core/_methods.py:204 — `rcount = um.maximum(rcount - ddof, 0)`,
+            // then true_divide. When ddof >= n the divisor clamps to 0 and IEEE-754
+            // float division yields +inf (sum_sq > 0) or NaN (sum_sq == 0), NOT an
+            // error. Saturating-sub keeps the divisor at 0 instead of underflowing.
+            let divisor = T::from(n.saturating_sub(ddof)).unwrap_or_else(<T as Element>::zero);
+            dst[0] = sum_sq / divisor;
             Ok(())
         }
         Some(ax) => {
             validate_axis(ax, a.ndim())?;
             let shape_vec = a.shape().to_vec();
             let axis_len = shape_vec[ax];
-            if axis_len <= ddof {
-                return Err(FerrayError::invalid_value(
-                    "ddof >= axis length, variance undefined",
-                ));
-            }
             let out_s = output_shape(&shape_vec, ax);
             let nf = T::from(axis_len).unwrap();
-            let denom = T::from(axis_len - ddof).unwrap();
+            // numpy/_core/_methods.py:204 clamps `rcount = max(axis_len - ddof, 0)`
+            // then true-divides: ddof >= axis_len yields +inf / NaN, never an error.
+            let denom = T::from(axis_len.saturating_sub(ddof)).unwrap_or_else(<T as Element>::zero);
             let dst = check_out_shape(out, &out_s, "var")?;
             reduce_axis_general_into(&data, &shape_vec, ax, dst, |lane| {
                 let mean_val = try_simd_pairwise_sum(lane)
@@ -3174,11 +3173,15 @@ mod tests {
     }
 
     #[test]
-    fn var_into_rejects_ddof_too_large() {
+    fn var_into_ddof_too_large_is_inf_not_error() -> FerrayResult<()> {
         let a = arr1d(vec![1.0, 2.0, 3.0]);
-        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[]), vec![0.0]).unwrap();
-        // n=3, ddof=3 → ddof >= n, must error.
-        assert!(var_into(&a, None, 3, &mut out).is_err());
+        let mut out = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[]), vec![0.0])?;
+        // n=3, ddof=3 → divisor clamps to 0; IEEE-754 true-division yields +inf,
+        // matching numpy (np.var([1.,2.,3.], ddof=3) == inf; _core/_methods.py:204).
+        var_into(&a, None, 3, &mut out)?;
+        let got: f64 = out.iter().copied().next().unwrap_or(0.0);
+        assert!(got.is_infinite() && got.is_sign_positive());
+        Ok(())
     }
 
     #[test]
