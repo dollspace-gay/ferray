@@ -645,6 +645,17 @@ fn register_random_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -
     // Modern Generator class
     m.add_class::<random::PyGenerator>()?;
     m.add_function(wrap_pyfunction!(random::default_rng_py, &m)?)?;
+    // BitGenerator family + SeedSequence + legacy RandomState (refs #834 #818)
+    m.add_class::<random::PyBitGenerator>()?;
+    m.add_class::<random::PyMT19937>()?;
+    m.add_class::<random::PyPCG64>()?;
+    m.add_class::<random::PyPCG64DXSM>()?;
+    m.add_class::<random::PyPhilox>()?;
+    m.add_class::<random::PySFC64>()?;
+    m.add_class::<random::PySeedSequence>()?;
+    m.add_class::<random::PyRandomState>()?;
+    m.add_function(wrap_pyfunction!(random::get_state, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::set_state, &m)?)?;
     parent.add_submodule(&m)?;
     py.import("sys")?
         .getattr("modules")?

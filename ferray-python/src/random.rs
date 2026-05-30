@@ -95,8 +95,21 @@ fn seed_generator_from(seed: Option<&Bound<'_, PyAny>>) -> PyResult<Generator<Xo
             if o.is_none() {
                 return Ok(default_rng());
             }
+            // A BitGenerator instance (`PCG64(42)`, `MT19937(7)`, …) carries
+            // the resolved Xoshiro seed it was built from. numpy's
+            // `default_rng(bit_generator)` adopts that generator's stream;
+            // ferray has a single PRNG (Xoshiro256**), so we re-seed from the
+            // BitGenerator's stored seed — API-compatible, NOT bit-identical
+            // to numpy's PCG64/MT19937/etc. streams (documented limitation).
+            if let Ok(bg) = o.extract::<PyRef<'_, PyBitGenerator>>() {
+                return Ok(default_rng_seeded(bg.seed));
+            }
             if let Ok(s) = o.extract::<u64>() {
                 return Ok(default_rng_seeded(s));
+            }
+            // A SeedSequence instance: fold to a single deterministic u64.
+            if let Ok(ss) = o.extract::<PyRef<'_, PySeedSequence>>() {
+                return Ok(default_rng_seeded(ss.inner.generate_u64()));
             }
             // array_like / sequence seed: fold the entropy words through a
             // SeedSequence to produce a single deterministic u64.
@@ -1779,4 +1792,733 @@ pub fn default_rng_py(seed: Option<&Bound<'_, PyAny>>) -> PyResult<PyGenerator> 
     Ok(PyGenerator {
         inner: seed_generator_from(seed)?,
     })
+}
+
+// ---------------------------------------------------------------------------
+// BitGenerator class family (refs #834 #818)
+//
+// numpy exposes a BitGenerator base plus the concrete streams MT19937 /
+// PCG64 / PCG64DXSM / Philox / SFC64 (`numpy/random/__init__.py:181-191`).
+// Each is a constructible object accepted as the `bit_generator` argument to
+// `default_rng`. ferray's runtime PRNG is a single Xoshiro256** — there is
+// no PCG64/MT19937 bit-stream behind these wrappers. They provide the numpy
+// *API* (constructible with a seed, `.state` dict, `.seed_seq`, accepted by
+// `default_rng`); the produced stream is ferray's Xoshiro seeded from the
+// same seed, NOT numpy-bit-identical (R-DEV-7: the observable API contract is
+// preserved; bit-stream identity across a different PRNG is out of scope and
+// documented here).
+// ---------------------------------------------------------------------------
+
+/// Resolve a numpy-compatible BitGenerator `seed` argument
+/// (`None | int | SeedSequence`) to a single deterministic `u64` seed for the
+/// underlying Xoshiro256** stream. `None` draws from OS entropy via a fresh
+/// `SeedSequence` so each unseeded BitGenerator is independent.
+fn bitgen_seed_from(seed: Option<&Bound<'_, PyAny>>) -> PyResult<u64> {
+    match seed {
+        None => Ok(SeedSequence::new(os_entropy_u64()).generate_u64()),
+        Some(o) => {
+            if o.is_none() {
+                return Ok(SeedSequence::new(os_entropy_u64()).generate_u64());
+            }
+            if let Ok(ss) = o.extract::<PyRef<'_, PySeedSequence>>() {
+                return Ok(ss.inner.generate_u64());
+            }
+            if let Ok(s) = o.extract::<u64>() {
+                return Ok(s);
+            }
+            // array_like / sequence seed -> fold through SeedSequence.
+            let words: Vec<u64> = o.extract::<Vec<u64>>().map_err(|_| {
+                pyo3::exceptions::PyTypeError::new_err(
+                    "seed must be None, an int, a sequence of ints, or a SeedSequence",
+                )
+            })?;
+            let mut entropy: u64 = 0;
+            for (i, w) in words.iter().enumerate() {
+                entropy ^= w
+                    .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                    .rotate_left((i as u32 % 64) + 1);
+            }
+            Ok(SeedSequence::new(entropy).generate_u64())
+        }
+    }
+}
+
+/// Draw a non-deterministic `u64` for an unseeded BitGenerator / SeedSequence.
+/// Delegates to `ferray_random::default_rng()`, which seeds itself from OS
+/// entropy (`generator.rs` `default_rng`), then pulls one `u64` — so each
+/// unseeded object gets an independent stream without panicking at the
+/// boundary (R-CODE-2).
+fn os_entropy_u64() -> u64 {
+    default_rng().next_u64()
+}
+
+/// `numpy.random.BitGenerator` family — a constructible PRNG-stream object
+/// accepted by `default_rng`. The concrete numpy classes (`MT19937`,
+/// `PCG64`, `PCG64DXSM`, `Philox`, `SFC64`) are registered as Python
+/// subclasses of this base sharing one Rust `#[pyclass]`; `name` records
+/// which numpy class was constructed so `.state["bit_generator"]` reports the
+/// numpy-expected label.
+#[pyclass(name = "BitGenerator", module = "ferray.random", subclass)]
+pub struct PyBitGenerator {
+    /// Resolved Xoshiro256** seed this BitGenerator wraps.
+    seed: u64,
+    /// numpy class label (`"PCG64"`, `"MT19937"`, …) for `.state`.
+    name: String,
+}
+
+#[pymethods]
+impl PyBitGenerator {
+    #[new]
+    #[pyo3(signature = (seed = None))]
+    fn py_new(seed: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        Ok(Self {
+            seed: bitgen_seed_from(seed)?,
+            name: "BitGenerator".to_string(),
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{}() <ferray Xoshiro256** stream>", self.name)
+    }
+
+    /// `BitGenerator.state` — numpy returns a dict describing the stream.
+    /// ferray reports the numpy class label plus the resolved Xoshiro seed
+    /// (the actual backing state), matching numpy's dict *shape*
+    /// (`bit_generator` + `state` keys) without claiming bit-identity.
+    #[getter]
+    fn state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let d = pyo3::types::PyDict::new(py);
+        d.set_item("bit_generator", &self.name)?;
+        let inner = pyo3::types::PyDict::new(py);
+        inner.set_item("seed", self.seed)?;
+        d.set_item("state", inner)?;
+        d.set_item("has_uint32", 0)?;
+        d.set_item("uinteger", 0)?;
+        Ok(d.into_any())
+    }
+
+    /// `BitGenerator.seed_seq` — the `SeedSequence` that initialised this
+    /// stream (numpy exposes this on the modern BitGenerators).
+    #[getter]
+    fn seed_seq(&self) -> PySeedSequence {
+        PySeedSequence {
+            inner: SeedSequence::new(self.seed),
+        }
+    }
+}
+
+/// Macro defining a concrete numpy BitGenerator subclass over the shared
+/// [`PyBitGenerator`] base. Each records its numpy class `name` for `.state`.
+macro_rules! bitgen_subclass {
+    ($cls:ident, $pyname:literal) => {
+        #[pyclass(name = $pyname, module = "ferray.random", extends = PyBitGenerator)]
+        pub struct $cls;
+
+        #[pymethods]
+        impl $cls {
+            #[new]
+            #[pyo3(signature = (seed = None))]
+            fn py_new(seed: Option<&Bound<'_, PyAny>>) -> PyResult<(Self, PyBitGenerator)> {
+                Ok((
+                    $cls,
+                    PyBitGenerator {
+                        seed: bitgen_seed_from(seed)?,
+                        name: $pyname.to_string(),
+                    },
+                ))
+            }
+        }
+    };
+}
+
+bitgen_subclass!(PyMT19937, "MT19937");
+bitgen_subclass!(PyPCG64, "PCG64");
+bitgen_subclass!(PyPCG64DXSM, "PCG64DXSM");
+bitgen_subclass!(PyPhilox, "Philox");
+bitgen_subclass!(PySFC64, "SFC64");
+
+// ---------------------------------------------------------------------------
+// SeedSequence class (refs #834 #818)
+//
+// numpy `numpy/random/__init__.py:186` `from .bit_generator import
+// SeedSequence`. Wraps `ferray_random::SeedSequence` to expose `.entropy`,
+// `.spawn(n)` and `.generate_state(n_words)`. The generated words are a
+// deterministic function of `(entropy, spawn_key)` — reproducible, though not
+// numpy-bit-identical.
+// ---------------------------------------------------------------------------
+
+/// `numpy.random.SeedSequence(entropy=None)` — entropy mixing + child spawn.
+#[pyclass(name = "SeedSequence", module = "ferray.random")]
+pub struct PySeedSequence {
+    inner: SeedSequence,
+}
+
+#[pymethods]
+impl PySeedSequence {
+    #[new]
+    #[pyo3(signature = (entropy = None))]
+    fn py_new(entropy: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let e = match entropy {
+            None => os_entropy_u64(),
+            Some(o) if o.is_none() => os_entropy_u64(),
+            Some(o) => {
+                if let Ok(v) = o.extract::<u64>() {
+                    v
+                } else {
+                    // sequence entropy: fold to a single u64.
+                    let words: Vec<u64> = o.extract::<Vec<u64>>().map_err(|_| {
+                        pyo3::exceptions::PyTypeError::new_err(
+                            "entropy must be None, an int, or a sequence of ints",
+                        )
+                    })?;
+                    let mut acc: u64 = 0;
+                    for (i, w) in words.iter().enumerate() {
+                        acc ^= w
+                            .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                            .rotate_left((i as u32 % 64) + 1);
+                    }
+                    acc
+                }
+            }
+        };
+        Ok(Self {
+            inner: SeedSequence::new(e),
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!("SeedSequence(entropy={})", self.inner.entropy())
+    }
+
+    /// `SeedSequence.entropy` — the root entropy value.
+    #[getter]
+    fn entropy(&self) -> u64 {
+        self.inner.entropy()
+    }
+
+    /// `SeedSequence.spawn_key` — the spawn path (tuple of ints) identifying
+    /// this child within the spawn tree.
+    #[getter]
+    fn spawn_key<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        Ok(pyo3::types::PyTuple::new(py, self.inner.spawn_key())?.into_any())
+    }
+
+    /// `SeedSequence.generate_state(n_words, dtype=uint32)` — `n_words`
+    /// deterministic uint32 words as a numpy `uint32` array.
+    #[pyo3(signature = (n_words, dtype = None))]
+    fn generate_state<'py>(
+        &self,
+        py: Python<'py>,
+        n_words: isize,
+        dtype: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let _ = dtype;
+        if n_words < 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "n_words must be non-negative",
+            ));
+        }
+        let words: Vec<u32> = self.inner.generate_state(n_words as usize);
+        let arr = Array1::<u32>::from_vec(ferray_core::dimension::Ix1::new([words.len()]), words)
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `SeedSequence.spawn(n)` — return `n` independent child SeedSequences.
+    fn spawn(&mut self, n: usize) -> Vec<PySeedSequence> {
+        self.inner
+            .spawn(n)
+            .into_iter()
+            .map(|inner| PySeedSequence { inner })
+            .collect()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RandomState — the legacy numpy.random API (refs #834 #818)
+//
+// numpy `numpy/random/__init__.py:188` `from .mtrand import RandomState`.
+// Wraps a ferray `Generator<Xoshiro256**>` and exposes the legacy method
+// surface (`rand`, `randn`, `randint`, `random`/`random_sample`,
+// `standard_normal`, `normal`, `uniform`, `choice`, `shuffle`,
+// `permutation`, `seed`, `get_state`/`set_state`, plus common
+// distributions). Most methods delegate to the same library calls the
+// module-level functions and `PyGenerator` use. Legacy `RandomState` uses
+// MT19937 in numpy; ferray backs it with Xoshiro256** — reproducible per
+// seed but NOT numpy-bit-identical (documented limitation).
+// ---------------------------------------------------------------------------
+
+/// `numpy.random.RandomState(seed=None)` — the legacy stateful generator.
+#[pyclass(name = "RandomState", module = "ferray.random")]
+pub struct PyRandomState {
+    inner: Generator<Xoshiro256StarStar>,
+}
+
+#[pymethods]
+impl PyRandomState {
+    #[new]
+    #[pyo3(signature = (seed = None))]
+    fn py_new(seed: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        Ok(Self {
+            inner: seed_generator_from(seed)?,
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        "RandomState(Xoshiro256**)".to_string()
+    }
+
+    /// `RandomState.seed(seed=None)` — re-seed in place.
+    #[pyo3(signature = (seed = None))]
+    fn seed(&mut self, seed: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        self.inner = seed_generator_from(seed)?;
+        Ok(())
+    }
+
+    /// `RandomState.rand(*shape)` — uniform [0, 1); scalar for no args.
+    #[pyo3(signature = (*shape))]
+    fn rand<'py>(
+        &mut self,
+        py: Python<'py>,
+        shape: &Bound<'py, pyo3::types::PyTuple>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if shape.is_empty() {
+            let v = self
+                .inner
+                .random(1usize)
+                .map_err(ferr_to_pyerr)?
+                .iter()
+                .next()
+                .copied()
+                .unwrap_or(0.0);
+            return Ok(v.into_pyobject(py)?.into_any());
+        }
+        let dims = varargs_dims(shape)?;
+        let arr: ArrayD<f64> = self.inner.random(dims.as_slice()).map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `RandomState.randn(*shape)` — standard normal; scalar for no args.
+    #[pyo3(signature = (*shape))]
+    fn randn<'py>(
+        &mut self,
+        py: Python<'py>,
+        shape: &Bound<'py, pyo3::types::PyTuple>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if shape.is_empty() {
+            let v = self
+                .inner
+                .standard_normal(1usize)
+                .map_err(ferr_to_pyerr)?
+                .iter()
+                .next()
+                .copied()
+                .unwrap_or(0.0);
+            return Ok(v.into_pyobject(py)?.into_any());
+        }
+        let dims = varargs_dims(shape)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .standard_normal(dims.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `RandomState.random_sample(size=None)` — uniform [0, 1); scalar for
+    /// `size=None`.
+    #[pyo3(signature = (size = None))]
+    fn random_sample<'py>(
+        &mut self,
+        py: Python<'py>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if size.is_none() {
+            let v = self
+                .inner
+                .random(1usize)
+                .map_err(ferr_to_pyerr)?
+                .iter()
+                .next()
+                .copied()
+                .unwrap_or(0.0);
+            return Ok(v.into_pyobject(py)?.into_any());
+        }
+        let s = shape_from_pyany(size)?;
+        let arr: ArrayD<f64> = self.inner.random(s.as_slice()).map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `RandomState.random(size=None)` — alias of `random_sample`.
+    #[pyo3(signature = (size = None))]
+    fn random<'py>(
+        &mut self,
+        py: Python<'py>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.random_sample(py, size)
+    }
+
+    /// `RandomState.standard_normal(size=None)`; scalar for `size=None`.
+    #[pyo3(signature = (size = None))]
+    fn standard_normal<'py>(
+        &mut self,
+        py: Python<'py>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if size.is_none() {
+            let v = self
+                .inner
+                .standard_normal(1usize)
+                .map_err(ferr_to_pyerr)?
+                .iter()
+                .next()
+                .copied()
+                .unwrap_or(0.0);
+            return Ok(v.into_pyobject(py)?.into_any());
+        }
+        let s = shape_from_pyany(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .standard_normal(s.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `RandomState.normal(loc=0, scale=1, size=None)`.
+    #[pyo3(signature = (loc = 0.0, scale = 1.0, size = None))]
+    fn normal<'py>(
+        &mut self,
+        py: Python<'py>,
+        loc: f64,
+        scale: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if size.is_none() {
+            let v = self
+                .inner
+                .normal(loc, scale, 1usize)
+                .map_err(ferr_to_pyerr)?
+                .iter()
+                .next()
+                .copied()
+                .unwrap_or(0.0);
+            return Ok(v.into_pyobject(py)?.into_any());
+        }
+        let s = shape_from_pyany(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .normal(loc, scale, s.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `RandomState.uniform(low=0, high=1, size=None)`.
+    #[pyo3(signature = (low = 0.0, high = 1.0, size = None))]
+    fn uniform<'py>(
+        &mut self,
+        py: Python<'py>,
+        low: f64,
+        high: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if size.is_none() {
+            let v = self
+                .inner
+                .uniform(low, high, 1usize)
+                .map_err(ferr_to_pyerr)?
+                .iter()
+                .next()
+                .copied()
+                .unwrap_or(0.0);
+            return Ok(v.into_pyobject(py)?.into_any());
+        }
+        let s = shape_from_pyany(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .uniform(low, high, s.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `RandomState.randint(low, high=None, size=None)` — half-open
+    /// `[low, high)`; scalar for `size=None`.
+    #[pyo3(signature = (low, high = None, size = None))]
+    fn randint<'py>(
+        &mut self,
+        py: Python<'py>,
+        low: i64,
+        high: Option<i64>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (lo, hi) = match high {
+            Some(h) => (low, h),
+            None => (0, low),
+        };
+        if size.is_none() {
+            let v: i64 = self
+                .inner
+                .integers(lo, hi, 1usize)
+                .map_err(ferr_to_pyerr)?
+                .iter()
+                .next()
+                .copied()
+                .unwrap_or(0);
+            return Ok(v.into_pyobject(py)?.into_any());
+        }
+        let s = shape_from_pyany(size)?;
+        let arr: ArrayD<i64> = self
+            .inner
+            .integers(lo, hi, s.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `RandomState.tomaxint`-free alias: `random_integers(low, high=None,
+    /// size=None)` — inclusive `[low, high]` (or `[1, low]`).
+    #[pyo3(signature = (low, high = None, size = None))]
+    fn random_integers<'py>(
+        &mut self,
+        py: Python<'py>,
+        low: i64,
+        high: Option<i64>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (lo, hi_excl) = match high {
+            Some(h) => (low, h.saturating_add(1)),
+            None => (1, low.saturating_add(1)),
+        };
+        self.randint(py, lo, Some(hi_excl), size)
+    }
+
+    /// `RandomState.exponential(scale=1.0, size=None)`.
+    #[pyo3(signature = (scale = 1.0, size = None))]
+    fn exponential<'py>(
+        &mut self,
+        py: Python<'py>,
+        scale: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let s = shape_from_pyany(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .exponential(scale, s.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `RandomState.poisson(lam=1.0, size=None)` — int64.
+    #[pyo3(signature = (lam = 1.0, size = None))]
+    fn poisson<'py>(
+        &mut self,
+        py: Python<'py>,
+        lam: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let s = shape_from_pyany(size)?;
+        let arr: ArrayD<i64> = self
+            .inner
+            .poisson(lam, s.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `RandomState.binomial(n, p, size=None)` — `n < 0` -> `ValueError`.
+    #[pyo3(signature = (n, p, size = None))]
+    fn binomial<'py>(
+        &mut self,
+        py: Python<'py>,
+        n: i64,
+        p: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if n < 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err("n < 0"));
+        }
+        let s = shape_from_pyany(size)?;
+        let arr: ArrayD<i64> = self
+            .inner
+            .binomial(n as u64, p, s.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `RandomState.choice(a, size=None, replace=True, p=None)`.
+    #[pyo3(signature = (a, size = None, replace = true, p = None))]
+    fn choice<'py>(
+        &mut self,
+        py: Python<'py>,
+        a: &Bound<'py, PyAny>,
+        size: Option<&Bound<'py, PyAny>>,
+        replace: bool,
+        p: Option<Vec<f64>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let scalar = size.is_none();
+        let shape = shape_from_pyany(size)?;
+        let n: usize = shape
+            .iter()
+            .product::<usize>()
+            .max(if scalar { 1 } else { 0 });
+        let p_ref = p.as_deref();
+        if let Ok(k) = a.extract::<usize>() {
+            let range_arr: Array1<i64> = (0..k as i64).collect::<Vec<_>>().pipe(|v| {
+                Array1::<i64>::from_vec(ferray_core::dimension::Ix1::new([k]), v)
+                    .map_err(ferr_to_pyerr)
+            })?;
+            let r: Array1<i64> = self
+                .inner
+                .choice(&range_arr, n, replace, p_ref)
+                .map_err(ferr_to_pyerr)?;
+            let out = r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+            return finish_choice(out, &shape, scalar);
+        }
+        let arr = as_ndarray(py, a)?;
+        let dt = dtype_name(&arr)?;
+        let out = match_dtype_all!(dt.as_str(), T => {
+            let view: PyReadonlyArray1<T> = arr.extract()?;
+            let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+            let r: Array1<T> = self.inner.choice(&fa, n, replace, p_ref)
+                .map_err(ferr_to_pyerr)?;
+            r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        });
+        finish_choice(out, &shape, scalar)
+    }
+
+    /// `RandomState.shuffle(x)` — shuffle a 1-D array in place, return `None`.
+    fn shuffle(&mut self, x: &Bound<'_, PyAny>) -> PyResult<()> {
+        let dt = dtype_name(x)?;
+        match_dtype_all!(dt.as_str(), T => {
+            let mut rw: PyReadwriteArray1<T> = x.extract().map_err(|_| {
+                pyo3::exceptions::PyTypeError::new_err(
+                    "shuffle requires a writeable 1-D numpy array",
+                )
+            })?;
+            let slice = rw.as_slice_mut().map_err(|_| {
+                pyo3::exceptions::PyValueError::new_err(
+                    "array must be contiguous for in-place shuffle",
+                )
+            })?;
+            let len = slice.len();
+            for i in (1..len).rev() {
+                let j = self.inner.next_u64_bounded((i + 1) as u64) as usize;
+                slice.swap(i, j);
+            }
+        });
+        Ok(())
+    }
+
+    /// `RandomState.permutation(x)` — permute `range(n)` for an int, or an
+    /// array along axis 0.
+    fn permutation<'py>(
+        &mut self,
+        py: Python<'py>,
+        x: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if x.is_instance_of::<pyo3::types::PyInt>() {
+            let nn: isize = x.extract()?;
+            if nn <= 0 {
+                let empty: Array1<i64> =
+                    Array1::<i64>::from_vec(ferray_core::dimension::Ix1::new([0]), Vec::new())
+                        .map_err(ferr_to_pyerr)?;
+                return Ok(empty.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
+            }
+            let arr: Array1<i64> = self
+                .inner
+                .permutation_range(nn as usize)
+                .map_err(ferr_to_pyerr)?;
+            return Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
+        }
+        let arr = as_ndarray(py, x)?;
+        let dt = dtype_name(&arr)?;
+        let ndim: usize = arr.getattr("ndim")?.extract()?;
+        Ok(match_dtype_all!(dt.as_str(), T => {
+            if ndim <= 1 {
+                let view: PyReadonlyArray1<T> = arr.extract()?;
+                let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+                let r: Array1<T> = self.inner.permutation(&fa).map_err(ferr_to_pyerr)?;
+                r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+            } else {
+                let view: numpy::PyReadonlyArrayDyn<T> = arr.extract()?;
+                let mut fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+                self.inner.shuffle_dyn(&mut fa, 0).map_err(ferr_to_pyerr)?;
+                fa.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+            }
+        }))
+    }
+
+    /// `RandomState.get_state()` — legacy state tuple. numpy returns
+    /// `(str, ndarray, int, int, float)`; ferray reports the backing PRNG
+    /// label plus its raw state bytes as a uint8 array — round-trippable via
+    /// `set_state` (NOT numpy-bit-compatible; documented limitation).
+    fn get_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let bytes = self.inner.state_bytes().map_err(ferr_to_pyerr)?;
+        let arr = Array1::<u8>::from_vec(ferray_core::dimension::Ix1::new([bytes.len()]), bytes)
+            .map_err(ferr_to_pyerr)?;
+        let state_arr = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+        let tuple = pyo3::types::PyTuple::new(
+            py,
+            [
+                "Xoshiro256**".into_pyobject(py)?.into_any(),
+                state_arr,
+                0i64.into_pyobject(py)?.into_any(),
+                0i64.into_pyobject(py)?.into_any(),
+                0.0f64.into_pyobject(py)?.into_any(),
+            ],
+        )?;
+        Ok(tuple.into_any())
+    }
+
+    /// `RandomState.set_state(state)` — restore from a `get_state` tuple.
+    fn set_state(&mut self, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let arr = state.get_item(1)?;
+        let view: PyReadonlyArray1<u8> = arr.extract().map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err(
+                "state[1] must be a 1-D uint8 array from get_state",
+            )
+        })?;
+        let bytes = view.as_slice().map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err("state array must be contiguous")
+        })?;
+        self.inner.set_state_bytes(bytes).map_err(ferr_to_pyerr)?;
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Module-level legacy get_state / set_state over the thread-local RNG
+// (`numpy/random/__init__.py:137,164`).
+// ---------------------------------------------------------------------------
+
+/// `numpy.random.get_state()` — legacy accessor over the process-wide RNG.
+/// Returns the same tuple shape as `RandomState.get_state`.
+#[pyfunction]
+pub fn get_state<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    let bytes = with_rng(|rng| rng.state_bytes()).map_err(ferr_to_pyerr)?;
+    let arr = Array1::<u8>::from_vec(ferray_core::dimension::Ix1::new([bytes.len()]), bytes)
+        .map_err(ferr_to_pyerr)?;
+    let state_arr = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let tuple = pyo3::types::PyTuple::new(
+        py,
+        [
+            "Xoshiro256**".into_pyobject(py)?.into_any(),
+            state_arr,
+            0i64.into_pyobject(py)?.into_any(),
+            0i64.into_pyobject(py)?.into_any(),
+            0.0f64.into_pyobject(py)?.into_any(),
+        ],
+    )?;
+    Ok(tuple.into_any())
+}
+
+/// `numpy.random.set_state(state)` — legacy setter over the process-wide RNG.
+#[pyfunction]
+pub fn set_state(state: &Bound<'_, PyAny>) -> PyResult<()> {
+    let arr = state.get_item(1)?;
+    let view: PyReadonlyArray1<u8> = arr.extract().map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err("state[1] must be a 1-D uint8 array from get_state")
+    })?;
+    let bytes = view
+        .as_slice()
+        .map_err(|_| pyo3::exceptions::PyValueError::new_err("state array must be contiguous"))?;
+    with_rng(|rng| rng.set_state_bytes(bytes)).map_err(ferr_to_pyerr)?;
+    Ok(())
 }
