@@ -10,6 +10,32 @@
 // Integration: trapezoid
 //
 // Reduction: add_reduce, add_accumulate, multiply_outer
+//
+// ## REQ status — integer-dtype arithmetic + NEP-50 true-division
+//
+// SHIPPED:
+//   - `divide` / `divide_into` / `true_divide` are *true division* (NumPy
+//     `PyUFunc_TrueDivisionTypeResolver`, generate_umath.py:422): integer
+//     operands promote to f64, float operands keep their float type. The
+//     output element type is `<T as TrueDivide>::Output` (i*/u* -> f64,
+//     f32 -> f32, f64 -> f64). Integer divide-by-zero NEVER panics — the
+//     operands are cast to f64 first so `x/0.0` yields inf/nan exactly as
+//     NumPy does. f32/f64 callers keep the byte-identical SIMD fast path.
+//   - `floor_divide_int` / `remainder_int` / `mod_int`: integer floor-div
+//     and Python-style modulo with divisor-zero -> 0 (NumPy
+//     `loops_modulo`/`PyUFunc_RemainderTypeResolver` returns 0 + a
+//     RuntimeWarning, never a panic — generate_umath.py:405,1039).
+//   - `power_int`: integer exponentiation, int -> int (NumPy `power`
+//     `TD(ints)`, generate_umath.py:480).
+//   - `sign_int` / `negative_int` / `absolute_int`: preserve the integer
+//     dtype (NumPy `sign`/`negative`/`absolute` `TD(ints)`,
+//     generate_umath.py:496,516,534). Wrapping where NumPy wraps
+//     (e.g. `negative(i8::MIN)`).
+//
+// Consumers: `divide` (public re-export, also reached via the `/` operator
+// through `operator_overloads::array_div`) consumes `TrueDivide`. The int
+// ops are re-exported from the crate root and reached through the public
+// ufunc surface.
 
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, Ix1, IxDyn};
@@ -28,15 +54,84 @@ use crate::kernels::simd_f64::{add_f64, div_f64, mul_f64, sub_f64};
 // Basic arithmetic (binary, same-shape)
 // ---------------------------------------------------------------------------
 
+/// NumPy fixed-width integer arithmetic: `add`/`subtract`/`multiply` on
+/// integer dtypes wrap on overflow (modular arithmetic), while floats use
+/// ordinary IEEE arithmetic. This trait selects the right per-element
+/// kernel so `np.add(int8(100), int8(100)) == int8(-56)` instead of
+/// panicking in debug builds.
+///
+/// Floats implement the methods as plain `+`/`-`/`*` (byte-identical to the
+/// previous behaviour); integers implement them as `wrapping_*`.
+pub trait WrappingArith: Copy {
+    /// `self + rhs`, wrapping on overflow for integer types.
+    fn wadd(self, rhs: Self) -> Self;
+    /// `self - rhs`, wrapping on overflow for integer types.
+    fn wsub(self, rhs: Self) -> Self;
+    /// `self * rhs`, wrapping on overflow for integer types.
+    fn wmul(self, rhs: Self) -> Self;
+}
+
+macro_rules! impl_wrapping_arith_int {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl WrappingArith for $ty {
+                #[inline]
+                fn wadd(self, rhs: $ty) -> $ty { self.wrapping_add(rhs) }
+                #[inline]
+                fn wsub(self, rhs: $ty) -> $ty { self.wrapping_sub(rhs) }
+                #[inline]
+                fn wmul(self, rhs: $ty) -> $ty { self.wrapping_mul(rhs) }
+            }
+        )*
+    };
+}
+
+impl_wrapping_arith_int!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128);
+
+macro_rules! impl_wrapping_arith_float {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl WrappingArith for $ty {
+                #[inline]
+                fn wadd(self, rhs: $ty) -> $ty { self + rhs }
+                #[inline]
+                fn wsub(self, rhs: $ty) -> $ty { self - rhs }
+                #[inline]
+                fn wmul(self, rhs: $ty) -> $ty { self * rhs }
+            }
+        )*
+    };
+}
+
+impl_wrapping_arith_float!(f32, f64);
+
+#[cfg(feature = "f16")]
+impl WrappingArith for half::f16 {
+    #[inline]
+    fn wadd(self, rhs: half::f16) -> half::f16 {
+        half::f16::from_f32(self.to_f32() + rhs.to_f32())
+    }
+    #[inline]
+    fn wsub(self, rhs: half::f16) -> half::f16 {
+        half::f16::from_f32(self.to_f32() - rhs.to_f32())
+    }
+    #[inline]
+    fn wmul(self, rhs: half::f16) -> half::f16 {
+        half::f16::from_f32(self.to_f32() * rhs.to_f32())
+    }
+}
+
 /// Elementwise addition with `NumPy` broadcasting.
 ///
 /// Same-shape f64 / f32 inputs go through the explicit SIMD slice
 /// kernel (`add_f64` / `add_f32` via `pulp::Arch` runtime dispatch).
 /// Other dtypes and broadcasting paths fall through to the generic
-/// auto-vectorised loop in `binary_elementwise_op`. (#88)
+/// auto-vectorised loop. Integer dtypes wrap on overflow (NumPy
+/// fixed-width contract — `np.add(int8(100), int8(100)) == -56`), via
+/// [`WrappingArith`]; floats are unchanged. (#88)
 pub fn add<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
-    T: Element + std::ops::Add<Output = T> + Copy,
+    T: Element + WrappingArith,
     D: Dimension,
 {
     if let Some(r) = try_simd_f64_binary(a, b, add_f64) {
@@ -45,7 +140,7 @@ where
     if let Some(r) = try_simd_f32_binary(a, b, add_f32) {
         return r;
     }
-    binary_elementwise_op(a, b, |x, y| x + y)
+    binary_elementwise_op(a, b, WrappingArith::wadd)
 }
 
 /// In-place elementwise addition, equivalent to `NumPy`'s
@@ -59,17 +154,17 @@ where
 /// - `FerrayError::InvalidValue` if any array is non-contiguous.
 pub fn add_into<T, D>(a: &Array<T, D>, b: &Array<T, D>, out: &mut Array<T, D>) -> FerrayResult<()>
 where
-    T: Element + std::ops::Add<Output = T> + Copy,
+    T: Element + WrappingArith,
     D: Dimension,
 {
-    binary_elementwise_op_into(a, b, out, "add", |x, y| x + y)
+    binary_elementwise_op_into(a, b, out, "add", WrappingArith::wadd)
 }
 
 /// Elementwise subtraction with `NumPy` broadcasting. SIMD-dispatched
-/// for same-shape f64/f32 inputs (#88).
+/// for same-shape f64/f32 inputs; integer dtypes wrap on overflow (#88).
 pub fn subtract<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
-    T: Element + std::ops::Sub<Output = T> + Copy,
+    T: Element + WrappingArith,
     D: Dimension,
 {
     if let Some(r) = try_simd_f64_binary(a, b, sub_f64) {
@@ -78,7 +173,7 @@ where
     if let Some(r) = try_simd_f32_binary(a, b, sub_f32) {
         return r;
     }
-    binary_elementwise_op(a, b, |x, y| x - y)
+    binary_elementwise_op(a, b, WrappingArith::wsub)
 }
 
 /// In-place subtraction — the `_into` counterpart of [`subtract`].
@@ -88,17 +183,17 @@ pub fn subtract_into<T, D>(
     out: &mut Array<T, D>,
 ) -> FerrayResult<()>
 where
-    T: Element + std::ops::Sub<Output = T> + Copy,
+    T: Element + WrappingArith,
     D: Dimension,
 {
-    binary_elementwise_op_into(a, b, out, "subtract", |x, y| x - y)
+    binary_elementwise_op_into(a, b, out, "subtract", WrappingArith::wsub)
 }
 
 /// Elementwise multiplication with `NumPy` broadcasting. SIMD-dispatched
-/// for same-shape f64/f32 inputs (#88).
+/// for same-shape f64/f32 inputs; integer dtypes wrap on overflow (#88).
 pub fn multiply<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
-    T: Element + std::ops::Mul<Output = T> + Copy,
+    T: Element + WrappingArith,
     D: Dimension,
 {
     if let Some(r) = try_simd_f64_binary(a, b, mul_f64) {
@@ -107,7 +202,7 @@ where
     if let Some(r) = try_simd_f32_binary(a, b, mul_f32) {
         return r;
     }
-    binary_elementwise_op(a, b, |x, y| x * y)
+    binary_elementwise_op(a, b, WrappingArith::wmul)
 }
 
 /// In-place multiplication — the `_into` counterpart of [`multiply`].
@@ -117,51 +212,156 @@ pub fn multiply_into<T, D>(
     out: &mut Array<T, D>,
 ) -> FerrayResult<()>
 where
-    T: Element + std::ops::Mul<Output = T> + Copy,
+    T: Element + WrappingArith,
     D: Dimension,
 {
-    binary_elementwise_op_into(a, b, out, "multiply", |x, y| x * y)
+    binary_elementwise_op_into(a, b, out, "multiply", WrappingArith::wmul)
 }
 
-/// Elementwise division with `NumPy` broadcasting. SIMD-dispatched
-/// for same-shape f64/f32 inputs (#88).
-pub fn divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+/// NumPy true-division element resolver (`PyUFunc_TrueDivisionTypeResolver`,
+/// generate_umath.py:422).
+///
+/// `np.divide` / `np.true_divide` always perform *true* (float) division.
+/// The output dtype depends on the input dtype: integer inputs promote to
+/// `float64`, `float32` stays `float32`, `float64` stays `float64`. The
+/// associated [`TrueDivide::Output`] captures that mapping at compile time
+/// so `divide(&Array<i32>, &Array<i32>)` returns `Array<f64>`.
+///
+/// Implementations cast through `f64`/`f32` (never Rust integer `/`), so an
+/// integer divide-by-zero produces `inf`/`nan` instead of panicking —
+/// matching NumPy's RuntimeWarning-only behaviour.
+pub trait TrueDivide: Element + Copy {
+    /// The dtype of `np.true_divide(self_dtype, self_dtype)`.
+    type Output: Element + Copy;
+
+    /// True (float) division of a single pair of elements.
+    fn true_div(self, rhs: Self) -> Self::Output;
+}
+
+impl TrueDivide for f64 {
+    type Output = f64;
+    #[inline]
+    fn true_div(self, rhs: f64) -> f64 {
+        self / rhs
+    }
+}
+
+impl TrueDivide for f32 {
+    type Output = f32;
+    #[inline]
+    fn true_div(self, rhs: f32) -> f32 {
+        self / rhs
+    }
+}
+
+macro_rules! impl_true_divide_int {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl TrueDivide for $ty {
+                type Output = f64;
+                #[inline]
+                #[allow(
+                    clippy::cast_lossless,
+                    reason = "NEP-50: integer true-division promotes to f64; \
+                              the f64 widening is the documented contract, not a bug"
+                )]
+                fn true_div(self, rhs: $ty) -> f64 {
+                    // Cast to f64 BEFORE dividing: f64 div-by-zero yields
+                    // inf/nan (no panic), unlike Rust integer `/`.
+                    (self as f64) / (rhs as f64)
+                }
+            }
+        )*
+    };
+}
+
+impl_true_divide_int!(i8, i16, i32, i64, u8, u16, u32, u64);
+
+/// Elementwise *true* division with `NumPy` broadcasting.
+///
+/// Matches `np.divide` / `np.true_divide`: integer operands promote to
+/// `float64`, floats keep their float dtype (see [`TrueDivide`]). Integer
+/// divide-by-zero returns `inf`/`nan` and never panics. Same-shape f64/f32
+/// inputs keep the byte-identical SIMD fast path (#88).
+pub fn divide<T, D>(
+    a: &Array<T, D>,
+    b: &Array<T, D>,
+) -> FerrayResult<Array<<T as TrueDivide>::Output, D>>
 where
-    T: Element + std::ops::Div<Output = T> + Copy,
+    T: TrueDivide,
     D: Dimension,
 {
-    if let Some(r) = try_simd_f64_binary(a, b, div_f64) {
-        return r;
+    use std::any::TypeId;
+
+    // f64/f32 fast path: Output == T, so the SIMD kernel result can be
+    // reinterpreted to the (identical) Output type. This keeps existing
+    // float callers byte-identical with the pre-true-division behaviour.
+    if TypeId::of::<T>() == TypeId::of::<f64>() {
+        if let Some(r) = try_simd_f64_binary(a, b, div_f64) {
+            // SAFETY: T == f64 == <T as TrueDivide>::Output (verified by the
+            // TypeId check); reinterpreting Array<T> as Array<Output> is a
+            // no-op identity transmute of the element type.
+            return r.map(|arr| unsafe {
+                crate::helpers::reinterpret_array::<T, <T as TrueDivide>::Output, D>(arr)
+            });
+        }
+    } else if TypeId::of::<T>() == TypeId::of::<f32>() {
+        if let Some(r) = try_simd_f32_binary(a, b, div_f32) {
+            // SAFETY: T == f32 == <T as TrueDivide>::Output (verified above).
+            return r.map(|arr| unsafe {
+                crate::helpers::reinterpret_array::<T, <T as TrueDivide>::Output, D>(arr)
+            });
+        }
     }
-    if let Some(r) = try_simd_f32_binary(a, b, div_f32) {
-        return r;
-    }
-    binary_elementwise_op(a, b, |x, y| x / y)
+    crate::helpers::binary_map_op(a, b, T::true_div)
 }
 
-/// In-place division — the `_into` counterpart of [`divide`].
+/// In-place true division — the `_into` counterpart of [`divide`].
+///
+/// Writes into `out`, whose element type is the promoted true-division
+/// output (`<T as TrueDivide>::Output`). For integer `T` this is an `f64`
+/// `out`, so `np.divide(int, int, out=float_arr)` is expressible.
 pub fn divide_into<T, D>(
     a: &Array<T, D>,
     b: &Array<T, D>,
-    out: &mut Array<T, D>,
+    out: &mut Array<<T as TrueDivide>::Output, D>,
 ) -> FerrayResult<()>
 where
-    T: Element + std::ops::Div<Output = T> + Copy,
+    T: TrueDivide,
     D: Dimension,
 {
-    binary_elementwise_op_into(a, b, out, "divide", |x, y| x / y)
+    if a.shape() != b.shape() || a.shape() != out.shape() {
+        return Err(FerrayError::shape_mismatch(format!(
+            "divide_into: shapes {:?}, {:?}, out {:?} must match",
+            a.shape(),
+            b.shape(),
+            out.shape()
+        )));
+    }
+    let result = divide(a, b)?;
+    for (dst, src) in out.iter_mut().zip(result.iter()) {
+        *dst = *src;
+    }
+    Ok(())
 }
 
-/// Alias for [`divide`] — true division (float).
-pub fn true_divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+/// Alias for [`divide`] — true (float) division. Identical semantics:
+/// integer inputs promote to `float64`.
+pub fn true_divide<T, D>(
+    a: &Array<T, D>,
+    b: &Array<T, D>,
+) -> FerrayResult<Array<<T as TrueDivide>::Output, D>>
 where
-    T: Element + Float,
+    T: TrueDivide,
     D: Dimension,
 {
-    binary_elementwise_op(a, b, |x, y| x / y)
+    divide(a, b)
 }
 
-/// Floor division: floor(a / b).
+/// Floor division: floor(a / b) for float inputs.
+///
+/// For integer arrays use [`floor_divide_int`] (NumPy keeps integer
+/// floor-division in the integer dtype with divisor-zero -> 0).
 pub fn floor_divide<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
@@ -170,13 +370,92 @@ where
     binary_elementwise_op(a, b, |x, y| (x / y).floor())
 }
 
-/// Elementwise power: a^b.
+/// Integer floor division (`np.floor_divide` on integer dtypes,
+/// generate_umath.py:405 `TD(ints, dispatch=loops_modulo)`).
+///
+/// Result has the same integer dtype as the inputs and rounds toward
+/// negative infinity (Python `//` semantics, not Rust truncating `/`).
+/// Divisor-zero yields `0` (NumPy returns 0 + a RuntimeWarning, never a
+/// panic).
+pub fn floor_divide_int<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy + num_traits::PrimInt,
+    D: Dimension,
+{
+    let z = <T as Element>::zero();
+    let one = <T as Element>::one();
+    binary_elementwise_op(a, b, move |x, y| {
+        if y == z {
+            return z;
+        }
+        // Truncating quotient, then adjust toward -inf when the signs of
+        // the operands differ and the division is inexact (Python `//`).
+        let q = x / y;
+        let r = x - q * y;
+        if r != z && ((r < z) != (y < z)) {
+            q - one
+        } else {
+            q
+        }
+    })
+}
+
+/// Elementwise power for float inputs: a^b.
+///
+/// For integer bases/exponents use [`power_int`] (NumPy keeps integer
+/// power in the integer dtype).
 pub fn power<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
 {
     binary_elementwise_op(a, b, num_traits::Float::powf)
+}
+
+/// Integer power: a^b, int -> int (`np.power` on integer dtypes,
+/// generate_umath.py:480 `TD(ints)`).
+///
+/// Uses wrapping exponentiation so overflow wraps (matching NumPy's
+/// fixed-width integer behaviour) instead of panicking in debug builds.
+/// A negative exponent on an integer base yields `0` for `|base| > 1`
+/// (matching NumPy, which returns 0 for integer `a ** -n`), `1` for
+/// `base == 1`, and `0` otherwise.
+pub fn power_int<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy + num_traits::PrimInt + num_traits::WrappingMul,
+    D: Dimension,
+{
+    let z = <T as Element>::zero();
+    let one = <T as Element>::one();
+    binary_elementwise_op(a, b, move |base, exp| {
+        if exp < z {
+            // NumPy integer power with negative exponent: 1**-n == 1,
+            // (-1)**-n is ±1, everything else truncates to 0.
+            if base == one {
+                return one;
+            }
+            if base == z - one {
+                // (-1)^exp: even -> 1, odd -> -1.
+                let two = one + one;
+                return if (z - exp) % two == z { one } else { z - one };
+            }
+            return z;
+        }
+        let mut result = one;
+        let mut b_acc = base;
+        let mut e = exp;
+        let two = one + one;
+        while e > z {
+            if e % two == one {
+                result = result.wrapping_mul(&b_acc);
+            }
+            e = e / two;
+            if e > z {
+                b_acc = b_acc.wrapping_mul(&b_acc);
+            }
+        }
+        result
+    })
 }
 
 /// Elementwise remainder (Python-style modulo).
@@ -204,6 +483,41 @@ where
     D: Dimension,
 {
     remainder(a, b)
+}
+
+/// Integer remainder (Python-style modulo) preserving the integer dtype.
+///
+/// `np.remainder` / `np.mod` on integer dtypes
+/// (`PyUFunc_RemainderTypeResolver`, generate_umath.py:1039) returns a
+/// result with the sign of the divisor. Divisor-zero yields `0` (NumPy
+/// returns 0 + a RuntimeWarning, never a panic).
+pub fn remainder_int<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy + num_traits::PrimInt,
+    D: Dimension,
+{
+    let z = <T as Element>::zero();
+    binary_elementwise_op(a, b, move |x, y| {
+        if y == z {
+            return z;
+        }
+        let r = x % y;
+        // Python/NumPy mod: result takes the sign of the divisor.
+        if r != z && ((r < z) != (y < z)) {
+            r + y
+        } else {
+            r
+        }
+    })
+}
+
+/// Alias for [`remainder_int`] — integer Python-style modulo.
+pub fn mod_int<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy + num_traits::PrimInt,
+    D: Dimension,
+{
+    remainder_int(a, b)
 }
 
 /// C-style fmod (remainder has same sign as dividend).
@@ -319,6 +633,68 @@ where
     D: Dimension,
 {
     absolute(input)
+}
+
+/// Elementwise absolute value preserving the integer dtype.
+///
+/// `np.absolute` on integer arrays keeps the integer dtype
+/// (generate_umath.py:496 `TD(bints + ... ints)`). Uses wrapping negation
+/// so `absolute(i8::MIN)` wraps (matching NumPy's fixed-width behaviour)
+/// rather than panicking in debug builds.
+pub fn absolute_int<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy + PartialOrd + num_traits::WrappingNeg,
+    D: Dimension,
+{
+    let z = <T as Element>::zero();
+    let data: Vec<T> = input
+        .iter()
+        .map(|&x| if x < z { x.wrapping_neg() } else { x })
+        .collect();
+    Array::from_vec(input.dim().clone(), data)
+}
+
+/// Elementwise sign preserving the integer dtype: -1, 0, or +1.
+///
+/// `np.sign` on integer arrays returns the same integer dtype
+/// (generate_umath.py:534 `TD(ints + flts)`).
+pub fn sign_int<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy + PartialOrd + num_traits::WrappingSub,
+    D: Dimension,
+{
+    let z = <T as Element>::zero();
+    let one = <T as Element>::one();
+    // `0.wrapping_sub(1)` is -1 for signed types; for unsigned types the
+    // `x < z` branch is unreachable, so the wrapped value is never read.
+    let neg_one = z.wrapping_sub(&one);
+    let data: Vec<T> = input
+        .iter()
+        .map(|&x| {
+            if x > z {
+                one
+            } else if x < z {
+                neg_one
+            } else {
+                z
+            }
+        })
+        .collect();
+    Array::from_vec(input.dim().clone(), data)
+}
+
+/// Elementwise negation preserving the integer dtype.
+///
+/// `np.negative` on integer arrays keeps the integer dtype
+/// (generate_umath.py:516 `TD(ints + flts)`). Uses wrapping negation so
+/// `negative(i8::MIN)` wraps like NumPy rather than panicking.
+pub fn negative_int<T, D>(input: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy + num_traits::WrappingNeg,
+    D: Dimension,
+{
+    let data: Vec<T> = input.iter().map(|&x| x.wrapping_neg()).collect();
+    Array::from_vec(input.dim().clone(), data)
 }
 
 /// Elementwise sign: -1 for negative, 0 for zero, +1 for positive.

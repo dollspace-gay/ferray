@@ -514,6 +514,28 @@ where
     })
 }
 
+/// Elementwise maximum preserving the integer dtype.
+///
+/// `np.maximum` / `np.minimum` on integer arrays keep the integer dtype
+/// (generate_umath.py:661,671 `TD(no_obj_bool, dispatch=loops_minmax)`).
+/// No NaN handling is needed for integers — `PartialOrd` is total.
+pub fn maximum_ord<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy + PartialOrd,
+    D: Dimension,
+{
+    binary_elementwise_op(a, b, |x, y| if x >= y { x } else { y })
+}
+
+/// Elementwise minimum preserving the integer dtype. See [`maximum_ord`].
+pub fn minimum_ord<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+where
+    T: Element + Copy + PartialOrd,
+    D: Dimension,
+{
+    binary_elementwise_op(a, b, |x, y| if x <= y { x } else { y })
+}
+
 /// Elementwise maximum, ignoring NaN.
 pub fn fmax<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where

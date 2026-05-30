@@ -17,37 +17,48 @@ use num_traits::Float;
 
 use crate::ops::bitwise::{BitwiseOps, ShiftOps};
 
-/// Array addition (delegates to `arithmetic::add`).
+/// Array addition (delegates to `arithmetic::add`). Integer dtypes wrap on
+/// overflow (NumPy fixed-width contract).
 pub fn array_add<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
-    T: Element + std::ops::Add<Output = T> + Copy,
+    T: Element + crate::ops::arithmetic::WrappingArith,
     D: Dimension,
 {
     crate::ops::arithmetic::add(a, b)
 }
 
-/// Array subtraction (delegates to `arithmetic::subtract`).
+/// Array subtraction (delegates to `arithmetic::subtract`). Integer dtypes
+/// wrap on overflow.
 pub fn array_sub<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
-    T: Element + std::ops::Sub<Output = T> + Copy,
+    T: Element + crate::ops::arithmetic::WrappingArith,
     D: Dimension,
 {
     crate::ops::arithmetic::subtract(a, b)
 }
 
-/// Array multiplication (delegates to `arithmetic::multiply`).
+/// Array multiplication (delegates to `arithmetic::multiply`). Integer
+/// dtypes wrap on overflow.
 pub fn array_mul<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
-    T: Element + std::ops::Mul<Output = T> + Copy,
+    T: Element + crate::ops::arithmetic::WrappingArith,
     D: Dimension,
 {
     crate::ops::arithmetic::multiply(a, b)
 }
 
-/// Array division (delegates to `arithmetic::divide`).
-pub fn array_div<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+/// Array division — the `/` operator (delegates to `arithmetic::divide`).
+///
+/// This is NumPy *true* division: integer operands promote to `float64`
+/// (so `int_arr / int_arr` returns a `float64` array) and integer
+/// divide-by-zero yields `inf`/`nan` rather than panicking. The result
+/// element type is `<T as TrueDivide>::Output`.
+pub fn array_div<T, D>(
+    a: &Array<T, D>,
+    b: &Array<T, D>,
+) -> FerrayResult<Array<<T as crate::ops::arithmetic::TrueDivide>::Output, D>>
 where
-    T: Element + std::ops::Div<Output = T> + Copy,
+    T: crate::ops::arithmetic::TrueDivide,
     D: Dimension,
 {
     crate::ops::arithmetic::divide(a, b)

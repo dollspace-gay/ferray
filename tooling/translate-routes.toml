@@ -95,6 +95,15 @@ design = ".design/ferray-core.md"
 parity_ops = ["reshape", "transpose", "concatenate", "stack", "squeeze", "expand_dims"]
 
 [[route]]
+crate_pattern = "ferray-core/src/manipulation/extended.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/lib/_function_base_impl.py",
+  "/home/doll/numpy-ref/numpy/lib/_arraypad_impl.py",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["pad", "tile", "repeat", "delete", "insert", "append", "resize", "trim_zeros"]
+
+[[route]]
 crate_pattern = "ferray-core/src/dimension/broadcast.rs"
 upstream = [
   "/home/doll/numpy-ref/numpy/_core/numeric.py",
@@ -102,3 +111,64 @@ upstream = [
 ]
 design = ".design/ferray-core.md"
 parity_ops = ["broadcast_to", "broadcast_arrays", "broadcast_shapes"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# ferray-ufunc — elementwise ufuncs + reductions (depends on ferray-core)
+# Verified Rust-side via cargo test + numpy oracle; the ~38 ferray-python
+# divergence_ufunc.py pins are the downstream contract (int promotion,
+# true-division, divide-by-zero must not panic).
+# ─────────────────────────────────────────────────────────────────────────
+
+[[route]]
+crate_pattern = "ferray-ufunc/src/ops/arithmetic.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+  "/home/doll/numpy-ref/numpy/_core/umath.py",
+  "/home/doll/numpy-ref/numpy/_core/_methods.py",
+]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["add", "subtract", "multiply", "divide", "true_divide", "floor_divide", "mod", "remainder", "power", "float_power"]
+
+[[route]]
+crate_pattern = "ferray-ufunc/src/dispatch.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+  "/home/doll/numpy-ref/numpy/_core/umath.py",
+]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["promotion_dispatch"]
+
+[[route]]
+crate_pattern = "ferray-ufunc/src/promoted.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["result_type_dispatch"]
+
+[[route]]
+crate_pattern = "ferray-ufunc/src/ops/floatintrinsic.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+  "/home/doll/numpy-ref/numpy/_core/umath.py",
+]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["maximum", "minimum", "fmax", "fmin", "clip"]
+
+[[route]]
+crate_pattern = "ferray-ufunc/src/operator_overloads.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+  "/home/doll/numpy-ref/numpy/_core/umath.py",
+]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["array_add", "array_sub", "array_mul", "array_div", "array_rem"]
+
+[[route]]
+crate_pattern = "ferray-ufunc/src/lib.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+  "/home/doll/numpy-ref/numpy/_core/umath.py",
+]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["public_reexport"]

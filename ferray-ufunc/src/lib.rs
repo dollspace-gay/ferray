@@ -84,22 +84,24 @@ pub use ops::rounding::{around, ceil, fix, floor, rint, round, trunc};
 
 // Arithmetic
 pub use ops::arithmetic::{
-    absolute, absolute_into, add, add_accumulate, add_broadcast, add_into, add_reduce,
-    add_reduce_all, add_reduce_axes, add_reduce_keepdims, cbrt, cross, cumprod, cumsum,
-    cumulative_prod, cumulative_sum, diff, divide, divide_broadcast, divide_into, divmod, ediff1d,
-    fabs, floor_divide, fmod, gcd, gcd_int, gradient, heaviside, lcm, lcm_int, mod_, multiply,
-    multiply_broadcast, multiply_into, multiply_outer, nan_add_reduce, nan_add_reduce_all,
-    nan_add_reduce_axes, nan_max_reduce, nan_max_reduce_all, nan_max_reduce_axes, nan_min_reduce,
-    nan_min_reduce_all, nan_min_reduce_axes, nan_multiply_reduce, nan_multiply_reduce_all,
-    nan_multiply_reduce_axes, nancumprod, nancumsum, negative, negative_into, positive, power,
-    reciprocal, remainder, sign, sqrt, sqrt_into, square, square_into, subtract,
-    subtract_broadcast, subtract_into, trapezoid, true_divide,
+    TrueDivide, WrappingArith, absolute, absolute_int, absolute_into, add, add_accumulate,
+    add_broadcast, add_into, add_reduce, add_reduce_all, add_reduce_axes, add_reduce_keepdims,
+    cbrt, cross, cumprod, cumsum, cumulative_prod, cumulative_sum, diff, divide, divide_broadcast,
+    divide_into, divmod, ediff1d, fabs, floor_divide, floor_divide_int, fmod, gcd, gcd_int,
+    gradient, heaviside, lcm, lcm_int, mod_, mod_int, multiply, multiply_broadcast, multiply_into,
+    multiply_outer, nan_add_reduce, nan_add_reduce_all, nan_add_reduce_axes, nan_max_reduce,
+    nan_max_reduce_all, nan_max_reduce_axes, nan_min_reduce, nan_min_reduce_all,
+    nan_min_reduce_axes, nan_multiply_reduce, nan_multiply_reduce_all, nan_multiply_reduce_axes,
+    nancumprod, nancumsum, negative, negative_int, negative_into, positive, power, power_int,
+    reciprocal, remainder, remainder_int, sign, sign_int, sqrt, sqrt_into, square, square_into,
+    subtract, subtract_broadcast, subtract_into, trapezoid, true_divide,
 };
 
 // Float intrinsics
 pub use ops::floatintrinsic::{
     clip, clip_ord, copysign, float_power, fmax, fmin, frexp, isfinite, isinf, isnan, isneginf,
-    isposinf, ldexp, maximum, minimum, modf, nan_to_num, nextafter, signbit, spacing,
+    isposinf, ldexp, maximum, maximum_ord, minimum, minimum_ord, modf, nan_to_num, nextafter,
+    signbit, spacing,
 };
 
 // Complex

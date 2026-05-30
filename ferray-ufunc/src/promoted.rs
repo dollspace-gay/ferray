@@ -18,6 +18,15 @@
 //! All helpers here take same-shape inputs (no broadcasting on the
 //! promoted path — composing promotion with broadcasting is not hard
 //! but is deferred until there's a concrete caller that wants it).
+//!
+//! ## REQ status — NEP-50 mixed-width integer promotion
+//!
+//! SHIPPED: `add_promoted` / `subtract_promoted` / `multiply_promoted`
+//! resolve the output dtype via `Promoted` and run the wrapping integer
+//! kernel (`WrappingArith`) so `int8 + int64 -> int64`, `int32 * int64 ->
+//! int64` work and overflow wraps like NumPy's fixed-width integers.
+//! `divide_promoted` stays float-output (NumPy true-division): integer
+//! true-division is the same-type `divide` via `TrueDivide`.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
@@ -27,6 +36,7 @@ use ferray_core::error::{FerrayError, FerrayResult};
 use num_traits::Float;
 
 use crate::helpers::binary_elementwise_op;
+use crate::ops::arithmetic::WrappingArith;
 
 /// Cast every element of `a` from `A` to the target type `Out`, producing
 /// a fresh array. This is the tiny bridge that lets a mixed-type op
@@ -54,7 +64,8 @@ where
 /// Elementwise addition with NumPy-style type promotion.
 ///
 /// `add_promoted(Array<i32>, Array<f64>)` promotes the i32 to f64
-/// (per the `Promoted` trait) and returns `Array<f64>`.
+/// (per the `Promoted` trait) and returns `Array<f64>`. Integer-only
+/// mixed widths promote too (`int8 + int64 -> int64`) and wrap on overflow.
 ///
 /// Both inputs must have the same shape. For broadcasting, cast
 /// explicitly and use the existing [`crate::add`].
@@ -68,7 +79,7 @@ pub fn add_promoted<A, B, D>(
 where
     A: Element + Copy + Promoted<B> + PromoteTo<<A as Promoted<B>>::Output>,
     B: Element + Copy + PromoteTo<<A as Promoted<B>>::Output>,
-    <A as Promoted<B>>::Output: Element + Copy + Float,
+    <A as Promoted<B>>::Output: Element + Copy + WrappingArith,
     D: Dimension,
 {
     if a.shape() != b.shape() {
@@ -80,7 +91,7 @@ where
     }
     let a_cast = cast_array::<A, <A as Promoted<B>>::Output, D>(a)?;
     let b_cast = cast_array::<B, <A as Promoted<B>>::Output, D>(b)?;
-    binary_elementwise_op(&a_cast, &b_cast, |x, y| x + y)
+    binary_elementwise_op(&a_cast, &b_cast, WrappingArith::wadd)
 }
 
 /// Elementwise subtraction with NumPy-style type promotion.
@@ -91,7 +102,7 @@ pub fn subtract_promoted<A, B, D>(
 where
     A: Element + Copy + Promoted<B> + PromoteTo<<A as Promoted<B>>::Output>,
     B: Element + Copy + PromoteTo<<A as Promoted<B>>::Output>,
-    <A as Promoted<B>>::Output: Element + Copy + Float,
+    <A as Promoted<B>>::Output: Element + Copy + WrappingArith,
     D: Dimension,
 {
     if a.shape() != b.shape() {
@@ -103,7 +114,7 @@ where
     }
     let a_cast = cast_array::<A, <A as Promoted<B>>::Output, D>(a)?;
     let b_cast = cast_array::<B, <A as Promoted<B>>::Output, D>(b)?;
-    binary_elementwise_op(&a_cast, &b_cast, |x, y| x - y)
+    binary_elementwise_op(&a_cast, &b_cast, WrappingArith::wsub)
 }
 
 /// Elementwise multiplication with NumPy-style type promotion.
@@ -114,7 +125,7 @@ pub fn multiply_promoted<A, B, D>(
 where
     A: Element + Copy + Promoted<B> + PromoteTo<<A as Promoted<B>>::Output>,
     B: Element + Copy + PromoteTo<<A as Promoted<B>>::Output>,
-    <A as Promoted<B>>::Output: Element + Copy + Float,
+    <A as Promoted<B>>::Output: Element + Copy + WrappingArith,
     D: Dimension,
 {
     if a.shape() != b.shape() {
@@ -126,10 +137,16 @@ where
     }
     let a_cast = cast_array::<A, <A as Promoted<B>>::Output, D>(a)?;
     let b_cast = cast_array::<B, <A as Promoted<B>>::Output, D>(b)?;
-    binary_elementwise_op(&a_cast, &b_cast, |x, y| x * y)
+    binary_elementwise_op(&a_cast, &b_cast, WrappingArith::wmul)
 }
 
 /// Elementwise division with NumPy-style type promotion.
+///
+/// This path requires the promoted output to be a float (`int + float`,
+/// `float + float`). For `int + int`, NumPy's `np.divide` is *true*
+/// division returning `float64` — that is the same-type [`crate::divide`]
+/// via the [`crate::TrueDivide`] trait, not `Promoted::Output` (which would
+/// be an integer). Use [`crate::divide`] for integer true-division.
 pub fn divide_promoted<A, B, D>(
     a: &Array<A, D>,
     b: &Array<B, D>,
@@ -156,6 +173,28 @@ where
 mod tests {
     use super::*;
     use ferray_core::dimension::{Ix1, Ix2};
+
+    #[test]
+    fn add_i8_i64_promotes_to_i64() {
+        // np.add(int8, int64) -> int64 (NEP-50 mixed-width integer promotion).
+        // Live numpy: np.add(np.array([1,2],np.int8), np.array([10,20],np.int64))
+        //   -> array([11, 22]) dtype=int64
+        let a = Array::<i8, Ix1>::from_vec(Ix1::new([2]), vec![1i8, 2]).unwrap();
+        let b = Array::<i64, Ix1>::from_vec(Ix1::new([2]), vec![10i64, 20]).unwrap();
+        let c = add_promoted(&a, &b).unwrap();
+        let slice: &[i64] = c.as_slice().unwrap();
+        assert_eq!(slice, &[11, 22]);
+    }
+
+    #[test]
+    fn multiply_i32_i64_promotes_to_i64() {
+        // np.multiply(int32, int64) -> int64.
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([2]), vec![3i32, 4]).unwrap();
+        let b = Array::<i64, Ix1>::from_vec(Ix1::new([2]), vec![10i64, 20]).unwrap();
+        let c = multiply_promoted(&a, &b).unwrap();
+        let slice: &[i64] = c.as_slice().unwrap();
+        assert_eq!(slice, &[30, 80]);
+    }
 
     #[test]
     fn add_i32_f64_promotes_to_f64() {
