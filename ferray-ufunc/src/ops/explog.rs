@@ -173,6 +173,14 @@ where
             return T::nan();
         }
         let max = if x > y { x } else { y };
+        // Equal-infinity / infinite-max guard (numpy: logaddexp(inf,inf)=inf,
+        // logaddexp(-inf,-inf)=-inf). The stable form below computes
+        // inf - inf = NaN when both inputs are +inf; returning `max` directly
+        // mirrors numpy. (inf,-inf)/(inf,finite) → max=inf → inf;
+        // (-inf,finite) keeps max=finite and falls through to the finite path.
+        if max.is_infinite() {
+            return max;
+        }
         let min = if x > y { y } else { x };
         max + (min - max).cr_exp().cr_ln_1p()
     })
@@ -190,6 +198,14 @@ where
             return T::nan();
         }
         let max = if x > y { x } else { y };
+        // Equal-infinity / infinite-max guard (numpy: logaddexp2(inf,inf)=inf,
+        // logaddexp2(-inf,-inf)=-inf). The stable form below computes
+        // inf - inf = NaN when both inputs are +inf; returning `max` directly
+        // mirrors numpy. (inf,-inf)/(inf,finite) → max=inf → inf;
+        // (-inf,finite) keeps max=finite and falls through to the finite path.
+        if max.is_infinite() {
+            return max;
+        }
         let min = if x > y { y } else { x };
         max + ((min - max) * ln2).cr_exp().cr_ln_1p() / ln2
     })
@@ -352,6 +368,57 @@ mod tests {
         let s = r.as_slice().unwrap();
         // log2(2^0 + 2^0) = log2(2) = 1
         assert!((s[0] - 1.0).abs() < 1e-12);
+    }
+
+    fn eval_logaddexp(
+        f: impl Fn(
+            &Array<f64, ferray_core::dimension::Ix1>,
+            &Array<f64, ferray_core::dimension::Ix1>,
+        ) -> FerrayResult<Array<f64, ferray_core::dimension::Ix1>>,
+        a: Vec<f64>,
+        b: Vec<f64>,
+    ) -> Vec<f64> {
+        let r = f(&arr1(a), &arr1(b));
+        assert!(r.is_ok(), "logaddexp kernel returned error: {:?}", r.err());
+        match r {
+            Ok(arr) => match arr.as_slice() {
+                Some(s) => s.to_vec(),
+                None => arr.iter().copied().collect(),
+            },
+            Err(_) => Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_logaddexp_infinities() {
+        // Live numpy 2.4.5 oracle (generate_umath.py:710 `logaddexp`):
+        //   np.logaddexp(inf, inf)   == inf
+        //   np.logaddexp(-inf, -inf) == -inf
+        //   np.logaddexp(inf, -inf)  == inf
+        let inf = f64::INFINITY;
+        let s = eval_logaddexp(logaddexp, vec![inf, -inf, inf], vec![inf, -inf, -inf]);
+        assert_eq!(s[0], inf, "logaddexp(inf, inf)");
+        assert_eq!(s[1], -inf, "logaddexp(-inf, -inf)");
+        assert_eq!(s[2], inf, "logaddexp(inf, -inf)");
+        // Finite case stays byte-identical: logaddexp(1,1) == 1 + ln(2).
+        let f = eval_logaddexp(logaddexp, vec![1.0], vec![1.0]);
+        assert!((f[0] - (1.0 + std::f64::consts::LN_2)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_logaddexp2_infinities() {
+        // Live numpy 2.4.5 oracle (generate_umath.py:716 `logaddexp2`):
+        //   np.logaddexp2(inf, inf)   == inf
+        //   np.logaddexp2(-inf, -inf) == -inf
+        //   np.logaddexp2(inf, -inf)  == inf
+        let inf = f64::INFINITY;
+        let s = eval_logaddexp(logaddexp2, vec![inf, -inf, inf], vec![inf, -inf, -inf]);
+        assert_eq!(s[0], inf, "logaddexp2(inf, inf)");
+        assert_eq!(s[1], -inf, "logaddexp2(-inf, -inf)");
+        assert_eq!(s[2], inf, "logaddexp2(inf, -inf)");
+        // Finite case stays byte-identical: logaddexp2(0,0) == 1.
+        let f = eval_logaddexp(logaddexp2, vec![0.0], vec![0.0]);
+        assert!((f[0] - 1.0).abs() < 1e-12);
     }
 
     #[cfg(feature = "f16")]
