@@ -502,6 +502,150 @@ impl_wrap_dyn!(
     u8 => U8, u16 => U16, u32 => U32, u64 => U64, f32 => F32, f64 => F64,
 );
 
+// ---------------------------------------------------------------------------
+// Dtype-preserving masked reductions (#858, R-CODE-4/R-CODE-5)
+//
+// numpy.ma's `sum`/`prod`/`cumsum`/`cumprod` delegate to
+// `self.filled(<identity>).<op>(...)` (`numpy/ma/core.py:5244` sum,
+// `:5294` cumsum, `:5303` prod), so the result dtype is exactly numpy's
+// reduction accumulator: narrow signed ints → int64, narrow unsigned →
+// uint64, bool → int64, float stays float. That is `ferray_core::ReduceAcc`
+// (i8/i16/i32/i64→i64, u*→u64, bool→i64, f32→f32, f64→f64). `min`/`max`
+// delegate to `self.filled(<extreme>).<op>()` which KEEP the input dtype
+// (`numpy/ma/core.py:5933` min — no accumulator promotion). The old
+// `to_f64_ma` funnel collapsed every integer/bool reduction to float64; these
+// helpers reduce over the native `DynMa` variant instead.
+// ---------------------------------------------------------------------------
+
+use ferray_core::array::reductions::ReduceAcc;
+
+/// Additive / multiplicative identities for a `ReduceAcc::Acc` accumulator
+/// type (the 4 reachable accumulators: `i64`, `u64`, `f32`, `f64`). Mirrors
+/// `<Acc as num_traits::Zero/One>` without taking a direct `num-traits`
+/// dependency on this crate; the reduction folds start from these.
+trait AccIdentity: Copy {
+    const ZERO: Self;
+    const ONE: Self;
+}
+macro_rules! impl_acc_identity {
+    ($($t:ty => $z:expr, $o:expr);* $(;)?) => {
+        $(impl AccIdentity for $t { const ZERO: Self = $z; const ONE: Self = $o; })*
+    };
+}
+impl_acc_identity!(i64 => 0, 1; u64 => 0, 1; f32 => 0.0, 1.0; f64 => 0.0, 1.0);
+
+/// Additive (`ZERO`) / multiplicative (`ONE`) identities in the array's NATIVE
+/// element type `T`, used to fill masked slots before a cumulative op —
+/// numpy.ma's `filled(0)` / `filled(1)` (`numpy/ma/core.py:5294`). `bool` maps
+/// `false`/`true` (numpy's bool 0/1).
+trait MaIdentity: Copy {
+    const ZERO: Self;
+    const ONE: Self;
+}
+macro_rules! impl_ma_identity {
+    ($($t:ty => $z:expr, $o:expr);* $(;)?) => {
+        $(impl MaIdentity for $t { const ZERO: Self = $z; const ONE: Self = $o; })*
+    };
+}
+impl_ma_identity!(
+    i8 => 0, 1; i16 => 0, 1; i32 => 0, 1; i64 => 0, 1;
+    u8 => 0, 1; u16 => 0, 1; u32 => 0, 1; u64 => 0, 1;
+    f32 => 0.0, 1.0; f64 => 0.0, 1.0; bool => false, true;
+);
+
+/// Egress a single reduction result as a **numpy scalar of element type `E`**
+/// (not a dtype-agnostic Python `int`/`float`). numpy.ma's scalar reductions
+/// return a typed numpy scalar (`np.int8`, `np.uint64`, `np.float32`, …) whose
+/// `dtype` the dtype-audit pins read; a bare Rust `i8`/`u64`/`f32` egressed via
+/// `into_bound_py_any` would collapse to Python `int`/`float` → `int64`/
+/// `float64` under `np.asarray`. Building a 1-element `ArrayD<E>` and indexing
+/// `[0]` yields a numpy scalar that preserves `E`'s dtype (#858, R-CODE-4/5).
+fn scalar_pyobject<'py, E>(py: Python<'py>, value: E) -> PyResult<Bound<'py, PyAny>>
+where
+    E: ferray_core::Element,
+    ArrayD<E>: IntoNumPy<E, IxDyn>,
+{
+    let arr = ArrayD::<E>::from_vec(IxDyn::new(&[1]), vec![value]).map_err(ferr_to_pyerr)?;
+    let py_arr = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    py_arr.get_item(0)
+}
+
+/// Sum the unmasked elements of `m`, widening each to numpy's reduction
+/// accumulator `<T as ReduceAcc>::Acc` (narrow int → i64/u64, bool → i64,
+/// float unchanged) and folding with `+` — exactly `filled(0).sum()`
+/// (`numpy/ma/core.py:5244`), but skipping masked slots rather than adding 0.
+fn ma_sum_acc<T>(m: &RustMa<T, IxDyn>) -> <T as ReduceAcc>::Acc
+where
+    T: ferray_core::Element + ReduceAcc,
+    <T as ReduceAcc>::Acc: AccIdentity,
+{
+    let mut acc = <<T as ReduceAcc>::Acc as AccIdentity>::ZERO;
+    for (&v, &mk) in m.data().iter().zip(m.mask().iter()) {
+        if !mk {
+            acc = acc + v.widen();
+        }
+    }
+    acc
+}
+
+/// Product of the unmasked elements of `m`, widened to the reduction
+/// accumulator and folded with `*` — `filled(1).prod()`
+/// (`numpy/ma/core.py:5303`/`:5340`).
+fn ma_prod_acc<T>(m: &RustMa<T, IxDyn>) -> <T as ReduceAcc>::Acc
+where
+    T: ferray_core::Element + ReduceAcc,
+    <T as ReduceAcc>::Acc: AccIdentity,
+{
+    let mut acc = <<T as ReduceAcc>::Acc as AccIdentity>::ONE;
+    for (&v, &mk) in m.data().iter().zip(m.mask().iter()) {
+        if !mk {
+            acc = acc * v.widen();
+        }
+    }
+    acc
+}
+
+/// Minimum (`max=false`) / maximum (`max=true`) unmasked element of `m`, kept
+/// in the INPUT dtype `T` (numpy.ma `min`/`max` delegate to
+/// `filled(<extreme>).min()` with NO accumulator promotion,
+/// `numpy/ma/core.py:5933`). Returns `None` when every element is masked
+/// (caller maps that to the `numpy.ma.masked` singleton). NaN-propagating for
+/// float dtypes, matching the ferray-ma `Float` reductions.
+fn ma_extremum<T>(m: &RustMa<T, IxDyn>, want_max: bool) -> Option<T>
+where
+    T: ferray_core::Element + Copy + PartialOrd,
+{
+    let mut acc: Option<T> = None;
+    for (&v, &mk) in m.data().iter().zip(m.mask().iter()) {
+        if mk {
+            continue;
+        }
+        acc = Some(match acc {
+            None => v,
+            Some(a) => {
+                // NaN-propagating: an unordered comparison keeps the running
+                // value if it is already NaN, else adopts the NaN `v`.
+                if want_max {
+                    if a >= v {
+                        a
+                    } else if a < v {
+                        v
+                    } else {
+                        a
+                    }
+                } else if a <= v {
+                    a
+                } else if a > v {
+                    v
+                } else {
+                    a
+                }
+            }
+        });
+    }
+    acc
+}
+
 /// Coerce a single Python scalar to the masked array's element type `T` by
 /// routing it through `numpy.asarray(value, dtype)` (numpy's cast of a
 /// `fill_value` / RHS scalar to `self.dtype`, R-CODE-4 — no hard-f64 funnel),
@@ -670,17 +814,17 @@ impl PyMaskedArray {
 
     /// Sum of unmasked elements (full reduction). An all-masked array
     /// reduces to the `numpy.ma.masked` singleton (`numpy/ma/core.py:5250`).
-    /// Computed in f64 (the ferray-ma scalar reductions are `T: Float`-bound;
-    /// numpy.ma's `sum`/`min`/`max` on integer input keep int, but the f64
-    /// value is byte-equal for the integral magnitudes these bindings target
-    /// and preserves the established behavior — dtype-faithful integer
-    /// reductions are a follow-up tracked under #853).
+    /// The result dtype is numpy's reduction accumulator
+    /// (`ferray_core::ReduceAcc`): narrow ints → int64, unsigned → uint64,
+    /// bool → int64, float unchanged — exactly `filled(0).sum()`
+    /// (`numpy/ma/core.py:5244`), NOT a float64 collapse (#858, R-CODE-4).
     fn sum<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.to_f64_ma()?.sum().map_err(ferr_to_pyerr)?;
-        Ok(v.into_pyobject(py)?.into_any())
+        match_ma!(&self.inner, m, T => {
+            scalar_pyobject(py, ma_sum_acc(m))
+        })
     }
 
     /// Mean of unmasked elements (full reduction). All-masked reduces to the
@@ -694,23 +838,34 @@ impl PyMaskedArray {
     }
 
     /// Minimum unmasked element. All-masked reduces to the `numpy.ma.masked`
-    /// singleton (`numpy/ma/core.py:5942`). Computed in f64.
+    /// singleton (`numpy/ma/core.py:5942`). Keeps the INPUT dtype — numpy.ma
+    /// `min` delegates to `filled(maximum_fill).min()` with no accumulator
+    /// promotion (`numpy/ma/core.py:5933`), so int8 stays int8 (#858).
     fn min<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.to_f64_ma()?.min().map_err(ferr_to_pyerr)?;
-        Ok(v.into_pyobject(py)?.into_any())
+        match_ma!(&self.inner, m, T => {
+            match ma_extremum(m, false) {
+                Some(v) => scalar_pyobject(py, v),
+                None => ma_masked_singleton(py),
+            }
+        })
     }
 
     /// Maximum unmasked element. All-masked reduces to the `numpy.ma.masked`
-    /// singleton (`numpy/ma/core.py:6047`). Computed in f64.
+    /// singleton (`numpy/ma/core.py:6047`). Keeps the INPUT dtype (numpy.ma
+    /// `max` = `filled(minimum_fill).max()`, no promotion) (#858).
     fn max<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
-        let v = self.to_f64_ma()?.max().map_err(ferr_to_pyerr)?;
-        Ok(v.into_pyobject(py)?.into_any())
+        match_ma!(&self.inner, m, T => {
+            match ma_extremum(m, true) {
+                Some(v) => scalar_pyobject(py, v),
+                None => ma_masked_singleton(py),
+            }
+        })
     }
 
     /// Variance of unmasked elements. All-masked (count==0) reduces to the
@@ -970,14 +1125,18 @@ impl PyMaskedArray {
                     // mask, the result's mask is ALWAYS `_mask[indx]` (the #849
                     // pattern, keyed off `has_real_mask()`, NEVER off any-True
                     // bits); a nomask source gathers to a nomask sub-array.
-                    let inner = if has_real {
-                        let mk = mask_flat.as_ref().expect("real mask => Some");
-                        let sub_mask: Vec<bool> = positions.iter().map(|&p| mk[p]).collect();
-                        let mask_fa = ArrayD::<bool>::from_vec(IxDyn::new(&shape), sub_mask)
-                            .map_err(ferr_to_pyerr)?;
-                        T::wrap(RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?)
-                    } else {
-                        T::wrap(RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?)
+                    let inner = match (has_real, mask_flat.as_ref()) {
+                        (true, Some(mk)) => {
+                            let sub_mask: Vec<bool> = positions.iter().map(|&p| mk[p]).collect();
+                            let mask_fa = ArrayD::<bool>::from_vec(IxDyn::new(&shape), sub_mask)
+                                .map_err(ferr_to_pyerr)?;
+                            T::wrap(RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?)
+                        }
+                        // `has_real` is derived from `has_real_mask()`, the same
+                        // source as `mask_opt_bits()`, so a real mask always
+                        // yields `Some`; the `None` arm gathers to a nomask
+                        // sub-array rather than panicking (R-CODE-2/R-APG-1).
+                        _ => T::wrap(RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?),
                     };
                     Ok(Py::new(py, Self::from_dynma(inner))?.into_bound(py).into_any())
                 }
@@ -1633,6 +1792,23 @@ fn coerce_to_ma<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<RustM
     coerce_to_ma_impl(py, obj, false)
 }
 
+/// Coerce a Python operand to a dtype-preserving [`DynMa`] (native dtype +
+/// mask), the integer/bool-faithful analog of [`coerce_to_ma`]. A
+/// `ferray.ma.MaskedArray` keeps its variant verbatim; any other array-like is
+/// normalized via `numpy.asarray` (no cast) and routed through `build_dynma`,
+/// reading a `numpy.ma` operand's mask via `numpy.ma.getmaskarray` (#858,
+/// R-CODE-4 — no float64 funnel).
+fn coerce_to_dynma<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<DynMa> {
+    if let Ok(m) = obj.extract::<PyMaskedArray>() {
+        return Ok(m.inner);
+    }
+    let arr = crate::conv::as_ndarray(py, obj)?;
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let mask_obj = np_ma.call_method1("getmaskarray", (obj,))?;
+    let mask_fa = extract_bool_array(py, &mask_obj)?;
+    build_dynma(&arr, Some(mask_fa))
+}
+
 /// Like [`coerce_to_ma`] but, for a `numpy.ma.MaskedArray` operand, reads its
 /// mask via `numpy.ma.getmaskarray` rather than discarding it.
 ///
@@ -2015,8 +2191,12 @@ pub fn prod<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAn
     if a.all_masked()? {
         return ma_masked_singleton(py);
     }
-    let v = a.to_f64_ma()?.prod().map_err(ferr_to_pyerr)?;
-    Ok(v.into_pyobject(py)?.into_any())
+    // Dtype-preserving: numpy.ma `prod` = `filled(1).prod()`
+    // (`numpy/ma/core.py:5303`), result dtype = the ReduceAcc accumulator
+    // (int8→int64, uint8→uint64, bool→int64, float unchanged) (#858).
+    match_ma!(&a.inner, m, T => {
+        scalar_pyobject(py, ma_prod_acc(m))
+    })
 }
 
 /// `numpy.ma.median(a)` — median of unmasked elements. All-masked reduces
@@ -3902,52 +4082,51 @@ pub fn compress<'py>(
 /// `numpy.ma.cumsum(a)` / `cumprod(a)`: numpy.ma fills the masked positions
 /// with the reduction identity (0 for sum, 1 for prod) BEFORE the cumulative
 /// op, runs `numpy.<func>` on that filled data, and keeps the original mask
-/// (`numpy/ma/core.py` `cumsum`/`cumprod`: "fills masked data with the
-/// identity, then accumulates"). The binding reproduces that exactly.
+/// (`numpy/ma/core.py:5294` `result = self.filled(0).cumsum(...)`). The result
+/// dtype is numpy's accumulator (`ReduceAcc`: int8→int64, uint8→uint64,
+/// bool→int64, float unchanged), NOT a float64 collapse (#858, R-CODE-4): the
+/// masked data is filled with the identity in its NATIVE dtype and handed to
+/// `numpy.<func>`, which yields the accumulator dtype; we rebuild a
+/// dtype-preserving `DynMa` from that result and re-apply the original mask.
 fn ma_cumulative<'py>(
     py: Python<'py>,
     func: &str,
-    identity: f64,
+    product: bool,
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
 ) -> PyResult<PyMaskedArray> {
     let np = py.import("numpy")?;
-    let m = coerce_to_ma(py, a)?;
-    let data: ArrayD<f64> = fma::getdata(&m).map_err(ferr_to_pyerr)?;
-    let mask: ArrayD<bool> = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
-    // Fill masked slots with the identity in the data buffer.
-    let shape = data.shape().to_vec();
-    let filled: Vec<f64> = data
-        .iter()
-        .zip(mask.iter())
-        .map(|(&v, &mk)| if mk { identity } else { v })
-        .collect();
-    let filled = ArrayD::<f64>::from_vec(IxDyn::new(&shape), filled).map_err(ferr_to_pyerr)?;
-    let filled_py = filled.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let mask_py = mask.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let dynma = coerce_to_dynma(py, a)?;
+    let mask_fa = dynma.mask_bits()?;
+    // Fill masked slots with the reduction identity in the NATIVE dtype, egress
+    // to a numpy ndarray, then run `numpy.<func>` — numpy promotes the dtype to
+    // its reduction accumulator exactly as `filled(0).cumsum()` does.
+    let filled_py: Bound<'py, PyAny> = match_ma!(&dynma, m, T => {
+        let ident: T = if product { <T as MaIdentity>::ONE } else { <T as MaIdentity>::ZERO };
+        let filled: ArrayD<T> = m.filled(ident).map_err(ferr_to_pyerr)?;
+        filled.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    });
+    let mask_py = mask_fa
+        .clone()
+        .into_pyarray(py)
+        .map_err(ferr_to_pyerr)?
+        .into_any();
     let (data_res, mask_res) = match axis {
         None => (
             np.call_method1(func, (filled_py,))?,
-            // numpy.ma keeps the original mask; cumsum of a 1-D bool reshape is
-            // not what we want — carry the mask flattened to match numpy's
-            // axis=None flattening of the data.
+            // axis=None flattens the data; flatten the mask to match.
             np.call_method1("ravel", (mask_py,))?,
         ),
         Some(ax) => (np.call_method1(func, (filled_py, ax))?, mask_py),
     };
-    let data_res = coerce_dtype(py, &data_res, "float64")?;
+    // Rebuild a dtype-preserving DynMa from numpy's accumulator-typed result.
     let mask_res = coerce_dtype(py, &mask_res, "bool")?;
-    let data_fa: ArrayD<f64> = data_res
-        .extract::<PyReadonlyArrayDyn<f64>>()?
-        .as_ferray()
-        .map_err(ferr_to_pyerr)?;
-    let mask_fa: ArrayD<bool> = mask_res
+    let result_mask: ArrayD<bool> = mask_res
         .extract::<PyReadonlyArrayDyn<bool>>()?
         .as_ferray()
         .map_err(ferr_to_pyerr)?;
-    Ok(PyMaskedArray::from_inner(
-        RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
-    ))
+    let inner = build_dynma(&data_res, Some(result_mask))?;
+    Ok(PyMaskedArray::from_dynma(inner))
 }
 
 /// `numpy.ma.cumsum(a, axis=None)` — cumulative sum, masked slots contribute 0
@@ -3959,7 +4138,7 @@ pub fn cumsum<'py>(
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
 ) -> PyResult<PyMaskedArray> {
-    ma_cumulative(py, "cumsum", 0.0, a, axis)
+    ma_cumulative(py, "cumsum", false, a, axis)
 }
 
 /// `numpy.ma.cumprod(a, axis=None)` — cumulative product, masked slots
@@ -3971,7 +4150,7 @@ pub fn cumprod<'py>(
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
 ) -> PyResult<PyMaskedArray> {
-    ma_cumulative(py, "cumprod", 1.0, a, axis)
+    ma_cumulative(py, "cumprod", true, a, axis)
 }
 
 // ---------------------------------------------------------------------------
