@@ -181,7 +181,10 @@ pub fn promote_types<'py>(
 /// applying numpy's promotion rules (NEP-50) to all inputs.
 #[pyfunction]
 #[pyo3(signature = (*args))]
-pub fn result_type<'py>(py: Python<'py>, args: &Bound<'py, PyTuple>) -> PyResult<Bound<'py, PyAny>> {
+pub fn result_type<'py>(
+    py: Python<'py>,
+    args: &Bound<'py, PyTuple>,
+) -> PyResult<Bound<'py, PyAny>> {
     py.import("numpy")?.call_method1("result_type", args)
 }
 
@@ -211,7 +214,11 @@ pub fn issubdtype(
 /// `'integral'`, `'real floating'`, `'complex floating'`, `'numeric'`),
 /// or a tuple of either.
 #[pyfunction]
-pub fn isdtype(py: Python<'_>, dtype: &Bound<'_, PyAny>, kind: &Bound<'_, PyAny>) -> PyResult<bool> {
+pub fn isdtype(
+    py: Python<'_>,
+    dtype: &Bound<'_, PyAny>,
+    kind: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
     py.import("numpy")?
         .call_method1("isdtype", (dtype, kind))?
         .extract()

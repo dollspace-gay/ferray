@@ -22,7 +22,7 @@
 use std::collections::HashMap;
 
 use ferray_core::array::aliases::ArrayD;
-use ferray_core::dimension::{IxDyn, Ix1};
+use ferray_core::dimension::{Ix1, IxDyn};
 use ferray_numpy_interop::IntoNumPy;
 use ferray_strings as fs;
 use ferray_strings::{StringArray, StringArray1};

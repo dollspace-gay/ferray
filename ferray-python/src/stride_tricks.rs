@@ -249,7 +249,11 @@ pub fn sliding_window_view<'py>(
     });
 
     // numpy defaults writeable=False -> read-only view (`:181`).
-    if writeable { Ok(out) } else { set_readonly(out) }
+    if writeable {
+        Ok(out)
+    } else {
+        set_readonly(out)
+    }
 }
 
 /// `numpy.lib.stride_tricks.as_strided(x, shape=None, strides=None,
@@ -265,7 +269,10 @@ pub fn sliding_window_view<'py>(
 /// caller of `as_strided` consumes.
 #[pyfunction]
 #[pyo3(signature = (x, shape = None, strides = None, subok = false, writeable = true, *, check_bounds = None))]
-#[allow(clippy::too_many_arguments, reason = "mirrors numpy as_strided signature")]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "mirrors numpy as_strided signature"
+)]
 pub fn as_strided<'py>(
     py: Python<'py>,
     x: &Bound<'py, PyAny>,

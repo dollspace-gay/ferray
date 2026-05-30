@@ -717,14 +717,13 @@ pub fn polyval<'py>(
     let result = poly.eval_many(&data).map_err(ferr_to_pyerr)?;
     match shape {
         None => {
-            let arr = ArrayD::<f64>::from_vec(IxDyn::new(&[]), vec![result[0]])
-                .map_err(ferr_to_pyerr)?;
+            let arr =
+                ArrayD::<f64>::from_vec(IxDyn::new(&[]), vec![result[0]]).map_err(ferr_to_pyerr)?;
             let zerod = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
             crate::conv::scalarize(zerod)
         }
         Some(shape) => {
-            let arr =
-                ArrayD::<f64>::from_vec(IxDyn::new(&shape), result).map_err(ferr_to_pyerr)?;
+            let arr = ArrayD::<f64>::from_vec(IxDyn::new(&shape), result).map_err(ferr_to_pyerr)?;
             Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
         }
     }
@@ -741,8 +740,7 @@ pub fn polyval<'py>(
 pub fn poly<'py>(py: Python<'py>, seq_of_zeros: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
     if seq_of_zeros.is_empty() {
         // `numpy/lib/_polynomial_impl.py:148-149` returns the scalar `1.0`.
-        let arr =
-            ArrayD::<f64>::from_vec(IxDyn::new(&[]), vec![1.0]).map_err(ferr_to_pyerr)?;
+        let arr = ArrayD::<f64>::from_vec(IxDyn::new(&[]), vec![1.0]).map_err(ferr_to_pyerr)?;
         let zerod = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
         return crate::conv::scalarize(zerod);
     }
@@ -883,11 +881,7 @@ pub fn polyfit<'py>(
 /// `numpy.polydiv(u, v)` — polynomial division returning `(quotient,
 /// remainder)`, both highest-first. `numpy/lib/_polynomial_impl.py:992`.
 #[pyfunction]
-pub fn polydiv<'py>(
-    py: Python<'py>,
-    u: Vec<f64>,
-    v: Vec<f64>,
-) -> PyResult<Bound<'py, PyAny>> {
+pub fn polydiv<'py>(py: Python<'py>, u: Vec<f64>, v: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
     let pu = fp::Polynomial::new(&flip(u));
     let pv = fp::Polynomial::new(&flip(v));
     let (q, r) = pu.divmod(&pv).map_err(ferr_to_pyerr)?;

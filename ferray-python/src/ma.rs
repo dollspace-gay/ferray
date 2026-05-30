@@ -544,8 +544,8 @@ fn coerce_to_ma<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<RustM
     let data_fa = extract_data(py, obj)?;
     let n = data_fa.size();
     let shape = data_fa.shape().to_vec();
-    let mask_fa = ArrayD::<bool>::from_vec(IxDyn::new(&shape), vec![false; n])
-        .map_err(ferr_to_pyerr)?;
+    let mask_fa =
+        ArrayD::<bool>::from_vec(IxDyn::new(&shape), vec![false; n]).map_err(ferr_to_pyerr)?;
     RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)
 }
 
@@ -582,35 +582,111 @@ macro_rules! ma_unary_domain {
     };
 }
 
-ma_unary!(sin, f64::sin, "`numpy.ma.sin` — elementwise sine, mask propagated.");
-ma_unary!(cos, f64::cos, "`numpy.ma.cos` — elementwise cosine, mask propagated.");
-ma_unary!(tan, f64::tan, "`numpy.ma.tan` — elementwise tangent, mask propagated.");
-ma_unary!(arctan, f64::atan, "`numpy.ma.arctan` — elementwise arctangent.");
-ma_unary!(sinh, f64::sinh, "`numpy.ma.sinh` — elementwise hyperbolic sine.");
-ma_unary!(cosh, f64::cosh, "`numpy.ma.cosh` — elementwise hyperbolic cosine.");
-ma_unary!(tanh, f64::tanh, "`numpy.ma.tanh` — elementwise hyperbolic tangent.");
-ma_unary!(arcsinh, f64::asinh, "`numpy.ma.arcsinh` — inverse hyperbolic sine.");
+ma_unary!(
+    sin,
+    f64::sin,
+    "`numpy.ma.sin` — elementwise sine, mask propagated."
+);
+ma_unary!(
+    cos,
+    f64::cos,
+    "`numpy.ma.cos` — elementwise cosine, mask propagated."
+);
+ma_unary!(
+    tan,
+    f64::tan,
+    "`numpy.ma.tan` — elementwise tangent, mask propagated."
+);
+ma_unary!(
+    arctan,
+    f64::atan,
+    "`numpy.ma.arctan` — elementwise arctangent."
+);
+ma_unary!(
+    sinh,
+    f64::sinh,
+    "`numpy.ma.sinh` — elementwise hyperbolic sine."
+);
+ma_unary!(
+    cosh,
+    f64::cosh,
+    "`numpy.ma.cosh` — elementwise hyperbolic cosine."
+);
+ma_unary!(
+    tanh,
+    f64::tanh,
+    "`numpy.ma.tanh` — elementwise hyperbolic tangent."
+);
+ma_unary!(
+    arcsinh,
+    f64::asinh,
+    "`numpy.ma.arcsinh` — inverse hyperbolic sine."
+);
 ma_unary!(exp, f64::exp, "`numpy.ma.exp` — elementwise exponential.");
 ma_unary!(floor, f64::floor, "`numpy.ma.floor` — elementwise floor.");
 ma_unary!(ceil, f64::ceil, "`numpy.ma.ceil` — elementwise ceiling.");
-ma_unary!(negative, |x: f64| -x, "`numpy.ma.negative` — elementwise negation.");
-ma_unary!(absolute, f64::abs, "`numpy.ma.absolute` — elementwise absolute value.");
+ma_unary!(
+    negative,
+    |x: f64| -x,
+    "`numpy.ma.negative` — elementwise negation."
+);
+ma_unary!(
+    absolute,
+    f64::abs,
+    "`numpy.ma.absolute` — elementwise absolute value."
+);
 ma_unary!(abs, f64::abs, "`numpy.ma.abs` — alias of `absolute`.");
-ma_unary!(fabs, f64::abs, "`numpy.ma.fabs` — elementwise float absolute value.");
+ma_unary!(
+    fabs,
+    f64::abs,
+    "`numpy.ma.fabs` — elementwise float absolute value."
+);
 ma_unary!(
     conjugate,
     |x: f64| x,
     "`numpy.ma.conjugate` — conjugate; on real (f64) data the identity, mask propagated."
 );
 
-ma_unary_domain!(sqrt, fma::sqrt_domain, "`numpy.ma.sqrt` — sqrt; negative inputs are masked.");
-ma_unary_domain!(log, fma::log_domain, "`numpy.ma.log` — natural log; non-positive inputs masked.");
-ma_unary_domain!(log2, fma::log2_domain, "`numpy.ma.log2` — base-2 log; non-positive inputs masked.");
-ma_unary_domain!(log10, fma::log10_domain, "`numpy.ma.log10` — base-10 log; non-positive inputs masked.");
-ma_unary_domain!(arcsin, fma::arcsin_domain, "`numpy.ma.arcsin` — arcsine; `|x| > 1` inputs masked.");
-ma_unary_domain!(arccos, fma::arccos_domain, "`numpy.ma.arccos` — arccosine; `|x| > 1` inputs masked.");
-ma_unary_domain!(arccosh, fma::arccosh_domain, "`numpy.ma.arccosh` — arccosh; `x < 1` inputs masked.");
-ma_unary_domain!(arctanh, fma::arctanh_domain, "`numpy.ma.arctanh` — arctanh; `|x| >= 1` inputs masked.");
+ma_unary_domain!(
+    sqrt,
+    fma::sqrt_domain,
+    "`numpy.ma.sqrt` — sqrt; negative inputs are masked."
+);
+ma_unary_domain!(
+    log,
+    fma::log_domain,
+    "`numpy.ma.log` — natural log; non-positive inputs masked."
+);
+ma_unary_domain!(
+    log2,
+    fma::log2_domain,
+    "`numpy.ma.log2` — base-2 log; non-positive inputs masked."
+);
+ma_unary_domain!(
+    log10,
+    fma::log10_domain,
+    "`numpy.ma.log10` — base-10 log; non-positive inputs masked."
+);
+ma_unary_domain!(
+    arcsin,
+    fma::arcsin_domain,
+    "`numpy.ma.arcsin` — arcsine; `|x| > 1` inputs masked."
+);
+ma_unary_domain!(
+    arccos,
+    fma::arccos_domain,
+    "`numpy.ma.arccos` — arccosine; `|x| > 1` inputs masked."
+);
+ma_unary_domain!(
+    arccosh,
+    fma::arccosh_domain,
+    "`numpy.ma.arccosh` — arccosh; `x < 1` inputs masked."
+);
+ma_unary_domain!(
+    arctanh,
+    fma::arctanh_domain,
+    "`numpy.ma.arctanh` — arctanh; `|x| >= 1` inputs masked."
+);
 
 /// `numpy.ma.around(a, decimals=0)` — round to `decimals` places, mask
 /// propagated. NumPy's masked `around` rounds the underlying data with the
@@ -632,7 +708,11 @@ pub fn around<'py>(
         // case to half-to-even to mirror numpy.
         let adjusted = if (scaled - scaled.floor() - 0.5).abs() < f64::EPSILON {
             let lower = scaled.floor();
-            if (lower as i64) % 2 == 0 { lower } else { lower + 1.0 }
+            if (lower as i64) % 2 == 0 {
+                lower
+            } else {
+                lower + 1.0
+            }
         } else {
             r
         };
@@ -666,13 +746,48 @@ macro_rules! ma_binary {
     };
 }
 
-ma_binary!(add, |x: f64, y: f64| x + y, "add", "`numpy.ma.add` — elementwise sum, mask union.");
-ma_binary!(subtract, |x: f64, y: f64| x - y, "subtract", "`numpy.ma.subtract` — elementwise difference.");
-ma_binary!(multiply, |x: f64, y: f64| x * y, "multiply", "`numpy.ma.multiply` — elementwise product.");
-ma_binary!(arctan2, f64::atan2, "arctan2", "`numpy.ma.arctan2` — elementwise arctangent of y/x.");
-ma_binary!(hypot, f64::hypot, "hypot", "`numpy.ma.hypot` — elementwise hypotenuse.");
-ma_binary!(power, f64::powf, "power", "`numpy.ma.power` — elementwise power.");
-ma_binary!(fmod, |x: f64, y: f64| x % y, "fmod", "`numpy.ma.fmod` — C-style float modulo (sign of dividend).");
+ma_binary!(
+    add,
+    |x: f64, y: f64| x + y,
+    "add",
+    "`numpy.ma.add` — elementwise sum, mask union."
+);
+ma_binary!(
+    subtract,
+    |x: f64, y: f64| x - y,
+    "subtract",
+    "`numpy.ma.subtract` — elementwise difference."
+);
+ma_binary!(
+    multiply,
+    |x: f64, y: f64| x * y,
+    "multiply",
+    "`numpy.ma.multiply` — elementwise product."
+);
+ma_binary!(
+    arctan2,
+    f64::atan2,
+    "arctan2",
+    "`numpy.ma.arctan2` — elementwise arctangent of y/x."
+);
+ma_binary!(
+    hypot,
+    f64::hypot,
+    "hypot",
+    "`numpy.ma.hypot` — elementwise hypotenuse."
+);
+ma_binary!(
+    power,
+    f64::powf,
+    "power",
+    "`numpy.ma.power` — elementwise power."
+);
+ma_binary!(
+    fmod,
+    |x: f64, y: f64| x % y,
+    "fmod",
+    "`numpy.ma.fmod` — C-style float modulo (sign of dividend)."
+);
 ma_binary!(
     remainder,
     |x: f64, y: f64| x - y * (x / y).floor(),
@@ -687,13 +802,21 @@ ma_binary!(
 );
 ma_binary!(
     maximum,
-    |x: f64, y: f64| if x.is_nan() || y.is_nan() { f64::NAN } else { x.max(y) },
+    |x: f64, y: f64| if x.is_nan() || y.is_nan() {
+        f64::NAN
+    } else {
+        x.max(y)
+    },
     "maximum",
     "`numpy.ma.maximum` — elementwise maximum (NaN-propagating)."
 );
 ma_binary!(
     minimum,
-    |x: f64, y: f64| if x.is_nan() || y.is_nan() { f64::NAN } else { x.min(y) },
+    |x: f64, y: f64| if x.is_nan() || y.is_nan() {
+        f64::NAN
+    } else {
+        x.min(y)
+    },
     "minimum",
     "`numpy.ma.minimum` — elementwise minimum (NaN-propagating)."
 );
@@ -838,10 +961,7 @@ pub fn average<'py>(
 pub fn all(a: &PyMaskedArray) -> PyResult<bool> {
     let data = fma::getdata(&a.inner).map_err(ferr_to_pyerr)?;
     let mask = fma::getmaskarray(&a.inner).map_err(ferr_to_pyerr)?;
-    Ok(data
-        .iter()
-        .zip(mask.iter())
-        .all(|(&v, &m)| m || v != 0.0))
+    Ok(data.iter().zip(mask.iter()).all(|(&v, &m)| m || v != 0.0))
 }
 
 /// `numpy.ma.any(a)` — true iff at least one unmasked element is truthy.
@@ -849,10 +969,7 @@ pub fn all(a: &PyMaskedArray) -> PyResult<bool> {
 pub fn any(a: &PyMaskedArray) -> PyResult<bool> {
     let data = fma::getdata(&a.inner).map_err(ferr_to_pyerr)?;
     let mask = fma::getmaskarray(&a.inner).map_err(ferr_to_pyerr)?;
-    Ok(data
-        .iter()
-        .zip(mask.iter())
-        .any(|(&v, &m)| !m && v != 0.0))
+    Ok(data.iter().zip(mask.iter()).any(|(&v, &m)| !m && v != 0.0))
 }
 
 /// `numpy.ma.anom(a)` — deviations from the unmasked mean (a.k.a.
@@ -876,9 +993,7 @@ fn from_unmasked(data: ArrayD<f64>) -> PyResult<PyMaskedArray> {
 /// Promote a 1-D `MaskedArray<f64, Ix1>` (produced by `ravel`/`repeat`) to
 /// the dynamic-dimension `RustMa<f64, IxDyn>` the `PyMaskedArray` wrapper
 /// holds, preserving the data and mask.
-fn ix1_ma_to_dyn(
-    m: RustMa<f64, ferray_core::dimension::Ix1>,
-) -> PyResult<RustMa<f64, IxDyn>> {
+fn ix1_ma_to_dyn(m: RustMa<f64, ferray_core::dimension::Ix1>) -> PyResult<RustMa<f64, IxDyn>> {
     let data = fma::getdata(&m).map_err(ferr_to_pyerr)?.into_dyn();
     let mask = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?.into_dyn();
     RustMa::new(data, mask).map_err(ferr_to_pyerr)
@@ -1123,10 +1238,14 @@ pub fn make_mask<'py>(py: Python<'py>, m: &Bound<'py, PyAny>) -> PyResult<Bound<
 
 /// `numpy.ma.make_mask_none(shape)` — an all-`False` bool mask of `shape`.
 #[pyfunction]
-pub fn make_mask_none<'py>(py: Python<'py>, shape: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+pub fn make_mask_none<'py>(
+    py: Python<'py>,
+    shape: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let dims = crate::conv::extract_shape(shape)?;
     let n: usize = dims.iter().product();
-    let mask = ArrayD::<bool>::from_vec(IxDyn::new(&dims), vec![false; n]).map_err(ferr_to_pyerr)?;
+    let mask =
+        ArrayD::<bool>::from_vec(IxDyn::new(&dims), vec![false; n]).map_err(ferr_to_pyerr)?;
     Ok(mask.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 

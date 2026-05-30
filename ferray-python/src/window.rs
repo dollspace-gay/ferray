@@ -25,7 +25,8 @@ use crate::conv::{coerce_window_m, ferr_to_pyerr};
 /// for `M < 1` (numpy/lib/_function_base_impl.py:3349-3350 `hanning`, and the
 /// equivalent guard in every other window). Returned as a Python `ndarray`.
 fn empty_window<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-    let r: Array1<f64> = Array1::<f64>::from_vec(Ix1::new([0]), Vec::new()).map_err(ferr_to_pyerr)?;
+    let r: Array1<f64> =
+        Array1::<f64>::from_vec(Ix1::new([0]), Vec::new()).map_err(ferr_to_pyerr)?;
     Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 

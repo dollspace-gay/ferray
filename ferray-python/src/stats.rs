@@ -21,9 +21,7 @@ use numpy::{PyReadonlyArray1, PyReadonlyArrayDyn};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use crate::conv::{
-    as_ndarray, coerce_dtype, dtype_name, extract_q, ferr_to_pyerr, normalize_axis,
-};
+use crate::conv::{as_ndarray, coerce_dtype, dtype_name, extract_q, ferr_to_pyerr, normalize_axis};
 use crate::{match_dtype_all, match_dtype_float, match_dtype_numeric, match_dtype_orderable};
 
 // ---------------------------------------------------------------------------

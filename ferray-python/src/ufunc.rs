@@ -372,9 +372,8 @@ pub fn around<'py>(
     let scale = 10f64.powi(decimals);
     let scaled: Vec<f64> = fa.iter().map(|&x| x * scale).collect();
     let shape = fa.shape().to_vec();
-    let scaled_arr =
-        ArrayD::<f64>::from_vec(ferray_core::dimension::IxDyn::new(&shape), scaled)
-            .map_err(ferr_to_pyerr)?;
+    let scaled_arr = ArrayD::<f64>::from_vec(ferray_core::dimension::IxDyn::new(&shape), scaled)
+        .map_err(ferr_to_pyerr)?;
     let rounded: ArrayD<f64> = ferray_ufunc::rint(&scaled_arr).map_err(ferr_to_pyerr)?;
     let unscaled: Vec<f64> = rounded.iter().map(|&x| x / scale).collect();
     let out = ArrayD::<f64>::from_vec(ferray_core::dimension::IxDyn::new(&shape), unscaled)

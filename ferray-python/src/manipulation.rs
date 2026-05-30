@@ -914,9 +914,9 @@ fn repeat_per_element<T: ferray_core::Element>(
             let shape = a.shape().to_vec();
             let ndim = shape.len();
             if ax >= ndim {
-                return Err(ferr_to_pyerr(
-                    ferray_core::FerrayError::axis_out_of_bounds(ax, ndim),
-                ));
+                return Err(ferr_to_pyerr(ferray_core::FerrayError::axis_out_of_bounds(
+                    ax, ndim,
+                )));
             }
             let axis_len = shape[ax];
             let counts = broadcast_counts(counts, axis_len)?;
