@@ -849,52 +849,62 @@ where
     })
 }
 
-/// Integer GCD (works on float representations of integers).
-pub fn gcd<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+/// `np.gcd` — registered INTEGER-ONLY in NumPy
+/// (`numpy/_core/code_generators/generate_umath.py:1156` `'gcd': Ufunc(...
+/// TD(ints) ...)`): the only registered loops are integer (plus the
+/// object loop), so a FLOAT input array has no matching ufunc loop and
+/// NumPy raises `TypeError` ("no loop matching the specified signature").
+///
+/// The integer domain that NumPy accepts is served by [`gcd_int`]
+/// (Euclidean GCD preserving the integer dtype). This public symbol is
+/// bound `T: Element + Float`, so every reachable `T` is a float type —
+/// exactly the input NumPy rejects. It therefore returns
+/// [`FerrayError::invalid_dtype`] (the TypeError analog at the library
+/// boundary) instead of silently computing a value, mirroring NumPy's
+/// integer-only domain.
+///
+/// # Errors
+/// Always returns `FerrayError::invalid_dtype` — `gcd` has no float loop in
+/// NumPy. Use [`gcd_int`] for the integer domain NumPy accepts.
+pub fn gcd<T, D>(a: &Array<T, D>, _b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
 {
-    binary_elementwise_op(a, b, |mut x, mut y| {
-        if x.is_nan() || y.is_nan() {
-            return T::nan();
-        }
-        x = x.abs();
-        y = y.abs();
-        while y != <T as Element>::zero() {
-            let t = y;
-            y = x % y;
-            x = t;
-        }
-        x
-    })
+    let _ = a;
+    Err(FerrayError::invalid_dtype(format!(
+        "gcd: no loop matching the specified signature for dtype {:?}; \
+         np.gcd is registered integer-only (generate_umath.py:1156 \
+         TD(ints)) and rejects float input — use gcd_int for integer arrays",
+        <T as Element>::dtype()
+    )))
 }
 
-/// Integer LCM (works on float representations of integers).
-pub fn lcm<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
+/// `np.lcm` — registered INTEGER-ONLY in NumPy
+/// (`numpy/_core/code_generators/generate_umath.py:1163` `'lcm': Ufunc(...
+/// TD(ints) ...)`): like [`gcd`], the only registered loops are integer
+/// (plus the object loop), so FLOAT input raises `TypeError` in NumPy.
+///
+/// The integer domain is served by [`lcm_int`]. This `T: Element + Float`
+/// symbol can only be reached with a float type — the input NumPy rejects —
+/// so it returns [`FerrayError::invalid_dtype`] (the TypeError analog),
+/// matching NumPy's integer-only domain.
+///
+/// # Errors
+/// Always returns `FerrayError::invalid_dtype` — `lcm` has no float loop in
+/// NumPy. Use [`lcm_int`] for the integer domain NumPy accepts.
+pub fn lcm<T, D>(a: &Array<T, D>, _b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element + Float,
     D: Dimension,
 {
-    binary_elementwise_op(a, b, |x, y| {
-        if x.is_nan() || y.is_nan() {
-            return T::nan();
-        }
-        let ax = x.abs();
-        let ay = y.abs();
-        if ax == <T as Element>::zero() || ay == <T as Element>::zero() {
-            return <T as Element>::zero();
-        }
-        // lcm = |a*b| / gcd(a,b)
-        let mut gx = ax;
-        let mut gy = ay;
-        while gy != <T as Element>::zero() {
-            let t = gy;
-            gy = gx % gy;
-            gx = t;
-        }
-        ax / gx * ay
-    })
+    let _ = a;
+    Err(FerrayError::invalid_dtype(format!(
+        "lcm: no loop matching the specified signature for dtype {:?}; \
+         np.lcm is registered integer-only (generate_umath.py:1163 \
+         TD(ints)) and rejects float input — use lcm_int for integer arrays",
+        <T as Element>::dtype()
+    )))
 }
 
 /// Integer GCD using the Euclidean algorithm.
@@ -2087,18 +2097,33 @@ mod tests {
 
     #[test]
     fn test_gcd() {
+        // np.gcd is integer-only (generate_umath.py:1156 TD(ints)): a FLOAT
+        // input has no matching ufunc loop and raises TypeError. The public
+        // `gcd` mirrors that — it rejects float input. The integer domain
+        // NumPy accepts is served by `gcd_int`.
         let a = arr1(vec![12.0, 15.0]);
         let b = arr1(vec![8.0, 25.0]);
-        let r = gcd(&a, &b).unwrap();
-        assert_eq!(r.as_slice().unwrap(), &[4.0, 5.0]);
+        assert!(gcd(&a, &b).is_err());
+        // np.gcd([12,15],[8,25]) -> array([4, 5]) (live numpy 2.4.5).
+        let ai = arr1_i32(vec![12, 15]);
+        let bi = arr1_i32(vec![8, 25]);
+        let r = gcd_int(&ai, &bi).ok();
+        assert_eq!(r.as_ref().and_then(|x| x.as_slice()), Some(&[4, 5][..]));
     }
 
     #[test]
     fn test_lcm() {
+        // np.lcm is integer-only (generate_umath.py:1163 TD(ints)): float
+        // input raises TypeError; the public `lcm` rejects it. Integer domain
+        // is served by `lcm_int`.
         let a = arr1(vec![4.0, 6.0]);
         let b = arr1(vec![6.0, 8.0]);
-        let r = lcm(&a, &b).unwrap();
-        assert_eq!(r.as_slice().unwrap(), &[12.0, 24.0]);
+        assert!(lcm(&a, &b).is_err());
+        // np.lcm([4,6],[6,8]) -> array([12, 24]) (live numpy 2.4.5).
+        let ai = arr1_i32(vec![4, 6]);
+        let bi = arr1_i32(vec![6, 8]);
+        let r = lcm_int(&ai, &bi).ok();
+        assert_eq!(r.as_ref().and_then(|x| x.as_slice()), Some(&[12, 24][..]));
     }
 
     #[test]
