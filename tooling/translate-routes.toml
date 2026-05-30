@@ -51,6 +51,26 @@ upstream = [
 design = ".design/ferray-strings.md"
 parity_ops = ["str_len", "count", "find", "upper", "lower", "strip", "replace"]
 
+[[route]]
+crate_pattern = "ferray-python/src/conv.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/numeric.py",
+  "/home/doll/numpy-ref/numpy/exceptions.py",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["normalize_axis_index", "normalize_axis_tuple", "AxisError"]
+
+[[route]]
+crate_pattern = "ferray-python/src/manipulation.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/fromnumeric.py",
+  "/home/doll/numpy-ref/numpy/_core/shape_base.py",
+  "/home/doll/numpy-ref/numpy/lib/_shape_base_impl.py",
+  "/home/doll/numpy-ref/numpy/lib/_function_base_impl.py",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["reshape", "transpose", "swapaxes", "moveaxis", "roll", "squeeze", "expand_dims", "flip", "concatenate", "stack", "repeat", "rot90", "delete"]
+
 # ─────────────────────────────────────────────────────────────────────────
 # ferray-core — the foundational crate (dependency order: FIRST)
 # Verified Rust-side via cargo test + numpy oracle (ferray-test-oracle /
