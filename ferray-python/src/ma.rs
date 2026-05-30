@@ -1572,13 +1572,27 @@ enum BinOp {
 }
 
 impl BinOp {
-    /// Whether this op is *domained* (`/`, `//`, `%`) — masks the result where
-    /// the divisor is zero / the result is non-finite, and ALWAYS materializes
-    /// a real mask even from two nomask operands (`_DomainedBinaryOperation`,
-    /// `numpy/ma/core.py:1207`). The non-domained ops (`+`, `-`, `*`, `**`)
-    /// keep `nomask` when both operands are nomask (`numpy/ma/core.py:1077`).
+    /// Whether this op carries a *divisor-zero / non-finite domain mask* (`/`,
+    /// `//`, `%` are all registered with `_DomainSafeDivide`,
+    /// `numpy/ma/core.py:1317`-`:1322`). This only governs whether the domain
+    /// mask is COMPUTED — it does not by itself force a real result mask (see
+    /// [`BinOp::always_materializes`]).
     fn is_domained(self) -> bool {
         matches!(self, BinOp::TrueDiv | BinOp::FloorDiv | BinOp::Mod)
+    }
+
+    /// Whether this op ALWAYS materializes a real mask even from two nomask
+    /// operands. Only `/` and `//` do: `MaskedArray.__truediv__` /
+    /// `__floordiv__` (`numpy/ma/core.py:4355`/`:4371`) route to
+    /// `_DomainedBinaryOperation.__call__` (`:1207`), whose `m = ~isfinite |
+    /// union | domain` is always a real ndarray. `%` has NO `__mod__` override,
+    /// so it falls through to `np.remainder` + `MaskedArray.__array_wrap__`
+    /// (`:3143`), which keeps `m is nomask` when both operands are nomask and
+    /// the domain does not fire (`if d.any():`, `:3173`). The additive /
+    /// multiplicative ops (`+`, `-`, `*`, `**`) also keep `nomask`
+    /// (`numpy/ma/core.py:1077`).
+    fn always_materializes(self) -> bool {
+        matches!(self, BinOp::TrueDiv | BinOp::FloorDiv)
     }
 }
 
@@ -1676,10 +1690,12 @@ fn binary_op(
     // dispatched over the common operand dtype.
     let computed = compute_binary(&left, &right, &bshape, op)?;
 
-    // Real-mask identity: domained ops always materialize a real mask; the
-    // additive/multiplicative ops keep nomask only when BOTH operands are
-    // nomask (`numpy/ma/core.py:1077`).
-    let want_real = op.is_domained() || l_real || r_real || computed.domain_any;
+    // Real-mask identity: `/` and `//` always materialize a real mask
+    // (`_DomainedBinaryOperation`, `numpy/ma/core.py:1207`). `%` (no `__mod__`
+    // override) and the additive/multiplicative ops keep `nomask` when BOTH
+    // operands are nomask AND the divisor-zero domain did not fire
+    // (`MaskedArray.__array_wrap__` `if d.any():`, `numpy/ma/core.py:3173`).
+    let want_real = op.always_materializes() || l_real || r_real || computed.domain_any;
     let inner = if want_real {
         rewrap_dynma_with_mask(computed.data, computed.mask)?
     } else {
