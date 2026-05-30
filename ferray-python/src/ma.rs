@@ -3965,8 +3965,15 @@ fn compare_op(
     let (bool_data, union_mask) = compute_compare(&left, &right, &bshape, op)?;
 
     // numpy keeps the result mask as `nomask` when both operands are nomask
-    // (`mask is nomask`), else materializes a real mask (`:4253`).
-    let want_real = recv_real || other_real;
+    // (`mask is nomask`), else materializes a real mask (`:4253`). BUT numpy's
+    // comparison ufunc collapses an all-False RESULT mask to `nomask` (scalar
+    // `np.False_`): `(np.ma.array([1,2,3],mask=[F,F,F]) == 1).mask is nomask`
+    // is True (verified live numpy 2.4.5), unlike arithmetic which keeps the
+    // real all-False mask. So materialize the real mask only when it carries a
+    // True bit; an all-False union collapses to `nomask` even from real-mask
+    // operands. A union with some True stays a real mask (`b==1` for
+    // `mask=[1,0,0]` keeps `[True,_,_]`).
+    let want_real = (recv_real || other_real) && union_mask.iter().any(|&m| m);
     let inner = if want_real {
         DynMa::Bool(RustMa::new(bool_data, union_mask).map_err(ferr_to_pyerr)?)
     } else {
@@ -4275,8 +4282,13 @@ fn bitwise_op(
 
     // Non-domained: keep the `nomask` sentinel when BOTH operands are nomask
     // (`np.ma.getmask(np.ma.array([1,2]) & 1) is np.ma.nomask`, verified live),
-    // else materialize the real union mask.
-    let want_real = l_real || r_real;
+    // else materialize the real union mask. BUT, like comparison and unlike
+    // arithmetic, numpy's bitwise ufunc collapses an all-False RESULT mask to
+    // `nomask`: `(np.ma.array([1,2,3],mask=[F,F,F]) & 1).mask is nomask` is
+    // True (verified live numpy 2.4.5). So materialize the real union only when
+    // it carries a True bit; an all-False union collapses to `nomask` even from
+    // real-mask operands, while a some-True union stays a real mask.
+    let want_real = (l_real || r_real) && union_arr.iter().any(|&m| m);
     let inner = if want_real {
         rewrap_dynma_with_mask(data, union_arr)?
     } else {
