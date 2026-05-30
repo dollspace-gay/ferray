@@ -417,23 +417,46 @@ from ._ferray import char as _char_module
 from ._ferray import strings as _strings_module
 import numpy as _np
 
-# numpy.datetime64 / numpy.timedelta64 arithmetic and predicates work
-# natively on numpy ndarrays via operator overloading. Re-expose the
-# canonical names at top-level so `ferray.isnat(arr)` works alongside
-# `np.isnat(arr)`. For full datetime parity see numpy.datetime64 docs.
-isnat = _np.isnat
+# numpy.datetime64 / numpy.timedelta64 top-level surface (refs #831).
+#
+# isnat / datetime_as_string / is_busday / busday_count / busday_offset are
+# bound in the Rust extension (src/datetime.rs). isnat and the busday calendar
+# run the genuine ferray-ufunc / Rust algorithms; datetime arithmetic flows
+# through ferray's own add / subtract, which dispatch datetime64 / timedelta64
+# operands to the ferray-ufunc datetime kernels (sub_datetime_promoted /
+# add_datetime_timedelta_promoted / add_timedelta_promoted).
+from ._ferray import (
+    isnat,
+    datetime_as_string,
+    is_busday,
+    busday_count,
+    busday_offset,
+)
+
+
+def datetime_data(dtype):
+    """``numpy.datetime_data(dtype)`` -> ``(unit, count)``.
+
+    Reads the unit metadata carried on a numpy datetime64 / timedelta64
+    ``dtype`` object (e.g. ``datetime_data(dtype('datetime64[D]'))`` ->
+    ``('D', 1)``). The metadata lives on the shared numpy dtype, so this
+    is pure-Python delegation to ``numpy.datetime_data`` — there is no
+    ferray dtype object to read it from
+    (numpy/_core/src/multiarray/datetime.c ``datetime_data``).
+    """
+    return _np.datetime_data(dtype)
 
 
 def add_datetime(a, b):
-    """Add a timedelta to a datetime (or vice versa). Routes through
-    numpy's operator overloading on datetime64/timedelta64 arrays."""
-    return _np.add(a, b)
+    """Add a timedelta to a datetime (or two timedeltas), via ferray's
+    datetime-aware ``add`` (ferray-ufunc datetime kernels)."""
+    return add(a, b)
 
 
 def sub_datetime(a, b):
-    """Subtract two datetimes (returns timedelta) or a timedelta from a
-    datetime (returns datetime)."""
-    return _np.subtract(a, b)
+    """Subtract two datetimes (-> timedelta) or a timedelta from a datetime
+    (-> datetime), via ferray's datetime-aware ``subtract``."""
+    return subtract(a, b)
 from ._ferray import dtype as _dtype_module
 from ._ferray import emath as _emath_module
 from ._ferray import fft as _fft_module
@@ -1194,6 +1217,8 @@ __all__ = [
     "modf", "nextafter", "spacing",
     "convolve", "correlate", "ediff1d", "gradient", "i0", "interp", "sinc", "trapezoid",
     "add_datetime", "isnat", "sub_datetime",
+    "datetime_data", "datetime_as_string", "is_busday", "busday_count",
+    "busday_offset",
     # stats
     "all", "any", "average", "nancumprod", "nancumsum",
     "nanpercentile", "nanquantile", "sort_complex", "cross", "trace",

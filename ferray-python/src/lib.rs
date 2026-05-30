@@ -30,6 +30,7 @@ mod char;
 mod complex;
 mod conv;
 mod creation;
+mod datetime;
 mod emath;
 mod fft;
 mod indexing;
@@ -752,6 +753,15 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ufunc::array_equiv, m)?)?;
     m.add_function(wrap_pyfunction!(ufunc::allclose, m)?)?;
     m.add_function(wrap_pyfunction!(ufunc::isclose, m)?)?;
+    // datetime64 / timedelta64 top-level surface (refs #831): isnat,
+    // datetime_as_string, and the busday calendar (is_busday / busday_count /
+    // busday_offset). datetime arithmetic flows through ufunc::add /
+    // ufunc::subtract which dispatch to crate::datetime for time dtypes.
+    m.add_function(wrap_pyfunction!(datetime::isnat, m)?)?;
+    m.add_function(wrap_pyfunction!(datetime::datetime_as_string, m)?)?;
+    m.add_function(wrap_pyfunction!(datetime::is_busday, m)?)?;
+    m.add_function(wrap_pyfunction!(datetime::busday_count, m)?)?;
+    m.add_function(wrap_pyfunction!(datetime::busday_offset, m)?)?;
     // bitwise
     m.add_function(wrap_pyfunction!(ufunc::bitwise_and, m)?)?;
     m.add_function(wrap_pyfunction!(ufunc::bitwise_or, m)?)?;

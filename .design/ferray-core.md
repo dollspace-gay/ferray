@@ -251,3 +251,40 @@ checks above pass via `ferray-core/tests/divergence_argreduce.rs` (14 pins,
 green under both the default and `FERRAY_FORCE_SCALAR=1` builds), with the
 corresponding rows in the `reductions.rs` `//!` REQ-status table updated.
 
+## REQ status (datetime64 top-level surface — refs #831)
+
+Two states only (R-DEFER-2). The ferray-core `DateTime64`/`Timedelta64`/
+`TimeUnit` types (`dtype/datetime.rs`) and the ferray-ufunc datetime kernels
+(`ops/datetime.rs`) already existed; this batch ships the numpy *top-level*
+datetime functions ferray lacked, as the ferray-python binding
+`src/datetime.rs` marshalling datetime64 arrays via numpy's int64-view bridge
+(`conv.rs` `as_int64_view` / `int64_to_datetime64` / `datetime64_unit`).
+
+| REQ | Status | Evidence |
+|---|---|---|
+| REQ-D1 (datetime64 ufunc arithmetic via ferray) | SHIPPED | `fr.add`/`fr.subtract` dispatch datetime64/timedelta64 operands to `crate::datetime::add_time`/`subtract_time` (`ferray-python/src/datetime.rs`), which run `ferray_ufunc::sub_datetime_promoted` / `add_datetime_timedelta_promoted` / `add_timedelta_promoted` on the int64-view-marshalled ticks. NumPy contract: datetime64 − datetime64 → timedelta64, datetime64 ± timedelta64 → datetime64 (`numpy/_core/code_generators/generate_umath.py` datetime loops). Non-test consumer: `ufunc::add` / `ufunc::subtract` in `ferray-python/src/ufunc.rs` (the bound `numpy.add`/`numpy.subtract`). Pinned by `test_add_datetime_timedelta` / `test_subtract_two_datetimes_gives_timedelta` / `test_timedelta_plus_timedelta` in `tests/test_expansion_datetime.py`. |
+| REQ-D2 (isnat / datetime_as_string) | SHIPPED | `datetime::isnat` runs `ferray_ufunc::isnat_datetime`/`isnat_timedelta`; `datetime::datetime_as_string` validates the unit through `TimeUnit::from_descr_suffix` and renders ISO-8601 (numpy/_core/src/multiarray/datetime_strings.c). Non-test consumer: registered on the `_ferray` module in `lib.rs` and re-exported in `python/ferray/__init__.py`. Pinned by `test_isnat_datetime` / `test_datetime_as_string_days` / `test_datetime_as_string_ms`. |
+| REQ-D3 (busday calendar in Rust) | SHIPPED | `datetime::is_busday`/`busday_count`/`busday_offset` implement the weekday-counting algorithm in Rust: `day_of_week(date) = (date − 4).rem_euclid(7)` (numpy/_core/src/multiarray/datetime_busday.c:32 "1970-01-05 is Monday"), sign-aware `[begin,end)` counting (`:380`), roll-then-step offset (`:272` `apply_business_day_offset`), 7-char Mon..Sun weekmask + sorted holiday filter (`datetime_busdaycal.c`). Non-test consumer: registered on `_ferray` in `lib.rs`, re-exported in `__init__.py`. Pinned by `test_busday_count_one_week` / `test_busday_offset_roll` / `test_is_busday_array` + the Rust unit tests `epoch_is_thursday` / `busday_count_one_week` / `month_of_known_dates`. |
+| REQ-D4 (datetime_data) | SHIPPED | `datetime_data(dtype)` is pure-Python metadata on the shared numpy dtype (`python/ferray/__init__.py`), delegating to `numpy.datetime_data` (numpy/_core/src/multiarray/datetime.c) — there is no ferray dtype object to read the unit from at the Python boundary. Pinned by `test_datetime_data_units`. |
+
+### Verification (datetime64 surface)
+- `cd ferray-python && maturin develop` then
+  `PYTHONPATH=python python3 -m pytest tests/test_expansion_datetime.py -q` —
+  43 pins green; full suite 1684 passed (was ≥1641, +43).
+- numpy oracle (R-CHAR-3): every expected value built from a live numpy 2.4.5
+  call — `np.busday_count('2020-01-01','2020-01-08') == 5`,
+  `np.is_busday('2020-01-04') == False`, `np.busday_offset('2020-01-01',2) ==
+  2020-01-03`, `np.datetime_data(dtype('datetime64[D]')) == ('D', 1)`.
+- `cargo clippy -p ferray-python --all-targets -- -D warnings` clean;
+  `cargo test -p ferray-python --lib` (3 datetime unit tests) green.
+
+### Too-deep / deferred (open under #831)
+- Calendar units `Y`/`M` and `W`, sub-ns units (`ps`/`fs`/`as`): rejected with a
+  `TypeError` rather than mis-scaled, since `TimeUnit` does not model them.
+- `busdaycalendar` (stateful object) and `modifiedfollowing`/`modifiedpreceding`
+  rolls: the roll modes are implemented but `busdaycalendar` is not exposed as a
+  reusable object yet.
+- `datetime_as_string` non-`naive` timezone and explicit-`unit` recasting beyond
+  the common ISO path delegate to numpy's formatter on the
+  ferray-reconstructed array.
+

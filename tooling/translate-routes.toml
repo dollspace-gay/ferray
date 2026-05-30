@@ -104,6 +104,22 @@ upstream = [
 design = ".design/ferray-core.md"
 parity_ops = ["normalize_axis_index", "normalize_axis_tuple", "AxisError", "LinAlgError"]
 
+# ferray-python datetime64 / timedelta64 binding shim (refs #831): marshals
+# datetime64 / timedelta64 arrays via numpy's int64-view bridge through the
+# ferray-ufunc datetime kernels (sub_datetime_promoted /
+# add_datetime_timedelta_promoted / add_timedelta_promoted / isnat_*), plus the
+# busday calendar (is_busday / busday_count / busday_offset) implemented in
+# Rust. datetime_data is pure-Python metadata on the shared numpy dtype.
+[[route]]
+crate_pattern = "ferray-python/src/datetime.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/src/multiarray/datetime_busday.c",
+  "/home/doll/numpy-ref/numpy/_core/src/multiarray/datetime_strings.c",
+  "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["isnat", "datetime_as_string", "is_busday", "busday_count", "busday_offset", "add", "subtract"]
+
 # ferray-python top-level numpy alias + introspection shim. Hosts the
 # array-introspection (ndim/shape/size/isscalar/isfortran) and
 # dtype-introspection (astype/can_cast/promote_types/result_type/

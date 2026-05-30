@@ -1181,6 +1181,72 @@ pub fn scalarize<'py>(result: Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> 
     Ok(result)
 }
 
+// ---------------------------------------------------------------------------
+// datetime64 / timedelta64 <-> int64 marshalling (refs #831)
+//
+// numpy's datetime64 / timedelta64 arrays are i64-backed: the values are a
+// count of ticks of the dtype's TimeUnit (`numpy.datetime_data(dtype)` ->
+// `(unit_str, count)`). pyo3-numpy has no native datetime64 element type, so
+// `PyReadonlyArrayDyn<T>` cannot extract a datetime64 array directly. The
+// bridge is numpy's own zero-copy `.view('int64')`, which reinterprets the
+// same buffer as a C-contiguous int64 ndarray that `PyReadonlyArrayDyn<i64>`
+// CAN extract; the inverse `int64_arr.view('datetime64[<unit>]')` reconstructs
+// the typed array. This preserves numpy's dtype + unit + shape across the
+// boundary (R-CODE-4) without any lossy cast.
+// ---------------------------------------------------------------------------
+
+/// Read the `(unit_str, count)` metadata of a numpy datetime64 / timedelta64
+/// dtype via `numpy.datetime_data(dtype)`
+/// (numpy/_core/src/multiarray/datetime.c `datetime_data`). For
+/// `numpy.dtype('datetime64[D]')` this returns `("D", 1)`. The caller uses
+/// `unit_str` to reconstruct the output array's dtype string
+/// (`"datetime64[D]"`). `arr` must be a numpy datetime64 / timedelta64
+/// ndarray.
+pub fn datetime64_unit(py: Python<'_>, arr: &Bound<'_, PyAny>) -> PyResult<(String, i64)> {
+    let np = py.import("numpy")?;
+    let dt = arr.getattr("dtype")?;
+    let data = np.getattr("datetime_data")?.call1((dt,))?;
+    let tup: (String, i64) = data.extract()?;
+    Ok(tup)
+}
+
+/// Reinterpret a numpy datetime64 / timedelta64 ndarray as a C-contiguous
+/// int64 ndarray via the zero-copy `.view('int64')`, then return a
+/// `PyReadonlyArrayDyn<i64>`-extractable object. A non-contiguous input is
+/// first made contiguous so the view is well-defined.
+pub fn as_int64_view<'py>(py: Python<'py>, arr: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let contig = np.call_method1("ascontiguousarray", (arr,))?;
+    contig.call_method1("view", ("int64",))
+}
+
+/// Reconstruct a numpy datetime64 ndarray (unit `unit_str`) from a 1-D int64
+/// `ArrayD` of tick counts, by building the int64 ndarray and reinterpreting
+/// it via `.view('datetime64[<unit>]')` (the inverse of [`as_int64_view`]).
+pub fn int64_to_datetime64<'py>(
+    py: Python<'py>,
+    ticks: ferray_core::array::aliases::ArrayD<i64>,
+    unit_str: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_numpy_interop::IntoNumPy;
+    let i64_arr = ticks.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let descr = format!("datetime64[{unit_str}]");
+    i64_arr.call_method1("view", (descr,))
+}
+
+/// Reconstruct a numpy timedelta64 ndarray (unit `unit_str`) from a 1-D int64
+/// `ArrayD` of tick counts via `.view('timedelta64[<unit>]')`.
+pub fn int64_to_timedelta64<'py>(
+    py: Python<'py>,
+    ticks: ferray_core::array::aliases::ArrayD<i64>,
+    unit_str: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_numpy_interop::IntoNumPy;
+    let i64_arr = ticks.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    let descr = format!("timedelta64[{unit_str}]");
+    i64_arr.call_method1("view", (descr,))
+}
+
 /// Sort `roots` then build a `complex128` ndarray, down-converting it to a
 /// REAL (`float64`) array when every imaginary part is exactly zero —
 /// mirroring numpy's `polyroots` sort + real-cast.

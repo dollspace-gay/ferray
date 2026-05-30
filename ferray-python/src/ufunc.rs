@@ -608,8 +608,49 @@ macro_rules! bind_binary_numeric_broadcast {
     };
 }
 
-bind_binary_numeric_broadcast!(add, ferray_ufunc::add_broadcast);
-bind_binary_numeric_broadcast!(subtract, ferray_ufunc::subtract_broadcast);
+/// `numpy.add(x1, x2)` — element-wise sum. Datetime64 / timedelta64 operands
+/// route through the ferray-ufunc datetime kernels
+/// (`crate::datetime::add_time`): `datetime + timedelta -> datetime`,
+/// `timedelta + timedelta -> timedelta`. Numeric operands take the
+/// NEP-50-promoted broadcast path.
+#[pyfunction]
+#[pyo3(signature = (x1, x2, out = None))]
+pub fn add<'py>(
+    py: Python<'py>,
+    x1: &Bound<'py, PyAny>,
+    x2: &Bound<'py, PyAny>,
+    out: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if crate::datetime::is_time_op(py, x1, x2)? {
+        let result = crate::datetime::add_time(py, x1, x2)?;
+        return finish_with_out(out, result, false);
+    }
+    let scalar = all_scalar_inputs(py, &[x1, x2])?;
+    let result = binary_numeric_body!(py, x1, x2, ferray_ufunc::add_broadcast);
+    finish_with_out(out, result, scalar)
+}
+
+/// `numpy.subtract(x1, x2)` — element-wise difference. Datetime64 /
+/// timedelta64 operands route through the ferray-ufunc datetime kernels
+/// (`crate::datetime::subtract_time`): `datetime - datetime -> timedelta`,
+/// `datetime - timedelta -> datetime`, `timedelta - timedelta -> timedelta`.
+#[pyfunction]
+#[pyo3(signature = (x1, x2, out = None))]
+pub fn subtract<'py>(
+    py: Python<'py>,
+    x1: &Bound<'py, PyAny>,
+    x2: &Bound<'py, PyAny>,
+    out: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if crate::datetime::is_time_op(py, x1, x2)? {
+        let result = crate::datetime::subtract_time(py, x1, x2)?;
+        return finish_with_out(out, result, false);
+    }
+    let scalar = all_scalar_inputs(py, &[x1, x2])?;
+    let result = binary_numeric_body!(py, x1, x2, ferray_ufunc::subtract_broadcast);
+    finish_with_out(out, result, scalar)
+}
+
 bind_binary_numeric_broadcast!(multiply, ferray_ufunc::multiply_broadcast);
 bind_binary_numeric_broadcast!(divide, ferray_ufunc::divide_broadcast);
 
