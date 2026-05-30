@@ -90,28 +90,42 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
     /// Set flat-indexed positions to corresponding values, mirroring
     /// `numpy.ma.MaskedArray.put` (`numpy/ma/core.py:4837`).
     ///
-    /// `self._data.flat[indices[n]] = values[n]` for each `n`; if `values` is
-    /// shorter than `indices` it repeats (numpy resizes `values` to the index
-    /// shape). After the data write the mask is updated:
+    /// `self._data.flat[indices[n]] = values[n]` for each `n`. This is a
+    /// faithful translation of numpy's two-phase delegation
+    /// (`numpy/ma/core.py:4898-4921`): the **data** is written via
+    /// `self._data.put(indices, values, mode)` (numpy `ndarray.put`, which
+    /// *cycles* a short `values` and is a silent no-op for an empty `values`),
+    /// then the **mask** is updated by a *separate* `put` whose value array is
+    /// either a scalar `False` (unmasked `values`) or the `values` mask:
     ///
     /// - if `values_mask` is `None` (an unmasked `values`), every written
-    ///   position is **unmasked** (`numpy/ma/core.py:4916`);
+    ///   position is **unmasked** (`numpy/ma/core.py:4916`,
+    ///   `m.put(indices, False, mode)`);
     /// - if `values_mask` is `Some`, the written positions take the
-    ///   corresponding `values` mask bit (`:4918`).
+    ///   corresponding `values` mask bit, cycled like numpy's
+    ///   `m.put(indices, values._mask, mode)` (`:4918`).
     ///
-    /// When the array is hard-masked, every `(index, value)` pair whose target
-    /// position is currently masked is **dropped before the data write**
-    /// (`numpy/ma/core.py:4899`): such positions are neither overwritten nor
-    /// unmasked. Mirrors the live numpy oracle: after `a.harden_mask()`,
-    /// `a.put([1,3],[10,30])` leaves a masked `a[1]` unchanged.
+    /// Because the data and mask are two independent `ndarray.put` calls, an
+    /// **empty `values` with non-empty `indices` writes no data** (the data
+    /// `put` has nothing to iterate) but **still updates the mask** at every
+    /// resolved position (the mask `put` uses the scalar `False` / values-mask,
+    /// not the empty `values`). This matches the live oracle
+    /// `a.put([0], [])` → data unchanged, `a[0]` unmasked.
+    ///
+    /// When the array is hard-masked **and carries a real mask**, numpy takes
+    /// the hard-mask branch (`numpy/ma/core.py:4899-4905`): `values` is
+    /// `resize`d to `indices.shape` — numpy's `ndarray.resize` **zero-pads**
+    /// when growing (it does *not* cycle) — then every pair whose target is
+    /// masked in the *original* mask is dropped (`indices = indices[~mask]`).
+    /// The surviving `(index, zero-padded value)` pairs are then written 1:1.
+    /// So a masked target is neither overwritten nor unmasked, and a short
+    /// `values` zero-pads the tail rather than cycling.
     ///
     /// `mode` controls out-of-bounds index behaviour; see [`PutMode`].
     ///
     /// # Errors
     /// Returns `FerrayError::IndexOutOfBounds` for an out-of-range index under
-    /// [`PutMode::Raise`], `FerrayError::InvalidValue` when `values` is empty
-    /// while `indices` is not (numpy raises on an empty `values` resize against
-    /// a non-empty index shape), or any error from the underlying mask
+    /// [`PutMode::Raise`], or any error from the underlying mask
     /// materialisation. An empty `indices` is a no-op.
     pub fn put(
         &mut self,
@@ -124,11 +138,6 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
             // Nothing to do; numpy's empty put is a no-op.
             return Ok(());
         }
-        if values.is_empty() {
-            return Err(FerrayError::invalid_value(
-                "put: cannot place values from an empty `values` array into non-empty indices",
-            ));
-        }
         let len = self.size();
 
         // Resolve every index up-front so a `Raise` failure aborts before any
@@ -140,39 +149,74 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
 
         let hard = self.is_hard_mask() && self.has_real_mask();
 
-        // Snapshot the current mask once (for the hard-mask drop test) so we
-        // don't materialise it inside the loop.
-        let current_mask: Option<Vec<bool>> = if hard {
-            Some(self.mask().iter().copied().collect())
-        } else {
-            None
+        // Cycled values-mask bit at index `n` (numpy's `m.put(indices,
+        // values._mask)` cycles a short mask). An unmasked or empty
+        // values-mask yields `False`.
+        let vmask_bit = |n: usize| -> bool {
+            match values_mask {
+                Some(vm) if !vm.is_empty() => vm[n % vm.len()],
+                _ => false,
+            }
         };
 
-        // Iterate (index_position, flat_index). `values` repeats cyclically
-        // when shorter than `indices` (numpy resizes values to the index
-        // shape — a cyclic tile for the common shorter-values case).
-        for (n, &flat) in resolved.iter().enumerate() {
-            // Hard-mask drop: skip pairs whose target is currently masked.
-            if let Some(ref mask) = current_mask {
-                if mask[flat] {
+        if hard {
+            // ---- Hard-mask branch (numpy/ma/core.py:4899-4905) ----
+            // `values.resize(indices.shape)` zero-pads a short `values`; the
+            // surviving pairs are those whose target is unmasked in the
+            // *original* mask. Snapshot that mask once before any mutation.
+            let original_mask: Vec<bool> = self.mask().iter().copied().collect();
+            for (n, &flat) in resolved.iter().enumerate() {
+                // Drop pairs whose target is masked in the original mask.
+                if original_mask[flat] {
                     continue;
                 }
+                // Zero-pad: positions past the end of `values` write the
+                // type's zero (numpy `ndarray.resize` pads with zeros).
+                let value = if n < values.len() {
+                    values[n]
+                } else {
+                    T::zero()
+                };
+                if let Some(slice) = self.data_mut() {
+                    slice[flat] = value;
+                } else {
+                    return Err(FerrayError::invalid_value(
+                        "put: underlying data is not contiguous; cannot place values",
+                    ));
+                }
+                // Mask update for this surviving position. The hard mask cannot
+                // be cleared, so an unmasked `values` (False) leaves a masked
+                // target alone — but masked targets are already dropped above,
+                // so only currently-unmasked positions reach here.
+                self.set_mask_flat(flat, vmask_bit(n))?;
             }
-            let value = values[n % values.len()];
-            // Data write.
-            if let Some(slice) = self.data_mut() {
-                slice[flat] = value;
-            } else {
-                return Err(FerrayError::invalid_value(
-                    "put: underlying data is not contiguous; cannot place values",
-                ));
+            return Ok(());
+        }
+
+        // ---- Non-hard branch (numpy/ma/core.py:4907-4920) ----
+        // Phase 1: `self._data.put(indices, values, mode)`. numpy's
+        // `ndarray.put` cycles a short `values` and is a silent no-op for an
+        // empty `values`, so skip the data write entirely when `values` is
+        // empty (the mask phase still runs).
+        if !values.is_empty() {
+            for (n, &flat) in resolved.iter().enumerate() {
+                let value = values[n % values.len()];
+                if let Some(slice) = self.data_mut() {
+                    slice[flat] = value;
+                } else {
+                    return Err(FerrayError::invalid_value(
+                        "put: underlying data is not contiguous; cannot place values",
+                    ));
+                }
             }
-            // Mask update for this position.
-            let new_mask_bit = match values_mask {
-                None => false,
-                Some(vm) => vm[n % vm.len()],
-            };
-            self.set_mask_flat(flat, new_mask_bit)?;
+        }
+
+        // Phase 2: mask update (`numpy/ma/core.py:4910-4920`). A separate
+        // `ndarray.put` whose value array is the scalar `False` (unmasked
+        // `values`) or the cycled `values` mask — independent of whether the
+        // data `values` was empty.
+        for (n, &flat) in resolved.iter().enumerate() {
+            self.set_mask_flat(flat, vmask_bit(n))?;
         }
         Ok(())
     }
@@ -183,10 +227,11 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
     /// The data is written unconditionally at every `mask`-true position
     /// (numpy's final `np.copyto(a._data, valdata, where=mask)`, `:7590`) —
     /// even hard-masked positions get their **data** overwritten (only the
-    /// mask is protected). `values` is broadcast against `self` exactly as
-    /// numpy's `copyto` does: it must be either length 1 (a scalar fill) or the
-    /// same length as `self` (numpy raises `ValueError` on a mismatched
-    /// non-scalar `values`, since `copyto` broadcasts rather than cycles).
+    /// mask is protected). Both `mask` (the `where=` argument) and `values`
+    /// are **broadcast** against `self` exactly as numpy's `copyto` does: a
+    /// length-1 `mask`/`values` broadcasts across every position, otherwise it
+    /// must match `self`'s length (numpy raises `ValueError` on any other
+    /// length, since `copyto` broadcasts rather than cycles).
     ///
     /// Mask update branches on hard-mask (`numpy/ma/core.py:7581`):
     ///
@@ -199,9 +244,10 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
     ///   `if valmask is not nomask`).
     ///
     /// # Errors
-    /// Returns `FerrayError::ShapeMismatch` if `mask.len()` differs from
-    /// `self.size()`, or `FerrayError::InvalidValue` if `values` is neither
-    /// length 1 nor length `self.size()` (numpy's broadcast failure).
+    /// Returns `FerrayError::ShapeMismatch` if `mask.len()` is neither 1 nor
+    /// `self.size()` (numpy's `where=` broadcast failure), or
+    /// `FerrayError::InvalidValue` if `values` is neither length 1 nor length
+    /// `self.size()` (numpy's `values` broadcast failure).
     pub fn putmask(
         &mut self,
         mask: &[bool],
@@ -209,9 +255,12 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
         values_mask: Option<&[bool]>,
     ) -> FerrayResult<()> {
         let len = self.size();
-        if mask.len() != len {
+        // numpy's copyto broadcasts the `where=` mask against `self`: a
+        // length-1 mask broadcasts across every position; otherwise it must
+        // match `self` exactly (any other length is a broadcast error).
+        if mask.len() != 1 && mask.len() != len {
             return Err(FerrayError::shape_mismatch(format!(
-                "putmask: boolean mask length {} does not match array size {len}",
+                "putmask: boolean mask length {} does not broadcast to array size {len}",
                 mask.len()
             )));
         }
@@ -228,6 +277,9 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
                 values.len()
             )));
         }
+        // Broadcast the `where=` mask: a length-1 mask applies to all `len`
+        // positions; otherwise it is read 1:1.
+        let mask_bit = |i: usize| -> bool { if mask.len() == 1 { mask[0] } else { mask[i] } };
         let broadcast = |i: usize| -> T {
             if values.len() == 1 {
                 values[0]
@@ -256,8 +308,8 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
         match (hard, values_mask) {
             // soft path: copy the values mask (or all-False) where `mask`.
             (false, _) => {
-                for (i, &m) in mask.iter().enumerate() {
-                    if m {
+                for i in 0..len {
+                    if mask_bit(i) {
                         self.set_mask_flat(i, vmask_bit(i))?;
                     }
                 }
@@ -266,8 +318,8 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
             // never clearing (set_mask_flat already refuses to clear on a hard
             // mask, so a `true` bit is added and a `false` bit is a no-op).
             (true, Some(_)) => {
-                for (i, &m) in mask.iter().enumerate() {
-                    if m && vmask_bit(i) {
+                for i in 0..len {
+                    if mask_bit(i) && vmask_bit(i) {
                         self.set_mask_flat(i, true)?;
                     }
                 }
@@ -280,9 +332,9 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
         // Unconditional copyto where `mask`: even hard-masked positions get
         // their data overwritten (only the mask is protected on a hard mask).
         if let Some(slice) = self.data_mut() {
-            for (i, &m) in mask.iter().enumerate() {
-                if m {
-                    slice[i] = broadcast(i);
+            for (i, cell) in slice.iter_mut().enumerate() {
+                if mask_bit(i) {
+                    *cell = broadcast(i);
                 }
             }
         } else {
@@ -433,6 +485,77 @@ mod tests {
         assert_eq!(data_of(&a), vec![1.0, 2.0, 3.0]);
     }
 
+    // ---- put: empty values leaves DATA unchanged but unmasks targets (D3) ----
+    // numpy delegates the data write to `ndarray.put(indices, values)`, a
+    // silent no-op for an empty `values`; the mask is updated by a SEPARATE
+    // `m.put(indices, False)` so the targeted positions are unmasked.
+    // Oracle: a=np.ma.array([1.,2,3], mask=[1,0,0]); a.put([0], [])
+    //   -> data [1,2,3] (unchanged), mask [F,F,F] (a[0] unmasked).
+    #[test]
+    fn put_empty_values_data_noop_unmasks_target() {
+        let mut a = ma(vec![1.0, 2.0, 3.0], vec![true, false, false]);
+        a.put(&[0], &[], None, PutMode::Raise).unwrap();
+        assert_eq!(data_of(&a), vec![1.0, 2.0, 3.0]);
+        assert_eq!(mask_of(&a), vec![false, false, false]);
+    }
+
+    // ---- put: hard-mask short values zero-pad, not cycle (D1) ----
+    // numpy hard-mask branch: values.resize(indices.shape) ZERO-PADS, then
+    // filters indices/values by the original ~mask.
+    // Oracle: a=np.ma.array([1.,2,3,4,5], mask=[0,1,0,0,0]); a.harden_mask();
+    //   a.put([0,1,2],[10,20]):
+    //     resize([10,20]->(3,)) = [10,20,0]; ~mask over idx[0,1,2]=[F,T,F]
+    //     -> keep idx[0,2], values[10,0] -> data [10,2,0,4,5], mask unchanged.
+    #[test]
+    fn put_hard_mask_short_values_zeropad() {
+        let mut a = ma(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0],
+            vec![false, true, false, false, false],
+        );
+        a.harden_mask().unwrap();
+        a.put(&[0, 1, 2], &[10.0, 20.0], None, PutMode::Raise)
+            .unwrap();
+        assert_eq!(data_of(&a), vec![10.0, 2.0, 0.0, 4.0, 5.0]);
+        assert_eq!(mask_of(&a), vec![false, true, false, false, false]);
+    }
+
+    // ---- put: hard-mask, no masked target among indices, still zero-pads ----
+    // Oracle: a=np.ma.array([1.,2,3,4,5], mask=[0,1,0,0,0]); a.harden_mask();
+    //   a.put([0,2,4],[10,20]) -> resize->[10,20,0]; all ~mask kept
+    //   -> data [10,2,20,4,0].
+    #[test]
+    fn put_hard_mask_zeropad_all_kept() {
+        let mut a = ma(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0],
+            vec![false, true, false, false, false],
+        );
+        a.harden_mask().unwrap();
+        a.put(&[0, 2, 4], &[10.0, 20.0], None, PutMode::Raise)
+            .unwrap();
+        assert_eq!(data_of(&a), vec![10.0, 2.0, 20.0, 4.0, 0.0]);
+    }
+
+    // ---- put: hard-mask, values longer than indices (resize truncates) ----
+    // Oracle: a=np.ma.array([1.,2,3,4,5], mask=[0,1,0,0,0]); a.harden_mask();
+    //   a.put([0,1,2],[10,20,30,40,50]) -> resize to (3,)=[10,20,30];
+    //   keep idx[0,2] vals[10,30] -> data [10,2,30,4,5].
+    #[test]
+    fn put_hard_mask_long_values_truncate() {
+        let mut a = ma(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0],
+            vec![false, true, false, false, false],
+        );
+        a.harden_mask().unwrap();
+        a.put(
+            &[0, 1, 2],
+            &[10.0, 20.0, 30.0, 40.0, 50.0],
+            None,
+            PutMode::Raise,
+        )
+        .unwrap();
+        assert_eq!(data_of(&a), vec![10.0, 2.0, 30.0, 4.0, 5.0]);
+    }
+
     // ---- putmask: basic, clears mask where written ----
     // Oracle: x=ma([1,2,3,4], mask=[T,F,F,F]);
     //   np.ma.putmask(x,[T,F,T,F],[10,20,30,40])
@@ -440,12 +563,8 @@ mod tests {
     #[test]
     fn putmask_basic_clears_mask() {
         let mut x = ma(vec![1.0, 2.0, 3.0, 4.0], vec![true, false, false, false]);
-        x.putmask(
-            &[true, false, true, false],
-            &[10.0, 20.0, 30.0, 40.0],
-            None,
-        )
-        .unwrap();
+        x.putmask(&[true, false, true, false], &[10.0, 20.0, 30.0, 40.0], None)
+            .unwrap();
         assert_eq!(data_of(&x), vec![10.0, 2.0, 30.0, 4.0]);
         assert_eq!(mask_of(&x), vec![false, false, false, false]);
     }
@@ -480,6 +599,39 @@ mod tests {
         assert!(x.putmask(&[true, false], &[9.0], None).is_err());
     }
 
+    // ---- putmask: length-1 mask broadcasts across all positions (D2) ----
+    // numpy's `np.copyto(_data, valdata, where=mask)` broadcasts the `where=`
+    // mask, so a length-1 True mask writes every position.
+    // Oracle: a=np.ma.array([1.,2,3,4]); np.ma.putmask(a,[True],[9])
+    //   -> [9,9,9,9].
+    #[test]
+    fn putmask_length1_mask_broadcasts() {
+        let mut x = ma(vec![1.0, 2.0, 3.0, 4.0], vec![false; 4]);
+        x.putmask(&[true], &[9.0], None).unwrap();
+        assert_eq!(data_of(&x), vec![9.0, 9.0, 9.0, 9.0]);
+    }
+
+    // ---- putmask: length-1 False mask writes nothing ----
+    // Oracle: a=np.ma.array([1.,2,3,4]); np.ma.putmask(a,[False],[9])
+    //   -> [1,2,3,4].
+    #[test]
+    fn putmask_length1_false_mask_noop() {
+        let mut x = ma(vec![1.0, 2.0, 3.0, 4.0], vec![false; 4]);
+        x.putmask(&[false], &[9.0], None).unwrap();
+        assert_eq!(data_of(&x), vec![1.0, 2.0, 3.0, 4.0]);
+    }
+
+    // ---- putmask: length-1 masked values broadcast their mask too (D2) ----
+    // Oracle: a=np.ma.array([1.,2,3,4]); v=ma.array([9],mask=[1]);
+    //   np.ma.putmask(a,[True],v) -> data [9,9,9,9], mask [T,T,T,T].
+    #[test]
+    fn putmask_length1_mask_broadcasts_values_mask() {
+        let mut x = ma(vec![1.0, 2.0, 3.0, 4.0], vec![false; 4]);
+        x.putmask(&[true], &[9.0], Some(&[true])).unwrap();
+        assert_eq!(data_of(&x), vec![9.0, 9.0, 9.0, 9.0]);
+        assert_eq!(mask_of(&x), vec![true, true, true, true]);
+    }
+
     // ---- putmask: hard mask keeps existing mask; data still overwritten ----
     // Oracle: x=ma([1,2,3,4], mask=[T,F,F,F]); x.harden_mask();
     //   np.ma.putmask(x,[T,T,F,F],[10,20,30,40])
@@ -488,12 +640,8 @@ mod tests {
     fn putmask_hard_keeps_mask_overwrites_data() {
         let mut x = ma(vec![1.0, 2.0, 3.0, 4.0], vec![true, false, false, false]);
         x.harden_mask().unwrap();
-        x.putmask(
-            &[true, true, false, false],
-            &[10.0, 20.0, 30.0, 40.0],
-            None,
-        )
-        .unwrap();
+        x.putmask(&[true, true, false, false], &[10.0, 20.0, 30.0, 40.0], None)
+            .unwrap();
         assert_eq!(data_of(&x), vec![10.0, 20.0, 3.0, 4.0]);
         assert_eq!(mask_of(&x), vec![true, false, false, false]);
     }
