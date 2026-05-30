@@ -108,16 +108,32 @@
 //!   axis → plain ndarray). **`ids`** (`(id(data), id(mask))`). **`bool_`** —
 //!   re-export of the numpy bool scalar type (shared vocabulary).
 //!
+//! The structured-mask + integer-bitwise batch (refs #835 #818) binds the
+//! residual non-stateful numpy.ma surface as shared-vocabulary delegations to
+//! numpy.ma's canonical algorithm (the f64-only `PyMaskedArray` cannot hold
+//! structured / integer dtypes without a lossy f64 cast, R-CODE-4):
+//!
+//! - **Structured-mask dtype vocabulary**: `make_mask_descr` (all-bool mask
+//!   dtype mirroring a possibly-structured dtype), `flatten_mask` (flatten a
+//!   nested/structured mask to flat bool), `flatten_structured_array` (flatten
+//!   a structured array to 2-D/1-D), `fromflex` (rebuild a MaskedArray from a
+//!   flexible `_data`/`_mask` structured array — inverse of `toflex`), and the
+//!   `mvoid` scalar type re-export (single masked structured/record element).
+//! - **Buffer constructor**: `frombuffer` (MaskedArray over a buffer-protocol
+//!   object, no mask).
+//! - **Integer-dtype masked bitwise shifts**: `left_shift` / `right_shift`,
+//!   delegated dtype-preservingly so the integer result + mask survive the
+//!   boundary (no int→f64 cast).
+//!
 //! Functions still needing masked-algorithm support ferray-ma genuinely lacks
 //! or whose ferray-ma form diverges from numpy.ma's mask semantics
 //! (`vander`/`isin`/`in1d` mask handling, 2-D `dot` matmul, multi-axis
 //! `argsort`, `where`, `choose`, `diff`, `ediff1d`,
-//! `nonzero`, `clump_*`, `notmasked_*`, `flatnotmasked_*`,
-//! `harden_mask`/`soften_mask` state, `put`/`putmask` in-place, `left_shift`/
-//! `right_shift` (need integer-dtype masked data),
-//! `mvoid`, structured-mask `flatten_mask`/`make_mask_descr`/
-//! `make_mask_descr`/`flatten_structured_array`/`fromflex`/`frombuffer`)
-//! are tracked as a ferray-ma library / integer-masked follow-up under #835.
+//! `nonzero`, `clump_*`, `notmasked_*`, `flatnotmasked_*`) and the four
+//! genuinely-stateful ops needing an in-place / hardness-state extension on a
+//! ferray-ma `PyMaskedArray` (`harden_mask`/`soften_mask` state,
+//! `put`/`putmask` in-place) are tracked as a ferray-ma library follow-up
+//! under #835.
 
 use ferray_core::Array;
 use ferray_core::array::aliases::{Array1, ArrayD};
@@ -3656,4 +3672,166 @@ pub fn ids<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny
     let data_id = builtins.call_method1("id", (data_py,))?;
     let mask_id = builtins.call_method1("id", (mask_py,))?;
     Ok(pyo3::types::PyTuple::new(py, [data_id, mask_id])?.into_any())
+}
+
+// ===========================================================================
+// numpy.ma structured-mask + integer-bitwise batch 4 (refs #835 #818): the
+// residual non-stateful numpy.ma surface — structured-dtype mask vocabulary
+// (`make_mask_descr`, `flatten_mask`, `flatten_structured_array`, `fromflex`,
+// `mvoid`), the buffer-protocol constructor (`frombuffer`), and the
+// integer-dtype masked bitwise shifts (`left_shift`, `right_shift`).
+//
+// These all touch numpy's SHARED boundary vocabulary (structured dtypes,
+// record/void scalars, the buffer protocol, dtype-preserving integer results)
+// that the f64-only `PyMaskedArray` wrapper cannot represent without a lossy
+// f64 cast (R-CODE-4). They therefore delegate to numpy.ma's canonical
+// algorithm and return numpy's dtype-preserving object verbatim — exactly the
+// established shared-vocabulary delegation pattern of `masked_all` / `indices`
+// (batch 3) and the `mvoid` / `bool_` scalar re-exports.
+//
+// Every contract was verified live against numpy 2.4.5; the pytest oracle
+// (tests/test_expansion_ma_batch4.py) constructs every expected value from
+// `numpy.ma.*` directly (R-CHAR-3).
+// ===========================================================================
+
+/// `numpy.ma.make_mask_descr(ndtype)` — the all-bool mask dtype mirroring a
+/// (possibly structured) dtype (`numpy/ma/core.py` `def make_mask_descr`).
+///
+/// Pure structured-dtype vocabulary: a plain dtype maps to `bool`, a structured
+/// dtype maps to the same field layout with every field's type replaced by
+/// `bool` (recursing into nested sub-dtypes). The result is numpy's own
+/// `numpy.dtype` object, preserved verbatim across the boundary.
+#[pyfunction]
+pub fn make_mask_descr<'py>(
+    py: Python<'py>,
+    ndtype: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np_ma = py.import("numpy.ma")?;
+    np_ma.call_method1("make_mask_descr", (ndtype,))
+}
+
+/// `numpy.ma.flatten_mask(mask)` — flatten a (possibly nested / structured)
+/// mask to a flat bool `numpy.ndarray` (`numpy/ma/core.py` `def flatten_mask`).
+///
+/// Structured-mask vocabulary: a structured-dtype mask is recursively flattened
+/// into a 1-D `bool` array, so a `[('a', bool), ('b', [('ba', bool), ('bb',
+/// bool)])]` mask of length N becomes a flat `bool` array of length `3*N`.
+#[pyfunction]
+pub fn flatten_mask<'py>(py: Python<'py>, mask: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let np_ma = py.import("numpy.ma")?;
+    np_ma.call_method1("flatten_mask", (mask,))
+}
+
+/// `numpy.ma.flatten_structured_array(a)` — flatten a structured array to a
+/// (2-D for multi-field rows, else 1-D) array
+/// (`numpy/ma/core.py` `def flatten_structured_array`).
+///
+/// Structured-dtype vocabulary: each structured record is flattened into a row
+/// of its (recursively-expanded) scalar fields, yielding a plain numeric array
+/// with numpy's promoted dtype preserved verbatim.
+#[pyfunction]
+pub fn flatten_structured_array<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np_ma = py.import("numpy.ma")?;
+    np_ma.call_method1("flatten_structured_array", (a,))
+}
+
+/// `numpy.ma.fromflex(fxarray)` — rebuild a `MaskedArray` from a flexible
+/// structured array carrying `_data` / `_mask` fields (the inverse of
+/// `MaskedArray.toflex` / `torecords`) (`numpy/ma/core.py` `def fromflex`).
+///
+/// Structured-record vocabulary: `fxarray` is a structured array whose `_data`
+/// field carries the values and whose `_mask` field carries the mask; numpy
+/// reassembles them into a dtype-preserving `numpy.ma.MaskedArray`, returned
+/// verbatim. fr.ma does not expose `toflex`, so this is a standalone
+/// inverse-constructor (no fr.ma round-trip to wire).
+#[pyfunction]
+pub fn fromflex<'py>(py: Python<'py>, fxarray: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let np_ma = py.import("numpy.ma")?;
+    np_ma.call_method1("fromflex", (fxarray,))
+}
+
+/// `numpy.ma.frombuffer(buffer, dtype=float, count=-1, offset=0)` — a
+/// `MaskedArray` (no mask) over a buffer-protocol object
+/// (`numpy/ma/core.py` `frombuffer`).
+///
+/// Buffer-protocol shared vocabulary: numpy interprets `buffer`'s bytes as a
+/// flat array of `dtype` (honouring `count` / `offset`) and wraps it as a
+/// `numpy.ma.MaskedArray` with `nomask`; the dtype-preserving result is
+/// returned verbatim.
+#[pyfunction]
+#[pyo3(signature = (buffer, dtype = None, count = -1, offset = 0))]
+pub fn frombuffer<'py>(
+    py: Python<'py>,
+    buffer: &Bound<'py, PyAny>,
+    dtype: Option<&Bound<'py, PyAny>>,
+    count: isize,
+    offset: isize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np_ma = py.import("numpy.ma")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    match dtype {
+        Some(dt) => kwargs.set_item("dtype", dt)?,
+        // numpy.ma.frombuffer's default dtype is `float` (Python builtin).
+        None => kwargs.set_item("dtype", py.import("builtins")?.getattr("float")?)?,
+    }
+    kwargs.set_item("count", count)?;
+    kwargs.set_item("offset", offset)?;
+    np_ma.call_method("frombuffer", (buffer,), Some(&kwargs))
+}
+
+/// Build a *dtype-preserving* `numpy.ma.MaskedArray` (Python object) from any
+/// masked input, WITHOUT the f64 coercion `build_npma` performs.
+///
+/// A `ferray.ma.MaskedArray` is f64-only, so it routes through the f64
+/// [`build_npma`]; any other array-like (a plain `numpy.ndarray`, a
+/// `numpy.ma.MaskedArray`, a list, …) is passed to `numpy.ma.asarray`, which
+/// preserves its native dtype and mask. This is required for the integer-dtype
+/// bitwise shifts, which numpy refuses to evaluate on f64 data (R-CODE-4: no
+/// lossy int→f64 round-trip).
+fn build_npma_native<'py>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if obj.extract::<PyMaskedArray>().is_ok() {
+        return build_npma(py, obj);
+    }
+    let np_ma = py.import("numpy.ma")?;
+    np_ma.call_method1("asarray", (obj,))
+}
+
+/// `numpy.ma.left_shift(a, n)` — masked elementwise bitwise left shift on
+/// integer data, preserving the mask (`numpy/ma/core.py` `def left_shift`).
+///
+/// fr.ma's `PyMaskedArray` is f64-only and cannot hold int data losslessly
+/// (R-CODE-4), so this delegates via [`build_npma_native`] to
+/// `numpy.ma.left_shift`, returning numpy's dtype-preserving masked result
+/// (same pattern as `masked_all` / `indices`).
+#[pyfunction]
+pub fn left_shift<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    n: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np_ma = py.import("numpy.ma")?;
+    let npma = build_npma_native(py, a)?;
+    np_ma.call_method1("left_shift", (npma, n))
+}
+
+/// `numpy.ma.right_shift(a, n)` — masked elementwise bitwise right shift on
+/// integer data, preserving the mask (`numpy/ma/core.py` `def right_shift`).
+///
+/// Delegates via [`build_npma_native`] to `numpy.ma.right_shift` (see
+/// [`left_shift`]).
+#[pyfunction]
+pub fn right_shift<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    n: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np_ma = py.import("numpy.ma")?;
+    let npma = build_npma_native(py, a)?;
+    np_ma.call_method1("right_shift", (npma, n))
 }

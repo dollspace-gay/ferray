@@ -537,10 +537,24 @@ fn register_ma_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> Py
     m.add_function(wrap_pyfunction!(ma::mask_cols, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::compress_nd, &m)?)?;
     m.add_function(wrap_pyfunction!(ma::ids, &m)?)?;
+    // numpy.ma structured-mask + integer-bitwise batch 4 (refs #835 #818):
+    // structured-dtype mask vocabulary, buffer constructor, and the
+    // dtype-preserving integer masked bitwise shifts.
+    m.add_function(wrap_pyfunction!(ma::make_mask_descr, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::flatten_mask, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::flatten_structured_array, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::fromflex, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::frombuffer, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::left_shift, &m)?)?;
+    m.add_function(wrap_pyfunction!(ma::right_shift, &m)?)?;
     // `bool_` — the numpy bool scalar type, shared vocabulary (== fr.bool_).
+    // `mvoid` — the numpy.ma scalar type for a single masked structured/record
+    // element, re-exported as shared scalar vocabulary (like np.float64).
     {
         let np = py.import("numpy")?;
         m.add("bool_", np.getattr("bool_")?)?;
+        let np_ma = py.import("numpy.ma")?;
+        m.add("mvoid", np_ma.getattr("mvoid")?)?;
     }
     parent.add_submodule(&m)?;
     py.import("sys")?
