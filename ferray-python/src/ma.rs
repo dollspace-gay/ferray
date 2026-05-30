@@ -2252,27 +2252,27 @@ fn binary_op(
     // (NEP-50, matching numpy.ma materializing both operands as arrays first).
     let operand_dt = crate::conv::binary_result_dtype(py, ld, rd)?;
 
-    // Complex arithmetic (`+`/`-`/`*`/`/`/`//`/`%`/`**`) is a tracked gap:
-    // numpy.ma computes it, but ferray's `WrappingArith`/`TrueDivide`/`power`
-    // are not impl'd for `Complex` (the ferray-ufunc complex-arithmetic
-    // prerequisite, #869). A complex operand-common dtype therefore raises a
-    // tracked `TypeError` here (BEFORE coercion to a complex `DynMa`), so the
-    // gap is auditable rather than surfacing as the internal "dtypes not
-    // unified" error from `compute_binary`. (`//`/`%` over complex are a
-    // PERMANENT raise in numpy too — `floor_divide`/`remainder` have no complex
-    // loop — but are funneled through the same message here; #869 will split
-    // the permanent-vs-pending arms when complex arithmetic lands.)
-    if matches!(operand_dt.as_str(), "complex64" | "complex128") {
-        let name = match op {
-            BinOp::Add => "add",
-            BinOp::Sub => "subtract",
-            BinOp::Mul => "multiply",
-            BinOp::TrueDiv => "true_divide",
-            BinOp::FloorDiv => "floor_divide",
-            BinOp::Mod => "remainder",
-            BinOp::Pow => "power",
+    // Complex arithmetic (#869): `+`/`-`/`*`/`/`/`**` COMPUTE over the complex
+    // `DynMa` variant (ferray-ufunc impls `WrappingArith`/`TrueDivide`/
+    // `power_complex` for `Complex<f32>`/`Complex<f64>`), while `//`/`%` are a
+    // PERMANENT raise — numpy has no `floor_divide`/`remainder` loop for
+    // complex (verified live numpy 2.4.5: `np.ma.array([1+2j]) // 2` →
+    // `TypeError: ufunc 'floor_divide' not supported …`). The compute path
+    // flows on through `coerce_dtype` → `build_dynma` (which already builds the
+    // `Complex32`/`Complex64` variant, #868) → `compute_binary`'s complex arm.
+    if matches!(operand_dt.as_str(), "complex64" | "complex128")
+        && matches!(op, BinOp::FloorDiv | BinOp::Mod)
+    {
+        let ufunc = if op == BinOp::FloorDiv {
+            "floor_divide"
+        } else {
+            "remainder"
         };
-        return complex_arith_pending(name);
+        return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "ufunc '{ufunc}' not supported for the input types, and the inputs \
+             could not be safely coerced to any supported types according to \
+             the casting rule ''safe''"
+        )));
     }
 
     // Cast each operand's data to the common dtype and wrap as a same-dtype
@@ -2448,9 +2448,65 @@ fn compute_binary(
         }};
     }
 
+    // A complex arm (#869): `+`/`-`/`*` are the native complex operators
+    // (`WrappingArith` for `Complex`); `/` is true division keeping the complex
+    // width (`TrueDivide::Output == Complex`), domain-masked when the divisor is
+    // a complex zero (`re == 0 && im == 0`) OR the quotient is non-finite
+    // (matching numpy.ma's `_DomainSafeDivide` over complex — `complex / 0` →
+    // masked, verified live numpy 2.4.5); `**` is `power_complex` (mirrors
+    // `npy_cpow`, exact integer-exponent fast path). `//`/`%` never reach here —
+    // `binary_op` raises the numpy `TypeError` for complex floor-div/remainder
+    // upstream. The result variant equals the operand complex variant.
+    macro_rules! complex_arm {
+        ($l:expr, $r:expr, $T:ty, $variant:ident) => {{
+            use num_complex::Complex;
+            let la: ArrayD<Complex<$T>> = broadcast_to($l.data(), bshape).map_err(ferr_to_pyerr)?;
+            let ra: ArrayD<Complex<$T>> = broadcast_to($r.data(), bshape).map_err(ferr_to_pyerr)?;
+            let mut out = match op {
+                BinOp::Add => add(&la, &ra).map_err(ferr_to_pyerr)?,
+                BinOp::Sub => subtract(&la, &ra).map_err(ferr_to_pyerr)?,
+                BinOp::Mul => multiply(&la, &ra).map_err(ferr_to_pyerr)?,
+                BinOp::TrueDiv => divide(&la, &ra).map_err(ferr_to_pyerr)?,
+                BinOp::Pow => {
+                    ferray_ufunc::ops::arithmetic::power_complex(&la, &ra).map_err(ferr_to_pyerr)?
+                }
+                // `//`/`%` are raised by `binary_op` before reaching compute.
+                BinOp::FloorDiv | BinOp::Mod => {
+                    return Err(pyo3::exceptions::PyTypeError::new_err(
+                        "internal: complex floor_divide/remainder must be \
+                         rejected before compute_binary",
+                    ));
+                }
+            };
+            let zero = Complex::<$T>::new(0.0, 0.0);
+            let mut domain = vec![false; n];
+            if op.is_domained() {
+                for (i, (&div, r)) in ra.iter().zip(out.iter()).enumerate() {
+                    if div == zero || !r.is_finite() {
+                        domain[i] = true;
+                    }
+                }
+            }
+            let full = or_vecs(&union, &domain);
+            revert_masked(
+                out.as_slice_mut().ok_or_else(non_contig)?,
+                la.as_slice().ok_or_else(non_contig)?,
+                &full,
+            );
+            let data = Array::from_vec(IxDyn::new(bshape), out.iter().copied().collect())
+                .map_err(ferr_to_pyerr)?;
+            (
+                DynMa::$variant(RustMa::from_data(data).map_err(ferr_to_pyerr)?),
+                domain,
+            )
+        }};
+    }
+
     let (data, domain): (DynMa, Vec<bool>) = match (left, right) {
         (DynMa::F32(l), DynMa::F32(r)) => float_arm!(l, r, f32, F32),
         (DynMa::F64(l), DynMa::F64(r)) => float_arm!(l, r, f64, F64),
+        (DynMa::Complex32(l), DynMa::Complex32(r)) => complex_arm!(l, r, f32, Complex32),
+        (DynMa::Complex64(l), DynMa::Complex64(r)) => complex_arm!(l, r, f64, Complex64),
         (DynMa::I8(l), DynMa::I8(r)) => int_arm!(l, r, i8, I8),
         (DynMa::I16(l), DynMa::I16(r)) => int_arm!(l, r, i16, I16),
         (DynMa::I32(l), DynMa::I32(r)) => int_arm!(l, r, i32, I32),

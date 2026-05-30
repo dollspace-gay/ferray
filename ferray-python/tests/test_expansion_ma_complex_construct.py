@@ -228,33 +228,45 @@ def test_complex_bitwise_and_raises():
         _ = f & 1
 
 
-# --- arithmetic RAISES a TRACKED TypeError (pending #869) -------------------
-# numpy.ma COMPUTES these; the asserts pin the current incremental gap. When
-# the ferray-ufunc complex-arithmetic prereq (#869) lands, flip each to assert
-# value+mask equality vs numpy.ma.
+# --- arithmetic COMPUTES (#869 landed) -------------------------------------
+# numpy.ma computes complex `+`/`-`/`*`/`/`/`**`; #869 wired the ferray-ufunc
+# complex-arithmetic prereq + the binding. These flipped from the pending
+# TypeError pins to value+mask equality vs numpy.ma (full coverage lives in
+# test_expansion_ma_complex_arith.py). Unary `-` (negative) is still tracked
+# separately and stays a TypeError below.
 
-def test_complex_add_raises_pending_869():
-    f = fr.ma.array(_data(), mask=_mask())
-    with pytest.raises(TypeError):
-        _ = f + f
-
-
-def test_complex_mul_raises_pending_869():
-    f = fr.ma.array(_data(), mask=_mask())
-    with pytest.raises(TypeError):
-        _ = f * 2
-
-
-def test_complex_truediv_raises_pending_869():
-    f = fr.ma.array(_data(), mask=_mask())
-    with pytest.raises(TypeError):
-        _ = f / 2
+def _eq_ma(f, n):
+    fm = np.asarray(fr.ma.getmaskarray(f), dtype=bool)
+    nm = np.ma.getmaskarray(n)
+    np.testing.assert_array_equal(fm, nm)
+    keep = ~nm
+    np.testing.assert_allclose(
+        np.asarray(f.data)[keep], np.asarray(n.data)[keep], rtol=1e-6, atol=1e-7
+    )
 
 
-def test_complex_pow_raises_pending_869():
-    f = fr.ma.array(_data(), mask=_mask())
-    with pytest.raises(TypeError):
-        _ = f ** 2
+def test_complex_add_computes_869():
+    n = np.ma.array(_data(), mask=_mask()) + np.ma.array(_data(), mask=_mask())
+    f = fr.ma.array(_data(), mask=_mask()) + fr.ma.array(_data(), mask=_mask())
+    _eq_ma(f, n)
+
+
+def test_complex_mul_computes_869():
+    n = np.ma.array(_data(), mask=_mask()) * 2
+    f = fr.ma.array(_data(), mask=_mask()) * 2
+    _eq_ma(f, n)
+
+
+def test_complex_truediv_computes_869():
+    n = np.ma.array(_data(), mask=_mask()) / 2
+    f = fr.ma.array(_data(), mask=_mask()) / 2
+    _eq_ma(f, n)
+
+
+def test_complex_pow_computes_869():
+    n = np.ma.array(_data(), mask=_mask()) ** 2
+    f = fr.ma.array(_data(), mask=_mask()) ** 2
+    _eq_ma(f, n)
 
 
 def test_complex_neg_raises_pending_869():

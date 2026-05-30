@@ -53,6 +53,7 @@ use ferray_core::array::reductions::ReduceAcc;
 use ferray_core::dimension::{Dimension, Ix1, IxDyn};
 use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
+use num_complex::Complex;
 use num_traits::Float;
 
 use crate::helpers::{
@@ -116,6 +117,30 @@ macro_rules! impl_wrapping_arith_float {
 }
 
 impl_wrapping_arith_float!(f32, f64);
+
+// Complex add/subtract/multiply have NO wrapping semantics — they are the
+// native `num_complex` `Add`/`Sub`/`Mul` (component-wise float arithmetic for
+// `+`/`-`, the `(ac-bd, ad+bc)` cross-product for `*`). numpy.ma computes
+// `complex + complex` / `* ` / `- ` directly (verified live, numpy 2.4.5:
+// `np.ma.array([1+2j])*np.ma.array([2+0j]) -> [(2+4j)]`), so `WrappingArith`
+// for `Complex` just forwards to those operators. This lets the generic
+// `add`/`subtract`/`multiply` fns accept `Complex<f32>`/`Complex<f64>`.
+macro_rules! impl_wrapping_arith_complex {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl WrappingArith for Complex<$ty> {
+                #[inline]
+                fn wadd(self, rhs: Complex<$ty>) -> Complex<$ty> { self + rhs }
+                #[inline]
+                fn wsub(self, rhs: Complex<$ty>) -> Complex<$ty> { self - rhs }
+                #[inline]
+                fn wmul(self, rhs: Complex<$ty>) -> Complex<$ty> { self * rhs }
+            }
+        )*
+    };
+}
+
+impl_wrapping_arith_complex!(f32, f64);
 
 #[cfg(feature = "f16")]
 impl WrappingArith for half::f16 {
@@ -289,6 +314,28 @@ macro_rules! impl_true_divide_int {
 
 impl_true_divide_int!(i8, i16, i32, i64, u8, u16, u32, u64);
 
+// Complex true-division: `complex / complex -> complex` (NEVER promoted to
+// f64 — numpy keeps the complex width, verified live numpy 2.4.5:
+// `np.ma.array([1+2j])/np.ma.array([2+0j]) -> [(0.5+1j)]`). `num_complex`'s
+// `Div` already yields `inf`/`nan` complex on a zero divisor (no panic), so
+// the divide-by-zero RuntimeWarning-only contract holds without a guard; the
+// numpy.ma DOMAIN mask for `complex / 0` is applied by the binding, not here.
+macro_rules! impl_true_divide_complex {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl TrueDivide for Complex<$ty> {
+                type Output = Complex<$ty>;
+                #[inline]
+                fn true_div(self, rhs: Complex<$ty>) -> Complex<$ty> {
+                    self / rhs
+                }
+            }
+        )*
+    };
+}
+
+impl_true_divide_complex!(f32, f64);
+
 /// Elementwise *true* division with `NumPy` broadcasting.
 ///
 /// Matches `np.divide` / `np.true_divide`: integer operands promote to
@@ -422,6 +469,103 @@ where
     D: Dimension,
 {
     binary_elementwise_op(a, b, num_traits::Float::powf)
+}
+
+/// Elementwise complex power `a^b` (`np.power` on complex dtypes,
+/// generate_umath.py:480 `TD(cmplx)`), mirroring `npy_cpow`
+/// (`numpy/_core/src/npymath/npy_math_complex.c.src:438`).
+///
+/// `num_traits::Float` is not impl'd for `Complex`, so the generic [`power`]
+/// (bound `T: Float`) cannot serve complex — this is the complex arm.
+/// The kernel reproduces `npy_cpow`'s special cases verbatim so the result is
+/// byte-identical to numpy's `power` ufunc:
+///   - `b == 0` → `1 + 0j` (`npy_math_complex.c.src:452`);
+///   - zero base `a == 0`: `0` if `Re(b) > 0`, else `nan + nan*j`
+///     (`:462`-`:483`);
+///   - real integral exponent `Im(b) == 0`, `Re(b)` an integer in `(-100,
+///     100)`: integer power by repeated squaring over the complex `*` (`:485`-
+///     `:521`) — this is why `(1+2j)**2` is EXACTLY `-3+4j` (not the
+///     `4.0000000002j` that `powc`'s `exp(b*log(a))` would give);
+///   - otherwise the general branch `a.powc(b)` = `exp(b * log(a))` (`:524`).
+pub fn power_complex<T, D>(
+    a: &Array<Complex<T>, D>,
+    b: &Array<Complex<T>, D>,
+) -> FerrayResult<Array<Complex<T>, D>>
+where
+    T: Element + Float,
+    Complex<T>: Element,
+    D: Dimension,
+{
+    binary_elementwise_op(a, b, cpow_kernel)
+}
+
+/// Single-element complex power mirroring `npy_cpow`
+/// (`numpy/_core/src/npymath/npy_math_complex.c.src:438`). Factored out so the
+/// same kernel serves both the array op and the unit tests.
+#[inline]
+fn cpow_kernel<T: Float>(a: Complex<T>, b: Complex<T>) -> Complex<T> {
+    let zero = <T as num_traits::Zero>::zero();
+    let one = <T as num_traits::One>::one();
+
+    // a^0 == 1 (including 0^0, by convention — npy_math_complex.c.src:452).
+    if b.re == zero && b.im == zero {
+        return Complex::new(one, zero);
+    }
+    // 0^b for non-zero b: 0 if Re(b) > 0, else nan + nan*j (:462-:483).
+    if a.re == zero && a.im == zero {
+        if b.re > zero {
+            return Complex::new(zero, zero);
+        }
+        let nan = <T as Float>::nan();
+        return Complex::new(nan, nan);
+    }
+    // Real integral exponent in (-100, 100): integer power by repeated
+    // squaring over the complex product, so e.g. (1+2j)**2 is exactly -3+4j
+    // (:485-:521). `br as i64` truncates toward zero; the `(n as T) == b.re`
+    // guard accepts it only when br is exactly integral.
+    if b.im == zero {
+        let br = b.re;
+        // Bound check mirrors numpy's `br > -100 && br < 100`.
+        let hundred = {
+            let mut acc = one;
+            for _ in 0..100 {
+                acc = acc + one;
+            }
+            acc
+        };
+        if br > zero - hundred && br < hundred {
+            // Round toward zero, then verify the round-trip is exact.
+            let n_t = br.trunc();
+            if n_t == br {
+                let neg = br < zero;
+                let mut n = n_t.abs();
+                let mut aa = Complex::new(one, zero);
+                let mut p = a;
+                // Repeated-squaring exponentiation over the complex product.
+                loop {
+                    // Is the current low bit set? n is integral; (n/2)*2 != n
+                    // ⇔ n is odd.
+                    let two = one + one;
+                    let half = (n / two).trunc();
+                    let is_odd = (half + half) != n;
+                    if is_odd {
+                        aa = aa * p;
+                    }
+                    n = half;
+                    if n == zero {
+                        break;
+                    }
+                    p = p * p;
+                }
+                if neg {
+                    return Complex::new(one, zero) / aa;
+                }
+                return aa;
+            }
+        }
+    }
+    // General branch: a^b = exp(b * log(a)) (:524, `cpow`).
+    a.powc(b)
 }
 
 /// Integer power: a^b, int -> int (`np.power` on integer dtypes,
@@ -3044,6 +3188,144 @@ mod tests {
             {
                 assert!((x - y).abs() < 1e-14);
             }
+        }
+    }
+
+    // ---- complex arithmetic (#869) -------------------------------------
+    //
+    // Expected values are hand-computed from the complex algebra and
+    // cross-checked against the live numpy 2.4.5 oracle (R-CHAR-3):
+    //   (1+2j)+(2+0j) = 3+2j      (1+2j)-(2+0j) = -1+2j
+    //   (1+2j)*(2+0j) = 2+4j      (1+2j)/(2+0j) = 0.5+1j
+    //   (1+2j)*(3+4j) = -5+10j
+    //   (1+2j)**2     = -3+4j     (1+2j)**0.5   = 1.27201965+0.78615138j
+    //   (1+2j)**(1+1j)= -0.24720004+0.69645049j
+    mod complex_arith {
+        use super::*;
+        use num_complex::{Complex32, Complex64};
+
+        fn c64(data: Vec<Complex64>) -> FerrayResult<Array<Complex64, Ix1>> {
+            let n = data.len();
+            Array::from_vec(Ix1::new([n]), data)
+        }
+        fn c32(data: Vec<Complex32>) -> FerrayResult<Array<Complex32, Ix1>> {
+            let n = data.len();
+            Array::from_vec(Ix1::new([n]), data)
+        }
+        // First element of a 1-element array result (tests build singletons).
+        fn first<T: Element + Copy, D: Dimension>(a: &Array<T, D>) -> T {
+            *a.iter().next().expect("test array is non-empty")
+        }
+        fn close(a: Complex64, b: Complex64) {
+            assert!(
+                (a.re - b.re).abs() < 1e-12 && (a.im - b.im).abs() < 1e-12,
+                "{a:?} != {b:?}"
+            );
+        }
+
+        #[test]
+        fn complex_add_sub_mul() -> FerrayResult<()> {
+            let a = c64(vec![Complex64::new(1.0, 2.0)])?;
+            let b = c64(vec![Complex64::new(2.0, 0.0)])?;
+            assert_eq!(first(&add(&a, &b)?), Complex64::new(3.0, 2.0));
+            assert_eq!(first(&subtract(&a, &b)?), Complex64::new(-1.0, 2.0));
+            assert_eq!(first(&multiply(&a, &b)?), Complex64::new(2.0, 4.0));
+            Ok(())
+        }
+
+        #[test]
+        fn complex_mul_cross_term() -> FerrayResult<()> {
+            // (1+2j)*(3+4j) = (3-8) + (4+6)j = -5+10j
+            let a = c64(vec![Complex64::new(1.0, 2.0)])?;
+            let b = c64(vec![Complex64::new(3.0, 4.0)])?;
+            assert_eq!(first(&multiply(&a, &b)?), Complex64::new(-5.0, 10.0));
+            Ok(())
+        }
+
+        #[test]
+        fn complex_true_divide_keeps_complex() -> FerrayResult<()> {
+            let a = c64(vec![Complex64::new(1.0, 2.0)])?;
+            let b = c64(vec![Complex64::new(2.0, 0.0)])?;
+            // TrueDivide::Output for Complex<f64> is Complex<f64> (NOT f64).
+            close(first(&divide(&a, &b)?), Complex64::new(0.5, 1.0));
+            Ok(())
+        }
+
+        #[test]
+        fn complex_divide_by_zero_is_nan_not_panic() -> FerrayResult<()> {
+            let a = c64(vec![Complex64::new(2.0, 0.0)])?;
+            let z = c64(vec![Complex64::new(0.0, 0.0)])?;
+            let v = first(&divide(&a, &z)?);
+            assert!(!v.is_finite(), "complex /0 should be non-finite, got {v:?}");
+            Ok(())
+        }
+
+        #[test]
+        fn complex_power_int_exponent_exact() -> FerrayResult<()> {
+            // (1+2j)**2 == -3+4j EXACTLY (npy_cpow integer-exponent fast path).
+            let a = c64(vec![Complex64::new(1.0, 2.0)])?;
+            let two = c64(vec![Complex64::new(2.0, 0.0)])?;
+            assert_eq!(first(&power_complex(&a, &two)?), Complex64::new(-3.0, 4.0));
+            Ok(())
+        }
+
+        #[test]
+        fn complex_power_zero_and_negative_int() -> FerrayResult<()> {
+            let a = c64(vec![Complex64::new(1.0, 2.0)])?;
+            // a**0 == 1
+            let p0 = power_complex(&a, &c64(vec![Complex64::new(0.0, 0.0)])?)?;
+            assert_eq!(first(&p0), Complex64::new(1.0, 0.0));
+            // a**-1 == 1/a == (1-2j)/5 = 0.2-0.4j
+            let pm1 = power_complex(&a, &c64(vec![Complex64::new(-1.0, 0.0)])?)?;
+            close(first(&pm1), Complex64::new(0.2, -0.4));
+            Ok(())
+        }
+
+        #[test]
+        fn complex_power_float_exponent() -> FerrayResult<()> {
+            // (1+2j)**0.5 = 1.27201965+0.78615138j (general powc branch).
+            let a = c64(vec![Complex64::new(1.0, 2.0)])?;
+            let half = c64(vec![Complex64::new(0.5, 0.0)])?;
+            close(
+                first(&power_complex(&a, &half)?),
+                Complex64::new(1.272_019_649_514_069, 0.786_151_377_757_423_3),
+            );
+            Ok(())
+        }
+
+        #[test]
+        fn complex_power_complex_exponent() -> FerrayResult<()> {
+            // (1+2j)**(1+1j) = -0.24720004+0.69645049j.
+            let a = c64(vec![Complex64::new(1.0, 2.0)])?;
+            let e = c64(vec![Complex64::new(1.0, 1.0)])?;
+            close(
+                first(&power_complex(&a, &e)?),
+                Complex64::new(-0.247_200_044_262_917_22, 0.696_450_487_082_543_2),
+            );
+            Ok(())
+        }
+
+        #[test]
+        fn complex_power_zero_base() -> FerrayResult<()> {
+            // 0**positive = 0; 0**negative-real = nan.
+            let z = c64(vec![Complex64::new(0.0, 0.0)])?;
+            let pos = power_complex(&z, &c64(vec![Complex64::new(2.0, 0.0)])?)?;
+            assert_eq!(first(&pos), Complex64::new(0.0, 0.0));
+            let neg = power_complex(&z, &c64(vec![Complex64::new(-1.0, 0.0)])?)?;
+            assert!(!first(&neg).is_finite());
+            Ok(())
+        }
+
+        #[test]
+        fn complex64_add_and_divide() -> FerrayResult<()> {
+            // complex64 stays complex64 through add/divide.
+            let a = c32(vec![Complex32::new(1.0, 2.0)])?;
+            let b = c32(vec![Complex32::new(1.0, 1.0)])?;
+            assert_eq!(first(&add(&a, &b)?), Complex32::new(2.0, 3.0));
+            let d = divide(&a, &c32(vec![Complex32::new(2.0, 0.0)])?)?;
+            let v = first(&d);
+            assert!((v.re - 0.5).abs() < 1e-6 && (v.im - 1.0).abs() < 1e-6);
+            Ok(())
         }
     }
 }
