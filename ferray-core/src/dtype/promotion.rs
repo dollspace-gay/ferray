@@ -557,10 +557,20 @@ fn promote_dtypes(a: DType, b: DType) -> Option<DType> {
         (U32, I32) => I64,
         (U32, I64) => I64,
         (U32, I128) => I128,
-        (U64, I8) => I128,
-        (U64, I16) => I128,
-        (U64, I32) => I128,
-        (U64, I64) => I128,
+        // `uint64 + <native signed int>` -> F64 per NumPy NEP-50: no signed
+        // integer type is wide enough to losslessly hold the union of uint64
+        // (0..2^64-1) and a signed int (down to -2^63), and numpy has no
+        // int128 dtype, so the common dtype falls back to float64.
+        // numpy/_core/src/multiarray/convert_datatype.c: PyArray_PromoteTypes
+        // (line 1045) -> common-dtype with kind ordering unsigned(1) <
+        // signed(2) < float(4) in dtype_kind_to_ordering (line 652).
+        // Live oracle: np.promote_types('uint64','int64') == float64.
+        (U64, I8) => F64,
+        (U64, I16) => F64,
+        (U64, I32) => F64,
+        (U64, I64) => F64,
+        // (U64, I128) stays I128 — I128 is a ferray-only extension with no
+        // numpy counterpart, so this pair is unreachable from the numpy API.
         (U64, I128) => I128,
         // `U128 + <any signed int>` promotes to the custom
         // `I256` type which can losslessly hold the full union
@@ -667,7 +677,7 @@ mod tests {
         assert_eq!(result_type(DType::U8, DType::I8).unwrap(), DType::I16);
         assert_eq!(result_type(DType::U16, DType::I16).unwrap(), DType::I32);
         assert_eq!(result_type(DType::U32, DType::I32).unwrap(), DType::I64);
-        assert_eq!(result_type(DType::U64, DType::I64).unwrap(), DType::I128);
+        assert_eq!(result_type(DType::U64, DType::I64).unwrap(), DType::F64);
     }
 
     #[test]
