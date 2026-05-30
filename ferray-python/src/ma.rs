@@ -558,6 +558,158 @@ impl PyMaskedArray {
             .putmask(&mask_flat, &vals, vmask.as_deref())
             .map_err(ferr_to_pyerr)
     }
+
+    /// `MaskedArray.__getitem__(indx)` — subscripting
+    /// (`numpy/ma/core.py:3277`).
+    ///
+    /// numpy computes `dout = self.data[indx]` and `mout = self._mask[indx]`,
+    /// then: a SCALAR result that is masked returns the `numpy.ma.masked`
+    /// singleton, an unmasked scalar returns the plain value, and a non-scalar
+    /// result (slice / fancy / bool / a row of a 2-D array) returns a new
+    /// `MaskedArray` carrying the gathered data and mask (`core.py:3334`-`3400`).
+    ///
+    /// The index is resolved against numpy itself via a flat-position grid
+    /// `numpy.arange(size).reshape(shape)[indx]`: numpy raises its exact
+    /// `IndexError` for out-of-bounds / negative-out-of-bounds, a 0-d result
+    /// flags the scalar case, and a higher-rank result yields both the result
+    /// shape and the gathered flat C-order positions to gather over the
+    /// library's contiguous `data()`/`mask()` buffers (R-CODE-4 — numpy's
+    /// indexing semantics are reused, not reimplemented).
+    fn __getitem__<'py>(
+        &self,
+        py: Python<'py>,
+        indx: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let resolved = resolve_index(py, self.inner.shape(), indx)?;
+        let data: Vec<f64> = self.inner.data().iter().copied().collect();
+        match resolved {
+            ResolvedIndex::Scalar(pos) => {
+                let masked = self
+                    .inner
+                    .mask_opt()
+                    .is_some_and(|m| m.iter().nth(pos).copied().unwrap_or(false));
+                if masked {
+                    ma_masked_singleton(py)
+                } else {
+                    Ok(data[pos].into_pyobject(py)?.into_any())
+                }
+            }
+            ResolvedIndex::Gather { positions, shape } => {
+                let sub_data: Vec<f64> = positions.iter().map(|&p| data[p]).collect();
+                let data_fa =
+                    ArrayD::<f64>::from_vec(IxDyn::new(&shape), sub_data).map_err(ferr_to_pyerr)?;
+                // Only carry a real mask when the source has one AND at least one
+                // gathered position is masked — otherwise stay on the `from_data`
+                // nomask sentinel (preserves the #848/#849 nomask distinction:
+                // gathering from a nomask source yields a nomask sub-array).
+                let inner = match self.inner.mask_opt() {
+                    Some(m) => {
+                        let flat: Vec<bool> = m.iter().copied().collect();
+                        let sub_mask: Vec<bool> = positions.iter().map(|&p| flat[p]).collect();
+                        if sub_mask.iter().any(|&b| b) {
+                            let mask_fa = ArrayD::<bool>::from_vec(IxDyn::new(&shape), sub_mask)
+                                .map_err(ferr_to_pyerr)?;
+                            RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?
+                        } else {
+                            RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?
+                        }
+                    }
+                    None => RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?,
+                };
+                Ok(Py::new(py, Self { inner })?.into_bound(py).into_any())
+            }
+        }
+    }
+
+    /// `MaskedArray.__setitem__(indx, value)` — in-place subscript assignment
+    /// (`numpy/ma/core.py:3406`).
+    ///
+    /// - `a[i] = numpy.ma.masked` masks the targeted positions, materializing a
+    ///   real mask if the array was a nomask sentinel
+    ///   (`core.py:3427`-`3436`; #848/#849).
+    /// - Otherwise the new value's data is written. Under a SOFT mask the
+    ///   targeted positions are unmasked except where the value itself is masked
+    ///   (`core.py:3450`-`3457`, `_mask[indx] = mval`). Under a HARD mask the
+    ///   existing mask is never cleared and already-masked positions keep their
+    ///   data (`core.py:3461`-`3472`, `copyto(..., where=~mindx)`); the
+    ///   hard-mask suppression of the clear is already enforced by
+    ///   `set_mask_flat`.
+    ///
+    /// The index is resolved via the same flat-position grid as `__getitem__`,
+    /// and the right-hand side is broadcast to the resolved result shape with
+    /// numpy (`numpy.broadcast_to`) so `a[1:3] = [7, 8]`, `a[a > 1] = 0`, and a
+    /// masked-array RHS all align element-for-element with the gathered target
+    /// positions.
+    fn __setitem__<'py>(
+        &mut self,
+        py: Python<'py>,
+        indx: &Bound<'py, PyAny>,
+        value: &Bound<'py, PyAny>,
+    ) -> PyResult<()> {
+        let resolved = resolve_index(py, self.inner.shape(), indx)?;
+        let (positions, result_shape) = match resolved {
+            ResolvedIndex::Scalar(p) => (vec![p], Vec::new()),
+            ResolvedIndex::Gather { positions, shape } => (positions, shape),
+        };
+
+        // `a[i] = numpy.ma.masked` — mask the targeted positions. `set_mask_flat`
+        // materializes a real mask on a nomask sentinel and is a no-op clear
+        // under a hard mask, exactly mirroring numpy's `_mask[indx] = True`
+        // after a lazy `make_mask_none` (core.py:3427).
+        let masked_singleton = ma_masked_singleton(py)?;
+        if value.is(&masked_singleton) {
+            for &p in &positions {
+                self.inner
+                    .set_mask_flat(p, true)
+                    .map_err(put_err_to_pyerr)?;
+            }
+            return Ok(());
+        }
+
+        // Data + (optional) mask of the RHS, broadcast to the target shape.
+        let (vals, vmask) = broadcast_values(py, value, &result_shape, positions.len())?;
+        let is_hard = self.inner.is_hard_mask();
+        let had_real_mask = self.inner.has_real_mask();
+        let existing: Option<Vec<bool>> =
+            self.inner.mask_opt().map(|m| m.iter().copied().collect());
+
+        {
+            let buf = self
+                .inner
+                .data_mut()
+                .ok_or_else(|| PyValueError::new_err("masked array data is not contiguous"))?;
+            for (k, &p) in positions.iter().enumerate() {
+                if is_hard {
+                    // Hard mask: an already-masked position keeps its data
+                    // (numpy copies only where `~mindx`); unmasked positions take
+                    // the new value.
+                    let was_masked = existing.as_ref().map(|e| e[p]).unwrap_or(false);
+                    if !was_masked {
+                        buf[p] = vals[k];
+                    }
+                } else {
+                    buf[p] = vals[k];
+                }
+            }
+        }
+
+        // Apply the mask updates after the data write (set_mask_flat reborrows
+        // self.inner). Under a soft mask each written position is unmasked unless
+        // the RHS value was itself masked (numpy `_mask[indx] = mval`). Under a
+        // hard mask `set_mask_flat` already suppresses clears, so a False from an
+        // unmasked RHS is ignored and a True from a masked RHS still adds a bit
+        // (numpy `mask_or`). When the RHS is unmasked and the array had no real
+        // mask and isn't hard, there is nothing to do (stay nomask).
+        if vmask.is_some() || had_real_mask || is_hard {
+            for (k, &p) in positions.iter().enumerate() {
+                let rhs_masked = vmask.as_ref().map(|vm| vm[k]).unwrap_or(false);
+                self.inner
+                    .set_mask_flat(p, rhs_masked)
+                    .map_err(put_err_to_pyerr)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -574,6 +726,153 @@ fn extract_bool_array<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult
     let arr = coerce_dtype(py, obj, "bool")?;
     let view: PyReadonlyArrayDyn<bool> = arr.extract()?;
     view.as_ferray().map_err(ferr_to_pyerr)
+}
+
+/// Outcome of resolving a Python subscript index against a masked array's
+/// shape — either a single flat (C-order) position (numpy's "scalar" case) or
+/// a gather of flat positions plus the result shape (slice / fancy / bool /
+/// multi-dim row, numpy's non-scalar case). See [`resolve_index`].
+enum ResolvedIndex {
+    Scalar(usize),
+    Gather {
+        positions: Vec<usize>,
+        shape: Vec<usize>,
+    },
+}
+
+/// Resolve a Python subscript index against a masked array of the given
+/// `shape` into flat C-order positions, delegating ALL indexing semantics to
+/// numpy (R-CODE-4 — negative indices, out-of-bounds `IndexError`, slices,
+/// fancy / boolean indexing all behave exactly as numpy does).
+///
+/// The technique mirrors numpy's own `dout = self.data[indx]` (`numpy/ma/
+/// core.py:3288`): a flat-position grid `numpy.arange(size).reshape(shape)` is
+/// subscripted with `indx`. A 0-d result is numpy's scalar case
+/// (`core.py:3334`, `scalar_expected`) and carries the single flat position; a
+/// higher-rank result yields both the gathered flat positions (C-order
+/// `ravel()`) and the result `shape` to build the sub-`MaskedArray`. numpy
+/// raises the appropriate `IndexError` here for any out-of-range index before
+/// we touch the data buffer.
+fn resolve_index<'py>(
+    py: Python<'py>,
+    shape: &[usize],
+    indx: &Bound<'py, PyAny>,
+) -> PyResult<ResolvedIndex> {
+    let size: usize = shape.iter().product();
+    let np = py.import("numpy")?;
+    let grid = np.call_method1("arange", (size,))?;
+    let grid = grid.call_method1("reshape", (shape.to_vec(),))?;
+    // `grid[indx]` reproduces numpy's exact indexing — including raising the
+    // correct `IndexError` for an out-of-bounds / negative-out-of-bounds index.
+    let picked = grid.get_item(indx)?;
+    if picked
+        .call_method0("__array__")?
+        .getattr("ndim")?
+        .extract::<usize>()?
+        == 0
+    {
+        let pos: usize = picked.call_method0("item")?.extract()?;
+        return Ok(ResolvedIndex::Scalar(pos));
+    }
+    let arr = picked.call_method0("__array__")?;
+    let result_shape: Vec<usize> = arr.getattr("shape")?.extract()?;
+    let view: PyReadonlyArrayDyn<i64> = arr
+        .call_method1("astype", ("int64",))?
+        .call_method0("ravel")?
+        .extract()?;
+    let positions: Vec<usize> = view
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?
+        .iter()
+        .map(|&v| v as usize)
+        .collect();
+    Ok(ResolvedIndex::Gather {
+        positions,
+        shape: result_shape,
+    })
+}
+
+/// Broadcast a `__setitem__` right-hand side to the resolved target shape and
+/// return its flat (C-order) `Vec<f64>` data plus, when the RHS carries a mask
+/// (a `ferray.ma.MaskedArray` or `numpy.ma.MaskedArray`), the parallel flat
+/// `Vec<bool>` of mask bits.
+///
+/// numpy assigns `dval = getattr(value, '_data', value)` broadcast across the
+/// indexed region and `mval = getmask(value)` likewise (`numpy/ma/
+/// core.py:3439`-`3441`). The boundary mirrors that with `numpy.broadcast_to`
+/// so `a[1:3] = [7, 8]`, `a[a > 1] = 0` (scalar broadcast) and a masked-array
+/// RHS each align element-for-element with the `count` gathered positions. The
+/// mask is read through `numpy.ma.getmaskarray` so a masked RHS re-masks the
+/// target, matching `_mask[indx] = mval`.
+fn broadcast_values<'py>(
+    py: Python<'py>,
+    value: &Bound<'py, PyAny>,
+    result_shape: &[usize],
+    count: usize,
+) -> PyResult<(Vec<f64>, Option<Vec<bool>>)> {
+    let np = py.import("numpy")?;
+    let np_ma = np.getattr("ma")?;
+    // A `ferray.ma.MaskedArray` RHS exposes its mask via `.mask`/`.data` (numpy's
+    // `getmaskarray` sees only its `__array__` data and would read all-False); a
+    // `numpy.ma.MaskedArray` RHS is read with numpy.ma's own helpers.
+    let fr_ma = value.extract::<PyMaskedArray>().ok();
+    let is_np_ma = value.is_instance(&np_ma.getattr("MaskedArray")?)?;
+
+    // Data: strip any mask, then broadcast to the target shape.
+    let data_obj = if let Some(ref m) = fr_ma {
+        m.data(py)?
+    } else if is_np_ma {
+        np_ma.call_method1("getdata", (value,))?
+    } else {
+        value.clone()
+    };
+    let data_f64 = coerce_dtype(py, &data_obj, "float64")?;
+    let data_bc = np
+        .call_method1("broadcast_to", (data_f64, result_shape.to_vec()))?
+        .call_method0("ravel")?;
+    let data_view: PyReadonlyArrayDyn<f64> = data_bc.extract()?;
+    let vals: Vec<f64> = data_view
+        .as_ferray()
+        .map_err(ferr_to_pyerr)?
+        .iter()
+        .copied()
+        .collect();
+    if vals.len() != count {
+        return Err(PyValueError::new_err(format!(
+            "could not broadcast value into the {count} indexed position(s)",
+        )));
+    }
+
+    let mask_obj = if let Some(ref m) = fr_ma {
+        // `.mask` is `nomask` for a nomask source — `getmaskarray` over the data
+        // shape yields the all-False full mask so it broadcasts cleanly.
+        let mk = m.mask(py)?;
+        if mk.is(&ma_nomask(py)?) {
+            Some(np_ma.call_method1("getmaskarray", (m.data(py)?,))?)
+        } else {
+            Some(mk)
+        }
+    } else if is_np_ma {
+        Some(np_ma.call_method1("getmaskarray", (value,))?)
+    } else {
+        None
+    };
+    let vmask = if let Some(mask_obj) = mask_obj {
+        let mask_bc = np
+            .call_method1("broadcast_to", (mask_obj, result_shape.to_vec()))?
+            .call_method0("ravel")?;
+        let mask_view: PyReadonlyArrayDyn<bool> = mask_bc.extract()?;
+        let bits: Vec<bool> = mask_view
+            .as_ferray()
+            .map_err(ferr_to_pyerr)?
+            .iter()
+            .copied()
+            .collect();
+        Some(bits)
+    } else {
+        None
+    };
+    Ok((vals, vmask))
 }
 
 /// Coerce a Python index argument (scalar / list / ndarray) into a flat
