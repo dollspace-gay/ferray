@@ -304,7 +304,48 @@ from ._ferray import (
     union1d,
     unique,
     where_ as where,
+    # top-level numpy alias + introspection surface (expansion batch 1)
+    ndim,
+    shape,
+    size,
+    isscalar,
+    isfortran,
+    astype,
+    can_cast,
+    promote_types,
+    result_type,
+    min_scalar_type,
+    issubdtype,
+    isdtype,
+    common_type,
 )
+
+# numpy-2.0 array-API trig aliases + thin wrappers. numpy itself defines
+# these as bare assignments in numpy/_core/__init__.py:138 (`acos =
+# numeric.arccos`); ferray mirrors the exact same aliasing against its
+# already-bound ufunc/manipulation/reduction surface.
+acos = arccos
+acosh = arccosh
+asin = arcsin
+asinh = arcsinh
+atan = arctan
+atanh = arctanh
+atan2 = arctan2
+bitwise_invert = invert
+bitwise_left_shift = left_shift
+bitwise_right_shift = right_shift
+concat = concatenate
+permute_dims = transpose
+pow = power  # noqa: A001 - intentional NumPy compat shadow of builtin pow
+amax = max
+amin = min
+cumulative_sum = cumsum
+cumulative_prod = cumprod
+
+# numpy.divmod ufunc — (floor_divide, mod) tuple, integer + float kernels.
+from ._ferray import divmod as _divmod_ufunc
+
+globals()["divmod"] = _divmod_ufunc  # noqa: A001 - NumPy compat shadow of builtin
 
 # `mod` is a Python keyword and cannot be a bare `from ... import mod`, so it
 # is bound by attribute. It is the numpy alias of `remainder` (umath.py).
@@ -445,4 +486,12 @@ __all__ = [
     "einsum", "matvec", "vecdot", "vecmat",
     "diagonal", "matrix_transpose",
     "dot", "vdot", "matmul", "inner", "outer", "tensordot", "kron",
+    # top-level numpy aliases + introspection (expansion batch 1)
+    "acos", "acosh", "asin", "asinh", "atan", "atanh", "atan2",
+    "bitwise_invert", "bitwise_left_shift", "bitwise_right_shift",
+    "concat", "permute_dims", "pow", "amax", "amin",
+    "cumulative_sum", "cumulative_prod", "divmod",
+    "ndim", "shape", "size", "isscalar", "isfortran",
+    "astype", "can_cast", "promote_types", "result_type",
+    "min_scalar_type", "issubdtype", "isdtype", "common_type",
 ]

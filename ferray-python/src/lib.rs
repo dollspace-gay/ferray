@@ -24,6 +24,7 @@
 //! modules and get registered on the top-level extension module
 //! (`_ferray`) by [`_ferray`] at import time.
 
+mod aliases;
 mod autodiff;
 mod char;
 mod complex;
@@ -741,6 +742,26 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // `subok` kwarg (:475). Registered AFTER manipulation::broadcast_to so it
     // wins.
     m.add_function(wrap_pyfunction!(stride_tricks::broadcast_to, m)?)?;
+
+    // ----- top-level numpy alias + introspection surface -----
+    // numpy/_core/__init__.py + numpy/_core/fromnumeric.py +
+    // numpy/_core/numerictypes.py — array & dtype introspection plus the
+    // `divmod` ufunc tuple. The pure 1:1 trig/bitwise/manip/reduction
+    // aliases are bare Python re-exports in python/ferray/__init__.py.
+    m.add_function(wrap_pyfunction!(aliases::ndim, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::shape, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::size, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::isscalar, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::isfortran, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::astype, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::can_cast, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::promote_types, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::result_type, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::min_scalar_type, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::issubdtype, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::isdtype, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::common_type, m)?)?;
+    m.add_function(wrap_pyfunction!(aliases::divmod, m)?)?;
 
     register_dtype_module(py, m)?;
     register_linalg_module(py, m)?;

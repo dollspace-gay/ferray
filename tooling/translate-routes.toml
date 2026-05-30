@@ -95,6 +95,24 @@ upstream = [
 design = ".design/ferray-core.md"
 parity_ops = ["normalize_axis_index", "normalize_axis_tuple", "AxisError", "LinAlgError"]
 
+# ferray-python top-level numpy alias + introspection shim. Hosts the
+# array-introspection (ndim/shape/size/isscalar/isfortran) and
+# dtype-introspection (astype/can_cast/promote_types/result_type/
+# min_scalar_type/issubdtype/isdtype/common_type) functions numpy exposes
+# at the package root, plus the `divmod` ufunc tuple. The pure 1:1 trig/
+# bitwise/manip/reduction aliases (acos=arccos, concat=concatenate, …) are
+# bare Python re-exports in python/ferray/__init__.py, mirroring numpy's own
+# alias assignments in numpy/_core/__init__.py:138 (`acos = numeric.arccos`).
+[[route]]
+crate_pattern = "ferray-python/src/aliases.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/__init__.py",
+  "/home/doll/numpy-ref/numpy/_core/fromnumeric.py",
+  "/home/doll/numpy-ref/numpy/_core/numerictypes.py",
+]
+design = ".design/ferray-reexport.md"
+parity_ops = ["ndim", "shape", "size", "isscalar", "isfortran", "result_type", "promote_types", "can_cast", "astype", "issubdtype", "isdtype", "common_type", "min_scalar_type", "divmod"]
+
 # ferray-python complex-array binding shim: marshals numpy's complex helpers
 # (real / imag / conj / conjugate / angle / real_if_close / iscomplex /
 # isreal / iscomplexobj / isrealobj) through to ferray-ufunc. Owns the
