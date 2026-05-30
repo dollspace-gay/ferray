@@ -406,7 +406,11 @@ pub fn arange<T: ArangeNum>(start: T, stop: T, step: T) -> FerrayResult<Array<T,
 
     let mut data = Vec::with_capacity(n);
     for i in 0..n {
-        data.push(T::from_f64((i as f64).mul_add(step_f, start_f)));
+        // numpy fills `start + i*step` with TWO separate roundings — the
+        // product `i*step` rounds, then the `+ start` rounds. We must NOT
+        // use a fused multiply-add (`mul_add`), which rounds once and so
+        // diverges from numpy in the last ULP (e.g. arange(0.1,2.0,0.1)[5]).
+        data.push(T::from_f64(i as f64 * step_f + start_f));
     }
     let dim = Ix1::new([data.len()]);
     Array::from_vec(dim, data)
@@ -474,7 +478,19 @@ pub fn linspace<T: LinspaceNum>(
     let step = (stop_f - start_f) / divisor;
     let mut data = Vec::with_capacity(num);
     for i in 0..num {
-        data.push(T::from_f64((i as f64).mul_add(step, start_f)));
+        // numpy/_core/function_base.py:142-173: `y = arange(0,num)*step`
+        // then `y += start` — TWO separate roundings, NOT a fused
+        // multiply-add. `mul_add` rounds once and diverges in the last ULP
+        // (e.g. linspace(0.1,0.7,7)[3] == 0.4 in numpy, not 0.399...97).
+        data.push(T::from_f64(i as f64 * step + start_f));
+    }
+    // numpy/_core/function_base.py:175-176: `if endpoint and num > 1:
+    // y[-1, ...] = stop` — pin the final sample to exactly `stop`, since the
+    // arithmetic fill can land a ULP off (e.g. linspace(0.1,3.7,15)[-1]).
+    if endpoint && num > 1 {
+        // `stop_f` is the exact f64 image of `stop` (to_f64 is lossless for
+        // f32/f64), so `from_f64(stop_f)` reproduces `stop` bit-for-bit.
+        data[num - 1] = T::from_f64(stop_f);
     }
     Array::from_vec(Ix1::new([num]), data)
 }
