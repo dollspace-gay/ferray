@@ -159,6 +159,7 @@ use numpy::PyReadonlyArrayDyn;
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::pyclass::CompareOp;
 use pyo3::types::PyAny;
 
 use crate::conv::{coerce_dtype, ferr_to_pyerr, ma_masked_singleton, ma_nomask};
@@ -1441,6 +1442,42 @@ impl PyMaskedArray {
         }
         binary_op(py, &self.inner, other, BinOp::Pow, true)
     }
+
+    // -- Comparison dunders (#863, REQ-2 R-B + REQ-7 R-G) ---------------------
+    //
+    // PyO3 routes all six rich-comparison operators (`<`, `<=`, `>`, `>=`,
+    // `==`, `!=`) through the single `__richcmp__` entry, carrying the operator
+    // as a [`CompareOp`]. Python has already swapped the operator for a
+    // reflected comparison BEFORE calling here — `2 < a` first tries
+    // `int.__lt__(a)` (NotImplemented), then calls `a.__gt__(2)`, which PyO3
+    // delivers as `__richcmp__(self=a, other=2, CompareOp::Gt)`. So the
+    // receiver is ALWAYS `self` and the op is already correctly oriented; no
+    // manual reflection is needed (verified live: `2 < a` == `a > 2`,
+    // numpy.ma).
+    //
+    // The result is a bool-dtype `MaskedArray`, masked where either operand is
+    // masked (`mask_or(smask, omask)`, `numpy/ma/core.py:4206`), with the
+    // `_comparison` eq/ne special-case at masked positions
+    // (`numpy/ma/core.py:4245`): `check = np.where(mask, compare(smask, omask),
+    // check)` — equal if both masked, unequal if one masked. Ordering ops
+    // (`<`/`<=`/`>`/`>=`) carry NO override (the raw comparison data is kept
+    // under the mask). Delegates to [`compare_op`].
+    fn __richcmp__(
+        &self,
+        py: Python<'_>,
+        other: &Bound<'_, PyAny>,
+        op: CompareOp,
+    ) -> PyResult<Py<PyAny>> {
+        let cmp = match op {
+            CompareOp::Lt => CmpOp::Lt,
+            CompareOp::Le => CmpOp::Le,
+            CompareOp::Gt => CmpOp::Gt,
+            CompareOp::Ge => CmpOp::Ge,
+            CompareOp::Eq => CmpOp::Eq,
+            CompareOp::Ne => CmpOp::Ne,
+        };
+        compare_op(py, &self.inner, other, cmp)
+    }
 }
 
 /// Wrap a unary-op result (already in the source's native dtype `T`) back into
@@ -1816,6 +1853,238 @@ fn compute_binary(
 /// Elementwise OR of two equal-length bool slices.
 fn or_vecs(a: &[bool], b: &[bool]) -> Vec<bool> {
     a.iter().zip(b.iter()).map(|(&x, &y)| x || y).collect()
+}
+
+/// The six `numpy.ma` rich-comparison operators. `Eq`/`Ne` carry the
+/// `_comparison` masked-position special-case (`numpy/ma/core.py:4245`); the
+/// four ordering ops (`Lt`/`Le`/`Gt`/`Ge`) do not.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CmpOp {
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    Eq,
+    Ne,
+}
+
+impl CmpOp {
+    /// `==`/`!=` are the mask-aware special-cased pair; the ordering ops are
+    /// not (`numpy/ma/core.py:4243`-`:4248` only runs the `np.where` override
+    /// `if compare in (operator.eq, operator.ne)`).
+    fn is_eq_ne(self) -> bool {
+        matches!(self, CmpOp::Eq | CmpOp::Ne)
+    }
+}
+
+/// Compute one of the six masked comparison operators, mirroring numpy.ma's
+/// `MaskedArray._comparison` (`numpy/ma/core.py:4193`). The result is a
+/// bool-dtype `MaskedArray`.
+///
+/// Pipeline (mirrors `binary_op`'s coerce→broadcast→compute→mask-union→rewrap,
+/// but the data op is a `ferray_ufunc` comparison and the output dtype is
+/// always BOOL):
+///
+/// 1. `other` is materialized as `np.asarray(other)` (its native dtype) +
+///    `numpy.ma.getmaskarray(other)` (the source mask, or all-False for a
+///    plain array-like). A `fr.ma.MaskedArray` operand is read from its
+///    `inner`. The `numpy.ma.masked` singleton coerces to a 0-d operand with
+///    an all-True mask, so the union below masks every position — matching
+///    `a == np.ma.masked` → all masked (verified live).
+/// 2. Both operands are cast to `numpy.result_type(left, right)` so the
+///    comparison runs over a common dtype (NEP-50). For a truly-incomparable
+///    operand (e.g. an int array vs a string), `result_type` raises: for the
+///    ordering ops that surfaces as numpy's `TypeError` (`a < 'foo'` →
+///    `UFuncTypeError`), while `==`/`!=` fall back to `NotImplemented` so
+///    Python yields its identity comparison (the one edge that differs from
+///    numpy.ma, which returns an all-False masked array — see the module
+///    doc / divergence test).
+/// 3. `check = compare(sdata, odata)` over the common dtype via the matching
+///    `ferray_ufunc` op (`less`/`less_equal`/`greater`/`greater_equal`/
+///    `equal`/`not_equal`), broadcast to the union shape.
+/// 4. `mask = getmaskarray(left) | getmaskarray(right)` (broadcast,
+///    `:4206`). For `==`/`!=` ONLY, masked positions are overwritten with
+///    `compare(smask, omask)` (`:4245`) — equal-if-both-masked,
+///    unequal-if-one-masked.
+/// 5. Re-wrap as a `DynMa::Bool`: a REAL mask when either operand had one
+///    (`:4253` `check._mask = mask`), else the `nomask` sentinel (numpy keeps
+///    `mask is nomask` when both operands are nomask, so
+///    `np.ma.getmask(np.ma.array([1,2]) == 2)` is `nomask`, verified live).
+fn compare_op(
+    py: Python<'_>,
+    recv: &DynMa,
+    other: &Bound<'_, PyAny>,
+    op: CmpOp,
+) -> PyResult<Py<PyAny>> {
+    let recv_data = dynma_data_pyarray(py, recv)?;
+    let recv_mask = recv.mask_bits()?;
+    let recv_real = recv.has_real_mask();
+
+    // Materialize `other`'s data + full bool mask + real-mask flag, exactly as
+    // `binary_op` does (a `fr.ma` operand from its `inner`; a `numpy.ma` /
+    // plain array-like via `numpy.ma.getmaskarray`).
+    let (other_data, other_mask, other_real) = if let Ok(m) = other.extract::<PyMaskedArray>() {
+        (
+            m.data_pyarray(py)?,
+            m.inner.mask_bits()?,
+            m.inner.has_real_mask(),
+        )
+    } else {
+        let data = crate::conv::as_ndarray(py, other)?;
+        let np_ma = py.import("numpy")?.getattr("ma")?;
+        let mask_obj = np_ma.call_method1("getmaskarray", (other,))?;
+        let mask = extract_bool_array(py, &mask_obj)?;
+        let real = source_real_mask(py, other)?.is_some();
+        (data, mask, real)
+    };
+
+    // Common comparison dtype = numpy.result_type(left, right). A failure means
+    // the operands are incomparable: ordering ops re-raise numpy's TypeError;
+    // eq/ne fall back to NotImplemented (Python then yields its identity
+    // result), the one documented divergence from numpy.ma.
+    let operand_dt = match crate::conv::binary_result_dtype(py, &recv_data, &other_data) {
+        Ok(dt) => dt,
+        Err(_) if op.is_eq_ne() => return Ok(py.NotImplemented()),
+        Err(_) => {
+            return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                "'{}' not supported between a ferray.ma.MaskedArray and the given operand",
+                match op {
+                    CmpOp::Lt => "<",
+                    CmpOp::Le => "<=",
+                    CmpOp::Gt => ">",
+                    CmpOp::Ge => ">=",
+                    CmpOp::Eq => "==",
+                    CmpOp::Ne => "!=",
+                },
+            )));
+        }
+    };
+
+    // Cast each operand to the common dtype and wrap as a same-dtype DynMa
+    // carrying its mask (rejects complex/structured via `build_dynma`).
+    let left = build_dynma(&coerce_dtype(py, &recv_data, &operand_dt)?, Some(recv_mask))?;
+    let right = build_dynma(
+        &coerce_dtype(py, &other_data, &operand_dt)?,
+        Some(other_mask),
+    )?;
+
+    let bshape = ferray_core::dimension::broadcast::broadcast_shapes(&left.shape(), &right.shape())
+        .map_err(|_| {
+            PyValueError::new_err(format!(
+                "operands could not be broadcast together with shapes {:?} {:?}",
+                left.shape(),
+                right.shape()
+            ))
+        })?;
+
+    let (bool_data, union_mask) = compute_compare(&left, &right, &bshape, op)?;
+
+    // numpy keeps the result mask as `nomask` when both operands are nomask
+    // (`mask is nomask`), else materializes a real mask (`:4253`).
+    let want_real = recv_real || other_real;
+    let inner = if want_real {
+        DynMa::Bool(RustMa::new(bool_data, union_mask).map_err(ferr_to_pyerr)?)
+    } else {
+        DynMa::Bool(RustMa::from_data(bool_data).map_err(ferr_to_pyerr)?)
+    };
+    Ok(Py::new(py, PyMaskedArray::from_dynma(inner))?.into_any())
+}
+
+/// Compute the bool result buffer of a masked comparison over two same-dtype
+/// `DynMa` operands, applying the `==`/`!=` masked-position override.
+///
+/// Mirrors `_comparison` (`numpy/ma/core.py:4233`-`:4248`): `check =
+/// compare(sdata, odata)` via the matching `ferray_ufunc` comparison op, then,
+/// for `==`/`!=` only, `check = np.where(mask, compare(smask, omask), check)`
+/// at masked positions. The four ordering ops keep the raw comparison data
+/// under the mask. `left`/`right` are the SAME `DynMa` variant (cast upstream).
+///
+/// Returns `(check_data, union_mask)` — the union mask (broadcast to `bshape`)
+/// is the result mask the caller wraps when either operand carried a real mask.
+fn compute_compare(
+    left: &DynMa,
+    right: &DynMa,
+    bshape: &[usize],
+    op: CmpOp,
+) -> PyResult<(ArrayD<bool>, ArrayD<bool>)> {
+    use ferray_core::manipulation::broadcast_to;
+    use ferray_ufunc::ops::comparison::{
+        equal, greater, greater_equal, less, less_equal, not_equal,
+    };
+
+    // Broadcast operand masks to the result shape and union them.
+    let lmask = broadcast_to(&left.mask_bits()?, bshape).map_err(ferr_to_pyerr)?;
+    let rmask = broadcast_to(&right.mask_bits()?, bshape).map_err(ferr_to_pyerr)?;
+    let union: Vec<bool> = lmask
+        .iter()
+        .zip(rmask.iter())
+        .map(|(&a, &b)| a || b)
+        .collect();
+
+    // The raw elementwise comparison over the common operand dtype. `equal` /
+    // `not_equal` are defined for every variant (bool included); the four
+    // ordering ops require `PartialOrd` — `bool` HAS `PartialOrd`, so a single
+    // `match_ma!`-shaped macro covers all 11 variants for every op.
+    macro_rules! cmp_arm {
+        ($l:expr, $r:expr, $T:ty) => {{
+            let la: ArrayD<$T> = broadcast_to($l.data(), bshape).map_err(ferr_to_pyerr)?;
+            let ra: ArrayD<$T> = broadcast_to($r.data(), bshape).map_err(ferr_to_pyerr)?;
+            match op {
+                CmpOp::Lt => less(&la, &ra).map_err(ferr_to_pyerr)?,
+                CmpOp::Le => less_equal(&la, &ra).map_err(ferr_to_pyerr)?,
+                CmpOp::Gt => greater(&la, &ra).map_err(ferr_to_pyerr)?,
+                CmpOp::Ge => greater_equal(&la, &ra).map_err(ferr_to_pyerr)?,
+                CmpOp::Eq => equal(&la, &ra).map_err(ferr_to_pyerr)?,
+                CmpOp::Ne => not_equal(&la, &ra).map_err(ferr_to_pyerr)?,
+            }
+        }};
+    }
+
+    let check: ArrayD<bool> = match (left, right) {
+        (DynMa::Bool(l), DynMa::Bool(r)) => cmp_arm!(l, r, bool),
+        (DynMa::I8(l), DynMa::I8(r)) => cmp_arm!(l, r, i8),
+        (DynMa::I16(l), DynMa::I16(r)) => cmp_arm!(l, r, i16),
+        (DynMa::I32(l), DynMa::I32(r)) => cmp_arm!(l, r, i32),
+        (DynMa::I64(l), DynMa::I64(r)) => cmp_arm!(l, r, i64),
+        (DynMa::U8(l), DynMa::U8(r)) => cmp_arm!(l, r, u8),
+        (DynMa::U16(l), DynMa::U16(r)) => cmp_arm!(l, r, u16),
+        (DynMa::U32(l), DynMa::U32(r)) => cmp_arm!(l, r, u32),
+        (DynMa::U64(l), DynMa::U64(r)) => cmp_arm!(l, r, u64),
+        (DynMa::F32(l), DynMa::F32(r)) => cmp_arm!(l, r, f32),
+        (DynMa::F64(l), DynMa::F64(r)) => cmp_arm!(l, r, f64),
+        _ => {
+            return Err(PyValueError::new_err(
+                "internal: comparison operand dtypes were not unified before compute",
+            ));
+        }
+    };
+
+    let mut out: Vec<bool> = check.iter().copied().collect();
+
+    // eq/ne masked-position override (`numpy/ma/core.py:4245`): at every masked
+    // position, the underlying bool is `compare(smask, omask)` — for `==`,
+    // `smask == omask` (equal iff both masked); for `!=`, `smask != omask`
+    // (unequal iff exactly one masked). Ordering ops keep the raw data.
+    if op.is_eq_ne() {
+        for (i, ((o, &lm), &rm)) in out
+            .iter_mut()
+            .zip(lmask.iter())
+            .zip(rmask.iter())
+            .enumerate()
+        {
+            if union[i] {
+                *o = match op {
+                    CmpOp::Eq => lm == rm,
+                    CmpOp::Ne => lm != rm,
+                    _ => *o,
+                };
+            }
+        }
+    }
+
+    let data = ArrayD::<bool>::from_vec(IxDyn::new(bshape), out).map_err(ferr_to_pyerr)?;
+    let mask = ArrayD::<bool>::from_vec(IxDyn::new(bshape), union).map_err(ferr_to_pyerr)?;
+    Ok((data, mask))
 }
 
 /// Revert `result` to the left operand `la` at every masked position, building
