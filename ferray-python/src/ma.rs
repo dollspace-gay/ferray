@@ -787,6 +787,53 @@ impl PyMaskedArray {
         }
     }
 
+    /// Propagate THIS operand's `fill_value` onto an arithmetic/unary op
+    /// `result`, mirroring numpy's `_update_from(self)` fill carry (#885).
+    ///
+    /// numpy's elementwise arithmetic / unary ufunc result copies the
+    /// receiver's `_fill_value` via `MaskedArray._update_from`
+    /// (`numpy/ma/core.py:3040` — `'_fill_value': getattr(obj, '_fill_value',
+    /// None)`), where `obj` is the masked operand whose dunder was invoked
+    /// (`self`). So `(a OP b).fill_value` carries `a`'s fill when `a`'s fill is
+    /// MATERIALIZED (`a._fill_value is not None`), and falls back to the
+    /// per-dtype default otherwise — independent of the OTHER operand's fill
+    /// (verified live numpy 2.4.4: `(a2+b).fill_value == a2.fill_value`,
+    /// `(b+a2).fill_value == default` where `a2` is materialized and `b` is
+    /// not). The same carry applies to the reflected forms (`__radd__` etc.:
+    /// the masked `self` is still the template) and the unary ops
+    /// (`-a`/`+a`/`abs(a)`).
+    ///
+    /// When `self`'s fill is NOT materialized, the freshly-built `result`
+    /// already carries the per-dtype default (`from_dynma`/`from_inner` leave
+    /// `fill_set: false`), so there is nothing to do. When it IS materialized,
+    /// the receiver's `fill_value` Python object is re-coerced to the RESULT's
+    /// native dtype (numpy stores the fill in `result.dtype`, so a float fill
+    /// on an int operand promoted by `/` casts to the float result; verified
+    /// live: `(int_ma_fill7 / 2).fill_value == 7.0`).
+    fn propagate_fill(&self, py: Python<'_>, result: PyMaskedArray) -> PyResult<PyMaskedArray> {
+        if !self.is_fill_materialized() {
+            return Ok(result);
+        }
+        let fill = self.fill_value(py)?;
+        let mut result = result;
+        let dt = result.dtype_name_cheap();
+        // numpy `_update_from` copies `_fill_value` VERBATIM, so when an op
+        // changes the dtype CATEGORY (only `abs(complex)` → real, here) numpy
+        // keeps the operand's complex fill on a real result — a value the
+        // result's native real dtype cannot represent. ferray stores the fill
+        // in the result's dtype, so coercing a complex fill into a real result
+        // would drop the imaginary part (R-CODE-4). That single corner is left
+        // at the per-dtype default rather than silently truncated; every
+        // same-category op (all arithmetic dunders, real/complex unary) coerces
+        // cleanly. The coercion error is matched (not swallowed): only a
+        // dtype-incompatible fill falls through to the default.
+        match set_fill_value_owned(py, &mut result.storage, &fill, dt) {
+            Ok(()) => Ok(result),
+            Err(e) if e.is_instance_of::<pyo3::exceptions::PyTypeError>(py) => Ok(result),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Apply a BUFFER-mutating operation, writing through to the base when the
     /// receiver is a view (numpy's shared-buffer write semantics, R-DEV-1).
     ///
@@ -951,6 +998,28 @@ impl PyMaskedArray {
     /// Egress the data buffer as a numpy `ndarray` of the NATIVE dtype.
     fn data_pyarray<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         dynma_data_pyarray(py, &self.snapshot(py)?)
+    }
+
+    /// Build the EQUIVALENT `numpy.ma.MaskedArray` from this array's CURRENT
+    /// snapshot — native-dtype data, the `.mask` getter's bool array OR the
+    /// `nomask` singleton, and the effective per-object `fill_value`. The
+    /// faithful-boundary egress used by [`PyMaskedArray::__repr__`] /
+    /// [`PyMaskedArray::__str__`] (#884) to delegate formatting to numpy's own
+    /// `array2string`.
+    ///
+    /// Passing the `mask` getter's value verbatim is load-bearing: it returns
+    /// the `nomask` singleton for a non-real-mask array, which numpy needs to
+    /// print the scalar `mask=False` repr (an all-False bool array would print
+    /// `mask=[False, ...]` instead — verified live numpy 2.4.4).
+    fn as_numpy_ma<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let np_ma = py.import("numpy")?.getattr("ma")?;
+        let data = self.data(py)?;
+        let mask = self.mask(py)?;
+        let fill = self.fill_value(py)?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("mask", mask)?;
+        kwargs.set_item("fill_value", fill)?;
+        np_ma.call_method("array", (data,), Some(&kwargs))
     }
 }
 
@@ -1967,18 +2036,36 @@ impl PyMaskedArray {
         }
     }
 
-    fn __repr__(&self) -> String {
-        let cur = match self.snapshot_gil() {
-            Ok(c) => c,
-            Err(_) => return "MaskedArray(<unavailable>)".to_string(),
-        };
-        let masked = cur.count().map(|c| cur.size() - c).unwrap_or(0);
-        format!(
-            "MaskedArray(shape={:?}, masked={}, dtype={})",
-            cur.shape(),
-            masked,
-            cur.dtype_name(),
-        )
+    /// `repr(a)` — byte-identical to `numpy.ma`'s `MaskedArray.__repr__`
+    /// (#884). numpy formats a masked array as the
+    /// `masked_array(data=..., mask=..., fill_value=...)` block
+    /// (`numpy/ma/core.py` `__repr__`), with masked positions shown as `--`,
+    /// a scalar `mask=False` for a `nomask` array, and numpy's own
+    /// `array2string` line-wrapping / summarization.
+    ///
+    /// Rather than reimplement numpy's `array2string`, the binding builds the
+    /// EQUIVALENT `numpy.ma.MaskedArray` from this array's CURRENT snapshot
+    /// (native-dtype data + the `.mask` getter's bool array / `nomask`
+    /// singleton + the effective `fill_value`, all #882/#883-aware) and
+    /// delegates to ITS `repr`. This guarantees identical output across every
+    /// dtype (real/complex/int/bool), shape (0-d/1-d/N-d/empty), nomask vs
+    /// masked, and all-masked. The `mask` getter already returns the `nomask`
+    /// singleton for a non-real-mask array (#849) — passing that (not an
+    /// all-False bool array) is what makes numpy print the scalar `mask=False`
+    /// (verified live numpy 2.4.4). Views format their gathered snapshot.
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        let np_ma = self.as_numpy_ma(py)?;
+        np_ma.repr()?.extract()
+    }
+
+    /// `str(a)` — byte-identical to `numpy.ma`'s `MaskedArray.__str__` (#884):
+    /// the bare data array with masked positions shown as `--`
+    /// (`[1.0 -- 3.0]`), NOT the `repr` block. Same numpy-delegation strategy
+    /// as [`PyMaskedArray::__repr__`] — build the equivalent
+    /// `numpy.ma.MaskedArray` and delegate to its `str`.
+    fn __str__(&self, py: Python<'_>) -> PyResult<String> {
+        let np_ma = self.as_numpy_ma(py)?;
+        np_ma.str()?.extract()
     }
 
     fn __len__(&self) -> usize {
@@ -2421,9 +2508,9 @@ impl PyMaskedArray {
     /// signed/unsigned int → `negative_int` (C-wrapping, so `-uint8(2)`
     /// wraps to `254`). `bool` raises `TypeError`, matching numpy 2.4
     /// (`-np.ma.array([True]) → TypeError: boolean negative … not supported`).
-    fn __neg__(&self) -> PyResult<Self> {
+    fn __neg__(&self, py: Python<'_>) -> PyResult<Self> {
         use ferray_ufunc::ops::arithmetic::{negative, negative_int};
-        let cur = self.snapshot_gil()?;
+        let cur = self.snapshot(py)?;
         let inner = match &cur {
             DynMa::F32(m) => carry_unary_mask(m, negative(m.data()).map_err(ferr_to_pyerr)?)?,
             DynMa::F64(m) => carry_unary_mask(m, negative(m.data()).map_err(ferr_to_pyerr)?)?,
@@ -2450,7 +2537,7 @@ impl PyMaskedArray {
             DynMa::Complex32(m) => carry_unary_mask(m, m.data().mapv(|z| -z))?,
             DynMa::Complex64(m) => carry_unary_mask(m, m.data().mapv(|z| -z))?,
         };
-        Ok(Self::from_dynma(inner))
+        self.propagate_fill(py, Self::from_dynma(inner))
     }
 
     /// Unary plus (`+a`), `numpy.ma`'s `__pos__` → `numpy.positive`. Returns a
@@ -2459,9 +2546,9 @@ impl PyMaskedArray {
     /// `bool` raises `TypeError` — numpy 2.4 has no `positive` loop for bool
     /// (`+np.ma.array([True]) → numpy.exceptions._UFuncNoLoopError`, a
     /// `TypeError` subclass; verified live).
-    fn __pos__(&self) -> PyResult<Self> {
+    fn __pos__(&self, py: Python<'_>) -> PyResult<Self> {
         use ferray_ufunc::ops::arithmetic::positive;
-        let cur = self.snapshot_gil()?;
+        let cur = self.snapshot(py)?;
         let inner = match &cur {
             DynMa::F32(m) => carry_unary_mask(m, positive(m.data()).map_err(ferr_to_pyerr)?)?,
             DynMa::F64(m) => carry_unary_mask(m, positive(m.data()).map_err(ferr_to_pyerr)?)?,
@@ -2483,7 +2570,7 @@ impl PyMaskedArray {
             DynMa::Complex32(m) => carry_unary_mask(m, m.data().clone())?,
             DynMa::Complex64(m) => carry_unary_mask(m, m.data().clone())?,
         };
-        Ok(Self::from_dynma(inner))
+        self.propagate_fill(py, Self::from_dynma(inner))
     }
 
     /// Absolute value (`abs(a)`), `numpy.ma`'s `__abs__` → `numpy.absolute`,
@@ -2494,9 +2581,9 @@ impl PyMaskedArray {
     /// identity (numpy `abs(uint)` is the value unchanged); `bool` → identity
     /// (`abs(np.ma.array([True, False])).dtype == bool`; `abs(True) == True`,
     /// verified live numpy 2.4.4).
-    fn __abs__(&self) -> PyResult<Self> {
+    fn __abs__(&self, py: Python<'_>) -> PyResult<Self> {
         use ferray_ufunc::ops::arithmetic::{absolute, absolute_int};
-        let cur = self.snapshot_gil()?;
+        let cur = self.snapshot(py)?;
         let inner = match &cur {
             DynMa::F32(m) => carry_unary_mask(m, absolute(m.data()).map_err(ferr_to_pyerr)?)?,
             DynMa::F64(m) => carry_unary_mask(m, absolute(m.data()).map_err(ferr_to_pyerr)?)?,
@@ -2525,7 +2612,12 @@ impl PyMaskedArray {
                 carry_mask_into(m, mag)?
             }
         };
-        Ok(Self::from_dynma(inner))
+        // #885: `abs(complex)` changes the dtype CATEGORY (complex → real); the
+        // receiver's complex fill cannot be stored in the real result dtype, so
+        // `propagate_fill` leaves the per-dtype default there (numpy keeps the
+        // complex fill verbatim, a documented best-effort corner). Same-dtype
+        // abs (real/int) carries the fill cleanly.
+        self.propagate_fill(py, Self::from_dynma(inner))
     }
 
     /// `a.real` — the real part as a REAL-dtype masked array, mask preserved.
@@ -2677,56 +2769,92 @@ impl PyMaskedArray {
 
     /// `a + b` — `numpy.ma`'s `__add__` → `add` (`numpy/ma/core.py:4313`).
     fn __add__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::Add, false)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::Add, false)?,
+        )
     }
     /// `b + a` — reflected `__radd__` → `add(other, self)` (`:4322`).
     fn __radd__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::Add, true)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::Add, true)?,
+        )
     }
     /// `a - b` — `__sub__` → `subtract` (`numpy/ma/core.py:4332`).
     fn __sub__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::Sub, false)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::Sub, false)?,
+        )
     }
     /// `b - a` — reflected `__rsub__` → `subtract(other, self)`.
     fn __rsub__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::Sub, true)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::Sub, true)?,
+        )
     }
     /// `a * b` — `__mul__` → `multiply` (`numpy/ma/core.py:4342`).
     fn __mul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::Mul, false)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::Mul, false)?,
+        )
     }
     /// `b * a` — reflected `__rmul__` → `multiply(other, self)`.
     fn __rmul__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::Mul, true)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::Mul, true)?,
+        )
     }
     /// `a / b` — `__truediv__` → `true_divide` (`numpy/ma/core.py:4362`).
     /// True (float) division: integer operands promote to float64 (NEP-50),
     /// and divisor-zero / non-finite positions are domain-masked
     /// (`_DomainedBinaryOperation`, `numpy/ma/core.py:1207`).
     fn __truediv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::TrueDiv, false)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::TrueDiv, false)?,
+        )
     }
     /// `b / a` — reflected `__rtruediv__` → `true_divide(other, self)`.
     fn __rtruediv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::TrueDiv, true)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::TrueDiv, true)?,
+        )
     }
     /// `a // b` — `__floordiv__` → `floor_divide` (`numpy/ma/core.py:4378`),
     /// divisor-zero domain-masked.
     fn __floordiv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::FloorDiv, false)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::FloorDiv, false)?,
+        )
     }
     /// `b // a` — reflected `__rfloordiv__` → `floor_divide(other, self)`.
     fn __rfloordiv__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::FloorDiv, true)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::FloorDiv, true)?,
+        )
     }
     /// `a % b` — `__mod__` → `remainder` (`numpy/ma/core.py:4386`),
     /// divisor-zero domain-masked.
     fn __mod__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::Mod, false)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::Mod, false)?,
+        )
     }
     /// `b % a` — reflected `__rmod__` → `remainder(other, self)`.
     fn __rmod__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Self> {
-        binary_op(py, &self.snapshot(py)?, other, BinOp::Mod, true)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::Mod, true)?,
+        )
     }
     /// `a ** b` — `__pow__` → `power` (`numpy/ma/core.py:4394`). The optional
     /// ternary-pow `modulo` argument is unsupported (numpy.ma ignores it too).
@@ -2741,7 +2869,10 @@ impl PyMaskedArray {
                 "pow() 3rd argument not allowed unless all arguments are integers",
             ));
         }
-        binary_op(py, &self.snapshot(py)?, other, BinOp::Pow, false)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::Pow, false)?,
+        )
     }
     /// `b ** a` — reflected `__rpow__` → `power(other, self)`.
     fn __rpow__(
@@ -2755,7 +2886,10 @@ impl PyMaskedArray {
                 "pow() 3rd argument not allowed unless all arguments are integers",
             ));
         }
-        binary_op(py, &self.snapshot(py)?, other, BinOp::Pow, true)
+        self.propagate_fill(
+            py,
+            binary_op(py, &self.snapshot(py)?, other, BinOp::Pow, true)?,
+        )
     }
 
     // -- Comparison dunders (#863, REQ-2 R-B + REQ-7 R-G) ---------------------
