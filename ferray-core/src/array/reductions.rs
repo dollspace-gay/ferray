@@ -23,6 +23,25 @@
 //  - empty-array min/max raising ValueError — NOT-STARTED (open blocker #782).
 //  - cumsum / cumprod live as ferray-stats free functions; their narrow-int
 //    promotion is a separate ferray-stats blocker that reuses `ReduceAcc`.
+//  - argmax / argmin (REQ-40, REQ-41) — SHIPPED: `Array::argmax`/`argmin`
+//    (flattened, returning `Option<i64>`) and `argmax_axis`/`argmin_axis`
+//    (returning `Array<i64, IxDyn>`) in this file. First-occurrence on ties and
+//    NaN-first propagation (numpy/_core/fromnumeric.py:1222 `argmax`,
+//    :1261-1262 ties; :1322 `argmin`, :1361-1362 ties). Empty flattened form
+//    returns `None` (mirroring `min`/`max`'s `Option` analog; the ferray-python
+//    boundary maps `None`→`ValueError` as numpy does). Result index dtype is
+//    `i64` (ferray's `intp` analog), independent of element dtype. Consumers:
+//    the boundary methods themselves are the public API surface (like
+//    `sum`/`min`), exercised by the `ArrayView` mirror and the in-file tests.
+//  - integer/bool mean → f64 (REQ-42) — SHIPPED: the `MeanAcc` trait (this
+//    file) maps bool/integer element types to an `f64` accumulator-and-result,
+//    while `f32`/`f64`/complex stay themselves, so `Array::<i32, _>::mean()`
+//    returns `f64` matching numpy, which casts bool/unsigned/signed int to
+//    float64 before averaging (numpy/_core/_methods.py:124-127). `mean`/
+//    `mean_axis` and the `ArrayView::mean` mirror are now bounded by `MeanAcc`
+//    instead of `Float`; existing `f32`/`f64` means are unchanged
+//    (`MeanAcc::Mean == Self`). Consumers: `Array::var`/`std` (`self.mean()?`)
+//    and the `ArrayView` mirror, all in this file.
 //
 // See: https://github.com/dollspace-gay/ferray/issues/368, /issues/780
 
@@ -121,6 +140,167 @@ impl ReduceAcc for num_complex::Complex<f64> {
     fn widen(self) -> Self {
         self
     }
+}
+
+// ---------------------------------------------------------------------------
+// MeanAcc — NumPy's mean accumulator-and-result dtype.
+// ---------------------------------------------------------------------------
+
+/// Maps an element type `T` to the type NumPy uses to *accumulate* (and
+/// return) `mean` over it.
+///
+/// NumPy casts a bool / unsigned-int / signed-int input to `float64` before
+/// averaging:
+///
+/// > "Cast bool, unsigned int, and int to float64 by default ...
+/// > `dtype = mu.dtype('f8')`"
+/// > — `numpy/_core/_methods.py:124-127`
+///
+/// so `np.mean(np.array([1, 2, 3], np.int32))` is `float64 2.0` and
+/// `np.mean([True, False, True])` is `float64 0.6666…`. Floating-point inputs
+/// keep their own dtype (`f32`→`f32`, `f64`→`f64`), and complex stays itself.
+///
+/// The mapping:
+///   - `bool / i8.. / u8.. → f64`
+///   - `f32 → f32`, `f64 → f64` (unchanged — `Mean == Self`)
+///   - `Complex<f32> → Complex<f32>`, `Complex<f64> → Complex<f64>`
+pub trait MeanAcc: Element + Copy {
+    /// The accumulator-and-result element type for `mean` over `Self`.
+    type Mean: Element
+        + Copy
+        + std::ops::Add<Output = Self::Mean>
+        + std::ops::Div<Output = Self::Mean>;
+
+    /// Widen one element into the mean accumulator type, matching NumPy's
+    /// pre-average cast (`true → 1.0`, `false → 0.0` for `bool`).
+    fn widen_mean(self) -> Self::Mean;
+
+    /// Construct the divisor (element count `n`) in the accumulator type.
+    fn count(n: usize) -> Self::Mean;
+}
+
+macro_rules! impl_mean_acc_to_f64 {
+    ($($t:ty),* $(,)?) => {
+        $(
+            impl MeanAcc for $t {
+                type Mean = f64;
+                #[inline]
+                fn widen_mean(self) -> f64 {
+                    self as f64
+                }
+                #[inline]
+                fn count(n: usize) -> f64 {
+                    n as f64
+                }
+            }
+        )*
+    };
+}
+
+// bool / all integer dtypes average in f64 (numpy/_core/_methods.py:124-127).
+impl_mean_acc_to_f64!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128);
+
+impl MeanAcc for bool {
+    type Mean = f64;
+    #[inline]
+    fn widen_mean(self) -> f64 {
+        if self { 1.0 } else { 0.0 }
+    }
+    #[inline]
+    fn count(n: usize) -> f64 {
+        n as f64
+    }
+}
+
+// Floating-point inputs keep their own dtype (Mean == Self).
+impl MeanAcc for f32 {
+    type Mean = f32;
+    #[inline]
+    fn widen_mean(self) -> f32 {
+        self
+    }
+    #[inline]
+    fn count(n: usize) -> f32 {
+        n as f32
+    }
+}
+
+impl MeanAcc for f64 {
+    type Mean = f64;
+    #[inline]
+    fn widen_mean(self) -> f64 {
+        self
+    }
+    #[inline]
+    fn count(n: usize) -> f64 {
+        n as f64
+    }
+}
+
+impl MeanAcc for num_complex::Complex<f32> {
+    type Mean = num_complex::Complex<f32>;
+    #[inline]
+    fn widen_mean(self) -> Self {
+        self
+    }
+    #[inline]
+    fn count(n: usize) -> Self {
+        num_complex::Complex::new(n as f32, 0.0)
+    }
+}
+
+impl MeanAcc for num_complex::Complex<f64> {
+    type Mean = num_complex::Complex<f64>;
+    #[inline]
+    fn widen_mean(self) -> Self {
+        self
+    }
+    #[inline]
+    fn count(n: usize) -> Self {
+        num_complex::Complex::new(n as f64, 0.0)
+    }
+}
+
+/// First-occurrence, NaN-first arg-reduction over a flat element iterator.
+///
+/// Mirrors NumPy's `argmax`/`argmin` (`numpy/_core/fromnumeric.py:1222`,
+/// `:1322`): on ties the *first* occurrence wins (`:1261-1262`, `:1361-1362`),
+/// and when any NaN is present the index of the *first* NaN is returned
+/// (NaN-propagating, NaN-first — live oracle numpy 2.4.5:
+/// `np.argmax([1.0, nan, 3.0, nan]) == 1`).
+///
+/// Returns `None` for an empty iterator, the `Option` analog `min`/`max` use;
+/// the ferray-python boundary maps `None`→`ValueError` as numpy does.
+#[inline]
+fn arg_reduce<T: PartialOrd + Copy>(iter: impl Iterator<Item = T>, take_min: bool) -> Option<i64> {
+    let mut best_idx: Option<i64> = None;
+    let mut best: Option<T> = None;
+    for (i, x) in iter.enumerate() {
+        let i = i as i64;
+        // NaN-first: the first NaN seen wins immediately and is never beaten.
+        if x.partial_cmp(&x).is_none() {
+            return Some(i);
+        }
+        match best {
+            None => {
+                best = Some(x);
+                best_idx = Some(i);
+            }
+            Some(b) => {
+                // Strict comparison => first occurrence wins on ties.
+                let replace = match x.partial_cmp(&b) {
+                    Some(std::cmp::Ordering::Less) => take_min,
+                    Some(std::cmp::Ordering::Greater) => !take_min,
+                    _ => false,
+                };
+                if replace {
+                    best = Some(x);
+                    best_idx = Some(i);
+                }
+            }
+        }
+    }
+    best_idx
 }
 
 /// Generic min/max fold step that propagates NaN per `NumPy` semantics.
@@ -316,6 +496,84 @@ where
         self.fold_axis_min_max(axis, false)
     }
 
+    /// Flat index of the maximum element (whole-array reduction).
+    ///
+    /// Returns `None` for an empty array (the `Option` analog `min`/`max`
+    /// use; the ferray-python boundary maps `None`→`ValueError`, matching
+    /// `np.argmax([])`). On ties the **first** occurrence wins, and when any
+    /// NaN is present the index of the **first** NaN is returned (NaN-first),
+    /// matching `np.argmax` (`numpy/_core/fromnumeric.py:1222`, ties at
+    /// `:1261-1262`; live oracle `np.argmax([1.0, nan, 3.0, nan]) == 1`). The
+    /// index type is `i64` (ferray's `intp` analog), independent of `T`.
+    pub fn argmax(&self) -> Option<i64> {
+        arg_reduce(self.iter().copied(), false)
+    }
+
+    /// Flat index of the minimum element (whole-array reduction).
+    ///
+    /// Mirror of [`Array::argmax`] with min substituted for max: first
+    /// occurrence on ties, NaN-first, `None` on empty, `i64` index
+    /// (`numpy/_core/fromnumeric.py:1322`, ties at `:1361-1362`; live oracle
+    /// `np.argmin([1.0, nan, 3.0]) == 1`).
+    pub fn argmin(&self) -> Option<i64> {
+        arg_reduce(self.iter().copied(), true)
+    }
+
+    /// Indices of the maxima along `axis`, as an `Array<i64, IxDyn>` with the
+    /// reduced axis removed. First-occurrence on ties, NaN-first per lane
+    /// (`numpy/_core/fromnumeric.py:1222`).
+    ///
+    /// # Errors
+    /// Returns `FerrayError::AxisOutOfBounds` if `axis >= ndim`, or
+    /// `FerrayError::ShapeMismatch` if the reduced axis is empty (matching
+    /// numpy's `ValueError` on an empty argmax axis).
+    pub fn argmax_axis(&self, axis: Axis) -> FerrayResult<Array<i64, IxDyn>>
+    where
+        D::NdarrayDim: ndarray::RemoveAxis,
+    {
+        self.arg_axis(axis, false)
+    }
+
+    /// Indices of the minima along `axis`. See [`Array::argmax_axis`].
+    pub fn argmin_axis(&self, axis: Axis) -> FerrayResult<Array<i64, IxDyn>>
+    where
+        D::NdarrayDim: ndarray::RemoveAxis,
+    {
+        self.arg_axis(axis, true)
+    }
+
+    /// Internal: per-lane arg-reduction along `axis`. Each lane is a 1D view
+    /// orthogonal to `axis`; the reduced index is the position within the lane.
+    fn arg_axis(&self, axis: Axis, take_min: bool) -> FerrayResult<Array<i64, IxDyn>>
+    where
+        D::NdarrayDim: ndarray::RemoveAxis,
+    {
+        let ndim = self.ndim();
+        if axis.index() >= ndim {
+            return Err(crate::error::FerrayError::axis_out_of_bounds(
+                axis.index(),
+                ndim,
+            ));
+        }
+        if self.shape()[axis.index()] == 0 {
+            return Err(crate::error::FerrayError::shape_mismatch(
+                "attempt to get argmax/argmin of an empty axis",
+            ));
+        }
+        let nd_axis = ndarray::Axis(axis.index());
+        let lanes = self.inner.lanes(nd_axis);
+        let mut out: Vec<i64> = Vec::with_capacity(lanes.into_iter().len());
+        for lane in self.inner.lanes(nd_axis) {
+            // Lane is non-empty (empty axis already rejected), so arg_reduce
+            // returns Some; default 0 is unreachable but keeps the code panic-free.
+            let idx = arg_reduce(lane.iter().copied(), take_min).unwrap_or(0);
+            out.push(idx);
+        }
+        let mut out_shape: Vec<usize> = self.shape().to_vec();
+        out_shape.remove(axis.index());
+        Array::from_vec(IxDyn::from(&out_shape[..]), out)
+    }
+
     /// Internal: per-lane min/max via manual lane iteration. Avoids the
     /// init-bias problem of `fold_axis` (which applies a single init to every
     /// lane, even though min/max have no identity element).
@@ -348,26 +606,35 @@ where
 
 impl<T, D> Array<T, D>
 where
-    T: Element + Float,
+    T: MeanAcc,
     D: Dimension,
 {
     /// Arithmetic mean of all elements. Returns `None` for an empty array.
-    pub fn mean(&self) -> Option<T> {
+    ///
+    /// The result type is the NumPy mean accumulator [`MeanAcc::Mean`]:
+    /// bool / integer inputs average in (and return) `f64`, while `f32`/`f64`/
+    /// complex keep their own dtype. This matches numpy, which casts bool /
+    /// unsigned / signed int to `float64` before averaging
+    /// (`numpy/_core/_methods.py:124-127`), so `Array::<i32, _>::mean()` is
+    /// `Some(f64)` and `Array::<bool, _>::mean()` is `Some(f64)` (e.g.
+    /// `0.666…`), matching `np.mean`.
+    pub fn mean(&self) -> Option<<T as MeanAcc>::Mean> {
         let n = self.size();
         if n == 0 {
             return None;
         }
-        let sum: T = self
+        let sum = self
             .iter()
             .copied()
-            .fold(<T as Element>::zero(), |acc, x| acc + x);
-        Some(sum / T::from(n).unwrap())
+            .fold(<T as MeanAcc>::Mean::zero(), |acc, x| acc + x.widen_mean());
+        Some(sum / <T as MeanAcc>::count(n))
     }
 
-    /// Mean along an axis.
-    pub fn mean_axis(&self, axis: Axis) -> FerrayResult<Array<T, IxDyn>>
+    /// Mean along an axis. Element type is the promoted [`MeanAcc::Mean`]
+    /// (bool / integer lanes average in `f64`; `f32`/`f64` stay themselves).
+    pub fn mean_axis(&self, axis: Axis) -> FerrayResult<Array<<T as MeanAcc>::Mean, IxDyn>>
     where
-        T: ReduceAcc<Acc = T>,
+        <T as MeanAcc>::Mean: ReduceAcc<Acc = <T as MeanAcc>::Mean>,
         D::NdarrayDim: ndarray::RemoveAxis,
     {
         let ndim = self.ndim();
@@ -383,11 +650,20 @@ where
                 "cannot compute mean along empty axis",
             ));
         }
-        let sums = self.sum_axis(axis)?;
-        let n_t = T::from(n).unwrap();
+        // Widen each element into the mean accumulator, then sum along the axis
+        // and divide by the lane length.
+        let widened = self.map_to::<<T as MeanAcc>::Mean>(MeanAcc::widen_mean);
+        let sums = widened.sum_axis(axis)?;
+        let n_t = <T as MeanAcc>::count(n);
         Ok(sums.mapv(|x| x / n_t))
     }
+}
 
+impl<T, D> Array<T, D>
+where
+    T: Element + Float + MeanAcc<Mean = T>,
+    D: Dimension,
+{
     /// Variance with `ddof` degrees of freedom (Bessel's correction = 1).
     ///
     /// Returns `None` for an empty array, or when `ddof >= n`.
@@ -482,24 +758,34 @@ where
         let first = iter.next()?;
         Some(iter.fold(first, |acc, x| reduce_step(acc, x, false)))
     }
+
+    /// Flat index of the maximum element. See [`Array::argmax`].
+    pub fn argmax(&self) -> Option<i64> {
+        arg_reduce(self.iter().copied(), false)
+    }
+
+    /// Flat index of the minimum element. See [`Array::argmin`].
+    pub fn argmin(&self) -> Option<i64> {
+        arg_reduce(self.iter().copied(), true)
+    }
 }
 
 impl<T, D> ArrayView<'_, T, D>
 where
-    T: Element + Float,
+    T: MeanAcc,
     D: Dimension,
 {
-    /// Mean. See [`Array::mean`].
-    pub fn mean(&self) -> Option<T> {
+    /// Mean. See [`Array::mean`] — returns the promoted [`MeanAcc::Mean`].
+    pub fn mean(&self) -> Option<<T as MeanAcc>::Mean> {
         let n = self.size();
         if n == 0 {
             return None;
         }
-        let sum: T = self
+        let sum = self
             .iter()
             .copied()
-            .fold(<T as Element>::zero(), |acc, x| acc + x);
-        Some(sum / T::from(n).unwrap())
+            .fold(<T as MeanAcc>::Mean::zero(), |acc, x| acc + x.widen_mean());
+        Some(sum / <T as MeanAcc>::count(n))
     }
 }
 

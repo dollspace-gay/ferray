@@ -89,6 +89,41 @@ Agent 1a must complete before 1b/1c/1d can start. 1b, 1c, 1d can run in parallel
 ### Display and Formatting
 - REQ-39: Implement `Display` and `Debug` for all `NdArray` variants. Display format must match NumPy's array printing: aligned columns, truncated output for large arrays (>1000 elements shows first/last 3 rows with `...`), configurable precision via `set_print_options(precision, threshold, linewidth, edgeitems)`. Default: precision=8, threshold=1000, linewidth=75, edgeitems=3.
 
+### Reductions (argmin / argmax / integer-mean — NumPy parity)
+These extend the instance-method reductions in `array/reductions.rs`
+(`sum`/`prod`/`min`/`max`/`mean`/`var`/`std`/`any`/`all` + the `ReduceAcc`
+accumulator-promotion trait shipped in #780). The functions below are present in
+NumPy but absent or under-constrained in ferray-core today.
+
+- REQ-40: Implement `argmax` — return the index (NumPy `intp`, i.e. `i64` on a
+  64-bit platform) of the maximum element. Whole-array form returns the flat
+  index; the axis form returns an `Array<i64, IxDyn>` with the reduced axis
+  removed. Semantics, exact (`numpy/_core/fromnumeric.py:1221-1314`):
+  (a) **first occurrence** on ties — "In case of multiple occurrences of the
+  maximum values, the indices corresponding to the first occurrence are
+  returned" (`fromnumeric.py:1261-1262`);
+  (b) **NaN-propagating, NaN-first** — when any NaN is present, the returned
+  index is that of the *first* NaN, not of the numeric maximum (live oracle
+  numpy 2.4.5: `np.argmax([1.0, nan, 3.0, nan]) == 1`);
+  (c) **empty → error** — an empty reduction raises `ValueError`
+  ("attempt to get argmax of an empty sequence", numpy 2.4.5); ferray returns
+  `Err(FerrayError)` rather than panicking;
+  (d) **result dtype is `intp`/`int64`**, independent of the input element dtype
+  (`np.argmax(np.arange(5)).dtype == int64`).
+- REQ-41: Implement `argmin` — the minimum-index mirror of REQ-40, identical
+  contract with min substituted for max (`numpy/_core/fromnumeric.py:1321-...`):
+  first-occurrence on ties (`fromnumeric.py:1361-1362`), NaN-first propagation
+  (`np.argmin([1.0, nan, 3.0, nan]) == 1`), empty → `ValueError`
+  ("attempt to get argmin of an empty sequence"), result dtype `intp`/`int64`.
+- REQ-42: Integer/bool `mean` (and `mean_axis`) must promote to `f64`. NumPy
+  casts a bool/integer input to `float64` before averaging: "Cast bool, unsigned
+  int, and int to float64 by default ... `dtype = mu.dtype('f8')`"
+  (`numpy/_core/_methods.py:124-127`), so `np.mean(np.array([1,2,3], np.int32))`
+  is `float64 2.0` and `np.mean([True,False,True])` is `float64 0.6667` (live
+  oracle numpy 2.4.5). Today ferray's `mean`/`mean_axis` are bounded `T: Element
+  + Float`, so `Array::<i32, _>::mean()` does not compile and an integer mean is
+  unreachable. The contract: the mean of an integer or bool array yields `f64`.
+
 ## Acceptance Criteria
 - [ ] AC-1: `NdArray<f64, Ix2>` can be created, indexed, sliced, reshaped, and transposed. All operations return correct results verified against NumPy fixtures.
 - [ ] AC-2: All five ownership variants (Array, ArrayView, ArrayViewMut, ArcArray, CowArray) compile and enforce their borrow semantics — mutable aliasing is a compile error.
@@ -108,6 +143,15 @@ Agent 1a must complete before 1b/1c/1d can start. 1b, 1c, 1d can run in parallel
 - [ ] AC-16: `.mapv(|x| x * 2.0)` produces correct element-doubled array. `.iter()` visits all elements in logical order. `.axis_iter(Axis(0))` yields correct sub-arrays.
 - [ ] AC-17: `println!("{}", array_2d)` produces NumPy-style formatted output. Arrays larger than threshold show truncated output with `...`.
 - [ ] AC-18: `ferray_core::constants::PI` == `std::f64::consts::PI`. `ferray_core::constants::INF` == `f64::INFINITY`.
+
+- [ ] AC-19: `Array::<i64, _>::from_vec([3,1,4,1,5,9,2]).argmax()` returns `5`
+  and `.argmin()` returns `1` (first occurrence on the tied `1`s), matching
+  `np.argmax`/`np.argmin`. NaN case: `argmax`/`argmin` of `[1.0, NaN, 3.0, NaN]`
+  both return index `1` (NaN-first). Empty array → `Err(FerrayError)`, never a
+  panic. Result element type is `i64`.
+- [ ] AC-20: `Array::<i32, _>::from_vec([1,2,3]).mean()` returns `f64` `2.0`;
+  `Array::<bool, _>` mean returns `f64` matching `np.mean` (e.g. `0.6666...`).
+  Verified against the numpy oracle; the int/bool `mean` path compiles.
 
 ## Architecture
 
@@ -177,3 +221,33 @@ ferray-core/
 - File I/O (handled by ferray-io)
 - Linear algebra (handled by ferray-linalg)
 - Random number generation (handled by ferray-random)
+
+
+## REQ status (reductions extension — argmin / argmax / integer-mean)
+
+Two states only (goal.md R-DEFER-2). ferray-core cites use symbol anchors
+(R-CITE-2b); numpy upstream cites use `file:line` against the read-only tree at
+`/home/doll/numpy-ref` (oracle: numpy 2.4.5).
+
+| REQ | Status | Evidence |
+|---|---|---|
+| REQ-40 (argmax) | SHIPPED | `pub fn argmax` (flattened, `Option<i64>`) and `pub fn argmax_axis` (`Array<i64, IxDyn>`) on `Array` in `reductions.rs`, sharing the `arg_reduce` helper (first-occurrence on ties via strict comparison; NaN-first via `partial_cmp(&x).is_none()`). NumPy contract: `numpy/_core/fromnumeric.py:1222` (`argmax`), first-occurrence ties `:1261-1262`, NaN-first / `intp` result; empty flattened → `None` (the `Option` analog `min`/`max` use, mapped to `ValueError` at the ferray-python boundary). Consumers (non-test): the `ArrayView::argmax` mirror in `reductions.rs` and the public-API boundary method itself (like `sum`/`min`); pinned by `argmax_argmin_basic`/`_nan_first`/`_axis_2d` in `ferray-core/tests/divergence_argreduce.rs` (oracle: numpy 2.4.5). |
+| REQ-41 (argmin) | SHIPPED | `pub fn argmin`/`argmin_axis` on `Array` (and the `ArrayView::argmin` mirror) in `reductions.rs` — the min mirror of REQ-40 through the shared `arg_reduce(.., take_min=true)`. NumPy contract: `numpy/_core/fromnumeric.py:1322` (`argmin`), first-occurrence ties `:1361-1362`, NaN-first, `intp` result, empty→`None`. Pinned by `argmin_first_occurrence_on_ties`/`argmax_argmin_empty_returns_none` in `divergence_argreduce.rs`. |
+| REQ-42 (integer/bool mean → f64) | SHIPPED | The `MeanAcc` trait in `reductions.rs` maps bool / signed-int / unsigned-int element types to an `f64` accumulator-and-result while `f32`/`f64`/complex keep their dtype (`Mean == Self`); `Array::mean`/`mean_axis` and the `ArrayView::mean` mirror are now bounded by `MeanAcc` instead of `Float`, so `Array::<i32, _>::mean()` returns `f64`. NumPy casts bool/unsigned/signed int to `float64` before averaging: `numpy/_core/_methods.py:124-127` ("Cast bool, unsigned int, and int to float64 by default ... `dtype = mu.dtype('f8')`"). Consumers (non-test): `Array::var`/`std` call `self.mean()?` (bounded `MeanAcc<Mean = T>`) and the `ArrayView` mirror, all in `reductions.rs`. Pinned by `mean_i32_returns_f64`/`mean_bool_returns_f64`/`mean_f32_stays_f32`/`mean_axis_int_returns_f64` in `divergence_argreduce.rs`. |
+
+### Verification (gates the builder for REQ-40..42)
+- `cargo test -p ferray-core` — existing reduction unit tests in `reductions.rs`
+  stay green; the builder adds first-occurrence / NaN-first / empty-error tests
+  for argmin/argmax and an int/bool-mean→f64 test.
+- numpy oracle (R-CHAR-3): expected values from live numpy 2.4.5 —
+  `np.argmax([1.0, nan, 3.0, nan]) == 1`, `np.argmin([3,1,4,1,5,1]) == 1`,
+  `np.argmax([])` raises `ValueError`, `np.mean(np.int32([1,2,3])) == 2.0`
+  (dtype `float64`), `np.mean([True,False,True])` ≈ `0.6667` (dtype `float64`).
+- `cargo clippy -p ferray-core --all-targets -- -D warnings` and
+  `cargo fmt --check`.
+
+All three REQs are SHIPPED: the impls landed in `reductions.rs` and the oracle
+checks above pass via `ferray-core/tests/divergence_argreduce.rs` (14 pins,
+green under both the default and `FERRAY_FORCE_SCALAR=1` builds), with the
+corresponding rows in the `reductions.rs` `//!` REQ-status table updated.
+
