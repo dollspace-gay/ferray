@@ -113,7 +113,10 @@ pub fn extract_axis_tuple(obj: &Bound<'_, PyAny>) -> PyResult<Vec<isize>> {
 /// entry and stacks the results, mirroring numpy's `q array_like` contract
 /// (R-DEV-2). A non-numeric / non-sequence object raises `TypeError`,
 /// matching numpy's `asarray(q)` failure.
-#[allow(clippy::type_complexity, reason = "scalar-vs-sequence sum type is clearer inline than a named enum")]
+#[allow(
+    clippy::type_complexity,
+    reason = "scalar-vs-sequence sum type is clearer inline than a named enum"
+)]
 pub fn extract_q(obj: &Bound<'_, PyAny>) -> PyResult<Result<Vec<f64>, f64>> {
     // A scalar must be matched first: a 0-d numpy array / Python float both
     // extract as f64, and numpy treats those as the scalar-q (collapsed) form.
@@ -503,6 +506,42 @@ pub fn pyscalar_default_dtype(obj: &Bound<'_, PyAny>) -> Option<&'static str> {
         return Some("float64");
     }
     None
+}
+
+/// Normalize any dtype-like Python object — a `str` (`"float64"`), a numpy
+/// scalar *type* object (`numpy.float64`), or a `numpy.dtype` instance
+/// (`numpy.dtype("int8")`) — to its canonical numpy dtype name string
+/// (`"float64"`, `"int8"`, `"complex128"`, …).
+///
+/// numpy's creation functions accept all three forms in `dtype=` because the
+/// front-ends funnel the argument through `numpy.dtype(obj)`
+/// (`numpy/_core/numeric.py def full` -> `empty(shape, dtype, …)`; the C
+/// `PyArray_DescrConverter` accepts a type object, a `dtype` instance, or a
+/// string). ferray's bindings bound `dtype` as a PyO3 `&str`, so passing the
+/// type object ferray itself now exposes (`fr.float64`) raised
+/// `TypeError: argument 'dtype': 'type' object is not an instance of 'str'`.
+/// Routing the incoming object through `numpy.dtype(obj).name` reproduces
+/// numpy's exact acceptance set and yields the canonical string the dispatch
+/// macros consume (R-DEV-2). An object numpy can't interpret as a dtype
+/// surfaces numpy's own `TypeError` here, matching `np.zeros(3, dtype=object())`.
+pub fn normalize_dtype(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<String> {
+    let np = py.import("numpy")?;
+    let dt = np.getattr("dtype")?.call1((obj,))?;
+    dt.getattr("name")?.extract()
+}
+
+/// Normalize an optional `dtype=` argument: `None` (the default) passes
+/// through as `None`, otherwise the object is normalized through
+/// [`normalize_dtype`]. Used by every creation binding whose `dtype` defaults
+/// to "inherit / infer" (`full`, `arange`, `linspace`, `*_like`, …).
+pub fn normalize_opt_dtype(
+    py: Python<'_>,
+    obj: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Option<String>> {
+    match obj {
+        None => Ok(None),
+        Some(o) => Ok(Some(normalize_dtype(py, o)?)),
+    }
 }
 
 /// Normalise any array-like Python object (numpy.ndarray, list, tuple,

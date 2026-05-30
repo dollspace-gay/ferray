@@ -34,6 +34,8 @@
 //! | RC-ARANGEINT (integer dtype, fractional step) | SHIPPED | `arange_int` counts elements from the float division then fills with integer arithmetic (`T(start) + i*T(step)`), so `np.arange(0,5,0.5,dtype='int64')` is ten zeros. Pinned green: `test_arange_float_step_with_int_dtype_does_not_zero_step_error`. |
 //! | RC-LINSPACE (retstep / int dtype / negative num) | SHIPPED | `linspace` binds `num` signed + validates via `validate_num_samples` (`function_base.py:122-126`), returns `(samples, step)` on `retstep=True` (`function_base.py:185-186`), and floors+casts for an integer `dtype` (`function_base.py:181-182`); `logspace`/`geomspace` accept an integer `dtype` via `float_range_to_int_array` (numpy `astype`, `function_base.py:453`). Pinned green: `test_linspace_negative_num_raises_valueerror`, `test_linspace_retstep_returns_tuple`, `test_linspace_integer_dtype_floors_toward_neg_inf`, `test_logspace_integer_dtype_supported`, `test_geomspace_integer_dtype_supported`. |
 //! | RC-F16 (float16 dtype) | SHIPPED | The `creation_dispatch` `float16` arm builds the values in f32 via ferray-core then narrows to `float16` with numpy's `astype` (the installed pyo3-numpy has no f16 `NumpyElement`); consumed by `zeros`/`ones`/`empty`/`zeros_like`/`ones_like`. Pinned green: `test_zeros_float16_dtype_supported`, `test_zeros_like_preserves_float16_dtype`. |
+//! | RC-DTYPEOBJ (accept dtype type-objects / `np.dtype` instances / str) | SHIPPED | `normalize_dtype`/`normalize_opt_dtype` in `conv.rs` route any `dtype=` object through `numpy.dtype(obj).name` (numpy's `PyArray_DescrConverter` accepts all three forms), consumed by `zeros`/`ones`/`empty`/`full`/`eye`/`identity`/`tri`/`arange`/`linspace`/`logspace`/`geomspace`/`zeros_like`/`ones_like`/`empty_like`/`full_like` here. numpy: `np.zeros(3, dtype=np.float64)` / `np.dtype('int8')` both accepted; `fr.float64 is np.float64`. Pinned green: `tests/test_expansion_dtype_accept.py::test_zeros_accepts_all_dtype_spellings`, `::test_eye_accepts_all_dtype_spellings`, `::test_ferray_reexposed_type_object_is_numpy_type`. |
+//! | RC-COMPLEX (complex64/complex128 creation kernel) | SHIPPED | `creation_dispatch!`'s `complex64`/`complex128` arms build `ArrayD<Complex<f32|f64>>` via ferray-core's `Element`-generic `zeros`/`ones` and push them across the boundary with `complex_ferray_to_pyarray` (the shared fft helper); `full_impl` handles complex fills via `extract_complex`. Consumed by `zeros`/`ones`/`empty`/`full`/`full_like`. numpy: `np.zeros(3, dtype='complex128')`, `np.full((2,), 1+2j).dtype == complex128` (numpy/_core/numeric.py:382-384). Pinned green: `tests/test_expansion_dtype_accept.py::test_zeros_complex_dtype`, `::test_full_complex_fill_default_dtype`, `::test_full_complex_explicit_dtype`. |
 //! | RC-ARANGE-FLOAT (per-element float construction) | NOT-STARTED | `np.arange(1.0,2.0,0.3)` last element is `1.9000000000000001`; ferray-core's float `arange` diverges. Root cause is in ferray-core (`creation/mod.rs`), not this binding — open ferray-core follow-up. Pin: `test_arange_float_last_element_matches_numpy`. |
 //! | RC-GEOM-EXACT (geomspace endpoint pinning) | NOT-STARTED | `np.geomspace(-1,-1000,4)` is exactly `[-1,-10,-100,-1000]` via sign rotation + endpoint pinning; ferray-core's `geomspace` lacks both. Root cause in ferray-core, not this binding — open ferray-core follow-up. Pin: `test_geomspace_negative_endpoints_exact`. |
 
@@ -47,10 +49,12 @@ use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
 use crate::conv::{
-    as_ndarray, dtype_name, extract_shape, extract_signed_shape, ferr_to_pyerr,
-    pyscalar_default_dtype, validate_dim, validate_num_samples,
+    as_ndarray, dtype_name, extract_shape, extract_signed_shape, ferr_to_pyerr, normalize_dtype,
+    normalize_opt_dtype, pyscalar_default_dtype, validate_dim, validate_num_samples,
 };
+use crate::fft::complex_ferray_to_pyarray;
 use crate::{match_dtype_all, match_dtype_float};
+use num_complex::Complex;
 
 // ---------------------------------------------------------------------------
 // Shape + dtype creation
@@ -124,9 +128,23 @@ macro_rules! creation_dispatch {
                 let arr: ArrayD<bool> = $func(dim).map_err(ferr_to_pyerr)?;
                 arr.into_pyarray($py).map_err(ferr_to_pyerr)?.into_any()
             }
+            "complex128" | "c16" => {
+                // ferray-core creation is generic over `Element`, which
+                // includes `Complex<f64>`; the installed pyo3-numpy has no
+                // `NumpyElement`/`into_pyarray` for complex, so we push the
+                // result across the boundary via the manual complex helper
+                // shared with the fft bindings. numpy's `zeros`/`ones`/`full`
+                // support complex dtypes, so this restores parity.
+                let arr: ArrayD<Complex<f64>> = $func(dim).map_err(ferr_to_pyerr)?;
+                complex_ferray_to_pyarray($py, arr)?
+            }
+            "complex64" | "c8" => {
+                let arr: ArrayD<Complex<f32>> = $func(dim).map_err(ferr_to_pyerr)?;
+                complex_ferray_to_pyarray($py, arr)?
+            }
             other => {
                 return Err(PyTypeError::new_err(format!(
-                    "unsupported dtype: {other:?} (supported: bool, int8/16/32/64, uint8/16/32/64, float32/64)"
+                    "unsupported dtype: {other:?} (supported: bool, int8/16/32/64, uint8/16/32/64, float32/64, complex64/128)"
                 )));
             }
         }
@@ -134,27 +152,40 @@ macro_rules! creation_dispatch {
 }
 
 /// `numpy.zeros(shape, dtype="float64")` equivalent.
+///
+/// `dtype` accepts a string, a numpy scalar *type* object (`fr.float64`), or
+/// a `numpy.dtype` instance — all normalized through [`normalize_dtype`]
+/// (numpy's `PyArray_DescrConverter` accepts the same three forms).
 #[pyfunction]
-#[pyo3(signature = (shape, dtype = "float64"))]
+#[pyo3(signature = (shape, dtype = None))]
 pub fn zeros<'py>(
     py: Python<'py>,
     shape: &Bound<'py, PyAny>,
-    dtype: &str,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let shape_vec = extract_signed_shape(shape)?;
-    Ok(creation_dispatch!(fc::zeros, py, shape_vec, dtype))
+    let dt = match dtype {
+        Some(d) => normalize_dtype(py, d)?,
+        None => "float64".to_string(),
+    };
+    Ok(creation_dispatch!(fc::zeros, py, shape_vec, dt.as_str()))
 }
 
-/// `numpy.ones(shape, dtype="float64")` equivalent.
+/// `numpy.ones(shape, dtype="float64")` equivalent. `dtype` accepts a string,
+/// a numpy type object, or a `numpy.dtype` instance (see [`zeros`]).
 #[pyfunction]
-#[pyo3(signature = (shape, dtype = "float64"))]
+#[pyo3(signature = (shape, dtype = None))]
 pub fn ones<'py>(
     py: Python<'py>,
     shape: &Bound<'py, PyAny>,
-    dtype: &str,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let shape_vec = extract_signed_shape(shape)?;
-    Ok(creation_dispatch!(fc::ones, py, shape_vec, dtype))
+    let dt = match dtype {
+        Some(d) => normalize_dtype(py, d)?,
+        None => "float64".to_string(),
+    };
+    Ok(creation_dispatch!(fc::ones, py, shape_vec, dt.as_str()))
 }
 
 /// `numpy.empty(shape, dtype="float64")` equivalent.
@@ -166,14 +197,18 @@ pub fn ones<'py>(
 /// values are technically allowed, but most callers immediately
 /// overwrite) is a strict superset.
 #[pyfunction]
-#[pyo3(signature = (shape, dtype = "float64"))]
+#[pyo3(signature = (shape, dtype = None))]
 pub fn empty<'py>(
     py: Python<'py>,
     shape: &Bound<'py, PyAny>,
-    dtype: &str,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let shape_vec = extract_signed_shape(shape)?;
-    Ok(creation_dispatch!(fc::zeros, py, shape_vec, dtype))
+    let dt = match dtype {
+        Some(d) => normalize_dtype(py, d)?,
+        None => "float64".to_string(),
+    };
+    Ok(creation_dispatch!(fc::zeros, py, shape_vec, dt.as_str()))
 }
 
 /// `numpy.identity(n, dtype="float64")` equivalent — n×n identity matrix.
@@ -181,10 +216,18 @@ pub fn empty<'py>(
 /// `n` is bound signed and validated (`np.identity(-2)` -> `ValueError`,
 /// not `OverflowError`).
 #[pyfunction]
-#[pyo3(signature = (n, dtype = "float64"))]
-pub fn identity<'py>(py: Python<'py>, n: isize, dtype: &str) -> PyResult<Bound<'py, PyAny>> {
+#[pyo3(signature = (n, dtype = None))]
+pub fn identity<'py>(
+    py: Python<'py>,
+    n: isize,
+    dtype: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
     let n = validate_dim(n)?;
-    Ok(match_dtype_all!(dtype, T => {
+    let dt = match dtype {
+        Some(d) => normalize_dtype(py, d)?,
+        None => "float64".to_string(),
+    };
+    Ok(match_dtype_all!(dt.as_str(), T => {
         let arr = fc::identity::<T>(n).map_err(ferr_to_pyerr)?;
         let dynd = ArrayD::<T>::from_vec(IxDyn::new(arr.shape()), arr.iter().cloned().collect())
             .map_err(ferr_to_pyerr)?;
@@ -199,20 +242,24 @@ pub fn identity<'py>(py: Python<'py>, n: isize, dtype: &str) -> PyResult<Bound<'
 /// not `OverflowError`; `eye` routes through `zeros((N, M))` in numpy,
 /// `numpy/_core/twodim_base.py`).
 #[pyfunction]
-#[pyo3(signature = (n, m = None, k = 0, dtype = "float64"))]
+#[pyo3(signature = (n, m = None, k = 0, dtype = None))]
 pub fn eye<'py>(
     py: Python<'py>,
     n: isize,
     m: Option<isize>,
     k: isize,
-    dtype: &str,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let n = validate_dim(n)?;
     let m = match m {
         Some(m) => validate_dim(m)?,
         None => n,
     };
-    Ok(match_dtype_all!(dtype, T => {
+    let dt = match dtype {
+        Some(d) => normalize_dtype(py, d)?,
+        None => "float64".to_string(),
+    };
+    Ok(match_dtype_all!(dt.as_str(), T => {
         let arr = fc::eye::<T>(n, m, k).map_err(ferr_to_pyerr)?;
         let dynd = ArrayD::<T>::from_vec(IxDyn::new(arr.shape()), arr.iter().cloned().collect())
             .map_err(ferr_to_pyerr)?;
@@ -223,16 +270,20 @@ pub fn eye<'py>(
 /// `numpy.tri(n, m=None, k=0, dtype="float64")` — 2-D array with ones
 /// at and below the k-th diagonal.
 #[pyfunction]
-#[pyo3(signature = (n, m = None, k = 0, dtype = "float64"))]
+#[pyo3(signature = (n, m = None, k = 0, dtype = None))]
 pub fn tri<'py>(
     py: Python<'py>,
     n: usize,
     m: Option<usize>,
     k: isize,
-    dtype: &str,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let m = m.unwrap_or(n);
-    Ok(match_dtype_all!(dtype, T => {
+    let dt = match dtype {
+        Some(d) => normalize_dtype(py, d)?,
+        None => "float64".to_string(),
+    };
+    Ok(match_dtype_all!(dt.as_str(), T => {
         let arr = fc::tri::<T>(n, m, k).map_err(ferr_to_pyerr)?;
         let dynd = ArrayD::<T>::from_vec(IxDyn::new(arr.shape()), arr.iter().cloned().collect())
             .map_err(ferr_to_pyerr)?;
@@ -269,8 +320,10 @@ pub fn arange<'py>(
     start: &Bound<'py, PyAny>,
     stop: Option<&Bound<'py, PyAny>>,
     step: Option<&Bound<'py, PyAny>>,
-    dtype: Option<&str>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let dtype: Option<String> = normalize_opt_dtype(py, dtype)?;
+    let dtype: Option<&str> = dtype.as_deref();
     // Extract numeric values for the length/fill math.
     let start_f: f64 = start.extract()?;
     let (s, e, start_obj, stop_obj) = match stop {
@@ -449,10 +502,11 @@ pub fn linspace<'py>(
     num: isize,
     endpoint: bool,
     retstep: bool,
-    dtype: Option<&str>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let num = validate_num_samples(num)?;
-    let dt = dtype.unwrap_or("float64");
+    let dt_owned = normalize_opt_dtype(py, dtype)?;
+    let dt = dt_owned.as_deref().unwrap_or("float64");
 
     // numpy's step: delta / div, with div = (num-1) if endpoint else num;
     // undefined (nan) when div <= 0 (function_base.py:153-169).
@@ -503,12 +557,14 @@ pub fn logspace<'py>(
     num: isize,
     endpoint: bool,
     base: f64,
-    dtype: Option<&str>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let num = validate_num_samples(num)?;
-    let dt = dtype.unwrap_or("float64");
+    let dt_owned = normalize_opt_dtype(py, dtype)?;
+    let dt = dt_owned.as_deref().unwrap_or("float64");
     if is_integer_dtype(dt) {
-        let values = fc::logspace::<f64>(start, stop, num, endpoint, base).map_err(ferr_to_pyerr)?;
+        let values =
+            fc::logspace::<f64>(start, stop, num, endpoint, base).map_err(ferr_to_pyerr)?;
         let flat: Vec<f64> = values.iter().copied().collect();
         return float_range_to_int_array(py, flat, dt, /* floor = */ false);
     }
@@ -531,10 +587,11 @@ pub fn geomspace<'py>(
     stop: f64,
     num: isize,
     endpoint: bool,
-    dtype: Option<&str>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let num = validate_num_samples(num)?;
-    let dt = dtype.unwrap_or("float64");
+    let dt_owned = normalize_opt_dtype(py, dtype)?;
+    let dt = dt_owned.as_deref().unwrap_or("float64");
     if is_integer_dtype(dt) {
         let values = fc::geomspace::<f64>(start, stop, num, endpoint).map_err(ferr_to_pyerr)?;
         let flat: Vec<f64> = values.iter().copied().collect();
@@ -557,11 +614,11 @@ pub fn geomspace<'py>(
 pub fn zeros_like<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    dtype: Option<&str>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
-    let dt = match dtype {
-        Some(d) => d.to_string(),
+    let dt = match normalize_opt_dtype(py, dtype)? {
+        Some(d) => d,
         None => dtype_name(&arr)?,
     };
     let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
@@ -574,11 +631,11 @@ pub fn zeros_like<'py>(
 pub fn ones_like<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    dtype: Option<&str>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
-    let dt = match dtype {
-        Some(d) => d.to_string(),
+    let dt = match normalize_opt_dtype(py, dtype)? {
+        Some(d) => d,
         None => dtype_name(&arr)?,
     };
     let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
@@ -597,11 +654,11 @@ pub fn ones_like<'py>(
 pub fn empty_like<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    dtype: Option<&str>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
-    let dt = match dtype {
-        Some(d) => d.to_string(),
+    let dt = match normalize_opt_dtype(py, dtype)? {
+        Some(d) => d,
         None => dtype_name(&arr)?,
     };
     let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
@@ -617,16 +674,15 @@ pub fn full_like<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     fill_value: &Bound<'py, PyAny>,
-    dtype: Option<&str>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
-    let dt = match dtype {
-        Some(d) => d.to_string(),
+    let dt = match normalize_opt_dtype(py, dtype)? {
+        Some(d) => d,
         None => dtype_name(&arr)?,
     };
-    let fv: f64 = fill_value.extract()?;
     let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
-    full_impl(py, &shape, fv, dt.as_str())
+    full_impl(py, &shape, fill_value, dt.as_str())
 }
 
 /// `numpy.full(shape, fill_value, dtype=None)` equivalent.
@@ -644,31 +700,72 @@ pub fn full<'py>(
     py: Python<'py>,
     shape: &Bound<'py, PyAny>,
     fill_value: &Bound<'py, PyAny>,
-    dtype: Option<&str>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let shape_vec = extract_signed_shape(shape)?;
-    let dt = match dtype {
+    let dt = match normalize_opt_dtype(py, dtype)? {
         Some(d) => d,
-        None => pyscalar_default_dtype(fill_value).ok_or_else(|| {
-            PyTypeError::new_err("full: fill_value must be a scalar int, float, or bool")
-        })?,
+        // numpy defaults `dtype` to `np.array(fill_value).dtype`
+        // (numpy/_core/numeric.py:382-384). For a Python int/float/bool the
+        // type-keyed inference applies; for a Python `complex` (and any other
+        // array-like fill) we route through numpy's own `np.asarray` so the
+        // inferred dtype (e.g. `complex128` for `1+2j`) exactly matches numpy.
+        None => match pyscalar_default_dtype(fill_value) {
+            Some(d) => d.to_string(),
+            None => dtype_name(&as_ndarray(py, fill_value)?)?,
+        },
     };
-    let fv: f64 = fill_value.extract()?;
-    full_impl(py, &shape_vec, fv, dt)
+    full_impl(py, &shape_vec, fill_value, dt.as_str())
 }
 
 fn full_impl<'py>(
     py: Python<'py>,
     shape: &[usize],
-    fill_value: f64,
+    fill_value: &Bound<'py, PyAny>,
     dtype: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
     let dim = IxDyn::new(shape);
+    // Complex fills carry both parts; extract a `Complex<f64>` from the Python
+    // object (a Python `complex`, a numpy complex scalar, or a real number all
+    // extract) and build the complex array via the shared complex helper.
+    if matches!(dtype, "complex128" | "c16") {
+        let fv: Complex<f64> = extract_complex(fill_value)?;
+        let arr: ArrayD<Complex<f64>> = fc::full(dim, fv).map_err(ferr_to_pyerr)?;
+        return complex_ferray_to_pyarray(py, arr);
+    }
+    if matches!(dtype, "complex64" | "c8") {
+        let fv: Complex<f64> = extract_complex(fill_value)?;
+        let fv = Complex::new(fv.re as f32, fv.im as f32);
+        let arr: ArrayD<Complex<f32>> = fc::full(dim, fv).map_err(ferr_to_pyerr)?;
+        return complex_ferray_to_pyarray(py, arr);
+    }
+    let fill_f: f64 = fill_value.extract()?;
     Ok(match_dtype_all!(dtype, T => {
-        let fv = T::from_f64_lossy(fill_value);
+        let fv = T::from_f64_lossy(fill_f);
         let arr: ArrayD<T> = fc::full(dim, fv).map_err(ferr_to_pyerr)?;
         arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
+}
+
+/// Extract a `Complex<f64>` fill value from a Python object — a Python
+/// `complex`, a numpy complex scalar, or any real number (real numbers
+/// extract with a zero imaginary part, matching `np.full((2,), 3,
+/// dtype=complex)`).
+fn extract_complex(obj: &Bound<'_, PyAny>) -> PyResult<Complex<f64>> {
+    // A real number extracts directly with a zero imaginary part. Otherwise
+    // read `.real`/`.imag`, which both a Python `complex` and a numpy complex
+    // scalar expose (pyo3's optional num-complex `FromPyObject` is not
+    // enabled in this crate, so we read the components by attribute).
+    if let Ok(re) = obj.extract::<f64>() {
+        return Ok(Complex::new(re, 0.0));
+    }
+    let re: f64 = obj.getattr("real").and_then(|v| v.extract()).map_err(|_| {
+        PyTypeError::new_err("full: complex fill_value must be a number or complex")
+    })?;
+    let im: f64 = obj.getattr("imag").and_then(|v| v.extract()).map_err(|_| {
+        PyTypeError::new_err("full: complex fill_value must be a number or complex")
+    })?;
+    Ok(Complex::new(re, im))
 }
 
 /// Local trait for fill-value coercion. Avoids pulling in `num-traits`
@@ -765,9 +862,11 @@ pub fn asanyarray<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound
 pub fn array<'py>(
     py: Python<'py>,
     obj: &Bound<'py, PyAny>,
-    dtype: Option<&str>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let np = py.import("numpy")?;
+    // numpy.asarray accepts a str / type object / dtype instance natively;
+    // pass the object through unchanged so `dtype=fr.float64` works.
     let arr = match dtype {
         Some(d) => np.call_method1("asarray", (obj, d))?,
         None => np.call_method1("asarray", (obj,))?,
@@ -1116,7 +1215,7 @@ pub fn vander<'py>(
 pub fn asarray<'py>(
     py: Python<'py>,
     obj: &Bound<'py, PyAny>,
-    dtype: Option<&str>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     array(py, obj, dtype)
 }
