@@ -33,6 +33,7 @@ mod creation;
 mod emath;
 mod fft;
 mod indexing;
+mod io;
 mod linalg;
 mod ma;
 mod manipulation;
@@ -858,6 +859,19 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(indexing::putmask, m)?)?;
     m.add_function(wrap_pyfunction!(indexing::put, m)?)?;
     m.add_function(wrap_pyfunction!(indexing::extract, m)?)?;
+
+    // ----- file-IO surface (.npy/.npz binary + delimited text) -----
+    // numpy exposes save/load/savez/savez_compressed/savetxt/loadtxt/
+    // genfromtxt at the package root (numpy/lib/_npyio_impl.py). The
+    // bindings marshal numpy.ndarray <-> ferray_core::DynArray over the
+    // already-shipped ferray-io crate.
+    m.add_function(wrap_pyfunction!(io::save, m)?)?;
+    m.add_function(wrap_pyfunction!(io::load, m)?)?;
+    m.add_function(wrap_pyfunction!(io::savez, m)?)?;
+    m.add_function(wrap_pyfunction!(io::savez_compressed, m)?)?;
+    m.add_function(wrap_pyfunction!(io::savetxt, m)?)?;
+    m.add_function(wrap_pyfunction!(io::loadtxt, m)?)?;
+    m.add_function(wrap_pyfunction!(io::genfromtxt, m)?)?;
 
     // Top-level window aliases (numpy puts these at top level).
     m.add_function(wrap_pyfunction!(window::hanning, m)?)?;

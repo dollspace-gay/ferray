@@ -560,6 +560,117 @@ pub fn dtype_name(arr: &Bound<'_, PyAny>) -> PyResult<String> {
     arr.getattr("dtype")?.getattr("name")?.extract()
 }
 
+// ---------------------------------------------------------------------------
+// DynArray <-> numpy.ndarray marshalling (file-IO boundary, refs #832)
+//
+// ferray-io's binary/text I/O is typed in `ferray_core::DynArray` (a
+// runtime-typed array enum) on the Rust side, but the Python boundary is a
+// `numpy.ndarray`. These two helpers bridge that gap so the io.rs bindings
+// can stay thin:
+//
+//   numpy.ndarray --pyany_to_dynarray--> DynArray  (write path: save/savez/...)
+//   DynArray --dynarray_to_pyarray-----> numpy.ndarray (read path: load/...)
+//
+// The dtype set is the `NpElement` set the numpy-interop crate already
+// supports (bool, int8/16/32/64, uint8/16/32/64, float32/64) — exactly the
+// dtypes that round-trip through `PyReadonlyArrayDyn<T>` / `into_pyarray`.
+// numpy's `.npy` format also stores complex / datetime arrays; those dtypes
+// are not in the interop `NpElement` set, so they surface a `TypeError` here
+// rather than a silent lossy cast (R-CODE-4) and are tracked as a follow-up.
+// ---------------------------------------------------------------------------
+
+/// Convert any array-like Python object into a `ferray_core::DynArray`,
+/// dispatching on the input's numpy dtype.
+///
+/// The object is first normalized to a C-contiguous `numpy.ndarray` via
+/// `numpy.ascontiguousarray` (the interop `as_ferray` reads elements in
+/// C order), then a `PyReadonlyArrayDyn<T>` view is taken for the matched
+/// dtype and copied into the corresponding `DynArray` variant. This is the
+/// inverse of [`dynarray_to_pyarray`] and preserves numpy's dtype + shape
+/// across the boundary (R-CODE-4).
+pub fn pyany_to_dynarray(
+    py: Python<'_>,
+    obj: &Bound<'_, PyAny>,
+) -> PyResult<ferray_core::DynArray> {
+    use ferray_core::DynArray;
+    use ferray_numpy_interop::AsFerray;
+    use numpy::PyReadonlyArrayDyn;
+
+    // Normalize to a contiguous ndarray so the IxDyn view reads in C order.
+    let arr = py
+        .import("numpy")?
+        .call_method1("ascontiguousarray", (obj,))?;
+    let dt = dtype_name(&arr)?;
+
+    macro_rules! to_dyn {
+        ($ty:ty, $variant:ident) => {{
+            let view = arr.extract::<PyReadonlyArrayDyn<$ty>>()?;
+            let fa = view.as_ferray().map_err(ferr_to_pyerr)?;
+            Ok(DynArray::$variant(fa))
+        }};
+    }
+
+    match dt.as_str() {
+        "float64" | "f64" => to_dyn!(f64, F64),
+        "float32" | "f32" => to_dyn!(f32, F32),
+        "int64" | "i64" => to_dyn!(i64, I64),
+        "int32" | "i32" => to_dyn!(i32, I32),
+        "int16" | "i16" => to_dyn!(i16, I16),
+        "int8" | "i8" => to_dyn!(i8, I8),
+        "uint64" | "u64" => to_dyn!(u64, U64),
+        "uint32" | "u32" => to_dyn!(u32, U32),
+        "uint16" | "u16" => to_dyn!(u16, U16),
+        "uint8" | "u8" => to_dyn!(u8, U8),
+        "bool" => to_dyn!(bool, Bool),
+        other => Err(PyTypeError::new_err(format!(
+            "ferray file-IO does not yet support dtype {other:?} (supported: \
+             bool, int8/16/32/64, uint8/16/32/64, float32/64)"
+        ))),
+    }
+}
+
+/// Convert a `ferray_core::DynArray` into a Python-owned `numpy.ndarray`,
+/// dispatching on the array's runtime dtype.
+///
+/// This is the inverse of [`pyany_to_dynarray`]: the inner
+/// `Array<T, IxDyn>` is pushed across the boundary via the interop
+/// `IntoNumPy` impl, preserving the loaded dtype + shape so a `load` round
+/// trips a `save` exactly (R-DEV-3). A `DynArray` carrying a dtype outside
+/// the interop `NpElement` set (complex / datetime / 128-bit) raises a
+/// `TypeError` rather than a lossy cast.
+pub fn dynarray_to_pyarray<'py>(
+    py: Python<'py>,
+    arr: ferray_core::DynArray,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::DynArray;
+    use ferray_numpy_interop::IntoNumPy;
+
+    macro_rules! from_dyn {
+        ($inner:expr) => {{
+            Ok($inner.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }};
+    }
+
+    match arr {
+        DynArray::F64(a) => from_dyn!(a),
+        DynArray::F32(a) => from_dyn!(a),
+        DynArray::I64(a) => from_dyn!(a),
+        DynArray::I32(a) => from_dyn!(a),
+        DynArray::I16(a) => from_dyn!(a),
+        DynArray::I8(a) => from_dyn!(a),
+        DynArray::U64(a) => from_dyn!(a),
+        DynArray::U32(a) => from_dyn!(a),
+        DynArray::U16(a) => from_dyn!(a),
+        DynArray::U8(a) => from_dyn!(a),
+        DynArray::Bool(a) => from_dyn!(a),
+        other => Err(PyTypeError::new_err(format!(
+            "ferray file-IO cannot marshal dtype {} to numpy yet (supported: \
+             bool, int8/16/32/64, uint8/16/32/64, float32/64)",
+            other.dtype()
+        ))),
+    }
+}
+
 /// Dispatch over all 11 supported element types.
 ///
 /// Inside the body, the type alias `T` is bound to the concrete

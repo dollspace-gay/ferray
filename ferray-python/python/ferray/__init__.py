@@ -399,6 +399,19 @@ from ._ferray import (
     polyval,
     roots,
 )
+
+# File I/O: .npy/.npz binary serialization + delimited text. Wired over the
+# ferray-io crate (numpy/lib/_npyio_impl.py). `import ferray as np;
+# np.save('x.npy', a); np.load('x.npy')` round-trips against numpy.
+from ._ferray import (
+    save,
+    load,
+    savez,
+    savez_compressed,
+    savetxt,
+    loadtxt,
+    genfromtxt,
+)
 from . import autodiff as _autodiff_module
 from ._ferray import char as _char_module
 from ._ferray import strings as _strings_module
@@ -1137,6 +1150,9 @@ __all__ = [
     # top-level poly1d family (highest-degree-first)
     "poly", "polyadd", "polyder", "polydiv", "polyfit", "polyint",
     "polymul", "polysub", "polyval", "roots",
+    # file I/O (.npy/.npz binary + delimited text)
+    "save", "load", "savez", "savez_compressed", "savetxt", "loadtxt",
+    "genfromtxt",
     # creation
     "abs", "arange", "array", "asanyarray", "asarray", "ascontiguousarray",
     "asfortranarray", "copy", "dtype", "empty", "empty_like", "eye", "full", "full_like",

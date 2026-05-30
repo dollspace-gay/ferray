@@ -1,0 +1,45 @@
+[package]
+name = "ferray-python"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+description = "Python bindings for ferray — drop-in NumPy replacement powered by Rust"
+publish = false
+
+[lib]
+# Wheel-only crate: only the cdylib gets distributed (loaded by CPython
+# as ferray._ferray). `extension-module` is unconditional because there
+# is no scenario where this crate is consumed as a Rust library — the
+# Python test suite under tests/*.py is the test surface, run with
+# `maturin develop` + pytest. Disabling test/doctest harnesses prevents
+# `cargo test` from trying to link a binary that pulls libpython into
+# the linker line.
+name = "ferray"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[dependencies]
+ferray = { workspace = true, features = ["full", "numpy", "io"] }
+ferray-core = { workspace = true }
+ferray-numpy-interop = { workspace = true, features = ["python"] }
+ferray-ufunc = { workspace = true }
+ferray-stats = { workspace = true }
+ferray-linalg = { workspace = true }
+ferray-fft = { workspace = true }
+ferray-random = { workspace = true }
+ferray-window = { workspace = true }
+ferray-polynomial = { workspace = true }
+ferray-stride-tricks = { workspace = true }
+ferray-strings = { workspace = true }
+ferray-ma = { workspace = true }
+ferray-autodiff = { workspace = true }
+pyo3 = { workspace = true, features = ["extension-module"] }
+numpy = { workspace = true }
+num-complex = { workspace = true }

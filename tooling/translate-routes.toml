@@ -579,6 +579,23 @@ parity_ops = ["bartlett", "blackman", "hamming", "hanning", "kaiser"]
 # `__all__` (lines 126-177) is the registration contract; mtrand.pyi /
 # _generator.pyi carry the per-function ABI (scalar size=None, size tuples,
 # inclusive-high random_integers, array_like default_rng seed).
+# File-IO bindings: save/load (.npy), savez/savez_compressed/load (.npz),
+# savetxt/loadtxt/genfromtxt (delimited text), wired over the already-shipped
+# ferray-io crate (typed in ferray_core::DynArray on the Rust side). The
+# binding marshals numpy.ndarray <-> DynArray at the boundary
+# (conv::pyany_to_dynarray / dynarray_to_pyarray) and mirrors numpy's
+# _npyio_impl.py contract: .npy extension appended on save, arr_N positional
+# naming for savez, %.18e float savetxt default, single-row/col loadtxt
+# collapse to 1-D, genfromtxt missing->nan. format.py is the .npy header spec.
+[[route]]
+crate_pattern = "ferray-python/src/io.rs"
+upstream = [
+    "/home/doll/numpy-ref/numpy/lib/_npyio_impl.py",
+    "/home/doll/numpy-ref/numpy/lib/format.py",
+]
+design = ".design/ferray-io.md"
+parity_ops = ["save", "load", "savez", "savez_compressed", "savetxt", "loadtxt", "genfromtxt"]
+
 [[route]]
 crate_pattern = "ferray-python/src/random.rs"
 upstream = [
