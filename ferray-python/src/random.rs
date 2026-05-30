@@ -850,6 +850,231 @@ pub fn hypergeometric<'py>(
     Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 
+// ---------------------------------------------------------------------------
+// Multivariate / extra distributions implemented in ferray-random but
+// previously unbound at the Python surface (refs #834 #818). The library
+// methods return a 2-D `[rows, k]` array (one draw per row); numpy's
+// boundary contract is `size + (k,)` for an array/tuple `size` and a bare
+// `(k,)` 1-D vector for `size=None`. `resolve_mv_size` maps a numpy `size`
+// argument to `(rows, target_shape)`:
+//   - None     -> (1,   None)            (drop leading dim -> 1-D `(k,)`)
+//   - int n    -> (n,   Some([n]))       (natural `[n, k]`)
+//   - tuple t  -> (prod(t), Some(t))     (reshape `[prod, k]` -> `t + (k,)`)
+// ---------------------------------------------------------------------------
+
+/// Resolve a numpy `size` argument to `(rows, outer_shape)` where `rows` is
+/// the number of independent draws (rows the library must produce) and
+/// `outer_shape` is the leading shape to prepend to the per-draw vector
+/// length `k`. `None` -> `(1, None)` so the result collapses to 1-D `(k,)`.
+fn resolve_mv_size(size: Option<&Bound<'_, PyAny>>) -> PyResult<(usize, Option<Vec<usize>>)> {
+    match size {
+        None => Ok((1, None)),
+        Some(o) if o.is_none() => Ok((1, None)),
+        Some(_) => {
+            // An empty tuple `size=()` is a single draw; otherwise the
+            // number of rows is the product of the requested dims.
+            let dims = shape_from_pyany(size)?;
+            let rows: usize = if dims.is_empty() {
+                1
+            } else {
+                dims.iter().product()
+            };
+            Ok((rows, Some(dims)))
+        }
+    }
+}
+
+/// Reshape the flat `[rows, k]` boundary array to numpy's `size + (k,)`
+/// contract. `outer_shape == None` (i.e. numpy `size=None`) collapses the
+/// single row to a 1-D `(k,)` vector; an int `size` keeps `[n, k]`; a tuple
+/// `size` reshapes to `outer + (k,)`.
+fn reshape_mv<'py>(
+    arr2d: Bound<'py, PyAny>,
+    outer_shape: Option<Vec<usize>>,
+    k: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    match outer_shape {
+        None => {
+            // size=None: single draw -> 1-D vector of length k.
+            let tuple = pyo3::types::PyTuple::new(arr2d.py(), [k])?;
+            arr2d.call_method1("reshape", (tuple,))
+        }
+        Some(dims) => {
+            // int size -> already [n, k]; tuple size -> outer + (k,).
+            if dims.len() <= 1 {
+                return Ok(arr2d);
+            }
+            let mut full = dims;
+            full.push(k);
+            let tuple = pyo3::types::PyTuple::new(arr2d.py(), full)?;
+            arr2d.call_method1("reshape", (tuple,))
+        }
+    }
+}
+
+/// `numpy.random.dirichlet(alpha, size=None)` — float64, each draw sums to
+/// 1 along the last axis; shape `size + (len(alpha),)`
+/// (`numpy/random/_generator.pyi` `dirichlet`).
+#[pyfunction]
+#[pyo3(signature = (alpha, size = None))]
+pub fn dirichlet<'py>(
+    py: Python<'py>,
+    alpha: Vec<f64>,
+    size: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let k = alpha.len();
+    let (rows, outer) = resolve_mv_size(size)?;
+    let arr = with_rng(|rng| rng.dirichlet(&alpha, rows)).map_err(ferr_to_pyerr)?;
+    let out = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    reshape_mv(out, outer, k)
+}
+
+/// `numpy.random.multinomial(n, pvals, size=None)` — int64, last axis
+/// `len(pvals)`, each row sums to `n`
+/// (`numpy/random/_generator.pyi` `multinomial`). `n < 0` -> `ValueError`
+/// (bound signed to avoid a PyO3 `OverflowError`; R-DEV-2).
+#[pyfunction]
+#[pyo3(signature = (n, pvals, size = None))]
+pub fn multinomial<'py>(
+    py: Python<'py>,
+    n: i64,
+    pvals: Vec<f64>,
+    size: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if n < 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err("n < 0"));
+    }
+    let k = pvals.len();
+    let (rows, outer) = resolve_mv_size(size)?;
+    let arr = with_rng(|rng| rng.multinomial(n as u64, &pvals, rows)).map_err(ferr_to_pyerr)?;
+    let out = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    reshape_mv(out, outer, k)
+}
+
+/// `numpy.random.multivariate_normal(mean, cov, size=None)` — float64,
+/// shape `size + (len(mean),)`; `cov` is flattened row-major to a
+/// `len(mean) x len(mean)` matrix (`numpy/random/_generator.pyi`
+/// `multivariate_normal`).
+#[pyfunction]
+#[pyo3(signature = (mean, cov, size = None))]
+pub fn multivariate_normal<'py>(
+    py: Python<'py>,
+    mean: Vec<f64>,
+    cov: &Bound<'py, PyAny>,
+    size: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let d = mean.len();
+    // cov is array_like `[d, d]`; flatten row-major to `[d*d]` for the
+    // library entry point, which validates `cov.len() == d * d`.
+    let cov_arr = as_ndarray(py, cov)?;
+    let cov_flat: Vec<f64> = cov_arr
+        .call_method1("reshape", ((-1isize,),))?
+        .call_method0("tolist")?
+        .extract()?;
+    let (rows, outer) = resolve_mv_size(size)?;
+    let arr =
+        with_rng(|rng| rng.multivariate_normal(&mean, &cov_flat, rows)).map_err(ferr_to_pyerr)?;
+    let out = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    reshape_mv(out, outer, d)
+}
+
+/// `numpy.random.multivariate_hypergeometric(colors, nsample, size=None)`
+/// — int64, last axis `len(colors)`, each row sums to `nsample`
+/// (`numpy/random/_generator.pyi` `multivariate_hypergeometric`). A
+/// negative `colors`/`nsample` -> `ValueError` (bound signed to avoid a
+/// PyO3 `OverflowError`; R-DEV-2).
+#[pyfunction]
+#[pyo3(signature = (colors, nsample, size = None))]
+pub fn multivariate_hypergeometric<'py>(
+    py: Python<'py>,
+    colors: Vec<i64>,
+    nsample: i64,
+    size: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if nsample < 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "nsample must be non-negative",
+        ));
+    }
+    let mut colors_u = Vec::with_capacity(colors.len());
+    for c in &colors {
+        if *c < 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "colors must be non-negative",
+            ));
+        }
+        colors_u.push(*c as u64);
+    }
+    let k = colors_u.len();
+    let (rows, outer) = resolve_mv_size(size)?;
+    let arr = with_rng(|rng| rng.multivariate_hypergeometric(&colors_u, nsample as u64, rows))
+        .map_err(ferr_to_pyerr)?;
+    let out = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+    reshape_mv(out, outer, k)
+}
+
+/// `numpy.random.logseries(p, size=None)` — int64 in `{1, 2, ...}`
+/// (`numpy/random/_generator.pyi` `logseries`).
+#[pyfunction]
+#[pyo3(signature = (p, size = None))]
+pub fn logseries<'py>(
+    py: Python<'py>,
+    p: f64,
+    size: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let shape = shape_from_pyany(size)?;
+    let arr: ArrayD<i64> =
+        with_rng(|rng| rng.logseries(p, shape.as_slice())).map_err(ferr_to_pyerr)?;
+    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// `numpy.random.noncentral_chisquare(df, nonc, size=None)` — float64
+/// (`numpy/random/_generator.pyi` `noncentral_chisquare`).
+#[pyfunction]
+#[pyo3(signature = (df, nonc, size = None))]
+pub fn noncentral_chisquare<'py>(
+    py: Python<'py>,
+    df: f64,
+    nonc: f64,
+    size: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let shape = shape_from_pyany(size)?;
+    let arr: ArrayD<f64> = with_rng(|rng| rng.noncentral_chisquare(df, nonc, shape.as_slice()))
+        .map_err(ferr_to_pyerr)?;
+    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// `numpy.random.noncentral_f(dfnum, dfden, nonc, size=None)` — float64
+/// (`numpy/random/_generator.pyi` `noncentral_f`).
+#[pyfunction]
+#[pyo3(signature = (dfnum, dfden, nonc, size = None))]
+pub fn noncentral_f<'py>(
+    py: Python<'py>,
+    dfnum: f64,
+    dfden: f64,
+    nonc: f64,
+    size: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let shape = shape_from_pyany(size)?;
+    let arr: ArrayD<f64> = with_rng(|rng| rng.noncentral_f(dfnum, dfden, nonc, shape.as_slice()))
+        .map_err(ferr_to_pyerr)?;
+    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// `numpy.random.zipf(a, size=None)` — int64 in `{1, 2, ...}` with `a > 1`
+/// (`numpy/random/_generator.pyi` `zipf`).
+#[pyfunction]
+#[pyo3(signature = (a, size = None))]
+pub fn zipf<'py>(
+    py: Python<'py>,
+    a: f64,
+    size: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let shape = shape_from_pyany(size)?;
+    let arr: ArrayD<i64> = with_rng(|rng| rng.zipf(a, shape.as_slice())).map_err(ferr_to_pyerr)?;
+    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
 /// `numpy.random.choice(a, size=None, replace=True, p=None)`.
 ///
 /// `size` is a shape: `None` returns a **scalar** (`mtrand.pyi:379`
@@ -1372,6 +1597,174 @@ impl PyGenerator {
             }
         });
         Ok(())
+    }
+
+    // --- multivariate / extra distributions (refs #834 #818) -----------
+
+    /// `Generator.dirichlet(alpha, size=None)` — float64, each draw sums to
+    /// 1 along the last axis; shape `size + (len(alpha),)`.
+    #[pyo3(signature = (alpha, size = None))]
+    fn dirichlet<'py>(
+        &mut self,
+        py: Python<'py>,
+        alpha: Vec<f64>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let k = alpha.len();
+        let (rows, outer) = resolve_mv_size(size)?;
+        let arr = self.inner.dirichlet(&alpha, rows).map_err(ferr_to_pyerr)?;
+        let out = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+        reshape_mv(out, outer, k)
+    }
+
+    /// `Generator.multinomial(n, pvals, size=None)` — int64, each row sums
+    /// to `n`; `n < 0` -> `ValueError` (R-DEV-2).
+    #[pyo3(signature = (n, pvals, size = None))]
+    fn multinomial<'py>(
+        &mut self,
+        py: Python<'py>,
+        n: i64,
+        pvals: Vec<f64>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if n < 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err("n < 0"));
+        }
+        let k = pvals.len();
+        let (rows, outer) = resolve_mv_size(size)?;
+        let arr = self
+            .inner
+            .multinomial(n as u64, &pvals, rows)
+            .map_err(ferr_to_pyerr)?;
+        let out = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+        reshape_mv(out, outer, k)
+    }
+
+    /// `Generator.multivariate_normal(mean, cov, size=None)` — float64,
+    /// shape `size + (len(mean),)`.
+    #[pyo3(signature = (mean, cov, size = None))]
+    fn multivariate_normal<'py>(
+        &mut self,
+        py: Python<'py>,
+        mean: Vec<f64>,
+        cov: &Bound<'py, PyAny>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let d = mean.len();
+        let cov_arr = as_ndarray(py, cov)?;
+        let cov_flat: Vec<f64> = cov_arr
+            .call_method1("reshape", ((-1isize,),))?
+            .call_method0("tolist")?
+            .extract()?;
+        let (rows, outer) = resolve_mv_size(size)?;
+        let arr = self
+            .inner
+            .multivariate_normal(&mean, &cov_flat, rows)
+            .map_err(ferr_to_pyerr)?;
+        let out = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+        reshape_mv(out, outer, d)
+    }
+
+    /// `Generator.multivariate_hypergeometric(colors, nsample, size=None)`
+    /// — int64, each row sums to `nsample`; negative inputs -> `ValueError`
+    /// (R-DEV-2).
+    #[pyo3(signature = (colors, nsample, size = None))]
+    fn multivariate_hypergeometric<'py>(
+        &mut self,
+        py: Python<'py>,
+        colors: Vec<i64>,
+        nsample: i64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if nsample < 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "nsample must be non-negative",
+            ));
+        }
+        let mut colors_u = Vec::with_capacity(colors.len());
+        for c in &colors {
+            if *c < 0 {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "colors must be non-negative",
+                ));
+            }
+            colors_u.push(*c as u64);
+        }
+        let k = colors_u.len();
+        let (rows, outer) = resolve_mv_size(size)?;
+        let arr = self
+            .inner
+            .multivariate_hypergeometric(&colors_u, nsample as u64, rows)
+            .map_err(ferr_to_pyerr)?;
+        let out = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+        reshape_mv(out, outer, k)
+    }
+
+    /// `Generator.logseries(p, size=None)` — int64 in `{1, 2, ...}`.
+    #[pyo3(signature = (p, size = None))]
+    fn logseries<'py>(
+        &mut self,
+        py: Python<'py>,
+        p: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let shape = shape_from_pyany(size)?;
+        let arr: ArrayD<i64> = self
+            .inner
+            .logseries(p, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `Generator.noncentral_chisquare(df, nonc, size=None)` — float64.
+    #[pyo3(signature = (df, nonc, size = None))]
+    fn noncentral_chisquare<'py>(
+        &mut self,
+        py: Python<'py>,
+        df: f64,
+        nonc: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let shape = shape_from_pyany(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .noncentral_chisquare(df, nonc, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `Generator.noncentral_f(dfnum, dfden, nonc, size=None)` — float64.
+    #[pyo3(signature = (dfnum, dfden, nonc, size = None))]
+    fn noncentral_f<'py>(
+        &mut self,
+        py: Python<'py>,
+        dfnum: f64,
+        dfden: f64,
+        nonc: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let shape = shape_from_pyany(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .noncentral_f(dfnum, dfden, nonc, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `Generator.zipf(a, size=None)` — int64 in `{1, 2, ...}`, `a > 1`.
+    #[pyo3(signature = (a, size = None))]
+    fn zipf<'py>(
+        &mut self,
+        py: Python<'py>,
+        a: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let shape = shape_from_pyany(size)?;
+        let arr: ArrayD<i64> = self
+            .inner
+            .zipf(a, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
     }
 }
 

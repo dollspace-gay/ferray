@@ -511,6 +511,16 @@ fn register_random_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -
     m.add_function(wrap_pyfunction!(random::standard_gamma, &m)?)?;
     m.add_function(wrap_pyfunction!(random::negative_binomial, &m)?)?;
     m.add_function(wrap_pyfunction!(random::hypergeometric, &m)?)?;
+    // multivariate / extra distributions newly bound over ferray-random
+    // (refs #834 #818)
+    m.add_function(wrap_pyfunction!(random::dirichlet, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::multinomial, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::multivariate_normal, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::multivariate_hypergeometric, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::logseries, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::noncentral_chisquare, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::noncentral_f, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::zipf, &m)?)?;
     // Modern Generator class
     m.add_class::<random::PyGenerator>()?;
     m.add_function(wrap_pyfunction!(random::default_rng_py, &m)?)?;
