@@ -108,16 +108,13 @@ pub fn squeeze<T: Element, D: Dimension>(
         let data: Vec<T> = a.iter().cloned().collect();
         Array::from_vec(IxDyn::new(&new_shape), data)
     } else {
+        // Remove every length-1 axis. When *all* axes are length 1 the
+        // result collapses to a 0-D array (shape `[]`), matching numpy:
+        // `np.squeeze(np.ones((1,1,1))).shape == ()` — numpy
+        // _core/fromnumeric.py:1615 ("if all axes are squeezed, the result
+        // is a 0d array and not a scalar"). An empty `new_shape` already
+        // encodes the 0-D case, so no special-casing is needed.
         let new_shape: Vec<usize> = shape.iter().copied().filter(|&s| s != 1).collect();
-        // If all dims are 1, the result is a scalar (0-D is tricky), so
-        // make it at least 1-D with a single element.
-        let new_shape = if new_shape.is_empty() && !shape.is_empty() {
-            vec![1]
-        } else if new_shape.is_empty() {
-            vec![]
-        } else {
-            new_shape
-        };
         let data: Vec<T> = a.iter().cloned().collect();
         Array::from_vec(IxDyn::new(&new_shape), data)
     }

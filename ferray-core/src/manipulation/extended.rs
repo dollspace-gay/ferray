@@ -513,8 +513,55 @@ pub fn insert<T: Element, D: Dimension>(
         });
     }
 
-    let n_insert = values.size();
+    // A scalar `index` (obj) inserts a single contiguous block of
+    // sub-arrays along `axis`, with `values` broadcast into that block.
+    // numpy _function_base_impl.py:5544-5556: for a 0-d index,
+    //   values = array(values, ndmin=arr.ndim)   # prepend leading 1-axes
+    //   values = np.moveaxis(values, 0, axis)    # axis-0 -> axis
+    //   numnew = values.shape[axis]              # count of inserted slices
+    //   new[index:index+numnew, ...] = values    # broadcast assignment
+    // So the inserted count is `values.shape[axis]` AFTER prepending
+    // leading length-1 axes to reach `ndim` dims, then moving the leading
+    // axis to `axis`. We replicate that shape arithmetic, then fill the
+    // inserted region by broadcasting `values` (in its moved layout) into
+    // the destination region shape.
     let vals: Vec<T> = values.iter().cloned().collect();
+
+    // `values` reshaped to ndmin = ndim by prepending leading 1-axes.
+    let mut vshape: Vec<usize> = values.shape().to_vec();
+    while vshape.len() < ndim {
+        vshape.insert(0, 1);
+    }
+    if vshape.len() > ndim {
+        return Err(FerrayError::shape_mismatch(format!(
+            "insert values have {} dims, cannot exceed array ndim {}",
+            vshape.len(),
+            ndim,
+        )));
+    }
+    // moveaxis(values, 0, axis): pull leading axis out, reinsert at `axis`.
+    let lead = vshape.remove(0);
+    vshape.insert(axis, lead);
+    let moved_shape = vshape; // logical shape of the moved `values`
+    let n_insert = moved_shape[axis];
+
+    // Destination region for the inserted block: array shape with the axis
+    // length set to `n_insert`. `values` (moved) must broadcast to it.
+    let mut region_shape = shape.to_vec();
+    region_shape[axis] = n_insert;
+    for i in 0..ndim {
+        if moved_shape[i] != region_shape[i] && moved_shape[i] != 1 {
+            return Err(FerrayError::shape_mismatch(format!(
+                "could not broadcast insert values shape {:?} into region {:?}",
+                moved_shape, region_shape,
+            )));
+        }
+    }
+    // Row-major strides over the moved `values` (length == vals.len()).
+    let mut moved_strides = vec![1usize; ndim];
+    for i in (0..ndim.saturating_sub(1)).rev() {
+        moved_strides[i] = moved_strides[i + 1] * moved_shape[i + 1];
+    }
 
     let mut new_shape = shape.to_vec();
     new_shape[axis] = axis_len + n_insert;
@@ -532,9 +579,6 @@ pub fn insert<T: Element, D: Dimension>(
         out_strides[i] = out_strides[i + 1] * new_shape[i + 1];
     }
 
-    // Compute the "inner" size (product of dims after axis)
-    let inner: usize = shape[axis + 1..].iter().product();
-
     let mut data = Vec::with_capacity(total);
     for flat in 0..total {
         let mut rem = flat;
@@ -546,12 +590,16 @@ pub fn insert<T: Element, D: Dimension>(
 
         let ax_idx = nd_idx[axis];
         if ax_idx >= index && ax_idx < index + n_insert {
-            // This is an inserted value
-            let insert_idx = ax_idx - index;
-            // For multi-D insert, we tile the values along the inner dims
-            let val_idx = (insert_idx * inner + nd_idx.get(axis + 1).copied().unwrap_or(0))
-                % vals.len().max(1);
-            data.push(vals[val_idx].clone());
+            // Inserted block: position within the region is `nd_idx` with the
+            // axis coordinate rebased to `ax_idx - index`. Broadcast the
+            // moved `values` (size-1 axes repeat) into this region.
+            let mut val_flat = 0usize;
+            for i in 0..ndim {
+                let region_coord = if i == axis { ax_idx - index } else { nd_idx[i] };
+                let v_coord = if moved_shape[i] == 1 { 0 } else { region_coord };
+                val_flat += v_coord * moved_strides[i];
+            }
+            data.push(vals[val_flat].clone());
         } else {
             // Original data
             let src_ax_idx = if ax_idx >= index + n_insert {
