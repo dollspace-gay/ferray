@@ -49,12 +49,10 @@
 use ferray_core::Array;
 use ferray_core::dimension::{Ix1, Ix2};
 use ferray_stats::correlation::{CorrelateMode, corrcoef, correlate, cov};
-use ferray_stats::descriptive::{
-    ModeResult, gmean, hmean, iqr, kurtosis, mode, sem, skew, zscore,
-};
+use ferray_stats::descriptive::{ModeResult, gmean, hmean, iqr, kurtosis, mode, sem, skew, zscore};
 use ferray_stats::histogram::{
-    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram2d,
-    histogram_bin_edges, histogramdd,
+    Bins, bincount, bincount_u64, bincount_weighted, digitize, histogram, histogram_bin_edges,
+    histogram2d, histogramdd,
 };
 use ferray_stats::hypothesis::{
     Chi2ContingencyResult, chi2_contingency, ks_2samp, pearsonr, spearmanr, ttest_1samp, ttest_ind,
@@ -173,7 +171,10 @@ fn histogram_bin_edges_fixture_matches_numpy() {
         }
         tested += 1;
     }
-    assert!(tested > 0, "no f64 cases tested in histogram_bin_edges.json");
+    assert!(
+        tested > 0,
+        "no f64 cases tested in histogram_bin_edges.json"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -263,11 +264,8 @@ fn correlate_cov_corrcoef_match_numpy_contract() {
 
     // cov: two rows of [1,2,3] (perfectly correlated) -> 2x2 covariance
     // with each entry = sample var(1,2,3) = 1.
-    let mat = Array::<f64, Ix2>::from_vec(
-        Ix2::new([2, 3]),
-        vec![1.0, 2.0, 3.0, 1.0, 2.0, 3.0],
-    )
-    .unwrap();
+    let mat =
+        Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 1.0, 2.0, 3.0]).unwrap();
     let c = cov(&mat, true, None).unwrap();
     let c_data: Vec<f64> = c.iter().copied().collect();
     for (i, v) in c_data.iter().enumerate() {
@@ -360,8 +358,7 @@ fn descriptive_stats_match_scipy_contract() {
     let z = zscore(&a).unwrap();
     let z_data: Vec<f64> = z.iter().copied().collect();
     let mean_z: f64 = z_data.iter().sum::<f64>() / z_data.len() as f64;
-    let var_z: f64 = z_data.iter().map(|v| (v - mean_z).powi(2)).sum::<f64>()
-        / z_data.len() as f64;
+    let var_z: f64 = z_data.iter().map(|v| (v - mean_z).powi(2)).sum::<f64>() / z_data.len() as f64;
     close_rel(mean_z, 0.0, 1e-12, 1e-12, "mean(zscore)");
     close_rel(var_z, 1.0, 1e-12, 1e-12, "var(zscore)");
 }
@@ -399,11 +396,7 @@ fn hypothesis_tests_match_scipy_contract() {
 
     // chi2_contingency: a 2x2 table where rows are independent ->
     // statistic should be very close to zero.
-    let obs = Array::<f64, Ix2>::from_vec(
-        Ix2::new([2, 2]),
-        vec![10.0, 10.0, 20.0, 20.0],
-    )
-    .unwrap();
+    let obs = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![10.0, 10.0, 20.0, 20.0]).unwrap();
     let r: Chi2ContingencyResult = chi2_contingency(&obs).unwrap();
     assert!(r.statistic >= 0.0);
     assert!(

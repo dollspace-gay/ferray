@@ -86,12 +86,6 @@
 use ferray_core::Array;
 use ferray_core::dimension::{Ix1, Ix2, IxDyn};
 use ferray_core::error::FerrayResult;
-use ferray_stats::reductions::{
-    argmax, argmax_keepdims, argmin, argmin_keepdims, average, cumprod, cumsum, max, max_axes,
-    max_into, max_with, mean, mean_as_f64, mean_axes, mean_into, mean_where, min, min_axes,
-    min_into, min_with, prod, prod_axes, prod_into, prod_with, ptp, std_, std_as_f64, std_axes,
-    std_into, sum, sum_as_f64, sum_axes, sum_into, sum_with, var, var_as_f64, var_axes, var_into,
-};
 use ferray_stats::reductions::nan_aware::{
     nanargmax, nanargmin, nancumprod, nancumsum, nanmax, nanmean, nanmin, nanprod, nanstd, nansum,
     nanvar,
@@ -99,6 +93,12 @@ use ferray_stats::reductions::nan_aware::{
 use ferray_stats::reductions::quantile::{
     QuantileMethod, median, nanmedian, nanpercentile, nanquantile, percentile,
     percentile_with_method, quantile, quantile_with_method,
+};
+use ferray_stats::reductions::{
+    argmax, argmax_keepdims, argmin, argmin_keepdims, average, cumprod, cumsum, max, max_axes,
+    max_into, max_with, mean, mean_as_f64, mean_axes, mean_into, mean_where, min, min_axes,
+    min_into, min_with, prod, prod_axes, prod_into, prod_with, ptp, std_, std_as_f64, std_axes,
+    std_into, sum, sum_as_f64, sum_axes, sum_into, sum_with, var, var_as_f64, var_axes, var_into,
 };
 use ferray_test_oracle::{
     TOL_REDUCTION_F64_ABS, TOL_REDUCTION_F64_REL, fixtures_dir, run_reduction_f64_oracle,

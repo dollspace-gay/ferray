@@ -112,7 +112,12 @@ fn sort_quick_fixture_matches_numpy() {
         let result = sort(&arr, axis, SortKind::Quick).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
         let got = result.as_slice().unwrap();
-        assert_eq!(got.len(), expected.len(), "case '{}': len mismatch", case.name);
+        assert_eq!(
+            got.len(),
+            expected.len(),
+            "case '{}': len mismatch",
+            case.name
+        );
         for (i, (a, b)) in got.iter().zip(expected.iter()).enumerate() {
             assert!(
                 (a - b).abs() <= TOL_EXACT.max(b.abs() * TOL_EXACT),
@@ -168,7 +173,10 @@ fn argsort_fixture_matches_numpy() {
         // Ties may permute differently; compare the values gathered through
         // both permutations (matches existing oracle behaviour).
         let flat_input: Vec<f64> = arr.iter().copied().collect();
-        let actual_sorted: Vec<f64> = result_slice.iter().map(|&i| flat_input[i as usize]).collect();
+        let actual_sorted: Vec<f64> = result_slice
+            .iter()
+            .map(|&i| flat_input[i as usize])
+            .collect();
         let expected_sorted: Vec<f64> = expected.iter().map(|&i| flat_input[i as usize]).collect();
         for (i, (a, b)) in actual_sorted.iter().zip(expected_sorted.iter()).enumerate() {
             assert_eq!(
@@ -289,8 +297,8 @@ fn nonzero_where_count_nonzero_match_numpy_contract() {
     assert_eq!(cnt_data, vec![3]);
 
     // nonzero on a 2-D array: returns one Array<u64, Ix1> per dim.
-    let m = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0, 1.0, 0.0, 2.0, 0.0, 3.0])
-        .unwrap();
+    let m =
+        Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![0.0, 1.0, 0.0, 2.0, 0.0, 3.0]).unwrap();
     let nz = nonzero(&m).unwrap();
     assert_eq!(nz.len(), 2);
     let rows: Vec<u64> = nz[0].iter().copied().collect();
@@ -300,8 +308,7 @@ fn nonzero_where_count_nonzero_match_numpy_contract() {
     assert_eq!(cols, vec![1, 0, 2]);
 
     // where_: ternary selection on same-shape arrays.
-    let cond =
-        Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, false, true]).unwrap();
+    let cond = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![true, false, true]).unwrap();
     let x = arr1::<f64>(vec![1.0, 2.0, 3.0]);
     let y = arr1::<f64>(vec![10.0, 20.0, 30.0]);
     let out = where_(&cond, &x, &y).unwrap();
@@ -360,7 +367,10 @@ fn partition_argpartition_lexsort_sort_complex_match_numpy_contract() {
     let lsv: Vec<u64> = lsi.iter().copied().collect();
     // After sort on primary (all equal), tie-break is secondary asc.
     // Secondary values at the returned indices should be 1, 2, 3, 4.
-    let sec_vals: Vec<f64> = lsv.iter().map(|&i| secondary.iter().copied().nth(i as usize).unwrap()).collect();
+    let sec_vals: Vec<f64> = lsv
+        .iter()
+        .map(|&i| secondary.iter().copied().nth(i as usize).unwrap())
+        .collect();
     assert_eq!(sec_vals, vec![1.0, 2.0, 3.0, 4.0]);
 
     // sort_complex: sort by real, then by imag.
