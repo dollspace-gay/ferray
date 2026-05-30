@@ -40,6 +40,9 @@
 //! | matmul 1d×1d → scalar | SHIPPED | Impl: `one_d` branch of `matmul` routes to `fl::dot` (0-d result) in `linalg.rs`. Consumer: registered top-level + under `linalg` in `lib.rs`. |
 //! | norm ord=-1/-2 on 2-D matrix | SHIPPED | Impl: `parse_norm_order` maps `-1.0`→`NormOrder::NegL1`, `-2.0`→`NormOrder::NegL2` in `linalg.rs`. Consumer: `norm`/`norm_axis`/`cond` call `parse_norm_order`. |
 //! | eigvals (general eigenvalues) | SHIPPED | Impl: `eigvals` `#[pyfunction]` in `linalg.rs` (routes to `fl::eigvals`, complex result). Consumer: registered in `lib.rs` `register_linalg_module`. |
+//! | matrix_norm / vector_norm (NumPy 2.0 array-API) | SHIPPED | Impl: `matrix_norm` (default `ord='fro'`, routes to `fl::norm` matrix path) + `vector_norm` (axis=None flattens, axis routes to `fl::norm_axis`) `#[pyfunction]`s in `linalg.rs`. Consumer: registered in `lib.rs` `register_linalg_module`. |
+//! | svdvals (NumPy 2.0 array-API) | SHIPPED | Impl: `svdvals` `#[pyfunction]` in `linalg.rs` (routes to `fl::svdvals`). Consumer: registered in `lib.rs` `register_linalg_module`. |
+//! | linalg.cross (NumPy 2.0 array-API) | SHIPPED | Impl: `cross` `#[pyfunction]` in `linalg.rs` (1-D 3-component, routes to `fl::cross`; stacked input raises ValueError — library lacks the batched path). Consumer: registered in `lib.rs` `register_linalg_module`. |
 
 use ferray_core::array::aliases::{Array1, Array2, ArrayD};
 use ferray_core::dimension::IxDyn;
@@ -149,6 +152,150 @@ pub fn norm<'py>(
         let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar])
             .map_err(ferr_to_pyerr)?;
         arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    }))
+}
+
+/// `numpy.linalg.matrix_norm(x, ord='fro', keepdims=False)` (NumPy 2.0
+/// array-API). Computes the matrix norm of the trailing 2 axes. ferray's
+/// linalg is single-matrix, so we mirror `numpy/linalg/_linalg.py
+/// matrix_norm` for the 2-D case: route to the library `norm` with the
+/// matrix-norm interpretation. The default `ord='fro'` is the Frobenius
+/// norm (`_linalg.py def matrix_norm(x, /, *, keepdims=False, ord="fro")`).
+#[pyfunction]
+#[pyo3(signature = (x, *, keepdims = false, ord = None))]
+pub fn matrix_norm<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    keepdims: bool,
+    ord: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = promote_linalg_input(py, x)?;
+    let dt = dtype_name(&arr)?;
+    // Default ord is 'fro' (Frobenius), unlike the scalar `norm` whose
+    // default is the 2-norm. matrix_norm always treats input as a matrix.
+    let ord_value = match ord {
+        Some(o) => parse_norm_order(o)?,
+        None => fl::NormOrder::Fro,
+    };
+    Ok(match_dtype_float!(dt.as_str(), T => {
+        let view: PyReadonlyArray2<T> = arr.extract()?;
+        let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+        let scalar: T = fl::norm(&fa.into_dyn(), ord_value).map_err(|e| linalg_err_to_pyerr(py, e))?;
+        if keepdims {
+            let arr2 = ArrayD::<T>::from_vec(IxDyn::new(&[1, 1]), vec![scalar])
+                .map_err(ferr_to_pyerr)?;
+            arr2.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        } else {
+            let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar])
+                .map_err(ferr_to_pyerr)?;
+            arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        }
+    }))
+}
+
+/// `numpy.linalg.vector_norm(x, axis=None, keepdims=False, ord=2)` (NumPy
+/// 2.0 array-API). With the default `axis=None` numpy flattens `x` to a
+/// vector and computes the `ord`-norm (`_linalg.py def vector_norm(x, /, *,
+/// axis=None, keepdims=False, ord=2)`); ferray's scalar `norm` over a
+/// flattened array gives the identical reduction. An explicit `axis` routes
+/// to the library `norm_axis` reducer.
+#[pyfunction]
+#[pyo3(signature = (x, *, axis = None, keepdims = false, ord = None))]
+pub fn vector_norm<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+    keepdims: bool,
+    ord: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = promote_linalg_input(py, x)?;
+    let dt = dtype_name(&arr)?;
+    // vector_norm's default ord is 2 (the L2 vector norm).
+    let ord_value = match ord {
+        Some(o) => parse_norm_order(o)?,
+        None => fl::NormOrder::L2,
+    };
+    Ok(match_dtype_float!(dt.as_str(), T => {
+        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+        match axis {
+            None => {
+                // Flatten to a 1-D vector and reduce. numpy flattens when
+                // axis is None (_linalg.py vector_norm: `x = x.ravel()`).
+                let flat: Vec<T> = fa.iter().copied().collect();
+                let n = flat.len();
+                let vec1 = ArrayD::<T>::from_vec(IxDyn::new(&[n]), flat)
+                    .map_err(ferr_to_pyerr)?;
+                let scalar: T = fl::norm(&vec1, ord_value).map_err(|e| linalg_err_to_pyerr(py, e))?;
+                if keepdims {
+                    let shape: Vec<usize> = fa.shape().iter().map(|_| 1usize).collect();
+                    let arrk = ArrayD::<T>::from_vec(IxDyn::new(&shape), vec![scalar])
+                        .map_err(ferr_to_pyerr)?;
+                    arrk.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+                } else {
+                    let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar])
+                        .map_err(ferr_to_pyerr)?;
+                    arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+                }
+            }
+            Some(ax) => {
+                let r: ArrayD<T> = fl::norm_axis(&fa, ord_value, ax, keepdims).map_err(ferr_to_pyerr)?;
+                r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+            }
+        }
+    }))
+}
+
+/// `numpy.linalg.svdvals(x)` (NumPy 2.0 array-API) — the 1-D singular
+/// values of `x`, sorted in descending order. Equivalent to
+/// `svd(x, compute_uv=False)` (`_linalg.py def svdvals(x): return
+/// svd(x, compute_uv=False, hermitian=False)`); routes to the library
+/// `svdvals` path.
+#[pyfunction]
+pub fn svdvals<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let arr = promote_linalg_input(py, x)?;
+    let dt = dtype_name(&arr)?;
+    Ok(match_dtype_float!(dt.as_str(), T => {
+        let view: PyReadonlyArray2<T> = arr.extract()?;
+        let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+        let s: Array1<T> = fl::svdvals(&fa).map_err(|e| linalg_err_to_pyerr(py, e))?;
+        s.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    }))
+}
+
+/// `numpy.linalg.cross(a, b, axis=-1)` (NumPy 2.0 array-API) — the cross
+/// product of two 3-component vectors along `axis`. NumPy 2.0's
+/// `linalg.cross` REQUIRES exactly 3 components (unlike the legacy
+/// top-level `numpy.cross` which also did 2-vectors). ferray-linalg's
+/// `cross` is the 1-D 3-element form; this binding handles the 1-D case.
+/// Stacked (>1-D) inputs are NOT yet supported by the library and raise
+/// `ValueError`.
+#[pyfunction]
+#[pyo3(signature = (a, b, axis = -1))]
+pub fn cross<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    axis: isize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr_a = promote_linalg_input(py, a)?;
+    let dt = dtype_name(&arr_a)?;
+    let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
+    // The library cross only supports 1-D 3-element vectors; reject stacked
+    // input rather than silently producing a wrong result.
+    let ndim_a: usize = arr_a.getattr("ndim")?.extract()?;
+    if ndim_a != 1 || (axis != -1 && axis != 0) {
+        return Err(PyValueError::new_err(
+            "linalg.cross: only 1-D 3-component vectors are supported (stacked cross is deferred)",
+        ));
+    }
+    Ok(match_dtype_float!(dt.as_str(), T => {
+        let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
+        let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
+        let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
+        let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+        let r: ArrayD<T> = fl::cross(&fa, &fb).map_err(ferr_to_pyerr)?;
+        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
 }
 

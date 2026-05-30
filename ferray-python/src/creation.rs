@@ -585,6 +585,29 @@ pub fn ones_like<'py>(
     Ok(creation_dispatch!(fc::ones, py, shape, dt.as_str()))
 }
 
+/// `numpy.empty_like(prototype, dtype=None)` equivalent. Returns an array
+/// of the same shape and dtype as `prototype` (`numpy/_core/numeric.py
+/// def empty_like`). NumPy makes no guarantee about the *contents* of an
+/// `empty`/`empty_like` buffer; ferray-core's `empty_like` yields an
+/// uninitialised buffer that the library always overwrites before use, so
+/// at the binding boundary we return a defined (zero-filled) buffer of the
+/// matching shape/dtype — the only observable contract numpy specifies.
+#[pyfunction]
+#[pyo3(signature = (a, dtype = None))]
+pub fn empty_like<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    dtype: Option<&str>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, a)?;
+    let dt = match dtype {
+        Some(d) => d.to_string(),
+        None => dtype_name(&arr)?,
+    };
+    let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
+    Ok(creation_dispatch!(fc::zeros, py, shape, dt.as_str()))
+}
+
 /// `numpy.full_like(a, fill_value, dtype=None)` equivalent. When `dtype`
 /// is omitted the result inherits the *source array's* dtype (numpy
 /// `full_like` defaults `dtype` to `a.dtype`).

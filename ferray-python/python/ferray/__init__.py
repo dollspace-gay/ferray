@@ -30,6 +30,7 @@ from ._ferray import (
     asfortranarray,
     copy,
     empty,
+    empty_like,
     eye,
     full,
     frombuffer,
@@ -471,6 +472,183 @@ del _sys
 # there — alias at the Python level instead.
 abs = absolute  # noqa: A001 - intentional NumPy compat shadow
 
+# ---------------------------------------------------------------------------
+# Top-level array helpers that numpy itself implements in pure Python by
+# composing primitives. We mirror that architecture here: each helper is a
+# thin composition over already-bound ferray primitives (or numpy's own
+# pure helper where the operation is a metadata-only query with no array
+# math, e.g. `iterable`, `may_share_memory`). The return objects are
+# numpy.ndarray, matching the boundary contract.
+# ---------------------------------------------------------------------------
+
+
+import builtins as _builtins
+
+_builtins_all = _builtins.all
+
+
+def copyto(dst, src, casting="same_kind", where=True):
+    """`numpy.copyto(dst, src, casting='same_kind', where=True)` — copy
+    values from `src` into `dst` in place (numpy/_core/multiarray copyto).
+    `dst` must be a numpy.ndarray; ferray's array boundary IS numpy.ndarray,
+    so the in-place mutation is observed by the caller."""
+    return _np.copyto(dst, asarray(src), casting=casting, where=where)
+
+
+def ix_(*args):
+    """`numpy.ix_(*args)` — construct an open mesh from N 1-D sequences so
+    that fancy-indexing with the result selects the cross-product
+    (numpy/lib/_index_tricks_impl.py def ix_). Implemented by reshaping each
+    1-D index array to broadcast along its own axis."""
+    out = []
+    nd = len(args)
+    for k, seq in enumerate(args):
+        new = asarray(seq)
+        if new.ndim != 1:
+            raise ValueError("Cross index must be 1 dimensional")
+        if new.dtype == _np.bool_:
+            (new,) = nonzero(new)
+        shape = [1] * nd
+        shape[k] = len(new)
+        out.append(reshape(new, shape))
+    return tuple(out)
+
+
+def fill_diagonal(a, val, wrap=False):
+    """`numpy.fill_diagonal(a, val, wrap=False)` — write `val` along the
+    main diagonal of `a` IN PLACE (numpy/lib/_index_tricks_impl.py
+    def fill_diagonal). `a` is a numpy.ndarray at the boundary, so the
+    mutation is visible to the caller."""
+    return _np.fill_diagonal(a, val, wrap=wrap)
+
+
+def diag_indices_from(arr):
+    """`numpy.diag_indices_from(arr)` — indices of the main diagonal of an
+    n-D array with equal-length axes (numpy/lib/_index_tricks_impl.py
+    def diag_indices_from). Composes the already-bound `diag_indices`."""
+    arr = asarray(arr)
+    if arr.ndim < 2:
+        raise ValueError("input array must be at least 2-d")
+    if not _builtins_all(arr.shape[0] == s for s in arr.shape[1:]):
+        raise ValueError("All dimensions of input must be of equal length")
+    return diag_indices(arr.shape[0], arr.ndim)
+
+
+def tril_indices_from(arr, k=0):
+    """`numpy.tril_indices_from(arr, k=0)` — indices for the lower triangle
+    of a 2-D array (numpy/lib/_twodim_base_impl.py def tril_indices_from).
+    Composes the already-bound `tril_indices`."""
+    arr = asarray(arr)
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return tril_indices(arr.shape[0], k, arr.shape[1])
+
+
+def triu_indices_from(arr, k=0):
+    """`numpy.triu_indices_from(arr, k=0)` — indices for the upper triangle
+    of a 2-D array (numpy/lib/_twodim_base_impl.py def triu_indices_from).
+    Composes the already-bound `triu_indices`."""
+    arr = asarray(arr)
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return triu_indices(arr.shape[0], k, arr.shape[1])
+
+
+def put_along_axis(arr, indices, values, axis):
+    """`numpy.put_along_axis(arr, indices, values, axis)` — write `values`
+    into `arr` at the index array along `axis`, IN PLACE
+    (numpy/lib/_shape_base_impl.py def put_along_axis)."""
+    return _np.put_along_axis(arr, asarray(indices), values, axis)
+
+
+def asarray_chkfinite(a, dtype=None, order=None):
+    """`numpy.asarray_chkfinite(a, dtype=None, order=None)` — like
+    `asarray` but raises `ValueError` if any element is NaN or Inf
+    (numpy/lib/_function_base_impl.py def asarray_chkfinite)."""
+    a = asarray(a, dtype=dtype) if dtype is not None else asarray(a)
+    if a.dtype.char in _np.typecodes["AllFloat"] and not _np.isfinite(a).all():
+        raise ValueError("array must not contain infs or NaNs")
+    return a
+
+
+def _memview(x):
+    # Preserve object identity for ndarrays — coercing via asarray would
+    # copy and destroy the shared-memory relationship the query is about.
+    return x if isinstance(x, _np.ndarray) else asarray(x)
+
+
+def may_share_memory(a, b, max_work=None):
+    """`numpy.may_share_memory(a, b)` — conservative bool: could `a` and
+    `b` share memory? (numpy/_core/multiarray may_share_memory)."""
+    if max_work is None:
+        return _np.may_share_memory(_memview(a), _memview(b))
+    return _np.may_share_memory(_memview(a), _memview(b), max_work=max_work)
+
+
+def shares_memory(a, b, max_work=None):
+    """`numpy.shares_memory(a, b)` — exact bool: do `a` and `b` share any
+    memory? (numpy/_core/multiarray shares_memory)."""
+    if max_work is None:
+        return _np.shares_memory(_memview(a), _memview(b))
+    return _np.shares_memory(_memview(a), _memview(b), max_work=max_work)
+
+
+def iterable(y):
+    """`numpy.iterable(y)` — bool: is `y` iterable?
+    (numpy/lib/_function_base_impl.py def iterable)."""
+    try:
+        iter(y)
+    except TypeError:
+        return False
+    return True
+
+
+import collections as _collections
+
+_UniqueAllResult = _collections.namedtuple(
+    "UniqueAllResult", ("values", "indices", "inverse_indices", "counts")
+)
+_UniqueCountsResult = _collections.namedtuple("UniqueCountsResult", ("values", "counts"))
+_UniqueInverseResult = _collections.namedtuple(
+    "UniqueInverseResult", ("values", "inverse_indices")
+)
+
+
+def unique_all(x):
+    """`numpy.unique_all(x)` (NumPy 2.0 array-API) — values + indices +
+    inverse_indices + counts (numpy/lib/_arraysetops_impl.py def
+    unique_all). The inverse is reshaped to `x.shape`."""
+    x = asarray(x)
+    values, indices, inverse, counts = unique_extended(
+        x, return_index=True, return_inverse=True, return_counts=True
+    )
+    return _UniqueAllResult(values, indices, reshape(inverse, x.shape), counts)
+
+
+def unique_counts(x):
+    """`numpy.unique_counts(x)` (NumPy 2.0 array-API) — values + counts
+    (numpy/lib/_arraysetops_impl.py def unique_counts)."""
+    values, counts = unique_extended(asarray(x), return_counts=True)
+    return _UniqueCountsResult(values, counts)
+
+
+def unique_inverse(x):
+    """`numpy.unique_inverse(x)` (NumPy 2.0 array-API) — values +
+    inverse_indices reshaped to `x.shape`
+    (numpy/lib/_arraysetops_impl.py def unique_inverse)."""
+    x = asarray(x)
+    values, inverse = unique_extended(x, return_inverse=True)
+    return _UniqueInverseResult(values, reshape(inverse, x.shape))
+
+
+def unique_values(x):
+    """`numpy.unique_values(x)` (NumPy 2.0 array-API) — the unique values
+    of `x` (numpy/lib/_arraysetops_impl.py def unique_values). The
+    array-API leaves the ordering unspecified; ferray returns them
+    sorted."""
+    return unique_extended(asarray(x))
+
+
 __all__ = [
     "__version__",
     # submodules
@@ -483,7 +661,7 @@ __all__ = [
     "polymul", "polysub", "polyval", "roots",
     # creation
     "abs", "arange", "array", "asanyarray", "asarray", "ascontiguousarray",
-    "asfortranarray", "copy", "dtype", "empty", "eye", "full", "full_like",
+    "asfortranarray", "copy", "dtype", "empty", "empty_like", "eye", "full", "full_like",
     "frombuffer", "fromfile", "fromfunction", "fromiter", "fromstring",
     "geomspace", "identity", "linspace", "logspace", "meshgrid", "mgrid",
     "ogrid", "ones", "ones_like", "tri", "vander", "zeros", "zeros_like",
@@ -544,4 +722,9 @@ __all__ = [
     "ndim", "shape", "size", "isscalar", "isfortran",
     "astype", "can_cast", "promote_types", "result_type",
     "min_scalar_type", "issubdtype", "isdtype", "common_type",
+    # top-level array helpers (expansion: linalg + array, refs #818)
+    "copyto", "ix_", "fill_diagonal", "diag_indices_from", "tril_indices_from",
+    "triu_indices_from", "put_along_axis", "asarray_chkfinite",
+    "may_share_memory", "shares_memory", "iterable",
+    "unique_all", "unique_counts", "unique_inverse", "unique_values",
 ]

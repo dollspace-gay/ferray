@@ -74,6 +74,11 @@ fn register_dtype_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) ->
 fn register_linalg_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> PyResult<()> {
     let m = PyModule::new(py, "linalg")?;
     m.add_function(wrap_pyfunction!(linalg::norm, &m)?)?;
+    // NumPy 2.0 array-API linalg norms / singular values / cross.
+    m.add_function(wrap_pyfunction!(linalg::matrix_norm, &m)?)?;
+    m.add_function(wrap_pyfunction!(linalg::vector_norm, &m)?)?;
+    m.add_function(wrap_pyfunction!(linalg::svdvals, &m)?)?;
+    m.add_function(wrap_pyfunction!(linalg::cross, &m)?)?;
     m.add_function(wrap_pyfunction!(linalg::det, &m)?)?;
     m.add_function(wrap_pyfunction!(linalg::slogdet, &m)?)?;
     m.add_function(wrap_pyfunction!(linalg::matrix_rank, &m)?)?;
@@ -451,6 +456,7 @@ fn _ferray(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(creation::geomspace, m)?)?;
     m.add_function(wrap_pyfunction!(creation::zeros_like, m)?)?;
     m.add_function(wrap_pyfunction!(creation::ones_like, m)?)?;
+    m.add_function(wrap_pyfunction!(creation::empty_like, m)?)?;
     m.add_function(wrap_pyfunction!(creation::full_like, m)?)?;
     m.add_function(wrap_pyfunction!(creation::copy, m)?)?;
     m.add_function(wrap_pyfunction!(creation::ascontiguousarray, m)?)?;
