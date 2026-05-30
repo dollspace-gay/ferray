@@ -353,6 +353,11 @@ fn register_random_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -
     m.add("default_rng", wrap_pyfunction!(random::default_rng_py, &m)?)?;
     m.add_function(wrap_pyfunction!(random::seed, &m)?)?;
     m.add_function(wrap_pyfunction!(random::random, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::random_sample, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::sample, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::ranf, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::random_integers, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::bytes, &m)?)?;
     m.add_function(wrap_pyfunction!(random::rand, &m)?)?;
     m.add_function(wrap_pyfunction!(random::standard_normal, &m)?)?;
     m.add_function(wrap_pyfunction!(random::randn, &m)?)?;
@@ -378,6 +383,18 @@ fn register_random_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -
     m.add_function(wrap_pyfunction!(random::laplace, &m)?)?;
     m.add_function(wrap_pyfunction!(random::gumbel, &m)?)?;
     m.add_function(wrap_pyfunction!(random::triangular, &m)?)?;
+    // distributions newly exposed at the module surface (#787 follow-up)
+    m.add_function(wrap_pyfunction!(random::logistic, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::power, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::standard_t, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::f_dist, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::vonmises, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::wald, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::standard_cauchy, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::standard_exponential, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::standard_gamma, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::negative_binomial, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::hypergeometric, &m)?)?;
     // Modern Generator class
     m.add_class::<random::PyGenerator>()?;
     m.add_function(wrap_pyfunction!(random::default_rng_py, &m)?)?;

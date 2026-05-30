@@ -505,3 +505,26 @@ crate_pattern = "ferray-python/src/window.rs"
 upstream = ["/home/doll/numpy-ref/numpy/lib/_function_base_impl.py"]
 design = ".design/ferray-window.md"
 parity_ops = ["bartlett", "blackman", "hamming", "hanning", "kaiser"]
+
+# Random bindings: legacy module-level aliases (random_sample/sample/ranf/
+# random_integers/bytes), scalar-vs-array choice return, size-as-tuple,
+# in-place shuffle, N-D/negative permutation, negative-dim->ValueError, and
+# the module-level + Generator distribution surface. numpy/random/__init__.py
+# `__all__` (lines 126-177) is the registration contract; mtrand.pyi /
+# _generator.pyi carry the per-function ABI (scalar size=None, size tuples,
+# inclusive-high random_integers, array_like default_rng seed).
+[[route]]
+crate_pattern = "ferray-python/src/random.rs"
+upstream = [
+    "/home/doll/numpy-ref/numpy/random/__init__.py",
+    "/home/doll/numpy-ref/numpy/random/mtrand.pyi",
+    "/home/doll/numpy-ref/numpy/random/_generator.pyi",
+]
+design = ".design/ferray-random.md"
+parity_ops = [
+    "random_sample", "sample", "ranf", "random_integers", "bytes",
+    "choice", "shuffle", "permutation", "default_rng",
+    "logistic", "power", "standard_t", "f", "vonmises", "wald",
+    "standard_cauchy", "standard_exponential", "standard_gamma",
+    "negative_binomial", "hypergeometric",
+]
