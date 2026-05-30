@@ -414,6 +414,126 @@ macro_rules! match_dtype_int_only {
     };
 }
 
+/// Dispatch a binary (or unary) op that has SEPARATE float and integer
+/// implementations: floating dtypes route to `$float_fn`, integer dtypes
+/// to `$int_fn`. Used where numpy registers both a float loop and an
+/// integer loop with different semantics — e.g. `maximum` (NaN-propagating
+/// float vs. ordered int), `power` (`powf` vs. wrapping int pow),
+/// `floor_divide` / `remainder` (true float floor-div vs. integer
+/// floor-div). bool is rejected (these ops have no bool loop in numpy).
+#[macro_export]
+macro_rules! match_dtype_float_or_int {
+    ($dtype:expr, $T:ident, $float_fn:path, $int_fn:path => $body:block) => {
+        match $dtype {
+            "float64" | "f64" => {
+                #[allow(non_camel_case_types)]
+                type $T = f64;
+                macro_rules! __op {
+                    () => {
+                        $float_fn
+                    };
+                }
+                $body
+            }
+            "float32" | "f32" => {
+                #[allow(non_camel_case_types)]
+                type $T = f32;
+                macro_rules! __op {
+                    () => {
+                        $float_fn
+                    };
+                }
+                $body
+            }
+            "int64" | "i64" => {
+                #[allow(non_camel_case_types)]
+                type $T = i64;
+                macro_rules! __op {
+                    () => {
+                        $int_fn
+                    };
+                }
+                $body
+            }
+            "int32" | "i32" => {
+                #[allow(non_camel_case_types)]
+                type $T = i32;
+                macro_rules! __op {
+                    () => {
+                        $int_fn
+                    };
+                }
+                $body
+            }
+            "int16" | "i16" => {
+                #[allow(non_camel_case_types)]
+                type $T = i16;
+                macro_rules! __op {
+                    () => {
+                        $int_fn
+                    };
+                }
+                $body
+            }
+            "int8" | "i8" => {
+                #[allow(non_camel_case_types)]
+                type $T = i8;
+                macro_rules! __op {
+                    () => {
+                        $int_fn
+                    };
+                }
+                $body
+            }
+            "uint64" | "u64" => {
+                #[allow(non_camel_case_types)]
+                type $T = u64;
+                macro_rules! __op {
+                    () => {
+                        $int_fn
+                    };
+                }
+                $body
+            }
+            "uint32" | "u32" => {
+                #[allow(non_camel_case_types)]
+                type $T = u32;
+                macro_rules! __op {
+                    () => {
+                        $int_fn
+                    };
+                }
+                $body
+            }
+            "uint16" | "u16" => {
+                #[allow(non_camel_case_types)]
+                type $T = u16;
+                macro_rules! __op {
+                    () => {
+                        $int_fn
+                    };
+                }
+                $body
+            }
+            "uint8" | "u8" => {
+                #[allow(non_camel_case_types)]
+                type $T = u8;
+                macro_rules! __op {
+                    () => {
+                        $int_fn
+                    };
+                }
+                $body
+            }
+            other => {
+                return Err(::pyo3::exceptions::PyTypeError::new_err(format!(
+                    "unsupported dtype for numeric op: {other:?}"
+                )));
+            }
+        }
+    };
+}
+
 /// Coerce a Python array-like to a `numpy.ndarray` of the requested
 /// dtype. Used by binary ufuncs to align two inputs to a common dtype
 /// before extracting typed views — the alternative (extract both then
@@ -425,4 +545,95 @@ pub fn coerce_dtype<'py>(
     dt: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
     py.import("numpy")?.call_method1("asarray", (obj, dt))
+}
+
+/// Compute the NumPy NEP-50 promoted dtype name for a binary ufunc over
+/// two array-likes, mirroring `numpy.result_type(a, b)`
+/// (numpy/_core/src/multiarray/convert_datatype.c — the type-promotion
+/// table that every binary ufunc consults before selecting a loop).
+///
+/// `add([1,2], [1.5,2.5])` promotes `int64 + float64 -> float64`, so the
+/// float operand's fractional part survives instead of being truncated
+/// to the first operand's integer dtype. `maximum([1,5],[3,2])` promotes
+/// `int64 + int64 -> int64`, keeping the integer loop.
+pub fn binary_result_dtype<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<String> {
+    let np = py.import("numpy")?;
+    let dt = np.getattr("result_type")?.call1((a, b))?;
+    dt.getattr("name")?.extract()
+}
+
+/// For a unary "promote-to-float" ufunc (`exp`, `log`, `sqrt`, `sin`,
+/// `fabs`, …), return `(compute_dtype, output_dtype)` for an input whose
+/// dtype is `in_dt`.
+///
+/// NumPy promotes integer/bool input to the smallest inexact float that
+/// safely holds it (`result_type(x, float16)`): bool/int8/uint8 ->
+/// float16, int16/uint16 -> float32, the wider ints -> float64
+/// (generate_umath.py:1003 `fabs` `TD(flts ...)` / the inexact common
+/// type). Float input keeps its dtype. The binding computes in float32 for
+/// any float16/float32 output (numpy's f16 ufuncs upcast to f32 internally)
+/// and in float64 otherwise, then narrows the result back to `output_dtype`
+/// at the boundary — so no `half::f16` plumbing is needed in Rust while the
+/// returned array still carries numpy's exact promoted dtype.
+pub fn unary_promote_dtypes<'py>(
+    py: Python<'py>,
+    sample: &Bound<'py, PyAny>,
+    in_dt: &str,
+) -> PyResult<(String, String)> {
+    if matches!(
+        in_dt,
+        "float64" | "f64" | "float32" | "f32" | "float16" | "f16"
+    ) {
+        let compute = if matches!(in_dt, "float64" | "f64") {
+            "float64"
+        } else {
+            "float32"
+        };
+        return Ok((compute.to_string(), in_dt.to_string()));
+    }
+    let np = py.import("numpy")?;
+    let f16 = np.getattr("float16")?;
+    let out = np.getattr("result_type")?.call1((sample, f16))?;
+    let out_name: String = out.getattr("name")?.extract()?;
+    let compute = if out_name == "float64" {
+        "float64"
+    } else {
+        "float32"
+    };
+    Ok((compute.to_string(), out_name))
+}
+
+/// Return `true` if every argument is a 0-dimensional array-like (a Python
+/// scalar, a numpy scalar, or a 0-d `ndarray`).
+///
+/// NumPy's `$OUT_SCALAR` contract: a ufunc whose inputs are all scalar /
+/// 0-d returns a numpy *scalar* (e.g. `numpy.float64`), not a 0-d
+/// `ndarray` (numpy/_core/code_generators/ufunc_docstrings.py
+/// `$OUT_SCALAR_2`). The binding produces a 0-d ndarray, then collapses it
+/// to a scalar via [`scalarize`] when this predicate holds.
+pub fn all_scalar_inputs(py: Python<'_>, inputs: &[&Bound<'_, PyAny>]) -> PyResult<bool> {
+    for obj in inputs {
+        let arr = as_ndarray(py, obj)?;
+        let ndim: usize = arr.getattr("ndim")?.extract()?;
+        if ndim != 0 {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// Collapse a 0-d ndarray result into a numpy scalar via `ndarray[()]`
+/// (numpy's own scalar-extraction), matching the `$OUT_SCALAR` contract.
+/// If `result` is not 0-d it is returned unchanged.
+pub fn scalarize<'py>(result: Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let ndim: usize = result.getattr("ndim")?.extract()?;
+    if ndim == 0 {
+        let empty = pyo3::types::PyTuple::empty(result.py());
+        return result.get_item(empty);
+    }
+    Ok(result)
 }

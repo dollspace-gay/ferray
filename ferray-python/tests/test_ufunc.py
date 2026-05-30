@@ -1,0 +1,226 @@
+"""Phase-2 parity tests for the ferray ufunc surface."""
+
+import numpy as np
+import pytest
+
+import ferray
+
+
+# ---------------------------------------------------------------------------
+# Unary float ufuncs — shape preservation + numeric agreement with numpy
+# ---------------------------------------------------------------------------
+
+UNARY_FLOAT_FUNCS = [
+    ("sin", -np.pi, np.pi),
+    ("cos", -np.pi, np.pi),
+    ("tan", -1.0, 1.0),
+    ("sinh", -2.0, 2.0),
+    ("cosh", -2.0, 2.0),
+    ("tanh", -2.0, 2.0),
+    ("arcsin", -0.99, 0.99),
+    ("arccos", -0.99, 0.99),
+    ("arctan", -10.0, 10.0),
+    ("arcsinh", -3.0, 3.0),
+    ("arccosh", 1.01, 5.0),
+    ("arctanh", -0.99, 0.99),
+    ("exp", -3.0, 3.0),
+    ("exp2", -3.0, 3.0),
+    ("expm1", -3.0, 3.0),
+    ("log", 0.01, 100.0),
+    ("log1p", 0.0, 100.0),
+    ("log2", 0.01, 100.0),
+    ("log10", 0.01, 100.0),
+    ("sqrt", 0.0, 100.0),
+    ("cbrt", -27.0, 27.0),
+    ("square", -10.0, 10.0),
+    ("reciprocal", 0.5, 5.0),
+    ("negative", -10.0, 10.0),
+    ("positive", -10.0, 10.0),
+    ("absolute", -10.0, 10.0),
+    ("fabs", -10.0, 10.0),
+    ("sign", -10.0, 10.0),
+    ("floor", -5.7, 5.7),
+    ("ceil", -5.7, 5.7),
+    ("round", -5.7, 5.7),
+    ("trunc", -5.7, 5.7),
+    ("rint", -5.7, 5.7),
+    ("degrees", 0.0, 2 * np.pi),
+    ("radians", 0.0, 360.0),
+    ("deg2rad", 0.0, 360.0),
+    ("rad2deg", 0.0, 2 * np.pi),
+]
+
+
+@pytest.mark.parametrize("name, lo, hi", UNARY_FLOAT_FUNCS)
+def test_unary_float_matches_numpy(name, lo, hi):
+    rng = np.random.default_rng(seed=42)
+    src = rng.uniform(lo, hi, size=(50,))
+    fr_fn = getattr(ferray, name)
+    np_fn = getattr(np, name)
+    np.testing.assert_allclose(fr_fn(src), np_fn(src), rtol=1e-10, atol=1e-12)
+
+
+def test_abs_alias_for_absolute():
+    src = np.array([-1.0, 0.0, 1.0, -2.5])
+    np.testing.assert_allclose(ferray.abs(src), np.abs(src))
+
+
+def test_unary_float_dtype_preserved_f32():
+    src = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+    out = ferray.sin(src)
+    assert out.dtype == np.float32
+
+
+def test_unary_float_promotes_int_input():
+    # numpy promotes integer input to float64 for transcendental ufuncs
+    # (generate_umath.py: sin/exp/... register only float loops, int args
+    # promote via the inexact common type). The binding now routes int
+    # input through the promoted float path instead of rejecting it.
+    src = np.array([1, 2, 3], dtype=np.int64)
+    expected = np.sin(src)  # live numpy oracle (R-CHAR-3)
+    got = ferray.sin(src)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+    np.testing.assert_allclose(got, expected)
+
+
+# ---------------------------------------------------------------------------
+# Predicates: float → bool
+# ---------------------------------------------------------------------------
+
+
+def test_isnan_basic():
+    src = np.array([1.0, np.nan, 3.0, np.inf])
+    np.testing.assert_array_equal(ferray.isnan(src), np.isnan(src))
+
+
+def test_isinf_basic():
+    src = np.array([1.0, np.nan, np.inf, -np.inf])
+    np.testing.assert_array_equal(ferray.isinf(src), np.isinf(src))
+
+
+def test_isfinite_basic():
+    src = np.array([1.0, np.nan, np.inf, -np.inf, 0.0])
+    np.testing.assert_array_equal(ferray.isfinite(src), np.isfinite(src))
+
+
+def test_signbit_basic():
+    src = np.array([-1.0, 0.0, 1.0, -0.0])
+    np.testing.assert_array_equal(ferray.signbit(src), np.signbit(src))
+
+
+# ---------------------------------------------------------------------------
+# Binary numeric (broadcasting)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("op_name", ["add", "subtract", "multiply", "divide"])
+def test_binary_numeric_matches_numpy(op_name):
+    a = np.array([1.0, 2.0, 3.0, 4.0])
+    b = np.array([10.0, 20.0, 30.0, 40.0])
+    fr_fn = getattr(ferray, op_name)
+    np_fn = getattr(np, op_name)
+    np.testing.assert_allclose(fr_fn(a, b), np_fn(a, b))
+
+
+def test_add_broadcasts_2d_and_1d():
+    a = np.arange(12).reshape(3, 4)
+    b = np.arange(4)
+    np.testing.assert_array_equal(ferray.add(a, b), np.add(a, b))
+
+
+def test_multiply_int_dtype():
+    a = np.array([1, 2, 3], dtype=np.int32)
+    b = np.array([4, 5, 6], dtype=np.int32)
+    out = ferray.multiply(a, b)
+    assert out.dtype == np.int32
+    np.testing.assert_array_equal(out, np.multiply(a, b))
+
+
+# ---------------------------------------------------------------------------
+# Binary float
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("op_name", [
+    "power", "maximum", "minimum", "fmax", "fmin", "copysign",
+    "hypot", "arctan2", "logaddexp", "logaddexp2", "heaviside",
+])
+def test_binary_float_matches_numpy(op_name):
+    rng = np.random.default_rng(123)
+    a = rng.uniform(0.5, 5.0, size=(20,))
+    b = rng.uniform(0.5, 5.0, size=(20,))
+    fr_fn = getattr(ferray, op_name)
+    np_fn = getattr(np, op_name)
+    np.testing.assert_allclose(fr_fn(a, b), np_fn(a, b), rtol=1e-10)
+
+
+def test_power_broadcasts():
+    a = np.array([2.0, 3.0])
+    b = np.array([[1.0], [2.0], [3.0]])
+    np.testing.assert_allclose(ferray.power(a, b), np.power(a, b))
+
+
+# ---------------------------------------------------------------------------
+# Comparison
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("op_name", [
+    "equal", "not_equal", "less", "less_equal", "greater", "greater_equal",
+])
+def test_comparison_matches_numpy(op_name):
+    a = np.array([1.0, 2.0, 3.0, 4.0])
+    b = np.array([2.0, 2.0, 2.0, 2.0])
+    fr_fn = getattr(ferray, op_name)
+    np_fn = getattr(np, op_name)
+    np.testing.assert_array_equal(fr_fn(a, b), np_fn(a, b))
+
+
+def test_equal_broadcasts():
+    a = np.arange(6).reshape(2, 3)
+    b = np.array([0, 1, 2])
+    np.testing.assert_array_equal(ferray.equal(a, b), np.equal(a, b))
+
+
+# ---------------------------------------------------------------------------
+# Logical
+# ---------------------------------------------------------------------------
+
+
+def test_logical_and_matches_numpy():
+    a = np.array([True, True, False, False])
+    b = np.array([True, False, True, False])
+    np.testing.assert_array_equal(ferray.logical_and(a, b), np.logical_and(a, b))
+
+
+def test_logical_or_matches_numpy():
+    a = np.array([True, True, False, False])
+    b = np.array([True, False, True, False])
+    np.testing.assert_array_equal(ferray.logical_or(a, b), np.logical_or(a, b))
+
+
+def test_logical_xor_matches_numpy():
+    a = np.array([True, True, False, False])
+    b = np.array([True, False, True, False])
+    np.testing.assert_array_equal(ferray.logical_xor(a, b), np.logical_xor(a, b))
+
+
+def test_logical_not_matches_numpy():
+    src = np.array([True, False, True, False])
+    np.testing.assert_array_equal(ferray.logical_not(src), np.logical_not(src))
+
+
+def test_logical_and_on_int_truthy():
+    a = np.array([0, 1, 2, 0])
+    b = np.array([1, 0, 1, 1])
+    np.testing.assert_array_equal(ferray.logical_and(a, b), np.logical_and(a, b))
+
+
+# ---------------------------------------------------------------------------
+# Clip
+# ---------------------------------------------------------------------------
+
+
+def test_clip_matches_numpy():
+    src = np.array([-3.0, -1.0, 0.0, 1.0, 5.0])
+    np.testing.assert_allclose(ferray.clip(src, -1.0, 2.0), np.clip(src, -1.0, 2.0))

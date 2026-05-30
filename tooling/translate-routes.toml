@@ -31,6 +31,18 @@ upstream = [
 design = ".design/ferray-ufunc.md"
 parity_ops = ["add", "subtract", "multiply", "divide", "power", "mod", "clip", "maximum", "minimum", "sign", "abs", "exp", "log", "sqrt", "sin", "cos"]
 
+# ferray-python module entry point: registers every #[pyfunction] on the
+# extension module. Touched only to register newly-added top-level ufunc
+# aliases (true_divide / floor_divide / remainder / mod / float_power).
+[[route]]
+crate_pattern = "ferray-python/src/lib.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/umath.py",
+  "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["true_divide", "floor_divide", "remainder", "mod", "float_power"]
+
 [[route]]
 crate_pattern = "ferray-python/src/stats.rs"
 upstream = [

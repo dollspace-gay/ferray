@@ -29,8 +29,14 @@ use numpy::PyReadonlyArrayDyn;
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use crate::conv::{as_ndarray, coerce_dtype, dtype_name, ferr_to_pyerr};
-use crate::{match_dtype_all, match_dtype_float, match_dtype_numeric};
+use crate::conv::{
+    all_scalar_inputs, as_ndarray, binary_result_dtype, coerce_dtype, dtype_name, ferr_to_pyerr,
+    scalarize, unary_promote_dtypes,
+};
+use crate::{
+    match_dtype_all, match_dtype_float, match_dtype_float_or_int, match_dtype_int_only,
+    match_dtype_numeric,
+};
 
 // ---------------------------------------------------------------------------
 // Helper: per-dispatch-shape inline macros that capture the full
@@ -38,14 +44,45 @@ use crate::{match_dtype_all, match_dtype_float, match_dtype_numeric};
 // each binding is one expression.
 // ---------------------------------------------------------------------------
 
-/// Unary float ufunc body: in `Array<T, IxDyn>` (T: Float) → out same.
+/// Unary "promote-to-float" ufunc body (REQ-23): float input keeps its
+/// dtype; integer/bool input promotes to the NumPy-promoted float dtype
+/// (`result_type(x, float16)`). The promotion happens at the Python
+/// boundary — the input is coerced to the *compute* float (f32/f64), the
+/// existing `T: Float` kernel runs, and the result is narrowed to the
+/// *output* float dtype (which may be float16) by numpy. This keeps the
+/// returned array's dtype byte-for-byte numpy-correct without needing
+/// `half::f16` plumbing inside Rust.
 macro_rules! unary_float_body {
     ($py:expr, $arr:expr, $func:path) => {{
-        let dt = dtype_name(&$arr)?;
-        match_dtype_float!(dt.as_str(), T => {
-            let view: PyReadonlyArrayDyn<T> = $arr.extract()?;
+        let in_dt = dtype_name(&$arr)?;
+        let (compute_dt, out_dt) = unary_promote_dtypes($py, &$arr, in_dt.as_str())?;
+        let arr_c = coerce_dtype($py, &$arr, compute_dt.as_str())?;
+        let result = match_dtype_float!(compute_dt.as_str(), T => {
+            let view: PyReadonlyArrayDyn<T> = arr_c.extract()?;
             let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
             let r: ArrayD<T> = $func(&fa).map_err(ferr_to_pyerr)?;
+            r.into_pyarray($py).map_err(ferr_to_pyerr)?.into_any()
+        });
+        // Narrow to numpy's exact output dtype (identity when compute == out).
+        if out_dt != compute_dt {
+            coerce_dtype($py, &result, out_dt.as_str())?
+        } else {
+            result
+        }
+    }};
+}
+
+/// Unary algebraic body that PRESERVES the input numeric dtype (REQ-24 /
+/// int-identity family: `negative`, `absolute`, `sign`, `floor`, `ceil`,
+/// `trunc`, `fix`). Float dtypes route to `$float_fn`, integer dtypes to
+/// `$int_fn` (which keeps the integer dtype).
+macro_rules! unary_numeric_split_body {
+    ($py:expr, $arr:expr, $float_fn:path, $int_fn:path) => {{
+        let dt = dtype_name(&$arr)?;
+        match_dtype_float_or_int!(dt.as_str(), T, $float_fn, $int_fn => {
+            let view: PyReadonlyArrayDyn<T> = $arr.extract()?;
+            let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+            let r: ArrayD<T> = __op!()(&fa).map_err(ferr_to_pyerr)?;
             r.into_pyarray($py).map_err(ferr_to_pyerr)?.into_any()
         })
     }};
@@ -64,61 +101,103 @@ macro_rules! unary_float_predicate_body {
     }};
 }
 
-/// Binary numeric broadcast body: dispatch on first arg's dtype, coerce
-/// the second to match, call `func(a, b)`.
+/// Binary numeric broadcast body (`add`/`subtract`/`multiply`/`divide`):
+/// promote BOTH inputs to the NEP-50 common dtype (`result_type(a, b)`),
+/// not the first operand's dtype, then call `func(a, b)`. Promoting to
+/// the first operand's dtype would truncate the wider operand —
+/// `add(int[1,2], float[1.5,2.5])` must yield `float64 [2.5,4.5]`, not
+/// `int64 [2,4]`. The result dtype follows the op: `add`/`subtract`/
+/// `multiply` return the common dtype; `divide` is true-division and
+/// returns its promoted float output (numpy `int/int -> float64`).
 macro_rules! binary_numeric_body {
     ($py:expr, $a:expr, $b:expr, $func:path) => {{
         let arr_a = as_ndarray($py, $a)?;
-        let dt = dtype_name(&arr_a)?;
+        let arr_b0 = as_ndarray($py, $b)?;
+        let dt = binary_result_dtype($py, &arr_a, &arr_b0)?;
         match_dtype_numeric!(dt.as_str(), T => {
-            let arr_b = coerce_dtype($py, $b, dt.as_str())?;
-            let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
+            let arr_a2 = coerce_dtype($py, &arr_a, dt.as_str())?;
+            let arr_b = coerce_dtype($py, &arr_b0, dt.as_str())?;
+            let va: PyReadonlyArrayDyn<T> = arr_a2.extract()?;
             let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
             let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
             let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
-            // Let the result dtype follow the op: same-type ops (add/sub/mul)
-            // return `ArrayD<T>`, but `divide` is true-division and returns the
-            // promoted float output (`ferray_ufunc::TrueDivide::Output`), so the
-            // bound type must not be pinned to `T` (numpy divide int->float64).
             let r = $func(&fa, &fb).map_err(ferr_to_pyerr)?;
             r.into_pyarray($py).map_err(ferr_to_pyerr)?.into_any()
         })
     }};
 }
 
-/// Binary float same-shape body (e.g. power, maximum). ferray's
-/// non-broadcast variants require matching shapes, so we coerce both
-/// to the first's shape via `numpy.broadcast_arrays` first.
-macro_rules! binary_float_body {
+/// Binary "promote-to-float" body (`hypot`, `arctan2`, `copysign`,
+/// `logaddexp`, …): numpy registers ONLY float loops, so any integer
+/// input promotes to float (`result_type(a, b, float16)`). Computed in
+/// f32/f64 at the boundary and narrowed to numpy's exact output dtype.
+macro_rules! binary_float_promote_body {
     ($py:expr, $a:expr, $b:expr, $func:path) => {{
         let arr_a = as_ndarray($py, $a)?;
-        let dt = dtype_name(&arr_a)?;
-        match_dtype_float!(dt.as_str(), T => {
-            let np = $py.import("numpy")?;
-            // numpy.broadcast_arrays returns a list of views with a
-            // common shape; we then coerce dtype to align both inputs.
-            let pair = np.call_method1("broadcast_arrays", (&arr_a, $b))?;
-            let pair_list: Vec<Bound<PyAny>> = pair.extract()?;
-            let arr_a2 = coerce_dtype($py, &pair_list[0], dt.as_str())?;
-            let arr_b2 = coerce_dtype($py, &pair_list[1], dt.as_str())?;
+        let arr_b = as_ndarray($py, $b)?;
+        // Promote inputs together (covers int+int -> f64, int8+int8 -> f16).
+        let common = binary_result_dtype($py, &arr_a, &arr_b)?;
+        let (compute_dt, out_dt) = unary_promote_dtypes($py, &arr_a, common.as_str())?;
+        let np = $py.import("numpy")?;
+        let pair = np.call_method1("broadcast_arrays", (&arr_a, &arr_b))?;
+        let pair_list: Vec<Bound<PyAny>> = pair.extract()?;
+        let arr_a2 = coerce_dtype($py, &pair_list[0], compute_dt.as_str())?;
+        let arr_b2 = coerce_dtype($py, &pair_list[1], compute_dt.as_str())?;
+        let result = match_dtype_float!(compute_dt.as_str(), T => {
             let va: PyReadonlyArrayDyn<T> = arr_a2.extract()?;
             let vb: PyReadonlyArrayDyn<T> = arr_b2.extract()?;
             let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
             let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
             let r: ArrayD<T> = $func(&fa, &fb).map_err(ferr_to_pyerr)?;
             r.into_pyarray($py).map_err(ferr_to_pyerr)?.into_any()
+        });
+        if out_dt != compute_dt {
+            coerce_dtype($py, &result, out_dt.as_str())?
+        } else {
+            result
+        }
+    }};
+}
+
+/// Binary body for ops that have SEPARATE float and integer loops with
+/// the SAME output kind (`maximum`/`minimum`, `power`, `floor_divide`,
+/// `remainder`/`mod`): promote both inputs to the common numeric dtype
+/// (`result_type(a, b)`), then route float dtypes to `$float_fn` and
+/// integer dtypes to `$int_fn`.
+macro_rules! binary_numeric_split_body {
+    ($py:expr, $a:expr, $b:expr, $float_fn:path, $int_fn:path) => {{
+        let arr_a = as_ndarray($py, $a)?;
+        let arr_b = as_ndarray($py, $b)?;
+        let dt = binary_result_dtype($py, &arr_a, &arr_b)?;
+        let np = $py.import("numpy")?;
+        let pair = np.call_method1("broadcast_arrays", (&arr_a, &arr_b))?;
+        let pair_list: Vec<Bound<PyAny>> = pair.extract()?;
+        match_dtype_float_or_int!(dt.as_str(), T, $float_fn, $int_fn => {
+            let arr_a2 = coerce_dtype($py, &pair_list[0], dt.as_str())?;
+            let arr_b2 = coerce_dtype($py, &pair_list[1], dt.as_str())?;
+            let va: PyReadonlyArrayDyn<T> = arr_a2.extract()?;
+            let vb: PyReadonlyArrayDyn<T> = arr_b2.extract()?;
+            let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
+            let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+            let r: ArrayD<T> = __op!()(&fa, &fb).map_err(ferr_to_pyerr)?;
+            r.into_pyarray($py).map_err(ferr_to_pyerr)?.into_any()
         })
     }};
 }
 
 /// Binary comparison body: numeric inputs → bool output, broadcasting.
+/// Both inputs promote to the NEP-50 common dtype (`result_type(a, b)`),
+/// so `equal(int, float)` compares the float-promoted values rather than
+/// truncating the float operand to the first's integer dtype.
 macro_rules! comparison_body {
     ($py:expr, $a:expr, $b:expr, $func:path) => {{
         let arr_a = as_ndarray($py, $a)?;
-        let dt = dtype_name(&arr_a)?;
+        let arr_b0 = as_ndarray($py, $b)?;
+        let dt = binary_result_dtype($py, &arr_a, &arr_b0)?;
         match_dtype_numeric!(dt.as_str(), T => {
-            let arr_b = coerce_dtype($py, $b, dt.as_str())?;
-            let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
+            let arr_a2 = coerce_dtype($py, &arr_a, dt.as_str())?;
+            let arr_b = coerce_dtype($py, &arr_b0, dt.as_str())?;
+            let va: PyReadonlyArrayDyn<T> = arr_a2.extract()?;
             let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
             let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
             let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
@@ -166,12 +245,32 @@ macro_rules! logical_unary_body {
 // Trigonometric (unary float)
 // ---------------------------------------------------------------------------
 
+/// Bind a unary "promote-to-float" ufunc (REQ-23): integer/bool input
+/// promotes to float, float input keeps its dtype. Scalar / 0-d input
+/// returns a numpy scalar (`$OUT_SCALAR`).
 macro_rules! bind_unary_float {
     ($name:ident, $ferr_path:path) => {
         #[pyfunction]
         pub fn $name<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
             let arr = as_ndarray(py, x)?;
-            Ok(unary_float_body!(py, arr, $ferr_path))
+            let scalar = all_scalar_inputs(py, &[x])?;
+            let out = unary_float_body!(py, arr, $ferr_path);
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
+}
+
+/// Bind a unary algebraic ufunc that PRESERVES the input numeric dtype
+/// (REQ-24 int-identity family): float input → `$float_fn`, integer input
+/// → `$int_fn` (keeping the integer dtype).
+macro_rules! bind_unary_numeric_split {
+    ($name:ident, $float_fn:path, $int_fn:path) => {
+        #[pyfunction]
+        pub fn $name<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+            let arr = as_ndarray(py, x)?;
+            let scalar = all_scalar_inputs(py, &[x])?;
+            let out = unary_numeric_split_body!(py, arr, $float_fn, $int_fn);
+            if scalar { scalarize(out) } else { Ok(out) }
         }
     };
 }
@@ -193,7 +292,7 @@ bind_unary_float!(radians, ferray_ufunc::radians);
 bind_unary_float!(deg2rad, ferray_ufunc::deg2rad);
 bind_unary_float!(rad2deg, ferray_ufunc::rad2deg);
 
-// Exponential / logarithmic
+// Exponential / logarithmic (REQ-23: int -> float)
 bind_unary_float!(exp, ferray_ufunc::exp);
 bind_unary_float!(exp2, ferray_ufunc::exp2);
 bind_unary_float!(expm1, ferray_ufunc::expm1);
@@ -202,26 +301,103 @@ bind_unary_float!(log1p, ferray_ufunc::log1p);
 bind_unary_float!(log2, ferray_ufunc::log2);
 bind_unary_float!(log10, ferray_ufunc::log10);
 
-// Roots / squares / reciprocal — all float-only in ferray
+// Roots — REQ-23: int -> float.
 bind_unary_float!(sqrt, ferray_ufunc::sqrt);
 bind_unary_float!(cbrt, ferray_ufunc::cbrt);
-bind_unary_float!(square, ferray_ufunc::square);
-bind_unary_float!(reciprocal, ferray_ufunc::reciprocal);
-
-// Sign / absolute / negative — float-only in ferray
-bind_unary_float!(negative, ferray_ufunc::negative);
-bind_unary_float!(positive, ferray_ufunc::positive);
-bind_unary_float!(absolute, ferray_ufunc::absolute);
-bind_unary_float!(fabs, ferray_ufunc::fabs);
-bind_unary_float!(sign, ferray_ufunc::sign);
-
-// Rounding — all float-only
-bind_unary_float!(floor, ferray_ufunc::floor);
-bind_unary_float!(ceil, ferray_ufunc::ceil);
-bind_unary_float!(round, ferray_ufunc::round);
-bind_unary_float!(trunc, ferray_ufunc::trunc);
+// `rint` has NO integer loop in numpy (generate_umath.py:1021) — int -> float.
 bind_unary_float!(rint, ferray_ufunc::rint);
-bind_unary_float!(fix, ferray_ufunc::fix);
+// `fabs` registers only float loops — int -> float (generate_umath.py:1003).
+bind_unary_float!(fabs, ferray_ufunc::fabs);
+
+// Sign / absolute / negative / positive — int-identity (int -> int).
+bind_unary_numeric_split!(negative, ferray_ufunc::negative, ferray_ufunc::negative_int);
+bind_unary_numeric_split!(absolute, ferray_ufunc::absolute, ferray_ufunc::absolute_int);
+bind_unary_numeric_split!(sign, ferray_ufunc::sign, ferray_ufunc::sign_int);
+
+// Rounding floor/ceil/trunc/fix — int-identity (REQ-24, int -> int).
+bind_unary_numeric_split!(floor, ferray_ufunc::floor, ferray_ufunc::floor_int);
+bind_unary_numeric_split!(ceil, ferray_ufunc::ceil, ferray_ufunc::ceil_int);
+bind_unary_numeric_split!(trunc, ferray_ufunc::trunc, ferray_ufunc::trunc_int);
+bind_unary_numeric_split!(fix, ferray_ufunc::fix, ferray_ufunc::fix_int);
+
+// `round` keeps int dtype (generate_umath.py `TD(bints)` on `rint`/`around`'s
+// int loops); float route is `ferray_ufunc::round`.
+bind_unary_numeric_split!(round, ferray_ufunc::round, ferray_ufunc::round_int);
+
+/// `positive` / `square` / `reciprocal` keep the integer dtype but have no
+/// int kernel in ferray-ufunc; numpy's integer semantics are: `positive` =
+/// identity, `square` = `x*x` (wrapping), `reciprocal` = `1 // x`
+/// (generate_umath.py:516/:524/:540 `TD(ints + flts)`). Float input routes
+/// to the float kernel. These are handled in dedicated `#[pyfunction]`s
+/// below rather than the split macro because the int branch reuses other
+/// ferray-ufunc integer ops instead of a single `_int` entry point.
+macro_rules! bind_unary_float_only_int_fallback {
+    ($name:ident, $ferr_path:path, $int_body:expr) => {
+        #[pyfunction]
+        pub fn $name<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+            let arr = as_ndarray(py, x)?;
+            let scalar = all_scalar_inputs(py, &[x])?;
+            let dt = dtype_name(&arr)?;
+            let out = if matches!(
+                dt.as_str(),
+                "float64" | "f64" | "float32" | "f32"
+            ) {
+                match_dtype_float!(dt.as_str(), T => {
+                    let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+                    let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+                    let r: ArrayD<T> = $ferr_path(&fa).map_err(ferr_to_pyerr)?;
+                    r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+                })
+            } else {
+                let int_fn: fn(Python<'py>, &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> =
+                    $int_body;
+                int_fn(py, &arr)?
+            };
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
+}
+
+/// `positive(int)` = identity: return the input array unchanged.
+fn positive_int_array<'py>(
+    _py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    Ok(arr.clone())
+}
+
+/// `square(int)` = `x * x` with wrapping (numpy's fixed-width int square),
+/// computed via ferray's integer multiply.
+fn square_int_array<'py>(py: Python<'py>, arr: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let dt = dtype_name(arr)?;
+    Ok(match_dtype_int_only!(dt.as_str(), T => {
+        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+        let r: ArrayD<T> = ferray_ufunc::multiply_broadcast(&fa, &fa).map_err(ferr_to_pyerr)?;
+        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    }))
+}
+
+/// `reciprocal(int)` = `1 // x` (numpy truncating integer reciprocal),
+/// computed via ferray's integer floor-divide.
+fn reciprocal_int_array<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let dt = dtype_name(arr)?;
+    Ok(match_dtype_int_only!(dt.as_str(), T => {
+        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+        let ones: ArrayD<T> = ArrayD::<T>::from_elem(fa.dim().clone(), <T as ferray_core::Element>::one())
+            .map_err(ferr_to_pyerr)?;
+        let r: ArrayD<T> = ferray_ufunc::floor_divide_int(&ones, &fa).map_err(ferr_to_pyerr)?;
+        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    }))
+}
+
+bind_unary_float_only_int_fallback!(positive, ferray_ufunc::positive, positive_int_array);
+bind_unary_float_only_int_fallback!(square, ferray_ufunc::square, square_int_array);
+bind_unary_float_only_int_fallback!(reciprocal, ferray_ufunc::reciprocal, reciprocal_int_array);
 
 // `np.abs` is just an alias for `np.absolute`. ferray-Rust's `abs`
 // is the complex-absolute (takes `Array<Complex<T>>`), so we don't
@@ -253,15 +429,46 @@ bind_predicate_float!(signbit, ferray_ufunc::signbit);
 // Binary arithmetic (broadcasting, numeric inputs)
 // ---------------------------------------------------------------------------
 
+/// Write a computed ufunc result into a caller-supplied `out=` ndarray
+/// (numpy's `$OUT` kwarg contract — every binary ufunc accepts
+/// `out : ndarray, None, or tuple`), then return `out`. The assignment
+/// goes through numpy's `ndarray.__setitem__` so dtype casting matches
+/// numpy's `out=` semantics. When `out` is absent the freshly-built
+/// `result` is returned (scalarized for all-scalar inputs).
+fn finish_with_out<'py>(
+    out: Option<&Bound<'py, PyAny>>,
+    result: Bound<'py, PyAny>,
+    scalar: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    match out {
+        Some(target) if !target.is_none() => {
+            let py = result.py();
+            // `numpy.copyto(dst, src, casting="unsafe")` writes the result in
+            // place with numpy's `out=` casting rules and broadcasting.
+            let np = py.import("numpy")?;
+            let kwargs = pyo3::types::PyDict::new(py);
+            kwargs.set_item("casting", "unsafe")?;
+            np.call_method("copyto", (target, &result), Some(&kwargs))?;
+            Ok(target.clone())
+        }
+        _ if scalar => scalarize(result),
+        _ => Ok(result),
+    }
+}
+
 macro_rules! bind_binary_numeric_broadcast {
     ($name:ident, $ferr_path:path) => {
         #[pyfunction]
+        #[pyo3(signature = (x1, x2, out = None))]
         pub fn $name<'py>(
             py: Python<'py>,
             x1: &Bound<'py, PyAny>,
             x2: &Bound<'py, PyAny>,
+            out: Option<&Bound<'py, PyAny>>,
         ) -> PyResult<Bound<'py, PyAny>> {
-            Ok(binary_numeric_body!(py, x1, x2, $ferr_path))
+            let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            let result = binary_numeric_body!(py, x1, x2, $ferr_path);
+            finish_with_out(out, result, scalar)
         }
     };
 }
@@ -272,11 +479,12 @@ bind_binary_numeric_broadcast!(multiply, ferray_ufunc::multiply_broadcast);
 bind_binary_numeric_broadcast!(divide, ferray_ufunc::divide_broadcast);
 
 // ---------------------------------------------------------------------------
-// Binary float (broadcasting via numpy.broadcast_arrays + same-shape
-// ferray fn) — power, maximum, minimum, fmax, fmin, copysign, hypot, arctan2
+// Binary float-promote (numpy registers ONLY float loops; int input
+// promotes to float) — fmax, fmin, copysign, hypot, arctan2, logaddexp,
+// logaddexp2, heaviside.
 // ---------------------------------------------------------------------------
 
-macro_rules! bind_binary_float {
+macro_rules! bind_binary_float_promote {
     ($name:ident, $ferr_path:path) => {
         #[pyfunction]
         pub fn $name<'py>(
@@ -284,22 +492,84 @@ macro_rules! bind_binary_float {
             x1: &Bound<'py, PyAny>,
             x2: &Bound<'py, PyAny>,
         ) -> PyResult<Bound<'py, PyAny>> {
-            Ok(binary_float_body!(py, x1, x2, $ferr_path))
+            let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            let out = binary_float_promote_body!(py, x1, x2, $ferr_path);
+            if scalar { scalarize(out) } else { Ok(out) }
         }
     };
 }
 
-bind_binary_float!(power, ferray_ufunc::power);
-bind_binary_float!(maximum, ferray_ufunc::maximum);
-bind_binary_float!(minimum, ferray_ufunc::minimum);
-bind_binary_float!(fmax, ferray_ufunc::fmax);
-bind_binary_float!(fmin, ferray_ufunc::fmin);
-bind_binary_float!(copysign, ferray_ufunc::copysign);
-bind_binary_float!(hypot, ferray_ufunc::hypot);
-bind_binary_float!(arctan2, ferray_ufunc::arctan2);
-bind_binary_float!(logaddexp, ferray_ufunc::logaddexp);
-bind_binary_float!(logaddexp2, ferray_ufunc::logaddexp2);
-bind_binary_float!(heaviside, ferray_ufunc::heaviside);
+bind_binary_float_promote!(fmax, ferray_ufunc::fmax);
+bind_binary_float_promote!(fmin, ferray_ufunc::fmin);
+bind_binary_float_promote!(copysign, ferray_ufunc::copysign);
+bind_binary_float_promote!(hypot, ferray_ufunc::hypot);
+bind_binary_float_promote!(arctan2, ferray_ufunc::arctan2);
+bind_binary_float_promote!(logaddexp, ferray_ufunc::logaddexp);
+bind_binary_float_promote!(logaddexp2, ferray_ufunc::logaddexp2);
+bind_binary_float_promote!(heaviside, ferray_ufunc::heaviside);
+
+// ---------------------------------------------------------------------------
+// Binary numeric-split (separate float + integer loops, same output kind) —
+// power, maximum, minimum, floor_divide, remainder/mod.
+// ---------------------------------------------------------------------------
+
+macro_rules! bind_binary_numeric_split {
+    ($name:ident, $float_fn:path, $int_fn:path) => {
+        #[pyfunction]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            x1: &Bound<'py, PyAny>,
+            x2: &Bound<'py, PyAny>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            let out = binary_numeric_split_body!(py, x1, x2, $float_fn, $int_fn);
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
+}
+
+bind_binary_numeric_split!(power, ferray_ufunc::power, ferray_ufunc::power_int);
+bind_binary_numeric_split!(maximum, ferray_ufunc::maximum, ferray_ufunc::maximum_ord);
+bind_binary_numeric_split!(minimum, ferray_ufunc::minimum, ferray_ufunc::minimum_ord);
+bind_binary_numeric_split!(
+    floor_divide,
+    ferray_ufunc::floor_divide,
+    ferray_ufunc::floor_divide_int
+);
+bind_binary_numeric_split!(
+    remainder,
+    ferray_ufunc::remainder,
+    ferray_ufunc::remainder_int
+);
+bind_binary_numeric_split!(mod_, ferray_ufunc::mod_, ferray_ufunc::mod_int);
+
+/// `numpy.true_divide(x1, x2)` — alias of `divide` (always true-division,
+/// int -> float64). generate_umath.py:404 "'true_divide' : aliased to
+/// divide".
+#[pyfunction]
+#[pyo3(signature = (x1, x2, out = None))]
+pub fn true_divide<'py>(
+    py: Python<'py>,
+    x1: &Bound<'py, PyAny>,
+    x2: &Bound<'py, PyAny>,
+    out: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    divide(py, x1, x2, out)
+}
+
+/// `numpy.float_power(x1, x2)` — power that ALWAYS promotes to float
+/// (int -> float64), unlike `power` which keeps the int dtype
+/// (generate_umath.py:490 `float_power` `TD(flts...)`).
+#[pyfunction]
+pub fn float_power<'py>(
+    py: Python<'py>,
+    x1: &Bound<'py, PyAny>,
+    x2: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let scalar = all_scalar_inputs(py, &[x1, x2])?;
+    let out = binary_float_promote_body!(py, x1, x2, ferray_ufunc::float_power);
+    if scalar { scalarize(out) } else { Ok(out) }
+}
 
 // ---------------------------------------------------------------------------
 // Comparisons (broadcasting → bool)
@@ -313,7 +583,9 @@ macro_rules! bind_comparison {
             x1: &Bound<'py, PyAny>,
             x2: &Bound<'py, PyAny>,
         ) -> PyResult<Bound<'py, PyAny>> {
-            Ok(comparison_body!(py, x1, x2, $ferr_path))
+            let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            let out = comparison_body!(py, x1, x2, $ferr_path);
+            if scalar { scalarize(out) } else { Ok(out) }
         }
     };
 }
@@ -816,10 +1088,65 @@ pub fn interp<'py>(
 
 bind_unary_float!(exp_fast, ferray_ufunc::exp_fast);
 bind_unary_float!(spacing, ferray_ufunc::spacing);
-bind_binary_float!(gcd, ferray_ufunc::gcd);
-bind_binary_float!(lcm, ferray_ufunc::lcm);
-bind_binary_float!(fmod, ferray_ufunc::fmod);
-bind_binary_float!(nextafter, ferray_ufunc::nextafter);
+bind_binary_float_promote!(fmod, ferray_ufunc::fmod);
+bind_binary_float_promote!(nextafter, ferray_ufunc::nextafter);
+
+/// `gcd` / `lcm` are INTEGER-ONLY in numpy — they register only `TD(ints)`
+/// loops (generate_umath.py:1156 `gcd`, :1163 `lcm`), so a float input
+/// raises `TypeError` (a `UFuncTypeError`). The binding promotes both
+/// inputs to the common integer dtype and routes to ferray's integer
+/// `gcd_int`/`lcm_int`; a float dtype falls through to the `TypeError` arm.
+///
+/// ferray-ufunc's `gcd_int`/`lcm_int` are bounded `num_traits::Signed`, so
+/// only the SIGNED integer dtypes are dispatched here (unsigned gcd/lcm is
+/// a ferray-ufunc library gap — see spillover note in the dispatch issue).
+/// numpy promotes the common dtype, so `gcd(int32, int64) -> int64`.
+macro_rules! bind_binary_signed_int_only {
+    ($name:ident, $ferr_path:path) => {
+        #[pyfunction]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            x1: &Bound<'py, PyAny>,
+            x2: &Bound<'py, PyAny>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            let arr_a = as_ndarray(py, x1)?;
+            let arr_b = as_ndarray(py, x2)?;
+            let dt = binary_result_dtype(py, &arr_a, &arr_b)?;
+            let np = py.import("numpy")?;
+            let pair = np.call_method1("broadcast_arrays", (&arr_a, &arr_b))?;
+            let pair_list: Vec<Bound<PyAny>> = pair.extract()?;
+            macro_rules! __gcd_arm {
+                ($Tn:ty) => {{
+                    let arr_a2 = coerce_dtype(py, &pair_list[0], dt.as_str())?;
+                    let arr_b2 = coerce_dtype(py, &pair_list[1], dt.as_str())?;
+                    let va: PyReadonlyArrayDyn<$Tn> = arr_a2.extract()?;
+                    let vb: PyReadonlyArrayDyn<$Tn> = arr_b2.extract()?;
+                    let fa: ArrayD<$Tn> = va.as_ferray().map_err(ferr_to_pyerr)?;
+                    let fb: ArrayD<$Tn> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+                    let r: ArrayD<$Tn> = $ferr_path(&fa, &fb).map_err(ferr_to_pyerr)?;
+                    r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+                }};
+            }
+            let out = match dt.as_str() {
+                "int64" | "i64" => __gcd_arm!(i64),
+                "int32" | "i32" => __gcd_arm!(i32),
+                "int16" | "i16" => __gcd_arm!(i16),
+                "int8" | "i8" => __gcd_arm!(i8),
+                other => {
+                    return Err(::pyo3::exceptions::PyTypeError::new_err(format!(
+                        "ufunc {:?} not supported for the input types (signed integer required): {other:?}",
+                        stringify!($name)
+                    )));
+                }
+            };
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
+}
+
+bind_binary_signed_int_only!(gcd, ferray_ufunc::gcd_int);
+bind_binary_signed_int_only!(lcm, ferray_ufunc::lcm_int);
 
 /// `numpy.divmod(x1, x2)` → tuple `(quotient, remainder)`.
 #[pyfunction]
@@ -935,21 +1262,37 @@ pub fn bitwise_count<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bo
 }
 
 /// `numpy.clip(a, a_min, a_max)` — limit values to `[a_min, a_max]`.
+///
+/// NumPy defines `clip(a, lo, hi) == minimum(maximum(a, lo), hi)`
+/// (fromnumeric.py `clip`), where `a_min` / `a_max` are `array_like or
+/// None` — a `None` bound means "do not clip that side" (one-sided clip).
+/// Because it is built from `maximum` / `minimum`, integer arrays keep
+/// their integer dtype and array-valued bounds broadcast against `a`. The
+/// binding therefore delegates to the [`maximum`] / [`minimum`] bindings,
+/// which already carry the int loops, mixed-dtype promotion, and
+/// broadcasting — instead of the old scalar-`f64`, float-only path.
 #[pyfunction]
+#[pyo3(signature = (a, a_min, a_max))]
 pub fn clip<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    a_min: f64,
-    a_max: f64,
+    a_min: Option<&Bound<'py, PyAny>>,
+    a_max: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let arr = as_ndarray(py, a)?;
-    let dt = dtype_name(&arr)?;
-    Ok(match_dtype_float!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        let lo = a_min as T;
-        let hi = a_max as T;
-        let r: ArrayD<T> = ferray_ufunc::clip(&fa, lo, hi).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
+    let lo = a_min.filter(|v| !v.is_none());
+    let hi = a_max.filter(|v| !v.is_none());
+    if lo.is_none() && hi.is_none() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "One of max or min must be given",
+        ));
+    }
+    // maximum(a, a_min) clamps the lower bound; minimum(., a_max) the upper.
+    let lower = match lo {
+        Some(lo_v) => maximum(py, a, lo_v)?,
+        None => as_ndarray(py, a)?,
+    };
+    match hi {
+        Some(hi_v) => minimum(py, &lower, hi_v),
+        None => Ok(lower),
+    }
 }
