@@ -3675,7 +3675,10 @@ pub fn masked_all<'py>(
 /// `numpy.ma.masked_all_like(arr)` — an all-masked masked array matching the
 /// shape and dtype of `arr` (`numpy/ma/extras.py` `def masked_all_like`).
 #[pyfunction]
-pub fn masked_all_like<'py>(py: Python<'py>, arr: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+pub fn masked_all_like<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let np_ma = py.import("numpy.ma")?;
     // `masked_all_like` reads `arr.shape`/`arr.dtype`; a `ferray.ma.MaskedArray`
     // is routed through its numpy.ma form so the int/float dtype is preserved.
@@ -3989,10 +3992,7 @@ pub fn frombuffer<'py>(
 /// preserves its native dtype and mask. This is required for the integer-dtype
 /// bitwise shifts, which numpy refuses to evaluate on f64 data (R-CODE-4: no
 /// lossy int→f64 round-trip).
-fn build_npma_native<'py>(
-    py: Python<'py>,
-    obj: &Bound<'py, PyAny>,
-) -> PyResult<Bound<'py, PyAny>> {
+fn build_npma_native<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     if obj.extract::<PyMaskedArray>().is_ok() {
         return build_npma(py, obj);
     }
