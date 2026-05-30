@@ -1,0 +1,44 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "ferray"
+description = "A NumPy-equivalent library for Python, powered by Rust"
+readme = "README.md"
+license = { text = "MIT OR Apache-2.0" }
+requires-python = ">=3.10"
+authors = [{ name = "ferray contributors" }]
+keywords = ["numpy", "ndarray", "scientific-computing", "simd", "linear-algebra", "rust"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = ["numpy>=1.24"]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/dollspace-gay/ferray"
+Homepage = "https://github.com/dollspace-gay/ferray"
+
+[tool.maturin]
+module-name = "ferray._ferray"
+python-source = "python"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `divergence_*.py` files are the vibe-fork ACToR pins: failing tests that
+# assert NumPy-oracle behavior the binding does not yet match. They are
+# collected alongside the regular `test_*.py` suite so the red/green state
+# honestly reflects outstanding numpy divergences (a pin closes only when
+# its fix lands and the test goes green — never via skip/xfail).
+python_files = ["test_*.py", "divergence_*.py"]

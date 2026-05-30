@@ -1,0 +1,104 @@
+# translate-routes.toml — read-gate route table (ferray-python ← NumPy)
+#
+# Consumed by tooling/translate-discipline.py to gate Edit/Write on
+# ferray-python/src/*.rs binding modules. Each [[route]] declares:
+#
+#   crate_pattern : repo-relative target file (exact or glob).
+#   upstream      : numpy source paths under /home/doll/numpy-ref/, at
+#                   least ONE of which must be Read before the edit.
+#   design        : .design/<doc>.md governing this translation. MUST
+#                   exist on disk; if missing, the hook blocks with
+#                   acto-doc-author dispatch instructions.
+#   parity_ops    : informational only for this project. Verification is
+#                   pytest-vs-numpy (see goal.md "The verification model"),
+#                   NOT a parity-sweep --op harness. Listed here as the
+#                   edge-case function families each module owns.
+#
+# Every gated edit also requires Read of goal.md in the same session.
+# Files under ferray-python/src/ without a route are BLOCKED (R-XLATE-2).
+
+# ─────────────────────────────────────────────────────────────────────────
+# Proof-loop modules (highest divergence risk: NaN / dtype / empty / errs)
+# ─────────────────────────────────────────────────────────────────────────
+
+[[route]]
+crate_pattern = "ferray-python/src/ufunc.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/umath.py",
+  "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+  "/home/doll/numpy-ref/numpy/_core/_methods.py",
+]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["add", "subtract", "multiply", "divide", "power", "mod", "clip", "maximum", "minimum", "sign", "abs", "exp", "log", "sqrt", "sin", "cos"]
+
+[[route]]
+crate_pattern = "ferray-python/src/stats.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/fromnumeric.py",
+  "/home/doll/numpy-ref/numpy/_core/_methods.py",
+  "/home/doll/numpy-ref/numpy/lib/_function_base_impl.py",
+  "/home/doll/numpy-ref/numpy/lib/_nanfunctions_impl.py",
+]
+design = ".design/ferray-stats.md"
+parity_ops = ["mean", "median", "std", "var", "percentile", "quantile", "average", "nanmean", "nanstd", "nanvar", "nanmedian", "ptp", "cov", "corrcoef"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# ferray-core — the foundational crate (dependency order: FIRST)
+# Verified Rust-side via cargo test + numpy oracle (ferray-test-oracle /
+# ferray-core/tests/conformance_*.rs). See goal.md "verification model (A)".
+# ─────────────────────────────────────────────────────────────────────────
+
+[[route]]
+crate_pattern = "ferray-core/src/dtype/promotion.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/numerictypes.py",
+  "/home/doll/numpy-ref/numpy/_core/_type_aliases.py",
+  "/home/doll/numpy-ref/numpy/_core/src/multiarray/convert_datatype.c",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["promote_types", "result_type", "min_scalar_type"]
+
+[[route]]
+crate_pattern = "ferray-core/src/dtype/casting.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/src/multiarray/convert_datatype.c",
+  "/home/doll/numpy-ref/numpy/_core/multiarray.pyi",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["can_cast", "astype"]
+
+[[route]]
+crate_pattern = "ferray-core/src/creation/mod.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/numeric.py",
+  "/home/doll/numpy-ref/numpy/_core/function_base.py",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["zeros", "ones", "full", "empty", "arange", "linspace", "eye", "identity"]
+
+[[route]]
+crate_pattern = "ferray-core/src/array/reductions.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/_methods.py",
+  "/home/doll/numpy-ref/numpy/_core/fromnumeric.py",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["sum", "prod", "min", "max", "argmin", "argmax", "cumsum", "cumprod"]
+
+[[route]]
+crate_pattern = "ferray-core/src/manipulation/mod.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/fromnumeric.py",
+  "/home/doll/numpy-ref/numpy/_core/shape_base.py",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["reshape", "transpose", "concatenate", "stack", "squeeze", "expand_dims"]
+
+[[route]]
+crate_pattern = "ferray-core/src/dimension/broadcast.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/numeric.py",
+  "/home/doll/numpy-ref/numpy/_core/src/multiarray/array_coercion.c",
+]
+design = ".design/ferray-core.md"
+parity_ops = ["broadcast_to", "broadcast_arrays", "broadcast_shapes"]
