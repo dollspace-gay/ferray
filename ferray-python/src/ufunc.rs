@@ -418,6 +418,102 @@ fn lexicographic_cmp<T: PartialOrd + Copy>(a_re: T, a_im: T, b_re: T, b_im: T, o
     }
 }
 
+/// Whole-operand lexicographic min/max select for the complex `maximum`/
+/// `minimum`/`fmax`/`fmin` loops. Returns the SELECTED `Complex` (width
+/// preserved — no imag discard, R-CODE-4). numpy registers these as complex
+/// ufunc loops comparing `(real, then imag)`; verified live (numpy 2.4.5):
+///
+/// - `nan_propagate = true` (`maximum`/`minimum`): if `a` has a NaN part return
+///   `a`; else if `b` has a NaN part return `b`; else the lexicographic
+///   `max`/`min`. (`np.maximum([nan+nanj],[1+5j]) == [nan+nanj]`;
+///   `np.maximum([1+5j],[nan+nanj]) == [nan+nanj]` — `a` takes precedence.)
+/// - `nan_propagate = false` (`fmax`/`fmin`): if exactly one operand has a NaN
+///   part return the OTHER (non-NaN) operand; if both NaN return `a`; else the
+///   lexicographic `max`/`min`. (`np.fmax([nan+nanj],[1+5j]) == [1+5j]`;
+///   `np.fmax([nan+nanj],[nan+nanj]) == [nan+nanj]`.)
+///
+/// `want_max` picks the larger (`"gt"`) vs smaller (`"lt"`) on the finite path.
+/// NaN of a part is detected by `x != x` (no `Float` bound needed); ties (equal
+/// real, equal imag) keep `b` for max and `a` for min via the strict `gt`/`lt`,
+/// matching numpy (equal operands are interchangeable).
+fn complex_minmax_select<T: PartialOrd + Copy>(
+    a: Complex<T>,
+    b: Complex<T>,
+    want_max: bool,
+    nan_propagate: bool,
+) -> Complex<T> {
+    // A NaN part is unorderable against itself: `partial_cmp` yields `None`
+    // (no `Float` bound needed — `num_traits` is not a direct dependency).
+    let is_nan = |v: T| v.partial_cmp(&v).is_none();
+    let a_nan = is_nan(a.re) || is_nan(a.im);
+    let b_nan = is_nan(b.re) || is_nan(b.im);
+    if a_nan || b_nan {
+        if nan_propagate {
+            // maximum/minimum: propagate; `a` takes precedence when NaN.
+            return if a_nan { a } else { b };
+        }
+        // fmax/fmin: suppress — return the non-NaN operand, or `a` if both NaN.
+        return if a_nan && b_nan {
+            a
+        } else if a_nan {
+            b
+        } else {
+            a
+        };
+    }
+    let op = if want_max { "gt" } else { "lt" };
+    if lexicographic_cmp(a.re, a.im, b.re, b.im, op) {
+        a
+    } else {
+        b
+    }
+}
+
+/// Complex arm for `maximum`/`minimum`/`fmax`/`fmin` → complex array (width
+/// preserved). Both operands are broadcast + coerced to the common complex
+/// dtype, then [`complex_minmax_select`] picks the whole `Complex` per element.
+fn complex_minmax_dispatch<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    want_max: bool,
+    nan_propagate: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    let (arr_a, arr_b, dt) = complex_binary_operands(py, a, b)?;
+    match dt.as_str() {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr_a)?;
+            let fb: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr_b)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<Complex<f64>> = fa
+                .iter()
+                .zip(fb.iter())
+                .map(|(x, y)| complex_minmax_select(*x, *y, want_max, nan_propagate))
+                .collect();
+            let r = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr_a)?;
+            let fb: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr_b)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<Complex<f32>> = fa
+                .iter()
+                .zip(fb.iter())
+                .map(|(x, y)| complex_minmax_select(*x, *y, want_max, nan_propagate))
+                .collect();
+            let r = ArrayD::<Complex<f32>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_minmax_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
 /// Complex arm for the four ordering comparisons → bool array, lexicographic
 /// `(real, then imag)`. Both operands are already broadcast + coerced to the
 /// common complex dtype.
@@ -1300,10 +1396,31 @@ macro_rules! bind_binary_float_promote {
             if scalar { scalarize(out) } else { Ok(out) }
         }
     };
+    // Complex-loop form (`fmax`/`fmin`): numpy registers a complex loop that
+    // selects the whole operand LEXICOGRAPHICALLY `(real, then imag)` with
+    // NaN-SUPPRESS semantics (return the non-NaN operand; both-NaN -> `a`). The
+    // imaginary part MUST be preserved — the prior real-only funnel silently
+    // discarded it (R-CODE-4 corruption). `want_max` picks fmax vs fmin.
+    ($name:ident, $ferr_path:path, complex_minmax = $want_max:expr) => {
+        #[pyfunction]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            x1: &Bound<'py, PyAny>,
+            x2: &Bound<'py, PyAny>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            let out = if binary_is_complex(py, x1, x2)? {
+                complex_minmax_dispatch(py, x1, x2, $want_max, false)?
+            } else {
+                binary_float_promote_body!(py, x1, x2, $ferr_path)
+            };
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
 }
 
-bind_binary_float_promote!(fmax, ferray_ufunc::fmax);
-bind_binary_float_promote!(fmin, ferray_ufunc::fmin);
+bind_binary_float_promote!(fmax, ferray_ufunc::fmax, complex_minmax = true);
+bind_binary_float_promote!(fmin, ferray_ufunc::fmin, complex_minmax = false);
 bind_binary_float_promote!(copysign, ferray_ufunc::copysign);
 bind_binary_float_promote!(hypot, ferray_ufunc::hypot);
 bind_binary_float_promote!(arctan2, ferray_ufunc::arctan2);
@@ -1318,9 +1435,10 @@ bind_binary_float_promote!(heaviside, ferray_ufunc::heaviside);
 
 macro_rules! bind_binary_numeric_split {
     // Plain form: complex input falls through to the real funnel
-    // (`match_dtype_float_or_int!` rejects it with `TypeError`). Used by
-    // `maximum`/`minimum`, whose complex-ordering loop numpy does register but
-    // which is out of this dispatch's scope (#924 owns add/.../compare).
+    // (`match_dtype_float_or_int!` rejects it with `TypeError`). `maximum`/
+    // `minimum` now use the `complex_minmax` arm below (numpy registers a
+    // complex-ordering loop, #929); this plain arm remains for any op whose
+    // complex input numpy genuinely rejects.
     ($name:ident, $float_fn:path, $int_fn:path) => {
         #[pyfunction]
         pub fn $name<'py>(
@@ -1371,6 +1489,27 @@ macro_rules! bind_binary_numeric_split {
             if scalar { scalarize(out) } else { Ok(out) }
         }
     };
+    // Complex-minmax form (`maximum`/`minimum`): numpy DOES register a complex
+    // loop that selects the whole operand LEXICOGRAPHICALLY `(real, then imag)`
+    // with NaN-PROPAGATE semantics (a NaN-part operand propagates; `a` first).
+    // The imaginary part is preserved (width c64->c64, c128->c128). `want_max`
+    // picks maximum vs minimum.
+    ($name:ident, $float_fn:path, $int_fn:path, complex_minmax = $want_max:expr) => {
+        #[pyfunction]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            x1: &Bound<'py, PyAny>,
+            x2: &Bound<'py, PyAny>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            let out = if binary_is_complex(py, x1, x2)? {
+                complex_minmax_dispatch(py, x1, x2, $want_max, true)?
+            } else {
+                binary_numeric_split_body!(py, x1, x2, $float_fn, $int_fn)
+            };
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
 }
 
 bind_binary_numeric_split!(
@@ -1379,8 +1518,18 @@ bind_binary_numeric_split!(
     ferray_ufunc::power_int,
     complex = ferray_ufunc::ops::arithmetic::power_complex
 );
-bind_binary_numeric_split!(maximum, ferray_ufunc::maximum, ferray_ufunc::maximum_ord);
-bind_binary_numeric_split!(minimum, ferray_ufunc::minimum, ferray_ufunc::minimum_ord);
+bind_binary_numeric_split!(
+    maximum,
+    ferray_ufunc::maximum,
+    ferray_ufunc::maximum_ord,
+    complex_minmax = true
+);
+bind_binary_numeric_split!(
+    minimum,
+    ferray_ufunc::minimum,
+    ferray_ufunc::minimum_ord,
+    complex_minmax = false
+);
 bind_binary_numeric_split!(
     floor_divide,
     ferray_ufunc::floor_divide,
