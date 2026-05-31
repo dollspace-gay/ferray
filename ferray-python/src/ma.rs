@@ -7502,12 +7502,19 @@ pub fn concatenate<'py>(
             "ma.concatenate: need at least one array to concatenate",
         ));
     }
-    let mut acc = coerce_to_ma(py, &seq[0])?;
-    for item in &seq[1..] {
-        let next = coerce_to_ma(py, item)?;
-        acc = fma::ma_concatenate(&acc, &next, axis).map_err(ferr_to_pyerr)?;
-    }
-    Ok(PyMaskedArray::from_inner(acc))
+    // #1056: delegate to numpy.ma.concatenate so the result dtype follows
+    // numpy's `result_type` over the inputs (int64+int64 -> int64) and the
+    // masks are combined by numpy itself. The previous f64-funnel path
+    // (`coerce_to_ma` -> f64 `getdata`) collapsed every integer input to
+    // float64. numpy/ma/core.py:7299 keeps the input dtype.
+    let np_seq: Vec<Bound<'py, PyAny>> = seq
+        .iter()
+        .map(|item| to_numpy_ma_any(py, item))
+        .collect::<PyResult<_>>()?;
+    let np_list = pyo3::types::PyList::new(py, np_seq)?;
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let r = np_ma.call_method1("concatenate", (np_list, axis))?;
+    from_numpy_ma(py, &r)
 }
 
 /// `numpy.ma.diag(a, k=0)` — masked diagonal / 2-D diagonal embedding,
@@ -9082,31 +9089,21 @@ fn stack_family<'py>(
             "ma.{func}: need at least one array"
         )));
     }
-    let np = py.import("numpy")?;
-    let mut datas: Vec<Bound<'py, PyAny>> = Vec::with_capacity(seq.len());
-    let mut masks: Vec<Bound<'py, PyAny>> = Vec::with_capacity(seq.len());
-    for item in &seq {
-        let m = coerce_to_ma(py, item)?;
-        let d: ArrayD<f64> = fma::getdata(&m).map_err(ferr_to_pyerr)?;
-        let k: ArrayD<bool> = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
-        datas.push(d.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
-        masks.push(k.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
-    }
-    let data_list = pyo3::types::PyList::new(py, datas)?;
-    let mask_list = pyo3::types::PyList::new(py, masks)?;
-    let data_res = coerce_dtype(py, &np.getattr(func)?.call1((data_list,))?, "float64")?;
-    let mask_res = coerce_dtype(py, &np.getattr(func)?.call1((mask_list,))?, "bool")?;
-    let data_fa: ArrayD<f64> = data_res
-        .extract::<PyReadonlyArrayDyn<f64>>()?
-        .as_ferray()
-        .map_err(ferr_to_pyerr)?;
-    let mask_fa: ArrayD<bool> = mask_res
-        .extract::<PyReadonlyArrayDyn<bool>>()?
-        .as_ferray()
-        .map_err(ferr_to_pyerr)?;
-    Ok(PyMaskedArray::from_inner(
-        RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
-    ))
+    // #1056: delegate to `numpy.ma.<func>` so the joined dtype follows numpy's
+    // `result_type` over the inputs (int64 stays int64) and the masks are
+    // combined by numpy itself. The previous path split each operand into f64
+    // `getdata` + bool mask and stacked them with `numpy.<func>`, which
+    // collapsed every integer input to float64. The `numpy.ma` stack family
+    // (`stack`/`vstack`/`hstack`/`column_stack`/`dstack`) delegates to
+    // `numpy/ma/core.py:7299` concatenate, preserving the input dtype.
+    let np_seq: Vec<Bound<'py, PyAny>> = seq
+        .iter()
+        .map(|item| to_numpy_ma_any(py, item))
+        .collect::<PyResult<_>>()?;
+    let np_list = pyo3::types::PyList::new(py, np_seq)?;
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let r = np_ma.call_method1(func, (np_list,))?;
+    from_numpy_ma(py, &r)
 }
 
 /// `numpy.ma.append(a, b, axis=None)` — append `b` to `a`, concatenating the
@@ -9119,44 +9116,19 @@ pub fn append<'py>(
     b: &Bound<'py, PyAny>,
     axis: Option<isize>,
 ) -> PyResult<PyMaskedArray> {
-    let np = py.import("numpy")?;
-    let ma = coerce_to_ma(py, a)?;
-    let mb = coerce_to_ma(py, b)?;
-    let (ad, am) = (
-        fma::getdata(&ma).map_err(ferr_to_pyerr)?,
-        fma::getmaskarray(&ma).map_err(ferr_to_pyerr)?,
-    );
-    let (bd, bm) = (
-        fma::getdata(&mb).map_err(ferr_to_pyerr)?,
-        fma::getmaskarray(&mb).map_err(ferr_to_pyerr)?,
-    );
-    let ad_py = ad.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let am_py = am.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let bd_py = bd.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let bm_py = bm.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let (data_res, mask_res) = match axis {
-        None => (
-            np.call_method1("append", (ad_py, bd_py))?,
-            np.call_method1("append", (am_py, bm_py))?,
-        ),
-        Some(ax) => (
-            np.call_method1("append", (ad_py, bd_py, ax))?,
-            np.call_method1("append", (am_py, bm_py, ax))?,
-        ),
+    // #1056: delegate to numpy.ma.append so the result dtype follows numpy's
+    // `result_type(a, b)` (int64+int64 -> int64) and the masks are combined by
+    // numpy itself; the previous f64-funnel path collapsed integer inputs to
+    // float64. numpy.ma.append flattens when `axis=None` (numpy/ma/core.py)
+    // and otherwise concatenates along `axis`, preserving the input dtype.
+    let na = to_numpy_ma_any(py, a)?;
+    let nb = to_numpy_ma_any(py, b)?;
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let r = match axis {
+        None => np_ma.call_method1("append", (na, nb))?,
+        Some(ax) => np_ma.call_method1("append", (na, nb, ax))?,
     };
-    let data_res = coerce_dtype(py, &data_res, "float64")?;
-    let mask_res = coerce_dtype(py, &mask_res, "bool")?;
-    let data_fa: ArrayD<f64> = data_res
-        .extract::<PyReadonlyArrayDyn<f64>>()?
-        .as_ferray()
-        .map_err(ferr_to_pyerr)?;
-    let mask_fa: ArrayD<bool> = mask_res
-        .extract::<PyReadonlyArrayDyn<bool>>()?
-        .as_ferray()
-        .map_err(ferr_to_pyerr)?;
-    Ok(PyMaskedArray::from_inner(
-        RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
-    ))
+    from_numpy_ma(py, &r)
 }
 
 /// `numpy.ma.compress(condition, a, axis=None)` — select entries of `a` where
@@ -9793,38 +9765,16 @@ pub fn outer<'py>(
     a: &Bound<'py, PyAny>,
     b: &Bound<'py, PyAny>,
 ) -> PyResult<PyMaskedArray> {
-    let np = py.import("numpy")?;
-    let ma = coerce_to_ma(py, a)?;
-    let mb = coerce_to_ma(py, b)?;
-    let ad = fma::getdata(&ma).map_err(ferr_to_pyerr)?;
-    let am = fma::getmaskarray(&ma).map_err(ferr_to_pyerr)?;
-    let bd = fma::getdata(&mb).map_err(ferr_to_pyerr)?;
-    let bm = fma::getmaskarray(&mb).map_err(ferr_to_pyerr)?;
-    let ad_py = ad.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let am_py = am.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let bd_py = bd.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let bm_py = bm.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let data_res = coerce_dtype(py, &np.call_method1("outer", (ad_py, bd_py))?, "float64")?;
-    // mask = outer(am, ones) OR outer(ones, bm): masked iff either source slot
-    // is masked. numpy.ma builds this via `mask = logical_or.outer(am, bm)`.
-    let mask_res = coerce_dtype(
-        py,
-        &np.getattr("logical_or")?
-            .getattr("outer")?
-            .call1((am_py, bm_py))?,
-        "bool",
-    )?;
-    let data_fa: ArrayD<f64> = data_res
-        .extract::<PyReadonlyArrayDyn<f64>>()?
-        .as_ferray()
-        .map_err(ferr_to_pyerr)?;
-    let mask_fa: ArrayD<bool> = mask_res
-        .extract::<PyReadonlyArrayDyn<bool>>()?
-        .as_ferray()
-        .map_err(ferr_to_pyerr)?;
-    Ok(PyMaskedArray::from_inner(
-        RustMa::new(data_fa, mask_fa).map_err(ferr_to_pyerr)?,
-    ))
+    // #1056: delegate to numpy.ma.outer so the product keeps the operands'
+    // native dtype (int64 x int64 -> int64 per numpy's `result_type`; the
+    // f64-funnel path upcast integer operands to float64). numpy/ma/core.py:8317
+    // computes `np.outer(filled(a, 0), filled(b, 0))` (dtype-preserving) and
+    // masks the result wherever either contributing operand element is masked.
+    let na = to_numpy_ma_any(py, a)?;
+    let nb = to_numpy_ma_any(py, b)?;
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let r = np_ma.call_method1("outer", (na, nb))?;
+    from_numpy_ma(py, &r)
 }
 
 /// `numpy.ma.inner(a, b)` / `innerproduct` — inner product over the unmasked
