@@ -198,6 +198,17 @@ pub fn datetime_roundtrip<'py>(
     let kind = time_kind(arr)?.ok_or_else(|| {
         PyTypeError::new_err("datetime_roundtrip requires a datetime64 / timedelta64 array")
     })?;
+    // Capture the input's TRUE shape before the int64-view round-trip. numpy's
+    // own `.view('int64')` promotes a 0-d array to shape `(1,)`
+    // (`np.array(np.datetime64('2024-01-01')).view('int64').shape == (1,)`,
+    // live numpy 2.4.x), and the reconstruction below inherits that leading
+    // axis — so a 0-d datetime64 scalar / 0-d ndarray would emerge as `(1,)`.
+    // numpy keeps `np.array`/`np.asarray` of a datetime64 *scalar* 0-d (shape
+    // `()`, numpy/_core/numeric.py `asarray`), so we reshape the result back to
+    // the input's shape. For ndim>=1 inputs (1-D/N-D/timedelta) the view does
+    // not add an axis, so this reshape is a no-op; only the 0-d case is
+    // corrected. dtype + unit are untouched (reshape never retypes).
+    let orig_shape: Vec<usize> = arr.getattr("shape")?.extract()?;
     // Read the unit string straight from the dtype (no TimeUnit parse, so
     // Y/M/W and the full sub-second range pass through — this is pure
     // marshalling, not arithmetic).
@@ -207,10 +218,13 @@ pub fn datetime_roundtrip<'py>(
     let i64_view = as_int64_view(py, arr)?;
     let view: PyReadonlyArrayDyn<i64> = i64_view.extract()?;
     let ticks: ArrayD<i64> = view.as_ferray().map_err(ferr_to_pyerr)?;
-    match kind {
-        TimeKind::Datetime => int64_to_datetime64(py, ticks, &unit_str),
-        TimeKind::Timedelta => int64_to_timedelta64(py, ticks, &unit_str),
-    }
+    let rebuilt = match kind {
+        TimeKind::Datetime => int64_to_datetime64(py, ticks, &unit_str)?,
+        TimeKind::Timedelta => int64_to_timedelta64(py, ticks, &unit_str)?,
+    };
+    // Restore the input's shape (no-op for ndim>=1; restores `()` for 0-d).
+    let shape_tuple = pyo3::types::PyTuple::new(py, &orig_shape)?;
+    rebuilt.call_method1("reshape", (shape_tuple,))
 }
 
 /// Delegate a pure data-movement manipulation op (reshape / transpose / flip /
