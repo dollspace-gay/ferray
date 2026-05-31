@@ -9,7 +9,44 @@ use ferray_core::error::{FerrayError, FerrayResult};
 use crate::batch::{self, faer_to_vec, slice_to_faer};
 use crate::faer_bridge;
 use crate::scalar::LinalgFloat;
-use faer::linalg::solvers::{DenseSolveCore, Solve};
+use faer::linalg::solvers::{DenseSolveCore, PartialPivLu, Solve};
+
+/// Decide whether a square matrix is singular from its partial-pivot LU
+/// factorization, matching numpy/LAPACK rather than scanning the output
+/// for NaN/Inf.
+///
+/// numpy's `linalg.solve`/`inv` delegate to LAPACK `gesv`/`getrf`, which
+/// report singularity when a pivot on the U-diagonal collapses to the
+/// machine floor relative to the largest pivot. faer's `partial_piv_lu`
+/// does **not** produce an exact zero for an exactly-rank-deficient
+/// integer matrix (e.g. `[[1,2,3],[4,5,6],[7,8,9]]` yields a last pivot
+/// of ~1.6e-16, not 0.0), so a literal `== 0.0` test would miss it.
+///
+/// Criterion: singular iff `min|U_ii| <= n * eps * max|U_ii|`. This is the
+/// relative-pivot-floor test; it flags exactly-singular and numerically
+/// rank-deficient inputs while leaving genuinely invertible-but-ill-
+/// conditioned matrices (e.g. Hilbert matrices, `[[1,2],[3,4.0001]]`)
+/// solvable — verified against the numpy 2.4 oracle.
+fn lu_is_singular<T: LinalgFloat>(lu: &PartialPivLu<T>, n: usize) -> bool {
+    if n == 0 {
+        return false;
+    }
+    let u = lu.U();
+    let zero = T::from_f64_const(0.0);
+    let mut min_abs = <T as num_traits::Float>::infinity();
+    let mut max_abs = zero;
+    for i in 0..n {
+        let d = u[(i, i)].abs();
+        if d < min_abs {
+            min_abs = d;
+        }
+        if d > max_abs {
+            max_abs = d;
+        }
+    }
+    let threshold = T::from_usize(n) * T::machine_epsilon() * max_abs;
+    min_abs <= threshold
+}
 
 /// Solve the linear equation `A @ x = b` for x.
 ///
@@ -35,6 +72,15 @@ pub fn solve<T: LinalgFloat>(
 
     let a_mat = faer_bridge::array2_to_faer(a);
     let lu = a_mat.as_ref().partial_piv_lu();
+
+    // Detect singularity from the LU factorization (not the output): faer's
+    // partial-pivot LU yields a tiny-but-finite pivot for an exactly-singular
+    // matrix, so a NaN/Inf scan misses it. numpy/LAPACK raise here.
+    if lu_is_singular(&lu, n) {
+        return Err(FerrayError::SingularMatrix {
+            message: "matrix is singular; solve has no unique solution".to_string(),
+        });
+    }
 
     let result = match b_shape.len() {
         1 => {
@@ -74,21 +120,6 @@ pub fn solve<T: LinalgFloat>(
         }
         _ => return Err(FerrayError::shape_mismatch("solve: b must be 1D or 2D")),
     };
-
-    // Check for singularity: scan result for NaN/Inf which indicates
-    // the LU solve encountered a (near-)singular matrix. This catches
-    // both exact singularity (zero pivot) and severe ill-conditioning.
-    // A more precise check would inspect the LU diagonal for near-zero
-    // pivots, but faer's partial_piv_lu does not expose the factors
-    // directly through a stable public API.
-    for &val in result.iter() {
-        if val.is_nan() || val.is_infinite() {
-            return Err(FerrayError::SingularMatrix {
-                message: "matrix is singular or nearly singular; solve produced non-finite values"
-                    .to_string(),
-            });
-        }
-    }
 
     Ok(result)
 }
@@ -313,18 +344,18 @@ pub fn inv<T: LinalgFloat>(a: &Array<T, Ix2>) -> FerrayResult<Array<T, Ix2>> {
 
     let mat = faer_bridge::array2_to_faer(a);
     let lu = mat.as_ref().partial_piv_lu();
-    let inv_mat = lu.inverse();
 
-    // Check for NaN/Inf in the result, which indicates a singular matrix
-    let result = faer_bridge::faer_to_array2(&inv_mat)?;
-    for &val in result.iter() {
-        if val.is_nan() || val.is_infinite() {
-            return Err(FerrayError::SingularMatrix {
-                message: "matrix is singular and cannot be inverted".to_string(),
-            });
-        }
+    // Detect singularity from the LU factorization (not the output): faer's
+    // LU inverse returns a finite (huge) matrix for a singular input, so a
+    // NaN/Inf scan misses it. numpy/LAPACK raise here.
+    if lu_is_singular(&lu, n) {
+        return Err(FerrayError::SingularMatrix {
+            message: "matrix is singular and cannot be inverted".to_string(),
+        });
     }
-    Ok(result)
+
+    let inv_mat = lu.inverse();
+    faer_bridge::faer_to_array2(&inv_mat)
 }
 
 /// Compute the Moore-Penrose pseudoinverse of a matrix.
@@ -533,18 +564,17 @@ pub fn solve_batched<T: LinalgFloat>(
             let b_slice = &b_data[idx * b_mat_size..(idx + 1) * b_mat_size];
             let a_faer = slice_to_faer(n, n, a_slice);
             let lu = a_faer.as_ref().partial_piv_lu();
+            if lu_is_singular(&lu, n) {
+                return Err(FerrayError::SingularMatrix {
+                    message: "matrix is singular; solve has no unique solution".to_string(),
+                });
+            }
             let b_faer = faer::Mat::<T>::from_fn(n, nrhs, |i, j| b_slice[i * nrhs + j]);
             let x = lu.solve(&b_faer);
             let mut out = Vec::with_capacity(b_mat_size);
             for i in 0..n {
                 for j in 0..nrhs {
-                    let v = x[(i, j)];
-                    if v.is_nan() || v.is_infinite() {
-                        return Err(FerrayError::SingularMatrix {
-                            message: "matrix is singular or nearly singular; solve produced non-finite values".to_string(),
-                        });
-                    }
-                    out.push(v);
+                    out.push(x[(i, j)]);
                 }
             }
             Ok(out)
@@ -586,16 +616,13 @@ pub fn inv_batched<T: LinalgFloat>(a: &Array<T, IxDyn>) -> FerrayResult<Array<T,
         }
         let mat = slice_to_faer(m, n, data);
         let lu = mat.as_ref().partial_piv_lu();
-        let inv_mat = lu.inverse();
-        let out = faer_to_vec(&inv_mat);
-        for &v in &out {
-            if v.is_nan() || v.is_infinite() {
-                return Err(FerrayError::SingularMatrix {
-                    message: "matrix is singular and cannot be inverted".to_string(),
-                });
-            }
+        if lu_is_singular(&lu, n) {
+            return Err(FerrayError::SingularMatrix {
+                message: "matrix is singular and cannot be inverted".to_string(),
+            });
         }
-        Ok(out)
+        let inv_mat = lu.inverse();
+        Ok(faer_to_vec(&inv_mat))
     })?;
 
     let flat: Vec<T> = results.into_iter().flatten().collect();
