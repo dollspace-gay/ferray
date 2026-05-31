@@ -695,6 +695,10 @@ fn register_random_module<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -
     m.add_class::<random::PyRandomState>()?;
     m.add_function(wrap_pyfunction!(random::get_state, &m)?)?;
     m.add_function(wrap_pyfunction!(random::set_state, &m)?)?;
+    // Hot-swap the global bit generator (closes #910) — last numpy
+    // public-callable gap (numpy/random/mtrand.pyx:4838,4864).
+    m.add_function(wrap_pyfunction!(random::get_bit_generator, &m)?)?;
+    m.add_function(wrap_pyfunction!(random::set_bit_generator, &m)?)?;
     parent.add_submodule(&m)?;
     py.import("sys")?
         .getattr("modules")?

@@ -27,17 +27,54 @@ use pyo3::types::PyAny;
 use crate::conv::{as_ndarray, dtype_name, ferr_to_pyerr, scalarize};
 use crate::match_dtype_all;
 
+/// The thread-local global random state backing the module-level functions.
+///
+/// Beyond the `Generator<Xoshiro256**>` stream itself we retain the `seed`
+/// that originated it. numpy's singleton `RandomState` owns a *bit generator*
+/// object that `get_bit_generator()` hands out and `set_bit_generator()`
+/// installs (`numpy/random/mtrand.pyx:4838,4864`). ferray reconstructs that
+/// hand-out from `seed`: `get_bit_generator()` returns a `PyBitGenerator`
+/// carrying this `seed`, and `set_bit_generator(bg)` re-seeds the global from
+/// `bg.seed` — so `set_bit_generator(get_bit_generator())` reinstalls the same
+/// reproducible stream (R-DEV-7: contract preserved over a different PRNG).
+struct GlobalRng {
+    rng: Generator<Xoshiro256StarStar>,
+    seed: u64,
+}
+
 thread_local! {
     /// Thread-local convenience generator backing the module-level
-    /// functions. Initialised lazily from OS entropy.
-    static RNG: RefCell<Generator<Xoshiro256StarStar>> = RefCell::new(default_rng());
+    /// functions. Initialised from an OS-entropy seed that is *committed*
+    /// (not discarded) so the global has a recoverable bit-generator origin.
+    static RNG: RefCell<GlobalRng> = RefCell::new(GlobalRng::from_seed(os_entropy_u64()));
+}
+
+impl GlobalRng {
+    fn from_seed(seed: u64) -> Self {
+        Self {
+            rng: default_rng_seeded(seed),
+            seed,
+        }
+    }
 }
 
 fn with_rng<F, R>(f: F) -> R
 where
     F: FnOnce(&mut Generator<Xoshiro256StarStar>) -> R,
 {
-    RNG.with(|cell| f(&mut cell.borrow_mut()))
+    RNG.with(|cell| f(&mut cell.borrow_mut().rng))
+}
+
+/// Reset the thread-local global RNG to a fresh stream seeded from `seed`,
+/// recording `seed` as its bit-generator origin.
+fn reseed_global(seed: u64) {
+    RNG.with(|cell| *cell.borrow_mut() = GlobalRng::from_seed(seed));
+}
+
+/// The resolved seed currently backing the thread-local global RNG — the
+/// value `get_bit_generator()` wraps in the returned `PyBitGenerator`.
+fn global_seed() -> u64 {
+    RNG.with(|cell| cell.borrow().seed)
 }
 
 // ---------------------------------------------------------------------------
@@ -88,48 +125,58 @@ fn shape_from_pyany(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<usize>> {
 /// single deterministic seed for the Xoshiro256** stream — the CONTRACT
 /// here is "a list seed is accepted and reproducible", not bit-exact
 /// agreement with PCG64 (different PRNG).
-fn seed_generator_from(seed: Option<&Bound<'_, PyAny>>) -> PyResult<Generator<Xoshiro256StarStar>> {
-    match seed {
-        None => Ok(default_rng()),
+///
+/// Returns both the constructed generator and the resolved `u64` Xoshiro seed.
+/// The seed is what
+/// [`get_bit_generator`]/`Generator.bit_generator` carry so that
+/// `set_bit_generator(get_bit_generator())` re-seeds the same reproducible
+/// stream. For an `int`/`BitGenerator`/`SeedSequence`/`array_like` seed the
+/// resolution is deterministic; for `None` (OS entropy) we still draw and
+/// commit a concrete `u64` so the resulting generator has a recoverable,
+/// reproducible origin seed (the BitGenerator it later hands out re-seeds the
+/// identical stream).
+fn seed_generator_with_seed(
+    seed: Option<&Bound<'_, PyAny>>,
+) -> PyResult<(Generator<Xoshiro256StarStar>, u64)> {
+    let resolved: u64 = match seed {
+        None => os_entropy_u64(),
         Some(o) => {
             if o.is_none() {
-                return Ok(default_rng());
+                os_entropy_u64()
+            } else if let Ok(bg) = o.extract::<PyRef<'_, PyBitGenerator>>() {
+                // A BitGenerator instance (`PCG64(42)`, `MT19937(7)`, …) carries
+                // the resolved Xoshiro seed it was built from. numpy's
+                // `default_rng(bit_generator)` adopts that generator's stream;
+                // ferray has a single PRNG (Xoshiro256**), so we re-seed from the
+                // BitGenerator's stored seed — API-compatible, NOT bit-identical
+                // to numpy's PCG64/MT19937/etc. streams (documented limitation).
+                bg.seed
+            } else if let Ok(s) = o.extract::<u64>() {
+                s
+            } else if let Ok(ss) = o.extract::<PyRef<'_, PySeedSequence>>() {
+                // A SeedSequence instance: fold to a single deterministic u64.
+                ss.inner.generate_u64()
+            } else {
+                // array_like / sequence seed: fold the entropy words through a
+                // SeedSequence to produce a single deterministic u64.
+                let words: Vec<u64> = o.extract::<Vec<u64>>().map_err(|_| {
+                    pyo3::exceptions::PyTypeError::new_err(
+                        "seed must be None, an int, or a sequence of ints",
+                    )
+                })?;
+                let mut entropy: u64 = 0;
+                for (i, w) in words.iter().enumerate() {
+                    // Mix each word with a position-dependent multiplier so
+                    // permutations of the same set seed differently.
+                    entropy ^= w
+                        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                        .rotate_left((i as u32 % 64) + 1);
+                }
+                SeedSequence::new(entropy).generate_u64()
             }
-            // A BitGenerator instance (`PCG64(42)`, `MT19937(7)`, …) carries
-            // the resolved Xoshiro seed it was built from. numpy's
-            // `default_rng(bit_generator)` adopts that generator's stream;
-            // ferray has a single PRNG (Xoshiro256**), so we re-seed from the
-            // BitGenerator's stored seed — API-compatible, NOT bit-identical
-            // to numpy's PCG64/MT19937/etc. streams (documented limitation).
-            if let Ok(bg) = o.extract::<PyRef<'_, PyBitGenerator>>() {
-                return Ok(default_rng_seeded(bg.seed));
-            }
-            if let Ok(s) = o.extract::<u64>() {
-                return Ok(default_rng_seeded(s));
-            }
-            // A SeedSequence instance: fold to a single deterministic u64.
-            if let Ok(ss) = o.extract::<PyRef<'_, PySeedSequence>>() {
-                return Ok(default_rng_seeded(ss.inner.generate_u64()));
-            }
-            // array_like / sequence seed: fold the entropy words through a
-            // SeedSequence to produce a single deterministic u64.
-            let words: Vec<u64> = o.extract::<Vec<u64>>().map_err(|_| {
-                pyo3::exceptions::PyTypeError::new_err(
-                    "seed must be None, an int, or a sequence of ints",
-                )
-            })?;
-            let mut entropy: u64 = 0;
-            for (i, w) in words.iter().enumerate() {
-                // Mix each word with a position-dependent multiplier so
-                // permutations of the same set seed differently.
-                entropy ^= w
-                    .wrapping_mul(0x9E37_79B9_7F4A_7C15)
-                    .rotate_left((i as u32 % 64) + 1);
-            }
-            let ss = SeedSequence::new(entropy);
-            Ok(default_rng_seeded(ss.generate_u64()))
         }
-    }
+    };
+    Ok((default_rng_seeded(resolved), resolved))
 }
 
 // ---------------------------------------------------------------------------
@@ -139,9 +186,7 @@ fn seed_generator_from(seed: Option<&Bound<'_, PyAny>>) -> PyResult<Generator<Xo
 /// `numpy.random.seed(s)` — re-seed the thread-local RNG.
 #[pyfunction]
 pub fn seed(s: u64) {
-    RNG.with(|cell| {
-        *cell.borrow_mut() = default_rng_seeded(s);
-    });
+    reseed_global(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -1182,6 +1227,10 @@ impl<T> Pipe for T {}
 #[pyclass(name = "Generator", module = "ferray.random", skip_from_py_object)]
 pub struct PyGenerator {
     inner: Generator<Xoshiro256StarStar>,
+    /// Resolved Xoshiro seed this Generator wraps — the value exposed via the
+    /// `bit_generator` getter so the wrapped BitGenerator re-seeds the same
+    /// stream (numpy's `Generator.bit_generator`, `_generator.pyi:50`).
+    seed: u64,
 }
 
 #[pymethods]
@@ -1189,13 +1238,25 @@ impl PyGenerator {
     #[new]
     #[pyo3(signature = (seed = None))]
     fn py_new(seed: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let (inner, resolved) = seed_generator_with_seed(seed)?;
         Ok(Self {
-            inner: seed_generator_from(seed)?,
+            inner,
+            seed: resolved,
         })
     }
 
     fn __repr__(&self) -> String {
         "Generator(Xoshiro256**)".to_string()
+    }
+
+    /// `Generator.bit_generator` — the BitGenerator object this Generator
+    /// wraps (`numpy/random/_generator.pyi:50`; numpy's `default_rng(X)`
+    /// wraps a `PCG64`). ferray returns a `PyBitGenerator` carrying this
+    /// Generator's resolved Xoshiro seed, labelled `PCG64` to match numpy's
+    /// default-rng bit generator class.
+    #[getter]
+    fn bit_generator(&self) -> PyBitGenerator {
+        PyBitGenerator::from_seed(self.seed, "PCG64")
     }
 
     /// `Generator.random(size=None)` — uniform [0, 1) floats.
@@ -1789,8 +1850,10 @@ impl PyGenerator {
 #[pyfunction]
 #[pyo3(signature = (seed = None))]
 pub fn default_rng_py(seed: Option<&Bound<'_, PyAny>>) -> PyResult<PyGenerator> {
+    let (inner, resolved) = seed_generator_with_seed(seed)?;
     Ok(PyGenerator {
-        inner: seed_generator_from(seed)?,
+        inner,
+        seed: resolved,
     })
 }
 
@@ -1937,6 +2000,66 @@ bitgen_subclass!(PyPCG64DXSM, "PCG64DXSM");
 bitgen_subclass!(PyPhilox, "Philox");
 bitgen_subclass!(PySFC64, "SFC64");
 
+impl PyBitGenerator {
+    /// Construct a [`PyBitGenerator`] directly from a resolved Xoshiro seed,
+    /// labelled with the numpy class `name`. Used to hand out the bit
+    /// generator that backs the global state (`get_bit_generator`) and the
+    /// one a `Generator`/`RandomState` wraps (`*.bit_generator`).
+    fn from_seed(seed: u64, name: &str) -> Self {
+        Self {
+            seed,
+            name: name.to_string(),
+        }
+    }
+
+    /// Extract the resolved Xoshiro seed from any object numpy would accept as
+    /// a bit generator: a ferray `PyBitGenerator` (or subclass) instance.
+    /// `set_bit_generator(bitgen)` re-seeds the global from this value.
+    fn seed_of(obj: &Bound<'_, PyAny>) -> PyResult<u64> {
+        obj.extract::<PyRef<'_, PyBitGenerator>>()
+            .map(|bg| bg.seed)
+            .map_err(|_| {
+                pyo3::exceptions::PyTypeError::new_err(
+                    "set_bit_generator requires a BitGenerator instance",
+                )
+            })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// get_bit_generator / set_bit_generator — hot-swap the global bit generator
+// (closes #910)
+//
+// numpy `numpy/random/mtrand.pyx:4838` `get_bit_generator()` returns the
+// singleton RandomState's `_bit_generator` (numpy default: MT19937);
+// `mtrand.pyx:4864` `set_bit_generator(bitgen)` installs `bitgen` on the
+// singleton via `_initialize_bit_generator`. ferray's singleton is the
+// thread-local Xoshiro256** `RNG`; we model its bit generator as a
+// `PyBitGenerator` carrying the global's origin `seed` (labelled "MT19937" to
+// match numpy's default singleton stream), and `set_bit_generator` re-seeds
+// the global from the supplied bit generator's resolved seed. Round-trip
+// `set_bit_generator(get_bit_generator())` reinstalls the identical
+// reproducible stream (R-DEV-7: API/round-trip contract preserved; bit-stream
+// identity with numpy's MT19937 is out of scope for a different PRNG).
+// ---------------------------------------------------------------------------
+
+/// `numpy.random.get_bit_generator()` — return the BitGenerator object
+/// backing the global/legacy random state (`numpy/random/mtrand.pyx:4838`).
+#[pyfunction]
+pub fn get_bit_generator() -> PyBitGenerator {
+    PyBitGenerator::from_seed(global_seed(), "MT19937")
+}
+
+/// `numpy.random.set_bit_generator(bitgen)` — install `bitgen` as the global
+/// bit generator; subsequent top-level draws use it
+/// (`numpy/random/mtrand.pyx:4864`). Returns `None`.
+#[pyfunction]
+pub fn set_bit_generator(bitgen: &Bound<'_, PyAny>) -> PyResult<()> {
+    let seed = PyBitGenerator::seed_of(bitgen)?;
+    reseed_global(seed);
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // SeedSequence class (refs #834 #818)
 //
@@ -2052,6 +2175,10 @@ impl PySeedSequence {
 #[pyclass(name = "RandomState", module = "ferray.random")]
 pub struct PyRandomState {
     inner: Generator<Xoshiro256StarStar>,
+    /// Resolved Xoshiro seed this RandomState wraps — exposed via the
+    /// `_bit_generator` getter (numpy `RandomState._bit_generator`,
+    /// `mtrand.pyi:86`; numpy default: MT19937).
+    seed: u64,
 }
 
 #[pymethods]
@@ -2059,8 +2186,10 @@ impl PyRandomState {
     #[new]
     #[pyo3(signature = (seed = None))]
     fn py_new(seed: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let (inner, resolved) = seed_generator_with_seed(seed)?;
         Ok(Self {
-            inner: seed_generator_from(seed)?,
+            inner,
+            seed: resolved,
         })
     }
 
@@ -2068,10 +2197,21 @@ impl PyRandomState {
         "RandomState(Xoshiro256**)".to_string()
     }
 
+    /// `RandomState._bit_generator` — the BitGenerator this legacy state wraps
+    /// (numpy `mtrand.pyi:86` `_bit_generator: BitGenerator`; numpy's legacy
+    /// singleton uses MT19937). `numpy.random.get_bit_generator()` reads the
+    /// singleton's `_bit_generator`, so the label matches.
+    #[getter]
+    fn _bit_generator(&self) -> PyBitGenerator {
+        PyBitGenerator::from_seed(self.seed, "MT19937")
+    }
+
     /// `RandomState.seed(seed=None)` — re-seed in place.
     #[pyo3(signature = (seed = None))]
     fn seed(&mut self, seed: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        self.inner = seed_generator_from(seed)?;
+        let (inner, resolved) = seed_generator_with_seed(seed)?;
+        self.inner = inner;
+        self.seed = resolved;
         Ok(())
     }
 
