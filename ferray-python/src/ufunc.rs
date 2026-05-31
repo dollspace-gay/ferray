@@ -361,6 +361,214 @@ fn complex_around_dispatch<'py>(
 }
 
 // ---------------------------------------------------------------------------
+// Complex arms for the common unary ufuncs square / reciprocal / sign /
+// isnan / isinf / isfinite (#934).
+//
+// numpy registers a complex loop for each: `square` (z*z), `reciprocal`
+// (1/z, with 1/0 -> nan+nanj), `sign` (z/|z| for z!=0, 0+0j for z==0), and the
+// three complex predicates isnan/isinf/isfinite (per-part rule -> bool). The
+// prior bindings rejected complex: `square`/`reciprocal` funnel a complex input
+// (neither float64/f32 nor an integer dtype) into their `match_dtype_int_only!`
+// int fallback (which raises), `sign` routes through the real
+// `match_dtype_float_or_int!` split (raises), and the predicates route through
+// `match_dtype_float!` (raises). These helpers compute the numpy result from
+// `num_complex` directly, preserving the complex width (c64->c64, c128->c128)
+// for the value ops and returning a `bool` array for the predicates — no
+// imaginary-part discard (R-CODE-4). Verified live (numpy 2.4.4):
+//   np.square([1+2j]) == [-3+4j]            (c64 in -> c64 out, c128 -> c128)
+//   np.reciprocal([1+2j]) == [0.2-0.4j]; np.reciprocal([0j]) == [nan+nanj]
+//   np.sign([3+4j]) == [0.6+0.8j]; np.sign([0j]) == [0+0j]; |sign| == 1
+//   np.isnan([1+2j, nan+0j, 1+nanj]) == [F,T,T]   (NaN in EITHER part)
+//   np.isinf([1+2j, inf+0j, 1+infj]) == [F,T,T]   (Inf in EITHER part)
+//   np.isfinite([1+2j, inf+0j, nan+0j]) == [T,F,F] (finite iff BOTH parts)
+// ---------------------------------------------------------------------------
+
+/// `square` over complex → `z*z` per element (`num_complex`'s `Mul`). numpy
+/// registers a complex `square` loop; `np.square([1+2j]) == [-3+4j]`. Width
+/// preserved (c64→c64, c128→c128) — no imag discard (R-CODE-4).
+fn complex_square_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<Complex<f64>> = fa.iter().map(|z| z * z).collect();
+            let r = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<Complex<f32>> = fa.iter().map(|z| z * z).collect();
+            let r = ArrayD::<Complex<f32>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_square_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+/// `reciprocal` over complex → `1/z` per element (`num_complex`'s `Div`).
+/// `num_complex` yields `nan+nanj` for `1/(0+0j)`, matching numpy's complex
+/// `reciprocal` loop (verified live: `np.reciprocal([0j]) == [nan+nanj]`,
+/// emitting the same `invalid value encountered` RuntimeWarning numpy does — we
+/// compute the same value without raising, R-DEV-1). Width preserved.
+fn complex_reciprocal_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let shape = fa.shape().to_vec();
+            let one = Complex::<f64>::new(1.0, 0.0);
+            let data: Vec<Complex<f64>> = fa.iter().map(|z| one / z).collect();
+            let r = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let shape = fa.shape().to_vec();
+            let one = Complex::<f32>::new(1.0, 0.0);
+            let data: Vec<Complex<f32>> = fa.iter().map(|z| one / z).collect();
+            let r = ArrayD::<Complex<f32>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_reciprocal_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+/// `sign` over complex → unit phasor `z/|z|` for `z != 0`, `0+0j` for `z == 0`
+/// (numpy 2.x complex-sign convention: `numpy/_core/src/umath/loops.c.src`
+/// `npy_csign`; verified live: `np.sign([3+4j]) == [0.6+0.8j]`, `np.sign([0j])
+/// == [0+0j]`, `abs(sign) == 1`). The `z == 0 → 0` special case is required
+/// because `z/|z|` is `0/0 = nan+nanj` at the origin in `num_complex` — numpy
+/// returns exactly `0+0j` there. Width preserved.
+fn complex_sign_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let shape = fa.shape().to_vec();
+            let zero = Complex::<f64>::new(0.0, 0.0);
+            let data: Vec<Complex<f64>> = fa
+                .iter()
+                .map(|z| {
+                    if z.re == 0.0 && z.im == 0.0 {
+                        zero
+                    } else {
+                        z / z.norm()
+                    }
+                })
+                .collect();
+            let r = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let shape = fa.shape().to_vec();
+            let zero = Complex::<f32>::new(0.0, 0.0);
+            let data: Vec<Complex<f32>> = fa
+                .iter()
+                .map(|z| {
+                    if z.re == 0.0 && z.im == 0.0 {
+                        zero
+                    } else {
+                        z / z.norm()
+                    }
+                })
+                .collect();
+            let r = ArrayD::<Complex<f32>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_sign_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+/// Per-element predicate kind for the complex isnan/isinf/isfinite loops.
+#[derive(Clone, Copy)]
+enum ComplexPredicate {
+    /// `isnan`: NaN in EITHER part.
+    Nan,
+    /// `isinf`: ±Inf in EITHER part.
+    Inf,
+    /// `isfinite`: finite (neither NaN nor Inf) in BOTH parts.
+    Finite,
+}
+
+/// `isnan`/`isinf`/`isfinite` over complex → `bool` array, per numpy's complex
+/// predicate loops (`numpy/_core/src/umath/loops_unary_complex.dispatch.c.src`):
+/// `isnan(z) = isnan(re) || isnan(im)`, `isinf(z) = isinf(re) || isinf(im)`,
+/// `isfinite(z) = isfinite(re) && isfinite(im)`. Verified live (numpy 2.4.4):
+/// `np.isnan([1+2j, nan+0j, 1+nanj]) == [F,T,T]`,
+/// `np.isinf([1+2j, inf+0j, 1+infj]) == [F,T,T]`,
+/// `np.isfinite([1+2j, inf+0j, nan+0j]) == [T,F,F]`. The result is a real `bool`
+/// array (`into_pyarray`), NOT a complex one — so no imaginary part is
+/// fabricated (R-CODE-4).
+fn complex_predicate_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+    kind: ComplexPredicate,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<bool> = fa
+                .iter()
+                .map(|z| match kind {
+                    ComplexPredicate::Nan => z.re.is_nan() || z.im.is_nan(),
+                    ComplexPredicate::Inf => z.re.is_infinite() || z.im.is_infinite(),
+                    ComplexPredicate::Finite => z.re.is_finite() && z.im.is_finite(),
+                })
+                .collect();
+            let r = ArrayD::<bool>::from_vec(IxDyn::new(&shape), data).map_err(ferr_to_pyerr)?;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<bool> = fa
+                .iter()
+                .map(|z| match kind {
+                    ComplexPredicate::Nan => z.re.is_nan() || z.im.is_nan(),
+                    ComplexPredicate::Inf => z.re.is_infinite() || z.im.is_infinite(),
+                    ComplexPredicate::Finite => z.re.is_finite() && z.im.is_finite(),
+                })
+                .collect();
+            let r = ArrayD::<bool>::from_vec(IxDyn::new(&shape), data).map_err(ferr_to_pyerr)?;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_predicate_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Complex arms for BINARY arithmetic + comparison (#924).
 //
 // numpy registers a complex loop for add/subtract/multiply/divide/power
@@ -1072,7 +1280,16 @@ bind_unary_numeric_split!(
     ferray_ufunc::absolute_int,
     complex = complex_abs_dispatch
 );
-bind_unary_numeric_split!(sign, ferray_ufunc::sign, ferray_ufunc::sign_int);
+// `sign` registers a complex loop in numpy returning the unit phasor `z/|z|`
+// (0+0j for z==0) — the prior split macro had no complex arm so `fr.sign(complex)`
+// raised TypeError where numpy computes (#934). Real/integer input keeps the
+// existing float/int split.
+bind_unary_numeric_split!(
+    sign,
+    ferray_ufunc::sign,
+    ferray_ufunc::sign_int,
+    complex = complex_sign_dispatch
+);
 
 // Rounding floor/ceil/trunc/fix — int-identity (REQ-24, int -> int).
 bind_unary_numeric_split!(floor, ferray_ufunc::floor, ferray_ufunc::floor_int);
@@ -1268,6 +1485,33 @@ macro_rules! bind_unary_float_only_int_fallback {
             if scalar { scalarize(out) } else { Ok(out) }
         }
     };
+    // Complex-loop form (#934): a complex input dispatches to `$cfn` (numpy
+    // registers a complex loop — `square` → z*z, `reciprocal` → 1/z), computing
+    // BEFORE the float/int fallback (which would otherwise raise on complex).
+    // Real float input → float kernel; integer input → the int fallback body.
+    ($name:ident, $ferr_path:path, $int_body:expr, complex = $cfn:path) => {
+        #[pyfunction]
+        pub fn $name<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+            let arr = as_ndarray(py, x)?;
+            let scalar = all_scalar_inputs(py, &[x])?;
+            let dt = dtype_name(&arr)?;
+            let out = if is_complex_dtype(dt.as_str()) {
+                $cfn(py, &arr, dt.as_str())?
+            } else if matches!(dt.as_str(), "float64" | "f64" | "float32" | "f32") {
+                match_dtype_float!(dt.as_str(), T => {
+                    let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+                    let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+                    let r: ArrayD<T> = $ferr_path(&fa).map_err(ferr_to_pyerr)?;
+                    r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+                })
+            } else {
+                let int_fn: fn(Python<'py>, &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> =
+                    $int_body;
+                int_fn(py, &arr)?
+            };
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
 }
 
 /// `positive(int)` = identity: return the input array unchanged.
@@ -1308,8 +1552,18 @@ fn reciprocal_int_array<'py>(
 }
 
 bind_unary_float_only_int_fallback!(positive, ferray_ufunc::positive, positive_int_array);
-bind_unary_float_only_int_fallback!(square, ferray_ufunc::square, square_int_array);
-bind_unary_float_only_int_fallback!(reciprocal, ferray_ufunc::reciprocal, reciprocal_int_array);
+bind_unary_float_only_int_fallback!(
+    square,
+    ferray_ufunc::square,
+    square_int_array,
+    complex = complex_square_dispatch
+);
+bind_unary_float_only_int_fallback!(
+    reciprocal,
+    ferray_ufunc::reciprocal,
+    reciprocal_int_array,
+    complex = complex_reciprocal_dispatch
+);
 
 // `np.abs` is just an alias for `np.absolute`. ferray-Rust's `abs`
 // is the complex-absolute (takes `Array<Complex<T>>`), so we don't
@@ -1328,11 +1582,29 @@ macro_rules! bind_predicate_float {
             Ok(unary_float_predicate_body!(py, arr, $ferr_path))
         }
     };
+    // Complex-loop form (#934): numpy registers a complex isnan/isinf/isfinite
+    // loop applying the per-part rule (`$kind`) → bool. A complex input computes
+    // BEFORE the real `match_dtype_float!` body, which would otherwise raise.
+    ($name:ident, $ferr_path:path, complex = $kind:expr) => {
+        #[pyfunction]
+        pub fn $name<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+            let arr = as_ndarray(py, x)?;
+            let dt = dtype_name(&arr)?;
+            if is_complex_dtype(dt.as_str()) {
+                return complex_predicate_dispatch(py, &arr, dt.as_str(), $kind);
+            }
+            Ok(unary_float_predicate_body!(py, arr, $ferr_path))
+        }
+    };
 }
 
-bind_predicate_float!(isnan, ferray_ufunc::isnan);
-bind_predicate_float!(isinf, ferray_ufunc::isinf);
-bind_predicate_float!(isfinite, ferray_ufunc::isfinite);
+bind_predicate_float!(isnan, ferray_ufunc::isnan, complex = ComplexPredicate::Nan);
+bind_predicate_float!(isinf, ferray_ufunc::isinf, complex = ComplexPredicate::Inf);
+bind_predicate_float!(
+    isfinite,
+    ferray_ufunc::isfinite,
+    complex = ComplexPredicate::Finite
+);
 bind_predicate_float!(isneginf, ferray_ufunc::isneginf);
 bind_predicate_float!(isposinf, ferray_ufunc::isposinf);
 bind_predicate_float!(signbit, ferray_ufunc::signbit);
