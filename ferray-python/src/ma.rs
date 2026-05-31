@@ -2620,7 +2620,13 @@ impl PyMaskedArray {
         axis: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         match axis {
-            None => Ok(self.snapshot(py)?.count()?.into_pyobject(py)?.into_any()),
+            // No-axis `count` returns a scalar. numpy's `MaskedArray.count()`
+            // (no axis) yields an `np.int64` scalar (`.dtype == int64`,
+            // `.shape == ()`), NOT a Python `int`. Egress the count (an i64)
+            // through `scalar_pyobject` to preserve the numpy dtype across the
+            // boundary (R-DEV-3 / R-CODE-4), mirroring sum/min/max/prod/ptp;
+            // `into_pyobject` would drop it to a bare Python `int`.
+            None => scalar_pyobject(py, self.snapshot(py)?.count()? as i64),
             Some(ax) => {
                 let kwargs = pyo3::types::PyDict::new(py);
                 kwargs.set_item("axis", ax)?;
@@ -2811,8 +2817,13 @@ impl PyMaskedArray {
             DynMa::Complex32(m) => ma_complex_mean(m),
             DynMa::Complex64(m) => ma_complex_mean(m),
             _ => {
+                // Real/integer `mean` promotes to f64 (numpy.ma `mean` returns
+                // `np.float64` even for float32 input). Egress as an `np.float64`
+                // scalar via `scalar_pyobject` (mirrors sum/min/max/prod/ptp,
+                // R-DEV-3 / R-CODE-4); `into_pyobject` would drop the numpy dtype
+                // to a bare Python `float`.
                 let v = self.to_f64_ma()?.mean().map_err(ferr_to_pyerr)?;
-                return Ok(v.into_pyobject(py)?.into_any());
+                return scalar_pyobject(py, v);
             }
         };
         match complex_mean {
@@ -2932,8 +2943,11 @@ impl PyMaskedArray {
             DynMa::Complex32(m) => ma_complex_var(m),
             DynMa::Complex64(m) => ma_complex_var(m),
             _ => {
+                // Real/integer `var` promotes to f64; egress as `np.float64`
+                // (mirrors the complex branch below and sum/min/max/prod/ptp,
+                // R-DEV-3 / R-CODE-4) instead of a bare Python `float`.
                 let v = self.to_f64_ma()?.var().map_err(ferr_to_pyerr)?;
-                return Ok(v.into_pyobject(py)?.into_any());
+                return scalar_pyobject(py, v);
             }
         };
         match complex_var {
@@ -2971,8 +2985,11 @@ impl PyMaskedArray {
             DynMa::Complex32(m) => ma_complex_var(m),
             DynMa::Complex64(m) => ma_complex_var(m),
             _ => {
+                // Real/integer `std` promotes to f64; egress as `np.float64`
+                // (mirrors the complex branch below and sum/min/max/prod/ptp,
+                // R-DEV-3 / R-CODE-4) instead of a bare Python `float`.
                 let v = self.to_f64_ma()?.std().map_err(ferr_to_pyerr)?;
-                return Ok(v.into_pyobject(py)?.into_any());
+                return scalar_pyobject(py, v);
             }
         };
         match complex_var {
