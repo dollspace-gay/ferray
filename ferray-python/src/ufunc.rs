@@ -311,6 +311,55 @@ fn complex_rint_dispatch<'py>(
     }
 }
 
+/// `around`/`round` over complex with a `decimals` argument → round the real
+/// AND imaginary parts independently to `decimals` places, half-to-even. numpy
+/// registers a complex `around` loop: `np.round([1.4+2.6j]) == [1+3j]`,
+/// `np.round([1.45+2.65j], 1) == [1.4+2.6j]` (live 2.4.5). Mirrors
+/// [`complex_rint_dispatch`] (decimals == 0) plus the `10**decimals` scale /
+/// `round_ties_even` / unscale of the real `around` path, applied per component.
+/// Width preserved (c64->c64, c128->c128); no imag discard (R-CODE-4).
+fn complex_around_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+    decimals: i32,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let shape = fa.shape().to_vec();
+            let scale = 10f64.powi(decimals);
+            let round1 = |x: f64| (x * scale).round_ties_even() / scale;
+            let data: Vec<Complex<f64>> = fa
+                .iter()
+                .map(|z| Complex::<f64>::new(round1(z.re), round1(z.im)))
+                .collect();
+            let r = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let shape = fa.shape().to_vec();
+            // numpy computes the scaled round in the element width; for c64 the
+            // f32 components are scaled/rounded/unscaled in f32.
+            let scale = 10f32.powi(decimals);
+            let round1 = |x: f32| (x * scale).round_ties_even() / scale;
+            let data: Vec<Complex<f32>> = fa
+                .iter()
+                .map(|z| Complex::<f32>::new(round1(z.re), round1(z.im)))
+                .collect();
+            let r = ArrayD::<Complex<f32>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_around_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Complex arms for BINARY arithmetic + comparison (#924).
 //
@@ -1032,8 +1081,17 @@ bind_unary_numeric_split!(trunc, ferray_ufunc::trunc, ferray_ufunc::trunc_int);
 bind_unary_numeric_split!(fix, ferray_ufunc::fix, ferray_ufunc::fix_int);
 
 // `round` keeps int dtype (generate_umath.py `TD(bints)` on `rint`/`around`'s
-// int loops); float route is `ferray_ufunc::round`.
-bind_unary_numeric_split!(round, ferray_ufunc::round, ferray_ufunc::round_int);
+// int loops); float route is `ferray_ufunc::round`. A complex input rounds the
+// real AND imaginary parts independently to nearest-even (decimals=0), reusing
+// the #928 complex `rint` arm — numpy: `np.round([1.4+2.6j]) == [1+3j]`. The
+// prior split macro had no complex arm so `fr.round(complex)` returned the input
+// UNROUNDED (a no-op, wrong value — R-CODE-4).
+bind_unary_numeric_split!(
+    round,
+    ferray_ufunc::round,
+    ferray_ufunc::round_int,
+    complex = complex_rint_dispatch
+);
 
 /// `numpy.around(a, decimals=0)` / `numpy.round(a, decimals=0)` — round to
 /// `decimals` places with half-to-even (banker's) rounding.
@@ -1057,6 +1115,14 @@ pub fn around<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex input: round the real AND imaginary parts independently to
+    // `decimals` places, half-to-even — numpy registers a complex `around` loop
+    // (`np.round([1.4+2.6j]) == [1+3j]`, `np.round([1.45+2.65j],1) == [1.4+2.6j]`,
+    // live 2.4.5). MUST branch BEFORE the float64 coercion below, which numpy
+    // casts complex->float64 DROPPING the imaginary part (R-CODE-4).
+    if is_complex_dtype(dt.as_str()) {
+        return complex_around_dispatch(py, &arr, dt.as_str(), decimals);
+    }
     let is_int = !matches!(
         dt.as_str(),
         "float64" | "f64" | "float32" | "f32" | "float16" | "f16"
@@ -2106,6 +2172,86 @@ pub fn convolve<'py>(
     }))
 }
 
+/// Complex cross-correlation `c[k] = sum_n a[n+k] * conj(v[n])` — numpy
+/// CONJUGATES the second operand for complex inputs (numpy/_core/numeric.py:721
+/// `correlate`). Mirrors `ferray_stats::correlate`'s convolution-style sliding
+/// loop (reverse `v`, accumulate `a[i-j] * v_rev[j]`) but with each `v` element
+/// conjugated, keeping the common complex width (c64 when both operands are c64,
+/// else c128 — numpy `result_type`). Composed inline because the library
+/// `correlate` is `T: Float`-bounded (no `Complex` impl); no imag discard
+/// (R-CODE-4).
+fn complex_correlate_dispatch<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    v: &Bound<'py, PyAny>,
+    dt: &str,
+    mode: ferray_stats::CorrelateMode,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::array::aliases::Array1;
+    use ferray_core::dimension::Ix1;
+
+    // Per-width concrete sliding loop. `Complex<f32>`/`Complex<f64>` satisfy the
+    // standard `Mul`/`Add`/`Neg` (`num_traits::Num`) used here, so the body stays
+    // free of a num-traits dependency at the binding level by being concrete.
+    macro_rules! correlate_arm {
+        ($Tc:ty, $cdt:expr) => {{
+            let arr_a = coerce_dtype(py, a, $cdt)?;
+            let arr_v = coerce_dtype(py, v, $cdt)?;
+            let fa: ArrayD<Complex<$Tc>> = complex_pyarray_to_ferray::<$Tc>(&arr_a)?;
+            let fv: ArrayD<Complex<$Tc>> = complex_pyarray_to_ferray::<$Tc>(&arr_v)?;
+            let a_data: Vec<Complex<$Tc>> = fa.iter().copied().collect();
+            let v_data: Vec<Complex<$Tc>> = fv.iter().copied().collect();
+            let la = a_data.len();
+            let lv = v_data.len();
+            if la == 0 || lv == 0 {
+                return Err(PyTypeError::new_err("correlate requires non-empty arrays"));
+            }
+            // numpy.correlate(a, v) = convolve(a, reverse(conj(v))). Reverse v
+            // and conjugate each element up front (matching the real library's
+            // reversed sliding loop, with the complex conjugation numpy applies).
+            let zero = Complex::<$Tc>::new(0.0, 0.0);
+            let v_rev_conj: Vec<Complex<$Tc>> = v_data.iter().rev().map(|z| z.conj()).collect();
+            let full_len = la + lv - 1;
+            let mut full = vec![zero; full_len];
+            for (i, out) in full.iter_mut().enumerate() {
+                let mut s = zero;
+                for (j, vj) in v_rev_conj.iter().enumerate() {
+                    let ai = i as isize - j as isize;
+                    if ai >= 0 && (ai as usize) < la {
+                        s += a_data[ai as usize] * *vj;
+                    }
+                }
+                *out = s;
+            }
+            let result: Vec<Complex<$Tc>> = match mode {
+                ferray_stats::CorrelateMode::Full => full,
+                ferray_stats::CorrelateMode::Same => {
+                    let out_len = la.max(lv);
+                    let start = (full_len - out_len) / 2;
+                    full[start..start + out_len].to_vec()
+                }
+                ferray_stats::CorrelateMode::Valid => {
+                    let out_len = la.max(lv) - la.min(lv) + 1;
+                    let start = la.min(lv) - 1;
+                    full[start..start + out_len].to_vec()
+                }
+            };
+            let n = result.len();
+            let r: Array1<Complex<$Tc>> =
+                Array1::from_vec(Ix1::new([n]), result).map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r.into_dyn())
+        }};
+    }
+
+    match dt {
+        "complex128" | "c16" => correlate_arm!(f64, "complex128"),
+        "complex64" | "c8" => correlate_arm!(f32, "complex64"),
+        other => Err(PyTypeError::new_err(format!(
+            "complex_correlate_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
 /// `numpy.correlate(a, v, mode='valid')` — cross-correlation.
 #[pyfunction]
 #[pyo3(signature = (a, v, mode = "valid"))]
@@ -2118,14 +2264,30 @@ pub fn correlate<'py>(
     use ferray_core::array::aliases::Array1;
     let m = parse_correlate_mode(mode)?;
     let arr_a = as_ndarray(py, a)?;
+    let arr_v0 = as_ndarray(py, v)?;
     let dt = dtype_name(&arr_a)?;
+    // Complex correlate: numpy CONJUGATES the second operand
+    // (`np.correlate(a,v) = sum(a[n+k]*conj(v[n]))`, numpy/_core/numeric.py:721
+    // `correlate` docstring), computing a complex result. MUST branch BEFORE the
+    // float64 coercion below, which numpy casts complex->float64 DROPPING the
+    // imaginary part with a `ComplexWarning` — the R-CODE-4 corruption this REQ
+    // eliminates (`fr.correlate([1+2j,...],[2+0j,...])` returned the real `[1.0]`;
+    // numpy returns the complex `[-3+4j]`). The common complex width follows
+    // numpy's `result_type` (c64 only when BOTH operands are c64).
+    {
+        let dv = dtype_name(&arr_v0)?;
+        if is_complex_dtype(dt.as_str()) || is_complex_dtype(dv.as_str()) {
+            let cdt = binary_result_dtype(py, &arr_a, &arr_v0)?;
+            return complex_correlate_dispatch(py, &arr_a, &arr_v0, cdt.as_str(), m);
+        }
+    }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
     } else {
         "float64".to_string()
     };
     let arr_a = coerce_dtype(py, &arr_a, &real_dt)?;
-    let arr_v = coerce_dtype(py, v, &real_dt)?;
+    let arr_v = coerce_dtype(py, &arr_v0, &real_dt)?;
     Ok(match_dtype_float!(real_dt.as_str(), T => {
         let va: numpy::PyReadonlyArray1<T> = arr_a.extract()?;
         let vv: numpy::PyReadonlyArray1<T> = arr_v.extract()?;

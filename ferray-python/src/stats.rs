@@ -84,6 +84,9 @@ trait ReductionReal:
 {
     const ZERO: Self;
     const ONE: Self;
+    /// `NaN` of this real width — the empty/all-NaN-lane result for the
+    /// complex `nanmean`/`median` helpers (numpy returns `nan+nanj` there).
+    const NAN: Self;
     fn from_usize(n: usize) -> Self;
     fn sqrt(self) -> Self;
 }
@@ -91,6 +94,7 @@ trait ReductionReal:
 impl ReductionReal for f32 {
     const ZERO: Self = 0.0;
     const ONE: Self = 1.0;
+    const NAN: Self = f32::NAN;
     fn from_usize(n: usize) -> Self {
         n as f32
     }
@@ -102,6 +106,7 @@ impl ReductionReal for f32 {
 impl ReductionReal for f64 {
     const ZERO: Self = 0.0;
     const ONE: Self = 1.0;
+    const NAN: Self = f64::NAN;
     fn from_usize(n: usize) -> Self {
         n as f64
     }
@@ -871,6 +876,160 @@ pub fn argmax<'py>(
 // NaN-aware reductions (float-only)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Complex nan-aware reductions (#930).
+//
+// `nansum`/`nanprod`/`nanmean` funnelled every input through
+// `coerce_dtype(arr, "float64")`, which numpy casts complex -> float64 DROPPING
+// the imaginary part with a `ComplexWarning` — an active R-CODE-4 boundary
+// corruption (`fr.nansum([1+2j,...])` returned the real scalar `0.0`; numpy
+// returns the complex `5j`). numpy COMPUTES these as complex: `nansum`/`nanprod`
+// replace NaN-complex (either part NaN) with the identity (0 / 1) then fold,
+// preserving the input complex width (c64->c64, c128->c128 — verified live numpy
+// 2.4.5: `np.nansum([...],dtype=complex64).dtype == complex64`). `nanmean` is
+// `nansum(non-nan) / count(non-nan)`. The complex `ReduceAcc` (`Acc = Self`) lets
+// `ferray_stats::sum`/`prod` fold the NaN-replaced complex array directly,
+// mirroring the #925 `complex_fold_dispatch`/`complex_mean_dispatch` design.
+// ---------------------------------------------------------------------------
+
+/// `true` if either component of `z` is NaN — numpy's `np.isnan` contract for a
+/// complex value (verified live: `np.isnan(complex(1, nan)) == True`).
+fn complex_is_nan<T: PartialOrd + Copy>(z: &Complex<T>) -> bool {
+    z.re.partial_cmp(&z.re).is_none() || z.im.partial_cmp(&z.im).is_none()
+}
+
+/// Which nan-aware fold a complex `nansum`/`nanprod` dispatches.
+#[derive(Clone, Copy)]
+enum ComplexNanFold {
+    Sum,
+    Prod,
+}
+
+/// Dispatch a complex `nansum`/`nanprod` over both complex widths: replace each
+/// NaN-complex element with the fold identity (`0` for sum, `1` for prod), then
+/// fold via the existing complex `ReduceAcc` (`Acc = Self`, width preserved).
+/// numpy: `np.nansum([1+2j,nan+0j,3+0j]) == (4+2j)`,
+/// `np.nanprod([1+2j,nan+nanj,2-1j]) == (4+3j)` (NaN -> identity, live 2.4.5).
+fn complex_nan_fold_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+    fold: ComplexNanFold,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + ReductionReal + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+    Complex<T>: ReduceAcc<Acc = Complex<T>> + Send + Sync,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    let ident = match fold {
+        ComplexNanFold::Sum => Complex::new(T::ZERO, T::ZERO),
+        ComplexNanFold::Prod => Complex::new(T::ONE, T::ZERO),
+    };
+    let shape: Vec<usize> = fa.shape().to_vec();
+    let data: Vec<Complex<T>> = fa
+        .iter()
+        .map(|z| if complex_is_nan(z) { ident } else { *z })
+        .collect();
+    let cleaned =
+        ArrayD::<Complex<T>>::from_vec(IxDyn::new(&shape), data).map_err(ferr_to_pyerr)?;
+    let r: ArrayD<Complex<T>> = match fold {
+        ComplexNanFold::Sum => ferray_stats::sum(&cleaned, axis).map_err(ferr_to_pyerr)?,
+        ComplexNanFold::Prod => ferray_stats::prod(&cleaned, axis).map_err(ferr_to_pyerr)?,
+    };
+    complex_ferray_to_pyarray(py, r)
+}
+
+/// Dispatch a complex `nanmean` over both complex widths: the complex
+/// `sum(non-nan) / count(non-nan)` per lane (reciprocal-multiply per component,
+/// mirroring `complex_mean_dispatch`). numpy: `np.nanmean([1+2j,nan+0j,3+0j]) ==
+/// (2+1j)` (sum `4+2j` over count `2`), width preserved (live 2.4.5). An
+/// all-NaN lane has count `0`; numpy returns `nan+nanj` there (a RuntimeWarning,
+/// not a raise) — matched by emitting `NaN + NaN*i` for that lane.
+fn complex_nanmean_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + ReductionReal + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    let shape: Vec<usize> = fa.shape().to_vec();
+    let ndim = shape.len();
+
+    // Mean of the non-NaN complex elements of one lane (reciprocal-multiply).
+    let mean_of = |vals: &[Complex<T>]| -> Complex<T> {
+        let mut re = T::ZERO;
+        let mut im = T::ZERO;
+        let mut cnt = 0usize;
+        for z in vals {
+            if !complex_is_nan(z) {
+                re = re + z.re;
+                im = im + z.im;
+                cnt += 1;
+            }
+        }
+        if cnt == 0 {
+            // All-NaN lane: numpy returns nan+nanj with a RuntimeWarning.
+            let nan = T::NAN;
+            return Complex::new(nan, nan);
+        }
+        let scl = T::ONE / T::from_usize(cnt);
+        Complex::new(re * scl, im * scl)
+    };
+
+    match axis {
+        None => {
+            let vals: Vec<Complex<T>> = fa.iter().copied().collect();
+            let r = mean_of(&vals);
+            let rd =
+                ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[]), vec![r]).map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, rd)
+        }
+        Some(ax) => {
+            if ax >= ndim {
+                return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+                    "complex nanmean: axis out of bounds",
+                )));
+            }
+            let out_shape: Vec<usize> = shape
+                .iter()
+                .enumerate()
+                .filter_map(|(d, &s)| if d == ax { None } else { Some(s) })
+                .collect();
+            let axis_len = shape[ax];
+            let flat: Vec<Complex<T>> = fa.iter().copied().collect();
+            let mut strides = vec![1usize; ndim];
+            for d in (0..ndim.saturating_sub(1)).rev() {
+                strides[d] = strides[d + 1] * shape[d + 1];
+            }
+            let out_dims: Vec<usize> = (0..ndim).filter(|&d| d != ax).collect();
+            let out_extents: Vec<usize> = out_dims.iter().map(|&d| shape[d]).collect();
+            let out_n: usize = out_extents.iter().product::<usize>().max(1);
+            let mut out: Vec<Complex<T>> = Vec::with_capacity(out_n);
+            for lin in 0..out_n {
+                let mut rem = lin;
+                let mut base = 0usize;
+                for (i, &d) in out_dims.iter().enumerate() {
+                    let ext = out_extents[i];
+                    let c = rem % ext;
+                    rem /= ext;
+                    base += c * strides[d];
+                }
+                let lane: Vec<Complex<T>> = (0..axis_len)
+                    .map(|k| flat[base + k * strides[ax]])
+                    .collect();
+                out.push(mean_of(&lane));
+            }
+            let rd = ArrayD::<Complex<T>>::from_vec(IxDyn::new(&out_shape), out)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, rd)
+        }
+    }
+}
+
 macro_rules! bind_nan_reduction {
     ($name:ident, $ferr_path:path) => {
         #[pyfunction]
@@ -896,13 +1055,88 @@ macro_rules! bind_nan_reduction {
             }))
         }
     };
+    // Complex-loop form: a complex input dispatches to `$cplx` (numpy COMPUTES
+    // these as complex, NaN->identity), keeping the input width, BEFORE the f64
+    // coercion can drop the imaginary part (R-CODE-4).
+    ($name:ident, $ferr_path:path, complex = $cplx:expr) => {
+        #[pyfunction]
+        #[pyo3(signature = (a, axis = None))]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            a: &Bound<'py, PyAny>,
+            axis: Option<usize>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let arr = as_ndarray(py, a)?;
+            let dt = dtype_name(&arr)?;
+            match dt.as_str() {
+                "complex128" | "c16" => return ($cplx)(py, &arr, axis, false),
+                "complex64" | "c8" => return ($cplx)(py, &arr, axis, true),
+                _ => {}
+            }
+            let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
+                arr
+            } else {
+                coerce_dtype(py, &arr, "float64")?
+            };
+            let dt = dtype_name(&arr)?;
+            Ok(match_dtype_float!(dt.as_str(), T => {
+                let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+                let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+                let r = $ferr_path(&fa, axis).map_err(ferr_to_pyerr)?;
+                r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+            }))
+        }
+    };
 }
 
-bind_nan_reduction!(nansum, ferray_stats::nansum);
-bind_nan_reduction!(nanmean, ferray_stats::nanmean);
+/// Complex `nansum` arm: width-keyed [`complex_nan_fold_dispatch`] (`is_c64`
+/// selects `f32` vs `f64` components).
+fn nansum_complex<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+    is_c64: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    if is_c64 {
+        complex_nan_fold_dispatch::<f32>(py, arr, axis, ComplexNanFold::Sum)
+    } else {
+        complex_nan_fold_dispatch::<f64>(py, arr, axis, ComplexNanFold::Sum)
+    }
+}
+
+/// Complex `nanprod` arm: width-keyed [`complex_nan_fold_dispatch`].
+fn nanprod_complex<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+    is_c64: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    if is_c64 {
+        complex_nan_fold_dispatch::<f32>(py, arr, axis, ComplexNanFold::Prod)
+    } else {
+        complex_nan_fold_dispatch::<f64>(py, arr, axis, ComplexNanFold::Prod)
+    }
+}
+
+/// Complex `nanmean` arm: width-keyed [`complex_nanmean_dispatch`].
+fn nanmean_complex<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+    is_c64: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    if is_c64 {
+        complex_nanmean_dispatch::<f32>(py, arr, axis)
+    } else {
+        complex_nanmean_dispatch::<f64>(py, arr, axis)
+    }
+}
+
+bind_nan_reduction!(nansum, ferray_stats::nansum, complex = nansum_complex);
+bind_nan_reduction!(nanmean, ferray_stats::nanmean, complex = nanmean_complex);
 bind_nan_reduction!(nanmin, ferray_stats::nanmin);
 bind_nan_reduction!(nanmax, ferray_stats::nanmax);
-bind_nan_reduction!(nanprod, ferray_stats::nanprod);
+bind_nan_reduction!(nanprod, ferray_stats::nanprod, complex = nanprod_complex);
 
 /// `numpy.nanvar(a, axis=None, ddof=0)`.
 #[pyfunction]
@@ -1655,6 +1889,18 @@ pub fn median<'py>(
         return nan_scalar_f64(py);
     }
     let dt = dtype_name(&arr)?;
+    // Complex median: numpy sorts complex LEXICOGRAPHICALLY (real, then imag)
+    // and takes the middle (odd) or the complex-average of the two middles
+    // (even), preserving the input complex width (c64->c64, c128->c128 —
+    // verified live numpy 2.4.5). MUST branch BEFORE the float64 coercion below,
+    // which numpy casts complex->float64 DROPPING the imaginary part with a
+    // `ComplexWarning` — the R-CODE-4 corruption this REQ eliminates
+    // (`fr.median([1+2j,...])` returned `0.5`; numpy returns `(0.5+1j)`).
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_median_dispatch::<f64>(py, &arr, axis),
+        "complex64" | "c8" => return complex_median_dispatch::<f32>(py, &arr, axis),
+        _ => {}
+    }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
     } else {
@@ -1667,6 +1913,125 @@ pub fn median<'py>(
         let r = ferray_stats::median(&fa, axis).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
+}
+
+/// Lexicographic order `(real, then imag)` for two complex values — numpy's
+/// complex sort key (`numpy/_core/src/npysort`). Used by the complex median.
+/// NaN parts compare as `Greater` so they sort to the END, matching numpy's
+/// placement of complex NaN at the tail of a sorted array.
+fn complex_lex_order<T: PartialOrd + Copy>(a: &Complex<T>, b: &Complex<T>) -> core::cmp::Ordering {
+    use core::cmp::Ordering;
+    // Order two REAL components; an unordered (NaN) comparison pushes the
+    // NaN-bearing side last so complex NaN sorts to the tail (numpy's placement).
+    let key = |x: T, y: T| -> Ordering {
+        match x.partial_cmp(&y) {
+            Some(o) => o,
+            None => {
+                let x_nan = x.partial_cmp(&x).is_none();
+                if x_nan {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
+            }
+        }
+    };
+    match key(a.re, b.re) {
+        Ordering::Equal => key(a.im, b.im),
+        ord => ord,
+    }
+}
+
+/// Complex `median` over `axis` (or the whole array): lexicographically sort
+/// each lane, then take the middle element (odd length) or the complex average
+/// of the two middle elements (even length). A lane containing a NaN component
+/// yields `nan+nanj` (numpy's `_median_nancheck` replaces a NaN-containing
+/// median with NaN). Width preserved (`Complex<T>`).
+fn complex_median_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + ReductionReal + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    let shape: Vec<usize> = fa.shape().to_vec();
+    let ndim = shape.len();
+    let half = T::ONE / (T::ONE + T::ONE);
+
+    let median_of = |vals: &[Complex<T>]| -> Complex<T> {
+        let n = vals.len();
+        if n == 0 {
+            let nan = T::NAN;
+            return Complex::new(nan, nan);
+        }
+        // numpy propagates NaN: a NaN-containing lane has a NaN median.
+        if vals.iter().any(complex_is_nan) {
+            let nan = T::NAN;
+            return Complex::new(nan, nan);
+        }
+        let mut sorted: Vec<Complex<T>> = vals.to_vec();
+        sorted.sort_by(complex_lex_order);
+        if n % 2 == 1 {
+            sorted[n / 2]
+        } else {
+            let lo = sorted[n / 2 - 1];
+            let hi = sorted[n / 2];
+            // (lo + hi) / 2 per component (numpy averages the two middles).
+            Complex::new((lo.re + hi.re) * half, (lo.im + hi.im) * half)
+        }
+    };
+
+    match axis {
+        None => {
+            let vals: Vec<Complex<T>> = fa.iter().copied().collect();
+            let r = median_of(&vals);
+            let rd =
+                ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[]), vec![r]).map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, rd)
+        }
+        Some(ax) => {
+            if ax >= ndim {
+                return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+                    "complex median: axis out of bounds",
+                )));
+            }
+            let out_shape: Vec<usize> = shape
+                .iter()
+                .enumerate()
+                .filter_map(|(d, &s)| if d == ax { None } else { Some(s) })
+                .collect();
+            let axis_len = shape[ax];
+            let flat: Vec<Complex<T>> = fa.iter().copied().collect();
+            let mut strides = vec![1usize; ndim];
+            for d in (0..ndim.saturating_sub(1)).rev() {
+                strides[d] = strides[d + 1] * shape[d + 1];
+            }
+            let out_dims: Vec<usize> = (0..ndim).filter(|&d| d != ax).collect();
+            let out_extents: Vec<usize> = out_dims.iter().map(|&d| shape[d]).collect();
+            let out_n: usize = out_extents.iter().product::<usize>().max(1);
+            let mut out: Vec<Complex<T>> = Vec::with_capacity(out_n);
+            for lin in 0..out_n {
+                let mut rem = lin;
+                let mut base = 0usize;
+                for (i, &d) in out_dims.iter().enumerate() {
+                    let ext = out_extents[i];
+                    let c = rem % ext;
+                    rem /= ext;
+                    base += c * strides[d];
+                }
+                let lane: Vec<Complex<T>> = (0..axis_len)
+                    .map(|k| flat[base + k * strides[ax]])
+                    .collect();
+                out.push(median_of(&lane));
+            }
+            let rd = ArrayD::<Complex<T>>::from_vec(IxDyn::new(&out_shape), out)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, rd)
+        }
+    }
 }
 
 /// `numpy.cov(m, rowvar=True, ddof=None)`.
