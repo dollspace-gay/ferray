@@ -734,12 +734,41 @@ impl DataBuf {
 /// writing the base makes the view WRITE THROUGH (numpy's shared-buffer view
 /// semantics, R-DEV-1). For a view-of-a-view the chain composes: the base's own
 /// `snapshot` recurses, and this descriptor indexes into that snapshot.
-#[derive(Clone)]
 struct ViewDesc {
     /// Flat C-order base positions, one per view element (view-flat → base-flat).
     positions: Vec<usize>,
     /// The view's result shape.
     shape: Vec<usize>,
+    /// The ORIGINAL Python basic-index object (`slice`/`int`/`Ellipsis`/
+    /// `None`/tuple thereof) that `__getitem__` parsed to build this view, RETAINED
+    /// so the `.data` getter can re-apply it to the base's aliasing numpy buffer
+    /// (#904). numpy's basic indexing of an ndarray returns an ALIASING VIEW
+    /// (`numpy/ma/core.py:3288` `dout = self.data[indx]` reuses
+    /// `ndarray.__getitem__`), so `base_buffer[basic_index]` is an aliasing
+    /// numpy view whose `.data[i] = x` writes the shared buffer → the base. The
+    /// flat `positions` alone CANNOT form an aliasing view (numpy fancy-indexing
+    /// with a position array COPIES), hence the original spec is retained.
+    ///
+    /// `None` for: the IDENTITY view (`[:]`/`...` — `.data` uses the
+    /// `base_buffer.reshape` alias path, no per-axis index needed) and for any
+    /// view whose `.data` deliberately copies (none today — fancy/bool views are
+    /// OWNED copies, never `Storage::View`). A `Some` basic index reconstructs
+    /// the aliasing slice; chained basic-index views compose because the base's
+    /// OWN aliasing buffer is already the parent's sliced view, so re-applying
+    /// THIS level's index slices that further (numpy's chained-view semantics).
+    basic_index: Option<Py<PyAny>>,
+}
+
+impl Clone for ViewDesc {
+    fn clone(&self) -> Self {
+        ViewDesc {
+            positions: self.positions.clone(),
+            shape: self.shape.clone(),
+            // `Py<PyAny>::clone_ref` bumps the refcount — the cloned descriptor
+            // re-applies the SAME basic index to the (also-shared) base buffer.
+            basic_index: Python::attach(|py| self.basic_index.as_ref().map(|i| i.clone_ref(py))),
+        }
+    }
 }
 
 /// Backing storage for a `PyMaskedArray`: either an OWNED `DynMa` (the array
@@ -911,6 +940,9 @@ fn identity_view(base: &Bound<'_, PyMaskedArray>) -> PyMaskedArray {
             desc: ViewDesc {
                 positions: (0..size).collect(),
                 shape,
+                // Identity view: `.data` aliases via the `base_buffer.reshape`
+                // path (#896), so no per-axis basic index is needed.
+                basic_index: None,
             },
             own_hard: false,
             own_fill: None,
@@ -1406,9 +1438,19 @@ impl PyMaskedArray {
     ///   `[:]`/`...` view — the #896 `ma.array(other, mask=/fill_value=)` case
     ///   and #898 foreign view): numpy's `base_buffer.reshape(view_shape)`,
     ///   which numpy returns as an ALIASING view of the same bytes, so
-    ///   `view.data[i] = x` writes the base buffer. A partial/fancy view (whose
-    ///   `positions` are not the identity) cannot be expressed as a single
-    ///   aliasing numpy view here, so it returns `None` (copy egress) — its
+    ///   `view.data[i] = x` writes the base buffer.
+    /// - `View` carrying a BASIC index (`slice`/`int`/`Ellipsis`/`newaxis`/tuple
+    ///   thereof — #904): re-apply that index to the base's OWN aliasing buffer
+    ///   via numpy basic indexing (`base_buffer[basic_index]`), which numpy
+    ///   returns as an ALIASING view of the same bytes (`numpy/ma/core.py:3288`
+    ///   `dout = self.data[indx]` reuses `ndarray.__getitem__`), so
+    ///   `view.data[i] = x` writes the base buffer → the base element. Chained
+    ///   basic-index views compose: the base's aliasing buffer is already the
+    ///   parent's sliced view, so re-applying THIS level's index slices it
+    ///   further (numpy's chained-view semantics). A non-aliasing base
+    ///   (op-result / complex-without-buf root) yields `None` (copy egress).
+    /// - A FANCY/bool view never reaches here — those are OWNED copies, not
+    ///   `Storage::View` (numpy copies fancy-indexed `.data` too). Its
     ///   write-through still works via `__setitem__` (#857), unchanged.
     fn aliasing_data_pyarray<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
         match &self.storage {
@@ -1420,17 +1462,32 @@ impl PyMaskedArray {
                 let base_size: usize = base_shape.iter().product();
                 let is_identity = desc.positions.len() == base_size
                     && desc.positions.iter().copied().eq(0..base_size);
-                if !is_identity {
-                    return Ok(None);
+                // The base's OWN aliasing buffer (recurses through chained
+                // views). A non-aliasing base yields None for both arms below.
+                let base_arr = match base_ref.aliasing_data_pyarray(py)? {
+                    Some(a) => a,
+                    None => return Ok(None),
+                };
+                if is_identity {
+                    // Identity view: `reshape` of a C-contiguous array is an
+                    // aliasing view — same bytes, this view's shape.
+                    let reshaped = base_arr.call_method1("reshape", (desc.shape.clone(),))?;
+                    return Ok(Some(reshaped));
                 }
-                // Recurse to the base's aliasing buffer, then reshape to this
-                // view's shape (numpy `reshape` of a C-contiguous array is an
-                // aliasing view — same bytes). A non-aliasing base yields None.
-                match base_ref.aliasing_data_pyarray(py)? {
-                    Some(base_arr) => {
-                        let reshaped = base_arr.call_method1("reshape", (desc.shape.clone(),))?;
-                        Ok(Some(reshaped))
+                // #904: a basic-index slice/int view. Re-apply the retained
+                // basic index to the base's aliasing buffer. numpy basic
+                // indexing returns an aliasing view (slices share the buffer);
+                // `get_item` is `base_arr[basic_index]`. The base buffer already
+                // carries the base's shape (it is the root buffer or a parent
+                // slice), so the same index yields exactly this view's shape.
+                match &desc.basic_index {
+                    Some(idx) => {
+                        let sub = base_arr.get_item(idx.bind(py))?;
+                        Ok(Some(sub))
                     }
+                    // A basic-index view should always carry its index; without
+                    // it we cannot form an aliasing slice, so fall back to the
+                    // copy egress rather than guessing (R-CODE-2/R-APG-1).
                     None => Ok(None),
                 }
             }
@@ -3196,6 +3253,12 @@ impl PyMaskedArray {
             let desc = ViewDesc {
                 positions: positions.clone(),
                 shape: shape.clone(),
+                // #904: retain the ORIGINAL basic index so `.data` re-applies it
+                // to the base's aliasing numpy buffer → an aliasing slice view.
+                // numpy's basic-index `.data` aliases the base buffer
+                // (`numpy/ma/core.py:3288`); the flat `positions` alone cannot
+                // express that (a position array would COPY).
+                basic_index: Some(indx.clone().unbind()),
             };
             // #883: capture whether the base's `_fill_value` is MATERIALIZED at
             // the moment the view is created — ferray's analog of numpy's
