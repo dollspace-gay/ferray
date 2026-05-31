@@ -1277,12 +1277,17 @@ where
     }
     let ax = normalize_axes(axes, a.ndim())?;
     let nan_min = |a: T, b: T| -> T {
-        if a <= b {
+        // NaN propagates whether it precedes or follows the finite operand
+        // (mirror of the scalar `min` fix, #1058). For integers `is_nan_val`
+        // is always false, so this reduces to the plain `a <= b` order.
+        if is_nan_val(&a) {
             a
-        } else if a > b {
+        } else if is_nan_val(&b) {
             b
+        } else if a <= b {
+            a
         } else {
-            a // NaN propagates
+            b
         }
     };
     let data = borrow_data(a);
@@ -1309,12 +1314,17 @@ where
     }
     let ax = normalize_axes(axes, a.ndim())?;
     let nan_max = |a: T, b: T| -> T {
-        if a >= b {
+        // NaN propagates whether it precedes or follows the finite operand
+        // (mirror of the scalar `max` fix, #1058). For integers `is_nan_val`
+        // is always false, so this reduces to the plain `a >= b` order.
+        if is_nan_val(&a) {
             a
-        } else if a < b {
+        } else if is_nan_val(&b) {
             b
+        } else if a >= b {
+            a
         } else {
-            a // NaN propagates
+            b
         }
     };
     let data = borrow_data(a);
