@@ -583,6 +583,16 @@ upstream = [
 design = ".design/ferray-polynomial.md"
 parity_ops = ["roots", "degree", "fit", "divmod", "domain", "window", "symbol", "polyval", "poly", "polyadd", "polysub", "polymul", "polyder", "polyint", "polyfit", "polydiv"]
 
+# f32 sibling newtypes for the non-power polynomial bases (Chebyshev/Hermite/
+# HermiteE/Laguerre/Legendre). Internal f32-boundary infrastructure: each XF32
+# wraps the f64 X polynomial, promoting on construction / demoting on
+# observation (numpy polynomial classes accept f32 coefficient arrays).
+[[route]]
+crate_pattern = "ferray-polynomial/src/f32_wrappers.rs"
+upstream = ["/home/doll/numpy-ref/numpy/polynomial/_polybase.py"]
+design = ".design/ferray-polynomial.md"
+parity_ops = ["Chebyshev", "Hermite", "HermiteE", "Laguerre", "Legendre"]
+
 # ─────────────────────────────────────────────────────────────────────────
 # ferray-strings — numpy.strings (vectorized elementwise string ops)
 # ─────────────────────────────────────────────────────────────────────────
