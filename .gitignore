@@ -20,6 +20,10 @@ ferray-python/python/ferray/_ferray.*.so
 # === Coverage output (regenerated) ===
 coverage/
 
+# === CI workflow held untracked (not ready; was committed by accident) ===
+# Re-add deliberately with `git add -f` when the wheel build is finished.
+.github/workflows/ferray-python-wheels.yml
+
 # === IDE / Editor ===
 .vscode/
 .idea/
