@@ -467,3 +467,116 @@ def test_permutation_axis_kwarg():
     assert out.shape == (2, 3)
     # axis=1 permutes columns: each row stays a permutation of its original.
     assert np.array_equal(np.sort(out, axis=1), np.sort(src, axis=1))
+
+
+# ===========================================================================
+# RandomState CLASS audit (legacy numpy.random.RandomState).
+# Oracle: np.random.RandomState (numpy 2.4.x). The legacy class lives at
+# numpy/random/__init__.py:188 `from .mtrand import RandomState`; its method
+# surface is typed in numpy/random/mtrand.pyi. ferray's PyRandomState is in
+# ferray-python/src/random.rs:2656. Contract-only (no value-stream match).
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Divergence class A: missing legacy RandomState methods -> AttributeError.
+# numpy/random/mtrand.pyi declares the full distribution + helper surface;
+# ferray.random.RandomState exposes only a subset. Each missing name is a
+# live attribute of np.random.RandomState (oracle dir() below) but absent on
+# ferray's class. Tracking: #1064.
+# ---------------------------------------------------------------------------
+
+_RANDOMSTATE_MISSING = [
+    "beta",                  # mtrand.pyi:121
+    "bytes",                 # mtrand.pyi:375
+    "chisquare",             # mtrand.pyi:597
+    "dirichlet",             # mtrand.pyi
+    "f",                     # mtrand.pyi
+    "gamma",                 # mtrand.pyi:532
+    "geometric",             # mtrand.pyi
+    "gumbel",                # mtrand.pyi
+    "hypergeometric",        # mtrand.pyi
+    "laplace",               # mtrand.pyi:674
+    "logistic",              # mtrand.pyi
+    "lognormal",             # mtrand.pyi
+    "logseries",             # mtrand.pyi
+    "multinomial",           # mtrand.pyi
+    "multivariate_normal",   # mtrand.pyi
+    "negative_binomial",     # mtrand.pyi
+    "noncentral_chisquare",  # mtrand.pyi
+    "noncentral_f",          # mtrand.pyi
+    "pareto",                # mtrand.pyi
+    "power",                 # mtrand.pyi
+    "rayleigh",              # mtrand.pyi
+    "standard_cauchy",       # mtrand.pyi
+    "standard_exponential",  # mtrand.pyi
+    "standard_gamma",        # mtrand.pyi:524
+    "standard_t",            # mtrand.pyi:628
+    "tomaxint",              # mtrand.pyi:145
+    "triangular",            # mtrand.pyi:816
+    "vonmises",              # mtrand.pyi
+    "wald",                  # mtrand.pyi
+    "weibull",               # mtrand.pyi:652
+    "zipf",                  # mtrand.pyi
+]
+
+
+@pytest.mark.parametrize("name", _RANDOMSTATE_MISSING)
+def test_randomstate_method_present(name):
+    """Each name is a live method of np.random.RandomState (oracle) but is
+    missing on ferray.random.RandomState, so calling it AttributeErrors.
+    numpy/random/mtrand.pyi declares the full surface. Tracking: #1064."""
+    # Oracle: numpy's legacy class actually has this attribute (callable).
+    assert callable(getattr(np.random.RandomState(0), name))
+    assert hasattr(
+        fr.random.RandomState(0), name
+    ), f"ferray RandomState missing legacy method {name!r}"
+
+
+# ---------------------------------------------------------------------------
+# Divergence class B: size=None must return a 0-d scalar, not raise.
+# numpy/random/mtrand.pyi:129 exponential(...,size:None)->float;
+# :858 poisson(...,size:None)->int; :842 binomial(...,size:None)->int.
+# ferray's exponential/poisson/binomial forward an empty shape to the core
+# generator which rejects a zero-axis shape with ValueError. Tracking: #1065.
+# ---------------------------------------------------------------------------
+
+_RANDOMSTATE_SCALAR = [
+    ("exponential", ()),       # mtrand.pyi:129 -> float
+    ("poisson", ()),           # mtrand.pyi:858 -> int
+    ("binomial", (10, 0.5)),   # mtrand.pyi:842 -> int
+]
+
+
+@pytest.mark.parametrize("name,args", _RANDOMSTATE_SCALAR)
+def test_randomstate_size_none_is_scalar(name, args):
+    """numpy returns a 0-d scalar (ndim==0) for size=None; ferray raises
+    ValueError('shape must have at least one axis'). Oracle below confirms
+    numpy yields a non-array scalar. Tracking: #1065."""
+    # Oracle: numpy default size=None -> python/0-d scalar, ndim==0.
+    o = getattr(np.random.RandomState(0), name)(*args)
+    assert np.ndim(o) == 0
+    # ferray must also produce a 0-d scalar (this currently RAISES).
+    f = getattr(fr.random.RandomState(0), name)(*args)
+    assert np.ndim(f) == 0
+
+
+# ---------------------------------------------------------------------------
+# Divergence class C: choice(int_a, size=None) returns a Python int scalar.
+# numpy/random/mtrand.pyi:386 `choice(self, a: int, size: None=...) -> int`.
+# numpy returns a plain python int (isinstance(np.ndarray)==False, no .ndim).
+# ferray returns a 0-d np.int64 (has .ndim==0). Tracking: #1066.
+# ---------------------------------------------------------------------------
+
+
+def test_randomstate_choice_int_size_none_python_int():
+    """numpy/random/mtrand.pyi:386 choice(a:int,size=None)->int returns a
+    bare python int (not an ndarray, no .ndim). ferray returns a 0-d
+    np.int64 numpy scalar instead. Tracking: #1066."""
+    # Oracle: numpy choice(int) with size=None is a python int.
+    o = np.random.RandomState(0).choice(5)
+    assert not isinstance(o, np.ndarray)
+    assert not hasattr(o, "ndim"), "numpy contract: python int, no .ndim"
+    # ferray currently yields np.int64 0-d (has .ndim) -> divergence.
+    f = fr.random.RandomState(0).choice(5)
+    assert not hasattr(f, "ndim"), "ferray returns 0-d np scalar, not python int"
