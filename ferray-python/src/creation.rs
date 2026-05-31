@@ -40,6 +40,7 @@
 //! | RC-CLINSPACE (complex-endpoint linspace) | SHIPPED | `complex_linspace` (consumed by the `linspace` `#[pyfunction]` here when an endpoint is complex or `dtype` is complex) computes `y = arange(0,num)*step + start` with `step = (stop-start)/div`, pinning `y[-1]=stop` on `endpoint`, marshalled via `complex_ferray_to_pyarray`; `retstep` returns `(samples, complex step)` (`numpy/_core/function_base.py:130-176,185-186`). numpy: `np.linspace(0j,1+1j,5) == [0j,0.25+0.25j,0.5+0.5j,0.75+0.75j,1+1j]` (live). Pinned green: `tests/test_divergence_complex_sweep_audit.py::test_divergence_linspace_complex_endpoints_raises`; `tests/test_expansion_complex_misc.py::test_linspace_complex_endpoints_matches_numpy`, `::test_linspace_complex_endpoint_pinned_exact`, `::test_linspace_complex_dtype_real_endpoints`. |
 //! | RC-CDCLASS (#938 complex eye/identity/vander/geomspace) | SHIPPED | `eye`/`identity` route their fill (`fc::eye`/`fc::identity`, `Element`-generic) through `match_dtype_all_complex!` + `T::emit_dyn` so `dtype=complex` yields `1+0j`/`0j`; `vander` dispatches complex to `complex_vander_dispatch` (`fc::vander` over `Complex<T>`, complex powers `x^j`); `geomspace` accepts complex endpoints (`extract_complex_scalar`) and computes `complex_geomspace` (`start*(stop/start)**linspace(0,1,num)`). Consumer: the `eye`/`identity`/`vander`/`geomspace` `#[pyfunction]`s registered top-level in `lib.rs` `_ferray`. numpy: `np.eye(2,dtype=complex)`, `np.vander([3+4j,...])`, `np.geomspace(1+1j,8+8j,3)` (live 2.4.5). Pinned green: `tests/test_divergence_complex_converge_audit.py::test_D_eye_complex`/`::test_D_identity_complex`/`::test_D_vander`/`::test_D_geomspace`; `tests/test_expansion_complex_dclass.py` (eye/identity/vander/geomspace cases). |
 //! | RC-DATETIME (#941 datetime64/timedelta64 input coercion) | SHIPPED | `array`/`asarray` branch on `crate::datetime::is_time_dtype_name` ahead of `match_dtype_all!`, and `zeros`/`ones`/`empty`/`full`/`zeros_like`/`ones_like`/`empty_like`/`full_like` route the `"M"`/`"m"` case through `time_shape_create` (numpy builds the buffer; the int64-view transport `crate::datetime::datetime_roundtrip` marshals it, preserving unit+shape+NaT, R-CODE-4). Consumer: the `array`/`asarray`/`zeros`/`ones`/`empty`/`full`/`*_like` `#[pyfunction]`s registered top-level in `lib.rs`. numpy: `np.array(['2020-01-01'],dtype='datetime64[D]')`, `np.zeros(3,dtype='datetime64[s]')`, `np.full(2,'2021-06-15',dtype='datetime64[D]')` (live 2.4.5). Pinned green: `tests/test_expansion_datetime_construct.py` (57 cases). |
+//! | RC-ARANGE-TIME (#945 datetime64/timedelta64 arange) | SHIPPED | `arange` branches to `arange_time` here when `dtype` is datetime64/timedelta64 (`crate::datetime::is_time_dtype_name`) or a start/stop/step operand is a datetime64/timedelta64 scalar/array (`crate::datetime::any_time_operand`), AHEAD of the f64-coercion path that raised `TypeError: must be real number, not str`. `arange_time` delegates to `numpy.arange(start[,stop[,step]],dtype=dtype)` on the original operands (numpy owns the string->datetime64 parse, calendar month/year stepping, int/timedelta64 step, half-open `[start,stop)` semantics) then marshals the result back through the int64-view transport (`crate::datetime::datetime_roundtrip`, #941), preserving unit+shape+NaT (R-CODE-4). Consumer: the `arange` `#[pyfunction]` registered top-level in `lib.rs`. numpy 2.4.5: `np.arange('2020-01','2020-04',dtype='datetime64[M]')==['2020-01','2020-02','2020-03']`, `np.arange(5,dtype='timedelta64[D]')==[0..4]`, `np.arange(d0,d1,np.timedelta64(2,'D'))`. Pinned green: `tests/test_expansion_datetime_arange.py`. |
 //! | RC-ARANGE-FLOAT (per-element float construction) | NOT-STARTED | `np.arange(1.0,2.0,0.3)` last element is `1.9000000000000001`; ferray-core's float `arange` diverges. Root cause is in ferray-core (`creation/mod.rs`), not this binding — open ferray-core follow-up. Pin: `test_arange_float_last_element_matches_numpy`. |
 //! | RC-GEOM-EXACT (geomspace endpoint pinning) | NOT-STARTED | `np.geomspace(-1,-1000,4)` is exactly `[-1,-10,-100,-1000]` via sign rotation + endpoint pinning; ferray-core's `geomspace` lacks both. Root cause in ferray-core, not this binding — open ferray-core follow-up. Pin: `test_geomspace_negative_endpoints_exact`. |
 
@@ -422,6 +423,26 @@ pub fn arange<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let dtype: Option<String> = normalize_opt_dtype(py, dtype)?;
     let dtype: Option<&str> = dtype.as_deref();
+
+    // datetime64 / timedelta64 arange (REQ-5, #945). numpy owns the datetime
+    // range algebra — string->datetime64 parse, calendar-month/year stepping, an
+    // int or timedelta64 step, and the half-open `[start, stop)` semantics — so
+    // the real-only path below, which coerces start/stop to f64
+    // (`start.extract::<f64>()`) and raises `TypeError: must be real number, not
+    // str` on a datetime64 string bound, cannot serve it. When the request is a
+    // time arange (an explicit `dtype='datetime64[u]'`/`'timedelta64[u]'`, OR a
+    // datetime64/timedelta64 start/stop/step operand) delegate the whole arange
+    // to numpy and marshal the resulting datetime64/timedelta64 buffer back
+    // through the int64-view transport (#831), preserving numpy's unit + shape +
+    // NaT with no lossy cast (R-CODE-4). numpy (live, 2.4.5):
+    // `np.arange('2020-01','2020-04',dtype='datetime64[M]')` ==
+    // `['2020-01','2020-02','2020-03']`; `np.arange(d0,d1,np.timedelta64(2,'D'))`
+    // steps by the timedelta; `np.arange(5,dtype='timedelta64[D]')` == `[0..4]`.
+    let dtype_is_time = dtype.is_some_and(crate::datetime::is_time_dtype_name);
+    if dtype_is_time || crate::datetime::any_time_operand(py, [Some(start), stop, step])? {
+        return arange_time(py, start, stop, step, dtype);
+    }
+
     // Extract numeric values for the length/fill math.
     let start_f: f64 = start.extract()?;
     let (s, e, start_obj, stop_obj) = match stop {
@@ -502,6 +523,46 @@ pub fn arange<'py>(
     };
 
     Ok(arr_any)
+}
+
+/// Build a datetime64 / timedelta64 `arange` (REQ-5, #945) by delegating the
+/// range construction to numpy and marshalling the result back through the
+/// ferray int64-view transport.
+///
+/// numpy owns the datetime range algebra (string->datetime64 parse, calendar
+/// month/year stepping, an int-or-timedelta64 step, the half-open
+/// `[start, stop)` semantics), so this binding builds numpy's exact
+/// `numpy.arange(start[, stop[, step]], dtype=dtype)` on the ORIGINAL Python
+/// operands — preserving numpy's parse and stepping — then round-trips the
+/// resulting datetime64 / timedelta64 buffer through
+/// [`crate::datetime::datetime_roundtrip`] (zero-copy `.view('int64')` ->
+/// `ArrayD<i64>` -> `int64_to_datetime64`/`int64_to_timedelta64`, #831). This
+/// preserves numpy's dtype + unit + shape + NaT with no lossy cast (R-CODE-4)
+/// and yields a fresh ferray-marshalled `numpy.ndarray`. The arg list mirrors
+/// numpy's positional surface: `stop`/`step` are only forwarded when present, so
+/// `fr.arange(5, dtype='timedelta64[D]')` (a single positional treated as the
+/// stop, start=0) and `fr.arange(d0, d1, td)` both delegate exactly as numpy.
+fn arange_time<'py>(
+    py: Python<'py>,
+    start: &Bound<'py, PyAny>,
+    stop: Option<&Bound<'py, PyAny>>,
+    step: Option<&Bound<'py, PyAny>>,
+    dtype: Option<&str>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    if let Some(dt) = dtype {
+        kwargs.set_item("dtype", dt)?;
+    }
+    // Forward the positional operands numpy received, in order. `step` requires
+    // `stop` (numpy's positional contract), so a present `step` always pairs with
+    // a present `stop`.
+    let built = match (stop, step) {
+        (Some(stop), Some(step)) => np.call_method("arange", (start, stop, step), Some(&kwargs))?,
+        (Some(stop), None) => np.call_method("arange", (start, stop), Some(&kwargs))?,
+        (None, _) => np.call_method("arange", (start,), Some(&kwargs))?,
+    };
+    crate::datetime::datetime_roundtrip(py, &built)
 }
 
 /// Build an integer-dtype `arange` matching numpy's count-from-float /

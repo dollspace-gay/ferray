@@ -140,6 +140,35 @@ pub fn is_time_dtype_name(name: &str) -> bool {
     name.starts_with("datetime64") || name.starts_with("timedelta64")
 }
 
+/// Returns `true` if any of the supplied (optional) operands is a
+/// datetime64 / timedelta64 scalar or array (numpy `dtype.kind` ∈ `{"M","m"}`).
+///
+/// Used by `arange` (`creation.rs`, REQ-5) to detect a datetime/timedelta range
+/// from its operands — `fr.arange(d0, d1, td)` carries no `dtype=` kwarg, so the
+/// time case must be recognised from a datetime64/timedelta64 `start`/`stop`/
+/// `step`. A plain Python string operand is NOT treated as time here (numpy only
+/// parses string bounds as datetime when an explicit `dtype='datetime64[u]'` is
+/// given, which `arange` detects separately); each operand is sniffed via
+/// `numpy.asarray(op).dtype.kind` so a numpy datetime64/timedelta64 scalar
+/// (kind `M`/`m`) is recognised while a real number / int (kind `i`/`f`/`u`/`b`)
+/// is not.
+pub fn any_time_operand<'a, 'py>(
+    py: Python<'py>,
+    operands: impl IntoIterator<Item = Option<&'a Bound<'py, PyAny>>>,
+) -> PyResult<bool>
+where
+    'py: 'a,
+{
+    let np = py.import("numpy")?;
+    for op in operands.into_iter().flatten() {
+        let arr = np.call_method1("asarray", (op,))?;
+        if time_kind(&arr)?.is_some() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// Round-trip an already-constructed numpy datetime64 / timedelta64 ndarray
 /// through the ferray int64-view transport, returning a fresh numpy
 /// datetime64 / timedelta64 ndarray of the SAME unit + shape + values.
