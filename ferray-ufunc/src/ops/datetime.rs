@@ -18,6 +18,39 @@
 //
 // NaT propagation: any operand that is NaT yields NaT in the output
 // (matching NumPy).
+//
+// ## REQ status — datetime64/timedelta64 ufunc kernels (#942)
+//
+// SHIPPED:
+//   - `datetime64`/`timedelta64` element-wise ufunc kernels — NOT a standalone
+//     REQ-1..REQ-28 row in `.design/ferray-ufunc.md` (the numbered REQs cover
+//     the real/complex numeric ufunc families; the time dtypes are tracked by
+//     issue #942). Honest classification: this is the numpy time-arithmetic
+//     ufunc surface (`np.subtract`/`np.add` resolved to the datetime loops)
+//     plus the `np.isnat` predicate. Anchors: `pub fn isnat_datetime`/
+//     `pub fn isnat_timedelta` (the `is Not a Time` predicate, true where the
+//     value equals the `i64::MIN` NaT sentinel); arithmetic kernels
+//     `pub fn sub_datetime` (datetime - datetime -> timedelta),
+//     `pub fn add_datetime_timedelta`/`pub fn sub_datetime_timedelta`
+//     (datetime ± timedelta -> datetime), `pub fn add_timedelta`/
+//     `pub fn sub_timedelta` (timedelta ± timedelta -> timedelta); scalar
+//     multiply/divide `pub fn mul_timedelta_scalar_i64`/`_f64`,
+//     `pub fn div_timedelta_scalar_i64`/`_f64`, `pub fn truediv_timedelta`/
+//     `pub fn floordiv_timedelta`/`pub fn mod_timedelta`; and the unit-aware
+//     `*_promoted` variants (`pub fn sub_datetime_promoted`/
+//     `pub fn add_datetime_timedelta_promoted`/`pub fn add_timedelta_promoted`)
+//     that resolve mixed-unit operands to the finer unit. Same-unit operands
+//     are required for the non-promoted kernels (a `ShapeMismatch` surfaces
+//     otherwise — ferray's "no implicit precision changes" stance). NaT
+//     propagation matches numpy. Audited against numpy 2.4.x and green.
+//     Non-test production consumer: re-exported from the crate root (`lib.rs`
+//     `pub use ops::datetime::{add_datetime_timedelta,
+//     add_datetime_timedelta_promoted, add_timedelta, add_timedelta_promoted,
+//     isnat_datetime, isnat_timedelta, sub_datetime, sub_datetime_promoted,
+//     sub_datetime_timedelta, sub_timedelta}`), the public time-dtype ufunc
+//     surface and the ferray-python datetime binding target.
+//
+// NOT-STARTED: none — the #942 datetime/timedelta kernels are shipped.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;

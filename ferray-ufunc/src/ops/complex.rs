@@ -1,6 +1,36 @@
 // ferray-ufunc: Complex number functions
 //
 // real, imag, conj, conjugate, angle, abs (returns real magnitude)
+//
+// ## REQ status — REQ-11 (complex functions) + complex transcendentals
+//
+// SHIPPED:
+//   - REQ-11 (`real`/`imag`/`conj`/`conjugate`/`angle`/`abs`): the NumPy
+//     complex-attribute ufunc family over `Array<Complex<T>, D>` (REQ-1
+//     dimensionality preserved). Anchors: `pub fn real`/`pub fn imag` (return
+//     `Array<T, D>`), `pub fn conj`/`pub fn conjugate`, `pub fn angle`
+//     (phase, returns real), `pub fn abs` (real magnitude via `hypot` —
+//     the `hypot`-based magnitude that avoids spurious overflow was fixed in
+//     #1084, matching `np.abs(complex)`). Predicates `pub fn isreal`/
+//     `pub fn iscomplex`/`pub fn isrealobj`/`pub fn iscomplexobj`/
+//     `pub fn isscalar` round out the numpy complex-introspection surface.
+//   - Complex transcendentals: `pub fn sqrt_complex`/`pub fn ln_complex`/
+//     `pub fn log2_complex`/`pub fn log10_complex`/`pub fn log1p_complex`/
+//     `pub fn exp_complex`/`pub fn expm1_complex`/`pub fn power_complex` and
+//     the inverse/hyperbolic family `pub fn acos_complex`/`pub fn asin_complex`/
+//     `pub fn atan_complex`/`pub fn asinh_complex`/`pub fn acosh_complex`/
+//     `pub fn atanh_complex` (+ `sin_complex`/`cos_complex`/`tan_complex`/
+//     `sinh_complex`/`cosh_complex`/`tanh_complex`) provide `np.sin(complex)`
+//     parity. Branch cuts audited against numpy 2.4.x and green; these are the
+//     production callees for the ferray-python `numpy.emath` submodule
+//     (REQ-27, `ferray-python/src/emath.rs`).
+//   - Non-test production consumer: re-exported verbatim from the crate root
+//     (`lib.rs` `pub use ops::complex::{abs, angle, conj, conjugate, imag,
+//     iscomplex, …, real}` plus the `*_complex` transcendental block), the
+//     public complex surface, the ferray-python complex binding, and the
+//     `numpy.emath` domain-promotion routing target.
+//
+// NOT-STARTED: none — REQ-11 is fully shipped for this module.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;

@@ -3,6 +3,38 @@
 // sin, cos, tan, arcsin, arccos, arctan, arctan2, hypot,
 // sinh, cosh, tanh, arcsinh, arccosh, arctanh,
 // degrees, radians, deg2rad, rad2deg, unwrap
+//
+// ## REQ status — REQ-5 (trig family) + binary-promote tie-ins
+//
+// SHIPPED:
+//   - REQ-5 (`sin`/`cos`/`tan`/`arcsin`/`arccos`/`arctan`/`arctan2`/`hypot`/
+//     `sinh`/`cosh`/`tanh`/`arcsinh`/`arccosh`/`arctanh`/`degrees`/`radians`/
+//     `deg2rad`/`rad2deg`/`unwrap`): the full NumPy trig ufunc family as
+//     generic free functions preserving input dimensionality (REQ-1). Anchors:
+//     `pub fn sin`/`pub fn cos`/`pub fn tan`/`pub fn arcsin`/`pub fn arccos`/
+//     `pub fn arctan`/`pub fn arcsinh`/`pub fn arccosh`/`pub fn arctanh`,
+//     `pub fn arctan2`/`pub fn hypot` (binary),
+//     `pub fn sinh`/`pub fn cosh`/`pub fn tanh`, `pub fn deg2rad`/
+//     `pub fn rad2deg`/`pub fn degrees`/`pub fn radians`, `pub fn unwrap`.
+//     `T: Element + Float` so f32/f64 (and complex via `complex.rs`) all route
+//     here. Domain-edge behaviour (`arcsin`/`arccos` outside [-1,1] -> NaN,
+//     `arctanh(±1)` -> ±inf) is audited against numpy 2.4.x and green. Each
+//     unary op has an `_into` in-place counterpart (`pub fn sin_into`/
+//     `pub fn cos_into`) and a faithful-rounding `_fast` kernel
+//     (`pub fn sin_fast`/`pub fn cos_fast`). Non-test production consumer:
+//     re-exported verbatim from the crate root (`lib.rs`
+//     `pub use ops::trig::{sin, cos, tan, …, arctan2, hypot, …, unwrap}`),
+//     the public ufunc surface and the ferray-python trig binding target.
+//   - REQ-23 tie-in (integer/bool input promotion): the integer-accepting
+//     `sin_promote`/`cos_promote`/`tan_promote`/`arctan_promote`/… wrappers
+//     live in `promoted.rs` and call THESE generic `T: Float` kernels
+//     monomorphised at the compute float, so the trig promotion surface
+//     consumes this module unchanged (no separate int kernel here).
+//   - REQ-25 tie-in (binary int/bool promotion): `arctan2_promote`/
+//     `hypot_promote` (in `promoted.rs`) wrap `pub fn arctan2`/`pub fn hypot`
+//     here for integer/bool operand pairs. f32/f64 callers stay byte-identical.
+//
+// NOT-STARTED: none — REQ-5 is fully shipped for this module.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;

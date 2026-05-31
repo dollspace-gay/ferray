@@ -2,6 +2,36 @@
 //
 // Provides generic unary/binary operation wrappers that handle contiguous
 // vs non-contiguous arrays, SIMD dispatch, and broadcasting.
+//
+// ## REQ status — internal ufunc-kernel infrastructure (no standalone numpy REQ)
+//
+// SHIPPED:
+//   - Internal infrastructure — provides the generic unary/binary operation
+//     wrappers (broadcasting + SIMD dispatch + contiguity routing) that the
+//     REQ-5/REQ-6/REQ-8/REQ-10 ufunc kernels are built from; NO standalone
+//     numpy ufunc surface. Honest classification: every op module
+//     (`trig.rs`/`explog.rs`/`floatintrinsic.rs`/`arithmetic.rs`) calls these
+//     wrappers rather than re-implementing iteration. Anchors:
+//     `pub fn unary_float_op`/`pub fn unary_float_op_compute`/
+//     `pub fn unary_map_op` (unary apply with the f32/f64 SIMD fast path and
+//     scalar fallback) and their `_into` in-place forms; `pub fn
+//     binary_elementwise_op`/`pub fn binary_broadcast_op`/`pub fn
+//     binary_map_op`/`pub fn binary_mixed_op` (binary same-shape and broadcast
+//     apply — REQ-4 broadcasting, REQ-19 non-contiguous scalar fallback);
+//     `pub fn try_simd_f32_unary`/`pub fn try_simd_f64_unary`/
+//     `pub fn try_simd_f32_binary`/`pub fn try_simd_f64_binary` (the SIMD
+//     opt-in bridge into `dispatch.rs`, REQ-17). Contiguity is checked at the
+//     start of each op (`pub(crate) fn contig_input`, REQ-19). The
+//     `unsafe pub(crate) fn reinterpret_array` is the single documented
+//     TypeId-dispatch safety boundary (`# Safety` invariant: caller proved
+//     `SRC == DST` via `TypeId`). Non-test production consumer: these wrappers
+//     are `pub(crate)`/`pub` within the crate and consumed directly by every
+//     op kernel (`crate::ops::trig::sin` -> `unary_float_op_compute`,
+//     `crate::ops::arithmetic::add` -> `binary_elementwise_op`, …); they are
+//     not re-exported because they are the implementation engine, not a
+//     user-facing numpy surface.
+//
+// NOT-STARTED: none — the helper infrastructure is shipped and consumed.
 
 use ferray_core::Array;
 use ferray_core::dimension::broadcast::broadcast_shapes;

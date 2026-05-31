@@ -16,6 +16,41 @@
 // - SIMD dispatch via pulp (REQ-17)
 // - Rayon parallelism for large arrays (REQ-21)
 // - Operator overloads (+, -, *, /, %, &, |, ^, !, <<, >>)
+//
+// ## REQ status — crate-root re-export + ufunc-registration surface
+//
+// This module is the crate root: the public re-export surface that registers
+// every routed ufunc family. Per-REQ detail lives in each op module's own
+// `## REQ status` table; this root tracks the REQ-1 free-function convention
+// and the registration surface itself.
+//
+// SHIPPED:
+//   - REQ-1 (ufuncs are generic free functions preserving input
+//     dimensionality, NOT a `Ufunc`/`IxDyn` trait): enforced workspace-wide —
+//     every `pub use` block below re-exports `fn op<T, D>(&Array<T, D>) ->
+//     FerrayResult<Array<T, D>>`-shaped free functions, so `sin` on an
+//     `Array2<f64>` returns `Array2<f64>`. The crate root IS the registration
+//     surface: `pub use ops::trig::{…}` (REQ-5), `pub use ops::explog::{…}`
+//     (REQ-6), `pub use ops::rounding::{…}` (REQ-7/REQ-24),
+//     `pub use ops::arithmetic::{…}` (REQ-8), `pub use ops::floatintrinsic::{…}`
+//     (REQ-10), `pub use ops::complex::{…}` (REQ-11), `pub use ops::datetime::
+//     {…}` (#942), `pub use ops::bitwise::{…}` (REQ-12), `pub use
+//     ops::comparison::{…}` (REQ-14/REQ-15), `pub use ops::logical::{…}`
+//     (REQ-16), `pub use operator_overloads::{…}` (REQ-9/REQ-13), plus the
+//     `pub use promoted::{…}` REQ-23/REQ-25 int/bool-promotion families and the
+//     `pub use ufunc_object::{Ufunc, …}` first-class ufunc objects (REQ-3
+//     reduce/accumulate/outer). REQ-2 (`UnaryOp`/`BinaryOp` kernel-dispatch
+//     traits) is intentionally crate-internal, NOT re-exported here.
+//   - Crate-level lint configuration: the `#![allow(...)]` block below is a
+//     crate-root allow scoped to the numerical-kernel cast/float-cmp lints
+//     that the ufunc contracts deliberately incur (documented inline).
+//   - Non-test production consumer: these re-exports ARE the public API that
+//     ferray-python's binding crate (`ferray-python/src/ufunc.rs`) and external
+//     callers import (`use ferray_ufunc::{sin, add, isnan, …}`). The crate root
+//     has no callee of its own — it is the registration boundary.
+//
+// NOT-STARTED: none — REQ-1's free-function convention is shipped for every
+// routed family; per-REQ shipped/not-started detail is in the op modules.
 
 // Ufunc kernels do bit-level float manipulation (`fast_exp`, `fast_trig`,
 // `frexp`, `nextafter`, `spacing`), evaluate libm/CORE-MATH-style range

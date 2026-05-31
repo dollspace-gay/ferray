@@ -8,6 +8,34 @@
 // REQ-13: &, |, ^, !, <<, >> on integer arrays — same approach.
 //
 // Users can call these directly: `ufunc::array_add(&a, &b)` etc.
+//
+// ## REQ status — REQ-9 / REQ-13 operator-overload delegation
+//
+// SHIPPED:
+//   - REQ-9 (operator overloads `+`/`-`/`*`/`/`/`%` on `NdArray` delegate to
+//     the corresponding ufunc): the orphan rule prevents `impl std::ops` on
+//     `ferray_core::Array` from this crate, so the delegation is exposed as
+//     free functions that ferray-core's operator impls call. Anchors:
+//     `pub fn array_add`/`pub fn array_sub`/`pub fn array_mul`/
+//     `pub fn array_div`/`pub fn array_rem`/`pub fn array_neg` — each forwards
+//     to `arithmetic::add`/`subtract`/`multiply`/`divide`/`remainder`/
+//     `negative` (so the NumPy fixed-width contract is inherited: integer
+//     `array_add` wraps on overflow via `WrappingArith`, `array_div` is true
+//     division via `TrueDivide`). This maps numpy's `__add__`/`__sub__`/… on
+//     arrays. No standalone numpy ufunc of its own — pure delegation infra.
+//   - REQ-13 (bitwise operator overloads `&`/`|`/`^`/`!`/`<<`/`>>` on integer
+//     arrays delegate to the bitwise ufuncs): anchors `pub fn array_bitand`/
+//     `pub fn array_bitor`/`pub fn array_bitxor`/`pub fn array_bitnot`/
+//     `pub fn array_shl`/`pub fn array_shr`, each forwarding to
+//     `ops::bitwise::{BitwiseOps, ShiftOps}`.
+//   - Non-test production consumer: all twelve `array_*` functions are
+//     re-exported from the crate root (`lib.rs` `pub use operator_overloads::{
+//     array_add, array_bitand, array_bitnot, array_bitor, array_bitxor,
+//     array_div, array_mul, array_neg, array_rem, array_shl, array_shr,
+//     array_sub}`) — the delegation surface ferray-core's `std::ops` impls
+//     and the ferray-python operator bindings call.
+//
+// NOT-STARTED: none — REQ-9 and REQ-13 delegation surfaces are shipped.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;

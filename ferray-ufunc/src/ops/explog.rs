@@ -1,6 +1,36 @@
 // ferray-ufunc: Exponential and logarithmic functions
 //
 // exp, exp2, expm1, log, log2, log10, log1p, logaddexp, logaddexp2
+//
+// ## REQ status — REQ-6 (exp/log family) + binary-promote tie-ins
+//
+// SHIPPED:
+//   - REQ-6 (`exp`/`exp2`/`expm1`/`log`/`log2`/`log10`/`log1p`/`logaddexp`/
+//     `logaddexp2`): the full NumPy exp/log ufunc family as generic free
+//     functions preserving input dimensionality (REQ-1). Anchors:
+//     `pub fn exp`/`pub fn exp2`/`pub fn expm1`, `pub fn log`/`pub fn log2`/
+//     `pub fn log10`/`pub fn log1p`, `pub fn logaddexp`/`pub fn logaddexp2`
+//     (binary). `T: Element + Float` (the `exp`/`log` defaults route through
+//     CORE-MATH `CrMath` for correctly-rounded results; faithful-rounding
+//     `_fast` kernels `pub fn exp_fast` and in-place `_into` counterparts
+//     `pub fn exp_into`/`pub fn log_into` are also provided). Special-value
+//     edges (`log(0)` -> -inf, `log(-x)` -> NaN, `exp` overflow -> inf,
+//     `expm1`/`log1p` near-zero accuracy) are audited against numpy 2.4.x and
+//     green. Non-test production consumer: re-exported verbatim from the crate
+//     root (`lib.rs` `pub use ops::explog::{exp, exp_fast, exp_into, exp2,
+//     expm1, log, log_into, log1p, log2, log10, logaddexp, logaddexp2}`), the
+//     public ufunc surface and the ferray-python exp/log binding target. (f16
+//     variants `exp_f16`/`log_f16`/… are feature-gated re-exports.)
+//   - REQ-23 tie-in (integer/bool input promotion): `exp_promote`/`log_promote`/
+//     `exp2_promote`/`expm1_promote`/`log2_promote`/`log10_promote`/
+//     `log1p_promote` (in `promoted.rs`) call THESE generic `T: Float` kernels
+//     monomorphised at the compute float — no separate int kernel here.
+//   - REQ-25 tie-in (binary int/bool promotion): `logaddexp_promote`/
+//     `logaddexp2_promote` (in `promoted.rs`) wrap `pub fn logaddexp`/
+//     `pub fn logaddexp2` here for integer/bool operand pairs; f32/f64 callers
+//     stay byte-identical.
+//
+// NOT-STARTED: none — REQ-6 is fully shipped for this module.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;

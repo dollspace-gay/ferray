@@ -3,6 +3,36 @@
 // isnan, isinf, isfinite, isneginf, isposinf, nan_to_num, nextafter,
 // spacing, ldexp, frexp, signbit, copysign, float_power, fmax, fmin,
 // maximum, minimum, clip
+//
+// ## REQ status — REQ-10 (float intrinsics) + binary-promote tie-ins
+//
+// SHIPPED:
+//   - REQ-10 (`isnan`/`isinf`/`isfinite`/`isneginf`/`isposinf`/`nan_to_num`/
+//     `nextafter`/`spacing`/`ldexp`/`frexp`/`signbit`/`copysign`/`float_power`/
+//     `fmax`/`fmin`/`maximum`/`minimum`/`clip`): the NumPy float-intrinsic
+//     ufunc family as generic free functions (REQ-1). Anchors — classification
+//     predicates `pub fn isnan`/`pub fn isinf`/`pub fn isfinite`/
+//     `pub fn isneginf`/`pub fn isposinf`/`pub fn signbit` (all return
+//     `Array<bool, D>`); bit-level intrinsics `pub fn nextafter`/
+//     `pub fn spacing`/`pub fn ldexp`/`pub fn frexp`/`pub fn modf`/
+//     `pub fn copysign`; cleanup/clamp `pub fn nan_to_num`/`pub fn clip`/
+//     `pub fn fmax`/`pub fn fmin`/`pub fn maximum`/`pub fn minimum`/
+//     `pub fn float_power`. The `spacing` sign bug was fixed in #1076
+//     (`spacing(-x)` now matches numpy's signed result); `maximum`/`minimum`
+//     are NaN-propagating while `fmax`/`fmin` are NaN-suppressing per numpy.
+//     `*_ord`/`*_f16` companions handle non-`Float` Ord types and the f16
+//     feature. Non-test production consumer: re-exported verbatim from the
+//     crate root (`lib.rs` `pub use ops::floatintrinsic::{clip, clip_ord,
+//     copysign, float_power, fmax, fmin, frexp, isfinite, isinf, isnan,
+//     isneginf, isposinf, ldexp, maximum, maximum_ord, minimum, minimum_ord,
+//     modf, nan_to_num, nextafter, signbit, spacing}`), the public ufunc
+//     surface and the ferray-python intrinsics binding target.
+//   - REQ-25 tie-in (binary int/bool promotion): `copysign_promote`/
+//     `nextafter_promote` (in `promoted.rs`) wrap `pub fn copysign`/
+//     `pub fn nextafter` here for integer/bool operand pairs; f32/f64 callers
+//     stay byte-identical.
+//
+// NOT-STARTED: none — REQ-10 is fully shipped for this module.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;

@@ -3,6 +3,31 @@
 // Provides runtime CPU feature detection and dispatch for SIMD-accelerated
 // elementwise operations. Uses `pulp::Arch` for portable dispatch across
 // SSE2, AVX2, AVX-512 on x86_64 and NEON on aarch64.
+//
+// ## REQ status — REQ-17 / REQ-18 / REQ-20 SIMD dispatch infrastructure
+//
+// SHIPPED:
+//   - REQ-17 (SIMD paths for `f32`/`f64`/`i32`/`i64`/`u8`/`u32` via `pulp`) +
+//     REQ-18 (runtime CPU dispatch AVX-512 > AVX2 > SSE2 on x86_64, NEON on
+//     aarch64, scalar fallback elsewhere) + REQ-20 (`FERRAY_FORCE_SCALAR=1`
+//     disables SIMD): this is the runtime-dispatch infrastructure these REQs
+//     name directly. Anchors: `pub fn dispatch_unary_f32`/`pub fn
+//     dispatch_unary_f64`/`pub fn dispatch_unary_f16` and `pub fn
+//     dispatch_binary_f32`/`pub fn dispatch_binary_f64`/`pub fn
+//     dispatch_binary_f16` route an arbitrary closure through `pulp::Arch`
+//     (the AVX-512/AVX2/SSE2/NEON selector — REQ-18); `pub fn force_scalar`
+//     reads and caches `FERRAY_FORCE_SCALAR` (REQ-20), with `pub fn
+//     reset_force_scalar` for test toggling. The specialized SIMD kernels
+//     `pub fn simd_sqrt_f32`/`_f64`, `simd_abs_f32`/`_f64`, `simd_neg_*`,
+//     `simd_square_*`, `simd_reciprocal_*`, and `dispatch_exp_fast_f32`/`_f64`
+//     are the per-op fast paths (REQ-17). This module exposes NO standalone
+//     numpy ufunc surface — it is the shared SIMD/dispatch engine the REQ-5/
+//     REQ-6/REQ-8/REQ-10 ufunc kernels build on. Non-test production consumer:
+//     the `helpers.rs` wrappers (`try_simd_f32_unary`/`try_simd_f64_unary`/
+//     `try_simd_*_binary`) call these dispatchers, and every contiguous
+//     f32/f64 ufunc (`crate::sin`, `crate::add`, …) reaches SIMD through them.
+//
+// NOT-STARTED: none — the dispatch infrastructure for REQ-17/18/20 is shipped.
 
 // `with_simd` is the pulp dispatch entry point; `#[inline(always)]` is
 // required so the SIMD instruction set selected at the call site can
