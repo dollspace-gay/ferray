@@ -622,9 +622,21 @@ pub fn pyany_to_dynarray(
         "uint16" | "u16" => to_dyn!(u16, U16),
         "uint8" | "u8" => to_dyn!(u8, U8),
         "bool" => to_dyn!(bool, Bool),
+        // Complex inputs can't ride the interop `AsFerray` path (no
+        // `Complex<T>` NpElement); route them through the manual complex
+        // marshaller (`fft::complex_pyarray_to_ferray`) into the `DynArray`
+        // `Complex32`/`Complex64` variants, preserving dtype + shape (R-CODE-4).
+        "complex128" | "c16" => {
+            let fa = crate::fft::complex_pyarray_to_ferray::<f64>(&arr)?;
+            Ok(DynArray::Complex64(fa))
+        }
+        "complex64" | "c8" => {
+            let fa = crate::fft::complex_pyarray_to_ferray::<f32>(&arr)?;
+            Ok(DynArray::Complex32(fa))
+        }
         other => Err(PyTypeError::new_err(format!(
             "ferray file-IO does not yet support dtype {other:?} (supported: \
-             bool, int8/16/32/64, uint8/16/32/64, float32/64)"
+             bool, int8/16/32/64, uint8/16/32/64, float32/64, complex64/128)"
         ))),
     }
 }
@@ -661,9 +673,15 @@ pub fn dynarray_to_pyarray<'py>(
         DynArray::U16(a) => from_dyn!(a),
         DynArray::U8(a) => from_dyn!(a),
         DynArray::Bool(a) => from_dyn!(a),
+        // Complex variants egress through the manual complex marshaller
+        // (`fft::complex_ferray_to_pyarray`), the inverse of the complex
+        // ingress arms above — so a complex `save`/`load` round-trips dtype +
+        // shape exactly (R-DEV-3).
+        DynArray::Complex64(a) => crate::fft::complex_ferray_to_pyarray(py, a),
+        DynArray::Complex32(a) => crate::fft::complex_ferray_to_pyarray(py, a),
         other => Err(PyTypeError::new_err(format!(
             "ferray file-IO cannot marshal dtype {} to numpy yet (supported: \
-             bool, int8/16/32/64, uint8/16/32/64, float32/64)",
+             bool, int8/16/32/64, uint8/16/32/64, float32/64, complex64/128)",
             other.dtype()
         ))),
     }

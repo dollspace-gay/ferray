@@ -52,9 +52,51 @@ use crate::conv::{
     as_ndarray, dtype_name, extract_shape, extract_signed_shape, ferr_to_pyerr, normalize_dtype,
     normalize_opt_dtype, pyscalar_default_dtype, validate_dim, validate_num_samples,
 };
-use crate::fft::complex_ferray_to_pyarray;
+use crate::fft::{complex_ferray_to_pyarray, complex_pyarray_to_ferray};
 use crate::{match_dtype_all, match_dtype_float};
 use num_complex::Complex;
+
+/// Round-trip a complex `numpy.ndarray` (dtype `"complex64"`/`"complex128"`)
+/// through ferray-core's `Element`-generic `copy`, returning a fresh
+/// Python-owned complex ndarray.
+///
+/// The 11-real-dtype `match_dtype_all!` macro funnels every arm through the
+/// interop `into_pyarray`, which has no `Complex<T>` `NumpyElement` impl, so a
+/// complex input previously hit the macro's `TypeError` fallthrough
+/// (`fr.array([1+2j])` -> "unsupported dtype: complex128"). numpy's `array`/
+/// `asarray`/`copy` accept complex; this branch routes complex through the
+/// shared `complex_pyarray_to_ferray` / `complex_ferray_to_pyarray` marshallers
+/// (the same pair the fft + creation-dispatch complex arms use), preserving the
+/// `complex64`/`complex128` width and shape across the boundary (R-CODE-4). A
+/// non-complex `dt` is rejected so the caller only invokes this for the complex
+/// arms.
+fn complex_roundtrip_copy<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let r: ArrayD<Complex<f64>> = fc::copy(&fa);
+            complex_ferray_to_pyarray(py, r)
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let r: ArrayD<Complex<f32>> = fc::copy(&fa);
+            complex_ferray_to_pyarray(py, r)
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_roundtrip_copy: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+/// `true` for the two complex dtype names ferray marshals
+/// (`complex64`/`complex128`, plus their `c8`/`c16` aliases).
+fn is_complex_dtype(dt: &str) -> bool {
+    matches!(dt, "complex128" | "c16" | "complex64" | "c8")
+}
 
 // ---------------------------------------------------------------------------
 // Shape + dtype creation
@@ -794,6 +836,9 @@ impl FromF64Lossy for bool {
 pub fn copy<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    if is_complex_dtype(dt.as_str()) {
+        return complex_roundtrip_copy(py, &arr, dt.as_str());
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -875,6 +920,12 @@ pub fn array<'py>(
     // and produce a fresh owned buffer (matches NumPy `array` semantics
     // which always copies unless `copy=False` is passed).
     let dt = dtype_name(&arr)?;
+    // Complex input cannot ride the 11-real-dtype macro (no complex
+    // `into_pyarray`); route it through the complex marshaller so
+    // `fr.array([1+2j])` builds a complex ndarray instead of raising.
+    if is_complex_dtype(dt.as_str()) {
+        return complex_roundtrip_copy(py, &arr, dt.as_str());
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;

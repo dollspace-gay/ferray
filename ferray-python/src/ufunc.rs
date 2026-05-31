@@ -25,7 +25,9 @@
 
 use ferray_core::array::aliases::ArrayD;
 use ferray_numpy_interop::{AsFerray, IntoNumPy};
+use num_complex::Complex;
 use numpy::PyReadonlyArrayDyn;
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
@@ -33,10 +35,105 @@ use crate::conv::{
     all_scalar_inputs, as_ndarray, binary_result_dtype, coerce_dtype, dtype_name, ferr_to_pyerr,
     scalarize, unary_promote_dtypes,
 };
+use crate::fft::{complex_ferray_to_pyarray, complex_pyarray_to_ferray};
 use crate::{
     match_dtype_all, match_dtype_float, match_dtype_float_or_int, match_dtype_int_only,
     match_dtype_numeric,
 };
+
+// ---------------------------------------------------------------------------
+// Complex-input dispatch for unary transcendentals (#920/#921/#922).
+//
+// numpy registers a complex loop for sqrt/exp/log/sin/cos/... (a complex
+// input computes a complex result), but registers NO complex loop for
+// cbrt/fabs/degrees/... (a complex input raises TypeError). The prior binding
+// funnelled EVERY unary-float op through `coerce_dtype(arr, "float32")`, which
+// numpy casts complex -> float32 DROPPING the imaginary part (a silent lossy
+// boundary round-trip — R-CODE-4) and then re-tagged the result complex. Both
+// outcomes are wrong: ops with a complex loop must COMPUTE complex; ops without
+// one must RAISE. The helpers below give each unary-float op the correct
+// complex behavior BEFORE the f32 coercion can corrupt the data.
+// ---------------------------------------------------------------------------
+
+/// `true` for the two complex dtype names ferray marshals.
+fn is_complex_dtype(dt: &str) -> bool {
+    matches!(dt, "complex128" | "c16" | "complex64" | "c8")
+}
+
+/// Raise numpy's exact `TypeError` for a complex input to a ufunc that has NO
+/// complex loop (`cbrt`, `fabs`, `degrees`, `radians`, `deg2rad`, `rad2deg`,
+/// `sinc`, `i0`, …). numpy: `np.cbrt([1+2j])` -> `TypeError: ufunc 'cbrt' not
+/// supported for the input types`. This replaces the prior silent imag-discard
+/// (R-CODE-4) with the numpy contract (R-DEV-2).
+fn reject_complex_unary(func: &str) -> PyErr {
+    PyTypeError::new_err(format!(
+        "ufunc '{func}' not supported for the input types, and the inputs \
+         could not be safely coerced to any supported types according to the \
+         casting rule ''safe''"
+    ))
+}
+
+/// Dispatch a unary complex transcendental over both complex widths: extract
+/// the complex array via the manual marshaller, call the matching
+/// `$cfn::<f32|f64>` complex op, and push the complex result back across the
+/// boundary. `$cfn` is a `ferray_ufunc::*_complex` path generic over
+/// `Complex<T>`. The result keeps the input's complex width (c64 -> c64,
+/// c128 -> c128), matching numpy.
+macro_rules! complex_unary_dispatch {
+    ($py:expr, $arr:expr, $dt:expr, $cfn:path) => {{
+        match $dt {
+            "complex128" | "c16" => {
+                let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&$arr)?;
+                let r: ArrayD<Complex<f64>> = $cfn(&fa).map_err(ferr_to_pyerr)?;
+                complex_ferray_to_pyarray($py, r)?
+            }
+            "complex64" | "c8" => {
+                let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&$arr)?;
+                let r: ArrayD<Complex<f32>> = $cfn(&fa).map_err(ferr_to_pyerr)?;
+                complex_ferray_to_pyarray($py, r)?
+            }
+            other => {
+                return Err(PyTypeError::new_err(format!(
+                    "complex_unary_dispatch: expected a complex dtype, got {other:?}"
+                )));
+            }
+        }
+    }};
+}
+
+/// `exp2` has no `ferray_ufunc::exp2_complex` library op, but numpy computes it
+/// complex (`np.exp2([1+2j])` -> `2**z`). Compose it inline via num_complex's
+/// `Complex::exp2`, mirroring the `*_complex` family's element-wise shape so the
+/// binding stays correct without a net-new library op (the brief's "compose via
+/// num_complex when the library op is missing").
+fn exp2_complex_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<Complex<f64>> = fa.iter().map(|z| z.exp2()).collect();
+            let r = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<Complex<f32>> = fa.iter().map(|z| z.exp2()).collect();
+            let r = ArrayD::<Complex<f32>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "exp2_complex_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Helper: per-dispatch-shape inline macros that capture the full
@@ -249,12 +346,38 @@ macro_rules! logical_unary_body {
 /// promotes to float, float input keeps its dtype. Scalar / 0-d input
 /// returns a numpy scalar (`$OUT_SCALAR`).
 macro_rules! bind_unary_float {
+    // No-complex-loop form: a complex input RAISES `TypeError` (numpy has no
+    // complex loop for this op — cbrt/fabs/degrees/radians/deg2rad/rad2deg/
+    // sinc/i0). The guard runs BEFORE `unary_float_body!`'s f32 coercion, so
+    // the imaginary part is never silently dropped (R-CODE-4).
     ($name:ident, $ferr_path:path) => {
         #[pyfunction]
         pub fn $name<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
             let arr = as_ndarray(py, x)?;
+            let dt = dtype_name(&arr)?;
+            if is_complex_dtype(dt.as_str()) {
+                return Err(reject_complex_unary(stringify!($name)));
+            }
             let scalar = all_scalar_inputs(py, &[x])?;
             let out = unary_float_body!(py, arr, $ferr_path);
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
+    // Complex-loop form: a complex input dispatches to the matching
+    // `ferray_ufunc::*_complex` op and returns a complex array (numpy computes
+    // complex), BEFORE the real f32 path. Real input keeps the existing
+    // promote-to-float behavior unchanged.
+    ($name:ident, $ferr_path:path, complex = $cfn:path) => {
+        #[pyfunction]
+        pub fn $name<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+            let arr = as_ndarray(py, x)?;
+            let dt = dtype_name(&arr)?;
+            let scalar = all_scalar_inputs(py, &[x])?;
+            let out = if is_complex_dtype(dt.as_str()) {
+                complex_unary_dispatch!(py, arr, dt.as_str(), $cfn)
+            } else {
+                unary_float_body!(py, arr, $ferr_path)
+            };
             if scalar { scalarize(out) } else { Ok(out) }
         }
     };
@@ -275,38 +398,120 @@ macro_rules! bind_unary_numeric_split {
     };
 }
 
-bind_unary_float!(sin, ferray_ufunc::sin);
-bind_unary_float!(cos, ferray_ufunc::cos);
-bind_unary_float!(tan, ferray_ufunc::tan);
-bind_unary_float!(arcsin, ferray_ufunc::arcsin);
-bind_unary_float!(arccos, ferray_ufunc::arccos);
-bind_unary_float!(arctan, ferray_ufunc::arctan);
-bind_unary_float!(sinh, ferray_ufunc::sinh);
-bind_unary_float!(cosh, ferray_ufunc::cosh);
-bind_unary_float!(tanh, ferray_ufunc::tanh);
-bind_unary_float!(arcsinh, ferray_ufunc::arcsinh);
-bind_unary_float!(arccosh, ferray_ufunc::arccosh);
-bind_unary_float!(arctanh, ferray_ufunc::arctanh);
+// Trigonometric + hyperbolic + inverse — numpy registers a complex loop for
+// each (generate_umath.py `'fdg' + cmplx`), so complex input computes complex
+// via the matching `ferray_ufunc::*_complex` op.
+bind_unary_float!(sin, ferray_ufunc::sin, complex = ferray_ufunc::sin_complex);
+bind_unary_float!(cos, ferray_ufunc::cos, complex = ferray_ufunc::cos_complex);
+bind_unary_float!(tan, ferray_ufunc::tan, complex = ferray_ufunc::tan_complex);
+bind_unary_float!(
+    arcsin,
+    ferray_ufunc::arcsin,
+    complex = ferray_ufunc::asin_complex
+);
+bind_unary_float!(
+    arccos,
+    ferray_ufunc::arccos,
+    complex = ferray_ufunc::acos_complex
+);
+bind_unary_float!(
+    arctan,
+    ferray_ufunc::arctan,
+    complex = ferray_ufunc::atan_complex
+);
+bind_unary_float!(
+    sinh,
+    ferray_ufunc::sinh,
+    complex = ferray_ufunc::sinh_complex
+);
+bind_unary_float!(
+    cosh,
+    ferray_ufunc::cosh,
+    complex = ferray_ufunc::cosh_complex
+);
+bind_unary_float!(
+    tanh,
+    ferray_ufunc::tanh,
+    complex = ferray_ufunc::tanh_complex
+);
+bind_unary_float!(
+    arcsinh,
+    ferray_ufunc::arcsinh,
+    complex = ferray_ufunc::asinh_complex
+);
+bind_unary_float!(
+    arccosh,
+    ferray_ufunc::arccosh,
+    complex = ferray_ufunc::acosh_complex
+);
+bind_unary_float!(
+    arctanh,
+    ferray_ufunc::arctanh,
+    complex = ferray_ufunc::atanh_complex
+);
+// degrees/radians/deg2rad/rad2deg register NO complex loop — complex RAISES.
 bind_unary_float!(degrees, ferray_ufunc::degrees);
 bind_unary_float!(radians, ferray_ufunc::radians);
 bind_unary_float!(deg2rad, ferray_ufunc::deg2rad);
 bind_unary_float!(rad2deg, ferray_ufunc::rad2deg);
 
-// Exponential / logarithmic (REQ-23: int -> float)
-bind_unary_float!(exp, ferray_ufunc::exp);
-bind_unary_float!(exp2, ferray_ufunc::exp2);
-bind_unary_float!(expm1, ferray_ufunc::expm1);
-bind_unary_float!(log, ferray_ufunc::log);
-bind_unary_float!(log1p, ferray_ufunc::log1p);
-bind_unary_float!(log2, ferray_ufunc::log2);
-bind_unary_float!(log10, ferray_ufunc::log10);
+// Exponential / logarithmic (REQ-23: int -> float). All register a complex
+// loop in numpy; `exp2` has no `exp2_complex` lib op so it is composed inline.
+bind_unary_float!(exp, ferray_ufunc::exp, complex = ferray_ufunc::exp_complex);
+bind_unary_float!(
+    expm1,
+    ferray_ufunc::expm1,
+    complex = ferray_ufunc::expm1_complex
+);
+bind_unary_float!(log, ferray_ufunc::log, complex = ferray_ufunc::ln_complex);
+bind_unary_float!(
+    log1p,
+    ferray_ufunc::log1p,
+    complex = ferray_ufunc::log1p_complex
+);
+bind_unary_float!(
+    log2,
+    ferray_ufunc::log2,
+    complex = ferray_ufunc::log2_complex
+);
+bind_unary_float!(
+    log10,
+    ferray_ufunc::log10,
+    complex = ferray_ufunc::log10_complex
+);
 
-// Roots — REQ-23: int -> float.
-bind_unary_float!(sqrt, ferray_ufunc::sqrt);
+/// `numpy.exp2(x)` — `2**x`. Real/int input promotes to float; complex input
+/// computes the complex `2**z` (numpy registers a complex loop, but ferray-ufunc
+/// has no `exp2_complex`, so the binding composes it via num_complex — see
+/// [`exp2_complex_dispatch`]).
+#[pyfunction]
+pub fn exp2<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, x)?;
+    let dt = dtype_name(&arr)?;
+    let scalar = all_scalar_inputs(py, &[x])?;
+    let out = if is_complex_dtype(dt.as_str()) {
+        exp2_complex_dispatch(py, &arr, dt.as_str())?
+    } else {
+        unary_float_body!(py, arr, ferray_ufunc::exp2)
+    };
+    if scalar { scalarize(out) } else { Ok(out) }
+}
+
+// Roots — REQ-23: int -> float. `sqrt` registers a complex loop (complex sqrt,
+// principal branch); `cbrt` does NOT (complex RAISES).
+bind_unary_float!(
+    sqrt,
+    ferray_ufunc::sqrt,
+    complex = ferray_ufunc::sqrt_complex
+);
 bind_unary_float!(cbrt, ferray_ufunc::cbrt);
 // `rint` has NO integer loop in numpy (generate_umath.py:1021) — int -> float.
+// numpy DOES register a complex `rint` loop, but ferray-ufunc has no
+// `rint_complex`; complex `rint` is out of this build's transcendental scope
+// (#922), so complex input RAISES here rather than silently dropping imag.
 bind_unary_float!(rint, ferray_ufunc::rint);
-// `fabs` registers only float loops — int -> float (generate_umath.py:1003).
+// `fabs` registers only float loops — int -> float (generate_umath.py:1003);
+// no complex loop -> complex RAISES.
 bind_unary_float!(fabs, ferray_ufunc::fabs);
 
 // Sign / absolute / negative / positive — int-identity (int -> int).
