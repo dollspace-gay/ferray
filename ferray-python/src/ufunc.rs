@@ -1438,6 +1438,16 @@ pub fn unwrap<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, p)?;
     let dt = dtype_name(&arr)?;
+    // numpy.unwrap raises TypeError on complex input (its internal `mod` / `remainder`
+    // ufunc has no complex loop): "ufunc 'remainder' not supported for the input
+    // types" (verified live numpy 2.4.4). Reject complex before the float coercion
+    // would silently unwrap the real parts (R-CODE-4 / R-DEV-2: preserve the
+    // exception type).
+    if matches!(dt.as_str(), "complex128" | "c16" | "complex64" | "c8") {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "ufunc 'remainder' not supported for the input types: numpy.unwrap does not accept complex input",
+        ));
+    }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32") {
         "float32"
     } else {

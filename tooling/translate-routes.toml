@@ -487,6 +487,16 @@ upstream = ["/home/doll/numpy-ref/numpy/linalg/_linalg.py"]
 design = ".design/ferray-linalg.md"
 parity_ops = ["solve", "inv", "det", "slogdet"]
 
+# Complex-input matrix ops (#931/#937): matmul/inv/solve/det and the #937
+# complex eig/eigvals over `Array<Complex<T>, Ix2>`, thin-wrapping faer's
+# complex `Mat`. numpy.linalg accepts "a complex- or real-valued matrix"
+# (numpy/linalg/_linalg.py:1193 eigvals, :1372 eig).
+[[route]]
+crate_pattern = "ferray-linalg/src/complex.rs"
+upstream = ["/home/doll/numpy-ref/numpy/linalg/_linalg.py"]
+design = ".design/ferray-linalg.md"
+parity_ops = ["matmul", "inv", "solve", "det", "eig", "eigvals"]
+
 # Matrix/vector products: dot, vdot, inner, outer, matmul, kron, multi_dot,
 # vecdot, tensordot, einsum, and cross. `cross` follows numpy's legacy
 # top-level `numpy.cross` (`numpy/_core/numeric.py:cross`): stacked (...,3)

@@ -345,6 +345,91 @@ where
     Ok(mat.as_ref().determinant())
 }
 
+// Complex eigendecomposition (#937). faer's general `eigen()`/`eigenvalues()`
+// over a complex `Mat<Complex<T>>` return eigenvalues of faer's complexified
+// scalar type `<Complex<T> as ComplexField>::Real` wrapped in `Complex`, which
+// for a `Complex<T>` field is `Complex<T>` itself — but the generic
+// associated-type identity `<Complex<T> as ComplexField>::Real == T` is opaque
+// to the type checker, so these are emitted as concrete `f32`/`f64`
+// monomorphisations (the only two widths ferray marshals). numpy.linalg.eig /
+// eigvals accept "a complex- or real-valued matrix"
+// (numpy/linalg/_linalg.py:1372 / :1193) and return complex eigenpairs whose
+// order is not canonical (:1199 "not necessarily ordered" — callers sort both
+// sides to compare against numpy).
+macro_rules! impl_complex_eig {
+    ($eig_fn:ident, $eigvals_fn:ident, $T:ty) => {
+        /// Eigenvalues and right eigenvectors of a general complex square
+        #[doc = concat!("matrix over `Complex<", stringify!($T), ">`. See [`crate::eig`].")]
+        ///
+        /// # Errors
+        /// - [`FerrayError::ShapeMismatch`] if the matrix is not square.
+        /// - [`FerrayError::InvalidValue`] if the eigensolver fails to converge.
+        pub fn $eig_fn(
+            a: &Array<Complex<$T>, Ix2>,
+        ) -> FerrayResult<(Array<Complex<$T>, Ix1>, Array<Complex<$T>, Ix2>)> {
+            let shape = a.shape();
+            if shape[0] != shape[1] {
+                return Err(FerrayError::shape_mismatch(format!(
+                    "eig_complex: requires a square matrix, got {}x{}",
+                    shape[0], shape[1]
+                )));
+            }
+            let n = shape[0];
+            let mat = array2c_to_faer(a);
+            let decomp = mat.as_ref().eigen().map_err(|e| FerrayError::InvalidValue {
+                message: format!("complex eigendecomposition failed: {e:?}"),
+            })?;
+
+            let s = decomp.S();
+            let mut eigenvalues: Vec<Complex<$T>> = Vec::with_capacity(n);
+            for i in 0..n {
+                eigenvalues.push(s.column_vector()[i]);
+            }
+
+            let u = decomp.U();
+            let mut eigvecs: Vec<Complex<$T>> = Vec::with_capacity(n * n);
+            for i in 0..n {
+                for j in 0..n {
+                    eigvecs.push(u[(i, j)]);
+                }
+            }
+
+            let vals = Array::from_vec(Ix1::new([n]), eigenvalues)?;
+            let vecs = Array::from_vec(Ix2::new([n, n]), eigvecs)?;
+            Ok((vals, vecs))
+        }
+
+        /// Eigenvalues of a general complex square matrix over
+        #[doc = concat!("`Complex<", stringify!($T), ">` (no eigenvectors). See [`crate::eigvals`].")]
+        ///
+        /// # Errors
+        /// - [`FerrayError::ShapeMismatch`] if the matrix is not square.
+        /// - [`FerrayError::InvalidValue`] if the eigensolver fails.
+        pub fn $eigvals_fn(
+            a: &Array<Complex<$T>, Ix2>,
+        ) -> FerrayResult<Array<Complex<$T>, Ix1>> {
+            let shape = a.shape();
+            if shape[0] != shape[1] {
+                return Err(FerrayError::shape_mismatch(format!(
+                    "eigvals_complex: requires a square matrix, got {}x{}",
+                    shape[0], shape[1]
+                )));
+            }
+            let mat = array2c_to_faer(a);
+            let vals = mat
+                .as_ref()
+                .eigenvalues()
+                .map_err(|e| FerrayError::InvalidValue {
+                    message: format!("complex eigenvalue computation failed: {e:?}"),
+                })?;
+            Array::from_vec(Ix1::new([vals.len()]), vals)
+        }
+    };
+}
+
+impl_complex_eig!(eig_complex_f64, eigvals_complex_f64, f64);
+impl_complex_eig!(eig_complex_f32, eigvals_complex_f32, f32);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -357,6 +442,81 @@ mod tests {
 
     fn arr2(rows: usize, cols: usize, data: Vec<Complex<f64>>) -> Array<Complex<f64>, Ix2> {
         Array::<Complex<f64>, Ix2>::from_vec(Ix2::new([rows, cols]), data).unwrap()
+    }
+
+    #[test]
+    fn eigvals_complex_matches_trace_and_det() {
+        // M = [[1+1j, 2-1j], [3+0j, 4+2j]]. Eigenvalue invariants are exact:
+        // sum(λ) == trace(M) = (5+3j), prod(λ) == det(M) = (-4+9j). Checks the
+        // complex eigensolver without copying ferray's own output.
+        let m = arr2(
+            2,
+            2,
+            vec![c64(1.0, 1.0), c64(2.0, -1.0), c64(3.0, 0.0), c64(4.0, 2.0)],
+        );
+        let res = eigvals_complex_f64(&m);
+        assert!(res.is_ok(), "eigvals_complex_f64 failed: {res:?}");
+        let Ok(w) = res else { return };
+        let vals: Vec<Complex<f64>> = w.iter().copied().collect();
+        assert_eq!(vals.len(), 2);
+        let sum = vals[0] + vals[1];
+        let trace = c64(5.0, 3.0);
+        assert!(
+            (sum - trace).norm() < 1e-10,
+            "sum(λ)={sum:?} != trace={trace:?}"
+        );
+        let prod = vals[0] * vals[1];
+        let det = c64(-4.0, 9.0);
+        assert!(
+            (prod - det).norm() < 1e-9,
+            "prod(λ)={prod:?} != det={det:?}"
+        );
+        // numpy live oracle np.sort_complex(np.linalg.eigvals(M)) (numpy 2.4.4):
+        //   [-0.34072265+1.76401733j, 5.34072265+1.23598267j]
+        let mut sorted = vals.clone();
+        sorted.sort_by(|a, b| {
+            let r = a.re.total_cmp(&b.re);
+            if r == core::cmp::Ordering::Equal {
+                a.im.total_cmp(&b.im)
+            } else {
+                r
+            }
+        });
+        assert!(
+            (sorted[0] - c64(-0.34072265, 1.76401733)).norm() < 1e-6,
+            "λ0={:?}",
+            sorted[0]
+        );
+        assert!(
+            (sorted[1] - c64(5.34072265, 1.23598267)).norm() < 1e-6,
+            "λ1={:?}",
+            sorted[1]
+        );
+    }
+
+    #[test]
+    fn eig_complex_av_equals_lambda_v() {
+        // A v == λ v for every returned eigenpair (column j of V).
+        let m = arr2(
+            2,
+            2,
+            vec![c64(1.0, 1.0), c64(2.0, -1.0), c64(3.0, 0.0), c64(4.0, 2.0)],
+        );
+        let res = eig_complex_f64(&m);
+        assert!(res.is_ok(), "eig_complex_f64 failed: {res:?}");
+        let Ok((w, v)) = res else { return };
+        let vals: Vec<Complex<f64>> = w.iter().copied().collect();
+        let vd: Vec<Complex<f64>> = v.iter().copied().collect(); // row-major 2x2
+        let mdata = [c64(1.0, 1.0), c64(2.0, -1.0), c64(3.0, 0.0), c64(4.0, 2.0)];
+        for j in 0..2 {
+            // eigenvector j is column j: [vd[0*2+j], vd[1*2+j]].
+            let vj = [vd[j], vd[2 + j]];
+            for i in 0..2 {
+                let av = mdata[i * 2] * vj[0] + mdata[i * 2 + 1] * vj[1];
+                let lv = vals[j] * vj[i];
+                assert!((av - lv).norm() < 1e-9, "Av != λv at i={i}, j={j}");
+            }
+        }
     }
 
     #[test]

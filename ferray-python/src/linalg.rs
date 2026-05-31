@@ -604,6 +604,26 @@ pub fn eigvalsh<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'
 pub fn eigvals<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex-input eigenvalues (#937): numpy.linalg.eigvals accepts "a complex-
+    // or real-valued matrix" (numpy/linalg/_linalg.py:1193). Routing complex
+    // input through the real `match_dtype_float!` below coerced it to float64,
+    // DROPPING the imaginary part and returning eigenvalues of `M.real` (the
+    // R-CODE-4 corruption). Dispatch the faer complex eigensolver first, keeping
+    // the input width (c128 -> complex128, c64 -> complex64).
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return match dt.as_str() {
+            "complex128" | "c16" => {
+                let fa = complex_pyarray_to_ferray_2d::<f64>(&arr)?;
+                let w = fl::complex::eigvals_complex_f64(&fa).map_err(ferr_to_pyerr)?;
+                complex_1d_ferray_to_pyarray(py, w)
+            }
+            _ => {
+                let fa = complex_pyarray_to_ferray_2d::<f32>(&arr)?;
+                let w = fl::complex::eigvals_complex_f32(&fa).map_err(ferr_to_pyerr)?;
+                complex_1d_ferray_to_pyarray(py, w)
+            }
+        };
+    }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
     } else {
@@ -1578,6 +1598,33 @@ pub fn solve_complex<'py>(
 pub fn eig<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex-input eigendecomposition (#937): numpy.linalg.eig accepts "a
+    // complex- or real-valued matrix" (numpy/linalg/_linalg.py:1372) and returns
+    // complex eigenpairs. The real path below coerced complex to float64 and
+    // returned the eigenpairs of `M.real` (R-CODE-4 imaginary discard). Dispatch
+    // faer's complex eigensolver, keeping the input width. Eigenvalue order is
+    // not canonical (numpy/linalg/_linalg.py:1199), so set/sort-compare downstream.
+    if is_complex_linalg_dtype(dt.as_str()) {
+        let (w_py, v_py) = match dt.as_str() {
+            "complex128" | "c16" => {
+                let fa = complex_pyarray_to_ferray_2d::<f64>(&arr)?;
+                let (w, v) = fl::complex::eig_complex_f64(&fa).map_err(ferr_to_pyerr)?;
+                (
+                    complex_1d_ferray_to_pyarray(py, w)?,
+                    complex_2d_ferray_to_pyarray(py, v)?,
+                )
+            }
+            _ => {
+                let fa = complex_pyarray_to_ferray_2d::<f32>(&arr)?;
+                let (w, v) = fl::complex::eig_complex_f32(&fa).map_err(ferr_to_pyerr)?;
+                (
+                    complex_1d_ferray_to_pyarray(py, w)?,
+                    complex_2d_ferray_to_pyarray(py, v)?,
+                )
+            }
+        };
+        return Ok(PyTuple::new(py, [w_py, v_py])?.into_any());
+    }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
     } else {
