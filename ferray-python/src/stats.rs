@@ -1885,6 +1885,14 @@ macro_rules! bind_nan_reduction {
                 "complex64" | "c8" => return ($cplx)(py, &arr, axis, true),
                 _ => {}
             }
+            // float16 (#956): delegate to numpy (f32-compute, f16-narrow) so the
+            // nan-aware result stays float16. MUST branch BEFORE the float64
+            // coercion below — that widening was the active silent-widening
+            // divergence (`fr.nansum(f16) -> float64`; numpy preserves float16,
+            // R-DEV-3 / R-CODE-4). Reuses the #954 detect-and-delegate pattern.
+            if is_float16_dtype(dt.as_str()) {
+                return f16_reduce(py, &arr, stringify!($name), axis, None);
+            }
             let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
                 arr
             } else {
@@ -1927,6 +1935,13 @@ macro_rules! bind_nan_reduction {
             // Integer/bool: native-dtype reduction (no NaN possible), #950.
             if let Some(out) = ($int)(py, &arr, axis, dt.as_str())? {
                 return Ok(out);
+            }
+            // float16 (#956): delegate to numpy (f32-compute, f16-narrow) so the
+            // result stays float16. MUST branch BEFORE the float64 coercion below
+            // (the silent-widening divergence: `fr.nanmin(f16) -> float64`; numpy
+            // preserves float16). Reuses the #954 detect-and-delegate pattern.
+            if is_float16_dtype(dt.as_str()) {
+                return f16_reduce(py, &arr, stringify!($name), axis, None);
             }
             let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
                 arr
@@ -2396,6 +2411,13 @@ pub fn nanvar<'py>(
         }
         _ => {}
     }
+    // float16 (#956): delegate to numpy (f32-compute square/var, f16-narrow) so
+    // the result stays float16. MUST branch BEFORE the float64 coercion below
+    // (the silent-widening divergence: `fr.nanvar(f16) -> float64`; numpy
+    // preserves float16). `ddof` is forwarded to numpy.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "nanvar", axis, Some(ddof));
+    }
     let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
         arr
     } else {
@@ -2430,6 +2452,13 @@ pub fn nanstd<'py>(
             return complex_nan_var_std_dispatch::<f32>(py, &arr, axis, ddof, true);
         }
         _ => {}
+    }
+    // float16 (#956): delegate to numpy (sqrt of the f32-computed variance,
+    // f16-narrow) so the result stays float16. MUST branch BEFORE the float64
+    // coercion below (the silent-widening divergence: `fr.nanstd(f16) ->
+    // float64`; numpy preserves float16). `ddof` is forwarded to numpy.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "nanstd", axis, Some(ddof));
     }
     let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
         arr
@@ -2533,6 +2562,13 @@ pub fn nanmedian<'py>(
         "complex128" | "c16" => return complex_nanmedian_dispatch::<f64>(py, &arr, axis),
         "complex64" | "c8" => return complex_nanmedian_dispatch::<f32>(py, &arr, axis),
         _ => {}
+    }
+    // float16 (#956): delegate to numpy (f32-compute median over the non-NaN
+    // elements, f16-narrow) so the result stays float16. MUST branch BEFORE the
+    // float64 coercion below (the silent-widening divergence: `fr.nanmedian(f16)
+    // -> float64`; numpy preserves float16).
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "nanmedian", axis, None);
     }
     let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
         arr
@@ -3520,6 +3556,25 @@ fn quantile_dispatch<'py>(
     }
 
     let dt = dtype_name(&arr)?;
+    // float16 (#956): delegate the whole call to numpy on the ORIGINAL f16 array
+    // (f32-compute interpolation, f16-narrow) so a scalar-`q` result stays
+    // float16. MUST branch BEFORE the float64 coercion below (the silent-widening
+    // divergence: `fr.percentile(f16,50) -> float64`; numpy preserves float16 for
+    // scalar `q`, and itself returns float64 for an array `q` — delegating lets
+    // numpy own both). `q`/`axis` are forwarded.
+    if is_float16_dtype(dt.as_str()) {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        match axis {
+            Some(ax) => kwargs.set_item("axis", ax)?,
+            None => kwargs.set_item("axis", py.None())?,
+        }
+        let func = match kind {
+            QuantileKind::Percentile => "percentile",
+            QuantileKind::Quantile => "quantile",
+        };
+        return np.call_method(func, (&arr, q), Some(&kwargs));
+    }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
     } else {
@@ -3616,6 +3671,13 @@ pub fn median<'py>(
         "complex128" | "c16" => return complex_median_dispatch::<f64>(py, &arr, axis),
         "complex64" | "c8" => return complex_median_dispatch::<f32>(py, &arr, axis),
         _ => {}
+    }
+    // float16 (#956): delegate to numpy (f32-compute median, f16-narrow) so the
+    // result stays float16. MUST branch BEFORE the float64 coercion below (the
+    // silent-widening divergence: `fr.median(f16) -> float64`; numpy preserves
+    // float16, R-DEV-3 / R-CODE-4).
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "median", axis, None);
     }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
@@ -4073,6 +4135,22 @@ pub fn average<'py>(
             },
             Some(w) => complex_weighted_average(py, &arr, w, axis),
         };
+    }
+    // float16 (#956): delegate the whole call to numpy on the ORIGINAL f16 array
+    // (f32-compute weighted/plain mean, f16-narrow) so the result stays float16.
+    // MUST branch BEFORE the `coerce_dtype(arr,"float64")` below (the silent-
+    // widening divergence: `fr.average(f16) -> float64`; numpy preserves
+    // float16). `axis`/`weights` are forwarded.
+    if is_float16_dtype(dt.as_str()) {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        if let Some(w) = weights {
+            kwargs.set_item("weights", w)?;
+        }
+        return np.call_method("average", (&arr,), Some(&kwargs));
     }
     let arr = coerce_dtype(py, &arr, "float64")?;
     let view: PyReadonlyArrayDyn<f64> = arr.extract()?;
