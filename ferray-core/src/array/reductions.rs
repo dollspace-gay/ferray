@@ -309,6 +309,16 @@ fn arg_reduce<T: PartialOrd + Copy>(iter: impl Iterator<Item = T>, take_min: boo
 /// generically via `x.partial_cmp(&x).is_none()`, which is true iff `x` is
 /// NaN (or any other value that violates `PartialOrd` reflexivity, e.g.
 /// `Complex` types — but those don't implement `PartialOrd` so this is moot).
+///
+/// On an equal compare (`Ordering::Equal`) the NEW element `x` is kept, not the
+/// accumulator. This mirrors `numpy`'s `maximum.reduce`/`minimum.reduce`
+/// (`numpy/_core/_methods.py:38-44`, `umr_maximum`/`umr_minimum`), whose
+/// underlying scalar `maximum(a, b)`/`minimum(a, b)` loops return the *later*
+/// operand on ties — observable only for signed zeros (`+0.0 == -0.0`), where
+/// numpy keeps the LAST seen zero's sign bit. For any non-signed-zero equal
+/// pair the values are identical, so this changes nothing. This is the VALUE
+/// min/max reduce; `argmin`/`argmax` use first-occurrence on ties and live on a
+/// separate code path (they do not call `reduce_step`).
 #[inline]
 fn reduce_step<T: PartialOrd + Copy>(acc: T, x: T, take_min: bool) -> T {
     let acc_is_nan = acc.partial_cmp(&acc).is_none();
@@ -322,6 +332,8 @@ fn reduce_step<T: PartialOrd + Copy>(acc: T, x: T, take_min: bool) -> T {
     match (take_min, x.partial_cmp(&acc)) {
         (true, Some(std::cmp::Ordering::Less)) => x,
         (false, Some(std::cmp::Ordering::Greater)) => x,
+        // Tie: keep the LAST operand (numpy maximum/minimum.reduce semantics).
+        (_, Some(std::cmp::Ordering::Equal)) => x,
         _ => acc,
     }
 }
