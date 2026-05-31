@@ -454,3 +454,177 @@ def test_trapezoid_f32y_f64x_promotes_to_float64():
     got = fr.trapezoid(y, x=x)
     assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
     np.testing.assert_array_equal(got, expected)
+
+
+# ===========================================================================
+# GROUP F — acto-critic FULL re-audit of ufunc.rs elementwise surface
+# (2026-05-31). Each pin computes the numpy 2.4.4 oracle LIVE (R-CHAR-3) and
+# asserts ferray matches value+dtype (or matching exception type). All RED
+# against current ferray.
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# F1: clip does NOT preserve the input array's dtype against scalar bounds.
+# numpy `clip` (fromnumeric.py:2208) keeps the array dtype when the bounds are
+# Python scalars (NEP-50: array wins over python scalar) — int8 -> int8,
+# uint8 -> uint8, float32 -> float32. ferray routes clip through
+# maximum/minimum whose `binary_result_dtype(result_type(a, scalar))` promotes
+# the python-int bound's default int64 / python-float's float64, so the result
+# is ALWAYS upcast to int64 / float64. Verified live:
+#   np.clip(int8 [1,5,9], 2, 7).dtype == int8;  ferray -> int64.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "dt",
+    [np.int8, np.int16, np.int32, np.uint8, np.float32],
+)
+def test_clip_preserves_input_dtype_with_scalar_bounds(dt):
+    a = np.array([1, 5, 9], dtype=dt)
+    lo, hi = (2.0, 7.0) if dt == np.float32 else (2, 7)
+    expected = np.clip(a, lo, hi)
+    got = fr.clip(a, lo, hi)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+    assert np.asarray(got).tolist() == expected.tolist()
+
+
+# F1b: one-sided clip and array-valued bounds also upcast int32 -> int64.
+def test_clip_one_sided_preserves_int_dtype():
+    a = np.array([1, 5, 9], dtype=np.int32)
+    expected = np.clip(a, None, 7)  # int32
+    got = fr.clip(a, None, 7)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+
+
+def test_clip_int32_array_bound_preserves_int32():
+    a = np.array([1, 5, 9], dtype=np.int32)
+    lo = np.array([2, 2, 2], dtype=np.int32)
+    expected = np.clip(a, lo, 7)  # int32
+    got = fr.clip(a, lo, 7)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+
+
+# F1c: clip of a 0-d int32 scalar returns an int32 numpy scalar in numpy;
+# ferray upcasts to int64.
+def test_clip_scalar_preserves_int32():
+    expected = np.clip(np.int32(5), 2, 7)
+    got = fr.clip(np.int32(5), 2, 7)
+    assert np.asarray(got).dtype == np.asarray(expected).dtype, (
+        np.asarray(got).dtype,
+        np.asarray(expected).dtype,
+    )
+
+
+# ---------------------------------------------------------------------------
+# F2: power with a NEGATIVE INTEGER exponent must raise ValueError, not return 0.
+# numpy raises "Integers to negative integer powers are not allowed."
+# (numpy/_core/src/umath/loops.c.src:519 / scalarmath.c.src:1553). ferray's
+# integer power kernel silently returns 0 for the negative exponent, which is a
+# wrong VALUE (not just a missing exception): np.power([2,3], [-1,-2]) raises;
+# ferray returns int64 [0,0].
+# ---------------------------------------------------------------------------
+def test_power_negative_int_exponent_raises_valueerror():
+    base = np.array([2, 3], dtype=np.int64)
+    exp = np.array([-1, -2], dtype=np.int64)
+    with pytest.raises(ValueError):
+        np.power(base, exp)  # oracle: confirm numpy raises
+    with pytest.raises(ValueError):
+        fr.power(base, exp)
+
+
+def test_power_negative_int_exponent_scalar_raises():
+    with pytest.raises(ValueError):
+        np.power(2, -1)  # oracle
+    with pytest.raises(ValueError):
+        fr.power(2, -1)
+
+
+# ---------------------------------------------------------------------------
+# F3: fmod of two INTEGER arrays keeps the integer dtype.
+# numpy registers `TD(ints, ...)` FIRST for fmod (generate_umath.py:446), so an
+# integer pair stays integer (no float promotion). ferray routes fmod through
+# the float-promote body and upcasts to float64. Verified live:
+#   np.fmod(int64 [5,-5], int64 [3,3]) -> int64 [2,-2]; ferray -> float64.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("dt", [np.int32, np.int64])
+def test_fmod_int_keeps_int_dtype(dt):
+    a = np.array([5, -5], dtype=dt)
+    b = np.array([3, 3], dtype=dt)
+    expected = np.fmod(a, b)
+    got = fr.fmod(a, b)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+    assert np.asarray(got).tolist() == expected.tolist()
+
+
+# ---------------------------------------------------------------------------
+# F4: bitwise ops and shifts must apply NEP-50 result_type promotion across
+# MIXED-WIDTH integer operands — not silently keep operand-1's dtype.
+# numpy: bitwise_and/or/xor register `TD(ints)` (generate_umath.py:722/733/744)
+# and left_shift/right_shift `TD(ints)` (:761/:769); the type resolver promotes
+# both operands to result_type(x1, x2). ferray coerces operand-2 to operand-1's
+# dtype, so the result keeps the NARROWER operand-1 dtype. Verified live:
+#   np.bitwise_and(int8 [5], int64 [3]).dtype == int64; ferray -> int8.
+#   np.right_shift(int32 [16], int64 [2]).dtype == int64; ferray -> int32.
+# ---------------------------------------------------------------------------
+def test_bitwise_and_mixed_width_promotes():
+    a = np.array([5], dtype=np.int8)
+    b = np.array([3], dtype=np.int64)
+    expected = np.bitwise_and(a, b)
+    got = fr.bitwise_and(a, b)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+
+
+def test_bitwise_or_mixed_width_promotes():
+    a = np.array([1], dtype=np.uint8)
+    b = np.array([2], dtype=np.int32)
+    expected = np.bitwise_or(a, b)
+    got = fr.bitwise_or(a, b)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+
+
+def test_bitwise_xor_mixed_width_promotes():
+    a = np.array([5], dtype=np.int16)
+    b = np.array([3], dtype=np.int64)
+    expected = np.bitwise_xor(a, b)
+    got = fr.bitwise_xor(a, b)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+
+
+def test_left_shift_mixed_width_promotes():
+    a = np.array([1], dtype=np.int8)
+    b = np.array([1], dtype=np.int32)
+    expected = np.left_shift(a, b)
+    got = fr.left_shift(a, b)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+
+
+def test_right_shift_mixed_width_promotes():
+    a = np.array([16], dtype=np.int32)
+    b = np.array([2], dtype=np.int64)
+    expected = np.right_shift(a, b)
+    got = fr.right_shift(a, b)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+
+
+# ---------------------------------------------------------------------------
+# F5: gcd/lcm must accept UNSIGNED integer dtypes.
+# numpy registers `TD(ints)` for gcd/lcm (generate_umath.py:1156/:1163), which
+# covers unsigned ints. ferray's binding only dispatches the SIGNED widths
+# (its gcd_int/lcm_int are num_traits::Signed-bounded) and raises TypeError for
+# uint. Verified live: np.gcd(uint32 [12], uint32 [8]) -> uint32 [4].
+# ---------------------------------------------------------------------------
+def test_gcd_unsigned_supported():
+    a = np.array([12], dtype=np.uint32)
+    b = np.array([8], dtype=np.uint32)
+    expected = np.gcd(a, b)
+    got = fr.gcd(a, b)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+    assert np.asarray(got).tolist() == expected.tolist()
+
+
+def test_lcm_unsigned_supported():
+    a = np.array([4], dtype=np.uint8)
+    b = np.array([6], dtype=np.uint8)
+    expected = np.lcm(a, b)
+    got = fr.lcm(a, b)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+    assert np.asarray(got).tolist() == expected.tolist()
