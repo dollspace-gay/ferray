@@ -45,6 +45,7 @@
 //! | matrix_norm / vector_norm (NumPy 2.0 array-API) | SHIPPED | Impl: `matrix_norm` (default `ord='fro'`, routes to `fl::norm` matrix path) + `vector_norm` (axis=None flattens, axis routes to `fl::norm_axis`) `#[pyfunction]`s in `linalg.rs`. Consumer: registered in `lib.rs` `register_linalg_module`. |
 //! | svdvals (NumPy 2.0 array-API) | SHIPPED | Impl: `svdvals` `#[pyfunction]` in `linalg.rs` (routes to `fl::svdvals`). Consumer: registered in `lib.rs` `register_linalg_module`. |
 //! | linalg.cross (NumPy 2.0 array-API) | SHIPPED | Impl: `cross` `#[pyfunction]` in `linalg.rs` (3-component, stacked `(...,3)` along `axis`, routes to `fl::cross` after moving the component axis last; #836). Consumer: registered in `lib.rs` `register_linalg_module`. |
+//! | RC11 (#971 integer/bool products compute) | SHIPPED | `kron`/`tensordot`/`vdot`/`inner`/`dot`/`matmul`/`trace`/`matrix_power` composed only over the `LinalgFloat`-sealed `match_dtype_float!`, so integer/bool input raised `TypeError: unsupported dtype for floating-point op`; numpy COMPUTES (preserving the input integer dtype for the products, and upcasting narrow ints via the sum accumulator for `trace`: int8->int64, uint8->uint64, bool->int64). Impl: an `is_int_or_bool_dtype` gate (`dtype.kind` in `i`/`u`/`b`) branches AHEAD of each op's real `match_dtype_float!` path and DELEGATES the int/bool case to `numpy.<fn>` / `numpy.linalg.matrix_power` on the original operands (via `numpy_delegate2`), so numpy owns the contraction + exact integer/bool dtype (incl bool logical-AND/OR products). float/complex paths unchanged. Consumer: the same `#[pyfunction]`s registered top-level in `lib.rs` `_ferray` (+ `trace`/`kron`/`matrix_power` under `register_linalg_module`). Verified by `tests/test_expansion_linalg_int.py` (int8/16/32/64, uint8/16/32/64, bool) + the #971 Class-E pins in `tests/test_divergence_dtype_gap_sweep.py` against live numpy 2.4.5. |
 
 use ferray_core::array::aliases::{Array1, Array2, ArrayD};
 use ferray_core::dimension::IxDyn;
@@ -81,6 +82,36 @@ fn is_non_real_dtype(arr: &Bound<'_, PyAny>) -> PyResult<bool> {
     }
     let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
     Ok(kind == "O" || kind == "V")
+}
+
+/// True when `arr`'s dtype is an integer (`'i'`/`'u'`) or boolean (`'b'`).
+/// These are the dtypes the `LinalgFloat`-sealed `match_dtype_float!` real
+/// path rejects but numpy COMPUTES on (preserving the integer/bool dtype for
+/// the products; `trace` upcasts via its sum accumulator). The int/bool case
+/// is delegated to numpy so the exact dtype contract is owned by numpy. (#971)
+fn is_int_or_bool_dtype(arr: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+    Ok(kind == "i" || kind == "u" || kind == "b")
+}
+
+/// Delegate a two-operand product to the top-level `numpy.<fn>` on the
+/// ORIGINAL operands, returning numpy's result unchanged. Used for the
+/// integer/bool arm of `kron`/`dot`/`inner`/`vdot`/`matmul`/`tensordot`,
+/// where numpy owns both the contraction and the exact integer/bool output
+/// dtype (no float promotion). `extra` carries any trailing positional
+/// argument numpy's signature needs (e.g. `tensordot`'s `axes`). (#971)
+fn numpy_delegate2<'py>(
+    py: Python<'py>,
+    func: &str,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    extra: Option<Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    match extra {
+        Some(e) => np.call_method1(func, (a, b, e)),
+        None => np.call_method1(func, (a, b)),
+    }
 }
 
 fn parse_norm_order(ord: &Bound<'_, PyAny>) -> PyResult<fl::NormOrder> {
@@ -510,6 +541,13 @@ pub fn trace<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py,
             _ => complex_trace_dispatch::<f64>(py, &arr),
         };
     }
+    // Integer/bool input: numpy computes the diagonal sum, UPCASTING narrow
+    // integers to the platform-wide accumulator (int8->int64, uint8->uint64,
+    // bool->int64) like `add.reduce`. `fl::trace` is `LinalgFloat`-sealed, so
+    // delegate to `numpy.trace` which owns that exact dtype contract. (#971)
+    if is_int_or_bool_dtype(&arr)? {
+        return py.import("numpy")?.call_method1("trace", (a,));
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -813,6 +851,16 @@ pub fn matrix_power<'py>(
             _ => complex_matrix_power_dispatch::<f64>(py, &arr, n),
         };
     }
+    // Integer/bool input: numpy's `matrix_power` is repeated integer matmul and
+    // keeps the input integer dtype (`np.linalg.matrix_power(int_matrix, 2)` is
+    // an int matrix). `fl::matrix_power` is `LinalgFloat`-sealed, so delegate to
+    // `numpy.linalg.matrix_power`. (#971)
+    if is_int_or_bool_dtype(&arr)? {
+        return py
+            .import("numpy")?
+            .getattr("linalg")?
+            .call_method1("matrix_power", (a, n));
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -843,6 +891,12 @@ pub fn kron<'py>(
             _ => complex_kron_dispatch::<f64>(py, &arr_a, &arr_b),
         };
     }
+    // Integer/bool input: numpy's `kron` keeps the input integer dtype exactly
+    // (`np.kron([1,2,3],[1,2,3])` is int64; bool uses logical-AND products).
+    // `fl::kron` is `LinalgFloat`-sealed, so delegate to `numpy.kron`. (#971)
+    if is_int_or_bool_dtype(&arr_a)? {
+        return numpy_delegate2(py, "kron", a, b, None);
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
         let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
@@ -868,6 +922,12 @@ pub fn dot<'py>(
     if is_complex_linalg_dtype(dt.as_str()) {
         return complex_dot_dispatch(py, &arr_a, b, dt.as_str());
     }
+    // Integer/bool input: `np.dot([1,2,3],[1,2,3])` is `14` int64 — numpy keeps
+    // the input integer dtype (no float64 accumulator upcast). `fl::dot` is
+    // `LinalgFloat`-sealed, so delegate to `numpy.dot`. (#971)
+    if is_int_or_bool_dtype(&arr_a)? {
+        return numpy_delegate2(py, "dot", a, b, None);
+    }
     let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
     Ok(match_dtype_float!(dt.as_str(), T => {
         let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
@@ -891,6 +951,12 @@ pub fn inner<'py>(
     let dt = dtype_name(&arr_a)?;
     if is_complex_linalg_dtype(dt.as_str()) {
         return complex_dot_dispatch(py, &arr_a, b, dt.as_str());
+    }
+    // Integer/bool input: numpy's `inner` keeps the input integer dtype
+    // (`np.inner([1,2,3],[1,2,3])` is `14` int64). `fl::inner` is
+    // `LinalgFloat`-sealed, so delegate to `numpy.inner`. (#971)
+    if is_int_or_bool_dtype(&arr_a)? {
+        return numpy_delegate2(py, "inner", a, b, None);
     }
     let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
     Ok(match_dtype_float!(dt.as_str(), T => {
@@ -1054,6 +1120,13 @@ pub fn matmul<'py>(
             complex_2d_ferray_to_pyarray(py, r)
         };
     }
+    // Integer/bool input: numpy's `matmul` keeps the input integer dtype
+    // (`np.matmul(int,int)` is an int matrix; bool uses logical-AND/OR).
+    // `fl::matmul`/`fl::dot` are `LinalgFloat`-sealed, so delegate to
+    // `numpy.matmul` which owns the contraction and exact dtype. (#971)
+    if is_int_or_bool_dtype(&arr_a)? {
+        return numpy_delegate2(py, "matmul", a, b, None);
+    }
     let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
     let a_ndim: usize = arr_a.getattr("ndim")?.extract()?;
     let b_ndim: usize = arr_b.getattr("ndim")?.extract()?;
@@ -1097,6 +1170,13 @@ pub fn vdot<'py>(
         } else {
             complex_sum_product::<f64>(py, &arr_a, &arr_b, true)
         };
+    }
+    // Integer/bool input: numpy's `vdot` keeps the input integer dtype
+    // (`np.vdot([1,2,3],[1,2,3])` is `14` int64; conjugation is a no-op for
+    // reals). `fl::vdot` is `LinalgFloat`-sealed, so delegate to
+    // `numpy.vdot`. (#971)
+    if is_int_or_bool_dtype(&arr_a)? {
+        return numpy_delegate2(py, "vdot", a, b, None);
     }
     let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
     Ok(match_dtype_float!(dt.as_str(), T => {
@@ -2686,6 +2766,14 @@ pub fn tensordot<'py>(
             "complex64" | "c8" => complex_tensordot_dispatch::<f32>(py, &arr_a, &arr_b, axes_u),
             _ => complex_tensordot_dispatch::<f64>(py, &arr_a, &arr_b, axes_u),
         };
+    }
+    // Integer/bool input: numpy's `tensordot` keeps the input integer dtype
+    // (`np.tensordot(int_matrix, int_matrix)` is int64). `fl::tensordot` is
+    // `LinalgFloat`-sealed, so delegate to `numpy.tensordot` with the scalar
+    // `axes` argument. (#971)
+    if is_int_or_bool_dtype(&arr_a)? {
+        let axes_arg = axes.into_pyobject(py)?.into_any();
+        return numpy_delegate2(py, "tensordot", a, b, Some(axes_arg));
     }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
