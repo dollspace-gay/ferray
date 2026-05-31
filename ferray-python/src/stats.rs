@@ -2876,15 +2876,29 @@ pub fn nanargmax<'py>(
 // Cumulative reductions (cumsum, cumprod, diff)
 // ---------------------------------------------------------------------------
 
-/// `numpy.cumsum(a, axis=None)`.
+/// `numpy.cumsum(a, axis=None, dtype=None)`.
+///
+/// When `dtype=` is given, numpy accumulates and returns in that dtype; the
+/// native kernel has no dtype-cast accumulator, so delegate to `numpy.cumsum`
+/// (the prior binding rejected `dtype=` with a TypeError).
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, dtype = None))]
 pub fn cumsum<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if let Some(dt) = dtype {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        kwargs.set_item("dtype", dt)?;
+        return np.call_method("cumsum", (&arr,), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     // datetime64/timedelta64 (REQ-4, #944): `cumsum(timedelta)->timedelta`
     // (NaT propagates forward); `cumsum(datetime)` RAISES numpy's
@@ -2913,15 +2927,28 @@ pub fn cumsum<'py>(
     }))
 }
 
-/// `numpy.cumprod(a, axis=None)`.
+/// `numpy.cumprod(a, axis=None, dtype=None)`.
+///
+/// When `dtype=` is given, numpy accumulates and returns in that dtype; the
+/// native kernel has no dtype-cast accumulator, so delegate to `numpy.cumprod`.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, dtype = None))]
 pub fn cumprod<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if let Some(dt) = dtype {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        kwargs.set_item("dtype", dt)?;
+        return np.call_method("cumprod", (&arr,), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     // float16 (REQ-5, #955): cumprod preserves the dtype (`np.cumprod(f16).dtype
     // == float16`, live, f32-compute + f16-narrow); delegate to numpy.
@@ -4798,23 +4825,29 @@ pub fn sort_complex<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bou
 ///   z-component (the legacy form numpy 2.4.5 still allows with a
 ///   `DeprecationWarning`).
 ///
-/// Integer inputs are promoted to `float64` via `promote_linalg_input`
-/// (the library cross is float-typed); numpy's documented contract is the
-/// numerical cross-product value, which is preserved.
+/// numpy preserves the promoted input dtype (int->int64, f16->f16, mixed floats
+/// to the wider, complex stays complex). The float-typed library kernel runs
+/// only when both operands already share one float width; every other dtype
+/// combination delegates to `numpy.cross`.
 #[pyfunction]
 pub fn cross<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     b: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    // complex (#972): numpy's `cross` computes a genuinely-complex cross product
-    // (`numpy/_core/numeric.py:cross` operates over `asarray`), but the
-    // `match_dtype_float!` path below is sealed to f32/f64 and would either reject
-    // the complex array or drop the imaginary part (R-CODE-4). Delegate the complex
-    // case to numpy on the ORIGINAL operands, which owns the complex result.
-    if is_complex_dtype(dtype_name(&as_ndarray(py, a)?)?.as_str())
-        || is_complex_dtype(dtype_name(&as_ndarray(py, b)?)?.as_str())
-    {
+    // numpy preserves the promoted INPUT dtype: `cross` of two int vectors is
+    // int64, float16 stays float16, and mixed float widths promote to the wider
+    // (f32 x f64 -> f64). The native `match_dtype_float!` path coerces every
+    // input to f64 (via `promote_linalg_input`) or to A's width, dropping those
+    // dtypes (R-CODE-4). Run native ONLY when both operands already share one
+    // float width (f32/f32 or f64/f64); delegate everything else to numpy.cross.
+    let a_dt = dtype_name(&as_ndarray(py, a)?)?;
+    let b_dt = dtype_name(&as_ndarray(py, b)?)?;
+    let is_f32 = |d: &str| matches!(d, "float32" | "f32");
+    let is_f64 = |d: &str| matches!(d, "float64" | "f64");
+    let native_ok = (is_f32(a_dt.as_str()) && is_f32(b_dt.as_str()))
+        || (is_f64(a_dt.as_str()) && is_f64(b_dt.as_str()));
+    if !native_ok {
         let np = py.import("numpy")?;
         return np.call_method1("cross", (a, b));
     }

@@ -222,3 +222,63 @@ def test_tensordot_axes_2():
     np.testing.assert_allclose(
         ferray.linalg.tensordot(a, b, axes=2), np.tensordot(a, b, axes=2)
     )
+
+
+# ---------------------------------------------------------------------------
+# eig/eigvals real-cast + matrix_rank scalar + cross dtype (#981)
+# ---------------------------------------------------------------------------
+# numpy casts a real-input eigen result back to a REAL array when the entire
+# spectrum is real (only a genuinely complex conjugate pair stays complex).
+# matrix_rank returns a numpy intp scalar (not a Python int). cross preserves
+# the promoted input dtype (int->int64). The prior bindings returned complex
+# eigen results unconditionally, a Python int rank, and float64 cross of ints.
+
+
+def test_eigvals_real_matrix_real_dtype():
+    w = ferray.linalg.eigvals([[4.0, 2], [1, 3]])
+    assert np.asarray(w).dtype == np.float64
+    np.testing.assert_allclose(np.sort(w), np.sort(np.linalg.eigvals([[4.0, 2], [1, 3]])))
+
+
+def test_eigvals_complex_spectrum_stays_complex():
+    w = ferray.linalg.eigvals([[0.0, -1], [1, 0]])
+    assert np.asarray(w).dtype == np.complex128
+    np.testing.assert_allclose(np.sort_complex(w), np.sort_complex(np.linalg.eigvals([[0.0, -1], [1, 0]])))
+
+
+def test_eig_real_matrix_real_pair():
+    w, v = ferray.linalg.eig([[4.0, 2], [1, 3]])
+    assert np.asarray(w).dtype == np.float64
+    assert np.asarray(v).dtype == np.float64
+
+
+def test_eig_complex_spectrum_complex_pair():
+    w, v = ferray.linalg.eig([[0.0, -1], [1, 0]])
+    assert np.asarray(w).dtype == np.complex128
+    assert np.asarray(v).dtype == np.complex128
+
+
+def test_matrix_rank_returns_numpy_scalar():
+    r = ferray.linalg.matrix_rank([[4.0, 2], [1, 3]])
+    assert isinstance(r, np.integer)
+    assert int(r) == int(np.linalg.matrix_rank([[4.0, 2], [1, 3]]))
+
+
+def test_cross_preserves_int_dtype():
+    r = ferray.cross([1, 0, 0], [0, 1, 0])
+    n = np.cross([1, 0, 0], [0, 1, 0])
+    assert np.asarray(r).dtype == n.dtype == np.int64
+    np.testing.assert_array_equal(r, n)
+
+
+def test_cross_mixed_float_promotes():
+    r = ferray.cross(np.array([1, 0, 0], np.float32), [0.0, 1, 0])
+    n = np.cross(np.array([1, 0, 0], np.float32), [0.0, 1, 0])
+    assert np.asarray(r).dtype == n.dtype == np.float64
+
+
+def test_linalg_cross_preserves_int_dtype():
+    r = ferray.linalg.cross([1, 0, 0], [0, 1, 0])
+    n = np.linalg.cross([1, 0, 0], [0, 1, 0])
+    assert np.asarray(r).dtype == n.dtype == np.int64
+    np.testing.assert_array_equal(r, n)

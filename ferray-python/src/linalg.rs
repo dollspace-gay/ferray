@@ -378,6 +378,23 @@ pub fn cross<'py>(
     b: &Bound<'py, PyAny>,
     axis: isize,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // numpy preserves the promoted input dtype (int->int64, f16->f16, mixed
+    // floats to the wider, complex stays complex); the float-typed library
+    // kernel runs only when both operands already share one float width.
+    // Everything else delegates to numpy.linalg.cross for exact dtype parity.
+    let a_dt = dtype_name(&as_ndarray(py, a)?)?;
+    let b_dt = dtype_name(&as_ndarray(py, b)?)?;
+    let is_f32 = |d: &str| matches!(d, "float32" | "f32");
+    let is_f64 = |d: &str| matches!(d, "float64" | "f64");
+    let native_ok = (is_f32(a_dt.as_str()) && is_f32(b_dt.as_str()))
+        || (is_f64(a_dt.as_str()) && is_f64(b_dt.as_str()));
+    if !native_ok {
+        let np = py.import("numpy")?;
+        let linalg = np.getattr("linalg")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("axis", axis)?;
+        return linalg.call_method("cross", (a, b), Some(&kwargs));
+    }
     let arr_a = promote_linalg_input(py, a)?;
     let dt = dtype_name(&arr_a)?;
     let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
@@ -539,7 +556,7 @@ pub fn matrix_rank<'py>(
             "complex64" | "c8" => complex_matrix_rank::<f32>(&arr, tol)?,
             _ => complex_matrix_rank::<f64>(&arr, tol)?,
         };
-        return Ok((rank as i64).into_pyobject(py)?.into_any());
+        return matrix_rank_scalar(py, rank as i64);
     }
     let rank: usize = match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
@@ -547,7 +564,16 @@ pub fn matrix_rank<'py>(
         let t: Option<T> = tol.map(|v| v as T);
         fl::matrix_rank(&fa, t).map_err(ferr_to_pyerr)?
     });
-    Ok((rank as i64).into_pyobject(py)?.into_any())
+    matrix_rank_scalar(py, rank as i64)
+}
+
+/// numpy.linalg.matrix_rank of a single matrix returns a numpy `intp` scalar
+/// (`np.int64` on a 64-bit platform), not a Python `int` (verified live:
+/// `type(np.linalg.matrix_rank(M)) is np.int64`). Wrap the count in `numpy.intp`
+/// so downstream `dtype`/`type` checks match.
+fn matrix_rank_scalar(py: Python<'_>, rank: i64) -> PyResult<Bound<'_, PyAny>> {
+    let np = py.import("numpy")?;
+    np.call_method1("intp", (rank,))
 }
 
 /// `numpy.trace(a)` — sum of the main diagonal.
@@ -766,12 +792,42 @@ pub fn eigvals<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'p
         "float64".to_string()
     };
     let arr = crate::conv::coerce_dtype(py, &arr, &real_dt)?;
-    Ok(match_dtype_float!(real_dt.as_str(), T => {
+    let result = match_dtype_float!(real_dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let w = fl::eigvals(&fa).map_err(|e| linalg_err_to_pyerr(py, e))?;
         complex_1d_ferray_to_pyarray(py, w)?
-    }))
+    });
+    // numpy casts a real-input eigenvalue array back to REAL when no genuinely
+    // complex (conjugate-pair) eigenvalue is present; only a real matrix with a
+    // complex spectrum stays complex (verified live: `np.linalg.eigvals([[4,2],
+    // [1,3]]).dtype == float64`, `[[0,-1],[1,0]] -> complex128`).
+    real_if_all_imag_zero(py, result)
+}
+
+/// numpy casts a real-input eigen result back to a REAL array when every
+/// imaginary part is exactly zero (`numpy/linalg/_linalg.py` `_realType`): a real
+/// matrix yields real eigenvalues/-vectors unless a genuinely complex
+/// conjugate pair appears. faer returns exactly-`0.0` imaginary parts for real
+/// eigenvalues, so the exact `imag == 0` test matches numpy's dtype choice.
+fn real_if_all_imag_zero<'py>(
+    py: Python<'py>,
+    arr: Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if all_imag_zero(py, &arr)? {
+        let np = py.import("numpy")?;
+        np.call_method1("ascontiguousarray", (arr.getattr("real")?,))
+    } else {
+        Ok(arr)
+    }
+}
+
+/// `true` if every imaginary part of `arr` is exactly zero.
+fn all_imag_zero(py: Python<'_>, arr: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let np = py.import("numpy")?;
+    let imag = arr.getattr("imag")?;
+    let cmp = np.call_method1("equal", (&imag, 0.0))?;
+    np.call_method1("all", (cmp,))?.extract()
 }
 
 // ---------------------------------------------------------------------------
@@ -2440,7 +2496,18 @@ pub fn eig<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, P
         let (w, v) = fl::eig(&fa).map_err(ferr_to_pyerr)?;
         let w_py = complex_1d_ferray_to_pyarray(py, w)?;
         let v_py = complex_2d_ferray_to_pyarray(py, v)?;
-        PyTuple::new(py, [w_py, v_py])?.into_any()
+        // numpy returns a real (w, v) pair for a real matrix whose entire
+        // spectrum is real; only a genuinely complex eigenvalue keeps the pair
+        // complex (numpy/linalg/_linalg.py `_realType`). Gate BOTH on the
+        // eigenvalues' imaginary parts so eigenvectors track the eigenvalues.
+        if all_imag_zero(py, &w_py)? {
+            let np = py.import("numpy")?;
+            let w_r = np.call_method1("ascontiguousarray", (w_py.getattr("real")?,))?;
+            let v_r = np.call_method1("ascontiguousarray", (v_py.getattr("real")?,))?;
+            PyTuple::new(py, [w_r, v_r])?.into_any()
+        } else {
+            PyTuple::new(py, [w_py, v_py])?.into_any()
+        }
     }))
 }
 

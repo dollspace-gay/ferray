@@ -354,3 +354,22 @@ def test_histogram_string_bins():
     np.testing.assert_array_equal(
         ferray.histogram(data, bins="auto")[0], np.histogram(data, bins="auto")[0]
     )
+
+
+# ---------------------------------------------------------------------------
+# cumsum/cumprod dtype= kwarg (#981)
+# ---------------------------------------------------------------------------
+
+
+def test_cumsum_dtype_kwarg():
+    r = ferray.cumsum([1, 2, 3], dtype="float64")
+    n = np.cumsum([1, 2, 3], dtype="float64")
+    assert np.asarray(r).dtype == n.dtype == np.float64
+    np.testing.assert_allclose(r, n)
+
+
+def test_cumprod_dtype_kwarg():
+    r = ferray.cumprod([1, 2, 3], dtype="float64")
+    n = np.cumprod([1, 2, 3], dtype="float64")
+    assert np.asarray(r).dtype == n.dtype == np.float64
+    np.testing.assert_allclose(r, n)
