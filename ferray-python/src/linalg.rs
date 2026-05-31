@@ -576,10 +576,35 @@ fn matrix_rank_scalar(py: Python<'_>, rank: i64) -> PyResult<Bound<'_, PyAny>> {
     np.call_method1("intp", (rank,))
 }
 
-/// `numpy.trace(a)` — sum of the main diagonal.
+/// `numpy.trace(a, offset=0, axis1=0, axis2=1, dtype=None)` — sum along
+/// diagonals. The native kernel computes the MAIN diagonal of a 2-D array; a
+/// non-default `offset`/`axis1`/`axis2`, an explicit `dtype`, or an N-D input
+/// delegates to `numpy.trace` (which is `diagonal(offset, axis1, axis2).sum(-1)`
+/// over arbitrary axes). The prior signature accepted only `a`, raising
+/// TypeError on `offset=`/`axis1=`/`axis2=`/`dtype=`.
 #[pyfunction]
-pub fn trace<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+#[pyo3(signature = (a, offset = 0, axis1 = 0, axis2 = 1, dtype = None))]
+pub fn trace<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    offset: isize,
+    axis1: isize,
+    axis2: isize,
+    dtype: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    let ndim: usize = arr.getattr("ndim")?.extract()?;
+    if offset != 0 || axis1 != 0 || axis2 != 1 || dtype.is_some() || ndim != 2 {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("offset", offset)?;
+        kwargs.set_item("axis1", axis1)?;
+        kwargs.set_item("axis2", axis2)?;
+        if let Some(d) = dtype {
+            kwargs.set_item("dtype", d)?;
+        }
+        return np.call_method("trace", (&arr,), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     // Complex trace = complex sum of the main diagonal (numpy computes
     // `(5+3j)` for the 2x2 fixture, verified live). `fl::trace` is sealed to
@@ -2666,15 +2691,25 @@ pub fn einsum<'py>(
     // object/structured), delegate the WHOLE einsum to `numpy.einsum(subscripts,
     // *operands)` ahead of the real path — numpy owns the complex contraction +
     // NEP-50 + dtype preservation. The real einsum path stays byte-identical.
+    //
+    // numpy ALSO keeps an INTEGER result for all-integer operands (the
+    // contraction sums/multiplies over the integer dtype: `einsum('ij->i',
+    // [[1,2],[3,4]]) -> int64`), whereas the real path's `float64` coercion would
+    // upcast. Delegate the all-integer case to numpy too (which additionally
+    // supports subscripts the native kernel rejects, e.g. `ii->i`). Mixed
+    // int+float still flows through the native f64 path, matching numpy's float
+    // result.
     let mut materialised: Vec<Bound<'py, PyAny>> = Vec::with_capacity(operands.len());
     let mut any_non_real = false;
+    let mut all_integer = true;
     for op in operands.iter() {
         let arr = as_ndarray(py, &op)?;
         let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
         any_non_real |= kind == "c" || is_non_real_dtype(&arr)?;
+        all_integer &= matches!(kind.as_str(), "i" | "u" | "b");
         materialised.push(arr);
     }
-    if any_non_real {
+    if any_non_real || all_integer {
         let np = py.import("numpy")?;
         let mut args: Vec<Bound<'py, PyAny>> = Vec::with_capacity(operands.len() + 1);
         args.push(subscripts.into_pyobject(py)?.into_any());

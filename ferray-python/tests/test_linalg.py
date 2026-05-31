@@ -282,3 +282,57 @@ def test_linalg_cross_preserves_int_dtype():
     n = np.linalg.cross([1, 0, 0], [0, 1, 0])
     assert np.asarray(r).dtype == n.dtype == np.int64
     np.testing.assert_array_equal(r, n)
+
+
+# ---------------------------------------------------------------------------
+# einsum int dtype + trace offset/axis (#985)
+# ---------------------------------------------------------------------------
+# numpy.einsum keeps an integer result for all-integer operands; the prior
+# binding coerced to float64. numpy.trace(a, offset, axis1, axis2, dtype)
+# supports diagonal offset / arbitrary axes / N-D; the prior signature took
+# only `a`.
+
+
+def test_einsum_int_preserved():
+    r = ferray.einsum("ij->i", [[1, 2], [3, 4]])
+    n = np.einsum("ij->i", [[1, 2], [3, 4]])
+    assert np.asarray(r).dtype == n.dtype == np.int64
+    np.testing.assert_array_equal(r, n)
+
+
+def test_einsum_int_diagonal_subscript():
+    # 'ii->i' is rejected by the native kernel but works via the integer delegate.
+    r = ferray.einsum("ii->i", [[1, 2], [3, 4]])
+    np.testing.assert_array_equal(r, np.einsum("ii->i", [[1, 2], [3, 4]]))
+
+
+def test_einsum_float_unchanged():
+    np.testing.assert_allclose(
+        ferray.einsum("ij->i", [[1.0, 2], [3, 4]]), np.einsum("ij->i", [[1.0, 2], [3, 4]])
+    )
+
+
+def test_einsum_mixed_int_float_promotes():
+    r = ferray.einsum("ij,jk->ik", [[1, 2], [3, 4]], [[1.0, 0], [0, 1]])
+    assert np.asarray(r).dtype == np.float64
+
+
+def test_trace_offset():
+    a = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    assert int(ferray.trace(a, offset=1)) == int(np.trace(a, offset=1))
+    assert int(ferray.trace(a, offset=-1)) == int(np.trace(a, offset=-1))
+
+
+def test_trace_main_diagonal_int_dtype():
+    r = ferray.trace([[1, 2], [3, 4]])
+    assert np.asarray(r).dtype == np.asarray(np.trace([[1, 2], [3, 4]])).dtype
+
+
+def test_trace_dtype_kwarg():
+    r = ferray.trace([[1, 2], [3, 4]], dtype="float64")
+    assert np.asarray(r).dtype == np.float64
+
+
+def test_trace_3d_stacked():
+    a = np.arange(24).reshape(2, 3, 4)
+    np.testing.assert_array_equal(ferray.trace(a), np.trace(a))
