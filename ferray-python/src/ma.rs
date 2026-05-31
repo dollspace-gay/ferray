@@ -1719,10 +1719,14 @@ fn unreachable_complex_egress_ma() -> PyResult<DynMa> {
 /// Egress a single masked-array element as its Python object, dispatching on
 /// the static element type `T`. The `__getitem__` scalar path is written once
 /// over the generic `T` bound by `match_ma!`, so it needs a per-type egress:
-/// the 11 real dtypes use PyO3's `IntoPyObjectExt` (a numpy scalar / Python
-/// `int`/`float`/`bool`), while `Complex<f32>`/`Complex<f64>` — which have no
-/// `IntoPyObject` — go through the `numpy::Element` complex marshaller (a
-/// 1-element complex ndarray indexed `[0]`, yielding a numpy complex scalar).
+/// the 11 real dtypes go through [`scalar_pyobject`] (a 1-element `ArrayD<T>`
+/// indexed `[0]`), which yields a **typed numpy scalar** (`numpy.int64`,
+/// `numpy.float32`, `numpy.bool_`, …) preserving the array's dtype — numpy's
+/// `dout = self.data[indx]` returns the underlying numpy scalar, not a bare
+/// Python `int`/`float` (`numpy/ma/core.py:3288`; #906, R-CODE-4). The
+/// `Complex<f32>`/`Complex<f64>` variants — which have no `IntoPyObject` — go
+/// through the `numpy::Element` complex marshaller (a 1-element complex ndarray
+/// indexed `[0]`, yielding a numpy complex scalar).
 trait MaScalarEgress: ferray_core::Element + Copy {
     fn egress<'py>(py: Python<'py>, value: Self) -> PyResult<Bound<'py, PyAny>>;
 }
@@ -1730,7 +1734,7 @@ macro_rules! impl_ma_scalar_egress_real {
     ($($t:ty),*) => {
         $(impl MaScalarEgress for $t {
             fn egress<'py>(py: Python<'py>, value: Self) -> PyResult<Bound<'py, PyAny>> {
-                value.into_bound_py_any(py)
+                scalar_pyobject(py, value)
             }
         })*
     };
@@ -2354,6 +2358,20 @@ impl PyMaskedArray {
         }
         let mask = cur.mask_bits()?;
         Ok(mask.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `MaskedArray._mask` — numpy.ma's PRIVATE mask attribute, the one the
+    /// free functions `numpy.ma.getmask`/`getmaskarray` read directly
+    /// (`numpy/ma/core.py` `getmask` → `getattr(a, '_mask', nomask)`,
+    /// `:3349`). It carries the SAME value as the public `.mask` getter — a
+    /// materialized bool array when a real mask exists, else the `nomask`
+    /// sentinel (`numpy/ma/core.py:3288`: a basic-index view exposes its own
+    /// `_mask`). Exposing it lets numpy's `ma` interop helpers read ferray's
+    /// mask across the boundary (R-CODE-4); without it `getmaskarray(fr_ma)`
+    /// silently falls back to an all-False array, dropping the mask contract.
+    #[getter(_mask)]
+    fn private_mask<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        self.mask(py)
     }
 
     /// `MaskedArray.mask` SETTER — assign a new mask (#890).
