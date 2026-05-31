@@ -660,11 +660,17 @@ pub fn randint<'py>(
 // Permutations / choice / shuffle
 // ---------------------------------------------------------------------------
 
-/// `numpy.random.permutation(x)` — if x is an int n, return a
-/// permutation of `range(n)`; if x is an array, return a permuted
-/// copy.
+/// `numpy.random.permutation(x, axis=0)` — if x is an int n, return a
+/// permutation of `range(n)`; if x is an array, return a permuted copy with
+/// whole hyperslices along `axis` reordered as blocks (`numpy/random/
+/// mtrand.pyi` / `_generator.pyi:101,103` `permutation(x, axis=0)`).
 #[pyfunction]
-pub fn permutation<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+#[pyo3(signature = (x, axis = 0))]
+pub fn permutation<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    axis: usize,
+) -> PyResult<Bound<'py, PyAny>> {
     // Integer argument: permute `range(n)`. numpy `permutation(-3)` ->
     // `array([], dtype=int64)` (it routes the int through `arange(n)`, and
     // `arange` of a negative count yields an empty array — *not* an error),
@@ -693,6 +699,11 @@ pub fn permutation<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Boun
     // fast path.
     Ok(match_dtype_all!(dt.as_str(), T => {
         if ndim <= 1 {
+            if axis != 0 {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "axis is out of bounds for array of dimension 1",
+                ));
+            }
             let view: PyReadonlyArray1<T> = arr.extract()?;
             let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
             let r: Array1<T> = with_rng(|rng| rng.permutation(&fa))
@@ -701,7 +712,7 @@ pub fn permutation<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Boun
         } else {
             let view: numpy::PyReadonlyArrayDyn<T> = arr.extract()?;
             let mut fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-            with_rng(|rng| rng.shuffle_dyn(&mut fa, 0)).map_err(ferr_to_pyerr)?;
+            with_rng(|rng| rng.shuffle_dyn(&mut fa, axis)).map_err(ferr_to_pyerr)?;
             fa.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
         }
     }))
@@ -1951,12 +1962,16 @@ impl PyGenerator {
         finish_choice(out, &shape, scalar)
     }
 
-    /// `Generator.permutation(x)` — permute `range(n)` for an int, or an
-    /// array along axis 0 (N-D preserves shape).
+    /// `Generator.permutation(x, axis=0)` — permute `range(n)` for an int,
+    /// or an array along `axis` (N-D preserves shape; whole hyperslices along
+    /// `axis` are reordered as blocks). numpy `_generator.pyi:101,103`
+    /// `def permutation(self, x, axis: int = 0)`.
+    #[pyo3(signature = (x, axis = 0))]
     fn permutation<'py>(
         &mut self,
         py: Python<'py>,
         x: &Bound<'py, PyAny>,
+        axis: usize,
     ) -> PyResult<Bound<'py, PyAny>> {
         if x.is_instance_of::<pyo3::types::PyInt>() {
             let nn: isize = x.extract()?;
@@ -1977,6 +1992,12 @@ impl PyGenerator {
         let ndim: usize = arr.getattr("ndim")?.extract()?;
         Ok(match_dtype_all!(dt.as_str(), T => {
             if ndim <= 1 {
+                // 1-D: numpy only permits axis 0; reorder the whole vector.
+                if axis != 0 {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        "axis is out of bounds for array of dimension 1",
+                    ));
+                }
                 let view: PyReadonlyArray1<T> = arr.extract()?;
                 let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
                 let r: Array1<T> = self.inner.permutation(&fa).map_err(ferr_to_pyerr)?;
@@ -1984,7 +2005,7 @@ impl PyGenerator {
             } else {
                 let view: numpy::PyReadonlyArrayDyn<T> = arr.extract()?;
                 let mut fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-                self.inner.shuffle_dyn(&mut fa, 0).map_err(ferr_to_pyerr)?;
+                self.inner.shuffle_dyn(&mut fa, axis).map_err(ferr_to_pyerr)?;
                 fa.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
             }
         }))
@@ -2012,6 +2033,112 @@ impl PyGenerator {
             }
         });
         Ok(())
+    }
+
+    /// `Generator.bytes(length)` — return `length` random bytes as a Python
+    /// `bytes` object, drawn from this Generator's isolated stream
+    /// (`numpy/random/_generator.pyi:67` `def bytes(self, length: int) ->
+    /// bytes`). Reproducible for a fixed seed.
+    fn bytes<'py>(&mut self, py: Python<'py>, length: isize) -> PyResult<Bound<'py, PyAny>> {
+        if length < 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "negative dimensions are not allowed",
+            ));
+        }
+        let buf: Vec<u8> = self.inner.bytes(length as usize);
+        Ok(pyo3::types::PyBytes::new(py, &buf).into_any())
+    }
+
+    /// `Generator.permuted(x, axis=None, out=None)` — return a permuted COPY
+    /// of `x` (`numpy/random/_generator.pyi:850`
+    /// `def permuted(self, x, *, axis=None, out=None)`). Unlike `shuffle`
+    /// (in-place) and `permutation` (reorders whole hyperslices along an axis),
+    /// `permuted` permutes the elements *within* each 1-D slice along `axis`
+    /// INDEPENDENTLY. `axis=None` flattens, permutes every element, then
+    /// restores the original shape. When `out` is provided the result is
+    /// written into it and `out` is returned.
+    #[pyo3(signature = (x, *, axis = None, out = None))]
+    fn permuted<'py>(
+        &mut self,
+        py: Python<'py>,
+        x: &Bound<'py, PyAny>,
+        axis: Option<isize>,
+        out: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let arr = as_ndarray(py, x)?;
+        let dt = dtype_name(&arr)?;
+        let ndim: usize = arr.getattr("ndim")?.extract()?;
+        let result = match_dtype_all!(dt.as_str(), T => {
+            let view: numpy::PyReadonlyArrayDyn<T> = arr.extract()?;
+            let mut fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+            let shape = fa.shape().to_vec();
+            match axis {
+                None => {
+                    // Flatten, Fisher-Yates over every element, restore shape.
+                    let buf = fa
+                        .as_slice_mut()
+                        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(
+                            "array must be contiguous for permuted",
+                        ))?;
+                    let n = buf.len();
+                    for i in (1..n).rev() {
+                        let j = self.inner.next_u64_bounded((i + 1) as u64) as usize;
+                        buf.swap(i, j);
+                    }
+                }
+                Some(ax) => {
+                    let ax = if ax < 0 { ax + ndim as isize } else { ax };
+                    if ax < 0 || ax as usize >= ndim {
+                        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                            "axis {} is out of bounds for array of dimension {}",
+                            ax, ndim
+                        )));
+                    }
+                    let axis = ax as usize;
+                    let n = shape[axis];
+                    if n > 1 {
+                        // Permute the `n` entries along `axis` independently for
+                        // each combination of the other indices. The buffer is
+                        // C-contiguous: entries along `axis` are `inner_stride`
+                        // apart, grouped into `outer_size` blocks of `n *
+                        // inner_stride`.
+                        let inner_stride: usize = shape[axis + 1..].iter().product();
+                        let block = n * inner_stride;
+                        let outer_size: usize = shape[..axis].iter().product();
+                        let buf = fa
+                            .as_slice_mut()
+                            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(
+                                "array must be contiguous for permuted",
+                            ))?;
+                        for o in 0..outer_size {
+                            let base = o * block;
+                            for k in 0..inner_stride {
+                                // Fisher-Yates over the `n` strided entries of
+                                // this 1-D slice, drawn fresh per slice.
+                                for i in (1..n).rev() {
+                                    let j = self.inner.next_u64_bounded((i + 1) as u64) as usize;
+                                    if i != j {
+                                        buf.swap(base + i * inner_stride + k,
+                                                 base + j * inner_stride + k);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            fa.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        });
+        match out {
+            None => Ok(result),
+            Some(o) => {
+                // Write the permuted values into the caller's array and return
+                // it (numpy's `out=` contract) via `numpy.copyto(out, result)`.
+                let np = py.import("numpy")?;
+                np.call_method1("copyto", (o, &result))?;
+                Ok(o.clone())
+            }
+        }
     }
 
     // --- multivariate / extra distributions (refs #834 #818) -----------

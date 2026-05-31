@@ -454,11 +454,16 @@ def test_generator_permuted_method():
 
 
 def test_permutation_axis_kwarg():
-    """numpy: permutation(arr2d, axis=1) permutes columns, shape preserved.
-    ferray's permutation() has no axis= kwarg. Tracking: #1053."""
+    """numpy: Generator.permutation(arr2d, axis=1) permutes along axis 1,
+    shape preserved (numpy/random/_generator.pyi:101,103
+    `permutation(x, axis=0)`). The `axis=` kwarg is a *Generator*-API feature;
+    the legacy module-level `np.random.permutation` has no `axis` (it raises
+    TypeError), so the oracle here is `default_rng(...).permutation`. ferray's
+    permutation() had no axis= kwarg. Tracking: #1053."""
     src = np.arange(6).reshape(2, 3)
-    oracle_shape = np.random.permutation(src, axis=1).shape  # oracle: (2, 3)
+    oracle_shape = np.random.default_rng(0).permutation(src, axis=1).shape  # oracle: (2, 3)
     assert oracle_shape == (2, 3)
-    fr.random.seed(0)
-    out = fr.random.permutation(np.arange(6).reshape(2, 3), axis=1)
+    out = fr.random.default_rng(0).permutation(np.arange(6).reshape(2, 3), axis=1)
     assert out.shape == (2, 3)
+    # axis=1 permutes columns: each row stays a permutation of its original.
+    assert np.array_equal(np.sort(out, axis=1), np.sort(src, axis=1))
