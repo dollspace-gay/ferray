@@ -2485,14 +2485,19 @@ fn complex_diff_dispatch<'py>(
 
 /// `numpy.sort(a, axis=-1)` — sorted copy.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = -1))]
 pub fn sort<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    axis: Option<usize>,
+    axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     use ferray_stats::SortKind;
     let arr = as_ndarray(py, a)?;
+    // numpy.sort defaults to `axis=-1` (sort along the last axis); an explicit
+    // `axis=None` flattens (numpy/_core/fromnumeric.py `sort` docstring). The
+    // dispatch helpers below take `Option<usize>` where `None` == flatten, so
+    // fold the negative/default axis into `[0, ndim)` here (`-1` -> last axis).
+    let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
     // datetime64/timedelta64 sort: by int64 tick, NaT last (REQ-3, #943).
     if crate::datetime::is_time_array(&arr)? {
@@ -2517,13 +2522,18 @@ pub fn sort<'py>(
 
 /// `numpy.argsort(a, axis=-1)`.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = -1))]
 pub fn argsort<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    axis: Option<usize>,
+    axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // numpy.argsort defaults to `axis=-1` (per-lane indices along the last
+    // axis); an explicit `axis=None` flattens. Fold the negative/default axis
+    // into `[0, ndim)` so the dispatch helpers (which take `Option<usize>`,
+    // `None` == flatten) match numpy's default.
+    let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
     // datetime64/timedelta64 argsort: int64 indices by tick, NaT last (REQ-3).
     if crate::datetime::is_time_array(&arr)? {
