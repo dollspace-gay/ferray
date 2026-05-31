@@ -122,14 +122,22 @@ pub fn broadcast_shapes<'py>(
     py: Python<'py>,
     shapes: &Bound<'py, PyTuple>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Extract each shape SIGNED first so a negative dimension surfaces numpy's
+    // `ValueError` (`np.empty(x)` -> 'negative dimensions are not allowed',
+    // `_stride_tricks_impl.py:580`) rather than a raw `OverflowError` at the
+    // `usize` conversion.
     let shape_vecs: Vec<Vec<usize>> = shapes
         .iter()
         .map(|s| {
-            if let Ok(n) = s.extract::<usize>() {
-                Ok(vec![n])
+            let signed: Vec<isize> = if let Ok(n) = s.extract::<isize>() {
+                vec![n]
             } else {
-                s.extract::<Vec<usize>>()
+                s.extract::<Vec<isize>>()?
+            };
+            if signed.iter().any(|&d| d < 0) {
+                return Err(PyValueError::new_err("negative dimensions are not allowed"));
             }
+            Ok(signed.iter().map(|&d| d as usize).collect())
         })
         .collect::<PyResult<_>>()?;
     let refs: Vec<&[usize]> = shape_vecs.iter().map(|v| v.as_slice()).collect();
@@ -247,11 +255,22 @@ pub fn broadcast_to<'py>(
         return np.call_method1("broadcast_to", (&arr, shape));
     }
     let dt = dtype_name(&arr)?;
-    let target: Vec<usize> = if let Ok(n) = shape.extract::<usize>() {
+    // Extract the shape SIGNED first, accepting a single int OR a sequence
+    // (`np.broadcast_to(x, 3)` is valid, `_stride_tricks_impl.py:448`). A
+    // negative entry raises numpy's `ValueError` ('all elements of broadcast
+    // shape must be non-negative', `:452-454`) rather than the `OverflowError`
+    // (sequence) / `TypeError` (scalar) a bare `usize` extraction would give.
+    let signed: Vec<isize> = if let Ok(n) = shape.extract::<isize>() {
         vec![n]
     } else {
         shape.extract()?
     };
+    if signed.iter().any(|&d| d < 0) {
+        return Err(PyValueError::new_err(
+            "all elements of broadcast shape must be non-negative",
+        ));
+    }
+    let target: Vec<usize> = signed.iter().map(|&d| d as usize).collect();
     // `broadcast_to` is a pure stride/view op (generic over `T: Element`), so
     // it works unchanged for `Complex<T>`: numpy returns a read-only complex
     // view (`np.broadcast_to(complex, (2,3))`, verified live). Route through the
