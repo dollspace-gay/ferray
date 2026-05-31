@@ -604,6 +604,70 @@ where
 // min / max
 // ---------------------------------------------------------------------------
 
+/// Generic NaN test for any `T: PartialEq`.
+///
+/// A value is NaN iff it does not equal itself (IEEE-754: `NaN != NaN`). For
+/// every integer/bool type this is always `false`, so the integer min/max/
+/// argmin/argmax paths are byte-for-byte unchanged; only float types observe
+/// the NaN-propagating behaviour numpy mandates (`np.maximum`/`np.minimum`
+/// propagate NaN — `numpy/_core/fromnumeric.py:3076`/`:3214`).
+#[inline]
+#[allow(clippy::eq_op)] // `x != x` is the intentional generic IEEE-754 NaN test.
+fn is_nan_val<T: PartialEq>(x: &T) -> bool {
+    x != x
+}
+
+/// First-NaN-aware fold step for `argmin`.
+///
+/// numpy reduces argmin via `np.minimum`, which propagates NaN: a NaN compares
+/// as the minimum, so the FIRST NaN's index wins (numpy/_core/fromnumeric.py:1362).
+/// Walking left-to-right: once the running accumulator is NaN it is kept (the
+/// first NaN's index is already recorded); a fresh NaN is adopted over any
+/// finite running value; otherwise the plain `<=` first-occurrence rule applies.
+/// For integers `is_nan_val` is always false, so this is byte-identical to the
+/// previous `if av <= bv` behaviour.
+#[inline]
+fn argmin_fold<'a, T: PartialOrd + PartialEq>(
+    acc: (usize, &'a T),
+    next: (usize, &'a T),
+) -> (usize, &'a T) {
+    let (ai, av) = acc;
+    let (bi, bv) = next;
+    if is_nan_val(av) {
+        (ai, av)
+    } else if is_nan_val(bv) {
+        (bi, bv)
+    } else if av <= bv {
+        (ai, av)
+    } else {
+        (bi, bv)
+    }
+}
+
+/// First-NaN-aware fold step for `argmax` (numpy/_core/fromnumeric.py:1262).
+///
+/// Mirror of [`argmin_fold`] with `>=` ordering: numpy reduces argmax via
+/// `np.maximum`, which propagates NaN, so the FIRST NaN's index wins. Integers
+/// never satisfy `is_nan_val`, so the integer path is byte-identical to the
+/// previous `if av >= bv` behaviour.
+#[inline]
+fn argmax_fold<'a, T: PartialOrd + PartialEq>(
+    acc: (usize, &'a T),
+    next: (usize, &'a T),
+) -> (usize, &'a T) {
+    let (ai, av) = acc;
+    let (bi, bv) = next;
+    if is_nan_val(av) {
+        (ai, av)
+    } else if is_nan_val(bv) {
+        (bi, bv)
+    } else if av >= bv {
+        (ai, av)
+    } else {
+        (bi, bv)
+    }
+}
+
 /// Minimum value of array elements over a given axis.
 ///
 /// Equivalent to `numpy.min` / `numpy.amin`.
@@ -620,14 +684,17 @@ where
     // NaN-propagating min: if either operand is NaN (comparison returns false
     // for both orderings), propagate NaN to match NumPy behavior.
     let nan_min = |a: T, b: T| -> T {
-        if a <= b {
+        // numpy's np.minimum propagates NaN: if EITHER operand is NaN the
+        // result is NaN (numpy/_core/fromnumeric.py:3214). For integers
+        // `is_nan_val` is always false, so this reduces to the plain order.
+        if is_nan_val(&a) {
             a
-        } else if a > b {
+        } else if is_nan_val(&b) {
             b
-        } else {
-            // One of them is NaN — return whichever is unordered
-            // (if a is NaN, a <= b and a > b are both false; return a)
+        } else if a <= b {
             a
+        } else {
+            b
         }
     };
     let data = borrow_data(a);
@@ -661,14 +728,18 @@ where
             "cannot compute max of empty array",
         ));
     }
-    // NaN-propagating max: same logic as min but reversed ordering.
+    // NaN-propagating max: if EITHER operand is NaN the result is NaN, to
+    // match numpy's np.maximum (numpy/_core/fromnumeric.py:3076). For
+    // integers `is_nan_val` is always false, so this reduces to plain order.
     let nan_max = |a: T, b: T| -> T {
-        if a >= b {
+        if is_nan_val(&a) {
             a
-        } else if a < b {
+        } else if is_nan_val(&b) {
             b
-        } else {
+        } else if a >= b {
             a
+        } else {
+            b
         }
     };
     let data = borrow_data(a);
@@ -710,12 +781,7 @@ where
     let data = borrow_data(a);
     match axis {
         None => {
-            let idx = data
-                .iter()
-                .enumerate()
-                .reduce(|(ai, av), (bi, bv)| if av <= bv { (ai, av) } else { (bi, bv) })
-                .unwrap()
-                .0 as u64;
+            let idx = data.iter().enumerate().reduce(argmin_fold).unwrap().0 as u64;
             make_result(&[], vec![idx])
         }
         Some(ax) => {
@@ -723,11 +789,7 @@ where
             let shape = a.shape();
             let out_s = output_shape(shape, ax);
             let result = reduce_axis_general_u64(&data, shape, ax, |lane| {
-                lane.iter()
-                    .enumerate()
-                    .reduce(|(ai, av), (bi, bv)| if av <= bv { (ai, av) } else { (bi, bv) })
-                    .unwrap()
-                    .0 as u64
+                lane.iter().enumerate().reduce(argmin_fold).unwrap().0 as u64
             });
             make_result(&out_s, result)
         }
@@ -750,12 +812,7 @@ where
     let data = borrow_data(a);
     match axis {
         None => {
-            let idx = data
-                .iter()
-                .enumerate()
-                .reduce(|(ai, av), (bi, bv)| if av >= bv { (ai, av) } else { (bi, bv) })
-                .unwrap()
-                .0 as u64;
+            let idx = data.iter().enumerate().reduce(argmax_fold).unwrap().0 as u64;
             make_result(&[], vec![idx])
         }
         Some(ax) => {
@@ -763,11 +820,7 @@ where
             let shape = a.shape();
             let out_s = output_shape(shape, ax);
             let result = reduce_axis_general_u64(&data, shape, ax, |lane| {
-                lane.iter()
-                    .enumerate()
-                    .reduce(|(ai, av), (bi, bv)| if av >= bv { (ai, av) } else { (bi, bv) })
-                    .unwrap()
-                    .0 as u64
+                lane.iter().enumerate().reduce(argmax_fold).unwrap().0 as u64
             });
             make_result(&out_s, result)
         }
@@ -2266,11 +2319,7 @@ where
     let data = borrow_data(a);
     let (result_f64, out_shape) =
         reduce_axes_general_u64(&data, shape, &ax_vec, keepdims, |lane| {
-            lane.iter()
-                .enumerate()
-                .reduce(|(ai, av), (bi, bv)| if av <= bv { (ai, av) } else { (bi, bv) })
-                .unwrap()
-                .0 as u64
+            lane.iter().enumerate().reduce(argmin_fold).unwrap().0 as u64
         });
     make_result(&out_shape, result_f64)
 }
@@ -2304,11 +2353,7 @@ where
     let data = borrow_data(a);
     let (result_u64, out_shape) =
         reduce_axes_general_u64(&data, shape, &ax_vec, keepdims, |lane| {
-            lane.iter()
-                .enumerate()
-                .reduce(|(ai, av), (bi, bv)| if av >= bv { (ai, av) } else { (bi, bv) })
-                .unwrap()
-                .0 as u64
+            lane.iter().enumerate().reduce(argmax_fold).unwrap().0 as u64
         });
     make_result(&out_shape, result_u64)
 }
