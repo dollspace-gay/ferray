@@ -3092,16 +3092,36 @@ fn complex_diff_dispatch<'py>(
 // Sort / argsort
 // ---------------------------------------------------------------------------
 
-/// `numpy.sort(a, axis=-1)` — sorted copy.
+/// `numpy.sort(a, axis=-1, kind=None, order=None)` — sorted copy. A non-default
+/// `kind` (`'stable'`/`'mergesort'`/`'heapsort'`/`'quicksort'`) or a structured
+/// `order` delegates to numpy for its exact algorithm/tie semantics; the native
+/// kernel handles the default introsort.
 #[pyfunction]
-#[pyo3(signature = (a, axis = -1))]
+#[pyo3(signature = (a, axis = -1, kind = None, order = None))]
 pub fn sort<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
+    kind: Option<&str>,
+    order: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     use ferray_stats::SortKind;
     let arr = as_ndarray(py, a)?;
+    if kind.is_some() || order.is_some() {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        match axis {
+            Some(ax) => kwargs.set_item("axis", ax)?,
+            None => kwargs.set_item("axis", py.None())?,
+        }
+        if let Some(k) = kind {
+            kwargs.set_item("kind", k)?;
+        }
+        if let Some(o) = order {
+            kwargs.set_item("order", o)?;
+        }
+        return np.call_method("sort", (&arr,), Some(&kwargs));
+    }
     // numpy.sort defaults to `axis=-1` (sort along the last axis); an explicit
     // `axis=None` flattens (numpy/_core/fromnumeric.py `sort` docstring). The
     // dispatch helpers below take `Option<usize>` where `None` == flatten, so
@@ -3154,15 +3174,34 @@ pub fn sort<'py>(
     }))
 }
 
-/// `numpy.argsort(a, axis=-1)`.
+/// `numpy.argsort(a, axis=-1, kind=None, order=None)`. A non-default `kind`
+/// (notably `'stable'`/`'mergesort'`, which fixes the tie order) or a structured
+/// `order` delegates to numpy for its exact index/tie semantics.
 #[pyfunction]
-#[pyo3(signature = (a, axis = -1))]
+#[pyo3(signature = (a, axis = -1, kind = None, order = None))]
 pub fn argsort<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
+    kind: Option<&str>,
+    order: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if kind.is_some() || order.is_some() {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        match axis {
+            Some(ax) => kwargs.set_item("axis", ax)?,
+            None => kwargs.set_item("axis", py.None())?,
+        }
+        if let Some(k) = kind {
+            kwargs.set_item("kind", k)?;
+        }
+        if let Some(o) = order {
+            kwargs.set_item("order", o)?;
+        }
+        return np.call_method("argsort", (&arr,), Some(&kwargs));
+    }
     // numpy.argsort defaults to `axis=-1` (per-lane indices along the last
     // axis); an explicit `axis=None` flattens. Fold the negative/default axis
     // into `[0, ndim)` so the dispatch helpers (which take `Option<usize>`,
@@ -3459,7 +3498,7 @@ enum CplxSetOp {
 }
 
 macro_rules! bind_set_op {
-    ($name:ident, $ferr_path:path, $kind:expr) => {
+    ($name:ident, $ferr_path:path, $kind:expr, $np_name:expr) => {
         #[pyfunction]
         #[pyo3(signature = (a, b, assume_unique = false))]
         pub fn $name<'py>(
@@ -3484,7 +3523,7 @@ macro_rules! bind_set_op {
                 }
                 return crate::manipulation::string_delegate(
                     py,
-                    stringify!($name),
+                    $np_name,
                     (a, b),
                     Some(&kwargs),
                 );
@@ -3502,7 +3541,7 @@ macro_rules! bind_set_op {
                 if stringify!($name) != "union1d" {
                     kwargs.set_item("assume_unique", assume_unique)?;
                 }
-                return crate::conv::f16_delegate(py, stringify!($name), (a, b), Some(&kwargs));
+                return crate::conv::f16_delegate(py, $np_name, (a, b), Some(&kwargs));
             }
             let arr_b = coerce_dtype(py, b, dt.as_str())?;
             // Complex set ops compose from the #932 `cplx_sort_cmp` lexicographic
@@ -3529,10 +3568,45 @@ macro_rules! bind_set_op {
     };
 }
 
-bind_set_op!(union1d, ferray_stats::union1d, CplxSetOp::Union);
-bind_set_op!(intersect1d, ferray_stats::intersect1d, CplxSetOp::Intersect);
-bind_set_op!(setdiff1d, ferray_stats::setdiff1d, CplxSetOp::Diff);
-bind_set_op!(setxor1d, ferray_stats::setxor1d, CplxSetOp::Xor);
+bind_set_op!(union1d, ferray_stats::union1d, CplxSetOp::Union, "union1d");
+bind_set_op!(
+    intersect1d_core,
+    ferray_stats::intersect1d,
+    CplxSetOp::Intersect,
+    "intersect1d"
+);
+bind_set_op!(
+    setdiff1d,
+    ferray_stats::setdiff1d,
+    CplxSetOp::Diff,
+    "setdiff1d"
+);
+bind_set_op!(setxor1d, ferray_stats::setxor1d, CplxSetOp::Xor, "setxor1d");
+
+/// `numpy.intersect1d(ar1, ar2, assume_unique=False, return_indices=False)`.
+/// Of the four 1-D set ops, only `intersect1d` takes `return_indices=`; when
+/// requested numpy returns `(common, idx_into_ar1, idx_into_ar2)`. That tuple
+/// form (with the index bookkeeping) is owned by numpy, so delegate the
+/// `return_indices=True` case; the plain case uses the native sorted-intersection
+/// kernel ([`intersect1d_core`]).
+#[pyfunction]
+#[pyo3(signature = (a, b, assume_unique = false, return_indices = false))]
+pub fn intersect1d<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    assume_unique: bool,
+    return_indices: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    if return_indices {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("assume_unique", assume_unique)?;
+        kwargs.set_item("return_indices", true)?;
+        return np.call_method("intersect1d", (a, b), Some(&kwargs));
+    }
+    intersect1d_core(py, a, b, assume_unique)
+}
 
 /// `numpy.in1d(ar1, ar2)` — bool array of presence.
 #[pyfunction]

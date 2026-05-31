@@ -464,3 +464,51 @@ def test_linspace_retstep_is_numpy_float64():
     step = ferray.linspace(0, 1, 5, retstep=True)[1]
     assert isinstance(step, np.float64)
     assert step == np.linspace(0, 1, 5, retstep=True)[1]
+
+
+# ---------------------------------------------------------------------------
+# sort/argsort kind= + intersect1d return_indices= (#988)
+# ---------------------------------------------------------------------------
+
+
+def test_sort_kind_kwarg():
+    np.testing.assert_array_equal(
+        ferray.sort([3, 1, 2], kind="stable"), np.sort([3, 1, 2], kind="stable")
+    )
+
+
+def test_argsort_stable_kind():
+    np.testing.assert_array_equal(
+        ferray.argsort([3, 1, 2, 1], kind="stable"), np.argsort([3, 1, 2, 1], kind="stable")
+    )
+
+
+def test_sort_axis_with_kind():
+    np.testing.assert_array_equal(
+        ferray.sort([[3, 1], [2, 4]], axis=0, kind="stable"),
+        np.sort([[3, 1], [2, 4]], axis=0, kind="stable"),
+    )
+
+
+def test_sort_default_unchanged():
+    np.testing.assert_array_equal(ferray.sort([3, 1, 2]), np.sort([3, 1, 2]))
+
+
+def test_intersect1d_return_indices():
+    fr_r = ferray.intersect1d([1, 2, 3, 4], [2, 3, 5], return_indices=True)
+    np_r = np.intersect1d([1, 2, 3, 4], [2, 3, 5], return_indices=True)
+    assert len(fr_r) == len(np_r) == 3
+    for f, n in zip(fr_r, np_r):
+        np.testing.assert_array_equal(f, n)
+
+
+def test_intersect1d_plain_unchanged():
+    np.testing.assert_array_equal(
+        ferray.intersect1d([1, 2, 3], [2, 3, 4]), np.intersect1d([1, 2, 3], [2, 3, 4])
+    )
+
+
+def test_union1d_rejects_return_indices_like_numpy():
+    # numpy.union1d has no return_indices param; ferray rejects it identically.
+    with pytest.raises(TypeError):
+        ferray.union1d([1], [2], return_indices=True)
