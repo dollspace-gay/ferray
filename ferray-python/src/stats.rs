@@ -3976,6 +3976,22 @@ pub fn cov<'py>(
     use ferray_core::array::aliases::Array2;
     let arr = as_ndarray(py, m)?;
     let dt = dtype_name(&arr)?;
+    // Complex input: numpy's covariance uses the conjugate transpose
+    // (`X @ conj(X).T`), so the result is genuinely complex
+    // (numpy/lib/_function_base_impl.py cov: `X_T = X.conj().T`). The real-only
+    // path below casts complex->float64, silently discarding the imaginary part
+    // (R-CODE-4). Delegate the complex case to numpy.cov, which owns the
+    // conj-covariance, and return its complex result unchanged.
+    if is_complex_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("rowvar", rowvar)?;
+        match ddof {
+            Some(d) => kwargs.set_item("ddof", d)?,
+            None => kwargs.set_item("ddof", py.None())?,
+        }
+        let np = py.import("numpy")?;
+        return np.call_method("cov", (&arr,), Some(&kwargs));
+    }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
     } else {
@@ -4001,6 +4017,18 @@ pub fn corrcoef<'py>(
     use ferray_core::array::aliases::Array2;
     let arr = as_ndarray(py, x)?;
     let dt = dtype_name(&arr)?;
+    // Complex input: corrcoef normalizes the complex covariance, so it is also
+    // genuinely complex (numpy/lib/_function_base_impl.py corrcoef builds on
+    // `cov`, whose complex result uses the conjugate transpose). The real-only
+    // path below casts complex->float64, discarding the imaginary part
+    // (R-CODE-4). Delegate the complex case to numpy.corrcoef and return its
+    // complex result unchanged.
+    if is_complex_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("rowvar", rowvar)?;
+        let np = py.import("numpy")?;
+        return np.call_method("corrcoef", (&arr,), Some(&kwargs));
+    }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
     } else {

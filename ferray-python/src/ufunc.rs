@@ -1518,6 +1518,21 @@ pub fn nan_to_num<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, x)?;
     let dt = dtype_name(&arr)?;
+    // Complex input: numpy replaces NaN/±Inf in BOTH the real and imaginary
+    // parts independently, keeping the result complex
+    // (numpy/lib/_type_check_impl.py:382 nan_to_num operates on `x.real` and
+    // `x.imag`). The float-only path below has no complex arm and would
+    // mis-handle (or drop the imaginary part of) the input (R-CODE-4).
+    // Delegate the complex case to numpy.nan_to_num, forwarding the
+    // nan/posinf/neginf replacements, and return its complex result.
+    if is_complex_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("nan", nan)?;
+        kwargs.set_item("posinf", posinf)?;
+        kwargs.set_item("neginf", neginf)?;
+        let np = py.import("numpy")?;
+        return np.call_method("nan_to_num", (&arr,), Some(&kwargs));
+    }
     // Integer / bool input has no NaN or Inf — numpy returns it unchanged.
     if !matches!(
         dt.as_str(),
