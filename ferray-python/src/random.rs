@@ -114,6 +114,85 @@ fn shape_from_pyany(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<usize>> {
     }
 }
 
+/// Which entry point a seed is being resolved for. numpy's two seeding
+/// surfaces apply *different* integer bounds to a scalar int seed
+/// (R-DEV-2, exception type + message family):
+///
+/// - [`SeedKind::Legacy`] — `numpy.random.seed` -> `RandomState.seed`, whose
+///   C `seed` is `uint32`-bounded: an int outside `[0, 2**32 - 1]` raises
+///   `ValueError("Seed must be between 0 and 2**32 - 1")`
+///   (`numpy/random/mtrand.pyx` `RandomState.seed`).
+/// - [`SeedKind::Generator`] — `numpy.random.default_rng` /
+///   `Generator(...)` / the `BitGenerator` family, which route a scalar int
+///   through `SeedSequence`: any *non-negative* int (arbitrary size, incl.
+///   `> 2**64`) is accepted; a *negative* int raises
+///   `ValueError("expected non-negative integer")`
+///   (`numpy/random/bit_generator.pyx` `SeedSequence`).
+///
+/// In both cases a *non-int* (float / str / …) keeps numpy's `TypeError`.
+#[derive(Clone, Copy)]
+enum SeedKind {
+    Legacy,
+    Generator,
+}
+
+/// Resolve a Python `int` seed object to a single `u64` for the Xoshiro256**
+/// stream, applying [`SeedKind`]'s numpy-matching range rule. Returns `Ok(None)`
+/// when `o` is not a Python int (so the caller can fall through to the
+/// `SeedSequence`/`array_like` paths and ultimately numpy's `TypeError`).
+fn resolve_int_seed(o: &Bound<'_, PyAny>, kind: SeedKind) -> PyResult<Option<u64>> {
+    if !o.is_instance_of::<pyo3::types::PyInt>() {
+        return Ok(None);
+    }
+    match kind {
+        SeedKind::Legacy => {
+            // Legacy RandomState seed is uint32-bounded: [0, 2**32 - 1].
+            match o.extract::<u64>() {
+                Ok(v) if v <= u32::MAX as u64 => Ok(Some(v)),
+                _ => Err(pyo3::exceptions::PyValueError::new_err(
+                    "Seed must be between 0 and 2**32 - 1",
+                )),
+            }
+        }
+        SeedKind::Generator => {
+            // default_rng/Generator route a scalar int through SeedSequence:
+            // any non-negative int (arbitrary size) is accepted; negative ->
+            // ValueError. A non-negative int that exceeds u64 is folded
+            // through SeedSequence (matching numpy accepting `2**64`).
+            if let Ok(v) = o.extract::<u64>() {
+                return Ok(Some(v));
+            }
+            // Not representable as u64: either negative, or >= 2**64. Reject a
+            // negative int with numpy's `SeedSequence` error; otherwise fold
+            // the big non-negative int's 64-bit words to a deterministic u64.
+            if o.lt(0)? {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "expected non-negative integer",
+                ));
+            }
+            // Decompose the big non-negative int into 64-bit words via Python
+            // bit ops (no new crate dependency; R-FIX-4): repeatedly take the
+            // low 64 bits and right-shift by 64. numpy accepts arbitrarily
+            // large non-negative seeds via SeedSequence, so we accept and fold.
+            let mask = (u64::MAX).into_pyobject(o.py())?;
+            let mut cur = o.clone();
+            let mut words: Vec<u64> = Vec::new();
+            while cur.is_truthy()? {
+                let low: u64 = cur.bitand(&mask)?.extract()?;
+                words.push(low);
+                cur = cur.rshift(64u32)?;
+            }
+            let mut entropy: u64 = 0;
+            for (i, w) in words.iter().enumerate() {
+                entropy ^= w
+                    .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                    .rotate_left((i as u32 % 64) + 1);
+            }
+            Ok(Some(SeedSequence::new(entropy).generate_u64()))
+        }
+    }
+}
+
 /// Construct a thread-local-equivalent `Generator` seeded from an
 /// arbitrary numpy-compatible seed object: `None` (OS entropy), an `int`,
 /// or an `array_like[int]` / sequence (folded via [`SeedSequence`]).
@@ -137,6 +216,7 @@ fn shape_from_pyany(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<usize>> {
 /// identical stream).
 fn seed_generator_with_seed(
     seed: Option<&Bound<'_, PyAny>>,
+    kind: SeedKind,
 ) -> PyResult<(Generator<Xoshiro256StarStar>, u64)> {
     let resolved: u64 = match seed {
         None => os_entropy_u64(),
@@ -151,7 +231,10 @@ fn seed_generator_with_seed(
                 // BitGenerator's stored seed — API-compatible, NOT bit-identical
                 // to numpy's PCG64/MT19937/etc. streams (documented limitation).
                 bg.seed
-            } else if let Ok(s) = o.extract::<u64>() {
+            } else if let Some(s) = resolve_int_seed(o, kind)? {
+                // A Python `int` seed, range-validated per entry point: legacy
+                // [0, 2**32-1] -> ValueError outside, default_rng non-negative
+                // (big ints folded via SeedSequence) -> ValueError if negative.
                 s
             } else if let Ok(ss) = o.extract::<PyRef<'_, PySeedSequence>>() {
                 // A SeedSequence instance: fold to a single deterministic u64.
@@ -203,7 +286,7 @@ fn seed_generator_with_seed(
 #[pyfunction]
 #[pyo3(signature = (seed = None))]
 pub fn seed(seed: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-    let (_gen, resolved) = seed_generator_with_seed(seed)?;
+    let (_gen, resolved) = seed_generator_with_seed(seed, SeedKind::Legacy)?;
     reseed_global(resolved);
     Ok(())
 }
@@ -1257,7 +1340,7 @@ impl PyGenerator {
     #[new]
     #[pyo3(signature = (seed = None))]
     fn py_new(seed: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let (inner, resolved) = seed_generator_with_seed(seed)?;
+        let (inner, resolved) = seed_generator_with_seed(seed, SeedKind::Generator)?;
         Ok(Self {
             inner,
             seed: resolved,
@@ -1869,7 +1952,7 @@ impl PyGenerator {
 #[pyfunction]
 #[pyo3(signature = (seed = None))]
 pub fn default_rng_py(seed: Option<&Bound<'_, PyAny>>) -> PyResult<PyGenerator> {
-    let (inner, resolved) = seed_generator_with_seed(seed)?;
+    let (inner, resolved) = seed_generator_with_seed(seed, SeedKind::Generator)?;
     Ok(PyGenerator {
         inner,
         seed: resolved,
@@ -2205,7 +2288,7 @@ impl PyRandomState {
     #[new]
     #[pyo3(signature = (seed = None))]
     fn py_new(seed: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let (inner, resolved) = seed_generator_with_seed(seed)?;
+        let (inner, resolved) = seed_generator_with_seed(seed, SeedKind::Legacy)?;
         Ok(Self {
             inner,
             seed: resolved,
@@ -2228,7 +2311,7 @@ impl PyRandomState {
     /// `RandomState.seed(seed=None)` — re-seed in place.
     #[pyo3(signature = (seed = None))]
     fn seed(&mut self, seed: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let (inner, resolved) = seed_generator_with_seed(seed)?;
+        let (inner, resolved) = seed_generator_with_seed(seed, SeedKind::Legacy)?;
         self.inner = inner;
         self.seed = resolved;
         Ok(())
