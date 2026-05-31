@@ -28,9 +28,7 @@
 
 use ferray_core::Array;
 use ferray_core::dimension::Ix1;
-use ferray_ufunc::{
-    arccos, arccosh, arcsin, arctanh, copysign, frexp, log, log1p, rint, spacing,
-};
+use ferray_ufunc::{arccos, arccosh, arcsin, arctanh, copysign, frexp, log, log1p, rint, spacing};
 
 fn a1(v: Vec<f64>) -> Array<f64, Ix1> {
     Array::from_vec(Ix1::new([v.len()]), v).unwrap()
@@ -75,7 +73,10 @@ fn divergence_spacing_negative_sign_f64() {
         s[2]
     );
     // All negative-input spacings must themselves be negative.
-    assert!(s[0] < 0.0 && s[1] < 0.0 && s[2] < 0.0, "spacing of negatives must be negative");
+    assert!(
+        s[0] < 0.0 && s[1] < 0.0 && s[2] < 0.0,
+        "spacing of negatives must be negative"
+    );
 }
 
 /// Divergence: `ferray_ufunc::spacing` f32 path
@@ -85,8 +86,7 @@ fn divergence_spacing_negative_sign_f64() {
 /// Live numpy 2.4.4 oracle.
 #[test]
 fn divergence_spacing_negative_sign_f32() {
-    let input: Array<f32, Ix1> =
-        Array::from_vec(Ix1::new([2]), vec![-1.0_f32, -5.0]).unwrap();
+    let input: Array<f32, Ix1> = Array::from_vec(Ix1::new([2]), vec![-1.0_f32, -5.0]).unwrap();
     let r = spacing(&input).unwrap();
     let s = r.as_slice().unwrap();
     assert_eq!(
@@ -97,7 +97,7 @@ fn divergence_spacing_negative_sign_f32() {
     );
     assert_eq!(
         s[1].to_bits(),
-        (-4.76837158203125e-07_f32).to_bits(),
+        (-4.7683716e-07_f32).to_bits(),
         "f32 spacing(-5.0) should equal numpy -4.7683716e-07, got {}",
         s[1]
     );
