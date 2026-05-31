@@ -2385,6 +2385,10 @@ pub fn sort<'py>(
     use ferray_stats::SortKind;
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 sort: by int64 tick, NaT last (REQ-3, #943).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::sort_time(py, &arr, axis);
+    }
     // Complex sort: lexicographic (real, then imag) with NaN-complex last,
     // width preserved — numpy: `np.sort([3+1j,1+2j,1+1j]) == [1+1j,1+2j,3+1j]`
     // (live). The real-only `match_dtype_orderable!` has no complex arm.
@@ -2412,6 +2416,10 @@ pub fn argsort<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 argsort: int64 indices by tick, NaT last (REQ-3).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::argsort_time(py, &arr, axis);
+    }
     // Complex argsort: lexicographic-with-nan-last indices (int64) — numpy:
     // `np.argsort([1+2j,-3+4j,0+0j,2-1j]) == [1,2,0,3]` (live).
     match dt.as_str() {
@@ -2448,6 +2456,13 @@ pub fn searchsorted<'py>(
     };
     let arr_a = as_ndarray(py, a)?;
     let dt = dtype_name(&arr_a)?;
+    // datetime64/timedelta64 searchsorted: int64 insertion points, NaT last
+    // (REQ-3, #943). Gated ahead of the real coerce (which would mis-coerce the
+    // datetime query). numpy returns a 0-d result for a scalar `v`.
+    if crate::datetime::is_time_array(&arr_a)? {
+        let v_scalar = !v.hasattr("__len__")?;
+        return crate::datetime::searchsorted_time(py, &arr_a, v, side, v_scalar);
+    }
     let arr_v = coerce_dtype(py, v, dt.as_str())?;
     // Complex `searchsorted`: lexicographic insertion points into the (assumed
     // sorted) complex array, matching numpy's lexicographic complex order
@@ -2484,6 +2499,11 @@ pub fn searchsorted<'py>(
 pub fn unique<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 unique: sorted-unique ticks, NaT last (one kept)
+    // (REQ-3, #943).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::unique_time(py, &arr);
+    }
     // Complex unique: lexicographic sort + dedup (NaN-complex last, one kept),
     // width preserved — numpy: `np.unique([1+2j,-3+4j,1+2j,2-1j]) ==
     // [-3+4j,1+2j,2-1j]` (live).
@@ -2643,6 +2663,11 @@ pub fn partition<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 partition: by int64 tick, NaT last (REQ-3, #943).
+    // A full ordered copy satisfies the partition postcondition for any kth.
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::partition_time(py, &arr);
+    }
     // Complex `partition`: numpy places the kth element of the lexicographically
     // sorted complex array in its final position. ferray's `partition` needs
     // `T: PartialOrd` (absent for `Complex<T>`); a full lexicographic sort
@@ -2670,6 +2695,11 @@ pub fn argpartition<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 argpartition: stable argsort by int64 tick, NaT
+    // last (REQ-3, #943) — a full ordered index satisfies argpartition for kth.
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::argpartition_time(py, &arr);
+    }
     let r: Array1<u64> = match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArray1<T> = arr.extract()?;
         let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;

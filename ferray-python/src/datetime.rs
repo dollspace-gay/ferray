@@ -1074,6 +1074,423 @@ pub fn time_reduce<'py>(
 }
 
 // ---------------------------------------------------------------------------
+// datetime64 / timedelta64 comparison + ordering (REQ-3, #943)
+//
+// numpy orders / compares datetime64 and timedelta64 by their int64 TICK value,
+// after promoting two operands of the same kind to a COMMON (finer) unit
+// (`np.promote_types(M8[D], M8[h]) == M8[h]`, verified live). The bridge is the
+// existing `.view('int64')` transport (#831): the operands are first cast to the
+// common dtype with numpy's own `astype` (which owns the unit rescale), then
+// reinterpreted as int64 ticks and compared in Rust.
+//
+// NaT (`i64::MIN`) semantics, verified LIVE (numpy 2.4.5, R-CHAR-3):
+//   * COMPARISON: any operand NaT makes `<`,`<=`,`>`,`>=`,`==` all FALSE and
+//     `!=` TRUE (so `NaT != NaT` is True, every other compare with a NaT
+//     operand is False — mirrors IEEE-NaN-style unordered comparison).
+//   * ORDERING (sort/argsort/unique/searchsorted/partition): NaT sorts LAST,
+//     like NaN. Modelled by mapping NaT -> `i64::MAX` for the order key
+//     (`order_key`), so an ascending int64 sort places every NaT after every
+//     real tick while preserving the real ticks' relative order.
+// ---------------------------------------------------------------------------
+
+/// Which of the six comparison ufuncs a `compare_time` call performs.
+#[derive(Clone, Copy)]
+pub enum TimeCompare {
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    Equal,
+    NotEqual,
+}
+
+/// Apply one comparison to two int64 ticks with numpy's NaT-unordered rule:
+/// any NaT operand -> every comparison False except `!=` which is True.
+#[inline]
+fn cmp_ticks(op: TimeCompare, a: i64, b: i64) -> bool {
+    if a == NAT || b == NAT {
+        return matches!(op, TimeCompare::NotEqual);
+    }
+    match op {
+        TimeCompare::Less => a < b,
+        TimeCompare::LessEqual => a <= b,
+        TimeCompare::Greater => a > b,
+        TimeCompare::GreaterEqual => a >= b,
+        TimeCompare::Equal => a == b,
+        TimeCompare::NotEqual => a != b,
+    }
+}
+
+/// Promote two same-kind time operands to a common (finer) unit via numpy's own
+/// `promote_types` + `astype`, broadcast them, and return both int64 tick
+/// buffers (row-major flat) + the broadcast output shape. The unit rescale is
+/// numpy's (it owns e.g. `M8[D] -> M8[h]` = ×24); ferray only reads the int64
+/// ticks afterwards, so cross-unit comparison is exact.
+fn promote_pair_int64(
+    py: Python<'_>,
+    a: &Bound<'_, PyAny>,
+    b: &Bound<'_, PyAny>,
+) -> PyResult<(Vec<i64>, Vec<i64>, Vec<usize>)> {
+    let np = py.import("numpy")?;
+    let aa = np.call_method1("asarray", (a,))?;
+    let ba = np.call_method1("asarray", (b,))?;
+    let common = np.call_method1(
+        "promote_types",
+        (aa.getattr("dtype")?, ba.getattr("dtype")?),
+    )?;
+    let ac = aa.call_method1("astype", (&common,))?;
+    let bc = ba.call_method1("astype", (&common,))?;
+    let pair = np.call_method1("broadcast_arrays", (&ac, &bc))?;
+    let pl: Vec<Bound<PyAny>> = pair.extract()?;
+    let shape: Vec<usize> = pl[0].getattr("shape")?.extract()?;
+    let (ta, _ua, _) = extract_ticks(py, &pl[0])?;
+    let (tb, _ub, _) = extract_ticks(py, &pl[1])?;
+    let fa: Vec<i64> = ta.iter().copied().collect();
+    let fb: Vec<i64> = tb.iter().copied().collect();
+    Ok((fa, fb, shape))
+}
+
+/// `true` if BOTH operands are time arrays of the same kind (datetime/datetime
+/// or timedelta/timedelta) — the only operand pairs numpy's comparison ufuncs
+/// define over the time dtypes. A datetime-vs-timedelta or time-vs-numeric pair
+/// is NOT comparable (numpy raises / returns NotImplemented), so the caller must
+/// fall through to its real / delegate path.
+pub fn is_time_compare(
+    py: Python<'_>,
+    a: &Bound<'_, PyAny>,
+    b: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
+    let np = py.import("numpy")?;
+    let aa = np.call_method1("asarray", (a,))?;
+    let ba = np.call_method1("asarray", (b,))?;
+    match (time_kind(&aa)?, time_kind(&ba)?) {
+        (Some(ka), Some(kb)) => Ok(ka == kb),
+        _ => Ok(false),
+    }
+}
+
+/// Element-wise comparison of two same-kind datetime64 / timedelta64 operands
+/// by int64 tick (common finer unit), with numpy's NaT-unordered rule. Returns
+/// a bool ndarray of the broadcast shape (REQ-3). The caller (the `ufunc.rs`
+/// comparison `#[pyfunction]`s) gates on [`is_time_compare`] first.
+pub fn compare_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    op: TimeCompare,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_numpy_interop::IntoNumPy;
+    let (fa, fb, shape) = promote_pair_int64(py, a, b)?;
+    let out: Vec<bool> = fa
+        .iter()
+        .zip(fb.iter())
+        .map(|(&x, &y)| cmp_ticks(op, x, y))
+        .collect();
+    let arr = ArrayD::from_vec(IxDyn::new(&shape), out).map_err(ferr_to_pyerr)?;
+    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+// ---------------------------------------------------------------------------
+// ordering: sort / argsort / unique / searchsorted / partition (REQ-3)
+// ---------------------------------------------------------------------------
+
+/// Order key for an int64 tick: NaT (`i64::MIN`) maps to `i64::MAX` so an
+/// ascending sort places it LAST (numpy sorts NaT last, like NaN). Real ticks
+/// keep their value, preserving their relative order.
+#[inline]
+fn order_key(t: i64) -> i64 {
+    if t == NAT { i64::MAX } else { t }
+}
+
+/// Lower a `Vec<i64>` of ticks (of `out_shape`) back to numpy as the requested
+/// time dtype.
+fn emit_ticks<'py>(
+    py: Python<'py>,
+    ticks: Vec<i64>,
+    out_shape: &[usize],
+    kind: TimeKind,
+    unit_str: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = ArrayD::from_vec(IxDyn::new(out_shape), ticks).map_err(ferr_to_pyerr)?;
+    match kind {
+        TimeKind::Datetime => int64_to_datetime64(py, arr, unit_str),
+        TimeKind::Timedelta => int64_to_timedelta64(py, arr, unit_str),
+    }
+}
+
+/// `numpy.sort(a, axis=-1)` over a datetime64 / timedelta64 array: sort each
+/// 1-D lane along `axis` (default = last, like numpy) by int64 tick with NaT
+/// last; re-tag with the input's own unit (REQ-3).
+pub fn sort_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let arr = np.call_method1("asarray", (a,))?;
+    let kind = time_kind(&arr)?
+        .ok_or_else(|| PyTypeError::new_err("sort_time requires a datetime64/timedelta64 array"))?;
+    let (ticks, _unit, unit_str) = extract_ticks(py, &arr)?;
+    let shape: Vec<usize> = ticks.shape().to_vec();
+    let flat: Vec<i64> = ticks.iter().copied().collect();
+
+    // numpy default axis for `sort` is the LAST axis; `axis=None` flattens.
+    if shape.is_empty() {
+        return emit_ticks(py, flat, &shape, kind, &unit_str);
+    }
+    let (work_shape, ax) = match axis {
+        None => {
+            let n = flat.len();
+            (vec![n], 0usize)
+        }
+        Some(ax) => (shape.clone(), ax),
+    };
+    let mut buf = flat;
+    sort_axis_inplace(&mut buf, &work_shape, ax, false)?;
+    emit_ticks(py, buf, &work_shape, kind, &unit_str)
+}
+
+/// In-place ascending sort of every lane along `axis` of a row-major i64 buffer,
+/// NaT mapped last via [`order_key`]. When `stable` the sort is stable (used by
+/// argsort to match numpy's order on tie / NaT runs).
+fn sort_axis_inplace(buf: &mut [i64], shape: &[usize], ax: usize, _stable: bool) -> PyResult<()> {
+    if ax >= shape.len() {
+        return Err(PyValueError::new_err("axis out of bounds for time sort"));
+    }
+    let axis_len = shape[ax];
+    if axis_len <= 1 {
+        return Ok(());
+    }
+    let strides = row_major_strides(shape);
+    let out_dims: Vec<usize> = (0..shape.len()).filter(|&d| d != ax).collect();
+    let out_extents: Vec<usize> = out_dims.iter().map(|&d| shape[d]).collect();
+    let out_n: usize = out_extents.iter().product::<usize>().max(1);
+    for lin in 0..out_n {
+        let mut rem = lin;
+        let mut base = 0usize;
+        for (i, &d) in out_dims.iter().enumerate() {
+            let ext = out_extents[i];
+            let c = rem % ext;
+            rem /= ext;
+            base += c * strides[d];
+        }
+        let mut lane: Vec<i64> = (0..axis_len).map(|k| buf[base + k * strides[ax]]).collect();
+        lane.sort_by_key(|&t| order_key(t));
+        for (k, v) in lane.into_iter().enumerate() {
+            buf[base + k * strides[ax]] = v;
+        }
+    }
+    Ok(())
+}
+
+/// `numpy.argsort(a, axis=-1)` over a datetime64 / timedelta64 array: a STABLE
+/// argsort of each lane by int64 tick (NaT last), returning int64 indices
+/// (REQ-3). Stable, so equal / NaT runs keep first-occurrence order (numpy's
+/// `argsort` default `kind='quicksort'` is not stable, but a stable order is a
+/// valid argsort and matches numpy on the verified live cases).
+pub fn argsort_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_numpy_interop::IntoNumPy;
+    let np = py.import("numpy")?;
+    let arr = np.call_method1("asarray", (a,))?;
+    let _ = time_kind(&arr)?.ok_or_else(|| {
+        PyTypeError::new_err("argsort_time requires a datetime64/timedelta64 array")
+    })?;
+    let (ticks, _unit, _) = extract_ticks(py, &arr)?;
+    let shape: Vec<usize> = ticks.shape().to_vec();
+    let flat: Vec<i64> = ticks.iter().copied().collect();
+
+    let (work_shape, ax) = match axis {
+        None => (vec![flat.len()], 0usize),
+        Some(ax) => (shape.clone(), ax),
+    };
+    if ax >= work_shape.len() {
+        return Err(PyValueError::new_err("axis out of bounds for argsort"));
+    }
+    let axis_len = work_shape[ax];
+    let strides = row_major_strides(&work_shape);
+    let out_dims: Vec<usize> = (0..work_shape.len()).filter(|&d| d != ax).collect();
+    let out_extents: Vec<usize> = out_dims.iter().map(|&d| work_shape[d]).collect();
+    let out_n: usize = out_extents.iter().product::<usize>().max(1);
+    let mut idx_flat = vec![0i64; flat.len()];
+    for lin in 0..out_n {
+        let mut rem = lin;
+        let mut base = 0usize;
+        for (i, &d) in out_dims.iter().enumerate() {
+            let ext = out_extents[i];
+            let c = rem % ext;
+            rem /= ext;
+            base += c * strides[d];
+        }
+        let mut order: Vec<usize> = (0..axis_len).collect();
+        // Stable sort by order key; ties (incl. NaT runs) keep input order.
+        order.sort_by_key(|&k| order_key(flat[base + k * strides[ax]]));
+        for (pos, k) in order.into_iter().enumerate() {
+            idx_flat[base + pos * strides[ax]] = k as i64;
+        }
+    }
+    let arr = ArrayD::from_vec(IxDyn::new(&work_shape), idx_flat).map_err(ferr_to_pyerr)?;
+    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// `numpy.unique(a)` over a datetime64 / timedelta64 array: sorted unique ticks
+/// (NaT last), with ALL NaT collapsed to a SINGLE trailing NaT (numpy keeps one
+/// NaT even though `NaT != NaT`, verified live). Returns a 1-D time array of the
+/// input's unit (REQ-3).
+pub fn unique_time<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let arr = np.call_method1("asarray", (a,))?;
+    let kind = time_kind(&arr)?.ok_or_else(|| {
+        PyTypeError::new_err("unique_time requires a datetime64/timedelta64 array")
+    })?;
+    let (ticks, _unit, unit_str) = extract_ticks(py, &arr)?;
+    let mut flat: Vec<i64> = ticks.iter().copied().collect();
+    flat.sort_by_key(|&t| order_key(t));
+    let mut out: Vec<i64> = Vec::with_capacity(flat.len());
+    let mut nat_emitted = false;
+    for t in flat {
+        if t == NAT {
+            // Collapse every NaT to a single trailing NaT (numpy keeps one).
+            if !nat_emitted {
+                out.push(NAT);
+                nat_emitted = true;
+            }
+            continue;
+        }
+        if out.last().copied() != Some(t) {
+            out.push(t);
+        }
+    }
+    let n = out.len();
+    emit_ticks(py, out, &[n], kind, &unit_str)
+}
+
+/// `numpy.searchsorted(a, v, side)` over a sorted datetime64 / timedelta64 `a`
+/// and time query `v` (same kind): insertion points by int64 tick (NaT ordered
+/// last, via [`order_key`]), returning int64 indices (REQ-3). `a` is assumed
+/// already sorted (numpy's contract). The two operands are promoted to a common
+/// finer unit first so a cross-unit query is exact.
+pub fn searchsorted_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    v: &Bound<'py, PyAny>,
+    side: &str,
+    v_scalar: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_numpy_interop::IntoNumPy;
+    let right = match side {
+        "left" => false,
+        "right" => true,
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "side must be 'left' or 'right', got {other:?}"
+            )));
+        }
+    };
+    // Promote both to a common unit, in int64 ticks (a is 1-D, v is N-D).
+    let (haystack, needles, v_shape) = promote_pair_for_search(py, a, v)?;
+    let keys: Vec<i64> = haystack.iter().map(|&t| order_key(t)).collect();
+    let out: Vec<i64> = needles
+        .iter()
+        .map(|&q| {
+            let qk = order_key(q);
+            // left -> first index i with keys[i] >= qk; right -> > qk.
+            let mut lo = 0usize;
+            let mut hi = keys.len();
+            while lo < hi {
+                let mid = (lo + hi) / 2;
+                let go_right = if right {
+                    keys[mid] <= qk
+                } else {
+                    keys[mid] < qk
+                };
+                if go_right {
+                    lo = mid + 1;
+                } else {
+                    hi = mid;
+                }
+            }
+            lo as i64
+        })
+        .collect();
+    if v_scalar {
+        let arr = ArrayD::from_vec(IxDyn::new(&[]), out).map_err(ferr_to_pyerr)?;
+        return Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
+    }
+    let arr = ArrayD::from_vec(IxDyn::new(&v_shape), out).map_err(ferr_to_pyerr)?;
+    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// Promote a sorted haystack `a` and query `v` (same time kind) to a common
+/// finer unit and return `(a_ticks, v_ticks, v_shape)` in int64.
+fn promote_pair_for_search(
+    py: Python<'_>,
+    a: &Bound<'_, PyAny>,
+    v: &Bound<'_, PyAny>,
+) -> PyResult<(Vec<i64>, Vec<i64>, Vec<usize>)> {
+    let np = py.import("numpy")?;
+    let aa = np.call_method1("asarray", (a,))?;
+    let va = np.call_method1("asarray", (v,))?;
+    let common = np.call_method1(
+        "promote_types",
+        (aa.getattr("dtype")?, va.getattr("dtype")?),
+    )?;
+    let ac = aa.call_method1("astype", (&common,))?;
+    let vc = va.call_method1("astype", (&common,))?;
+    let v_shape: Vec<usize> = vc.getattr("shape")?.extract()?;
+    let (ta, _ua, _) = extract_ticks(py, &ac)?;
+    let (tv, _uv, _) = extract_ticks(py, &vc)?;
+    Ok((
+        ta.iter().copied().collect(),
+        tv.iter().copied().collect(),
+        v_shape,
+    ))
+}
+
+/// `numpy.partition(a, kth)` over a 1-D datetime64 / timedelta64 array. A full
+/// sort by int64 tick (NaT last) satisfies the partition postcondition exactly
+/// (the kth element is in its final sorted position, smaller-before /
+/// larger-after), matching `np.partition` on the verified live cases (REQ-3).
+pub fn partition_time<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let arr = np.call_method1("asarray", (a,))?;
+    let kind = time_kind(&arr)?.ok_or_else(|| {
+        PyTypeError::new_err("partition_time requires a datetime64/timedelta64 array")
+    })?;
+    let (ticks, _unit, unit_str) = extract_ticks(py, &arr)?;
+    let mut flat: Vec<i64> = ticks.iter().copied().collect();
+    flat.sort_by_key(|&t| order_key(t));
+    let n = flat.len();
+    emit_ticks(py, flat, &[n], kind, &unit_str)
+}
+
+/// `numpy.argpartition(a, kth)` over a 1-D datetime64 / timedelta64 array. A
+/// stable argsort by int64 tick (NaT last) satisfies the argpartition
+/// postcondition (the index at position kth is the kth-smallest), matching
+/// `np.argpartition` on the verified live cases (REQ-3).
+pub fn argpartition_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_numpy_interop::IntoNumPy;
+    let np = py.import("numpy")?;
+    let arr = np.call_method1("asarray", (a,))?;
+    let _ = time_kind(&arr)?.ok_or_else(|| {
+        PyTypeError::new_err("argpartition_time requires a datetime64/timedelta64 array")
+    })?;
+    let (ticks, _unit, _) = extract_ticks(py, &arr)?;
+    let flat: Vec<i64> = ticks.iter().copied().collect();
+    let mut order: Vec<i64> = (0..flat.len() as i64).collect();
+    order.sort_by_key(|&k| order_key(flat[k as usize]));
+    let n = order.len();
+    let arr = ArrayD::from_vec(IxDyn::new(&[n]), order).map_err(ferr_to_pyerr)?;
+    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+// ---------------------------------------------------------------------------
 // isnat
 // ---------------------------------------------------------------------------
 

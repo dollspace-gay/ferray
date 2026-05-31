@@ -2060,7 +2060,7 @@ macro_rules! bind_comparison {
     // Equality form (`equal`/`not_equal`): a complex input computes via the
     // `PartialEq`-bounded `$cfn` (`equal_broadcast`/`not_equal_broadcast`,
     // Complex OK). numpy: `np.equal([1+2j],[1+2j]) == [True]`.
-    ($name:ident, $ferr_path:path, eq_complex = $cfn:path) => {
+    ($name:ident, $ferr_path:path, eq_complex = $cfn:path, time = $tcmp:expr) => {
         #[pyfunction]
         pub fn $name<'py>(
             py: Python<'py>,
@@ -2068,6 +2068,12 @@ macro_rules! bind_comparison {
             x2: &Bound<'py, PyAny>,
         ) -> PyResult<Bound<'py, PyAny>> {
             let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            // datetime64/timedelta64 (same kind) compare by int64 tick value with
+            // NaT-unordered semantics (REQ-3, #943), ahead of the real-only path.
+            if crate::datetime::is_time_compare(py, x1, x2)? {
+                let out = crate::datetime::compare_time(py, x1, x2, $tcmp)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
             let out = if binary_is_complex(py, x1, x2)? {
                 complex_eq_dispatch!(py, x1, x2, $cfn)
             } else {
@@ -2081,7 +2087,7 @@ macro_rules! bind_comparison {
     // raise (`np.less([1+2j,3+2j],[1+5j,3+1j]) == [True False]`, live). `$op` is
     // the lexicographic op tag `"lt"|"le"|"gt"|"ge"` (Complex is not
     // `PartialOrd`, so the real `less_broadcast` cannot take it).
-    ($name:ident, $ferr_path:path, order_complex = $op:expr) => {
+    ($name:ident, $ferr_path:path, order_complex = $op:expr, time = $tcmp:expr) => {
         #[pyfunction]
         pub fn $name<'py>(
             py: Python<'py>,
@@ -2089,6 +2095,12 @@ macro_rules! bind_comparison {
             x2: &Bound<'py, PyAny>,
         ) -> PyResult<Bound<'py, PyAny>> {
             let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            // datetime64/timedelta64 (same kind) order by int64 tick value with
+            // NaT-unordered semantics (REQ-3, #943), ahead of the real-only path.
+            if crate::datetime::is_time_compare(py, x1, x2)? {
+                let out = crate::datetime::compare_time(py, x1, x2, $tcmp)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
             let out = if binary_is_complex(py, x1, x2)? {
                 complex_order_dispatch(py, x1, x2, $op)?
             } else {
@@ -2099,31 +2111,43 @@ macro_rules! bind_comparison {
     };
 }
 
+use crate::datetime::TimeCompare;
+
 bind_comparison!(
     equal,
     ferray_ufunc::equal_broadcast,
-    eq_complex = ferray_ufunc::equal_broadcast
+    eq_complex = ferray_ufunc::equal_broadcast,
+    time = TimeCompare::Equal
 );
 bind_comparison!(
     not_equal,
     ferray_ufunc::not_equal_broadcast,
-    eq_complex = ferray_ufunc::not_equal_broadcast
+    eq_complex = ferray_ufunc::not_equal_broadcast,
+    time = TimeCompare::NotEqual
 );
-bind_comparison!(less, ferray_ufunc::less_broadcast, order_complex = "lt");
+bind_comparison!(
+    less,
+    ferray_ufunc::less_broadcast,
+    order_complex = "lt",
+    time = TimeCompare::Less
+);
 bind_comparison!(
     less_equal,
     ferray_ufunc::less_equal_broadcast,
-    order_complex = "le"
+    order_complex = "le",
+    time = TimeCompare::LessEqual
 );
 bind_comparison!(
     greater,
     ferray_ufunc::greater_broadcast,
-    order_complex = "gt"
+    order_complex = "gt",
+    time = TimeCompare::Greater
 );
 bind_comparison!(
     greater_equal,
     ferray_ufunc::greater_equal_broadcast,
-    order_complex = "ge"
+    order_complex = "ge",
+    time = TimeCompare::GreaterEqual
 );
 
 // ---------------------------------------------------------------------------
