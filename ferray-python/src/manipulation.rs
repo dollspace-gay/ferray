@@ -1427,18 +1427,32 @@ fn broadcast_counts(counts: &[usize], len: usize) -> PyResult<Vec<usize>> {
     }
 }
 
-/// `numpy.delete(arr, obj, axis)` — remove sub-arrays along `axis`
+/// `numpy.delete(arr, obj, axis=None)` — remove sub-arrays along `axis`
 /// (numpy/lib/_function_base_impl.py:5221). `obj` may be an int, a list
 /// of ints (negatives normalized), a `slice`, or a boolean mask the same
 /// length as the axis. `axis` may be negative.
+///
+/// `axis=None` (the default) flattens `arr` first, then deletes — numpy owns
+/// that flatten-and-delete path (plus the full `obj` resolution against the flat
+/// length), so delegate to `numpy.delete`. The native per-axis kernel runs only
+/// when `axis` is given. The prior signature made `axis` REQUIRED, so the
+/// common `np.delete(a, obj)` call (axis defaulted to None) raised TypeError.
 #[pyfunction]
+#[pyo3(signature = (arr, obj, axis = None))]
 pub fn delete<'py>(
     py: Python<'py>,
     arr: &Bound<'py, PyAny>,
     obj: &Bound<'py, PyAny>,
-    axis: isize,
+    axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, arr)?;
+    let axis = match axis {
+        Some(ax) => ax,
+        None => {
+            let np = py.import("numpy")?;
+            return np.call_method1("delete", (&arr, obj));
+        }
+    };
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "delete", (&arr, obj, axis), None);
     }
@@ -1524,36 +1538,32 @@ fn resolve_delete_obj(
         .collect()
 }
 
-/// `numpy.insert(arr, obj, values, axis)`.
+/// `numpy.insert(arr, obj, values, axis=None)` — insert `values` before the
+/// indices in `obj` along `axis`.
+///
+/// numpy owns the full `obj` surface (int, `slice`, or a sequence of indices),
+/// the `axis=None` flatten path (the default), value broadcasting, and dtype
+/// promotion against the inserted `values` (e.g. inserting a float into an int
+/// array promotes to float64). The prior native binding accepted only a SINGLE
+/// `int` `obj` and a REQUIRED `int` `axis`, so the common `np.insert(a, i, v)`
+/// call (axis defaulted to None) raised TypeError, and slice/sequence `obj`
+/// were unsupported. Delegate the whole op to `numpy.insert` for exact parity.
 #[pyfunction]
+#[pyo3(signature = (arr, obj, values, axis = None))]
 pub fn insert<'py>(
     py: Python<'py>,
     arr: &Bound<'py, PyAny>,
-    obj: usize,
+    obj: &Bound<'py, PyAny>,
     values: &Bound<'py, PyAny>,
-    axis: usize,
+    axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr_a = as_ndarray(py, arr)?;
-    if crate::datetime::is_time_array(&arr_a)? {
-        return crate::datetime::delegate_manip(py, "insert", (&arr_a, obj, values, axis), None);
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    if let Some(ax) = axis {
+        kwargs.set_item("axis", ax)?;
     }
-    // string `<U`/`<S` (REQ-2, #960): numpy owns the dtype passthrough and the
-    // width-promotion against the inserted `values`; delegate on the original
-    // operands and return numpy's string result directly.
-    if is_flexible_array(&arr_a)? {
-        return string_delegate(py, "insert", (&arr_a, obj, values, axis), None);
-    }
-    if crate::conv::is_float16_dtype(dtype_name(&arr_a)?.as_str()) {
-        return crate::conv::f16_delegate(py, "insert", (&arr_a, obj, values, axis), None);
-    }
-    let dt = dtype_name(&arr_a)?;
-    let arr_v = crate::conv::coerce_dtype(py, values, dt.as_str())?;
-    Ok(match_dtype_all_complex!(dt.as_str(), T => {
-        let fa: ArrayD<T> = T::extract_dyn(&arr_a)?;
-        let fv: ArrayD<T> = T::extract_dyn(&arr_v)?;
-        let r: ArrayD<T> = fme::insert(&fa, obj, &fv, axis).map_err(ferr_to_pyerr)?;
-        T::emit_dyn(py, r)?
-    }))
+    np.call_method("insert", (&arr_a, obj, values), Some(&kwargs))
 }
 
 /// `numpy.append(arr, values, axis=None)`.

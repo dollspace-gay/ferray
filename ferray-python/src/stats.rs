@@ -2943,12 +2943,43 @@ pub fn cumprod<'py>(
     }))
 }
 
-/// `numpy.diff(a, n=1)` — discrete difference along the only axis.
-/// ferray's diff is 1-D-only; multi-axis diff is deferred.
+/// `numpy.diff(a, n=1, axis=-1, prepend=<none>, append=<none>)` — discrete
+/// difference along `axis`.
+///
+/// The native 1-D kernel ([`ferray_ufunc::diff`]) covers the common case: a 1-D
+/// array along its only axis with no `prepend`/`append`. Anything else — an N-D
+/// array, a non-default `axis`, or a `prepend=`/`append=` edge value — delegates
+/// to `numpy.diff`, which owns the N-D `a[...,1:] - a[...,:-1]` reduction and the
+/// prepend/append concatenation. The prior binding accepted only `n=` and would
+/// raise TypeError on `axis=`/`prepend=`/`append=` and silently flatten N-D input.
 #[pyfunction]
-#[pyo3(signature = (a, n = 1))]
-pub fn diff<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, n: usize) -> PyResult<Bound<'py, PyAny>> {
+#[pyo3(signature = (a, n = 1, axis = -1, prepend = None, append = None))]
+pub fn diff<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    n: usize,
+    axis: isize,
+    prepend: Option<&Bound<'py, PyAny>>,
+    append: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    let ndim: usize = arr.getattr("ndim")?.extract()?;
+    // Delegate every case the 1-D native kernel can't represent: N-D input, a
+    // non-trivial `axis` (anything but the only axis of a 1-D array), or any
+    // prepend/append edge value.
+    if ndim != 1 || prepend.is_some() || append.is_some() || !(axis == -1 || axis == 0) {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("n", n)?;
+        kwargs.set_item("axis", axis)?;
+        if let Some(p) = prepend {
+            kwargs.set_item("prepend", p)?;
+        }
+        if let Some(ap) = append {
+            kwargs.set_item("append", ap)?;
+        }
+        return np.call_method("diff", (&arr,), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     // datetime64/timedelta64 diff -> timedelta64 (consecutive differences;
     // `datetime - datetime = timedelta`). Routed through the #947 time dispatch

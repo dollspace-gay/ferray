@@ -248,3 +248,64 @@ def test_concatenate_promotes_mixed_dtypes_to_first():
     out = ferray.concatenate([a, b])
     assert out.dtype == np.float64
     np.testing.assert_allclose(out, np.array([1.0, 2.0, 3.0, 4.0]))
+
+
+# ---------------------------------------------------------------------------
+# delete / insert signature parity (#980)
+# ---------------------------------------------------------------------------
+# numpy.delete(arr, obj, axis=None) and numpy.insert(arr, obj, values, axis=None)
+# default axis to None (flatten). The prior bindings made axis REQUIRED, so the
+# common no-axis call raised TypeError; insert also accepted only a single int
+# obj. These pin axis=None flatten + slice/sequence obj + value promotion.
+
+
+def test_delete_default_axis_flattens():
+    np.testing.assert_array_equal(ferray.delete([1, 2, 3, 4], 1), np.delete([1, 2, 3, 4], 1))
+
+
+def test_delete_2d_default_axis_flattens():
+    np.testing.assert_array_equal(
+        ferray.delete([[1, 2], [3, 4]], 1), np.delete([[1, 2], [3, 4]], 1)
+    )
+
+
+def test_delete_explicit_axis_native_path():
+    np.testing.assert_array_equal(
+        ferray.delete([[1, 2], [3, 4]], 0, 0), np.delete([[1, 2], [3, 4]], 0, 0)
+    )
+
+
+def test_delete_slice_obj():
+    np.testing.assert_array_equal(
+        ferray.delete([1, 2, 3, 4, 5], slice(1, 3)), np.delete([1, 2, 3, 4, 5], slice(1, 3))
+    )
+
+
+def test_delete_sequence_obj():
+    np.testing.assert_array_equal(
+        ferray.delete([1, 2, 3, 4, 5], [0, 2]), np.delete([1, 2, 3, 4, 5], [0, 2])
+    )
+
+
+def test_insert_default_axis_flattens():
+    np.testing.assert_array_equal(ferray.insert([1, 2, 3], 1, 9), np.insert([1, 2, 3], 1, 9))
+
+
+def test_insert_explicit_axis():
+    np.testing.assert_array_equal(
+        ferray.insert([[1, 2], [3, 4]], 1, 9, axis=1),
+        np.insert([[1, 2], [3, 4]], 1, 9, axis=1),
+    )
+
+
+def test_insert_sequence_obj():
+    np.testing.assert_array_equal(
+        ferray.insert([1, 2, 3], [0, 2], [9, 8]), np.insert([1, 2, 3], [0, 2], [9, 8])
+    )
+
+
+def test_insert_promotes_dtype():
+    fr_r = ferray.insert([1, 2, 3], 1, 9.5)
+    np_r = np.insert([1, 2, 3], 1, 9.5)
+    assert np.asarray(fr_r).dtype == np_r.dtype
+    np.testing.assert_array_equal(fr_r, np_r)

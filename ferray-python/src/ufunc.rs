@@ -3011,23 +3011,43 @@ pub fn trapezoid<'py>(
     }))
 }
 
+/// Resolve an `ediff1d` `to_end`/`to_begin` appendage into a flat `Vec<f64>`.
+/// numpy accepts a SCALAR or any array-like and ravels it
+/// (`numpy/lib/_arraysetops_impl.py`: `np.asanyarray(to_end).ravel()`), so a
+/// bare `to_end=99` is valid — the prior `Option<Vec<f64>>` signature rejected
+/// scalars with a `not an instance of Sequence` TypeError. Try the sequence
+/// form first, then fall back to a single scalar.
+fn ediff1d_appendage(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Vec<f64>>> {
+    match obj {
+        None => Ok(None),
+        Some(o) => {
+            if let Ok(v) = o.extract::<Vec<f64>>() {
+                Ok(Some(v))
+            } else {
+                Ok(Some(vec![o.extract::<f64>()?]))
+            }
+        }
+    }
+}
+
 /// `numpy.ediff1d(ary, to_end=None, to_begin=None)` — first differences.
+/// `to_end`/`to_begin` accept a scalar or any array-like (numpy ravels them).
 #[pyfunction]
 #[pyo3(signature = (ary, to_end = None, to_begin = None))]
 pub fn ediff1d<'py>(
     py: Python<'py>,
     ary: &Bound<'py, PyAny>,
-    to_end: Option<Vec<f64>>,
-    to_begin: Option<Vec<f64>>,
+    to_end: Option<&Bound<'py, PyAny>>,
+    to_begin: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     use ferray_core::array::aliases::Array1;
     let arr = as_ndarray(py, ary)?;
     let dt = dtype_name(&arr)?;
     // datetime64/timedelta64 ediff1d -> timedelta64 (consecutive differences).
     // Routed through the #947 time dispatch ahead of the real-only
-    // `match_dtype_numeric!`. The `to_end`/`to_begin` kwargs (typed `Vec<f64>`
-    // for the numeric path) are not part of the time divergence pin; the time
-    // arm forwards them only when present (numpy validates the time append).
+    // `match_dtype_numeric!`. The `to_end`/`to_begin` kwargs are not part of the
+    // time divergence pin; the time arm forwards them only when present (numpy
+    // validates the time append).
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::ediff1d_time(py, &arr, None, None);
     }
@@ -3036,31 +3056,33 @@ pub fn ediff1d<'py>(
     // original array via `ary[1:] - ary[:-1]`), but `match_dtype_numeric!` is
     // sealed to real numeric dtypes and would reject the complex array. Delegate
     // the complex case to numpy, which owns the complex result (R-CODE-4). The
-    // `to_end`/`to_begin` kwargs are forwarded only when present.
+    // `to_end`/`to_begin` objects (scalar or array-like) are forwarded as-is.
     if is_complex_dtype(dt.as_str()) {
         let kwargs = pyo3::types::PyDict::new(py);
-        if let Some(ref e) = to_end {
-            kwargs.set_item("to_end", e.clone())?;
+        if let Some(e) = to_end {
+            kwargs.set_item("to_end", e)?;
         }
-        if let Some(ref b) = to_begin {
-            kwargs.set_item("to_begin", b.clone())?;
+        if let Some(b) = to_begin {
+            kwargs.set_item("to_begin", b)?;
         }
         let np = py.import("numpy")?;
         return np.call_method("ediff1d", (&arr,), Some(&kwargs));
     }
     // float16 (REQ-5, #955): ediff1d preserves the dtype (`np.ediff1d(f16).dtype
     // == float16`, live); delegate to numpy as `match_dtype_numeric!` has no
-    // float16 arm. `to_end`/`to_begin` forwarded only when present.
+    // float16 arm. `to_end`/`to_begin` forwarded as-is when present.
     if is_float16_dtype(dt.as_str()) {
         let kwargs = pyo3::types::PyDict::new(py);
-        if let Some(ref e) = to_end {
-            kwargs.set_item("to_end", e.clone())?;
+        if let Some(e) = to_end {
+            kwargs.set_item("to_end", e)?;
         }
-        if let Some(ref b) = to_begin {
-            kwargs.set_item("to_begin", b.clone())?;
+        if let Some(b) = to_begin {
+            kwargs.set_item("to_begin", b)?;
         }
         return crate::conv::f16_delegate(py, "ediff1d", (&arr,), Some(&kwargs));
     }
+    let to_end = ediff1d_appendage(to_end)?;
+    let to_begin = ediff1d_appendage(to_begin)?;
     Ok(crate::match_dtype_numeric!(dt.as_str(), T => {
         let view: numpy::PyReadonlyArray1<T> = arr.extract()?;
         let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;

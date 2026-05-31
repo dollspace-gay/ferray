@@ -224,3 +224,54 @@ def test_logical_and_on_int_truthy():
 def test_clip_matches_numpy():
     src = np.array([-3.0, -1.0, 0.0, 1.0, 5.0])
     np.testing.assert_allclose(ferray.clip(src, -1.0, 2.0), np.clip(src, -1.0, 2.0))
+
+
+# ---------------------------------------------------------------------------
+# diff axis/prepend/append + ediff1d scalar appendage (#980)
+# ---------------------------------------------------------------------------
+# numpy.diff(a, n, axis=-1, prepend, append) supports N-D + edge values; the
+# prior binding accepted only n=. numpy.ediff1d to_end/to_begin accept a SCALAR
+# (numpy ravels it); the prior Vec<f64> signature rejected scalars.
+
+
+def test_diff_axis0():
+    np.testing.assert_array_equal(
+        ferray.diff([[1, 3], [6, 10]], axis=0), np.diff([[1, 3], [6, 10]], axis=0)
+    )
+
+
+def test_diff_axis1():
+    np.testing.assert_array_equal(
+        ferray.diff([[1, 3], [6, 10]], axis=1), np.diff([[1, 3], [6, 10]], axis=1)
+    )
+
+
+def test_diff_prepend():
+    np.testing.assert_array_equal(ferray.diff([1, 2, 4], prepend=0), np.diff([1, 2, 4], prepend=0))
+
+
+def test_diff_append():
+    np.testing.assert_array_equal(ferray.diff([1, 2, 4], append=7), np.diff([1, 2, 4], append=7))
+
+
+def test_diff_1d_native_unchanged():
+    np.testing.assert_array_equal(ferray.diff([1, 4, 9, 16], n=2), np.diff([1, 4, 9, 16], n=2))
+
+
+def test_ediff1d_scalar_to_end():
+    np.testing.assert_array_equal(
+        ferray.ediff1d([1, 2, 4], to_end=99), np.ediff1d([1, 2, 4], to_end=99)
+    )
+
+
+def test_ediff1d_scalar_to_begin():
+    np.testing.assert_array_equal(
+        ferray.ediff1d([1, 2, 4], to_begin=-1), np.ediff1d([1, 2, 4], to_begin=-1)
+    )
+
+
+def test_ediff1d_both_appendages():
+    np.testing.assert_array_equal(
+        ferray.ediff1d([1, 2, 4], to_end=[9, 8], to_begin=0),
+        np.ediff1d([1, 2, 4], to_end=[9, 8], to_begin=0),
+    )
