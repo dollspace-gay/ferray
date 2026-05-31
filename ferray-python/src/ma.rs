@@ -168,7 +168,7 @@ use ferray_polynomial as fp_poly;
 use ferray_stats::correlation::{CorrelateMode, correlate as stats_correlate};
 use ferray_ufunc::{ConvolveMode, convolve as ufunc_convolve};
 use num_complex::Complex;
-use numpy::PyReadonlyArrayDyn;
+use numpy::{PyArrayDyn, PyArrayMethods, PyReadonlyArrayDyn};
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyIndexError, PyValueError};
 use pyo3::prelude::*;
@@ -487,6 +487,207 @@ impl DynMa {
     }
 }
 
+/// A numpy-OWNED data buffer that an `Storage::Owned` array aliases for its
+/// `.data` egress (#896/#898). The buffer lives on the numpy heap (created via
+/// `PyArray::from_owned_array`, which MOVES the Rust `Vec` into numpy, or by
+/// directly retaining a foreign input `Py<PyArray>` for `copy=False`). Rust
+/// reads it through borrow-checked `.readonly().as_array()` and writes it
+/// through `.readwrite().as_array_mut()` — both SAFE pyo3-numpy 0.28 APIs, no
+/// `unsafe`/`RefCell` (R-CODE-1/R-APG-1).
+///
+/// The `Py<PyArrayDyn<T>>` is the CANONICAL data store for the 11 real dtypes:
+/// a Python-side `b.data[i] = x` write lands in this buffer, and the owned
+/// array's `DynMa` data component is refreshed FROM this buffer at every read
+/// (`snapshot`) and written BACK to it at every mutation (`with_buffer_mut`,
+/// view write-through). The mask + fill stay on the `DynMa` (separate fields).
+/// Complex dtypes carry NO `DataBuf` (the `buf: None` legacy copy path) — their
+/// `.data` aliasing is untested and the `Complex<T>` egress has no `NpElement`.
+///
+/// Each variant retains the dtype tag so a refresh/writeback dispatches to the
+/// matching `match_ma!` arm; a dtype mismatch between the buffer and the DynMa
+/// is an internal error (never a panic — R-CODE-2/R-APG-1).
+enum DataBuf {
+    Bool(Py<PyArrayDyn<bool>>),
+    I8(Py<PyArrayDyn<i8>>),
+    I16(Py<PyArrayDyn<i16>>),
+    I32(Py<PyArrayDyn<i32>>),
+    I64(Py<PyArrayDyn<i64>>),
+    U8(Py<PyArrayDyn<u8>>),
+    U16(Py<PyArrayDyn<u16>>),
+    U32(Py<PyArrayDyn<u32>>),
+    U64(Py<PyArrayDyn<u64>>),
+    F32(Py<PyArrayDyn<f32>>),
+    F64(Py<PyArrayDyn<f64>>),
+}
+
+impl DataBuf {
+    /// Build a numpy-owned `DataBuf` from a `DynMa`'s data (real dtypes only),
+    /// MOVING the data into a fresh numpy buffer via `from_owned_array`.
+    /// Returns `None` for the complex variants (legacy copy `.data`).
+    fn from_dynma(py: Python<'_>, d: &DynMa) -> Option<DataBuf> {
+        macro_rules! mk {
+            ($m:expr, $variant:ident) => {{
+                // MOVE the data into a fresh numpy-owned buffer (`into_pyarray`
+                // allocates a numpy array and copies the contiguous data; numpy
+                // then owns the buffer). Returns `None` on the (internal)
+                // allocation error rather than panicking (R-CODE-2/R-APG-1).
+                let arr: ArrayD<_> = $m.data().to_owned();
+                arr.into_pyarray(py)
+                    .ok()
+                    .map(|p| DataBuf::$variant(p.unbind()))
+            }};
+        }
+        match d {
+            DynMa::Bool(m) => mk!(m, Bool),
+            DynMa::I8(m) => mk!(m, I8),
+            DynMa::I16(m) => mk!(m, I16),
+            DynMa::I32(m) => mk!(m, I32),
+            DynMa::I64(m) => mk!(m, I64),
+            DynMa::U8(m) => mk!(m, U8),
+            DynMa::U16(m) => mk!(m, U16),
+            DynMa::U32(m) => mk!(m, U32),
+            DynMa::U64(m) => mk!(m, U64),
+            DynMa::F32(m) => mk!(m, F32),
+            DynMa::F64(m) => mk!(m, F64),
+            DynMa::Complex32(_) | DynMa::Complex64(_) => None,
+        }
+    }
+
+    /// Build a `DataBuf` directly retaining a FOREIGN numpy `Py<PyArray>` of the
+    /// matching dtype (`#898` `ma.array(ndarray, copy=False)` — share the input
+    /// buffer, no move). `arr` must already be a `numpy.ndarray` whose dtype
+    /// equals `d`'s. Returns `None` for complex / on any extraction failure (the
+    /// caller falls back to the moved-buffer or legacy copy path).
+    fn from_foreign(arr: &Bound<'_, PyAny>, d: &DynMa) -> Option<DataBuf> {
+        macro_rules! retain {
+            ($ty:ty, $variant:ident) => {{
+                arr.cast::<PyArrayDyn<$ty>>()
+                    .ok()
+                    .map(|a| DataBuf::$variant(a.clone().unbind()))
+            }};
+        }
+        match d {
+            DynMa::Bool(_) => retain!(bool, Bool),
+            DynMa::I8(_) => retain!(i8, I8),
+            DynMa::I16(_) => retain!(i16, I16),
+            DynMa::I32(_) => retain!(i32, I32),
+            DynMa::I64(_) => retain!(i64, I64),
+            DynMa::U8(_) => retain!(u8, U8),
+            DynMa::U16(_) => retain!(u16, U16),
+            DynMa::U32(_) => retain!(u32, U32),
+            DynMa::U64(_) => retain!(u64, U64),
+            DynMa::F32(_) => retain!(f32, F32),
+            DynMa::F64(_) => retain!(f64, F64),
+            DynMa::Complex32(_) | DynMa::Complex64(_) => None,
+        }
+    }
+
+    /// The aliasing `Py<PyArray>` handle BY REFERENCE (clone_ref bumps the
+    /// refcount; the returned numpy array shares the SAME buffer). This is the
+    /// `.data` egress that makes `b.data[i] = x` write the shared buffer.
+    fn data_pyarray<'py>(&self, py: Python<'py>) -> Bound<'py, PyAny> {
+        match self {
+            DataBuf::Bool(p) => p.bind(py).clone().into_any(),
+            DataBuf::I8(p) => p.bind(py).clone().into_any(),
+            DataBuf::I16(p) => p.bind(py).clone().into_any(),
+            DataBuf::I32(p) => p.bind(py).clone().into_any(),
+            DataBuf::I64(p) => p.bind(py).clone().into_any(),
+            DataBuf::U8(p) => p.bind(py).clone().into_any(),
+            DataBuf::U16(p) => p.bind(py).clone().into_any(),
+            DataBuf::U32(p) => p.bind(py).clone().into_any(),
+            DataBuf::U64(p) => p.bind(py).clone().into_any(),
+            DataBuf::F32(p) => p.bind(py).clone().into_any(),
+            DataBuf::F64(p) => p.bind(py).clone().into_any(),
+        }
+    }
+
+    /// REFRESH the DynMa's data component FROM this canonical numpy buffer (a
+    /// Python `.data[i] = x` write lands here, not on the DynMa). Takes a
+    /// MOMENTARY `.readonly()` borrow, copies the buffer into the DynMa's
+    /// contiguous data slice, then drops the borrow — so it never overlaps a
+    /// `.readwrite()` (the pyo3-numpy dynamic borrow checker panics on overlap).
+    /// A buffer/DynMa dtype mismatch or non-contiguous data is a (non-panicking)
+    /// internal error.
+    fn refresh_into(&self, py: Python<'_>, d: &mut DynMa) -> PyResult<()> {
+        macro_rules! pull {
+            ($p:expr, $m:expr) => {{
+                let bound = $p.bind(py);
+                let ro = bound.readonly();
+                let view = ro.as_array();
+                let buf = $m
+                    .data_mut()
+                    .ok_or_else(|| PyValueError::new_err("masked array data is not contiguous"))?;
+                if buf.len() != view.len() {
+                    return Err(PyValueError::new_err(
+                        "internal: numpy data buffer length mismatch",
+                    ));
+                }
+                for (dst, src) in buf.iter_mut().zip(view.iter()) {
+                    *dst = *src;
+                }
+                Ok(())
+            }};
+        }
+        match (self, d) {
+            (DataBuf::Bool(p), DynMa::Bool(m)) => pull!(p, m),
+            (DataBuf::I8(p), DynMa::I8(m)) => pull!(p, m),
+            (DataBuf::I16(p), DynMa::I16(m)) => pull!(p, m),
+            (DataBuf::I32(p), DynMa::I32(m)) => pull!(p, m),
+            (DataBuf::I64(p), DynMa::I64(m)) => pull!(p, m),
+            (DataBuf::U8(p), DynMa::U8(m)) => pull!(p, m),
+            (DataBuf::U16(p), DynMa::U16(m)) => pull!(p, m),
+            (DataBuf::U32(p), DynMa::U32(m)) => pull!(p, m),
+            (DataBuf::U64(p), DynMa::U64(m)) => pull!(p, m),
+            (DataBuf::F32(p), DynMa::F32(m)) => pull!(p, m),
+            (DataBuf::F64(p), DynMa::F64(m)) => pull!(p, m),
+            _ => Err(pyo3::exceptions::PyTypeError::new_err(
+                "internal: data buffer dtype mismatch on refresh",
+            )),
+        }
+    }
+
+    /// WRITE the DynMa's current data component BACK into this canonical numpy
+    /// buffer (after a Rust-side mutation: `__setitem__`, sort/fill, view
+    /// write-through). Takes a MOMENTARY `.readwrite()` borrow, copies in, then
+    /// drops it — disjoint from any `.readonly()` so the borrow checker never
+    /// panics.
+    fn writeback_from(&self, py: Python<'_>, d: &DynMa) -> PyResult<()> {
+        macro_rules! push {
+            ($p:expr, $m:expr) => {{
+                let bound = $p.bind(py);
+                let mut rw = bound.readwrite();
+                let mut view = rw.as_array_mut();
+                let src = $m.data();
+                if src.size() != view.len() {
+                    return Err(PyValueError::new_err(
+                        "internal: numpy data buffer length mismatch",
+                    ));
+                }
+                for (dst, s) in view.iter_mut().zip(src.iter()) {
+                    *dst = *s;
+                }
+                Ok(())
+            }};
+        }
+        match (self, d) {
+            (DataBuf::Bool(p), DynMa::Bool(m)) => push!(p, m),
+            (DataBuf::I8(p), DynMa::I8(m)) => push!(p, m),
+            (DataBuf::I16(p), DynMa::I16(m)) => push!(p, m),
+            (DataBuf::I32(p), DynMa::I32(m)) => push!(p, m),
+            (DataBuf::I64(p), DynMa::I64(m)) => push!(p, m),
+            (DataBuf::U8(p), DynMa::U8(m)) => push!(p, m),
+            (DataBuf::U16(p), DynMa::U16(m)) => push!(p, m),
+            (DataBuf::U32(p), DynMa::U32(m)) => push!(p, m),
+            (DataBuf::U64(p), DynMa::U64(m)) => push!(p, m),
+            (DataBuf::F32(p), DynMa::F32(m)) => push!(p, m),
+            (DataBuf::F64(p), DynMa::F64(m)) => push!(p, m),
+            _ => Err(pyo3::exceptions::PyTypeError::new_err(
+                "internal: data buffer dtype mismatch on writeback",
+            )),
+        }
+    }
+}
+
 /// View descriptor: the basic-index mapping from a child view's flat C-order
 /// coordinates to its base's flat C-order coordinates, plus the view's own
 /// result shape.
@@ -530,7 +731,17 @@ enum Storage {
     /// materialized base TRACKS the base's later changes (numpy's by-reference
     /// `_fill_value` share); a view over a never-set base returns the default
     /// forever. The discriminator is materialization, NOT a value-compare.
-    Owned { data: DynMa, fill_set: bool },
+    ///
+    /// `buf` is the optional numpy-OWNED data buffer (#896/#898): when `Some`,
+    /// it is the CANONICAL data store the `.data` getter aliases, and the
+    /// `data` DynMa's data component is refreshed FROM it on read / written BACK
+    /// to it on mutation. `None` is the legacy copy path (op results, complex
+    /// dtypes) where the DynMa is the sole data store and `.data` copies.
+    Owned {
+        data: DynMa,
+        fill_set: bool,
+        buf: Option<DataBuf>,
+    },
     View {
         base: Py<PyMaskedArray>,
         desc: ViewDesc,
@@ -573,9 +784,19 @@ enum Storage {
 impl Clone for Storage {
     fn clone(&self) -> Self {
         match self {
-            Storage::Owned { data, fill_set } => Storage::Owned {
+            Storage::Owned {
+                data,
+                fill_set,
+                buf,
+            } => Storage::Owned {
                 data: data.clone(),
                 fill_set: *fill_set,
+                // A clone gets an INDEPENDENT numpy buffer (a fresh
+                // `from_owned_array` move of the cloned data) so the clone does
+                // not alias the original's `.data` — matching numpy, where
+                // copies do not share `_data`. `clone()` is used by deep-copy /
+                // op-template paths; aliasing is only for the original handle.
+                buf: Python::attach(|py| buf.as_ref().and_then(|_| DataBuf::from_dynma(py, data))),
             },
             Storage::View {
                 base,
@@ -778,7 +999,46 @@ impl PyMaskedArray {
             storage: Storage::Owned {
                 data: inner,
                 fill_set: false,
+                // Legacy copy `.data` for internally-built arrays (op results,
+                // gathers). The numpy-backed aliasing buffer is attached only at
+                // the user-facing constructors via `from_dynma_buffered`.
+                buf: None,
             },
+        }
+    }
+
+    /// Build an OWNED `PyMaskedArray` whose `.data` ALIASES a numpy-owned buffer
+    /// (#896/#898). For the 11 real dtypes the data is MOVED into a fresh numpy
+    /// `Py<PyArray>` (`from_owned_array`) which becomes the canonical store;
+    /// complex falls back to the legacy copy path (`buf: None`). Used by the
+    /// user-facing `array`/`masked_array`/`MaskedArray(...)` constructors so a
+    /// Python `b.data[i] = x` writes the shared buffer.
+    fn from_dynma_buffered(py: Python<'_>, inner: DynMa) -> Self {
+        let buf = DataBuf::from_dynma(py, &inner);
+        Self {
+            storage: Storage::Owned {
+                data: inner,
+                fill_set: false,
+                buf,
+            },
+        }
+    }
+
+    /// Build an OWNED `PyMaskedArray` whose `.data` ALIASES the FOREIGN numpy
+    /// `Py<PyArray>` `arr` directly (#898 `ma.array(ndarray, copy=False)` — no
+    /// buffer move, the input ndarray IS the shared store). Falls back to a
+    /// moved buffer (`from_dynma_buffered`) when `arr`'s dtype cannot be
+    /// retained as a typed handle (complex, or a dtype mismatch).
+    fn from_foreign_buffered(py: Python<'_>, arr: &Bound<'_, PyAny>, inner: DynMa) -> Self {
+        match DataBuf::from_foreign(arr, &inner) {
+            Some(buf) => Self {
+                storage: Storage::Owned {
+                    data: inner,
+                    fill_set: false,
+                    buf: Some(buf),
+                },
+            },
+            None => Self::from_dynma_buffered(py, inner),
         }
     }
 
@@ -793,7 +1053,17 @@ impl PyMaskedArray {
     /// a nomask base yields a nomask view (mirrors `__getitem__`'s gather).
     fn snapshot(&self, py: Python<'_>) -> PyResult<DynMa> {
         match &self.storage {
-            Storage::Owned { data, .. } => Ok(data.clone()),
+            // For a numpy-backed owned array the buffer is the CANONICAL data
+            // (a Python `.data[i] = x` wrote it, not the DynMa). Clone the DynMa
+            // (mask/fill/structure) and overlay the buffer's CURRENT contents
+            // before returning, so every reader sees the live `.data` state.
+            Storage::Owned { data, buf, .. } => {
+                let mut snap = data.clone();
+                if let Some(b) = buf {
+                    b.refresh_into(py, &mut snap)?;
+                }
+                Ok(snap)
+            }
             Storage::View {
                 base,
                 desc,
@@ -919,7 +1189,22 @@ impl PyMaskedArray {
         f: impl FnOnce(&mut DynMa) -> PyResult<R>,
     ) -> PyResult<R> {
         match &mut self.storage {
-            Storage::Owned { data, .. } => f(data),
+            Storage::Owned { data, buf, .. } => {
+                // Refresh the DynMa data from the canonical numpy buffer (pick
+                // up any prior Python `.data[i] = x`), run the mutation, then
+                // write the mutated data BACK into the buffer. The refresh and
+                // writeback take DISJOINT momentary borrows (never overlapping),
+                // and `f` runs between them on Rust-owned storage — so the
+                // pyo3-numpy borrow checker never sees an overlap.
+                if let Some(b) = buf {
+                    b.refresh_into(py, data)?;
+                }
+                let r = f(data)?;
+                if let Some(b) = buf {
+                    b.writeback_from(py, data)?;
+                }
+                Ok(r)
+            }
             Storage::View {
                 base,
                 desc,
@@ -1016,6 +1301,8 @@ impl PyMaskedArray {
             storage: Storage::Owned {
                 data: DynMa::F64(inner),
                 fill_set: false,
+                // Op results use the legacy copy `.data` (no aliasing contract).
+                buf: None,
             },
         }
     }
@@ -1065,7 +1352,56 @@ impl PyMaskedArray {
 
     /// Egress the data buffer as a numpy `ndarray` of the NATIVE dtype.
     fn data_pyarray<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        // Aliasing `.data` egress (#896/#898): an owned array with a numpy
+        // buffer returns the buffer BY REFERENCE so `b.data[i] = x` writes the
+        // shared store. A view whose `.data` aliases the base buffer returns
+        // numpy's own aliasing view of that buffer. Everything else (op
+        // results, complex, fancy/partial views) falls back to the snapshot
+        // COPY egress — preserving every prior `.data` READ behavior.
+        if let Some(alias) = self.aliasing_data_pyarray(py)? {
+            return Ok(alias);
+        }
         dynma_data_pyarray(py, &self.snapshot(py)?)
+    }
+
+    /// Return the ALIASING `.data` numpy array when this storage can share its
+    /// data buffer with Python (`Some`), or `None` to fall back to the copy
+    /// egress.
+    ///
+    /// - `Owned` with a `buf`: the buffer handle by reference (direct alias).
+    /// - `View` whose descriptor covers the WHOLE base in C-order (an identity
+    ///   `[:]`/`...` view — the #896 `ma.array(other, mask=/fill_value=)` case
+    ///   and #898 foreign view): numpy's `base_buffer.reshape(view_shape)`,
+    ///   which numpy returns as an ALIASING view of the same bytes, so
+    ///   `view.data[i] = x` writes the base buffer. A partial/fancy view (whose
+    ///   `positions` are not the identity) cannot be expressed as a single
+    ///   aliasing numpy view here, so it returns `None` (copy egress) — its
+    ///   write-through still works via `__setitem__` (#857), unchanged.
+    fn aliasing_data_pyarray<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        match &self.storage {
+            Storage::Owned { buf: Some(b), .. } => Ok(Some(b.data_pyarray(py))),
+            Storage::Owned { buf: None, .. } => Ok(None),
+            Storage::View { base, desc, .. } => {
+                let base_ref = base.borrow(py);
+                let base_shape = base_ref.shape_vec();
+                let base_size: usize = base_shape.iter().product();
+                let is_identity = desc.positions.len() == base_size
+                    && desc.positions.iter().copied().eq(0..base_size);
+                if !is_identity {
+                    return Ok(None);
+                }
+                // Recurse to the base's aliasing buffer, then reshape to this
+                // view's shape (numpy `reshape` of a C-contiguous array is an
+                // aliasing view — same bytes). A non-aliasing base yields None.
+                match base_ref.aliasing_data_pyarray(py)? {
+                    Some(base_arr) => {
+                        let reshaped = base_arr.call_method1("reshape", (desc.shape.clone(),))?;
+                        Ok(Some(reshaped))
+                    }
+                    None => Ok(None),
+                }
+            }
+        }
     }
 
     /// Build the EQUIVALENT `numpy.ma.MaskedArray` from this array's CURRENT
@@ -1653,6 +1989,7 @@ fn construct_masked<'py>(
     data: &Bound<'py, PyAny>,
     mask: Option<&Bound<'py, PyAny>>,
     dtype: Option<&Bound<'py, PyAny>>,
+    copy: bool,
 ) -> PyResult<PyMaskedArray> {
     // Optional explicit `dtype=` (`fr.ma.array([1,2,3], dtype=np.int32)`),
     // normalized to a canonical numpy dtype name (mirrors numpy's
@@ -1733,8 +2070,27 @@ fn construct_masked<'py>(
             })
         }
     };
-    let inner = dynma_from_input(py, data, dt_ref, mask_arg)?;
-    Ok(PyMaskedArray::from_dynma(inner))
+    // #898: when `data` is a plain `numpy.ndarray` and NO `dtype=` recast is
+    // requested, numpy.ma's `ma.array(ndarray)` SHARES the foreign buffer
+    // (`copy=False` default). Retain the input ndarray's `Py<PyArray>` directly
+    // as the canonical data store so `fm.data[i] = x` writes the foreign array.
+    // Any other input (list, scalar, dtype recast) builds a fresh MOVED buffer.
+    let arr = match dt_ref {
+        Some(dt) => coerce_dtype(py, data, dt)?,
+        None => crate::conv::as_ndarray(py, data)?,
+    };
+    let inner = build_dynma(&arr, mask_arg)?;
+    // `as_ndarray`/`coerce_dtype` may return the SAME object the caller passed
+    // when `data` is already an ndarray of the right dtype, so retaining the
+    // handle aliases the user's buffer (#898 `copy=False`). With `copy=True`
+    // numpy reallocates `_data`, so MOVE into a fresh independent numpy buffer
+    // (`from_dynma_buffered`) — the recast/copy view must NOT write back
+    // through to the source.
+    if copy {
+        Ok(PyMaskedArray::from_dynma_buffered(py, inner))
+    } else {
+        Ok(PyMaskedArray::from_foreign_buffered(py, &arr, inner))
+    }
 }
 
 /// Build a dtype-preserving OWNED [`PyMaskedArray`] from a `numpy.ma.MaskedArray`
@@ -1757,10 +2113,13 @@ fn from_numpy_ma<'py>(py: Python<'py>, r: &Bound<'py, PyAny>) -> PyResult<PyMask
     let getmask = np_ma.call_method1("getmask", (r,))?;
     let nomask = np_ma.getattr("nomask")?;
     if getmask.is(&nomask) {
-        construct_masked(py, &data, None, None)
+        // `copy=true`: a numpy.ma method result is a fresh array; MOVE its data
+        // into an independent buffer rather than aliasing numpy.ma's internal
+        // `_data` (which numpy may free).
+        construct_masked(py, &data, None, None, true)
     } else {
         let mask = np_ma.call_method1("getmaskarray", (r,))?;
-        construct_masked(py, &data, Some(&mask), None)
+        construct_masked(py, &data, Some(&mask), None, true)
     }
 }
 
@@ -1805,6 +2164,48 @@ impl PyMaskedArray {
                 }
             }
         }
+        // #896: `ma.array(existing_ma, mask=m)` / `ma.array(existing_ma,
+        // fill_value=v)` — numpy still SHARES the base `_data` (`copy=False`
+        // default; only `mask`/`fill_value` differ, not the buffer). ferray
+        // mirrors this with an IDENTITY VIEW over the same-dtype fr.ma base
+        // (sharing its numpy `Py<PyArray>` so `view.data[i] = x` writes the
+        // base buffer) carrying the new `mask=`/`fill_value=` as view OVERLAYS
+        // (`own_mask`/`own_fill` — numpy's per-object `_mask`/`_fill_value`,
+        // NOT shared back to the base). A `dtype=` recast or `copy=True` forces
+        // the OWNED copy path below (numpy reallocates `_data`).
+        if !copy && (fill_value.is_some() || matches!(mask, MaskArg::Mask(_))) {
+            if let Ok(base) = data.cast::<PyMaskedArray>() {
+                let dt_name = crate::conv::normalize_opt_dtype(py, dtype)?;
+                let same_dtype = dt_name
+                    .as_deref()
+                    .is_none_or(|req| req == base.borrow().dtype_name_cheap());
+                if same_dtype {
+                    let mut view = identity_view(base);
+                    // Apply `mask=` as the view's own mask overlay. numpy's
+                    // `keep_mask=True` default ORs the explicit mask with the
+                    // SOURCE mask (`numpy/ma/core.py:3008`), so combine the
+                    // explicit mask with the base's current mask (via numpy's
+                    // own `getmaskarray` + `logical_or`) before setting it —
+                    // matching the OWNED `construct_masked` keep_mask path.
+                    if let MaskArg::Mask(m) = &mask {
+                        let np = py.import("numpy")?;
+                        let np_ma = np.getattr("ma")?;
+                        let shape = view.shape_vec();
+                        let explicit = np
+                            .call_method1("broadcast_to", (m, shape.clone()))?
+                            .call_method1("astype", (np.getattr("bool_")?,))?;
+                        let src_ma = base.borrow().as_numpy_ma(py)?;
+                        let src_mask = np_ma.call_method1("getmaskarray", (&src_ma,))?;
+                        let combined = np.call_method1("logical_or", (&explicit, &src_mask))?;
+                        view.set_mask(py, &combined)?;
+                    }
+                    if let Some(fv) = fill_value {
+                        set_fill_value(py, &mut view, fv)?;
+                    }
+                    return Ok(view);
+                }
+            }
+        }
         // Resolve numpy's `mask=` tri-state ([`MaskArg`]) into the shared
         // [`construct_masked`] body's `Option<&Bound>` contract (`None` = nomask
         // path; `Some(_)` = explicit real mask):
@@ -1815,16 +2216,16 @@ impl PyMaskedArray {
         //                        all-False OR src == src
         //   * Mask(m)          → `Some(&m)` (explicit mask, UNCHANGED)
         let mut out = match mask {
-            MaskArg::Absent | MaskArg::Nomask => construct_masked(py, data, None, dtype)?,
+            MaskArg::Absent | MaskArg::Nomask => construct_masked(py, data, None, dtype, copy)?,
             MaskArg::ExplicitNone => {
                 // numpy's `make_mask_none(data.shape)` (`numpy/ma/core.py:2904`):
                 // an all-False bool mask shaped like `data`.
                 let shape = crate::conv::as_ndarray(py, data)?.getattr("shape")?;
                 let np = py.import("numpy")?;
                 let all_false = np.call_method1("zeros", (shape, np.getattr("bool_")?))?;
-                construct_masked(py, data, Some(&all_false), dtype)?
+                construct_masked(py, data, Some(&all_false), dtype, copy)?
             }
-            MaskArg::Mask(m) => construct_masked(py, data, Some(&m), dtype)?,
+            MaskArg::Mask(m) => construct_masked(py, data, Some(&m), dtype, copy)?,
         };
         // #887: `fill_value=` kwarg. numpy's `MaskedArray.__new__` stores the
         // explicit `fill_value` (`numpy/ma/core.py:2914` —
@@ -1898,7 +2299,12 @@ impl PyMaskedArray {
         // shared base mask through a view; fall through to the bitwise path with
         // an all-False target, which under a soft view clears the view's bits).
         if value.is(&nomask) && !is_hard && matches!(self.storage, Storage::Owned { .. }) {
-            if let Storage::Owned { data, .. } = &mut self.storage {
+            if let Storage::Owned { data, buf, .. } = &mut self.storage {
+                // Refresh data from the canonical buffer before the mask-only
+                // rewrap so a pending Python `.data[i] = x` is carried verbatim.
+                if let Some(b) = buf {
+                    b.refresh_into(py, data)?;
+                }
                 let stripped = strip_mask(data.clone())?;
                 *data = stripped;
             }
@@ -1917,7 +2323,12 @@ impl PyMaskedArray {
         let target = extract_bool_array(py, &target_obj)?;
         let flat: Vec<bool> = target.iter().copied().collect();
 
-        if let Storage::Owned { data, .. } = &mut self.storage {
+        if let Storage::Owned { data, buf, .. } = &mut self.storage {
+            // Refresh data from the canonical buffer before the mask-only
+            // rewrap so a pending Python `.data[i] = x` is carried verbatim.
+            if let Some(b) = buf {
+                b.refresh_into(py, data)?;
+            }
             let mask_fa =
                 ArrayD::<bool>::from_vec(IxDyn::new(&data.shape()), flat).map_err(ferr_to_pyerr)?;
             let rewrapped = rewrap_dynma_with_mask(data.clone(), mask_fa)?;
@@ -3966,7 +4377,16 @@ impl PyMaskedArray {
             ));
         };
         match &mut self.storage {
-            Storage::Owned { data, .. } => {
+            Storage::Owned { data, buf, .. } => {
+                // An in-place sort/fill replaces the whole DynMa. If this owned
+                // array aliases a numpy buffer, write the NEW data back into the
+                // SAME buffer (in-place — preserving the `.data` alias identity
+                // and length, matching numpy's in-place `a.sort()` not
+                // reallocating `_data`). Shape/length are unchanged by
+                // sort/fill, so the existing buffer fits.
+                if let Some(b) = buf {
+                    b.writeback_from(py, &new_data)?;
+                }
                 *data = new_data;
                 Ok(())
             }
@@ -5190,7 +5610,20 @@ fn copy_data_through(
 ) -> PyResult<()> {
     let mut tref = target.borrow_mut();
     match &mut tref.storage {
-        Storage::Owned { data, .. } => copy_elem_dyn(data, pos, src, src_pos),
+        Storage::Owned { data, buf, .. } => {
+            // Refresh from the canonical buffer (in case a prior Python
+            // `.data[i] = x` is pending), write the element into the DynMa,
+            // then write the DynMa data BACK to the buffer so the shared store
+            // reflects the view write-through (#857 + #896 unified).
+            if let Some(b) = buf {
+                b.refresh_into(py, data)?;
+            }
+            copy_elem_dyn(data, pos, src, src_pos)?;
+            if let Some(b) = buf {
+                b.writeback_from(py, data)?;
+            }
+            Ok(())
+        }
         Storage::View { base, desc, .. } => {
             let base_pos = *desc.positions.get(pos).ok_or_else(|| {
                 PyValueError::new_err("internal: view writeback position out of range")
@@ -6863,6 +7296,7 @@ pub fn set_fill_value(
         let mut tmp = Storage::Owned {
             data: a.snapshot(py)?,
             fill_set: false,
+            buf: None,
         };
         set_fill_value_owned(py, &mut tmp, fill_value, dt)?;
         let coerced = match &tmp {
@@ -6897,6 +7331,7 @@ fn set_fill_value_owned(
         Storage::Owned {
             data: inner,
             fill_set,
+            ..
         } => {
             // #883: an EXPLICIT assignment MATERIALIZES the fill (numpy's
             // `_fill_value: None -> value`), independent of whether the value

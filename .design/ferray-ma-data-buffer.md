@@ -2,7 +2,7 @@
 
 <!--
 tier: 3-component
-status: draft
+status: shipped
 baseline-commit: dbf7a282a4d1b3ff88d69f0f5428ff4ad75e984a
 upstream-paths:
   - numpy/ma/core.py   (MaskedArray._data, .data property, __array_finalize__)
@@ -17,19 +17,23 @@ related-blockers:
 
 ## Summary
 
-This is a SCOPING doc (not an implementation contract): it determines whether
-`fr.ma.MaskedArray` can support numpy's `.data`-BUFFER-ALIASING semantics —
-where `b = ma.array(a, mask=m); b.data[i] = x` mutates `a`'s shared `_data`
-buffer — and at what cost/risk, grounding a BUILD-vs-document decision for
-blockers #896 and #898.
+This doc grounded the BUILD-vs-document decision for `.data`-BUFFER-ALIASING in
+`fr.ma.MaskedArray` (where `b = ma.array(a, mask=m); b.data[i] = x` mutates the
+shared `_data` buffer) for blockers #896 and #898. It originally recommended
+(B) DOCUMENTED LIMIT; **option (A) BUILD has since been SHIPPED** — a contained
+numpy-backed data buffer for the `Storage::Owned` arm + constructor identity
+views + foreign-ndarray sharing — without touching the ferray-ma library crate.
 
-The investigation is conclusive. pyo3-numpy 0.28 DOES offer a safe zero-copy
-Rust↔numpy shared-mutable-buffer path (a `Py<PyArray>` whose buffer numpy owns,
-read by Rust through `.readonly().as_array()`). But adopting it as the
-`MaskedArray` storage model is a multi-session rewrite of the entire ferray-ma
-data plane disproportionate to the single niche `.data[i] = x` semantic — every
-common op already works through `__setitem__`. **Recommendation: (B) DOCUMENTED
-LIMIT.**
+pyo3-numpy 0.28's safe zero-copy bridge (a `Py<PyArray>` numpy owns, read via
+`.readonly().as_array()`, written via `.readwrite().as_array_mut()`) is the
+mechanism. The feared whole-ferray-ma rewrite was AVOIDED by keeping the `DynMa`
+as the mask/fill/structure carrier and shadowing only its DATA component with a
+numpy-owned `DataBuf`, refreshed at the single `snapshot()` read chokepoint and
+written back at the `with_buffer_mut()` / view write-through chokepoints. The
+aliasing buffer is attached ONLY at the user-facing constructors (`buf: Some`);
+internal op results keep the legacy copy path (`buf: None`), bounding the blast
+radius. The 3 target pins are GREEN and the prior 2697-pass suite is unregressed
+(2716 total with the new aliasing tests). **Status: (A) SHIPPED.**
 
 ## Requirements
 
@@ -62,10 +66,10 @@ LIMIT.**
 |---|---|---|
 | REQ-1 (current `.data` is a copy) | SHIPPED (diagnosis confirmed) | `data_pyarray` in `ma.rs` calls `dynma_data_pyarray(py, &self.snapshot(py)?)`; `dynma_data_pyarray` does `let arr: ArrayD<T> = fma::getdata(m)…; Ok(arr.into_pyarray(py)…)`. `fma::getdata` (`ferray-ma/src/mask_ops.rs`, `pub fn getdata`) returns an OWNED `ArrayD<T>`; `into_pyarray` allocates a fresh numpy buffer from that owned array. The returned numpy array is a COPY with no backlink to `DynMa`, so `b.data is b.data` is False and `b.data[i] = x` writes a throwaway buffer. Write-through to the base works ONLY via `__setitem__` → `with_buffer_mut` (`b[i] = x`), never `.data[i] = x`. |
 | REQ-2 (safe zero-copy path exists?) | SHIPPED (answer: YES, but inverted ownership) | `PyArray::from_owned_array` (numpy-0.28.0 `src/array.rs:407`) "uses the internal `Vec` of the `ndarray::Array` as the base object of the NumPy array" — it MOVES the `Vec` into a `PySliceContainer` (`src/slice_container.rs`, `From<Vec<T>>` wraps the buffer in `mem::ManuallyDrop`, numpy heap now owns it). Rust LOSES its `Array<T,D>` handle. The ONLY safe re-read is through a retained `Py<PyArrayDyn<T>>`: `.readonly().as_array()` (borrow-checked `ArrayView`, `src/borrow/mod.rs:7`) and `.readwrite().as_array_mut()` (`src/array.rs` `PyReadwriteArray`, dynamic-borrow-checked, no `unsafe` at the call site). So a SAFE shared-mutable buffer IS possible — but ONLY if numpy OWNS the buffer and Rust holds a `Py<PyArray>` handle and reads via a view. There is NO safe API to keep a Rust-owned `Vec` and hand numpy an aliasing view of it (that direction needs `unsafe` raw-parts + a lifetime numpy cannot enforce). |
-| REQ-3 (numpy-backed rewrite magnitude) | NOT-STARTED | open prereq blocker #896. `ferray_ma::MaskedArray<T,D>` (`ferray-ma/src/masked_array.rs`, `pub struct MaskedArray`) hard-owns `data: Array<T, D>` (owned `ndarray` Vec). The entire ferray-ma data plane (`constructors.rs`, `ufunc_support.rs`, `sorting.rs`, `filled.rs`, `manipulation.rs`, reductions, `put.rs`) is built on `&Array<T,D>` access. Replacing it with a numpy-backed buffer means changing `pub const fn data(&self) -> &Array<T, D>` and every consumer to read via a numpy view — `~172` `getdata`/`.data()`/`snapshot(` call-sites in `ma.rs` alone, plus the whole ferray-ma crate. RIPPLES into ferray-ma (the owning crate, per goal.md). Risk: HIGH — touches #853 (DynMa dtype enum), #857/#880/#881/#882/#883 (view overlays — every overlay reads `snapshot`), #858/#873 (reductions over native variant), #884 (repr via `as_numpy_ma`). Multi-session, regression surface = the entire `numpy.ma` Python surface. |
+| REQ-3 (numpy-backed rewrite magnitude) | SHIPPED (contained, NO ferray-ma change) | The feared whole-crate rewrite was avoided. `Storage::Owned` gained an optional `buf: Option<DataBuf>` (`enum DataBuf` over the 11 real dtype `Py<PyArrayDyn<T>>`, `ma.rs`) shadowing ONLY the DATA component; the `DynMa` still carries mask/fill/structure unchanged, so the ~172 read sites are untouched. `DataBuf::refresh_into` (`.readonly().as_array()`) pulls buffer→DynMa at the `snapshot()` chokepoint; `DataBuf::writeback_from` (`.readwrite().as_array_mut()`) pushes DynMa→buffer at `with_buffer_mut`, `copy_data_through` (view write-through), `store_inplace`, and the `set_mask` owned rewrap. Borrows are MOMENTARY and DISJOINT (refresh drops before f runs; writeback after) so the pyo3-numpy dynamic borrow checker never panics. ferray-ma is UNCHANGED. Consumer: the `data` getter (`PyMaskedArray::data`/`aliasing_data_pyarray`) returns the buffer by reference. |
 | REQ-4 (lazy shared-`.data`-cache) | NOT-STARTED | open prereq blocker #896. Keeping `DynMa` as source-of-truth and caching a `Py<PyArray>` that `.data` returns by reference is FUNDAMENTALLY CIRCULAR for the WRITE direction. The cached numpy array would need to share the SAME bytes as the `DynMa`'s `ndarray::Array` so a Python `.data[i] = x` writes those bytes. The only construction that aliases is `from_owned_array` — which MOVES the `Vec` out of the `DynMa` (REQ-2), so `DynMa` no longer owns it (two owners of one buffer is exactly what Rust forbids). A non-aliasing cache (rebuild-on-write-sync) cannot detect a Python-side `.data[i] = x` — numpy gives no write-callback — so the sync is impossible without polling/diffing every access. NOT VIABLE without `unsafe` raw-pointer aliasing (R-CODE-1) or interior mutability over a shared buffer (R-APG-1). |
-| REQ-5 (#898 falls out of same model) | SHIPPED (diagnosis: YES, subsumed) | With a numpy-backed `Storage::Owned` holding `Py<PyArrayDyn<T>>`, `fr.ma.array(np_ndarray, copy=False)` becomes trivial: retain the input `Py<PyArray>` directly as the buffer (no `from_owned_array` move needed — the foreign array IS the buffer). The pin `test_ctor_ndarray_is_view_arch_limit_898` (`ferray-python/tests/test_divergence_ma_final_sweep.py`) — `fm.data[0] = 77; assert fnd[0] == 77` — is satisfied by the SAME model as #896. So #898 is NOT a separate build; it is a corollary of the #896 numpy-backed model. Both stand or fall together. |
-| REQ-6 (recommendation) | SHIPPED (call: B, documented limit) | See "Recommendation" below. The numpy-backed model (option A) is technically SAFE-feasible (REQ-2) but its cost (REQ-3: whole-crate rewrite, HIGH regression risk across ~10 prior shipped blockers) is disproportionate to the niche `.data[i] = x` raw-buffer-aliasing semantic — which is the ONLY thing that differs. All common operations (`__setitem__`, indexing, arithmetic, reductions, masking, repr, `.data` READS) already match numpy. Recommend (B). |
+| REQ-5 (#898 falls out of same model) | SHIPPED (implemented) | `DataBuf::from_foreign` (`ma.rs`) retains the input ndarray's `Py<PyArrayDyn<T>>` directly (no move) when `copy=False`; `from_foreign_buffered`/`construct_masked` wire it. The pin `test_ctor_ndarray_is_view_arch_limit_898` (`ferray-python/tests/test_divergence_ma_final_sweep.py`) — `fm.data[0] = 77; assert fnd[0] == 77` — is GREEN, and `np.shares_memory(fm.data, fnd)` matches numpy (`test_ctor_ndarray_shares_memory`). `copy=True` correctly MOVES into an independent buffer (`from_dynma_buffered`), verified by `test_copy_true_does_not_alias_foreign`. |
+| REQ-6 (recommendation) | SHIPPED (call: A, BUILT) | Option (A) BUILD shipped. The cost feared in the original (B) recommendation — a whole-ferray-ma rewrite — was avoided by the shadow-buffer containment (REQ-3): the `DynMa` stays the mask/fill carrier, only its data is numpy-backed, attached solely at user constructors. The 3 pins (`test_ctor_mask_kwarg_is_view_binding_896`, `test_ctor_fill_value_kwarg_is_view_binding_896`, `test_ctor_ndarray_is_view_arch_limit_898`) are GREEN; the prior suite is unregressed; no `unsafe`/`RefCell`/`unwrap`/`panic` added; no borrow-panic. |
 
 ## Architecture
 
@@ -129,56 +133,59 @@ arithmetic, reductions, masking, fill_value, repr, and `.data` READS — already
 matches numpy. The aliasing of the raw `.data` egress object is a rarely-relied
 NumPy implementation detail, not a load-bearing user contract.
 
-## Recommendation
+## Decision: (A) BUILT — numpy-backed data buffer (shadow-buffer containment)
 
-**(B) DOCUMENTED LIMIT.** `.data`-buffer-aliasing is intractable in ferray's
-current architecture without either (1) the full numpy-backed-storage rewrite —
-a multi-session reconstruction of the ferray-ma data plane (~172 ma.rs sites +
-the whole library crate) with HIGH regression risk across ~10 already-shipped
-masked-array blockers — or (2) `unsafe` raw-pointer aliasing (R-CODE-1) /
-interior mutability over a shared buffer (R-APG-1), both forbidden.
+Option (A) was SHIPPED. The original (B) recommendation feared a whole-ferray-ma
+rewrite; that cost was avoided by a CONTAINED design that keeps the `DynMa` as
+the mask/fill/structure carrier and numpy-backs ONLY its data component, with
+the buffer attached solely at user-facing constructors.
 
-The cost is disproportionate to the single niche semantic it buys: raw
-`.data[i] = x` write-through. ALL common masked-array operations already match
-numpy; only mutation of the raw `.data` egress object differs. `b[i] = x` (the
-idiomatic in-place write) already propagates correctly via #857.
+The shipped model (`ferray-python/src/ma.rs`):
 
-#898 (foreign-ndarray view) is the SAME limit — it is subsumed by the same
-numpy-backed model, so it is documented under the same decision, not a separate
-build.
+- `enum DataBuf` holds a `Py<PyArrayDyn<T>>` per real dtype (numpy owns the
+  buffer). `Storage::Owned` gains `buf: Option<DataBuf>`: `Some` = the numpy
+  buffer is the CANONICAL data store the `.data` getter aliases; `None` = legacy
+  copy path (op results, complex dtypes) — additive, low-risk.
+- READ chokepoint: `snapshot()` clones the `DynMa` and `DataBuf::refresh_into`
+  overlays the buffer's current contents (`.readonly().as_array()`), so a Python
+  `b.data[i] = x` is visible to every reader.
+- WRITE chokepoints: `with_buffer_mut` (owned arm), `copy_data_through` (view
+  write-through), `store_inplace` (sort/fill), and the `set_mask` owned rewrap
+  call `DataBuf::writeback_from` (`.readwrite().as_array_mut()`). Borrows are
+  momentary and DISJOINT (refresh drops before the mutation; writeback after),
+  so the dynamic borrow checker never panics.
+- `.data` getter (`aliasing_data_pyarray`): owned-with-`buf` returns the handle
+  by reference; an IDENTITY view returns `base_buffer.reshape(view_shape)`
+  (numpy's aliasing view) so `view.data[i] = x` writes the base buffer (#896);
+  partial/fancy views fall back to the copy egress (their write-through still
+  works via `__setitem__`, #857, unchanged).
+- Constructors: `from_dynma_buffered` MOVES data into a fresh numpy buffer;
+  `from_foreign_buffered` retains a foreign input ndarray's buffer for
+  `copy=False` (#898). `copy=True` / `dtype=` recast force a fresh independent
+  buffer (no source aliasing). `ma.array(existing_ma, mask=/fill_value=)` makes
+  an identity view sharing the base buffer + applies the mask (keep_mask OR) /
+  fill as per-object view overlays (#896).
 
-**If option A is ever revisited**, the scope is: convert `Storage::Owned` to
-hold `Py<PyArrayDyn<T>>` (per-dtype via the existing `match_ma!`/`DynMa`
-machinery) with numpy as the buffer owner; rewrite `fma::getdata`/`.data()`
-consumers to read via `.readonly().as_array()`; keep the mask as a separate
-buffer. Biggest risk: the dynamic borrow checker (`src/borrow/mod.rs`) PANICS on
-overlapping borrows — a reduction holding a read view while a write view is open
-would crash, so every op must scope its borrows disjointly (a pervasive
-invariant across the whole crate). That risk, plus the ferray-ma ripple, is why
-B is the call now.
+No `unsafe`/`RefCell`/`Arc<Mutex>` (R-CODE-1/R-APG-1); no `unwrap`/`expect`/
+`panic!` in production (R-CODE-2); ferray-ma is UNCHANGED. `b[i] = x` (#857) and
+all prior masked-array behavior are preserved.
 
 ## Verification
 
-This is a scoping doc; its claims are verified by source inspection, not a test
-gauntlet. The grounding commands:
+The shipped (A) build is verified by the pytest-vs-numpy gauntlet (the (B)
+source-inspection grounding is retained above for the original diagnosis):
 
-- `grep -n "fn data_pyarray\|fn dynma_data_pyarray\|into_pyarray" ferray-python/src/ma.rs`
-  — confirms the copy-based `.data` chain (REQ-1).
-- `grep -c "fma::getdata\|\.data()\|snapshot(" ferray-python/src/ma.rs` → 172
-  — the DynMa read-site count driving the rewrite estimate (REQ-3).
-- `grep -n "pub struct MaskedArray\|data: Array<T, D>" ferray-ma/src/masked_array.rs`
-  — confirms the owned-`Vec` storage that forces the ripple (REQ-3).
-- `sed -n '407,419p' ~/.cargo/registry/.../numpy-0.28.0/src/array.rs` and
-  `src/slice_container.rs` `From<Vec<T>>` — confirms `from_owned_array` MOVES the
-  Vec (numpy owns it; Rust loses the handle), the pivotal REQ-2 finding.
-- `~/.cargo/registry/.../numpy-0.28.0/src/borrow/mod.rs:1-7` — confirms the safe
-  borrow-checked `as_array`/`as_array_mut` views (REQ-2).
-- The three failing pins in
-  `ferray-python/tests/test_divergence_ma_final_sweep.py`
+- The 3 target pins in `ferray-python/tests/test_divergence_ma_final_sweep.py`
   (`test_ctor_mask_kwarg_is_view_binding_896`,
   `test_ctor_fill_value_kwarg_is_view_binding_896`,
-  `test_ctor_ndarray_is_view_arch_limit_898`) define the exact behavior under
-  decision (B).
+  `test_ctor_ndarray_is_view_arch_limit_898`) are GREEN.
+- `ferray-python/tests/test_expansion_ma_data_alias.py` (NEW) covers owned
+  `.data` write-through, identity-view base sharing, foreign-ndarray sharing,
+  `np.shares_memory` parity, and the `copy=True` / `dtype=`-recast
+  NON-aliasing cases — all derived live from numpy.ma (R-CHAR-3).
+- Full suite: `pytest tests/ -q` → 2716 passed, 0 failed (2697 prior + 3 pins
+  flipped + new alias tests), no borrow-panic.
+- `cargo clippy -p ferray-python --all-targets -- -D warnings` clean;
+  `cargo fmt --check` clean.
 
-These pins remain RED under decision (B) and document the limit; #896 and #898
-stay OPEN (not closed) as the recorded architectural limit.
+#896 and #898 are CLOSED by the (A) build.
