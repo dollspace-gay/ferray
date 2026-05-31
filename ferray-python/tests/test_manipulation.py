@@ -351,3 +351,30 @@ def test_block_complex():
     n = np.block([[np.array([1 + 1j, 2])]])
     assert np.asarray(r).dtype == n.dtype == np.complex128
     np.testing.assert_array_equal(r, n)
+
+
+# ---------------------------------------------------------------------------
+# ravel order= (#989)
+# ---------------------------------------------------------------------------
+# numpy.ravel(a, order='C') supports F/A/K column-major / layout traversal; the
+# prior binding took only `a` and raised TypeError on order=.
+
+
+@pytest.mark.parametrize("order", ["C", "F", "A", "K"])
+def test_ravel_order(order):
+    a = [[1, 2], [3, 4]]
+    np.testing.assert_array_equal(ferray.ravel(a, order=order), np.ravel(a, order=order))
+
+
+def test_ravel_order_f_3d():
+    a = np.arange(24).reshape(2, 3, 4)
+    np.testing.assert_array_equal(ferray.ravel(a, order="F"), np.ravel(a, order="F"))
+
+
+def test_ravel_order_f_string():
+    a = np.array([["a", "b"], ["c", "d"]])
+    np.testing.assert_array_equal(ferray.ravel(a, order="F"), np.ravel(a, order="F"))
+
+
+def test_ravel_default_c_unchanged():
+    np.testing.assert_array_equal(ferray.ravel([[1, 2], [3, 4]]), np.ravel([[1, 2], [3, 4]]))

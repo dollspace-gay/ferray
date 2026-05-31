@@ -288,10 +288,23 @@ pub fn reshape<'py>(
     }))
 }
 
-/// `numpy.ravel(a)` — flatten to 1-D.
+/// `numpy.ravel(a, order='C')` — flatten to 1-D. The native kernel flattens in
+/// C (row-major) order; a non-default `order` (`'F'`/`'A'`/`'K'`) delegates to
+/// numpy, which owns the column-major / memory-layout traversal.
 #[pyfunction]
-pub fn ravel<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+#[pyo3(signature = (a, order = "C"))]
+pub fn ravel<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    order: &str,
+) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if order != "C" {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("order", order)?;
+        return np.call_method("ravel", (&arr,), Some(&kwargs));
+    }
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "ravel", (&arr,), None);
     }
