@@ -1734,6 +1734,30 @@ macro_rules! bind_binary_float_promote {
             if scalar { scalarize(out) } else { Ok(out) }
         }
     };
+    // No-complex-loop form (`heaviside`/`copysign`/`nextafter`/`hypot`/
+    // `logaddexp`/`logaddexp2`/`fmod`/`arctan2`): numpy registers ONLY float
+    // loops for these — a complex input on EITHER operand RAISES `TypeError`
+    // (verified live, numpy 2.4: `np.hypot([1+2j],[1]) -> TypeError`). The prior
+    // plain arm funnelled through `binary_float_promote_body!`, whose
+    // `coerce_dtype(..,"float32"/"float64")` casts complex -> real DROPPING the
+    // imaginary part (a silent lossy boundary round-trip — R-CODE-4) and computed
+    // a wrong real result. The guard runs before the real funnel so the error
+    // matches numpy's `ufunc 'X' not supported for the input types` (R-DEV-2).
+    ($name:ident, $ferr_path:path, reject_complex = $func:expr) => {
+        #[pyfunction]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            x1: &Bound<'py, PyAny>,
+            x2: &Bound<'py, PyAny>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            if binary_is_complex(py, x1, x2)? {
+                return Err(reject_complex_binary($func));
+            }
+            let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            let out = binary_float_promote_body!(py, x1, x2, $ferr_path);
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
     // Complex-loop form (`fmax`/`fmin`): numpy registers a complex loop that
     // selects the whole operand LEXICOGRAPHICALLY `(real, then imag)` with
     // NaN-SUPPRESS semantics (return the non-NaN operand; both-NaN -> `a`). The
@@ -1759,12 +1783,28 @@ macro_rules! bind_binary_float_promote {
 
 bind_binary_float_promote!(fmax, ferray_ufunc::fmax, complex_minmax = true);
 bind_binary_float_promote!(fmin, ferray_ufunc::fmin, complex_minmax = false);
-bind_binary_float_promote!(copysign, ferray_ufunc::copysign);
-bind_binary_float_promote!(hypot, ferray_ufunc::hypot);
-bind_binary_float_promote!(arctan2, ferray_ufunc::arctan2);
-bind_binary_float_promote!(logaddexp, ferray_ufunc::logaddexp);
-bind_binary_float_promote!(logaddexp2, ferray_ufunc::logaddexp2);
-bind_binary_float_promote!(heaviside, ferray_ufunc::heaviside);
+bind_binary_float_promote!(
+    copysign,
+    ferray_ufunc::copysign,
+    reject_complex = "copysign"
+);
+bind_binary_float_promote!(hypot, ferray_ufunc::hypot, reject_complex = "hypot");
+bind_binary_float_promote!(arctan2, ferray_ufunc::arctan2, reject_complex = "arctan2");
+bind_binary_float_promote!(
+    logaddexp,
+    ferray_ufunc::logaddexp,
+    reject_complex = "logaddexp"
+);
+bind_binary_float_promote!(
+    logaddexp2,
+    ferray_ufunc::logaddexp2,
+    reject_complex = "logaddexp2"
+);
+bind_binary_float_promote!(
+    heaviside,
+    ferray_ufunc::heaviside,
+    reject_complex = "heaviside"
+);
 
 // ---------------------------------------------------------------------------
 // Binary numeric-split (separate float + integer loops, same output kind) —
@@ -2796,8 +2836,12 @@ pub fn interp<'py>(
 
 bind_unary_float!(exp_fast, ferray_ufunc::exp_fast);
 bind_unary_float!(spacing, ferray_ufunc::spacing);
-bind_binary_float_promote!(fmod, ferray_ufunc::fmod);
-bind_binary_float_promote!(nextafter, ferray_ufunc::nextafter);
+bind_binary_float_promote!(fmod, ferray_ufunc::fmod, reject_complex = "fmod");
+bind_binary_float_promote!(
+    nextafter,
+    ferray_ufunc::nextafter,
+    reject_complex = "nextafter"
+);
 
 /// `gcd` / `lcm` are INTEGER-ONLY in numpy — they register only `TD(ints)`
 /// loops (generate_umath.py:1156 `gcd`, :1163 `lcm`), so a float input
@@ -2912,6 +2956,13 @@ pub fn ldexp<'py>(
     x: &Bound<'py, PyAny>,
     n: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // numpy registers ONLY float `ldexp` loops — a complex input on EITHER
+    // operand RAISES `TypeError` (verified live, numpy 2.4). The prior path
+    // funnelled through `coerce_dtype(..,"float64")`, casting complex -> real and
+    // DROPPING the imaginary part (a silent lossy boundary round-trip, R-CODE-4).
+    if binary_is_complex(py, x, n)? {
+        return Err(reject_complex_binary("ldexp"));
+    }
     let arr_a = as_ndarray(py, x)?;
     let dt = dtype_name(&arr_a)?;
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
