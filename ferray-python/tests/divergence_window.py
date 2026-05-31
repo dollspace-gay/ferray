@@ -2,21 +2,17 @@
 
 ferray-python is meant to be a drop-in replacement for NumPy 2.4.x. These
 tests pin places where `ferray`'s window functions diverge from the *live*
-`numpy` oracle (numpy 2.4.5). Every expected value is produced by calling
+`numpy` oracle (numpy 2.4.x). Every expected value is produced by calling
 numpy at test time (R-CHAR-3 — never literal-copied from the ferray side).
 
 Source under audit: ferray-python/src/window.rs
 NumPy oracle: numpy/lib/_function_base_impl.py
 
-Root cause of all three pins: the PyO3 bindings type the first parameter as
-`m: usize` (window.rs `bind_window_n!` macro, lines 27-35, and
-`pub fn kaiser(py, m: usize, beta: f64)` line 51). NumPy types `M` as a
-*signed float* (`_FloatLike_co`) and names it `M`. So `m: usize`:
-  (1) rejects negative M with OverflowError instead of returning array([]),
-  (2) rejects integral-float M (e.g. 8.0) with TypeError, and
-  (3) names the kwarg `m`, breaking `np.hanning(M=8)`.
-The fix belongs in ferray-python (the marshalling boundary): accept a signed
-float-coercible M named `M`, guard `M < 1 -> empty float64 array`.
+NOTE (2026-05-31 critic pass): divergences 1-3 below (negative M, integral-
+float M, `M` keyword) were FIXED by the current binding, which now coerces M
+via `coerce_window_m` (src/conv.rs) and names the parameter `M`. Those tests
+now PASS and stand as regression guards. The NEW open divergence is
+test_noninteger_M_* (divergence 4) — fractional M is truncated.
 """
 
 import numpy as np
@@ -37,8 +33,7 @@ WINDOWS = ["bartlett", "blackman", "hamming", "hanning"]
 # negative M yields the empty array. kaiser: :3733 `n = arange(0, M)` over a
 # negative M is empty too.
 #
-# ferray's `m: usize` rejects any negative int at the PyO3 boundary with
-# OverflowError("can't convert negative int to unsigned").
+# STATUS: FIXED — now a regression guard (passes).
 # ---------------------------------------------------------------------------
 
 
@@ -67,8 +62,7 @@ def test_kaiser_negative_M_returns_empty_array():
 # equal to `np.hanning(8)`. A negative *float* (-1.0) likewise routes through
 # the `M < 1` guard to the empty array.
 #
-# ferray's `m: usize` rejects any Python float with
-#   TypeError: argument 'm': 'float' object cannot be interpreted as an integer
+# STATUS: FIXED — now a regression guard (passes).
 # ---------------------------------------------------------------------------
 
 
@@ -104,9 +98,7 @@ def test_negative_float_M_returns_empty_array(name):
 # bartlett, :3050 blackman, :3358 hamming, :3608 `def kaiser(M, beta):`).
 # numpy accepts `np.hanning(M=8)` / `np.kaiser(M=8, beta=14.0)`.
 #
-# ferray names the parameter `m` (window.rs `bind_window_n!` and
-# `pub fn kaiser(... m: usize ...)`), so `fr.hanning(M=8)` raises
-#   TypeError: hanning() got an unexpected keyword argument 'M'.
+# STATUS: FIXED — now a regression guard (passes).
 # ---------------------------------------------------------------------------
 
 
@@ -123,3 +115,49 @@ def test_kaiser_M_keyword_argument():
     got = fr.kaiser(M=8, beta=14.0)
     assert got.shape == expected.shape == (8,)
     np.testing.assert_allclose(got, expected, atol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# Divergence 4 (OPEN — tracking #1012) — non-integer M is truncated.
+#
+# NumPy keeps M as a *float64* through the whole formula. For hanning:
+#   numpy/lib/_function_base_impl.py:3346  values = np.array([0.0, M])
+#   :3347                                  M = values[1]      # stays 2.7
+#   :3353                                  n = arange(1 - M, M, 2)
+#   :3354                                  return 0.5 + 0.5 * cos(pi * n / (M - 1))
+# (identical structure: blackman :3137/:3144/:3145, bartlett :3244/:3251/:3252,
+#  hamming :3445/:3452/:3453, kaiser :3727/:3733/:3734.)
+# So `arange(1 - M, M, 2)` for M=2.7 yields len-3 [-1.7, 0.3, 2.3] and the
+# denominator `M - 1` is 1.7 — np.hanning(2.7) has 3 elements, not 2.
+#
+# ferray's `coerce_window_m` (src/conv.rs:346-354) does `f.trunc() as isize`,
+# so M=2.7 becomes integer 2 BEFORE any window math: wrong length AND wrong
+# values. This affects all five canonical windows.
+#
+# Expected values are taken from the LIVE oracle at test time (R-CHAR-3).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", WINDOWS)
+@pytest.mark.parametrize("M", [2.7, 3.5, 4.9])
+def test_noninteger_M_uses_float_in_formula(name, M):
+    expected = getattr(np, name)(M)  # live numpy oracle, float64 M preserved
+    got = np.asarray(getattr(fr, name)(M))
+    # numpy's length is len(arange(1 - M, M, 2)); ferray truncates M first.
+    assert got.shape == expected.shape, (
+        f"{name}({M}): ferray shape {got.shape} != numpy {expected.shape} "
+        f"(non-integer M must not be truncated)"
+    )
+    np.testing.assert_allclose(got, expected, rtol=1e-12, atol=1e-15)
+
+
+@pytest.mark.parametrize("M", [2.7, 4.9])
+def test_kaiser_noninteger_M_uses_float_in_formula(M):
+    expected = np.kaiser(M, 14.0)  # live numpy oracle
+    got = np.asarray(fr.kaiser(M, 14.0))
+    assert got.shape == expected.shape, (
+        f"kaiser({M}, 14.0): ferray shape {got.shape} != numpy {expected.shape}"
+    )
+    # numpy emits NaN for the out-of-domain tail element (invalid sqrt); compare
+    # with equal_nan so the pin tracks the value divergence, not the NaN itself.
+    np.testing.assert_allclose(got, expected, rtol=1e-12, atol=1e-15, equal_nan=True)
