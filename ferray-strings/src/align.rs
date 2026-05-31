@@ -24,7 +24,11 @@ pub fn center<D: Dimension>(
             return s.to_string();
         }
         let total_pad = width - char_count;
-        let left_pad = total_pad / 2;
+        // CPython `str.center` (Objects/unicodeobject.c `unicode_center_impl`):
+        // `left = marg / 2 + (marg & width & 1)`. The extra pad column goes
+        // LEFT iff both the margin and the target width are odd; otherwise the
+        // left side gets `floor(marg/2)`. numpy.strings/char.center mirror this.
+        let left_pad = total_pad / 2 + (total_pad & width & 1);
         let right_pad = total_pad - left_pad;
         let mut result = String::with_capacity(s.len() + total_pad);
         for _ in 0..left_pad {
