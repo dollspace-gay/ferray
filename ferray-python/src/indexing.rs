@@ -319,14 +319,31 @@ pub fn mask_indices<'py>(
 // ravel_multi_index / unravel_index
 // ---------------------------------------------------------------------------
 
-/// `numpy.ravel_multi_index(multi_index, dims)` — convert per-axis
-/// coordinate arrays into flat indices.
+/// `numpy.ravel_multi_index(multi_index, dims, mode='raise', order='C')` —
+/// convert per-axis coordinate arrays into flat indices.
+///
+/// `order` ∈ {'C','F'} selects the raveling order: 'C' (row-major, default)
+/// vs 'F' (column-major), which changes the per-axis stride weighting.
+/// ferray-core's `ravel_multi_index` is row-major only, so the binding
+/// delegates the 'F' (column-major) case to numpy (which owns C/F raveling)
+/// and keeps the native path for the default 'C' order.
 #[pyfunction]
+#[pyo3(signature = (multi_index, dims, order = "C"))]
 pub fn ravel_multi_index<'py>(
     py: Python<'py>,
-    multi_index: Vec<Vec<usize>>,
+    multi_index: &Bound<'py, PyAny>,
     dims: Vec<usize>,
+    order: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // 'F' (column-major) order changes the stride weighting; numpy owns the
+    // C/F raveling arithmetic. The native path below is row-major ('C') only.
+    if order != "C" {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("order", order)?;
+        return np.call_method("ravel_multi_index", (multi_index, dims), Some(&kwargs));
+    }
+    let multi_index: Vec<Vec<usize>> = multi_index.extract()?;
     let refs: Vec<&[usize]> = multi_index.iter().map(|v| v.as_slice()).collect();
     let flat = fi::ravel_multi_index(&refs, &dims).map_err(ferr_to_pyerr)?;
     usize_vec_to_numpy(py, flat)
@@ -334,12 +351,26 @@ pub fn ravel_multi_index<'py>(
 
 /// `numpy.unravel_index(indices, shape)` — convert flat indices into a
 /// tuple of per-axis coordinate arrays.
+///
+/// numpy accepts a SCALAR int `indices` and returns a tuple of scalar
+/// coordinates (`np.unravel_index(3, (2,2)) -> (1, 1)`), not a tuple of
+/// 1-element arrays. ferray-core's `unravel_index` takes a slice and yields
+/// per-axis arrays, so the binding routes a scalar int through numpy (which
+/// owns the scalar-tuple return form) and keeps the native path for a
+/// sequence of indices.
 #[pyfunction]
 pub fn unravel_index<'py>(
     py: Python<'py>,
-    indices: Vec<usize>,
+    indices: &Bound<'py, PyAny>,
     shape: Vec<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Scalar int ⇒ numpy returns a tuple of scalar coordinates (not arrays);
+    // delegate so the scalar-tuple shape/types match numpy exactly.
+    if indices.is_instance_of::<pyo3::types::PyInt>() {
+        let np = py.import("numpy")?;
+        return np.call_method1("unravel_index", (indices, shape));
+    }
+    let indices: Vec<usize> = indices.extract()?;
     let groups = fi::unravel_index(&indices, &shape).map_err(ferr_to_pyerr)?;
     let arrays: Vec<Bound<'py, PyAny>> = groups
         .into_iter()
@@ -626,14 +657,32 @@ pub fn take_along_axis<'py>(
     Ok(result)
 }
 
-/// `numpy.choose(a, choices)` — for each index in `a`, pick from
-/// `choices`. `a` must be u64; choices is a list of same-shape arrays.
+/// `numpy.choose(a, choices, out=None, mode='raise')` — for each index in
+/// `a`, pick from `choices`. `a` must be u64; choices is a list of
+/// same-shape arrays.
+///
+/// `numpy/_core/fromnumeric.py` `def choose(a, choices, out=None,
+/// mode='raise')`: `mode` ∈ {'raise','wrap','clip'} resolves out-of-bounds
+/// index entries ('raise' raises, 'wrap' folds `idx % n`, 'clip' clamps).
+/// ferray-core's `choose` only implements the default 'raise' semantics, so
+/// the binding delegates the 'wrap'/'clip' index-folding to numpy (which owns
+/// it) and keeps the native path for the default 'raise' mode.
 #[pyfunction]
+#[pyo3(signature = (a, choices, mode = "raise"))]
 pub fn choose<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     choices: &Bound<'py, PyAny>,
+    mode: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // 'wrap'/'clip' fold out-of-bounds index entries into range; numpy owns
+    // that index arithmetic. The native path below implements only 'raise'.
+    if mode != "raise" {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("mode", mode)?;
+        return np.call_method("choose", (a, choices), Some(&kwargs));
+    }
     let idx_arr = crate::conv::coerce_dtype(py, a, "uint64")?;
     let idx_view: PyReadonlyArrayDyn<u64> = idx_arr.extract()?;
     let idx_fa: ArrayD<u64> = idx_view.as_ferray().map_err(ferr_to_pyerr)?;
