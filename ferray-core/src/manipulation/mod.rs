@@ -2,6 +2,20 @@
 //
 // Mirrors numpy's shape manipulation routines: reshape, ravel, flatten,
 // concatenate, stack, transpose, flip, etc.
+//
+// ## REQ status (shape manipulation, NumPy parity)
+//  - REQ-20 (shape methods) — SHIPPED: `reshape`/`ravel`/`flatten`/`squeeze`/
+//    `expand_dims`/`broadcast_to` (this file; `broadcast_to` re-exports the
+//    `dimension::broadcast` primitive). Non-test consumer: `array/arc.rs`
+//    materializes via `manipulation::broadcast_to`.
+//  - REQ-21 (join/split) — SHIPPED: `concatenate`/`stack`/`vstack`/`hstack`/
+//    `dstack`/`column_stack`/`row_stack`/`block`/`split`/`array_split`/
+//    `array_split_n`/`vsplit`/`hsplit`/`dsplit` (this file).
+//  - REQ-22 (transpose/reorder) — SHIPPED: `transpose`/`swapaxes`/`moveaxis`/
+//    `rollaxis`/`flip`/`fliplr`/`flipud`/`rot90`/`roll` (this file). Non-test
+//    consumer: `array/arc.rs` calls `manipulation::transpose`.
+//  - `r_`/`c_` (NumPy index-expression concatenation builders) — SHIPPED:
+//    `r_`/`c_` (this file).
 
 pub mod extended;
 

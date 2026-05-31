@@ -7,6 +7,21 @@
 //
 // Broadcasting NEVER materializes the expanded array — it uses virtual
 // expansion via strides (setting stride = 0 for broadcast dimensions).
+//
+// ## REQ status (broadcasting, NumPy parity)
+//  - REQ-9 (full broadcasting rules: prepend 1s, stretch size-1 dims, error on
+//    incompatible mismatch) — SHIPPED: `broadcast_shapes` (this file)
+//    left-pads the shorter shape with 1s, takes the per-axis max, and returns
+//    `FerrayError::BroadcastFailure` when neither dim is 1 and they differ;
+//    `broadcast_shapes_multi` folds it over N shapes.
+//  - REQ-10 (never materialize the broadcast array — virtual stride expansion) —
+//    SHIPPED: `broadcast_strides` (this file) sets stride = 0 for broadcast
+//    axes, and `broadcast_to`/`broadcast_view_to` produce views without copying.
+//    Non-test consumer: `nditer.rs` zips two operands via `broadcast_shapes`
+//    + `broadcast_to` with no intermediate allocation.
+//  - REQ-11 (provide `broadcast_to`/`broadcast_arrays`/`broadcast_shapes`) —
+//    SHIPPED: `broadcast_to`, `broadcast_view_to`, `broadcast_arrays`, and
+//    `broadcast_shapes` (this file).
 
 use ndarray::ShapeBuilder;
 

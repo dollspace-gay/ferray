@@ -1,6 +1,14 @@
 // ferray-core: Extended manipulation functions (REQ-22a)
 //
 // pad, tile, repeat, delete, insert, append, resize, trim_zeros
+//
+// ## REQ status (extended manipulation, NumPy parity)
+//  - REQ-22a (extended manipulation surface) — SHIPPED: `pad`/`pad_1d` with all
+//    five `PadMode` variants (`Constant`/`Edge`/`Reflect`/`Symmetric`/`Wrap`),
+//    `tile`/`repeat`/`delete`/`insert`/`append`/`resize`/`trim_zeros`, and the
+//    `atleast_1d`/`atleast_2d`/`atleast_3d` shape-promotion helpers (all this
+//    file). `PadMode` (this file) is the mode enum consumed by `pad`/`pad_1d`,
+//    mirroring `numpy.pad`'s `mode` argument.
 
 use crate::array::owned::Array;
 use crate::dimension::{Dimension, Ix1, IxDyn};

@@ -5,6 +5,24 @@
 //
 // - `promoted_type!()` is a compile-time proc macro (in ferray-core-macros)
 // - `result_type()` is the runtime equivalent using DType
+//
+// ## REQ status (type promotion, NumPy parity)
+//  - REQ-23 (NumPy promotion rules: smallest type representing both inputs) —
+//    SHIPPED: `result_type` (this file) computes the runtime promoted `DType`
+//    for any two dtypes, and the `Promoted`/`PromoteTo` traits provide the
+//    compile-time counterpart used by `add_promoted`/`mul_promoted` et al. The
+//    NEP-50 rule that `uint64 + <native signed int> -> f64` (no signed type can
+//    hold the full u64 range) is implemented here (see the NEP-50 comment in
+//    `result_type`'s integer ladder). Non-test consumers: `casting::promote_types`
+//    and `casting::common_type` delegate to `result_type`
+//    (`dtype/casting.rs`), and `i256.rs` uses `result_type` for its
+//    `U128/I128 -> I256` promotion path.
+//  - REQ-24 (mixed-type binary ops must NOT compile implicitly; require explicit
+//    `add_promoted`/`mul_promoted`) — SHIPPED: the `PromoteTo` conversion trait
+//    in this file gates the explicit promoted operators; there is no blanket
+//    `Add<Rhs>` across distinct `Element` types, so a mixed-dtype op only
+//    compiles through the explicit `*_promoted` surface (`dtype/casting.rs`,
+//    `Array::add_promoted`/`sub_promoted`/`mul_promoted`/`div_promoted`).
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;

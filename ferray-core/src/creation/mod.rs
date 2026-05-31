@@ -2,6 +2,22 @@
 //
 // Mirrors numpy's array creation routines: zeros, ones, full, empty,
 // arange, linspace, logspace, geomspace, eye, identity, diag, etc.
+//
+// ## REQ status (array creation, NumPy parity)
+//  - REQ-16 (top-level constructors) — SHIPPED: `array`/`asarray`/`asanyarray`/
+//    `ascontiguousarray`/`asfortranarray`, `zeros`/`ones`/`full` and their
+//    `_like` forms (`zeros_like`/`ones_like`/`full_like`/`empty_like`),
+//    `frombuffer`/`frombuffer_view`/`fromiter`/`fromfile`/`fromstring`/
+//    `fromfunction` (all this file). Non-test consumers: `manipulation::mod`
+//    and `nditer.rs` build result buffers via `zeros`/`full`.
+//  - REQ-17 (`empty` returns `Array<MaybeUninit<T>, D>` requiring explicit
+//    `assume_init`, never silent garbage) — SHIPPED: `empty` (this file) returns
+//    the `MaybeUninit` array; `write_at`/`as_mut_ptr` are the safe init surface
+//    and `assume_init` is the caller's explicit step.
+//  - REQ-18 (range/grid functions) — SHIPPED: `arange`/`linspace`/`logspace`/
+//    `geomspace`/`meshgrid`/`mgrid`/`ogrid` (this file).
+//  - REQ-19 (identity/diagonal) — SHIPPED: `eye`/`identity`/`diag`/`diagflat`/
+//    `tri`/`tril`/`triu` (plus `vander`) (this file).
 
 use std::mem::MaybeUninit;
 

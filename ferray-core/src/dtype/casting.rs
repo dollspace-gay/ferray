@@ -9,6 +9,23 @@
 // - issubdtype(child, parent) — type hierarchy check
 // - isrealobj / iscomplexobj — type inspection predicates
 // - astype() / view_cast() — methods on Array for explicit casting
+//
+// ## REQ status (type casting & inspection, NumPy parity)
+//  - REQ-25 (cast functions: `astype`/`view`/`can_cast`/`common_type`/
+//    `min_scalar_type`/`promote_types`) — SHIPPED. `can_cast` (this file)
+//    dispatches all five `CastKind` modes; `No`/`Equiv` require dtype identity,
+//    `Safe` uses `is_safe_cast`, `SameKind` uses `is_same_kind`, `Unsafe` is
+//    unconditional. The `same_kind` rule is the numpy KIND-ORDERING lattice
+//    `no < equiv < safe < same_kind < unsafe` with `ord(from) <= ord(to)`
+//    (fixed #1061; see `is_same_kind`). `promote_types`/`common_type` delegate
+//    to `promotion::result_type`; `min_scalar_type` is the const smallest-type
+//    map; `Array::cast` (astype analog) and `view_cast` (reinterpret/view) are
+//    the explicit cast methods. Non-test consumer: `Array::cast` itself calls
+//    `can_cast(T::dtype(), U::dtype(), casting)?` before converting (this file).
+//  - REQ-26 (type inspection predicates `issubdtype`/`isrealobj`/
+//    `iscomplexobj`) — SHIPPED: `issubdtype` (type-hierarchy check),
+//    `isrealobj`, and `iscomplexobj` (this file) are the inspection surface,
+//    mirroring `np.issubdtype` / `np.isrealobj` / `np.iscomplexobj`.
 
 #[cfg(feature = "std")]
 use crate::dimension::Dimension;
