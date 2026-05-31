@@ -2529,6 +2529,18 @@ pub fn diagonal<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // complex (#972): `diagonal` is a pure view extraction (no arithmetic) and
+    // numpy returns the diagonal preserving the complex dtype
+    // (`numpy/_core/fromnumeric.py:diagonal` → `asanyarray(a).diagonal`). The
+    // `match_dtype_all!` real path is sealed to real dtypes and would raise
+    // `TypeError` on complex, while a float64 coercion would drop the imaginary
+    // part (R-CODE-4). Delegate the complex case to numpy, which owns the complex
+    // diagonal.
+    let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+    if kind == "c" {
+        let np = py.import("numpy")?;
+        return np.call_method1("diagonal", (&arr, offset));
+    }
     Ok(crate::match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;

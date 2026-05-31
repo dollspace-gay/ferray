@@ -3474,15 +3474,22 @@ pub fn histogram<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     use ferray_core::array::aliases::Array1;
     let arr = as_ndarray(py, a)?;
-    // numpy.histogram on complex input raises IndexError (the complex->real cast
-    // in `_search_sorted_inclusive` produces out-of-range bin indices), not a
-    // silent real-part histogram (numpy/lib/_histograms_impl.py:853 casts complex
-    // to intp). Reject complex to match numpy's observable failure (R-CODE-4 /
-    // R-DEV-2: preserve numpy's exception type).
+    // complex (#972): numpy.histogram does NOT raise on complex input (verified
+    // live, numpy 2.4.4) — it casts the complex values to real with a
+    // `ComplexWarning` and computes the histogram, returning integer counts and
+    // (complex) bin edges (`numpy/lib/_histograms_impl.py:853` casts the f_indices
+    // to intp). ferray previously raised a bogus `IndexError`, diverging from
+    // numpy's observable compute behavior (R-DEV-1 / R-CODE-4). Delegate the
+    // complex case to numpy, which owns the cast-and-compute result.
     if is_complex_dtype(dtype_name(&arr)?.as_str()) {
-        return Err(pyo3::exceptions::PyIndexError::new_err(
-            "index out of bounds for axis 0: numpy.histogram does not support complex input",
-        ));
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("bins", bins)?;
+        if let Some(r) = range {
+            kwargs.set_item("range", r)?;
+        }
+        kwargs.set_item("density", density)?;
+        return np.call_method("histogram", (&arr,), Some(&kwargs));
     }
     // datetime64/timedelta64 (#946): numpy's `histogram` RAISES on time inputs
     // (`DTypePromotionError`: a timedelta/datetime cannot be promoted with the
@@ -3734,6 +3741,18 @@ fn quantile_dispatch<'py>(
     }
 
     let dt = dtype_name(&arr)?;
+    // complex (#972): numpy's `percentile`/`quantile` REJECT complex input with
+    // `TypeError("a must be an array of real numbers")` (`numpy/lib/_function_base_impl.py`
+    // `_quantile_is_valid` / `_check_interpolation_as_method` guard via
+    // `np.issubdtype(a.dtype, np.complexfloating)`). ferray previously coerced the
+    // complex array to float64, silently discarding the imaginary part and returning
+    // a bogus real-only quantile (R-CODE-4). Match numpy: raise the same TypeError.
+    // MUST branch BEFORE the float64 coercion below.
+    if is_complex_dtype(dt.as_str()) {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "a must be an array of real numbers",
+        ));
+    }
     // float16 (#956): delegate the whole call to numpy on the ORIGINAL f16 array
     // (f32-compute interpolation, f16-narrow) so a scalar-`q` result stays
     // float16. MUST branch BEFORE the float64 coercion below (the silent-widening
@@ -4477,6 +4496,17 @@ pub fn cross<'py>(
     a: &Bound<'py, PyAny>,
     b: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // complex (#972): numpy's `cross` computes a genuinely-complex cross product
+    // (`numpy/_core/numeric.py:cross` operates over `asarray`), but the
+    // `match_dtype_float!` path below is sealed to f32/f64 and would either reject
+    // the complex array or drop the imaginary part (R-CODE-4). Delegate the complex
+    // case to numpy on the ORIGINAL operands, which owns the complex result.
+    if is_complex_dtype(dtype_name(&as_ndarray(py, a)?)?.as_str())
+        || is_complex_dtype(dtype_name(&as_ndarray(py, b)?)?.as_str())
+    {
+        let np = py.import("numpy")?;
+        return np.call_method1("cross", (a, b));
+    }
     let arr_a = promote_linalg_input(py, a)?;
     let dt = dtype_name(&arr_a)?;
     let arr_b = coerce_dtype(py, b, dt.as_str())?;

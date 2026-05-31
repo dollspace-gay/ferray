@@ -3031,6 +3031,23 @@ pub fn ediff1d<'py>(
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::ediff1d_time(py, &arr, None, None);
     }
+    // complex (#972): ediff1d on complex computes genuinely-complex consecutive
+    // differences (`numpy/lib/_arraysetops_impl.py` `ediff1d` operates over the
+    // original array via `ary[1:] - ary[:-1]`), but `match_dtype_numeric!` is
+    // sealed to real numeric dtypes and would reject the complex array. Delegate
+    // the complex case to numpy, which owns the complex result (R-CODE-4). The
+    // `to_end`/`to_begin` kwargs are forwarded only when present.
+    if is_complex_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ref e) = to_end {
+            kwargs.set_item("to_end", e.clone())?;
+        }
+        if let Some(ref b) = to_begin {
+            kwargs.set_item("to_begin", b.clone())?;
+        }
+        let np = py.import("numpy")?;
+        return np.call_method("ediff1d", (&arr,), Some(&kwargs));
+    }
     // float16 (REQ-5, #955): ediff1d preserves the dtype (`np.ediff1d(f16).dtype
     // == float16`, live); delegate to numpy as `match_dtype_numeric!` has no
     // float16 arm. `to_end`/`to_begin` forwarded only when present.

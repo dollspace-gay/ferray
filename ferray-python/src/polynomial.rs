@@ -882,7 +882,7 @@ fn poly_binop<'py>(
     vec_to_pyarray1(py, flip(out.coeffs().to_vec()))
 }
 
-/// Complex delegation for `polyadd` / `polymul`. When EITHER operand is a
+/// Complex delegation for `polyadd` / `polysub` / `polymul`. When EITHER operand is a
 /// complex array the highest-first result is genuinely complex
 /// (`numpy/lib/_polynomial_impl.py` zero-pads and adds / convolves over
 /// `NX.asarray`), but the real `poly_binop` path coerces both operands to
@@ -921,8 +921,15 @@ pub fn polyadd<'py>(
 /// `numpy.polysub(a1, a2)` — difference of two highest-first polynomials.
 /// `numpy/lib/_polynomial_impl.py:867`.
 #[pyfunction]
-pub fn polysub<'py>(py: Python<'py>, a1: Vec<f64>, a2: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
-    poly_binop(py, a1, a2, |x, y| x.sub(y))
+pub fn polysub<'py>(
+    py: Python<'py>,
+    a1: &Bound<'py, PyAny>,
+    a2: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = poly_binop_complex(py, "polysub", a1, a2)? {
+        return Ok(r);
+    }
+    poly_binop(py, a1.extract()?, a2.extract()?, |x, y| x.sub(y))
 }
 
 /// `numpy.polymul(a1, a2)` — product of two highest-first polynomials.

@@ -651,6 +651,17 @@ pub fn choose<'py>(
     if crate::conv::is_float16_dtype(dt.as_str()) {
         return crate::conv::f16_delegate(py, "choose", (a, choices), None);
     }
+    // complex (#972): `choose` is a pure gather (`numpy/_core/fromnumeric.py:choose`
+    // → `_wrapfunc(a, 'choose', ...)`) and numpy preserves the complex dtype of the
+    // choices. The `match_dtype_all!` real path is sealed to real dtypes and would
+    // raise `TypeError` on complex, while coercing the choices to float64 would drop
+    // every imaginary part (R-CODE-4). Delegate the complex case to numpy, which
+    // owns the complex result.
+    let first_kind: String = first.getattr("dtype")?.getattr("kind")?.extract()?;
+    if first_kind == "c" {
+        let np = py.import("numpy")?;
+        return np.call_method1("choose", (a, choices));
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let mut owned: Vec<ArrayD<T>> = Vec::with_capacity(list.len());
         for item in list.iter() {
