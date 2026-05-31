@@ -3612,6 +3612,17 @@ macro_rules! bind_binary_signed_int_only {
                 "int32" | "i32" => __gcd_arm!(i32),
                 "int16" | "i16" => __gcd_arm!(i16),
                 "int8" | "i8" => __gcd_arm!(i8),
+                // Unsigned integer dtypes (uint8/uint16/uint32/uint64) are
+                // covered by numpy's `TD(ints)` registration for gcd/lcm
+                // (generate_umath.py:1156/:1163) but ferray-ufunc's
+                // `gcd_int`/`lcm_int` are `num_traits::Signed`-bounded (a
+                // library gap acknowledged in `.design/ferray-ufunc.md`), so
+                // delegate the unsigned case to numpy, which computes the
+                // correct gcd/lcm preserving the (promoted) uint dtype.
+                u if u.starts_with("uint") => {
+                    np.getattr(stringify!($name))?
+                        .call1((&pair_list[0], &pair_list[1]))?
+                }
                 other => {
                     return Err(::pyo3::exceptions::PyTypeError::new_err(format!(
                         "ufunc {:?} not supported for the input types (signed integer required): {other:?}",
