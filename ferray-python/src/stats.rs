@@ -1200,6 +1200,40 @@ fn f16_reduce<'py>(
     np.call_method(func, (arr,), Some(&kwargs))
 }
 
+/// `keepdims=` delegate for the nan-family reductions (#1006). numpy accepts
+/// `keepdims=` on every nan-reduction (numpy/lib/_nanfunctions_impl.py — e.g.
+/// `nansum(a, axis=None, ..., keepdims=<no value>)`); with `keepdims=True` a
+/// FULL reduction returns an ndarray whose reduced dims are all 1 (NOT a
+/// scalar). The native fast paths here cannot synthesize the size-1 axes, so
+/// when `keepdims=True` is requested the whole op is delegated to numpy's own
+/// `nan<fn>`, which owns the nan-skip + keepdims reshape across every dtype.
+/// `q` (percentile/quantile) is forwarded positionally; `ddof` (var/std) and
+/// `axis` are forwarded as kwargs. This mirrors the #944/#954/#956
+/// detect-and-delegate pattern already used by `f16_reduce`.
+fn nan_keepdims_delegate<'py>(
+    py: Python<'py>,
+    func: &str,
+    arr: &Bound<'py, PyAny>,
+    q: Option<&Bound<'py, PyAny>>,
+    axis: Option<isize>,
+    ddof: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    match axis {
+        Some(ax) => kwargs.set_item("axis", ax)?,
+        None => kwargs.set_item("axis", py.None())?,
+    }
+    kwargs.set_item("keepdims", true)?;
+    if let Some(d) = ddof {
+        kwargs.set_item("ddof", d)?;
+    }
+    match q {
+        Some(qv) => np.call_method(func, (arr, qv), Some(&kwargs)),
+        None => np.call_method(func, (arr,), Some(&kwargs)),
+    }
+}
+
 /// Reduction-kwarg delegate gate (#975): when ANY of `dtype`/`keepdims`/
 /// `initial`/`where`/`ddof != 0` is supplied (non-default), delegate the whole
 /// reduction to numpy's own top-level function and return `Some(result)`; else
@@ -2070,13 +2104,26 @@ where
 macro_rules! bind_nan_reduction {
     ($name:ident, $ferr_path:path) => {
         #[pyfunction]
-        #[pyo3(signature = (a, axis = None))]
+        #[pyo3(signature = (a, axis = None, keepdims = false))]
         pub fn $name<'py>(
             py: Python<'py>,
             a: &Bound<'py, PyAny>,
             axis: Option<usize>,
+            keepdims: bool,
         ) -> PyResult<Bound<'py, PyAny>> {
             let arr = as_ndarray(py, a)?;
+            // #1006: numpy keeps reduced dims as size-1; delegate so numpy owns
+            // the nan-skip + keepdims reshape across every dtype.
+            if keepdims {
+                return nan_keepdims_delegate(
+                    py,
+                    stringify!($name),
+                    &arr,
+                    None,
+                    axis.map(|x| x as isize),
+                    None,
+                );
+            }
             let dt = dtype_name(&arr)?;
             let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
                 arr
@@ -2101,13 +2148,26 @@ macro_rules! bind_nan_reduction {
     // reductions (`fr.nansum(td)`/`fr.nanmax(td)` returned a bare float).
     ($name:ident, $ferr_path:path, complex = $cplx:expr, time = $time:expr) => {
         #[pyfunction]
-        #[pyo3(signature = (a, axis = None))]
+        #[pyo3(signature = (a, axis = None, keepdims = false))]
         pub fn $name<'py>(
             py: Python<'py>,
             a: &Bound<'py, PyAny>,
             axis: Option<usize>,
+            keepdims: bool,
         ) -> PyResult<Bound<'py, PyAny>> {
             let arr = as_ndarray(py, a)?;
+            // #1006: numpy keeps reduced dims as size-1; delegate so numpy owns
+            // the nan-skip + keepdims reshape across every dtype.
+            if keepdims {
+                return nan_keepdims_delegate(
+                    py,
+                    stringify!($name),
+                    &arr,
+                    None,
+                    axis.map(|x| x as isize),
+                    None,
+                );
+            }
             if crate::datetime::is_time_array(&arr)? {
                 return ($time)(py, &arr, axis);
             }
@@ -2149,13 +2209,26 @@ macro_rules! bind_nan_reduction {
     // unchanged.
     ($name:ident, $ferr_path:path, complex = $cplx:expr, time = $time:expr, int = $int:expr) => {
         #[pyfunction]
-        #[pyo3(signature = (a, axis = None))]
+        #[pyo3(signature = (a, axis = None, keepdims = false))]
         pub fn $name<'py>(
             py: Python<'py>,
             a: &Bound<'py, PyAny>,
             axis: Option<usize>,
+            keepdims: bool,
         ) -> PyResult<Bound<'py, PyAny>> {
             let arr = as_ndarray(py, a)?;
+            // #1006: numpy keeps reduced dims as size-1; delegate so numpy owns
+            // the nan-skip + keepdims reshape across every dtype.
+            if keepdims {
+                return nan_keepdims_delegate(
+                    py,
+                    stringify!($name),
+                    &arr,
+                    None,
+                    axis.map(|x| x as isize),
+                    None,
+                );
+            }
             if crate::datetime::is_time_array(&arr)? {
                 return ($time)(py, &arr, axis);
             }
@@ -2665,14 +2738,26 @@ where
 
 /// `numpy.nanvar(a, axis=None, ddof=0)`.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None, ddof = 0))]
+#[pyo3(signature = (a, axis = None, ddof = 0, keepdims = false))]
 pub fn nanvar<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
     ddof: usize,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // #1006: delegate the keepdims reshape (and nan-skip) to numpy.
+    if keepdims {
+        return nan_keepdims_delegate(
+            py,
+            "nanvar",
+            &arr,
+            None,
+            axis.map(|x| x as isize),
+            Some(ddof),
+        );
+    }
     let dt = dtype_name(&arr)?;
     // Complex nanvar: REAL variance over the non-NaN-complex data (NOT var of the
     // real parts). MUST branch BEFORE the float64 coercion that drops the
@@ -2711,14 +2796,26 @@ pub fn nanvar<'py>(
 
 /// `numpy.nanstd(a, axis=None, ddof=0)`.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None, ddof = 0))]
+#[pyo3(signature = (a, axis = None, ddof = 0, keepdims = false))]
 pub fn nanstd<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
     ddof: usize,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // #1006: delegate the keepdims reshape (and nan-skip) to numpy.
+    if keepdims {
+        return nan_keepdims_delegate(
+            py,
+            "nanstd",
+            &arr,
+            None,
+            axis.map(|x| x as isize),
+            Some(ddof),
+        );
+    }
     let dt = dtype_name(&arr)?;
     // Complex nanstd: sqrt of the REAL complex nanvar (same R-CODE-4 guard).
     match dt.as_str() {
@@ -2820,13 +2917,18 @@ where
 
 /// `numpy.nanmedian(a, axis=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, keepdims = false))]
 pub fn nanmedian<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // #1006: delegate the keepdims reshape (and nan-skip) to numpy.
+    if keepdims {
+        return nan_keepdims_delegate(py, "nanmedian", &arr, None, axis.map(|x| x as isize), None);
+    }
     // datetime64/timedelta64 (#946): `nanmedian(timedelta)->timedelta` (NaT
     // skipped, all-NaT lane -> NaT); `nanmedian(datetime)` RAISES numpy's
     // `UFuncTypeError`. Branch BEFORE the float64 coercion (silent-float fix).
@@ -2866,13 +2968,18 @@ pub fn nanmedian<'py>(
 
 /// `numpy.nanargmin(a, axis=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, keepdims = false))]
 pub fn nanargmin<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // #1006: delegate the keepdims reshape (and nan-skip) to numpy.
+    if keepdims {
+        return nan_keepdims_delegate(py, "nanargmin", &arr, None, axis.map(|x| x as isize), None);
+    }
     let dt = dtype_name(&arr)?;
     let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
         arr
@@ -2891,13 +2998,18 @@ pub fn nanargmin<'py>(
 
 /// `numpy.nanargmax(a, axis=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, keepdims = false))]
 pub fn nanargmax<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // #1006: delegate the keepdims reshape (and nan-skip) to numpy.
+    if keepdims {
+        return nan_keepdims_delegate(py, "nanargmax", &arr, None, axis.map(|x| x as isize), None);
+    }
     let dt = dtype_name(&arr)?;
     let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
         arr
@@ -4886,25 +4998,37 @@ fn nan_quantile_dispatch<'py>(
 
 /// `numpy.nanpercentile(a, q, axis=None)` — percentile ignoring NaNs.
 #[pyfunction]
-#[pyo3(signature = (a, q, axis = None))]
+#[pyo3(signature = (a, q, axis = None, keepdims = false))]
 pub fn nanpercentile<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     q: &Bound<'py, PyAny>,
     axis: Option<isize>,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // #1006: delegate the keepdims reshape (and nan-skip) to numpy.
+    if keepdims {
+        let arr = as_ndarray(py, a)?;
+        return nan_keepdims_delegate(py, "nanpercentile", &arr, Some(q), axis, None);
+    }
     nan_quantile_dispatch(py, a, q, axis, QuantileKind::Percentile)
 }
 
 /// `numpy.nanquantile(a, q, axis=None)` — quantile ignoring NaNs.
 #[pyfunction]
-#[pyo3(signature = (a, q, axis = None))]
+#[pyo3(signature = (a, q, axis = None, keepdims = false))]
 pub fn nanquantile<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     q: &Bound<'py, PyAny>,
     axis: Option<isize>,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // #1006: delegate the keepdims reshape (and nan-skip) to numpy.
+    if keepdims {
+        let arr = as_ndarray(py, a)?;
+        return nan_keepdims_delegate(py, "nanquantile", &arr, Some(q), axis, None);
+    }
     nan_quantile_dispatch(py, a, q, axis, QuantileKind::Quantile)
 }
 
