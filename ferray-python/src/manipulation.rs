@@ -61,22 +61,27 @@ fn list_first_is_time<'py>(py: Python<'py>, list: &Bound<'py, PyList>) -> PyResu
 }
 
 // ---------------------------------------------------------------------------
-// Fixed-width string (`<U`/`<S`) detect-and-delegate seam (REQ-2, #960)
+// Non-real flexible-dtype (`<U`/`<S` string, `V` structured/void, `O` object)
+// detect-and-delegate seam (REQ-2 #960 string; #964 structured/object)
 // ---------------------------------------------------------------------------
 //
 // Fixed-width string arrays (numpy `<U` unicode, kind `'U'`; `<S`/`|S` bytes,
-// kind `'S'`) are a *flexible* (itemsize-parameterised) dtype with no ferray
-// `Element` and no `DynArray` variant (`.design/ferray-core-string.md`,
-// `dynarray.rs` rejects `FixedUnicode`/`FixedAscii`/`RawBytes`, #741), so they
-// never enter the Rust library — they ride the boundary as numpy ndarrays. Every
-// data-move / select / order op detects the `'U'`/`'S'` kind ahead of its
-// real-only `match_dtype_all*!` / ordering macro and delegates to numpy's own
-// op, returning the numpy string result **directly** (no transport). This is the
-// string analogue of the datetime `is_time_array` + `delegate_manip` seam
-// (#948) and the float16 `is_float16_dtype` + `f16_delegate` seam (#955), minus
-// the int64-view round-trip: numpy owns the dtype passthrough, the
-// concatenate/stack width-promotion (`np.concatenate([['ab'],['cde']])` ->
-// `<U3`), and the lexicographic sort (`np.sort(['c','a','b']) == ['a','b','c']`).
+// kind `'S'`), structured/void arrays (kind `'V'`, e.g.
+// `dtype=[('a','i4'),('b','f4')]`), and object arrays (kind `'O'`,
+// `dtype=object`) are all *non-real flexible* dtypes with no ferray `Element`
+// and no `DynArray` variant (`.design/ferray-core-string.md`, `dynarray.rs`
+// rejects `FixedUnicode`/`FixedAscii`/`RawBytes`, #741/#964), so they never
+// enter the Rust library — they ride the boundary as numpy ndarrays. Every
+// data-move / select / order op detects the `'U'`/`'S'`/`'V'`/`'O'` kind
+// ([`is_flexible_array`]) ahead of its real-only `match_dtype_all*!` / ordering
+// macro and delegates to numpy's own op, returning the numpy result **directly**
+// (no transport). This is the string/datetime analogue of the `is_time_array` +
+// `delegate_manip` seam (#948) and the float16 `is_float16_dtype` +
+// `f16_delegate` seam (#955), minus the int64-view round-trip: numpy owns the
+// dtype passthrough, the structured field order, the concatenate/stack
+// width-promotion (`np.concatenate([['ab'],['cde']])` -> `<U3`), the object
+// passthrough, and the lexicographic / object-by-comparison sort
+// (`np.sort(['c','a','b']) == ['a','b','c']`).
 
 /// `true` if a numpy ndarray is a fixed-width string array — unicode (`<U`,
 /// dtype kind `'U'`) or bytes (`<S`/`|S`, kind `'S'`).
@@ -91,12 +96,33 @@ pub(crate) fn is_string_array(arr: &Bound<'_, PyAny>) -> PyResult<bool> {
     Ok(kind == "U" || kind == "S")
 }
 
-/// `true` if the first element of a list of array-likes is a fixed-width string
-/// array, so the list-consuming ops (`concatenate`/`stack`/`vstack`/`hstack`/
-/// `column_stack`/`dstack`/`block`) can route to the string-delegation path.
-/// The list-stack ops require a uniform element kind, so the first input
-/// determines the whole op (mirrors [`list_first_is_time`]).
-pub(crate) fn list_first_is_string<'py>(
+/// `true` if a numpy ndarray is a *non-real flexible* dtype that has no ferray
+/// `Element` / `DynArray` variant and therefore rides the boundary as a numpy
+/// ndarray: fixed-width string (`<U` unicode, kind `'U'`; `<S`/`|S` bytes, kind
+/// `'S'`), **structured/void** (`kind == 'V'`, e.g.
+/// `dtype=[('a','i4'),('b','f4')]`), or **object** (`kind == 'O'`,
+/// `dtype=object`). The data-move / select / order ops in this module gate on
+/// this superset to delegate the op to numpy (which owns the dtype passthrough,
+/// field-order semantics, and object-by-comparison ordering), returning numpy's
+/// result directly with no transport (R-CODE-4, #964 — the structured/object
+/// extension of the string `is_string_array` seam, #960).
+///
+/// Keys off the stable `dtype.kind`, NOT `dtype.name` (`np.dtype('U2').name` is
+/// `'str64'`, a structured dtype's `.name` is `'void64'` — both width-encoded and
+/// unstable; `.kind` is stably one of `'U'/'S'/'V'/'O'`, verified live numpy
+/// 2.4.5). Strict superset of [`is_string_array`].
+pub(crate) fn is_flexible_array(arr: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+    Ok(kind == "U" || kind == "S" || kind == "V" || kind == "O")
+}
+
+/// `true` if the first element of a list of array-likes is a non-real flexible
+/// (string / structured-void / object) array, so the list-consuming ops
+/// (`concatenate`/`stack`/`vstack`/`hstack`/`column_stack`/`dstack`/`block`)
+/// route to the numpy-delegation path. The list-stack ops require a uniform
+/// element kind, so the first input determines the whole op (mirrors
+/// [`list_first_is_time`], covering string/structured-void/object per #964).
+pub(crate) fn list_first_is_flexible<'py>(
     py: Python<'py>,
     list: &Bound<'py, PyList>,
 ) -> PyResult<bool> {
@@ -104,7 +130,7 @@ pub(crate) fn list_first_is_string<'py>(
         return Ok(false);
     }
     let first = as_ndarray(py, &list.get_item(0)?)?;
-    is_string_array(&first)
+    is_flexible_array(&first)
 }
 
 /// Delegate a data-move / select / order op over a fixed-width string (`<U`/`<S`)
@@ -211,7 +237,7 @@ pub fn reshape<'py>(
     // (`np.reshape(<U,(2,2)).dtype == <U`, live); delegate to numpy and return its
     // string ndarray directly (no transport). Same detect-and-delegate seam as the
     // datetime/f16 branches, applied to every data-move op in this module.
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("order", order)?;
         return string_delegate(py, "reshape", (&arr, shape), Some(&kwargs));
@@ -269,7 +295,7 @@ pub fn ravel<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py,
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "ravel", (&arr,), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "ravel", (&arr,), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -293,7 +319,7 @@ pub fn flatten<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'p
         let flat = arr.call_method0("flatten")?;
         return crate::datetime::datetime_roundtrip(py, &flat);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         // `flatten` is an ndarray method; call it on the string array and return
         // numpy's string result directly (no transport, REQ-2, #960).
         return arr.call_method0("flatten");
@@ -324,7 +350,7 @@ pub fn squeeze<'py>(
         }
         return crate::datetime::delegate_manip(py, "squeeze", (&arr,), Some(&kwargs));
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         if let Some(ax) = axis {
             kwargs.set_item("axis", ax)?;
@@ -383,7 +409,7 @@ pub fn expand_dims<'py>(
         kwargs.set_item("axis", axis)?;
         return crate::datetime::delegate_manip(py, "expand_dims", (&arr,), Some(&kwargs));
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("axis", axis)?;
         return string_delegate(py, "expand_dims", (&arr,), Some(&kwargs));
@@ -455,7 +481,7 @@ pub fn transpose<'py>(
         kwargs.set_item("axes", axes.clone())?;
         return crate::datetime::delegate_manip(py, "transpose", (&arr,), Some(&kwargs));
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("axes", axes.clone())?;
         return string_delegate(py, "transpose", (&arr,), Some(&kwargs));
@@ -493,7 +519,7 @@ pub fn swapaxes<'py>(
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "swapaxes", (&arr, axis1, axis2), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "swapaxes", (&arr, axis1, axis2), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -526,7 +552,7 @@ pub fn moveaxis<'py>(
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "moveaxis", (&arr, source, destination), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "moveaxis", (&arr, source, destination), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -569,7 +595,7 @@ pub fn rollaxis<'py>(
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "rollaxis", (&arr, axis, start), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "rollaxis", (&arr, axis, start), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -607,7 +633,7 @@ pub fn flip<'py>(
         }
         return crate::datetime::delegate_manip(py, "flip", (&arr,), Some(&kwargs));
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         if let Some(ax) = axis {
             kwargs.set_item("axis", ax)?;
@@ -643,7 +669,7 @@ pub fn fliplr<'py>(py: Python<'py>, m: &Bound<'py, PyAny>) -> PyResult<Bound<'py
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "fliplr", (&arr,), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "fliplr", (&arr,), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -664,7 +690,7 @@ pub fn flipud<'py>(py: Python<'py>, m: &Bound<'py, PyAny>) -> PyResult<Bound<'py
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "flipud", (&arr,), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "flipud", (&arr,), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -697,7 +723,7 @@ pub fn rot90<'py>(
         kwargs.set_item("axes", (axes.0, axes.1))?;
         return crate::datetime::delegate_manip(py, "rot90", (&arr,), Some(&kwargs));
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("k", k)?;
         kwargs.set_item("axes", (axes.0, axes.1))?;
@@ -771,7 +797,7 @@ pub fn roll<'py>(
         }
         return crate::datetime::delegate_manip(py, "roll", (&arr, shift), Some(&kwargs));
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         if let Some(ax) = axis {
             kwargs.set_item("axis", ax)?;
@@ -809,7 +835,7 @@ pub fn atleast_1d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "atleast_1d", (&arr,), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "atleast_1d", (&arr,), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -830,7 +856,7 @@ pub fn atleast_2d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "atleast_2d", (&arr,), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "atleast_2d", (&arr,), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -851,7 +877,7 @@ pub fn atleast_3d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "atleast_3d", (&arr,), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "atleast_3d", (&arr,), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -1001,7 +1027,7 @@ pub fn concatenate<'py>(
     // string `<U`/`<S` (REQ-2, #960): numpy owns the dtype passthrough AND the
     // width-promotion to the max input width (`np.concatenate([['ab'],['cde']])`
     // -> `<U3`, live); delegate to numpy and return its string ndarray directly.
-    if list_first_is_string(py, list)? {
+    if list_first_is_flexible(py, list)? {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("axis", axis)?;
         return string_delegate(py, "concatenate", (arrays,), Some(&kwargs));
@@ -1058,7 +1084,7 @@ pub fn stack<'py>(
         kwargs.set_item("axis", axis)?;
         return crate::datetime::delegate_manip(py, "stack", (arrays,), Some(&kwargs));
     }
-    if list_first_is_string(py, list)? {
+    if list_first_is_flexible(py, list)? {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("axis", axis)?;
         return string_delegate(py, "stack", (arrays,), Some(&kwargs));
@@ -1088,7 +1114,7 @@ pub fn vstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     if list_first_is_time(py, list)? {
         return crate::datetime::delegate_manip(py, "vstack", (arrays,), None);
     }
-    if list_first_is_string(py, list)? {
+    if list_first_is_flexible(py, list)? {
         return string_delegate(py, "vstack", (arrays,), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&as_ndarray(py, &list.get_item(0)?)?)?.as_str()) {
@@ -1113,7 +1139,7 @@ pub fn hstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     if list_first_is_time(py, list)? {
         return crate::datetime::delegate_manip(py, "hstack", (arrays,), None);
     }
-    if list_first_is_string(py, list)? {
+    if list_first_is_flexible(py, list)? {
         return string_delegate(py, "hstack", (arrays,), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&as_ndarray(py, &list.get_item(0)?)?)?.as_str()) {
@@ -1164,7 +1190,7 @@ pub fn pad<'py>(
     // (`np.pad(<U2,(1,1))` -> `''` fill, live); delegate to numpy. The f64
     // `constant_values` is only forwarded for `constant` mode (numpy coerces a
     // numeric 0 fill to `''` for a string array).
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("mode", mode)?;
         if mode == "constant" {
@@ -1269,7 +1295,7 @@ pub fn tile<'py>(
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "tile", (&arr, reps), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "tile", (&arr, reps), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -1308,7 +1334,7 @@ pub fn repeat<'py>(
         }
         return crate::datetime::delegate_manip(py, "repeat", (&arr, repeats), Some(&kwargs));
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         if let Some(ax) = axis {
             kwargs.set_item("axis", ax)?;
@@ -1445,7 +1471,7 @@ pub fn delete<'py>(
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "delete", (&arr, obj, axis), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "delete", (&arr, obj, axis), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -1543,7 +1569,7 @@ pub fn insert<'py>(
     // string `<U`/`<S` (REQ-2, #960): numpy owns the dtype passthrough and the
     // width-promotion against the inserted `values`; delegate on the original
     // operands and return numpy's string result directly.
-    if is_string_array(&arr_a)? {
+    if is_flexible_array(&arr_a)? {
         return string_delegate(py, "insert", (&arr_a, obj, values, axis), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr_a)?.as_str()) {
@@ -1576,7 +1602,7 @@ pub fn append<'py>(
         }
         return crate::datetime::delegate_manip(py, "append", (&arr_a, values), Some(&kwargs));
     }
-    if is_string_array(&arr_a)? {
+    if is_flexible_array(&arr_a)? {
         let kwargs = pyo3::types::PyDict::new(py);
         if let Some(ax) = axis {
             kwargs.set_item("axis", ax)?;
@@ -1612,7 +1638,7 @@ pub fn resize<'py>(
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::delegate_manip(py, "resize", (&arr, new_shape), None);
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate(py, "resize", (&arr, new_shape), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -1689,7 +1715,7 @@ pub fn split<'py>(
             None,
         );
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate_list(py, "split", (&arr, indices_or_sections, axis), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -1733,7 +1759,7 @@ pub fn array_split<'py>(
             None,
         );
     }
-    if is_string_array(&arr)? {
+    if is_flexible_array(&arr)? {
         return string_delegate_list(py, "array_split", (&arr, indices_or_sections, axis), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -1775,7 +1801,7 @@ macro_rules! bind_axis_split {
                     None,
                 );
             }
-            if is_string_array(&arr)? {
+            if is_flexible_array(&arr)? {
                 return string_delegate_list(py, stringify!($name), (&arr, n_sections), None);
             }
             if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
@@ -1815,7 +1841,7 @@ pub fn column_stack<'py>(
     if list_first_is_time(py, list)? {
         return crate::datetime::delegate_manip(py, "column_stack", (arrays,), None);
     }
-    if list_first_is_string(py, list)? {
+    if list_first_is_flexible(py, list)? {
         return string_delegate(py, "column_stack", (arrays,), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&as_ndarray(py, &list.get_item(0)?)?)?.as_str()) {
@@ -1853,7 +1879,7 @@ pub fn block<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Bound
     if crate::datetime::is_time_array(&first)? {
         return crate::datetime::delegate_manip(py, "block", (arrays,), None);
     }
-    if is_string_array(&first)? {
+    if is_flexible_array(&first)? {
         return string_delegate(py, "block", (arrays,), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&first)?.as_str()) {
@@ -1940,7 +1966,7 @@ pub fn dstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     if list_first_is_time(py, list)? {
         return crate::datetime::delegate_manip(py, "dstack", (arrays,), None);
     }
-    if list_first_is_string(py, list)? {
+    if list_first_is_flexible(py, list)? {
         return string_delegate(py, "dstack", (arrays,), None);
     }
     if crate::conv::is_float16_dtype(dtype_name(&as_ndarray(py, &list.get_item(0)?)?)?.as_str()) {

@@ -359,7 +359,7 @@ pub fn flatnonzero<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Boun
     let dt = dtype_name(&arr)?;
     // string `<U`/`<S` (REQ-2, #960): int index output (`''` is falsy); delegate
     // to numpy directly (no transport — strings never enter the Rust library).
-    if crate::manipulation::is_string_array(&arr)? {
+    if crate::manipulation::is_flexible_array(&arr)? {
         return crate::manipulation::string_delegate(py, "flatnonzero", (&arr,), None);
     }
     // float16 (REQ-5, #955): int index output; delegate to numpy as
@@ -399,7 +399,7 @@ pub fn nonzero<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'p
     // string `<U`/`<S` (REQ-2, #960): tuple of int index arrays of non-empty
     // strings (`''` is falsy); delegate to numpy directly. numpy returns a tuple,
     // which rides the boundary unchanged.
-    if crate::manipulation::is_string_array(&arr)? {
+    if crate::manipulation::is_flexible_array(&arr)? {
         return crate::manipulation::string_delegate(py, "nonzero", (&arr,), None);
     }
     // float16 (REQ-5, #955): tuple of int index arrays; delegate to numpy.
@@ -452,7 +452,7 @@ pub fn take<'py>(
     // string `<U`/`<S` (REQ-2, #960): `take` is a pure gather preserving the
     // string dtype (`np.take(<U,...).dtype == <U`, live); delegate to numpy
     // directly (no transport — strings never enter the Rust library).
-    if crate::manipulation::is_string_array(&arr)? {
+    if crate::manipulation::is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         if let Some(ax) = axis {
             kwargs.set_item("axis", ax)?;
@@ -571,7 +571,7 @@ pub fn take_along_axis<'py>(
     let dt = dtype_name(&arr)?;
     // string `<U`/`<S` (REQ-2, #960): pure gather preserving the string dtype;
     // delegate to numpy directly.
-    if crate::manipulation::is_string_array(&arr)? {
+    if crate::manipulation::is_flexible_array(&arr)? {
         return crate::manipulation::string_delegate(
             py,
             "take_along_axis",
@@ -696,7 +696,7 @@ pub fn compress<'py>(
     // string `<U`/`<S` (REQ-2, #960): compress preserves the string dtype;
     // delegate to numpy directly. (`arr` may have been raveled above; pass it so
     // numpy compresses the same flattened/axis form.)
-    if crate::manipulation::is_string_array(&arr)? {
+    if crate::manipulation::is_flexible_array(&arr)? {
         return crate::manipulation::string_delegate(py, "compress", (condition, &arr), None);
     }
     // float16 (REQ-5, #955): compress preserves the dtype; delegate to numpy.
@@ -937,7 +937,7 @@ pub fn extract<'py>(
     let dt = dtype_name(&arr_a)?;
     // string `<U`/`<S` (REQ-2, #960): extract returns a 1-D string array of the
     // selected elements, dtype preserved; delegate to numpy directly.
-    if crate::manipulation::is_string_array(&arr_a)? {
+    if crate::manipulation::is_flexible_array(&arr_a)? {
         return crate::manipulation::string_delegate(py, "extract", (condition, arr), None);
     }
     // float16 (REQ-5, #955): extract preserves the dtype; delegate to numpy.
@@ -960,7 +960,7 @@ pub fn argwhere<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'
     let dt = dtype_name(&arr)?;
     // string `<U`/`<S` (REQ-2, #960): int64 multi-index output of non-empty
     // strings; delegate to numpy directly.
-    if crate::manipulation::is_string_array(&arr)? {
+    if crate::manipulation::is_flexible_array(&arr)? {
         return crate::manipulation::string_delegate(py, "argwhere", (&arr,), None);
     }
     // float16 (REQ-5, #955): int64 multi-index output; delegate to numpy.

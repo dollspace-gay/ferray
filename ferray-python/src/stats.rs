@@ -2818,7 +2818,7 @@ pub fn sort<'py>(
     // and preserves the dtype (`np.sort(['c','a','b']) == ['a','b','c']`, live);
     // delegate on the original `a` so numpy's own axis default applies, returning
     // its string ndarray directly (no transport). Mirrors the datetime/f16 seam.
-    if crate::manipulation::is_string_array(&arr)? {
+    if crate::manipulation::is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         match axis {
             Some(ax) => kwargs.set_item("axis", ax)?,
@@ -2877,7 +2877,7 @@ pub fn argsort<'py>(
     }
     // string `<U`/`<S` (REQ-2, #960): numpy argsorts lexicographically, returning
     // int64 indices (`np.argsort(['c','a','b']) == [1,2,0]`, live); delegate.
-    if crate::manipulation::is_string_array(&arr)? {
+    if crate::manipulation::is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         match axis {
             Some(ax) => kwargs.set_item("axis", ax)?,
@@ -2940,7 +2940,7 @@ pub fn searchsorted<'py>(
     // string `<U`/`<S` (REQ-2, #960): numpy finds lexicographic insertion points
     // into the (sorted) string array (`np.searchsorted(['a','b','c'],'b') == 1`,
     // live); delegate the whole op (array + query) to numpy directly.
-    if crate::manipulation::is_string_array(&arr_a)? {
+    if crate::manipulation::is_flexible_array(&arr_a)? {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("side", side)?;
         return crate::manipulation::string_delegate(
@@ -2999,7 +2999,7 @@ pub fn unique<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py
     }
     // string `<U`/`<S` (REQ-2, #960): numpy returns the sorted-unique strings,
     // dtype preserved (`np.unique(['b','a','b']) == ['a','b']`, live); delegate.
-    if crate::manipulation::is_string_array(&arr)? {
+    if crate::manipulation::is_flexible_array(&arr)? {
         return crate::manipulation::string_delegate(py, "unique", (&arr,), None);
     }
     // float16 (REQ-5, #955): unique preserves the dtype (`np.unique(f16).dtype ==
@@ -3042,7 +3042,7 @@ pub fn count_nonzero<'py>(
     // string `<U`/`<S` (REQ-2, #960): numpy counts non-empty strings (`''` is
     // falsy), returning an int count (`np.count_nonzero(['','a','']) == 1`, live);
     // delegate the whole op to numpy directly.
-    if crate::manipulation::is_string_array(&arr)? {
+    if crate::manipulation::is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         match axis {
             Some(ax) => kwargs.set_item("axis", ax)?,
@@ -3100,8 +3100,8 @@ macro_rules! bind_set_op {
             // (`np.intersect1d(['a','b'],['b','c']) == ['b']`, live); delegate the
             // whole op (both operands) to numpy directly. `union1d` takes NO
             // `assume_unique` kwarg.
-            if crate::manipulation::is_string_array(&arr_a)?
-                || crate::manipulation::is_string_array(&as_ndarray(py, b)?)?
+            if crate::manipulation::is_flexible_array(&arr_a)?
+                || crate::manipulation::is_flexible_array(&as_ndarray(py, b)?)?
             {
                 let kwargs = pyo3::types::PyDict::new(py);
                 if stringify!($name) != "union1d" {
@@ -3173,8 +3173,8 @@ pub fn in1d<'py>(
     // string `<U`/`<S` (REQ-2, #960): bool membership output; delegate both
     // operands to `numpy.isin` (`numpy.in1d` was removed in numpy 2.x — `isin` is
     // the identical 1-D membership oracle). numpy owns string equality.
-    if crate::manipulation::is_string_array(&arr_a)?
-        || crate::manipulation::is_string_array(&as_ndarray(py, b)?)?
+    if crate::manipulation::is_flexible_array(&arr_a)?
+        || crate::manipulation::is_flexible_array(&as_ndarray(py, b)?)?
     {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("assume_unique", assume_unique)?;
@@ -3214,8 +3214,8 @@ pub fn isin<'py>(
     let dt = dtype_name(&arr_a)?;
     // string `<U`/`<S` (REQ-2, #960): bool membership output; delegate both
     // operands to numpy (numpy owns string equality, broadcast over `element`).
-    if crate::manipulation::is_string_array(&arr_a)?
-        || crate::manipulation::is_string_array(&as_ndarray(py, test_elements)?)?
+    if crate::manipulation::is_flexible_array(&arr_a)?
+        || crate::manipulation::is_flexible_array(&as_ndarray(py, test_elements)?)?
     {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("assume_unique", assume_unique)?;
@@ -3364,7 +3364,7 @@ pub fn lexsort<'py>(py: Python<'py>, keys: &Bound<'py, PyAny>) -> PyResult<Bound
     let dt = dtype_name(&first)?;
     // string `<U`/`<S` (REQ-2, #960): int64 index output via lexicographic order
     // over the keys; delegate to numpy directly.
-    if crate::manipulation::is_string_array(&first)? {
+    if crate::manipulation::is_flexible_array(&first)? {
         return crate::manipulation::string_delegate(py, "lexsort", (keys,), None);
     }
     // float16 (REQ-5, #955): int64 index output; delegate to numpy.
@@ -3402,7 +3402,7 @@ pub fn unique_extended<'py>(
     let dt = dtype_name(&arr)?;
     // string `<U`/`<S` (REQ-2, #960): unique strings stay string (sorted-unique),
     // index/inverse/counts are int — delegate the whole op to numpy directly.
-    if crate::manipulation::is_string_array(&arr)? {
+    if crate::manipulation::is_flexible_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("return_index", return_index)?;
         kwargs.set_item("return_inverse", return_inverse)?;
@@ -4042,13 +4042,15 @@ pub fn where_fn<'py>(
     // yield complex (numpy/_core/multiarray.py:198). Taking only x's
     // dtype would silently drop the imaginary part of a complex `y`.
     let rt = np.getattr("result_type")?.call1((&bcast[1], &bcast[2]))?;
-    // string `<U`/`<S` (REQ-2, #960): when `result_type(x, y)` is a string dtype,
-    // `where` selects strings and preserves the (width-promoted) string dtype
-    // (`np.where(mask, ['a','b'], ['c','d']).dtype == <U1`, live); delegate to
+    // non-real flexible dtype: string `<U`/`<S` (REQ-2, #960), structured/void
+    // `'V'` or object `'O'` (#964). When `result_type(x, y)` is one of these,
+    // `where` selects + preserves that dtype (string: `np.where(mask, ['a','b'],
+    // ['c','d']).dtype == <U1`; object: `np.where(mask, obj, obj).dtype == object`;
+    // structured: preserves the field layout — all live numpy 2.4.5); delegate to
     // numpy on the ORIGINAL operands so numpy applies its own broadcast + select +
-    // width-promotion, returning its string ndarray directly (no transport).
+    // width-promotion / field-order, returning its ndarray directly (no transport).
     let rt_kind: String = rt.getattr("kind")?.extract()?;
-    if rt_kind == "U" || rt_kind == "S" {
+    if rt_kind == "U" || rt_kind == "S" || rt_kind == "V" || rt_kind == "O" {
         return crate::manipulation::string_delegate(py, "where", (condition, x, y), None);
     }
     let dt: String = rt.getattr("name")?.extract()?;
