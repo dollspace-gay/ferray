@@ -380,6 +380,12 @@ pub fn nonzero<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'p
         ));
     }
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 nonzero (#947): coordinates of ticks != 0 (NaT is
+    // nonzero). Routed through the #947 time dispatch ahead of the real-only
+    // `match_dtype_all_complex!`, which would otherwise raise `TypeError`.
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::nonzero_time(py, &arr);
+    }
     // Complex `nonzero`: numpy treats `z != 0` as `re != 0 || im != 0`
     // (numpy/_core/fromnumeric.py:1994 dispatches to the elementwise truth of
     // the complex value). ferray-core `nonzero` uses `*val != T::zero()`, which

@@ -1946,6 +1946,287 @@ pub fn isnat<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py,
 }
 
 // ---------------------------------------------------------------------------
+// datetime64 / timedelta64 elementwise + selection ops (#947)
+//
+// The LAST datetime blocker: `diff` / `ediff1d` / `abs` / `negative` / `sign`
+// / `maximum` / `minimum` / `where` / `clip` / `count_nonzero` / `nonzero`
+// over datetime64 / timedelta64 inputs. The PRIOR binding paths rejected the
+// `M`/`m` dtype (the real-only `match_dtype_*` macros raised a ferray-side
+// `TypeError`) where numpy COMPUTES a datetime/timedelta (or int) result.
+//
+// Compute-or-raise per the LIVE numpy 2.4.5 contract (each derived live,
+// R-CHAR-3):
+//   diff(datetime)    -> timedelta   ; diff(timedelta)    -> timedelta
+//   ediff1d(datetime) -> timedelta   ; ediff1d(timedelta) -> timedelta
+//   abs(td)/negative(td) -> timedelta (|ticks| / -ticks; NaT propagates)
+//   sign(td)          -> timedelta   ({-1,0,1} ticks AS a timedelta — verified
+//                        live: `np.sign(td).dtype == timedelta64`, NOT int)
+//   abs/negative/sign(datetime) -> RAISE UFuncTypeError (undefined)
+//   maximum/minimum(dt|td, same-kind) -> dt|td (elementwise by tick; ANY NaT
+//                        operand -> NaT, like NaN-propagate; cross-unit ->
+//                        finer common unit)
+//   where(cond, dt|td, dt|td)  -> dt|td (select by tick)
+//   clip(dt|td, lo, hi)        -> dt|td (composes maximum + minimum; NaT bound
+//                        -> NaT, handled by the propagation above)
+//   count_nonzero(td) -> int (count of ticks != 0; NaT (i64::MIN) IS nonzero)
+//   nonzero(td)       -> tuple of int index arrays (ticks != 0; NaT nonzero)
+//
+// The heavy / edge cases (unit promotion in maximum/minimum/where, numpy's
+// exact diff/ediff1d/sign semantics + its precise RAISE exceptions) are
+// delegated to numpy on the time array and marshalled back across the ferray
+// boundary via the int64-view transport ([`datetime_roundtrip`] / the
+// `int64_to_*` helpers), so numpy owns the semantics and ferray owns the
+// boundary contract (a fresh ferray-marshalled buffer, no lossy cast,
+// R-CODE-4). The count_nonzero / nonzero arms compute directly on the int64
+// ticks (NaT = `i64::MIN` is naturally `!= 0`).
+// ---------------------------------------------------------------------------
+
+/// `numpy.diff(a, n)` over a datetime64 / timedelta64 array -> timedelta64.
+/// `diff(datetime)` and `diff(timedelta)` BOTH yield a timedelta of the input's
+/// unit (consecutive differences; `datetime - datetime = timedelta`). Delegated
+/// to numpy (which owns the `n`-th-difference fold + NaT propagation) and
+/// marshalled back through the int64-view transport.
+pub fn diff_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    n: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let arr = np.call_method1("asarray", (a,))?;
+    time_kind(&arr)?
+        .ok_or_else(|| PyTypeError::new_err("diff_time requires a datetime64/timedelta64 array"))?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    kwargs.set_item("n", n)?;
+    let result = np.call_method("diff", (&arr,), Some(&kwargs))?;
+    datetime_roundtrip(py, &result)
+}
+
+/// `numpy.ediff1d(ary, to_end=None, to_begin=None)` over a datetime64 /
+/// timedelta64 array -> timedelta64 (consecutive differences). Delegated to
+/// numpy and marshalled back. `to_end` / `to_begin` are passed through verbatim
+/// (numpy validates / coerces them); the binding's typed signature only forwards
+/// the bare array case for the time dtypes (the divergence pin).
+pub fn ediff1d_time<'py>(
+    py: Python<'py>,
+    ary: &Bound<'py, PyAny>,
+    to_end: Option<&Bound<'py, PyAny>>,
+    to_begin: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let arr = np.call_method1("asarray", (ary,))?;
+    time_kind(&arr)?.ok_or_else(|| {
+        PyTypeError::new_err("ediff1d_time requires a datetime64/timedelta64 array")
+    })?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    if let Some(e) = to_end {
+        kwargs.set_item("to_end", e)?;
+    }
+    if let Some(b) = to_begin {
+        kwargs.set_item("to_begin", b)?;
+    }
+    let result = np.call_method("ediff1d", (&arr,), Some(&kwargs))?;
+    datetime_roundtrip(py, &result)
+}
+
+/// Which unary elementwise op a [`unary_time`] call performs.
+#[derive(Clone, Copy)]
+pub enum TimeUnary {
+    Abs,
+    Negative,
+    Sign,
+}
+
+impl TimeUnary {
+    fn numpy_name(self) -> &'static str {
+        match self {
+            TimeUnary::Abs => "absolute",
+            TimeUnary::Negative => "negative",
+            TimeUnary::Sign => "sign",
+        }
+    }
+}
+
+/// `abs` / `negative` / `sign` over a datetime64 / timedelta64 array (#947).
+///
+/// * timedelta: `abs(td)` -> magnitude timedelta, `negative(td)` -> `-ticks`
+///   timedelta, `sign(td)` -> `{-1,0,1}` AS a timedelta (verified live:
+///   `np.sign(td).dtype == timedelta64`). NaT (`i64::MIN`) propagates for
+///   abs/negative; for `sign`, numpy treats NaT's negative ticks as `-1` (live).
+/// * datetime: numpy RAISES `UFuncTypeError` (abs/negative/sign undefined over
+///   datetime64) -> delegate to numpy so its EXACT exception surfaces (R-DEV-2).
+///
+/// The timedelta arms are computed on the int64 ticks (`abs`/`-`) for the
+/// magnitude/negate, and delegated to numpy for `sign` (so numpy's exact
+/// NaT-sign + result dtype apply) then marshalled back through the int64-view
+/// transport.
+pub fn unary_time<'py>(
+    py: Python<'py>,
+    x: &Bound<'py, PyAny>,
+    op: TimeUnary,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let arr = np.call_method1("asarray", (x,))?;
+    let kind = time_kind(&arr)?.ok_or_else(|| {
+        PyTypeError::new_err("unary_time requires a datetime64/timedelta64 array")
+    })?;
+    if kind == TimeKind::Datetime {
+        // abs/negative/sign of datetime64 are undefined in numpy -> delegate so
+        // numpy raises its exact UFuncTypeError (R-DEV-2).
+        return np.call_method1(op.numpy_name(), (&arr,));
+    }
+    match op {
+        TimeUnary::Abs | TimeUnary::Negative => {
+            let (ticks, _u, unit_str) = extract_ticks(py, &arr)?;
+            let out: Vec<i64> = ticks
+                .iter()
+                .map(|&t| {
+                    if t == NAT {
+                        NAT
+                    } else if matches!(op, TimeUnary::Abs) {
+                        t.wrapping_abs()
+                    } else {
+                        t.wrapping_neg()
+                    }
+                })
+                .collect();
+            let r = ArrayD::from_vec(IxDyn::new(ticks.shape()), out).map_err(ferr_to_pyerr)?;
+            int64_to_timedelta64(py, r, &unit_str)
+        }
+        TimeUnary::Sign => {
+            // `sign(td)` keeps the timedelta dtype with `{-1,0,1}` ticks; numpy
+            // treats NaT's `i64::MIN` ticks as a negative -> sign `-1` (verified
+            // live). Delegate the exact semantics + marshal back.
+            let result = np.call_method1("sign", (&arr,))?;
+            datetime_roundtrip(py, &result)
+        }
+    }
+}
+
+/// `numpy.maximum` / `numpy.minimum` over two SAME-KIND datetime64 /
+/// timedelta64 operands (#947) -> datetime64 / timedelta64. Element-wise by
+/// int64 tick after promoting both operands to a common (finer) unit; ANY NaT
+/// operand makes the result NaT (numpy NaN-propagate semantics, verified live:
+/// `np.maximum(dt, NaT) -> NaT`). Delegated to numpy (which owns the unit
+/// promotion + NaT propagation) and marshalled back through the int64-view
+/// transport. The caller gates on [`is_time_op`] / same-kind first; a
+/// datetime-vs-timedelta or time-vs-numeric pair falls through to the numeric
+/// path / numpy's own raise.
+pub fn minmax_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    want_max: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let func = if want_max { "maximum" } else { "minimum" };
+    let result = np.call_method1(func, (a, b))?;
+    datetime_roundtrip(py, &result)
+}
+
+/// `numpy.where(cond, x, y)` over datetime64 / timedelta64 `x`/`y` (#947) ->
+/// datetime64 / timedelta64. Delegated to numpy (which owns the broadcast +
+/// `result_type` unit promotion + NaT carry) and marshalled back through the
+/// int64-view transport. The caller gates on both `x` and `y` being time arrays
+/// of the same kind first.
+pub fn where_time<'py>(
+    py: Python<'py>,
+    cond: &Bound<'py, PyAny>,
+    x: &Bound<'py, PyAny>,
+    y: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let result = np.call_method1("where", (cond, x, y))?;
+    datetime_roundtrip(py, &result)
+}
+
+/// `true` if BOTH `x` and `y` are time arrays of the SAME kind (datetime/
+/// datetime or timedelta/timedelta) — the pairs `where` / `maximum` / `minimum`
+/// / `clip` define over the time dtypes. A mixed or time-vs-numeric pair falls
+/// through to the real path.
+pub fn is_time_pair_same_kind(
+    py: Python<'_>,
+    x: &Bound<'_, PyAny>,
+    y: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
+    let np = py.import("numpy")?;
+    let xa = np.call_method1("asarray", (x,))?;
+    let ya = np.call_method1("asarray", (y,))?;
+    match (time_kind(&xa)?, time_kind(&ya)?) {
+        (Some(kx), Some(ky)) => Ok(kx == ky),
+        _ => Ok(false),
+    }
+}
+
+/// `numpy.count_nonzero(a, axis=None)` over a datetime64 / timedelta64 array
+/// (#947) -> int (or int array for `axis`). Counts ticks `!= 0`; NaT
+/// (`i64::MIN`) is nonzero, so it IS counted (verified live:
+/// `np.count_nonzero([0, NaT]) == 1`). Computed on the int64 ticks.
+pub fn count_nonzero_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let arr = np.call_method1("asarray", (a,))?;
+    time_kind(&arr)?.ok_or_else(|| {
+        PyTypeError::new_err("count_nonzero_time requires a datetime64/timedelta64 array")
+    })?;
+    let (ticks, _u, _unit_str) = extract_ticks(py, &arr)?;
+    let shape: Vec<usize> = ticks.shape().to_vec();
+    let flat: Vec<i64> = ticks.iter().copied().collect();
+    match axis {
+        None => {
+            let n = flat.iter().filter(|&&t| t != 0).count() as i64;
+            // numpy returns a Python int for axis=None.
+            Ok(n.into_pyobject(py)?.into_any())
+        }
+        Some(ax) => {
+            let (out_shape, counts) = axis_lanes_i64(&flat, &shape, ax, |lane| {
+                lane.iter().filter(|&&t| t != 0).count() as i64
+            })?;
+            emit_index(py, counts, &out_shape)
+        }
+    }
+}
+
+/// `numpy.nonzero(a)` over a datetime64 / timedelta64 array (#947) -> tuple of
+/// int64 index arrays (one per dimension), the coordinates of ticks `!= 0`
+/// (NaT is nonzero). Computed on the int64 ticks; row-major flat order, matching
+/// numpy's C-order `nonzero`.
+pub fn nonzero_time<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_numpy_interop::IntoNumPy;
+    let np = py.import("numpy")?;
+    let arr = np.call_method1("asarray", (a,))?;
+    time_kind(&arr)?.ok_or_else(|| {
+        PyTypeError::new_err("nonzero_time requires a datetime64/timedelta64 array")
+    })?;
+    let (ticks, _u, _unit_str) = extract_ticks(py, &arr)?;
+    let shape: Vec<usize> = ticks.shape().to_vec();
+    let ndim = shape.len();
+    let flat: Vec<i64> = ticks.iter().copied().collect();
+    let strides = row_major_strides(&shape);
+    // One index vector per dimension; the flat positions of nonzero ticks
+    // expanded to per-axis coordinates (row-major, like numpy's nonzero).
+    let mut coords: Vec<Vec<i64>> = vec![Vec::new(); ndim];
+    for (lin, &t) in flat.iter().enumerate() {
+        if t != 0 {
+            for d in 0..ndim {
+                coords[d].push(((lin / strides[d]) % shape[d]) as i64);
+            }
+        }
+    }
+    let arrays: Vec<Bound<'py, PyAny>> = coords
+        .into_iter()
+        .map(|c| {
+            let n = c.len();
+            let arr = ArrayD::from_vec(IxDyn::new(&[n]), c).map_err(ferr_to_pyerr)?;
+            Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    Ok(pyo3::types::PyTuple::new(py, arrays)?.into_any())
+}
+
+// ---------------------------------------------------------------------------
 // datetime_as_string
 // ---------------------------------------------------------------------------
 

@@ -2422,6 +2422,13 @@ pub fn cumprod<'py>(
 pub fn diff<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, n: usize) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 diff -> timedelta64 (consecutive differences;
+    // `datetime - datetime = timedelta`). Routed through the #947 time dispatch
+    // (`crate::datetime::diff_time`) ahead of the real-only `match_dtype_numeric!`,
+    // which would otherwise raise `TypeError` where numpy computes.
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::diff_time(py, &arr, n);
+    }
     // Complex diff: numpy applies the SAME `a[1:] - a[:-1]` subtraction the real
     // path does (`numpy/lib/_function_base_impl.py:1538` `op = ... else
     // subtract`), dtype-preserving (c64->c64, c128->c128 — verified live, numpy
@@ -2632,6 +2639,12 @@ pub fn count_nonzero<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 count_nonzero -> int (count of ticks != 0; NaT is
+    // nonzero). Routed through the #947 time dispatch ahead of the real-only
+    // `match_dtype_all_complex!`, which would otherwise raise `TypeError`.
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::count_nonzero_time(py, &arr, axis);
+    }
     // Complex `count_nonzero`: numpy counts `z != 0` (`re != 0 || im != 0`).
     // `ferray_stats::count_nonzero` needs only `T: Element + PartialEq + Copy`,
     // which `Complex<T>` satisfies, so route through the DynMarshal seam (#933)
@@ -3433,6 +3446,13 @@ pub fn where_fn<'py>(
     y: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let cond = as_ndarray(py, condition)?;
+    // datetime64/timedelta64 selection: `where(cond, dt|td, dt|td)` ->
+    // dt|td. Routed through the #947 time dispatch ahead of the real-only
+    // `match_dtype_all_complex!` (which would raise `TypeError` on the time
+    // dtype), when BOTH x and y are time arrays of the same kind.
+    if crate::datetime::is_time_pair_same_kind(py, x, y)? {
+        return crate::datetime::where_time(py, &cond, x, y);
+    }
     // Broadcast condition + x + y to a common shape via numpy.
     let np = py.import("numpy")?;
     let pair = np.call_method1("broadcast_arrays", (&cond, x, y))?;

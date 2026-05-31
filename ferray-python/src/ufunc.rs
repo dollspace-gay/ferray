@@ -1132,6 +1132,30 @@ macro_rules! bind_unary_numeric_split {
             if scalar { scalarize(out) } else { Ok(out) }
         }
     };
+    // Time-aware complex-loop form (`absolute`/`negative`/`sign`, #947): a
+    // datetime64/timedelta64 input routes through `$tu`
+    // (`crate::datetime::TimeUnary`) — `abs(td)`/`negative(td)` -> timedelta,
+    // `sign(td)` -> timedelta `{-1,0,1}`; datetime input RAISES numpy's exact
+    // `UFuncTypeError`. Complex input keeps the `$cfn` loop; real/int the split.
+    ($name:ident, $float_fn:path, $int_fn:path, complex = $cfn:path, time = $tu:expr) => {
+        #[pyfunction]
+        pub fn $name<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+            let arr = as_ndarray(py, x)?;
+            let dt = dtype_name(&arr)?;
+            if crate::datetime::is_time_array(&arr)? {
+                let out = crate::datetime::unary_time(py, &arr, $tu)?;
+                let scalar = all_scalar_inputs(py, &[x])?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
+            let scalar = all_scalar_inputs(py, &[x])?;
+            let out = if is_complex_dtype(dt.as_str()) {
+                $cfn(py, &arr, dt.as_str())?
+            } else {
+                unary_numeric_split_body!(py, arr, $float_fn, $int_fn)
+            };
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
 }
 
 // Trigonometric + hyperbolic + inverse — numpy registers a complex loop for
@@ -1272,13 +1296,15 @@ bind_unary_numeric_split!(
     negative,
     ferray_ufunc::negative,
     ferray_ufunc::negative_int,
-    complex = complex_negative_dispatch
+    complex = complex_negative_dispatch,
+    time = crate::datetime::TimeUnary::Negative
 );
 bind_unary_numeric_split!(
     absolute,
     ferray_ufunc::absolute,
     ferray_ufunc::absolute_int,
-    complex = complex_abs_dispatch
+    complex = complex_abs_dispatch,
+    time = crate::datetime::TimeUnary::Abs
 );
 // `sign` registers a complex loop in numpy returning the unit phasor `z/|z|`
 // (0+0j for z==0) — the prior split macro had no complex arm so `fr.sign(complex)`
@@ -1288,7 +1314,8 @@ bind_unary_numeric_split!(
     sign,
     ferray_ufunc::sign,
     ferray_ufunc::sign_int,
-    complex = complex_sign_dispatch
+    complex = complex_sign_dispatch,
+    time = crate::datetime::TimeUnary::Sign
 );
 
 // Rounding floor/ceil/trunc/fix — int-identity (REQ-24, int -> int).
@@ -1918,6 +1945,16 @@ macro_rules! bind_binary_numeric_split {
             x1: &Bound<'py, PyAny>,
             x2: &Bound<'py, PyAny>,
         ) -> PyResult<Bound<'py, PyAny>> {
+            // datetime64/timedelta64 elementwise extremum (#947): same-kind time
+            // operands -> dt|td by int64 tick (NaT propagates; cross-unit promotes
+            // to the finer unit). Routed ahead of the real/complex split, which
+            // would otherwise raise `TypeError` on the time dtype. A mixed or
+            // time-vs-numeric pair falls through (numpy raises there too).
+            if crate::datetime::is_time_pair_same_kind(py, x1, x2)? {
+                let scalar = all_scalar_inputs(py, &[x1, x2])?;
+                let out = crate::datetime::minmax_time(py, x1, x2, $want_max)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
             let scalar = all_scalar_inputs(py, &[x1, x2])?;
             let out = if binary_is_complex(py, x1, x2)? {
                 complex_minmax_dispatch(py, x1, x2, $want_max, true)?
@@ -2677,6 +2714,14 @@ pub fn ediff1d<'py>(
     use ferray_core::array::aliases::Array1;
     let arr = as_ndarray(py, ary)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 ediff1d -> timedelta64 (consecutive differences).
+    // Routed through the #947 time dispatch ahead of the real-only
+    // `match_dtype_numeric!`. The `to_end`/`to_begin` kwargs (typed `Vec<f64>`
+    // for the numeric path) are not part of the time divergence pin; the time
+    // arm forwards them only when present (numpy validates the time append).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::ediff1d_time(py, &arr, None, None);
+    }
     Ok(crate::match_dtype_numeric!(dt.as_str(), T => {
         let view: numpy::PyReadonlyArray1<T> = arr.extract()?;
         let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
