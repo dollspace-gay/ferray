@@ -2924,15 +2924,20 @@ impl PyRandomState {
         scale: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let s = shape_from_pyany(size)?;
+        // size=None -> 0-d scalar via the shared dist_shape/finish_dist
+        // mechanism (numpy `mtrand.pyi:129` exponential(...,size:None)->float).
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
-            .exponential(scale, s.as_slice())
+            .exponential(scale, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
-    /// `RandomState.poisson(lam=1.0, size=None)` — int64.
+    /// `RandomState.poisson(lam=1.0, size=None)` — int64; scalar for `size=None`.
     #[pyo3(signature = (lam = 1.0, size = None))]
     fn poisson<'py>(
         &mut self,
@@ -2940,15 +2945,20 @@ impl PyRandomState {
         lam: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let s = shape_from_pyany(size)?;
+        // size=None -> 0-d scalar (numpy `mtrand.pyi:858` poisson(...,size:None)->int).
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<i64> = self
             .inner
-            .poisson(lam, s.as_slice())
+            .poisson(lam, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
-    /// `RandomState.binomial(n, p, size=None)` — `n < 0` -> `ValueError`.
+    /// `RandomState.binomial(n, p, size=None)` — `n < 0` -> `ValueError`;
+    /// scalar for `size=None`.
     #[pyo3(signature = (n, p, size = None))]
     fn binomial<'py>(
         &mut self,
@@ -2960,12 +2970,16 @@ impl PyRandomState {
         if n < 0 {
             return Err(pyo3::exceptions::PyValueError::new_err("n < 0"));
         }
-        let s = shape_from_pyany(size)?;
+        // size=None -> 0-d scalar (numpy `mtrand.pyi:842` binomial(...,size:None)->int).
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<i64> = self
             .inner
-            .binomial(n as u64, p, s.as_slice())
+            .binomial(n as u64, p, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `RandomState.choice(a, size=None, replace=True, p=None)`.
@@ -2994,6 +3008,14 @@ impl PyRandomState {
                 .inner
                 .choice(&range_arr, n, replace, p_ref)
                 .map_err(ferr_to_pyerr)?;
+            if scalar {
+                // numpy `mtrand.pyi:386` `choice(a: int, size=None) -> int`
+                // returns a bare PYTHON int (not a 0-d np.int64). Emit the drawn
+                // value directly as a Python int rather than scalarizing into a
+                // numpy scalar.
+                let v: i64 = r.iter().next().copied().unwrap_or(0);
+                return Ok(v.into_pyobject(py)?.into_any());
+            }
             let out = r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
             return finish_choice(out, &shape, scalar);
         }
@@ -3106,6 +3128,654 @@ impl PyRandomState {
         })?;
         self.inner.set_state_bytes(bytes).map_err(ferr_to_pyerr)?;
         Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Legacy distribution surface (refs #1064 #1065).
+    //
+    // numpy `numpy/random/mtrand.pyi` declares the full `RandomState`
+    // distribution method table; these mirror the same `ferray_random`
+    // library calls the `PyGenerator` methods use, drawing from this
+    // RandomState's own isolated stream (reproducible for a seeded instance).
+    // Every method routes `size` through the shared `dist_shape`/`finish_dist`
+    // helpers so `size=None` collapses to a 0-d scalar exactly as numpy's
+    // `mtrand.pyi` scalar overloads specify (R-DEV-2 contract parity).
+    // -----------------------------------------------------------------------
+
+    /// `RandomState.beta(a, b, size=None)` (`mtrand.pyi:121`).
+    #[pyo3(signature = (a, b, size = None))]
+    fn beta<'py>(
+        &mut self,
+        py: Python<'py>,
+        a: f64,
+        b: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .beta(a, b, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.chisquare(df, size=None)` (`mtrand.pyi:597`).
+    #[pyo3(signature = (df, size = None))]
+    fn chisquare<'py>(
+        &mut self,
+        py: Python<'py>,
+        df: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .chisquare(df, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.f(dfnum, dfden, size=None)` (`mtrand.pyi`).
+    #[pyo3(name = "f", signature = (dfnum, dfden, size = None))]
+    fn f_<'py>(
+        &mut self,
+        py: Python<'py>,
+        dfnum: f64,
+        dfden: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .f(dfnum, dfden, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.gamma(shape, scale=1.0, size=None)` (`mtrand.pyi:532`).
+    #[pyo3(name = "gamma", signature = (shape, scale = 1.0, size = None))]
+    fn gamma_<'py>(
+        &mut self,
+        py: Python<'py>,
+        shape: f64,
+        scale: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape_vec, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .gamma(shape, scale, shape_vec.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.standard_gamma(shape, size=None)` (`mtrand.pyi:524`).
+    #[pyo3(signature = (shape, size = None))]
+    fn standard_gamma<'py>(
+        &mut self,
+        py: Python<'py>,
+        shape: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape_vec, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .standard_gamma(shape, shape_vec.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.standard_t(df, size=None)` (`mtrand.pyi:628`).
+    #[pyo3(signature = (df, size = None))]
+    fn standard_t<'py>(
+        &mut self,
+        py: Python<'py>,
+        df: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .standard_t(df, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.standard_exponential(size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (size = None))]
+    fn standard_exponential<'py>(
+        &mut self,
+        py: Python<'py>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .standard_exponential(shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.standard_cauchy(size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (size = None))]
+    fn standard_cauchy<'py>(
+        &mut self,
+        py: Python<'py>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .standard_cauchy(shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.laplace(loc=0, scale=1, size=None)` (`mtrand.pyi:674`).
+    #[pyo3(signature = (loc = 0.0, scale = 1.0, size = None))]
+    fn laplace<'py>(
+        &mut self,
+        py: Python<'py>,
+        loc: f64,
+        scale: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .laplace(loc, scale, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.logistic(loc=0, scale=1, size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (loc = 0.0, scale = 1.0, size = None))]
+    fn logistic<'py>(
+        &mut self,
+        py: Python<'py>,
+        loc: f64,
+        scale: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .logistic(loc, scale, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.lognormal(mean=0, sigma=1, size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (mean = 0.0, sigma = 1.0, size = None))]
+    fn lognormal<'py>(
+        &mut self,
+        py: Python<'py>,
+        mean: f64,
+        sigma: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .lognormal(mean, sigma, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.gumbel(loc=0, scale=1, size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (loc = 0.0, scale = 1.0, size = None))]
+    fn gumbel<'py>(
+        &mut self,
+        py: Python<'py>,
+        loc: f64,
+        scale: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .gumbel(loc, scale, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.rayleigh(scale=1.0, size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (scale = 1.0, size = None))]
+    fn rayleigh<'py>(
+        &mut self,
+        py: Python<'py>,
+        scale: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .rayleigh(scale, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.weibull(a, size=None)` (`mtrand.pyi:652`).
+    #[pyo3(signature = (a, size = None))]
+    fn weibull<'py>(
+        &mut self,
+        py: Python<'py>,
+        a: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .weibull(a, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.pareto(a, size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (a, size = None))]
+    fn pareto<'py>(
+        &mut self,
+        py: Python<'py>,
+        a: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .pareto(a, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.power(a, size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (a, size = None))]
+    fn power<'py>(
+        &mut self,
+        py: Python<'py>,
+        a: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .power(a, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.vonmises(mu, kappa, size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (mu, kappa, size = None))]
+    fn vonmises<'py>(
+        &mut self,
+        py: Python<'py>,
+        mu: f64,
+        kappa: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .vonmises(mu, kappa, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.wald(mean, scale, size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (mean, scale, size = None))]
+    fn wald<'py>(
+        &mut self,
+        py: Python<'py>,
+        mean: f64,
+        scale: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .wald(mean, scale, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.triangular(left, mode, right, size=None)` (`mtrand.pyi:816`).
+    #[pyo3(signature = (left, mode, right, size = None))]
+    fn triangular<'py>(
+        &mut self,
+        py: Python<'py>,
+        left: f64,
+        mode: f64,
+        right: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .triangular(left, mode, right, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.noncentral_chisquare(df, nonc, size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (df, nonc, size = None))]
+    fn noncentral_chisquare<'py>(
+        &mut self,
+        py: Python<'py>,
+        df: f64,
+        nonc: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .noncentral_chisquare(df, nonc, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.noncentral_f(dfnum, dfden, nonc, size=None)` (`mtrand.pyi`).
+    #[pyo3(signature = (dfnum, dfden, nonc, size = None))]
+    fn noncentral_f<'py>(
+        &mut self,
+        py: Python<'py>,
+        dfnum: f64,
+        dfden: f64,
+        nonc: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<f64> = self
+            .inner
+            .noncentral_f(dfnum, dfden, nonc, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.geometric(p, size=None)` — int64 (`mtrand.pyi`).
+    #[pyo3(signature = (p, size = None))]
+    fn geometric<'py>(
+        &mut self,
+        py: Python<'py>,
+        p: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<i64> = self
+            .inner
+            .geometric(p, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.logseries(p, size=None)` — int64 in `{1, 2, ...}`
+    /// (`mtrand.pyi`).
+    #[pyo3(signature = (p, size = None))]
+    fn logseries<'py>(
+        &mut self,
+        py: Python<'py>,
+        p: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<i64> = self
+            .inner
+            .logseries(p, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.zipf(a, size=None)` — int64 in `{1, 2, ...}` (`mtrand.pyi`).
+    #[pyo3(signature = (a, size = None))]
+    fn zipf<'py>(
+        &mut self,
+        py: Python<'py>,
+        a: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<i64> = self
+            .inner
+            .zipf(a, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.negative_binomial(n, p, size=None)` — int64; numpy accepts
+    /// a float `n` (`mtrand.pyi`). `n <= 0` -> `ValueError` (library check).
+    #[pyo3(signature = (n, p, size = None))]
+    fn negative_binomial<'py>(
+        &mut self,
+        py: Python<'py>,
+        n: f64,
+        p: f64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<i64> = self
+            .inner
+            .negative_binomial(n, p, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.hypergeometric(ngood, nbad, nsample, size=None)` — int64;
+    /// negative inputs -> `ValueError` (R-DEV-2), bound signed to avoid a PyO3
+    /// `OverflowError` (`mtrand.pyi`).
+    #[pyo3(signature = (ngood, nbad, nsample, size = None))]
+    fn hypergeometric<'py>(
+        &mut self,
+        py: Python<'py>,
+        ngood: i64,
+        nbad: i64,
+        nsample: i64,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if ngood < 0 || nbad < 0 || nsample < 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "ngood, nbad, and nsample must be non-negative",
+            ));
+        }
+        let (shape, scalar) = dist_shape(size)?;
+        let arr: ArrayD<i64> = self
+            .inner
+            .hypergeometric(ngood as u64, nbad as u64, nsample as u64, shape.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
+    }
+
+    /// `RandomState.bytes(length)` — `length` random bytes as a Python `bytes`
+    /// object, drawn from this RandomState's stream (`mtrand.pyi:375`).
+    fn bytes<'py>(&mut self, py: Python<'py>, length: isize) -> PyResult<Bound<'py, PyAny>> {
+        if length < 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "negative dimensions are not allowed",
+            ));
+        }
+        let buf: Vec<u8> = self.inner.bytes(length as usize);
+        Ok(pyo3::types::PyBytes::new(py, &buf).into_any())
+    }
+
+    /// `RandomState.tomaxint(size=None)` — random integers in `[0, 2**63 - 1]`
+    /// (numpy's legacy `tomaxint`, `mtrand.pyi:145`; bound is the platform
+    /// `sys.maxsize`, i.e. `i64::MAX` on 64-bit). `size=None` yields a bare
+    /// Python int; an integer/tuple `size` yields an int64 array.
+    #[pyo3(signature = (size = None))]
+    fn tomaxint<'py>(
+        &mut self,
+        py: Python<'py>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        // numpy draws from [0, sys.maxsize]; on 64-bit that is i64::MAX.
+        // integers(lo, hi) is half-open, so the inclusive upper bound i64::MAX
+        // is reached by leaving `hi` at i64::MAX and admitting the endpoint via
+        // a full unsigned draw is not exposed; numpy's tomaxint is itself
+        // [0, maxint] inclusive but the exact endpoint has probability ~0, so a
+        // half-open [0, i64::MAX) faithfully reproduces the observable contract
+        // (non-negative int64 bounded by maxint). R-DEV-7: contract preserved.
+        if size.is_none() {
+            // numpy returns a bare Python int for size=None.
+            let v: i64 = self
+                .inner
+                .integers(0, i64::MAX, 1usize)
+                .map_err(ferr_to_pyerr)?
+                .iter()
+                .next()
+                .copied()
+                .unwrap_or(0);
+            return Ok(v.into_pyobject(py)?.into_any());
+        }
+        let s = shape_from_pyany(size)?;
+        let arr: ArrayD<i64> = self
+            .inner
+            .integers(0, i64::MAX, s.as_slice())
+            .map_err(ferr_to_pyerr)?;
+        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    }
+
+    /// `RandomState.dirichlet(alpha, size=None)` — float64, each draw sums to 1
+    /// along the last axis; shape `size + (len(alpha),)` (`mtrand.pyi`).
+    #[pyo3(signature = (alpha, size = None))]
+    fn dirichlet<'py>(
+        &mut self,
+        py: Python<'py>,
+        alpha: Vec<f64>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let k = alpha.len();
+        let (rows, outer) = resolve_mv_size(size)?;
+        let arr = self.inner.dirichlet(&alpha, rows).map_err(ferr_to_pyerr)?;
+        let out = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+        reshape_mv(out, outer, k)
+    }
+
+    /// `RandomState.multinomial(n, pvals, size=None)` — int64, each row sums to
+    /// `n`; `n < 0` -> `ValueError` (R-DEV-2) (`mtrand.pyi`).
+    #[pyo3(signature = (n, pvals, size = None))]
+    fn multinomial<'py>(
+        &mut self,
+        py: Python<'py>,
+        n: i64,
+        pvals: Vec<f64>,
+        size: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if n < 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err("n < 0"));
+        }
+        let k = pvals.len();
+        let (rows, outer) = resolve_mv_size(size)?;
+        let arr = self
+            .inner
+            .multinomial(n as u64, &pvals, rows)
+            .map_err(ferr_to_pyerr)?;
+        let out = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+        reshape_mv(out, outer, k)
+    }
+
+    /// `RandomState.multivariate_normal(mean, cov, size=None, ...)` — float64,
+    /// shape `size + (len(mean),)` (`mtrand.pyi`). numpy's legacy signature also
+    /// accepts `check_valid` / `tol` kwargs; ferray accepts and ignores them
+    /// (no PSD pre-validation), preserving the observable shape/dtype contract.
+    #[pyo3(signature = (mean, cov, size = None, check_valid = None, tol = 1e-8))]
+    fn multivariate_normal<'py>(
+        &mut self,
+        py: Python<'py>,
+        mean: Vec<f64>,
+        cov: &Bound<'py, PyAny>,
+        size: Option<&Bound<'py, PyAny>>,
+        check_valid: Option<&Bound<'py, PyAny>>,
+        tol: f64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let _ = (check_valid, tol); // numpy kwargs accepted for signature parity.
+        let d = mean.len();
+        let cov_arr = as_ndarray(py, cov)?;
+        let cov_flat: Vec<f64> = cov_arr
+            .call_method1("reshape", ((-1isize,),))?
+            .call_method0("tolist")?
+            .extract()?;
+        let (rows, outer) = resolve_mv_size(size)?;
+        let arr = self
+            .inner
+            .multivariate_normal(&mean, &cov_flat, rows)
+            .map_err(ferr_to_pyerr)?;
+        let out = arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+        reshape_mv(out, outer, d)
     }
 }
 
