@@ -275,11 +275,24 @@ pub fn isreal<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py
     let arr = as_ndarray(py, x)?;
     let dt = dtype_name(&arr)?;
 
-    let out = if !is_complex_dtype(dt.as_str()) {
-        // Non-complex input: all True.
+    // numpy `isreal(x)` is literally `imag(x) == 0`
+    // (numpy/lib/_type_check_impl.py:262, imag :166). For a *real numeric*
+    // dtype (kind in {i,u,f,b}) `imag(x)` is all-zero so the result is
+    // all-True (the fast path). For string/bytes/object/etc. (kind not in
+    // {i,u,f,b,c}), `imag(x)` returns the elements themselves and `"..." == 0`
+    // is False elementwise — so we delegate to `numpy.isreal(x)` to mirror
+    // numpy exactly (e.g. all-False for str_/bytes_, incl. the empty string).
+    let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+    let out = if matches!(kind.as_str(), "i" | "u" | "f" | "b") {
+        // Real numeric input: imag is all zeros -> all True.
         let np = py.import("numpy")?;
         let shape = arr.getattr("shape")?;
         np.call_method1("ones", (shape, "bool"))?.into_any()
+    } else if !is_complex_dtype(dt.as_str()) {
+        // Non-numeric, non-complex (string/bytes/object/...): defer to numpy's
+        // own `imag(x) == 0`, which is all-False for these kinds.
+        let np = py.import("numpy")?;
+        np.call_method1("isreal", (&arr,))?.into_any()
     } else if dt == "complex64" {
         let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr)?;
         let r: ArrayD<bool> = ferray_ufunc::isreal(&fa).map_err(ferr_to_pyerr)?;
