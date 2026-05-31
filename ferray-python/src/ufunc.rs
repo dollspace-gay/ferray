@@ -3576,11 +3576,17 @@ bind_binary_float_promote!(
 /// inputs to the common integer dtype and routes to ferray's integer
 /// `gcd_int`/`lcm_int`; a float dtype falls through to the `TypeError` arm.
 ///
-/// ferray-ufunc's `gcd_int`/`lcm_int` are bounded `num_traits::Signed`, so
-/// only the SIGNED integer dtypes are dispatched here (unsigned gcd/lcm is
-/// a ferray-ufunc library gap — see spillover note in the dispatch issue).
-/// numpy promotes the common dtype, so `gcd(int32, int64) -> int64`.
-macro_rules! bind_binary_signed_int_only {
+/// `TD(ints)` covers SIGNED `int8/16/32/64` AND UNSIGNED `uint8/16/32/64`, and
+/// ferray-ufunc's `gcd_int`/`lcm_int` now serve every one of those widths via
+/// the `GcdAbs` abstraction (the kernels dropped their old `num_traits::Signed`
+/// bound — see `.design/ferray-ufunc.md` REQ-27). Both operands are promoted to
+/// numpy's COMMON dtype first (`result_type`), so mixed-width / mixed-sign cases
+/// dispatch the promoted width: `gcd(int32,int64) -> int64`,
+/// `gcd(uint8,uint32) -> uint32`, `gcd(int8,uint8) -> int16` (NEP-50 signed +
+/// unsigned promotion). A pair whose common dtype is NOT integer — e.g.
+/// `gcd(uint64,int64)`, which numpy promotes to FLOAT64, a dtype gcd has no loop
+/// for — falls through to the `TypeError` arm (no float gcd is added).
+macro_rules! bind_binary_int_only {
     ($name:ident, $ferr_path:path) => {
         #[pyfunction]
         pub fn $name<'py>(
@@ -3612,20 +3618,21 @@ macro_rules! bind_binary_signed_int_only {
                 "int32" | "i32" => __gcd_arm!(i32),
                 "int16" | "i16" => __gcd_arm!(i16),
                 "int8" | "i8" => __gcd_arm!(i8),
-                // Unsigned integer dtypes (uint8/uint16/uint32/uint64) are
-                // covered by numpy's `TD(ints)` registration for gcd/lcm
-                // (generate_umath.py:1156/:1163) but ferray-ufunc's
-                // `gcd_int`/`lcm_int` are `num_traits::Signed`-bounded (a
-                // library gap acknowledged in `.design/ferray-ufunc.md`), so
-                // delegate the unsigned case to numpy, which computes the
-                // correct gcd/lcm preserving the (promoted) uint dtype.
-                u if u.starts_with("uint") => {
-                    np.getattr(stringify!($name))?
-                        .call1((&pair_list[0], &pair_list[1]))?
-                }
+                // Unsigned integer dtypes are covered by numpy's `TD(ints)`
+                // registration for gcd/lcm (generate_umath.py:1156/:1163) and
+                // are now served DOWN in ferray-ufunc's `gcd_int`/`lcm_int` via
+                // the `GcdAbs` abstraction (the kernels are no longer
+                // `Signed`-bounded). The promoted common dtype is dispatched, so
+                // `gcd(uint8,uint32) -> uint32`. A pair that numpy promotes to a
+                // non-integer common dtype (e.g. `gcd(uint64,int64) -> float64`)
+                // never reaches a uint arm — it hits the `other` TypeError arm.
+                "uint64" | "u64" => __gcd_arm!(u64),
+                "uint32" | "u32" => __gcd_arm!(u32),
+                "uint16" | "u16" => __gcd_arm!(u16),
+                "uint8" | "u8" => __gcd_arm!(u8),
                 other => {
                     return Err(::pyo3::exceptions::PyTypeError::new_err(format!(
-                        "ufunc {:?} not supported for the input types (signed integer required): {other:?}",
+                        "ufunc {:?} not supported for the input types (integer required): {other:?}",
                         stringify!($name)
                     )));
                 }
@@ -3635,8 +3642,8 @@ macro_rules! bind_binary_signed_int_only {
     };
 }
 
-bind_binary_signed_int_only!(gcd, ferray_ufunc::gcd_int);
-bind_binary_signed_int_only!(lcm, ferray_ufunc::lcm_int);
+bind_binary_int_only!(gcd, ferray_ufunc::gcd_int);
+bind_binary_int_only!(lcm, ferray_ufunc::lcm_int);
 
 /// `numpy.divmod(x1, x2)` → tuple `(quotient, remainder)`.
 #[pyfunction]

@@ -1119,18 +1119,73 @@ where
     )))
 }
 
+/// Non-negative absolute value for the integer dtypes `gcd_int`/`lcm_int`
+/// serve, abstracting away the `num_traits::Signed` bound the kernels used to
+/// require purely for `.abs()`.
+///
+/// NumPy's `gcd`/`lcm` are registered for ALL integer dtypes incl. unsigned
+/// (`numpy/_core/code_generators/generate_umath.py:1156` gcd, `:1163` lcm —
+/// `TD(ints)` covers uint8/16/32/64) and return the NON-NEGATIVE gcd. The only
+/// part of the Euclidean algorithm that needed `Signed` was the initial
+/// magnitude step; everything else (`Rem`/`Div`/`Mul`) is dtype-agnostic.
+///
+/// - Signed `i8/i16/i32/i64`: `self.wrapping_abs()`. This is MIN-safe —
+///   `i8::MIN.wrapping_abs() == i8::MIN` — and matches numpy, whose integer
+///   `gcd`/`lcm` loops compute `|x|` with two's-complement wraparound rather
+///   than trapping (verified live: `np.gcd(np.int8(-128), np.int8(0)) == -128`).
+///   The previous `Signed::abs()` would instead PANIC in debug builds on
+///   `i*::MIN` — a latent bug this abstraction fixes.
+/// - Unsigned `u8/u16/u32/u64`: identity (`self`) — an unsigned value is
+///   already its own magnitude.
+pub trait GcdAbs: Copy {
+    /// Non-negative magnitude, wrapping at `MIN` for signed types (identity
+    /// for unsigned). See the trait docs for the numpy-matching rationale.
+    fn gcd_abs(self) -> Self;
+}
+
+macro_rules! impl_gcd_abs_signed {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl GcdAbs for $ty {
+                #[inline]
+                fn gcd_abs(self) -> $ty { self.wrapping_abs() }
+            }
+        )*
+    };
+}
+
+impl_gcd_abs_signed!(i8, i16, i32, i64);
+
+macro_rules! impl_gcd_abs_unsigned {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl GcdAbs for $ty {
+                #[inline]
+                fn gcd_abs(self) -> $ty { self }
+            }
+        )*
+    };
+}
+
+impl_gcd_abs_unsigned!(u8, u16, u32, u64);
+
 /// Integer GCD using the Euclidean algorithm.
 ///
-/// Works on actual integer element types (i8, i16, i32, i64, u8, u16, u32, u64, etc.).
-/// For float-typed arrays, use [`gcd`] instead.
+/// Works on every integer element type `gcd`/`lcm` serve — signed
+/// `i8/i16/i32/i64` AND unsigned `u8/u16/u32/u64` — matching numpy's
+/// `TD(ints)` registration (`generate_umath.py:1156`), which covers unsigned.
+/// The non-negative magnitude step goes through [`GcdAbs`] (`.gcd_abs()`)
+/// rather than `num_traits::Signed::abs()`, so the kernel is dtype-agnostic
+/// and MIN-safe (`gcd_int(&[i8::MIN], &[0]) -> i8::MIN`, the wrapped abs,
+/// matching numpy, instead of panicking). For float-typed arrays, use [`gcd`].
 pub fn gcd_int<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
-    T: Element + Copy + PartialEq + std::ops::Rem<Output = T> + num_traits::Signed,
+    T: Element + Copy + PartialEq + std::ops::Rem<Output = T> + GcdAbs,
     D: Dimension,
 {
     binary_elementwise_op(a, b, |x, y| {
-        let mut ax = x.abs();
-        let mut ay = y.abs();
+        let mut ax = x.gcd_abs();
+        let mut ay = y.gcd_abs();
         while ay != <T as Element>::zero() {
             let t = ay;
             ay = ax % ay;
@@ -1142,7 +1197,10 @@ where
 
 /// Integer LCM using the Euclidean GCD algorithm.
 ///
-/// Works on actual integer element types. For float-typed arrays, use [`lcm`] instead.
+/// Works on every integer element type (signed AND unsigned), matching numpy's
+/// `TD(ints)` registration (`generate_umath.py:1163`). The magnitude step uses
+/// [`GcdAbs`] (`.gcd_abs()`) instead of `num_traits::Signed::abs()`, so it
+/// serves unsigned dtypes and is MIN-safe. For float-typed arrays, use [`lcm`].
 pub fn lcm_int<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> FerrayResult<Array<T, D>>
 where
     T: Element
@@ -1151,12 +1209,12 @@ where
         + std::ops::Rem<Output = T>
         + std::ops::Div<Output = T>
         + std::ops::Mul<Output = T>
-        + num_traits::Signed,
+        + GcdAbs,
     D: Dimension,
 {
     binary_elementwise_op(a, b, |x, y| {
-        let ax = x.abs();
-        let ay = y.abs();
+        let ax = x.gcd_abs();
+        let ay = y.gcd_abs();
         if ax == <T as Element>::zero() || ay == <T as Element>::zero() {
             return <T as Element>::zero();
         }
