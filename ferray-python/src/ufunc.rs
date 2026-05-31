@@ -3056,7 +3056,12 @@ pub fn trapezoid<'py>(
             None => ferray_ufunc::trapezoid(&fy, None, Some(dx as T))
                 .map_err(ferr_to_pyerr)?,
         };
-        scalar.into_pyobject(py)?.into_any()
+        // numpy.trapezoid returns a numpy float SCALAR of the computation dtype
+        // (float64 for int/float64 input, float32 for float32), not a Python
+        // float. Wrap the value via `numpy.<real_dt>` so `type()` matches numpy.
+        let np = py.import("numpy")?;
+        let pyf = scalar.into_pyobject(py)?.into_any();
+        np.call_method1(real_dt.as_str(), (pyf,))?
     }))
 }
 
@@ -3245,6 +3250,13 @@ pub fn convolve<'py>(
             return complex_convolve_dispatch(py, &arr_a, &arr_v0, cdt.as_str(), m);
         }
     }
+    // numpy promotes BOTH operands to `result_type(a, v)` (NEP-50): convolving an
+    // integer sequence with a float kernel yields float64, NOT a truncated int.
+    // The prior code coerced `v` to A's dtype (`dt`), so an int `a` truncated the
+    // fractional part of a float `v` — `convolve([1,2,3],[0,1,0.5])` returned the
+    // int kernel `[0,1,0]`'s result instead of the float one (R-CODE-4).
+    let dt = binary_result_dtype(py, &arr_a, &arr_v0)?;
+    let arr_a = coerce_dtype(py, a, dt.as_str())?;
     let arr_v = coerce_dtype(py, v, dt.as_str())?;
     Ok(crate::match_dtype_numeric!(dt.as_str(), T => {
         let va: numpy::PyReadonlyArray1<T> = arr_a.extract()?;

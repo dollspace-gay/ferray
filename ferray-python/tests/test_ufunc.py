@@ -375,3 +375,46 @@ def test_fmax_complex_preserved():
     r = ferray.fmax([1 + 1j, 2], [3, 1 + 5j])
     assert np.asarray(r).dtype == np.complex128
     np.testing.assert_array_equal(r, np.fmax([1 + 1j, 2], [3, 1 + 5j]))
+
+
+# ---------------------------------------------------------------------------
+# convolve dtype promotion + trapezoid scalar type (#990)
+# ---------------------------------------------------------------------------
+# convolve promotes BOTH operands to result_type(a, v) (NEP-50): an int
+# sequence convolved with a float kernel is float64 — the prior code coerced v
+# to a's dtype, truncating the kernel. trapezoid returns a numpy float scalar.
+
+
+def test_convolve_int_float_promotes():
+    r = ferray.convolve([1, 2, 3], [0, 1, 0.5])
+    n = np.convolve([1, 2, 3], [0, 1, 0.5])
+    assert np.asarray(r).dtype == n.dtype == np.float64
+    np.testing.assert_allclose(r, n)
+
+
+def test_convolve_same_mode_values():
+    np.testing.assert_allclose(
+        ferray.convolve([1, 2, 3], [0, 1, 0.5], "same"),
+        np.convolve([1, 2, 3], [0, 1, 0.5], "same"),
+    )
+
+
+def test_convolve_int_int_keeps_int():
+    r = ferray.convolve([1, 2, 3], [0, 1, 2])
+    assert np.asarray(r).dtype == np.convolve([1, 2, 3], [0, 1, 2]).dtype == np.int64
+
+
+def test_convolve_complex_unchanged():
+    np.testing.assert_allclose(
+        ferray.convolve([1 + 1j, 2], [1, 1j]), np.convolve([1 + 1j, 2], [1, 1j])
+    )
+
+
+def test_trapezoid_returns_numpy_scalar():
+    assert isinstance(ferray.trapezoid([1.0, 2, 3]), np.float64)
+    assert isinstance(ferray.trapezoid(np.array([1, 2, 3], np.float32)), np.float32)
+
+
+def test_trapezoid_values():
+    assert ferray.trapezoid([1.0, 2, 3], dx=2.0) == np.trapezoid([1.0, 2, 3], dx=2.0)
+    assert ferray.trapezoid([1.0, 2, 3], x=[0.0, 1, 3]) == np.trapezoid([1.0, 2, 3], x=[0.0, 1, 3])
