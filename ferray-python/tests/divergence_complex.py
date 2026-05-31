@@ -166,5 +166,73 @@ def test_angle_scalar_returns_scalar():
     assert np.allclose(float(got), float(expected))
 
 
+# ---------------------------------------------------------------------------
+# Group 7 — isreal() on a STRING / BYTES array must follow numpy's
+#   `imag(x) == 0` semantics, NOT blanket-True for "non-complex dtype".
+#
+#   numpy/lib/_type_check_impl.py:215-262 `isreal` is literally
+#       return imag(x) == 0
+#   For a string/bytes dtype, `imag(x)` returns the strings themselves
+#   (numpy/lib/_type_check_impl.py:166-169 `return asanyarray(val).imag`,
+#   which for a non-numeric ndarray is the array of the same elements), and
+#   the elementwise `"..." == 0` comparison is False for every element
+#   (including the empty string ``""``). So numpy reports FALSE for string
+#   elements.
+#
+#   ferray's binding (ferray-python/src/complex.rs:278-282) short-circuits any
+#   non-complex dtype to `np.ones(shape, bool)` — an all-True array — so it
+#   reports True where numpy reports False. This is a real, observable
+#   divergence for str_/bytes_ dtypes.
+#
+#   `iscomplex` matches numpy on strings (both all-False), so only isreal
+#   diverges; this is asserted below as the converged half (sanity guard).
+# ---------------------------------------------------------------------------
+def test_isreal_unicode_array_matches_numpy():
+    a = np.array(["a", "b"])  # dtype <U1
+    expected = np.isreal(a)  # array([False, False]) — "a" == 0 is False
+    got = fr.isreal(a)
+    assert got.tolist() == expected.tolist(), (
+        f"expected {expected.tolist()}, got {got.tolist()}"
+    )
+
+
+def test_isreal_empty_unicode_element_matches_numpy():
+    # The empty string is the subtle case: imag(['','']) -> ['',''] and
+    # "" == 0 is still False, so numpy yields [False, False].
+    a = np.array(["", ""])
+    expected = np.isreal(a)  # array([False, False])
+    got = fr.isreal(a)
+    assert got.tolist() == expected.tolist(), (
+        f"expected {expected.tolist()}, got {got.tolist()}"
+    )
+
+
+def test_isreal_bytes_array_matches_numpy():
+    a = np.array([b"x", b"y"])  # dtype |S1
+    expected = np.isreal(a)  # array([False, False])
+    got = fr.isreal(a)
+    assert got.tolist() == expected.tolist(), (
+        f"expected {expected.tolist()}, got {got.tolist()}"
+    )
+
+
+def test_isreal_unicode_scalar_matches_numpy():
+    expected = np.isreal("a")  # np.False_
+    got = fr.isreal("a")
+    assert bool(got) == bool(expected), (
+        f"expected {bool(expected)}, got {bool(got)}"
+    )
+
+
+def test_iscomplex_unicode_array_converged_guard():
+    # Sanity guard: iscomplex on strings DOES match numpy (both all-False),
+    # confirming the divergence is isreal-specific, not a general string bug.
+    a = np.array(["a", "b"])
+    expected = np.iscomplex(a)  # array([False, False])
+    got = fr.iscomplex(a)
+    assert got.tolist() == expected.tolist()
+
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
