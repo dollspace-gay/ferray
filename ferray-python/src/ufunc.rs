@@ -625,6 +625,32 @@ fn binary_both_integer(
     Ok(kind(a)? && kind(b)?)
 }
 
+/// `true` if BOTH operands are integer/unsigned/bool dtype AND the exponent
+/// (`x2`) contains ANY negative element — the case numpy's integer `power` loop
+/// REJECTS with `ValueError: Integers to negative integer powers are not
+/// allowed.` (`numpy/_core/src/umath/loops.c.src:519`, scalarmath `:1553`).
+/// ferray's integer `power_int` kernel would instead silently return `0` (a
+/// wrong VALUE, R-CODE-4), so the `power` binding must raise here BEFORE the
+/// kernel runs. A FLOAT base or FLOAT exponent is NOT both-integer and is left
+/// untouched (`np.power(2.0, -1) == 0.5`). The negativity test uses the numpy
+/// oracle (`np.any(x2 < 0)`) so it covers every signed-integer width and array
+/// shape without re-extracting the exponent into Rust.
+fn power_is_negative_int_exponent(
+    py: Python<'_>,
+    a: &Bound<'_, PyAny>,
+    b: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
+    if !binary_both_integer(py, a, b)? {
+        return Ok(false);
+    }
+    let exp = as_ndarray(py, b)?;
+    let np = py.import("numpy")?;
+    let zero = 0i64;
+    let neg = np.call_method1("less", (&exp, zero))?;
+    let any: bool = np.call_method1("any", (neg,))?.extract()?;
+    Ok(any)
+}
+
 /// Broadcast both operands to a common shape and coerce both to the common
 /// complex dtype (`result_type`, then `broadcast_arrays`), returning the two
 /// numpy ndarrays plus the resolved complex dtype name. Centralizes the
@@ -2091,6 +2117,16 @@ macro_rules! bind_binary_numeric_split {
             x1: &Bound<'py, PyAny>,
             x2: &Bound<'py, PyAny>,
         ) -> PyResult<Bound<'py, PyAny>> {
+            // Integer base ** NEGATIVE integer exponent: numpy's integer power
+            // loop RAISES `ValueError` (loops.c.src:519 / scalarmath:1553); the
+            // ferray `power_int` kernel would silently return 0 (R-CODE-4). Raise
+            // numpy's exact message BEFORE the kernel runs. Float base/exponent
+            // and non-negative integer exponents are unaffected.
+            if power_is_negative_int_exponent(py, x1, x2)? {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "Integers to negative integer powers are not allowed.",
+                ));
+            }
             let scalar = all_scalar_inputs(py, &[x1, x2])?;
             let out = if binary_involves_float16(py, x1, x2)? {
                 f16_binary_delegate(py, x1, x2, $npfunc)?
