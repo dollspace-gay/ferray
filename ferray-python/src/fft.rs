@@ -40,9 +40,12 @@
 //!   `ValueError` and `d == 0` → `ZeroDivisionError` (`validate_freq_args`);
 //!   consumer: every transform `pub fn` + `pub fn fftfreq`/`rfftfreq`. numpy
 //!   `_pocketfft.py:88`, `_helper.py:170-171`.
-//! - REQ-OUT-KWARG SHIPPED — `fft`/`ifft` accept the numpy 2.0 `out=` kwarg
-//!   via `apply_out` (writes in place, returns `out`); consumer: `pub fn fft`
-//!   / `pub fn ifft`. numpy `_pocketfft.py` fft signature.
+//! - REQ-OUT-KWARG SHIPPED — every transform (`fft`/`ifft`/`rfft`/`irfft`/
+//!   `hfft`/`ihfft`/`fftn`/`ifftn`/`fft2`/`ifft2`/`rfft2`/`irfft2`/`rfftn`/
+//!   `irfftn`) accepts the numpy 2.0 `out=` kwarg via `apply_out` (writes in
+//!   place, returns `out`); consumer: every transform `pub fn`. numpy
+//!   `_pocketfft.py` carries `out=None` on every transform (rfft:325,
+//!   fftn:756, …).
 
 use ferray_core::array::aliases::{Array1, ArrayD};
 use ferray_core::dimension::IxDyn;
@@ -289,15 +292,16 @@ fn resolve_nd_args_with_default(
     Ok((resolved_s, axes_signed))
 }
 
-/// `numpy.fft.fftn(a, s=None, axes=None, norm=None)`.
+/// `numpy.fft.fftn(a, s=None, axes=None, norm=None, out=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, s = None, axes = None, norm = None))]
+#[pyo3(signature = (a, s = None, axes = None, norm = None, out = None))]
 pub fn fftn<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     s: Option<Vec<isize>>,
     axes: Option<Vec<isize>>,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -311,7 +315,7 @@ pub fn fftn<'py>(
     let n_norm = parse_norm(norm)?;
     let s_ref = s_res.as_deref();
     let axes_ref = Some(axes_res.as_slice());
-    Ok(if cdt == "complex64" {
+    let r = if cdt == "complex64" {
         let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr)?;
         let r: ArrayD<Complex<f32>> =
             ff::fftn(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
@@ -321,18 +325,20 @@ pub fn fftn<'py>(
         let r: ArrayD<Complex<f64>> =
             ff::fftn(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
         complex_ferray_to_pyarray(py, r)?
-    })
+    };
+    apply_out(py, r, out)
 }
 
-/// `numpy.fft.ifftn(a, s=None, axes=None, norm=None)`.
+/// `numpy.fft.ifftn(a, s=None, axes=None, norm=None, out=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, s = None, axes = None, norm = None))]
+#[pyo3(signature = (a, s = None, axes = None, norm = None, out = None))]
 pub fn ifftn<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     s: Option<Vec<isize>>,
     axes: Option<Vec<isize>>,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -346,7 +352,7 @@ pub fn ifftn<'py>(
     let n_norm = parse_norm(norm)?;
     let s_ref = s_res.as_deref();
     let axes_ref = Some(axes_res.as_slice());
-    Ok(if cdt == "complex64" {
+    let r = if cdt == "complex64" {
         let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr)?;
         let r: ArrayD<Complex<f32>> =
             ff::ifftn(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
@@ -356,7 +362,8 @@ pub fn ifftn<'py>(
         let r: ArrayD<Complex<f64>> =
             ff::ifftn(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
         complex_ferray_to_pyarray(py, r)?
-    })
+    };
+    apply_out(py, r, out)
 }
 
 // ---------------------------------------------------------------------------
@@ -374,15 +381,16 @@ fn last_two_axes(ndim: usize) -> Vec<usize> {
     }
 }
 
-/// `numpy.fft.fft2(a, s=None, axes=None, norm=None)`.
+/// `numpy.fft.fft2(a, s=None, axes=None, norm=None, out=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, s = None, axes = None, norm = None))]
+#[pyo3(signature = (a, s = None, axes = None, norm = None, out = None))]
 pub fn fft2<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     s: Option<Vec<isize>>,
     axes: Option<Vec<isize>>,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -397,7 +405,7 @@ pub fn fft2<'py>(
     let n_norm = parse_norm(norm)?;
     let s_ref = s_res.as_deref();
     let axes_ref = Some(axes_res.as_slice());
-    Ok(if cdt == "complex64" {
+    let r = if cdt == "complex64" {
         let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr)?;
         let r: ArrayD<Complex<f32>> =
             ff::fft2(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
@@ -407,18 +415,20 @@ pub fn fft2<'py>(
         let r: ArrayD<Complex<f64>> =
             ff::fft2(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
         complex_ferray_to_pyarray(py, r)?
-    })
+    };
+    apply_out(py, r, out)
 }
 
-/// `numpy.fft.ifft2(a, s=None, axes=None, norm=None)`.
+/// `numpy.fft.ifft2(a, s=None, axes=None, norm=None, out=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, s = None, axes = None, norm = None))]
+#[pyo3(signature = (a, s = None, axes = None, norm = None, out = None))]
 pub fn ifft2<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     s: Option<Vec<isize>>,
     axes: Option<Vec<isize>>,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -433,7 +443,7 @@ pub fn ifft2<'py>(
     let n_norm = parse_norm(norm)?;
     let s_ref = s_res.as_deref();
     let axes_ref = Some(axes_res.as_slice());
-    Ok(if cdt == "complex64" {
+    let r = if cdt == "complex64" {
         let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr)?;
         let r: ArrayD<Complex<f32>> =
             ff::ifft2(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
@@ -443,22 +453,24 @@ pub fn ifft2<'py>(
         let r: ArrayD<Complex<f64>> =
             ff::ifft2(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
         complex_ferray_to_pyarray(py, r)?
-    })
+    };
+    apply_out(py, r, out)
 }
 
 // ---------------------------------------------------------------------------
 // Real FFT (rfft / irfft)
 // ---------------------------------------------------------------------------
 
-/// `numpy.fft.rfft(a, n=None, axis=-1, norm=None)`.
+/// `numpy.fft.rfft(a, n=None, axis=-1, norm=None, out=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, n = None, axis = -1, norm = None))]
+#[pyo3(signature = (a, n = None, axis = -1, norm = None, out = None))]
 pub fn rfft<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     n: Option<isize>,
     axis: isize,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -473,7 +485,7 @@ pub fn rfft<'py>(
     };
     let arr = coerce_dtype(py, &arr, real_dt)?;
     let n_norm = parse_norm(norm)?;
-    Ok(if real_dt == "float32" {
+    let r = if real_dt == "float32" {
         let view: PyReadonlyArrayDyn<f32> = arr.extract()?;
         let fa: ArrayD<f32> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r: ArrayD<Complex<f32>> = ff::rfft(&fa, n, Some(ax), n_norm).map_err(ferr_to_pyerr)?;
@@ -483,18 +495,20 @@ pub fn rfft<'py>(
         let fa: ArrayD<f64> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r: ArrayD<Complex<f64>> = ff::rfft(&fa, n, Some(ax), n_norm).map_err(ferr_to_pyerr)?;
         complex_ferray_to_pyarray(py, r)?
-    })
+    };
+    apply_out(py, r, out)
 }
 
-/// `numpy.fft.irfft(a, n=None, axis=-1, norm=None)`.
+/// `numpy.fft.irfft(a, n=None, axis=-1, norm=None, out=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, n = None, axis = -1, norm = None))]
+#[pyo3(signature = (a, n = None, axis = -1, norm = None, out = None))]
 pub fn irfft<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     n: Option<isize>,
     axis: isize,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -507,7 +521,7 @@ pub fn irfft<'py>(
     };
     let arr = coerce_to_complex(py, &arr, cdt)?;
     let n_norm = parse_norm(norm)?;
-    Ok(if cdt == "complex64" {
+    let r = if cdt == "complex64" {
         let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr)?;
         let r: ArrayD<f32> = ff::irfft(&fa, n, Some(ax), n_norm).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
@@ -515,22 +529,24 @@ pub fn irfft<'py>(
         let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr)?;
         let r: ArrayD<f64> = ff::irfft(&fa, n, Some(ax), n_norm).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    })
+    };
+    apply_out(py, r, out)
 }
 
 // ---------------------------------------------------------------------------
 // 2-D and N-D Real FFT (rfft2 / irfft2 / rfftn / irfftn)
 // ---------------------------------------------------------------------------
 
-/// `numpy.fft.rfft2(a, s=None, axes=None, norm=None)`.
+/// `numpy.fft.rfft2(a, s=None, axes=None, norm=None, out=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, s = None, axes = None, norm = None))]
+#[pyo3(signature = (a, s = None, axes = None, norm = None, out = None))]
 pub fn rfft2<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     s: Option<Vec<isize>>,
     axes: Option<Vec<isize>>,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -546,7 +562,7 @@ pub fn rfft2<'py>(
     let n_norm = parse_norm(norm)?;
     let s_ref = s_res.as_deref();
     let axes_ref = Some(axes_res.as_slice());
-    Ok(if real_dt == "float32" {
+    let r = if real_dt == "float32" {
         let view: PyReadonlyArrayDyn<f32> = arr.extract()?;
         let fa: ArrayD<f32> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r: ArrayD<Complex<f32>> =
@@ -558,18 +574,20 @@ pub fn rfft2<'py>(
         let r: ArrayD<Complex<f64>> =
             ff::rfft2(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
         complex_ferray_to_pyarray(py, r)?
-    })
+    };
+    apply_out(py, r, out)
 }
 
-/// `numpy.fft.irfft2(a, s=None, axes=None, norm=None)`.
+/// `numpy.fft.irfft2(a, s=None, axes=None, norm=None, out=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, s = None, axes = None, norm = None))]
+#[pyo3(signature = (a, s = None, axes = None, norm = None, out = None))]
 pub fn irfft2<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     s: Option<Vec<isize>>,
     axes: Option<Vec<isize>>,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -584,7 +602,7 @@ pub fn irfft2<'py>(
     let n_norm = parse_norm(norm)?;
     let s_ref = s_res.as_deref();
     let axes_ref = Some(axes_res.as_slice());
-    Ok(if cdt == "complex64" {
+    let r = if cdt == "complex64" {
         let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr)?;
         let r: ArrayD<f32> = ff::irfft2(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
@@ -592,18 +610,20 @@ pub fn irfft2<'py>(
         let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr)?;
         let r: ArrayD<f64> = ff::irfft2(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    })
+    };
+    apply_out(py, r, out)
 }
 
-/// `numpy.fft.rfftn(a, s=None, axes=None, norm=None)`.
+/// `numpy.fft.rfftn(a, s=None, axes=None, norm=None, out=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, s = None, axes = None, norm = None))]
+#[pyo3(signature = (a, s = None, axes = None, norm = None, out = None))]
 pub fn rfftn<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     s: Option<Vec<isize>>,
     axes: Option<Vec<isize>>,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -618,7 +638,7 @@ pub fn rfftn<'py>(
     let n_norm = parse_norm(norm)?;
     let s_ref = s_res.as_deref();
     let axes_ref = Some(axes_res.as_slice());
-    Ok(if real_dt == "float32" {
+    let r = if real_dt == "float32" {
         let view: PyReadonlyArrayDyn<f32> = arr.extract()?;
         let fa: ArrayD<f32> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r: ArrayD<Complex<f32>> =
@@ -630,18 +650,20 @@ pub fn rfftn<'py>(
         let r: ArrayD<Complex<f64>> =
             ff::rfftn(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
         complex_ferray_to_pyarray(py, r)?
-    })
+    };
+    apply_out(py, r, out)
 }
 
-/// `numpy.fft.irfftn(a, s=None, axes=None, norm=None)`.
+/// `numpy.fft.irfftn(a, s=None, axes=None, norm=None, out=None)`.
 #[pyfunction]
-#[pyo3(signature = (a, s = None, axes = None, norm = None))]
+#[pyo3(signature = (a, s = None, axes = None, norm = None, out = None))]
 pub fn irfftn<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     s: Option<Vec<isize>>,
     axes: Option<Vec<isize>>,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -655,7 +677,7 @@ pub fn irfftn<'py>(
     let n_norm = parse_norm(norm)?;
     let s_ref = s_res.as_deref();
     let axes_ref = Some(axes_res.as_slice());
-    Ok(if cdt == "complex64" {
+    let r = if cdt == "complex64" {
         let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr)?;
         let r: ArrayD<f32> = ff::irfftn(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
@@ -663,23 +685,25 @@ pub fn irfftn<'py>(
         let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr)?;
         let r: ArrayD<f64> = ff::irfftn(&fa, s_ref, axes_ref, n_norm).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    })
+    };
+    apply_out(py, r, out)
 }
 
 // ---------------------------------------------------------------------------
 // Hermitian FFT (#707)
 // ---------------------------------------------------------------------------
 
-/// `numpy.fft.hfft(a, n=None, axis=-1, norm=None)` — Hermitian FFT
+/// `numpy.fft.hfft(a, n=None, axis=-1, norm=None, out=None)` — Hermitian FFT
 /// (input has Hermitian symmetry, output is real).
 #[pyfunction]
-#[pyo3(signature = (a, n = None, axis = -1, norm = None))]
+#[pyo3(signature = (a, n = None, axis = -1, norm = None, out = None))]
 pub fn hfft<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     n: Option<isize>,
     axis: isize,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -692,7 +716,7 @@ pub fn hfft<'py>(
     };
     let arr = coerce_to_complex(py, &arr, cdt)?;
     let n_norm = parse_norm(norm)?;
-    Ok(if cdt == "complex64" {
+    let r = if cdt == "complex64" {
         let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr)?;
         let r: ArrayD<f32> = ff::hfft(&fa, n, Some(ax), n_norm).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
@@ -700,19 +724,21 @@ pub fn hfft<'py>(
         let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr)?;
         let r: ArrayD<f64> = ff::hfft(&fa, n, Some(ax), n_norm).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    })
+    };
+    apply_out(py, r, out)
 }
 
-/// `numpy.fft.ihfft(a, n=None, axis=-1, norm=None)` — inverse Hermitian
+/// `numpy.fft.ihfft(a, n=None, axis=-1, norm=None, out=None)` — inverse Hermitian
 /// FFT (real input → complex output with Hermitian symmetry).
 #[pyfunction]
-#[pyo3(signature = (a, n = None, axis = -1, norm = None))]
+#[pyo3(signature = (a, n = None, axis = -1, norm = None, out = None))]
 pub fn ihfft<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     n: Option<isize>,
     axis: isize,
     norm: Option<&str>,
+    out: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
@@ -726,7 +752,7 @@ pub fn ihfft<'py>(
     };
     let arr = coerce_dtype(py, &arr, real_dt)?;
     let n_norm = parse_norm(norm)?;
-    Ok(if real_dt == "float32" {
+    let r = if real_dt == "float32" {
         let view: PyReadonlyArrayDyn<f32> = arr.extract()?;
         let fa: ArrayD<f32> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r: ArrayD<Complex<f32>> = ff::ihfft(&fa, n, Some(ax), n_norm).map_err(ferr_to_pyerr)?;
@@ -736,7 +762,8 @@ pub fn ihfft<'py>(
         let fa: ArrayD<f64> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r: ArrayD<Complex<f64>> = ff::ihfft(&fa, n, Some(ax), n_norm).map_err(ferr_to_pyerr)?;
         complex_ferray_to_pyarray(py, r)?
-    })
+    };
+    apply_out(py, r, out)
 }
 
 // ---------------------------------------------------------------------------
