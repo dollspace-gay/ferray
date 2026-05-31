@@ -359,3 +359,80 @@ def test_req21_percentile_scalar_q_is_scalar_axis_q_stays_ndarray():
     assert isinstance(got_axis, np.ndarray)
     assert got_axis.shape == exp_axis.shape == (2,)
     np.testing.assert_array_equal(got_axis, exp_axis)
+
+
+# ---------------------------------------------------------------------------
+# Divergence (#1006): the ferray-python nan-family reductions reject the
+# `keepdims=` kwarg entirely, while numpy accepts it on ALL of them.
+#
+# numpy: every nan-reduction takes `keepdims` (numpy/_nanfunctions_impl.py —
+# e.g. `nansum(a, axis=None, dtype=None, out=None, keepdims=<no value>, ...)`
+# at the nansum def; same for nanprod/nanmean/nanmin/nanmax/nanvar/nanstd/
+# nanmedian/nanargmin/nanargmax/nanpercentile/nanquantile). With
+# `keepdims=True` a FULL reduction returns an ndarray whose reduced dims are
+# all 1 (NOT a scalar) — this is exactly the REQ-21 edge case #2 (keepdims
+# must NOT collapse to a scalar), but ferray cannot even reach the path:
+#
+# ferray `bind_nan_reduction!` macro signature is `(a, axis = None)`
+# (ferray-python/src/stats.rs:2073, :2104, :2152) — NO `keepdims` parameter —
+# so `fr.nansum(x, keepdims=True)` raises
+# `TypeError: nansum() got an unexpected keyword argument 'keepdims'`.
+#
+# Pre-existing ABI gap, INDEPENDENT of REQ-21 (#992 only wrapped egresses in
+# conv::scalarize); the REQ-21 scalar-return behaviour itself is correct.
+# Oracle live (numpy 2.4.4):
+#   np.nansum([[1.,2.],[3.,nan]], keepdims=True) == array([[6.]]), shape (1,1)
+#   np.nansum([1.,nan,3.], keepdims=True)        == array([4.]),  shape (1,)
+# Tracking: #1006
+# ---------------------------------------------------------------------------
+
+_NAN_FAMILY_KEEPDIMS = [
+    ("nansum", lambda x, **k: fr.nansum(x, **k), lambda x, **k: np.nansum(x, **k)),
+    ("nanprod", lambda x, **k: fr.nanprod(x, **k), lambda x, **k: np.nanprod(x, **k)),
+    ("nanmean", lambda x, **k: fr.nanmean(x, **k), lambda x, **k: np.nanmean(x, **k)),
+    ("nanmin", lambda x, **k: fr.nanmin(x, **k), lambda x, **k: np.nanmin(x, **k)),
+    ("nanmax", lambda x, **k: fr.nanmax(x, **k), lambda x, **k: np.nanmax(x, **k)),
+    ("nanvar", lambda x, **k: fr.nanvar(x, **k), lambda x, **k: np.nanvar(x, **k)),
+    ("nanstd", lambda x, **k: fr.nanstd(x, **k), lambda x, **k: np.nanstd(x, **k)),
+    ("nanmedian", lambda x, **k: fr.nanmedian(x, **k), lambda x, **k: np.nanmedian(x, **k)),
+    ("nanargmin", lambda x, **k: fr.nanargmin(x, **k), lambda x, **k: np.nanargmin(x, **k)),
+    ("nanargmax", lambda x, **k: fr.nanargmax(x, **k), lambda x, **k: np.nanargmax(x, **k)),
+    ("nanpercentile",
+     lambda x, **k: fr.nanpercentile(x, 50, **k),
+     lambda x, **k: np.nanpercentile(x, 50, **k)),
+    ("nanquantile",
+     lambda x, **k: fr.nanquantile(x, 0.5, **k),
+     lambda x, **k: np.nanquantile(x, 0.5, **k)),
+]
+
+
+@pytest.mark.parametrize(
+    "name,frfn,npfn",
+    _NAN_FAMILY_KEEPDIMS,
+    ids=[t[0] for t in _NAN_FAMILY_KEEPDIMS],
+)
+def test_divergence_nan_family_rejects_keepdims_kwarg(name, frfn, npfn):
+    # 2-D input so a full keepdims reduction yields a (1, 1) ndarray oracle.
+    x = [[1.0, 2.0], [3.0, np.nan]]
+    expected = _np_value(lambda: npfn(np.array(x), keepdims=True))  # live (R-CHAR-3)
+    # numpy keeps the reduced dims as 1s -> an ndarray, never a scalar.
+    assert isinstance(expected, np.ndarray)
+    assert expected.shape == (1, 1)
+    # ferray must accept keepdims= and likewise return a (1, 1) ndarray.
+    got = _np_value(lambda: frfn(fr.array(x), keepdims=True))
+    assert isinstance(got, np.ndarray), f"{name}: keepdims result must be an ndarray"
+    assert got.shape == expected.shape == (1, 1)
+    np.testing.assert_array_equal(got, expected)
+
+
+def test_divergence_nansum_keepdims_1d_is_shape_one_ndarray():
+    # REQ-21 edge #2 at 1-D: a full keepdims reduction stays an ndarray shape
+    # (1,), NOT a scalar. numpy: np.nansum([1,nan,3], keepdims=True) -> [4.].
+    x = [1.0, np.nan, 3.0]
+    expected = _np_value(lambda: np.nansum(np.array(x), keepdims=True))  # live
+    assert isinstance(expected, np.ndarray)
+    assert expected.shape == (1,)
+    got = _np_value(lambda: fr.nansum(fr.array(x), keepdims=True))
+    assert isinstance(got, np.ndarray)
+    assert got.shape == expected.shape == (1,)
+    np.testing.assert_array_equal(got, expected)
