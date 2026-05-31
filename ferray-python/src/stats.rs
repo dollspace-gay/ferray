@@ -1021,12 +1021,17 @@ where
 /// `bool_` scalar and a 0-D bool array are interchangeable; `.item()` drops
 /// to a Python bool if needed).
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, keepdims = false, r#where = None))]
 pub fn all<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
+    keepdims: bool,
+    r#where: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = reduce_delegate(py, a, "all", axis, None, keepdims, None, r#where, None)? {
+        return Ok(r);
+    }
     let arr = as_ndarray(py, a)?;
     let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
@@ -1056,12 +1061,17 @@ pub fn all<'py>(
 /// returns a bool ndarray (numpy/_core/fromnumeric.py:2479 `any` ->
 /// `_methods.py:62` `_any` reducing `logical_or`).
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, keepdims = false, r#where = None))]
 pub fn any<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
+    keepdims: bool,
+    r#where: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = reduce_delegate(py, a, "any", axis, None, keepdims, None, r#where, None)? {
+        return Ok(r);
+    }
     let arr = as_ndarray(py, a)?;
     let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
@@ -1175,6 +1185,65 @@ fn f16_reduce<'py>(
     np.call_method(func, (arr,), Some(&kwargs))
 }
 
+/// Reduction-kwarg delegate gate (#975): when ANY of `dtype`/`keepdims`/
+/// `initial`/`where`/`ddof != 0` is supplied (non-default), delegate the whole
+/// reduction to numpy's own top-level function and return `Some(result)`; else
+/// return `None` so the caller keeps its dtype-preserving no-kwarg fast path
+/// (#858 int / #925 complex / #944 datetime / #952 f16). This mirrors the #893
+/// `numpy.ma` `reduce_kwargs` gate and the #944/#954 detect-and-delegate
+/// pattern: numpy owns `where`/`dtype`/`keepdims`/`initial` semantics across all
+/// reductions (`where=` reduces only True lanes with `initial` as the identity,
+/// `dtype=` sets the accumulator/output dtype, `keepdims=` keeps reduced axes as
+/// size-1, `initial=` seeds the fold), AND preserves the correct dtype the fast
+/// path also preserves (verified live: a complex sum with `keepdims=True` stays
+/// `complex128`). `axis` is forwarded as the user supplied it (negative axes are
+/// valid in numpy); `None` is passed as `axis=None`. `keepdims_set`/`ddof` carry
+/// the `var`/`std` extra; `func` is the numpy function name (`"sum"`, …).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "mirrors numpy reduction kwarg surface"
+)]
+fn reduce_delegate<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    func: &str,
+    axis: Option<isize>,
+    dtype: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+    initial: Option<&Bound<'py, PyAny>>,
+    where_: Option<&Bound<'py, PyAny>>,
+    ddof: Option<i64>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    // `ddof` alone does NOT trigger delegation — `var`/`std` keep a native
+    // ddof-aware fast path. It is forwarded only when the gate fires for one of
+    // the genuinely-new kwargs (`dtype`/`keepdims`/`initial`/`where`).
+    if dtype.is_none() && !keepdims && initial.is_none() && where_.is_none() {
+        return Ok(None);
+    }
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    match axis {
+        Some(ax) => kwargs.set_item("axis", ax)?,
+        None => kwargs.set_item("axis", py.None())?,
+    }
+    if let Some(dt) = dtype {
+        kwargs.set_item("dtype", dt)?;
+    }
+    if keepdims {
+        kwargs.set_item("keepdims", true)?;
+    }
+    if let Some(init) = initial {
+        kwargs.set_item("initial", init)?;
+    }
+    if let Some(w) = where_ {
+        kwargs.set_item("where", w)?;
+    }
+    if let Some(d) = ddof {
+        kwargs.set_item("ddof", d)?;
+    }
+    Ok(Some(np.call_method(func, (a,), Some(&kwargs))?))
+}
+
 // ---------------------------------------------------------------------------
 // Reductions: numeric (sum, prod) — accept any numeric dtype
 // ---------------------------------------------------------------------------
@@ -1201,14 +1270,25 @@ fn norm_axis(
     }
 }
 
-/// `numpy.sum(a, axis=None)`.
+/// `numpy.sum(a, axis=None, dtype=None, keepdims=False, initial=None, where=None)`.
+///
+/// The no-kwarg fast path is dtype-preserving (#858/#925/#944/#952). When any of
+/// `dtype`/`keepdims`/`initial`/`where` is supplied, the reduction delegates to
+/// `numpy.sum` (#975), which owns those semantics and the same dtype contract.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, dtype = None, keepdims = false, initial = None, r#where = None))]
 pub fn sum<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
+    dtype: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+    initial: Option<&Bound<'py, PyAny>>,
+    r#where: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = reduce_delegate(py, a, "sum", axis, dtype, keepdims, initial, r#where, None)? {
+        return Ok(r);
+    }
     let arr = as_ndarray(py, a)?;
     let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
@@ -1249,14 +1329,25 @@ pub fn sum<'py>(
     }))
 }
 
-/// `numpy.prod(a, axis=None)`.
+/// `numpy.prod(a, axis=None, dtype=None, keepdims=False, initial=None, where=None)`.
+///
+/// No-kwarg fast path dtype-preserving (#858/#925/#944/#952); WITH-kwarg path
+/// delegates to `numpy.prod` (#975).
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, dtype = None, keepdims = false, initial = None, r#where = None))]
 pub fn prod<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
+    dtype: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+    initial: Option<&Bound<'py, PyAny>>,
+    r#where: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = reduce_delegate(py, a, "prod", axis, dtype, keepdims, initial, r#where, None)?
+    {
+        return Ok(r);
+    }
     let arr = as_ndarray(py, a)?;
     let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
@@ -1296,14 +1387,33 @@ pub fn prod<'py>(
 // Reductions: orderable (min, max, ptp) — any orderable dtype
 // ---------------------------------------------------------------------------
 
-/// `numpy.min(a, axis=None)`.
+/// `numpy.min(a, axis=None, keepdims=False, initial=None, where=None)`.
+///
+/// No-kwarg fast path dtype-preserving (#925/#944/#952); WITH-kwarg path
+/// delegates to `numpy.min` (#975).
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, keepdims = false, initial = None, r#where = None))]
 pub fn min<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    keepdims: bool,
+    initial: Option<&Bound<'py, PyAny>>,
+    r#where: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = reduce_delegate(
+        py,
+        a,
+        "min",
+        axis.map(|x| x as isize),
+        None,
+        keepdims,
+        initial,
+        r#where,
+        None,
+    )? {
+        return Ok(r);
+    }
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
     // datetime64/timedelta64 (REQ-3 ordering surfaced via #944): `min` ->
@@ -1333,14 +1443,33 @@ pub fn min<'py>(
     }))
 }
 
-/// `numpy.max(a, axis=None)`.
+/// `numpy.max(a, axis=None, keepdims=False, initial=None, where=None)`.
+///
+/// No-kwarg fast path dtype-preserving (#925/#944/#952); WITH-kwarg path
+/// delegates to `numpy.max` (#975).
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, keepdims = false, initial = None, r#where = None))]
 pub fn max<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    keepdims: bool,
+    initial: Option<&Bound<'py, PyAny>>,
+    r#where: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = reduce_delegate(
+        py,
+        a,
+        "max",
+        axis.map(|x| x as isize),
+        None,
+        keepdims,
+        initial,
+        r#where,
+        None,
+    )? {
+        return Ok(r);
+    }
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
     // datetime64/timedelta64 (#944): `max` -> datetime/timedelta by int64 tick
@@ -1408,14 +1537,33 @@ pub fn ptp<'py>(
 // Reductions: float-only (mean, var, std)
 // ---------------------------------------------------------------------------
 
-/// `numpy.mean(a, axis=None)` — float-only.
+/// `numpy.mean(a, axis=None, dtype=None, keepdims=False, where=None)`.
+///
+/// No-kwarg fast path width-preserving (#925/#944/#952); WITH-kwarg path
+/// delegates to `numpy.mean` (#975), which owns `dtype`/`keepdims`/`where`.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, dtype = None, keepdims = false, r#where = None))]
 pub fn mean<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    dtype: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+    r#where: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = reduce_delegate(
+        py,
+        a,
+        "mean",
+        axis.map(|x| x as isize),
+        dtype,
+        keepdims,
+        None,
+        r#where,
+        None,
+    )? {
+        return Ok(r);
+    }
     let arr = as_ndarray(py, a)?;
     // datetime64/timedelta64 (REQ-4, #944): `mean(timedelta)->timedelta`
     // (int64 trunc-toward-zero of sum/n); `mean(datetime)` RAISES numpy's
@@ -1465,15 +1613,35 @@ pub fn mean<'py>(
     }))
 }
 
-/// `numpy.var(a, axis=None, ddof=0)`.
+/// `numpy.var(a, axis=None, dtype=None, ddof=0, keepdims=False, where=None)`.
+///
+/// The native fast path (incl. `ddof`) is width-preserving (#925/#944/#952).
+/// When any of `dtype`/`keepdims`/`where` is supplied, the reduction delegates
+/// to `numpy.var` (#975), forwarding the actual `ddof`.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None, ddof = 0))]
+#[pyo3(signature = (a, axis = None, dtype = None, ddof = 0, keepdims = false, r#where = None))]
 pub fn var<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    dtype: Option<&Bound<'py, PyAny>>,
     ddof: usize,
+    keepdims: bool,
+    r#where: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = reduce_delegate(
+        py,
+        a,
+        "var",
+        axis.map(|x| x as isize),
+        dtype,
+        keepdims,
+        None,
+        r#where,
+        Some(ddof as i64),
+    )? {
+        return Ok(r);
+    }
     let arr = as_ndarray(py, a)?;
     // datetime64/timedelta64 (REQ-4, #944): `var` is UNDEFINED for both
     // (numpy RAISES `TypeError: ufunc 'square' not supported` for timedelta,
@@ -1523,15 +1691,35 @@ pub fn var<'py>(
     }))
 }
 
-/// `numpy.std(a, axis=None, ddof=0)`.
+/// `numpy.std(a, axis=None, dtype=None, ddof=0, keepdims=False, where=None)`.
+///
+/// The native fast path (incl. `ddof`) is width-preserving (#925/#944/#952).
+/// When any of `dtype`/`keepdims`/`where` is supplied, the reduction delegates
+/// to `numpy.std` (#975), forwarding the actual `ddof`.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None, ddof = 0))]
+#[pyo3(signature = (a, axis = None, dtype = None, ddof = 0, keepdims = false, r#where = None))]
 pub fn std<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    dtype: Option<&Bound<'py, PyAny>>,
     ddof: usize,
+    keepdims: bool,
+    r#where: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = reduce_delegate(
+        py,
+        a,
+        "std",
+        axis.map(|x| x as isize),
+        dtype,
+        keepdims,
+        None,
+        r#where,
+        Some(ddof as i64),
+    )? {
+        return Ok(r);
+    }
     let arr = as_ndarray(py, a)?;
     // datetime64/timedelta64 (REQ-4, #944): `std` is UNDEFINED for both —
     // numpy RAISES (`TypeError 'square' not supported` for timedelta,
@@ -1585,14 +1773,32 @@ pub fn std<'py>(
 // Argmin / argmax (return int64 index arrays)
 // ---------------------------------------------------------------------------
 
-/// `numpy.argmin(a, axis=None)`.
+/// `numpy.argmin(a, axis=None, keepdims=False)`.
+///
+/// No-kwarg fast path returns int64 indices (#925/#944/#952). With
+/// `keepdims=True` the reduction delegates to `numpy.argmin` (#975), which keeps
+/// the reduced axis as size-1.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, keepdims = false))]
 pub fn argmin<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = reduce_delegate(
+        py,
+        a,
+        "argmin",
+        axis.map(|x| x as isize),
+        None,
+        keepdims,
+        None,
+        None,
+        None,
+    )? {
+        return Ok(r);
+    }
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
     // datetime64/timedelta64 (#944): `argmin` -> int64 index by int64 tick
@@ -1619,14 +1825,32 @@ pub fn argmin<'py>(
     u64_arrd_to_i64_pyarray(py, r)
 }
 
-/// `numpy.argmax(a, axis=None)`.
+/// `numpy.argmax(a, axis=None, keepdims=False)`.
+///
+/// No-kwarg fast path returns int64 indices (#925/#944/#952). With
+/// `keepdims=True` the reduction delegates to `numpy.argmax` (#975), which keeps
+/// the reduced axis as size-1.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, keepdims = false))]
 pub fn argmax<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = reduce_delegate(
+        py,
+        a,
+        "argmax",
+        axis.map(|x| x as isize),
+        None,
+        keepdims,
+        None,
+        None,
+        None,
+    )? {
+        return Ok(r);
+    }
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
     // datetime64/timedelta64 (#944): `argmax` -> int64 index by int64 tick
