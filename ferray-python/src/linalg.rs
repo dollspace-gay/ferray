@@ -628,7 +628,11 @@ pub fn trace<'py>(
         let scalar: T = fl::trace(&fa).map_err(ferr_to_pyerr)?;
         let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar])
             .map_err(ferr_to_pyerr)?;
-        arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        // numpy.trace of a full 2-D matrix returns a numpy SCALAR (np.float64),
+        // not a 0-d ndarray (fromnumeric.py trace -> ndarray.trace OUT_SCALAR
+        // collapse). Route the 0-d egress through `scalarize` so the float
+        // native path matches numpy and ferray's own int/bool delegate path.
+        crate::conv::scalarize(arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
     }))
 }
 
@@ -1706,7 +1710,11 @@ where
         let z = flat[i * cols + i];
         acc = num_complex::Complex::new(acc.re + z.re, acc.im + z.im);
     }
-    complex_scalar_to_pyarray(py, acc)
+    // numpy.trace of a 2-D complex matrix returns a numpy SCALAR
+    // (np.complex128), not a 0-d ndarray. `complex_scalar_to_pyarray` builds a
+    // 0-d ndarray, so collapse it via `scalarize` to match numpy and the float
+    // native path above (fromnumeric.py trace OUT_SCALAR collapse).
+    crate::conv::scalarize(complex_scalar_to_pyarray(py, acc)?)
 }
 
 /// Complex `kron` for 2-D operands: the `(m*p, n*q)` block matrix
