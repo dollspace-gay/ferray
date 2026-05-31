@@ -62,9 +62,11 @@ fn is_complex_dtype(dt: &str) -> bool {
 
 /// Raise numpy's exact `TypeError` for a complex input to a ufunc that has NO
 /// complex loop (`cbrt`, `fabs`, `degrees`, `radians`, `deg2rad`, `rad2deg`,
-/// `sinc`, `i0`, …). numpy: `np.cbrt([1+2j])` -> `TypeError: ufunc 'cbrt' not
-/// supported for the input types`. This replaces the prior silent imag-discard
-/// (R-CODE-4) with the numpy contract (R-DEV-2).
+/// `i0`, `spacing`, …). numpy: `np.cbrt([1+2j])` -> `TypeError: ufunc 'cbrt'
+/// not supported for the input types`. This replaces the prior silent
+/// imag-discard (R-CODE-4) with the numpy contract (R-DEV-2). (`absolute`,
+/// `negative`, `sinc`, and `rint` DO register a complex loop in numpy and are
+/// handled by their dedicated complex arms, not this rejecter.)
 fn reject_complex_unary(func: &str) -> PyErr {
     PyTypeError::new_err(format!(
         "ufunc '{func}' not supported for the input types, and the inputs \
@@ -131,6 +133,180 @@ fn exp2_complex_dispatch<'py>(
         }
         other => Err(PyTypeError::new_err(format!(
             "exp2_complex_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Complex arms for abs / negative / sinc / rint (#923/#927/#928).
+//
+// numpy registers a complex loop for `absolute` (→ REAL magnitude),
+// `negative` (complex negate), `sinc` (`sin(pi*z)/(pi*z)`, z==0→1), and `rint`
+// (per-component round-half-to-even). The prior binding routed all four to
+// `reject_complex_unary`, raising `TypeError` where numpy COMPUTES — and for
+// `absolute`/`negative` the `match_dtype_float_or_int!` body had no complex arm
+// at all. These helpers compose the numpy result from the existing library
+// (`ferray_ufunc::abs`) / `num_complex`, preserving the input complex width
+// (c64→c64, c128→c128; `abs` narrows c64→float32, c128→float64 per numpy).
+// ---------------------------------------------------------------------------
+
+/// `abs`/`absolute` over complex → REAL magnitude array (`ferray_ufunc::abs`,
+/// `Array<Complex<T>,D> -> Array<T,D>`). numpy: `np.abs([3+4j]) == [5.0]`,
+/// dtype `float64` for c128 / `float32` for c64. The real result ships back via
+/// `IntoNumPy::into_pyarray` (f32/f64 are `NpElement`), NOT the complex helper —
+/// so no imaginary part is fabricated (R-CODE-4).
+fn complex_abs_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let r: ArrayD<f64> = ferray_ufunc::abs(&fa).map_err(ferr_to_pyerr)?;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let r: ArrayD<f32> = ferray_ufunc::abs(&fa).map_err(ferr_to_pyerr)?;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_abs_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+/// `negative` over complex → `-z` per element (`num_complex::Complex`'s `Neg`).
+/// `ferray_ufunc::negative` is `T: Float`-bounded (no Complex impl), so the
+/// negate is composed inline. numpy: `np.negative([1+2j,3-1j]) == [-1-2j,-3+1j]`,
+/// dtype preserved (c64→c64, c128→c128).
+fn complex_negative_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<Complex<f64>> = fa.iter().map(|z| -z).collect();
+            let r = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<Complex<f32>> = fa.iter().map(|z| -z).collect();
+            let r = ArrayD::<Complex<f32>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_negative_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+/// `sinc` over complex → `sin(pi*z)/(pi*z)`, with `z == 0 → 1+0j`
+/// (`num_complex::Complex::sin`). numpy registers a complex `sinc` loop
+/// (`numpy/lib/_function_base_impl.py` `sinc`: `y = pi*where(x==0, 1.0e-20, x)`
+/// → `sin(y)/y`); we use the exact `x==0 → 1` limit instead of numpy's
+/// `1e-20` fudge, which agrees to full precision at the interior points and is
+/// exactly `1+0j` at the origin. numpy: `np.sinc([1+2j]) == [-34.09-17.05j]`,
+/// `np.sinc([0j]) == [1+0j]`. Width preserved.
+fn complex_sinc_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let shape = fa.shape().to_vec();
+            let pi = std::f64::consts::PI;
+            let one = Complex::<f64>::new(1.0, 0.0);
+            let data: Vec<Complex<f64>> = fa
+                .iter()
+                .map(|z| {
+                    if z.re == 0.0 && z.im == 0.0 {
+                        one
+                    } else {
+                        let y = z * pi;
+                        y.sin() / y
+                    }
+                })
+                .collect();
+            let r = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let shape = fa.shape().to_vec();
+            let pi = std::f32::consts::PI;
+            let one = Complex::<f32>::new(1.0, 0.0);
+            let data: Vec<Complex<f32>> = fa
+                .iter()
+                .map(|z| {
+                    if z.re == 0.0 && z.im == 0.0 {
+                        one
+                    } else {
+                        let y = z * pi;
+                        y.sin() / y
+                    }
+                })
+                .collect();
+            let r = ArrayD::<Complex<f32>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_sinc_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+/// `rint` over complex → round real AND imaginary parts independently to the
+/// nearest even integer (`f64::round_ties_even`). numpy registers a complex
+/// `rint` loop that rounds each component half-to-even
+/// (`numpy/_core/src/umath/loops_unary_complex.dispatch.c.src`): `np.rint(
+/// [1.4+2.6j]) == [1+3j]`, `np.rint([2.5+3.5j]) == [2+4j]` (ties to even).
+/// Width preserved.
+fn complex_rint_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<Complex<f64>> = fa
+                .iter()
+                .map(|z| Complex::<f64>::new(z.re.round_ties_even(), z.im.round_ties_even()))
+                .collect();
+            let r = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<Complex<f32>> = fa
+                .iter()
+                .map(|z| Complex::<f32>::new(z.re.round_ties_even(), z.im.round_ties_even()))
+                .collect();
+            let r = ArrayD::<Complex<f32>>::from_vec(IxDyn::new(&shape), data)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_rint_dispatch: expected a complex dtype, got {other:?}"
         ))),
     }
 }
@@ -396,6 +572,23 @@ macro_rules! bind_unary_numeric_split {
             if scalar { scalarize(out) } else { Ok(out) }
         }
     };
+    // Complex-loop form: a complex input dispatches to `$cfn` (numpy registers a
+    // complex loop for this op — `absolute` → real magnitude, `negative` →
+    // complex negate). Real/integer input keeps the existing float/int split.
+    ($name:ident, $float_fn:path, $int_fn:path, complex = $cfn:path) => {
+        #[pyfunction]
+        pub fn $name<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+            let arr = as_ndarray(py, x)?;
+            let dt = dtype_name(&arr)?;
+            let scalar = all_scalar_inputs(py, &[x])?;
+            let out = if is_complex_dtype(dt.as_str()) {
+                $cfn(py, &arr, dt.as_str())?
+            } else {
+                unary_numeric_split_body!(py, arr, $float_fn, $int_fn)
+            };
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
 }
 
 // Trigonometric + hyperbolic + inverse — numpy registers a complex loop for
@@ -505,18 +698,45 @@ bind_unary_float!(
     complex = ferray_ufunc::sqrt_complex
 );
 bind_unary_float!(cbrt, ferray_ufunc::cbrt);
-// `rint` has NO integer loop in numpy (generate_umath.py:1021) — int -> float.
-// numpy DOES register a complex `rint` loop, but ferray-ufunc has no
-// `rint_complex`; complex `rint` is out of this build's transcendental scope
-// (#922), so complex input RAISES here rather than silently dropping imag.
-bind_unary_float!(rint, ferray_ufunc::rint);
+/// `numpy.rint(x)` — round to the nearest integer, ties to even. `rint` has NO
+/// integer loop in numpy (generate_umath.py:1021), so int/bool input promotes
+/// to float. numpy ALSO registers a complex `rint` loop that rounds the real
+/// AND imaginary parts independently to nearest-even
+/// (`np.rint([1.4+2.6j]) == [1+3j]`, `np.rint([2.5+3.5j]) == [2+4j]`); the
+/// complex arm composes that per-component (see [`complex_rint_dispatch`]).
+#[pyfunction]
+pub fn rint<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, x)?;
+    let dt = dtype_name(&arr)?;
+    let scalar = all_scalar_inputs(py, &[x])?;
+    let out = if is_complex_dtype(dt.as_str()) {
+        complex_rint_dispatch(py, &arr, dt.as_str())?
+    } else {
+        unary_float_body!(py, arr, ferray_ufunc::rint)
+    };
+    if scalar { scalarize(out) } else { Ok(out) }
+}
 // `fabs` registers only float loops — int -> float (generate_umath.py:1003);
 // no complex loop -> complex RAISES.
 bind_unary_float!(fabs, ferray_ufunc::fabs);
 
 // Sign / absolute / negative / positive — int-identity (int -> int).
-bind_unary_numeric_split!(negative, ferray_ufunc::negative, ferray_ufunc::negative_int);
-bind_unary_numeric_split!(absolute, ferray_ufunc::absolute, ferray_ufunc::absolute_int);
+// `negative` registers a complex loop (complex negate); `absolute` registers a
+// complex loop returning the REAL magnitude (`fr.abs` is a Python alias of
+// `absolute`, so this complex arm covers both). numpy: `np.negative([1+2j]) ==
+// [-1-2j]`; `np.abs([3+4j]) == [5.0]` (float64 for c128, float32 for c64).
+bind_unary_numeric_split!(
+    negative,
+    ferray_ufunc::negative,
+    ferray_ufunc::negative_int,
+    complex = complex_negative_dispatch
+);
+bind_unary_numeric_split!(
+    absolute,
+    ferray_ufunc::absolute,
+    ferray_ufunc::absolute_int,
+    complex = complex_abs_dispatch
+);
 bind_unary_numeric_split!(sign, ferray_ufunc::sign, ferray_ufunc::sign_int);
 
 // Rounding floor/ceil/trunc/fix — int-identity (REQ-24, int -> int).
@@ -1259,7 +1479,24 @@ pub fn right_shift<'py>(
 // sinc, i0, convolve, correlate, interp.
 // ---------------------------------------------------------------------------
 
-bind_unary_float!(sinc, ferray_ufunc::sinc);
+/// `numpy.sinc(x)` — the normalized sinc, `sin(pi*x)/(pi*x)` with `sinc(0) = 1`
+/// (numpy/lib/_function_base_impl.py `sinc`). Real/int input promotes to float.
+/// numpy registers a complex loop computing the same `sin(pi*z)/(pi*z)`
+/// (`np.sinc([1+2j]) == [-34.09-17.05j]`, `np.sinc([0j]) == [1+0j]`); the
+/// complex arm composes it via num_complex (see [`complex_sinc_dispatch`]).
+#[pyfunction]
+pub fn sinc<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, x)?;
+    let dt = dtype_name(&arr)?;
+    let scalar = all_scalar_inputs(py, &[x])?;
+    let out = if is_complex_dtype(dt.as_str()) {
+        complex_sinc_dispatch(py, &arr, dt.as_str())?
+    } else {
+        unary_float_body!(py, arr, ferray_ufunc::sinc)
+    };
+    if scalar { scalarize(out) } else { Ok(out) }
+}
+
 bind_unary_float!(i0, ferray_ufunc::i0);
 
 /// `numpy.gradient(f, *, dx=1.0)` — central-difference gradient of a 1-D
