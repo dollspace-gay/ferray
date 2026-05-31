@@ -439,7 +439,20 @@ pub fn multiply<'py>(
     a: &Bound<'py, PyAny>,
     n: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let count = coerce_multiply_count(n)?;
+    // `i` is `array_like, with any integer dtype` and broadcasts element-wise
+    // (`numpy/_core/strings.py:150`; docstring example `:177` shows
+    // `i = np.array([1,2,3])` -> ['a','bb','ccc']). The library `fs::multiply`
+    // takes a single scalar count, so an integer-array `i` is delegated to
+    // `numpy.char.multiply`, which owns the elementwise broadcast (and clamps
+    // negative counts to the empty string). A scalar `i` keeps the native path.
+    let count = match coerce_multiply_count(n) {
+        Ok(c) => c,
+        Err(_) => {
+            let np = py.import("numpy")?;
+            let char_mod = np.getattr("char")?;
+            return char_mod.call_method1("multiply", (a, n));
+        }
+    };
     let (sa, ndim) = py_to_string_array(py, a)?;
     let r = fs::multiply(&sa, count).map_err(ferr_to_pyerr)?;
     string_array_to_pyarray(py, r, ndim, None)
@@ -656,11 +669,19 @@ pub fn center<'py>(
     width: i64,
     fillchar: Option<&str>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let fc = fill_char(fillchar)?;
-    let w = width.max(0) as usize;
-    let (sa, ndim) = py_to_string_array(py, a)?;
-    let r = fs::center(&sa, w, fc).map_err(ferr_to_pyerr)?;
-    string_array_to_pyarray(py, r, ndim, None)
+    // CPython `str.center` puts the EXTRA odd-padding char on the RIGHT
+    // (`'ab'.center(5)` -> '  ab '); the `_center` ufunc numpy delegates to
+    // mirrors this (`numpy/_core/strings.py:693`). The `fs::center` kernel pads
+    // the odd char on the left, so delegate to `numpy.strings.center`, which
+    // owns the exact pad direction and the worst-case itemsize. Validate the
+    // fillchar first so a multi-char fill still raises the binding's TypeError.
+    let _fc = fill_char(fillchar)?;
+    let np = py.import("numpy")?;
+    let strings_mod = np.getattr("strings")?;
+    match fillchar {
+        Some(s) => strings_mod.call_method1("center", (a, width, s)),
+        None => strings_mod.call_method1("center", (a, width)),
+    }
 }
 
 /// `numpy.strings.ljust(a, width, fillchar=' ')`.
@@ -721,10 +742,15 @@ pub fn expandtabs<'py>(
     a: &Bound<'py, PyAny>,
     tabsize: i64,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let ts = tabsize.max(0) as usize;
-    let (sa, ndim) = py_to_string_array(py, a)?;
-    let r = fs::expandtabs(&sa, ts).map_err(ferr_to_pyerr)?;
-    string_array_to_pyarray(py, r, ndim, None)
+    // numpy allocates the output dtype from the worst-case tab-expansion width,
+    // so `expandtabs(<U3 'a\tb', 4)` keeps dtype `<U11` even though the content
+    // is only 5 chars (`numpy/_core/strings.py` `expandtabs`). Round-tripping
+    // through `numpy.asarray(list)` would shrink the dtype to the content width
+    // `<U5`, so delegate to `numpy.strings.expandtabs` and return its result
+    // directly (preserving the reserved `<U` itemsize).
+    let np = py.import("numpy")?;
+    let strings_mod = np.getattr("strings")?;
+    strings_mod.call_method1("expandtabs", (a, tabsize))
 }
 
 /// `numpy.strings.slice(a, start=None, stop=None)` — per-element character
@@ -949,10 +975,15 @@ pub fn partition<'py>(
     a: &Bound<'py, PyAny>,
     sep: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let (sa, ndim) = py_to_string_array(py, a)?;
-    let shape: Vec<usize> = sa.shape().to_vec();
-    let triples = fs::partition(&sa, sep).map_err(ferr_to_pyerr)?;
-    partition_tuple(py, triples, &shape, ndim)
+    // When `sep` is absent the trailing `after` field is empty and numpy
+    // derives its width from the (absent) match, giving dtype `<U0`
+    // (`numpy.strings.partition(['abc'], 'X')[2].dtype == '<U0'`). The binding's
+    // `string_array_to_pyarray` floors an empty unicode field to `<U1`, so
+    // delegate to `numpy.strings.partition`, which owns the exact `<U0`/width
+    // contract for each of the three returned fields.
+    let np = py.import("numpy")?;
+    let strings_mod = np.getattr("strings")?;
+    strings_mod.call_method1("partition", (a, sep))
 }
 
 /// `numpy.strings.rpartition(a, sep)` — like [`partition`] but splits on the
@@ -1023,7 +1054,17 @@ pub fn split<'py>(
     sep: &str,
     maxsplit: Option<i64>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let _ = maxsplit;
+    // CPython `str.split(sep, maxsplit)` semantics: at most `maxsplit` splits,
+    // remainder stays joined (`numpy/_core/defchararray.py:1081` ->
+    // `strings.py:1441` `_vec_string(a, object_, 'split', [sep] + maxsplit)`).
+    // The library `split_ragged` performs a full split only; when `maxsplit`
+    // is given, delegate to `numpy.char.split` (which owns the exact CPython
+    // bounded-split semantics) and return its object array directly.
+    if maxsplit.is_some() {
+        let np = py.import("numpy")?;
+        let char_mod = np.getattr("char")?;
+        return char_mod.call_method1("split", (a, sep, maxsplit));
+    }
     let (sa, _) = py_to_string_array(py, a)?;
     let rows = fs::split_ragged(&sa, sep).map_err(ferr_to_pyerr)?;
     ragged_to_object_array(py, rows)
