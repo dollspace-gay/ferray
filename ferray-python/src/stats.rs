@@ -2176,9 +2176,10 @@ fn nanprod_time<'py>(
 // non-complex, non-time input to float64 before folding, which dropped the
 // integer dtype (`fr.nanmin([3,1,2])` returned `1.0`). These helpers route the
 // integer/bool case to the #858 native reductions (`ferray_stats::min`/`max`/
-// `prod`) BEFORE that f64 coercion. nanmean/nansum keep the float64 path:
-// numpy `nanmean` is always float64, and `nansum` over integers is out of this
-// fix's scope (its own divergence).
+// `prod`/`sum`) BEFORE that f64 coercion. nansum (#957) likewise routes the
+// integer/bool case to `ferray_stats::sum` (no NaN, so `nansum == sum`; numpy
+// keeps the `sum` accumulator dtype: int*->int64, uint*->uint64, bool->int64).
+// nanmean keeps the float64 path: numpy `nanmean` is always float64.
 // ---------------------------------------------------------------------------
 
 /// Native-dtype `nanmin`/`nanmax` over an integer or bool array (ints/bool have
@@ -2213,6 +2214,43 @@ fn nan_minmax_int_native<'py>(
         "uint16" | "u16" => native_minmax!(u16),
         "uint8" | "u8" => native_minmax!(u8),
         "bool" => native_minmax!(bool),
+        _ => None,
+    })
+}
+
+/// Native-dtype `nansum` over an integer or bool array (#957). Integers/bool
+/// have no NaN, so `nansum == sum` and numpy keeps the native `sum` accumulator
+/// dtype rather than coercing to float64 (numpy `lib/_nanfunctions_impl.py:725`
+/// — `nansum` is `_replace_nan(a, 0)` then `np.sum(..., dtype=None)`, a no-op on
+/// integer input). Reuses the #858 `ferray_stats::sum`, which upcasts the
+/// accumulator to numpy's `sum` dtype (int8/16/32->int64, uint*->uint64,
+/// bool->int64; live numpy 2.4.5: `np.nansum(int8)->int64`,
+/// `np.nansum(uint8)->uint64`, `np.nansum(bool)->int64`). Returns `None` for a
+/// float/other dtype so the caller falls through to the float NaN-skip path.
+fn nansum_int_native<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+    axis: Option<usize>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    macro_rules! native_sum {
+        ($T:ty) => {{
+            let view: PyReadonlyArrayDyn<$T> = arr.extract()?;
+            let fa: ArrayD<$T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+            let r = ferray_stats::sum(&fa, axis).map_err(ferr_to_pyerr)?;
+            Some(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }};
+    }
+    Ok(match dt {
+        "int64" | "i64" => native_sum!(i64),
+        "int32" | "i32" => native_sum!(i32),
+        "int16" | "i16" => native_sum!(i16),
+        "int8" | "i8" => native_sum!(i8),
+        "uint64" | "u64" => native_sum!(u64),
+        "uint32" | "u32" => native_sum!(u32),
+        "uint16" | "u16" => native_sum!(u16),
+        "uint8" | "u8" => native_sum!(u8),
+        "bool" => native_sum!(bool),
         _ => None,
     })
 }
@@ -2254,7 +2292,8 @@ bind_nan_reduction!(
     nansum,
     ferray_stats::nansum,
     complex = nansum_complex,
-    time = nansum_time
+    time = nansum_time,
+    int = |py, arr, axis, dt| nansum_int_native(py, arr, dt, axis)
 );
 bind_nan_reduction!(
     nanmean,
