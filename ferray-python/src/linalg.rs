@@ -248,10 +248,14 @@ pub fn norm<'py>(
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let scalar: T = fl::norm(&fa, ord_value).map_err(|e| linalg_err_to_pyerr(py, e))?;
-        // Wrap in a 0-D numpy array — NumPy returns a 0-D scalar here.
+        // numpy.linalg.norm with no `axis` (whole-vector / Frobenius / nuc /
+        // ord=1 / ord=inf) returns a numpy SCALAR (np.float64), not a 0-d
+        // ndarray (_linalg.py:2599 norm $OUT_SCALAR collapse). Route the 0-d
+        // egress through `scalarize`. The `axis=` branch above delegates to
+        // numpy and never reaches here; `scalarize` is a no-op on ndim>=1.
         let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar])
             .map_err(ferr_to_pyerr)?;
-        arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        crate::conv::scalarize(arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
     }))
 }
 
@@ -505,7 +509,10 @@ pub fn det<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, P
         let scalar: T = fl::det(&fa).map_err(|e| linalg_err_to_pyerr(py, e))?;
         let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar])
             .map_err(ferr_to_pyerr)?;
-        arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        // numpy.linalg.det of a 2-D matrix returns a numpy SCALAR (np.float64),
+        // not a 0-d ndarray (_linalg.py:2120 det $OUT_SCALAR collapse). Route the
+        // 0-d egress through `scalarize` so the type matches numpy.
+        crate::conv::scalarize(arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
     }))
 }
 
@@ -531,8 +538,11 @@ pub fn slogdet<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'p
         let (sign, logabs): (T, T) = fl::slogdet(&fa).map_err(ferr_to_pyerr)?;
         let s = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![sign]).map_err(ferr_to_pyerr)?;
         let l = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![logabs]).map_err(ferr_to_pyerr)?;
-        let s_py = s.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-        let l_py = l.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
+        // numpy.linalg.slogdet returns a tuple of numpy SCALARS (sign, logabsdet
+        // both np.float64), not 0-d ndarrays (_linalg.py:2244). Collapse each 0-d
+        // egress through `scalarize` so both tuple elements match numpy's type.
+        let s_py = crate::conv::scalarize(s.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?;
+        let l_py = crate::conv::scalarize(l.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?;
         PyTuple::new(py, [s_py, l_py])?.into_any()
     }))
 }
@@ -1894,7 +1904,9 @@ where
     let mag_arr = ArrayD::<T>::from_vec(IxDyn::new(&shape), mags).map_err(ferr_to_pyerr)?;
     let scalar: T = fl::norm(&mag_arr, ord_value).map_err(|e| linalg_err_to_pyerr(py, e))?;
     let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar]).map_err(ferr_to_pyerr)?;
-    Ok(arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    // Whole-array complex norm collapses to a numpy SCALAR like the real path
+    // (_linalg.py:2599 norm $OUT_SCALAR); route the 0-d egress through `scalarize`.
+    crate::conv::scalarize(arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 
 /// The real-component scalar ops the complex products / norm need, sealed to the
@@ -2276,14 +2288,19 @@ where
             absdet.ln(),
         )
     };
-    let sign_py = complex_scalar_to_pyarray(py, sign)?;
+    // numpy.linalg.slogdet(complex) returns a tuple of numpy SCALARS: a COMPLEX
+    // `sign` (np.complex128) and a REAL `logabsdet` (np.float64) — not 0-d
+    // ndarrays (_linalg.py:2244). Collapse each 0-d egress through `scalarize`.
+    let sign_py = crate::conv::scalarize(complex_scalar_to_pyarray(py, sign)?)?;
     // logabsdet is a REAL 0-D scalar (build via PyArray1 + reshape to 0-d so we
     // only need `numpy::Element`, not the `IntoNumPy`/`NpElement` bound).
     let l_flat = numpy::PyArray1::<T>::from_vec(py, vec![logabs]);
-    let l_py = l_flat
-        .reshape::<[usize; 0]>([])
-        .map_err(|e| PyValueError::new_err(format!("slogdet logabsdet reshape: {e}")))?
-        .into_any();
+    let l_py = crate::conv::scalarize(
+        l_flat
+            .reshape::<[usize; 0]>([])
+            .map_err(|e| PyValueError::new_err(format!("slogdet logabsdet reshape: {e}")))?
+            .into_any(),
+    )?;
     Ok(PyTuple::new(py, [sign_py, l_py])?.into_any())
 }
 
@@ -2430,7 +2447,9 @@ pub fn det_complex<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Boun
         let r = arr0
             .reshape::<[usize; 0]>([])
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        r.into_any()
+        // numpy.linalg.det returns a numpy SCALAR (np.complex128), not a 0-d
+        // ndarray (_linalg.py:2120 det $OUT_SCALAR collapse).
+        crate::conv::scalarize(r.into_any())?
     } else {
         let fa = complex_pyarray_to_ferray_2d::<f64>(&arr)?;
         let scalar: num_complex::Complex<f64> = fl::det_complex(&fa).map_err(ferr_to_pyerr)?;
@@ -2438,7 +2457,9 @@ pub fn det_complex<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Boun
         let r = arr0
             .reshape::<[usize; 0]>([])
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        r.into_any()
+        // numpy.linalg.det returns a numpy SCALAR (np.complex128), not a 0-d
+        // ndarray (_linalg.py:2120 det $OUT_SCALAR collapse).
+        crate::conv::scalarize(r.into_any())?
     })
 }
 
@@ -2817,7 +2838,10 @@ pub fn cond<'py>(
         let scalar: T = fl::cond(&fa, ord_value).map_err(ferr_to_pyerr)?;
         let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar])
             .map_err(ferr_to_pyerr)?;
-        arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        // numpy.linalg.cond of a 2-D matrix returns a numpy SCALAR (np.float64),
+        // not a 0-d ndarray (_linalg.py:1846 cond $OUT_SCALAR). Route the 0-d
+        // egress through `scalarize`.
+        crate::conv::scalarize(arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
     }))
 }
 
