@@ -726,13 +726,20 @@ pub fn compress<'py>(
 
 /// `numpy.select(condlist, choicelist, default=0)` — multi-condition
 /// elementwise selection.
+///
+/// `numpy/lib/_function_base_impl.py:813` `def select(condlist, choicelist,
+/// default=0)`: where no condition matches, the `default` value fills the
+/// output using the **choice** dtype. A previous binding typed `default: f64`
+/// and round-tripped it through f64, so an int64 default above 2**53 lost its
+/// low bits (#1020). Accepting `default` as a raw object and delegating to
+/// numpy lets the default cast to the choice dtype exactly (R-CODE-4).
 #[pyfunction]
-#[pyo3(signature = (condlist, choicelist, default = 0.0))]
+#[pyo3(signature = (condlist, choicelist, default = None))]
 pub fn select<'py>(
     py: Python<'py>,
     condlist: &Bound<'py, PyAny>,
     choicelist: &Bound<'py, PyAny>,
-    default: f64,
+    default: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let cond_list = condlist.cast::<pyo3::types::PyList>()?;
     let choice_list = choicelist.cast::<pyo3::types::PyList>()?;
@@ -747,53 +754,17 @@ pub fn select<'py>(
         ));
     }
 
-    // Collect the bool conditions.
-    let mut conds: Vec<ArrayD<bool>> = Vec::with_capacity(cond_list.len());
-    for c in cond_list.iter() {
-        let coerced = crate::conv::coerce_dtype(py, &c, "bool")?;
-        let view: PyReadonlyArrayDyn<bool> = coerced.extract()?;
-        conds.push(view.as_ferray().map_err(ferr_to_pyerr)?);
+    // Delegate to numpy so the `default` casts to the choice dtype exactly
+    // (int64 default above 2**53 stays lossless; complex defaults preserved).
+    // numpy's `select` default is the integer `0` when omitted.
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    if let Some(def) = default {
+        kwargs.set_item("default", def)?;
+    } else {
+        kwargs.set_item("default", 0i64)?;
     }
-
-    // Sniff dtype from the first choice.
-    let first = as_ndarray(py, &choice_list.get_item(0)?)?;
-    let dt = dtype_name(&first)?;
-
-    // float16 (REQ-5, #955): choices stay float16; delegate to numpy.
-    if crate::conv::is_float16_dtype(dt.as_str()) {
-        let kwargs = pyo3::types::PyDict::new(py);
-        kwargs.set_item("default", default)?;
-        return crate::conv::f16_delegate(py, "select", (condlist, choicelist), Some(&kwargs));
-    }
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let mut choices: Vec<ArrayD<T>> = Vec::with_capacity(choice_list.len());
-        for ch in choice_list.iter() {
-            let coerced = crate::conv::coerce_dtype(py, &ch, dt.as_str())?;
-            let view: PyReadonlyArrayDyn<T> = coerced.extract()?;
-            choices.push(view.as_ferray().map_err(ferr_to_pyerr)?);
-        }
-        let def: T = default_cast::<T>(default);
-        let r: ArrayD<T> = fi::select(&conds, &choices, def).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
-}
-
-trait DefaultCast {
-    fn from_f64(v: f64) -> Self;
-}
-macro_rules! impl_default_cast {
-    ($($t:ty),*) => {
-        $(impl DefaultCast for $t { fn from_f64(v: f64) -> Self { v as Self } })*
-    };
-}
-impl_default_cast!(f64, f32, i64, i32, i16, i8, u64, u32, u16, u8);
-impl DefaultCast for bool {
-    fn from_f64(v: f64) -> Self {
-        v != 0.0
-    }
-}
-fn default_cast<T: DefaultCast>(v: f64) -> T {
-    T::from_f64(v)
+    np.call_method("select", (condlist, choicelist), Some(&kwargs))
 }
 
 /// `numpy.place(arr, mask, vals)` — non-mutating: returns a NEW array
@@ -805,30 +776,17 @@ pub fn place<'py>(
     py: Python<'py>,
     arr: &Bound<'py, PyAny>,
     mask: &Bound<'py, PyAny>,
-    vals: Vec<f64>,
+    vals: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Delegate to numpy on a fresh copy so `vals` is placed with the target
+    // array's OWN dtype (int64 above 2**53 stays lossless, #1019; complex
+    // preserved). numpy `place` mutates in place and returns None; we return
+    // the mutated copy, preserving ferray's copy-returning contract.
     let arr_a = as_ndarray(py, arr)?;
-    let dt = dtype_name(&arr_a)?;
-    // float16 (REQ-5, #955): ferray's `place` returns the MODIFIED COPY (a
-    // documented deviation from numpy's in-place void contract). Preserve that
-    // copy-returning contract for float16 by mutating a numpy copy and returning
-    // it — `match_dtype_all!` has no float16 arm.
-    if crate::conv::is_float16_dtype(dt.as_str()) {
-        let copy = arr_a.call_method0("copy")?;
-        crate::conv::f16_delegate(py, "place", (&copy, mask, vals), None)?;
-        return Ok(copy);
-    }
-    let mask_arr = crate::conv::coerce_dtype(py, mask, "bool")?;
-    let mask_view: PyReadonlyArrayDyn<bool> = mask_arr.extract()?;
-    let mask_fa: ArrayD<bool> = mask_view.as_ferray().map_err(ferr_to_pyerr)?;
-
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr_a.extract()?;
-        let mut fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        let typed_vals: Vec<T> = vals.iter().map(|&v| default_cast::<T>(v)).collect();
-        fi::place(&mut fa, &mask_fa, &typed_vals).map_err(ferr_to_pyerr)?;
-        fa.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
+    let copy = arr_a.call_method0("copy")?;
+    let np = py.import("numpy")?;
+    np.call_method1("place", (&copy, mask, vals))?;
+    Ok(copy)
 }
 
 /// `numpy.putmask(a, mask, values)` — set `a.flat[n] = values[n %
@@ -848,37 +806,18 @@ pub fn putmask<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     mask: &Bound<'py, PyAny>,
-    values: Vec<f64>,
+    values: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Delegate to numpy on a fresh copy so `values` are written with the target
+    // array's OWN dtype (int64 above 2**53 stays lossless, #1018; complex
+    // preserved) and cycled by global flat index per numpy's contract. numpy
+    // `putmask` mutates in place and returns None; we return the mutated copy,
+    // preserving ferray's copy-returning contract.
     let arr_a = as_ndarray(py, a)?;
-    let dt = dtype_name(&arr_a)?;
-    if values.is_empty() {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "putmask: values array is empty",
-        ));
-    }
-    // float16 (REQ-5, #955): mutate a numpy copy and return it (ferray's
-    // copy-returning deviation), as `match_dtype_all!` has no float16 arm.
-    if crate::conv::is_float16_dtype(dt.as_str()) {
-        let copy = arr_a.call_method0("copy")?;
-        crate::conv::f16_delegate(py, "putmask", (&copy, mask, values), None)?;
-        return Ok(copy);
-    }
-    let mask_arr = crate::conv::coerce_dtype(py, mask, "bool")?;
-    let mask_view: PyReadonlyArrayDyn<bool> = mask_arr.extract()?;
-    let mask_fa: ArrayD<bool> = mask_view.as_ferray().map_err(ferr_to_pyerr)?;
-
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr_a.extract()?;
-        let mut fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        let size = fa.size();
-        // Expand to one value per global flat position, cycling by n % len.
-        let expanded: Vec<T> = (0..size)
-            .map(|n| default_cast::<T>(values[n % values.len()]))
-            .collect();
-        fi::putmask(&mut fa, &mask_fa, &expanded).map_err(ferr_to_pyerr)?;
-        fa.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
+    let copy = arr_a.call_method0("copy")?;
+    let np = py.import("numpy")?;
+    np.call_method1("putmask", (&copy, mask, values))?;
+    Ok(copy)
 }
 
 /// `numpy.put(a, ind, v, mode='raise')` — set `a.flat[ind] = v` (cycling
@@ -897,40 +836,24 @@ pub fn putmask<'py>(
 pub fn put<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    ind: Vec<isize>,
-    v: Vec<f64>,
+    ind: &Bound<'py, PyAny>,
+    v: &Bound<'py, PyAny>,
     mode: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Delegate to numpy on a fresh copy so `v` is written with the target
+    // array's OWN dtype: an int64 value above 2**53 stays lossless (#1017) and
+    // complex values are accepted (#1021) instead of being rejected by an f64
+    // value param. numpy `put` (`numpy/_core/fromnumeric.py:489`,
+    // `a.flat[ind] = v`) mutates in place and returns None; we return the
+    // mutated copy, preserving ferray's copy-returning contract. `mode`
+    // resolves out-of-bounds indices (raise/wrap/clip) and is threaded through.
     let arr_a = as_ndarray(py, a)?;
-    let dt = dtype_name(&arr_a)?;
-    if v.is_empty() {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "put: values array is empty",
-        ));
-    }
-    // float16 (REQ-5, #955): mutate a numpy copy and return it (ferray's
-    // copy-returning deviation), as `match_dtype_all!` has no float16 arm.
-    if crate::conv::is_float16_dtype(dt.as_str()) {
-        let copy = arr_a.call_method0("copy")?;
-        let kwargs = pyo3::types::PyDict::new(py);
-        kwargs.set_item("mode", mode)?;
-        crate::conv::f16_delegate(py, "put", (&copy, ind, v), Some(&kwargs))?;
-        return Ok(copy);
-    }
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr_a.extract()?;
-        let mut fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        let size = fa.size();
-        // Resolve `mode` for wrap/clip against the flattened length; 'raise'
-        // defers OOB to the library so it raises numpy's IndexError.
-        let resolved: Vec<isize> = ind
-            .iter()
-            .map(|&i| apply_take_mode(i, size, mode))
-            .collect::<PyResult<Vec<_>>>()?;
-        let typed_vals: Vec<T> = v.iter().map(|&x| default_cast::<T>(x)).collect();
-        fa.put(&resolved, &typed_vals).map_err(gather_err_to_pyerr)?;
-        fa.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
+    let copy = arr_a.call_method0("copy")?;
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    kwargs.set_item("mode", mode)?;
+    np.call_method("put", (&copy, ind, v), Some(&kwargs))?;
+    Ok(copy)
 }
 
 /// `numpy.extract(condition, arr)` — return a 1-D array of elements
