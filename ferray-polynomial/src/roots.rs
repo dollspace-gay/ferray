@@ -57,27 +57,17 @@ pub fn find_roots_from_power_coeffs(coeffs: &[f64]) -> Result<Vec<Complex<f64>>,
             let root = -coeffs[0] / coeffs[1];
             Ok(vec![Complex::new(root, 0.0)])
         }
-        2 => {
-            // Numerically stable quadratic formula: c[0] + c[1]*x + c[2]*x^2 = 0
-            // Uses q = -(b + sign(b)*sqrt(disc))/2 to avoid catastrophic cancellation.
-            let a = coeffs[2];
-            let b = coeffs[1];
-            let c = coeffs[0];
-            let disc = b.mul_add(b, -(4.0 * a * c));
-            if disc >= 0.0 {
-                let sqrt_disc = disc.sqrt();
-                let sign_b = if b >= 0.0 { 1.0 } else { -1.0 };
-                let q = -0.5 * (b + sign_b * sqrt_disc);
-                let r1 = q / a;
-                let r2 = c / q;
-                Ok(vec![Complex::new(r1, 0.0), Complex::new(r2, 0.0)])
-            } else {
-                let sqrt_disc = (-disc).sqrt();
-                let re = -b / (2.0 * a);
-                let im = sqrt_disc / (2.0 * a);
-                Ok(vec![Complex::new(re, im), Complex::new(re, -im)])
-            }
-        }
+        // Degree 2 is routed through the same companion-matrix eigenvalue
+        // path as higher degrees, mirroring numpy `polyroots`
+        // (numpy/polynomial/polynomial.py:1542-1550), which only
+        // special-cases `len(c) < 2` (no roots) and `len(c) == 2` (linear);
+        // every polynomial of degree >= 2 goes through `polycompanion` +
+        // `eigvals`. The previous bespoke citardauq quadratic divided by
+        // `q = -0.5 * (b + sign(b) * sqrt(disc))`, which collapses to 0 when
+        // `b == 0 && c[0] == 0` (e.g. `x**2`, ascending `[0, 0, 1]`),
+        // yielding `r2 = 0.0 / 0.0 = NaN`. The companion path has no such
+        // division and returns the finite double root `[0, 0]`, matching
+        // numpy. (#1085)
         _ => {
             // Companion matrix eigenvalues via ferray-linalg (faer LU
             // + Schur). Faer's eigvals is more numerically robust than
