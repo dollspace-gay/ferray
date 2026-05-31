@@ -149,7 +149,10 @@ fn complex_fold_dispatch<'py>(
                 ComplexFold::CumSum => ferray_stats::cumsum(&fa, axis).map_err(ferr_to_pyerr)?,
                 ComplexFold::CumProd => ferray_stats::cumprod(&fa, axis).map_err(ferr_to_pyerr)?,
             };
-            complex_ferray_to_pyarray(py, r)
+            // REQ-21: a full complex Sum/Prod reduction (axis=None) is 0-d -> collapse
+            // to a numpy `complex128`/`complex64` scalar. CumSum/CumProd keep ndim >= 1,
+            // so `scalarize` is a no-op there (idempotent on non-0-d arrays).
+            crate::conv::scalarize(complex_ferray_to_pyarray(py, r)?)
         }
         "complex64" | "c8" => {
             let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
@@ -159,7 +162,7 @@ fn complex_fold_dispatch<'py>(
                 ComplexFold::CumSum => ferray_stats::cumsum(&fa, axis).map_err(ferr_to_pyerr)?,
                 ComplexFold::CumProd => ferray_stats::cumprod(&fa, axis).map_err(ferr_to_pyerr)?,
             };
-            complex_ferray_to_pyarray(py, r)
+            crate::conv::scalarize(complex_ferray_to_pyarray(py, r)?)
         }
         other => Err(PyTypeError::new_err(format!(
             "complex_fold_dispatch: expected a complex dtype, got {other:?}"
@@ -206,7 +209,8 @@ where
         .map(|z| Complex::new(z.re * scl, z.im * scl))
         .collect();
     let r = ArrayD::<Complex<T>>::from_vec(IxDyn::new(&shape), data).map_err(ferr_to_pyerr)?;
-    complex_ferray_to_pyarray(py, r)
+    // REQ-21: full complex mean (axis=None) is 0-d -> numpy complex scalar.
+    crate::conv::scalarize(complex_ferray_to_pyarray(py, r)?)
 }
 
 /// Element-wise complex variance of an axis-lane (or whole array): the REAL
@@ -272,7 +276,8 @@ where
                 ))
             })?;
             let r = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![v]).map_err(ferr_to_pyerr)?;
-            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+            // REQ-21: full complex var/std (axis=None) is 0-d -> numpy real scalar.
+            crate::conv::scalarize(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
         }
         Some(ax) => {
             if ax >= ndim {
@@ -381,7 +386,8 @@ fn complex_weighted_average<'py>(
             let r = wavg(&vals, &ws)?;
             let rd = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&[]), vec![r])
                 .map_err(ferr_to_pyerr)?;
-            complex_ferray_to_pyarray(py, rd)
+            // REQ-21: full complex weighted average (axis=None) is 0-d -> complex128 scalar.
+            crate::conv::scalarize(complex_ferray_to_pyarray(py, rd)?)
         }
         Some(ax) => {
             if ax >= ndim {
@@ -921,7 +927,8 @@ where
             let r = pick(&vals);
             let rd =
                 ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[]), vec![r]).map_err(ferr_to_pyerr)?;
-            complex_ferray_to_pyarray(py, rd)
+            // REQ-21: full complex min/max (axis=None) is 0-d -> complex scalar.
+            crate::conv::scalarize(complex_ferray_to_pyarray(py, rd)?)
         }
         Some(ax) => {
             let (out_shape, vals) = cplx_axis_lanes(&fa, ax, |lane| pick(lane))?;
@@ -955,7 +962,8 @@ where
             }
             let i = cplx_arg_extremum(&vals, want_max) as u64;
             let rd = ArrayD::<u64>::from_vec(IxDyn::new(&[]), vec![i]).map_err(ferr_to_pyerr)?;
-            u64_arrd_to_i64_pyarray(py, rd)
+            // REQ-21: full complex argmin/argmax (axis=None) is 0-d -> int64 scalar.
+            crate::conv::scalarize(u64_arrd_to_i64_pyarray(py, rd)?)
         }
         Some(ax) => {
             let (out_shape, vals) =
@@ -995,7 +1003,8 @@ where
             let r = ptp_of(&vals);
             let rd =
                 ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[]), vec![r]).map_err(ferr_to_pyerr)?;
-            complex_ferray_to_pyarray(py, rd)
+            // REQ-21: full complex ptp (axis=None) is 0-d -> complex scalar.
+            crate::conv::scalarize(complex_ferray_to_pyarray(py, rd)?)
         }
         Some(ax) => {
             let (out_shape, vals) = cplx_axis_lanes(&fa, ax, |lane| ptp_of(lane))?;
@@ -1035,7 +1044,9 @@ pub fn all<'py>(
     let arr = as_ndarray(py, a)?;
     let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
+    // REQ-21: `axis=None` builds a 0-d bool array -> collapse to a numpy `bool_`
+    // scalar; the `Some(ax)` branch leaves >= 1 dim so `scalarize` is a no-op.
+    crate::conv::scalarize(match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         match axis {
@@ -1075,7 +1086,9 @@ pub fn any<'py>(
     let arr = as_ndarray(py, a)?;
     let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
+    // REQ-21: `axis=None` builds a 0-d bool array -> collapse to a numpy `bool_`
+    // scalar; the `Some(ax)` branch leaves >= 1 dim so `scalarize` is a no-op.
+    crate::conv::scalarize(match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         match axis {
@@ -1129,7 +1142,9 @@ fn is_empty_array(arr: &Bound<'_, PyAny>) -> PyResult<bool> {
 /// NumPy's `nan` (float64, 0-D) result for an empty slice.
 fn nan_scalar_f64<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
     let r = ArrayD::<f64>::from_vec(IxDyn::new(&[]), vec![f64::NAN]).map_err(ferr_to_pyerr)?;
-    Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    // REQ-21: this is the empty-full-reduction egress for mean/var/std — collapse
+    // the 0-d array to a numpy `float64` scalar (numpy's nan result is a scalar).
+    crate::conv::scalarize(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 
 /// `true` for the float16 dtype name (plus its `f16` alias).
@@ -1319,9 +1334,12 @@ pub fn sum<'py>(
         let view: PyReadonlyArrayDyn<bool> = arr.extract()?;
         let fa: ArrayD<bool> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::sum(&fa, axis).map_err(ferr_to_pyerr)?;
-        return Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
+        // REQ-21: full bool->int64 sum (axis=None) is 0-d -> numpy int64 scalar.
+        return crate::conv::scalarize(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
     }
-    Ok(match_dtype_numeric!(dt.as_str(), T => {
+    // REQ-21: full reduction (axis=None) is 0-d -> numpy scalar; axis result is
+    // >= 1-d so `scalarize` is a no-op there.
+    crate::conv::scalarize(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::sum(&fa, axis).map_err(ferr_to_pyerr)?;
@@ -1373,9 +1391,11 @@ pub fn prod<'py>(
         let view: PyReadonlyArrayDyn<bool> = arr.extract()?;
         let fa: ArrayD<bool> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::prod(&fa, axis).map_err(ferr_to_pyerr)?;
-        return Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
+        // REQ-21: full bool->int64 prod (axis=None) is 0-d -> numpy int64 scalar.
+        return crate::conv::scalarize(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any());
     }
-    Ok(match_dtype_numeric!(dt.as_str(), T => {
+    // REQ-21: full reduction (axis=None) -> numpy scalar; axis result stays ndarray.
+    crate::conv::scalarize(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::prod(&fa, axis).map_err(ferr_to_pyerr)?;
@@ -1435,7 +1455,8 @@ pub fn min<'py>(
     if is_float16_dtype(dt.as_str()) {
         return f16_reduce(py, &arr, "min", axis, None);
     }
-    Ok(match_dtype_orderable!(dt.as_str(), T => {
+    // REQ-21: full reduction (axis=None) -> numpy scalar; axis result stays ndarray.
+    crate::conv::scalarize(match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::min(&fa, axis).map_err(ferr_to_pyerr)?;
@@ -1488,7 +1509,8 @@ pub fn max<'py>(
     if is_float16_dtype(dt.as_str()) {
         return f16_reduce(py, &arr, "max", axis, None);
     }
-    Ok(match_dtype_orderable!(dt.as_str(), T => {
+    // REQ-21: full reduction (axis=None) -> numpy scalar; axis result stays ndarray.
+    crate::conv::scalarize(match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::max(&fa, axis).map_err(ferr_to_pyerr)?;
@@ -1525,7 +1547,8 @@ pub fn ptp<'py>(
     if is_float16_dtype(dt.as_str()) {
         return f16_reduce(py, &arr, "ptp", axis, None);
     }
-    Ok(match_dtype_numeric!(dt.as_str(), T => {
+    // REQ-21: full reduction (axis=None) -> numpy scalar; axis result stays ndarray.
+    crate::conv::scalarize(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::ptp(&fa, axis).map_err(ferr_to_pyerr)?;
@@ -1605,7 +1628,8 @@ pub fn mean<'py>(
         coerce_dtype(py, &arr, "float64")?
     };
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_float!(dt.as_str(), T => {
+    // REQ-21: full reduction (axis=None) -> numpy scalar; axis result stays ndarray.
+    crate::conv::scalarize(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::mean(&fa, axis).map_err(ferr_to_pyerr)?;
@@ -1683,7 +1707,8 @@ pub fn var<'py>(
         coerce_dtype(py, &arr, "float64")?
     };
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_float!(dt.as_str(), T => {
+    // REQ-21: full reduction (axis=None) -> numpy scalar; axis result stays ndarray.
+    crate::conv::scalarize(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::var(&fa, axis, ddof).map_err(ferr_to_pyerr)?;
@@ -1761,7 +1786,8 @@ pub fn std<'py>(
         coerce_dtype(py, &arr, "float64")?
     };
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_float!(dt.as_str(), T => {
+    // REQ-21: full reduction (axis=None) -> numpy scalar; axis result stays ndarray.
+    crate::conv::scalarize(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::std_(&fa, axis, ddof).map_err(ferr_to_pyerr)?;
@@ -1822,7 +1848,8 @@ pub fn argmin<'py>(
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         ferray_stats::argmin(&fa, axis).map_err(ferr_to_pyerr)?
     });
-    u64_arrd_to_i64_pyarray(py, r)
+    // REQ-21: full argmin (axis=None) is 0-d -> numpy int64 scalar.
+    crate::conv::scalarize(u64_arrd_to_i64_pyarray(py, r)?)
 }
 
 /// `numpy.argmax(a, axis=None, keepdims=False)`.
@@ -1876,7 +1903,8 @@ pub fn argmax<'py>(
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         ferray_stats::argmax(&fa, axis).map_err(ferr_to_pyerr)?
     });
-    u64_arrd_to_i64_pyarray(py, r)
+    // REQ-21: full argmax (axis=None) is 0-d -> numpy int64 scalar.
+    crate::conv::scalarize(u64_arrd_to_i64_pyarray(py, r)?)
 }
 
 // ---------------------------------------------------------------------------
@@ -1944,7 +1972,8 @@ where
         ComplexNanFold::Sum => ferray_stats::sum(&cleaned, axis).map_err(ferr_to_pyerr)?,
         ComplexNanFold::Prod => ferray_stats::prod(&cleaned, axis).map_err(ferr_to_pyerr)?,
     };
-    complex_ferray_to_pyarray(py, r)
+    // REQ-21: full complex nansum/nanprod (axis=None) is 0-d -> complex scalar.
+    crate::conv::scalarize(complex_ferray_to_pyarray(py, r)?)
 }
 
 /// Dispatch a complex `nanmean` over both complex widths: the complex
@@ -1993,7 +2022,8 @@ where
             let r = mean_of(&vals);
             let rd =
                 ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[]), vec![r]).map_err(ferr_to_pyerr)?;
-            complex_ferray_to_pyarray(py, rd)
+            // REQ-21: full complex nanmean (axis=None) is 0-d -> complex scalar.
+            crate::conv::scalarize(complex_ferray_to_pyarray(py, rd)?)
         }
         Some(ax) => {
             if ax >= ndim {
@@ -2054,7 +2084,8 @@ macro_rules! bind_nan_reduction {
                 coerce_dtype(py, &arr, "float64")?
             };
             let dt = dtype_name(&arr)?;
-            Ok(match_dtype_float!(dt.as_str(), T => {
+            // REQ-21: full nan-reduction (axis=None) -> numpy scalar; axis stays ndarray.
+            crate::conv::scalarize(match_dtype_float!(dt.as_str(), T => {
                 let view: PyReadonlyArrayDyn<T> = arr.extract()?;
                 let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
                 let r = $ferr_path(&fa, axis).map_err(ferr_to_pyerr)?;
@@ -2100,7 +2131,8 @@ macro_rules! bind_nan_reduction {
                 coerce_dtype(py, &arr, "float64")?
             };
             let dt = dtype_name(&arr)?;
-            Ok(match_dtype_float!(dt.as_str(), T => {
+            // REQ-21: full nan-reduction (axis=None) -> numpy scalar; axis stays ndarray.
+            crate::conv::scalarize(match_dtype_float!(dt.as_str(), T => {
                 let view: PyReadonlyArrayDyn<T> = arr.extract()?;
                 let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
                 let r = $ferr_path(&fa, axis).map_err(ferr_to_pyerr)?;
@@ -2134,8 +2166,9 @@ macro_rules! bind_nan_reduction {
                 _ => {}
             }
             // Integer/bool: native-dtype reduction (no NaN possible), #950.
+            // REQ-21: a full (axis=None) native int/bool reduction is 0-d -> scalar.
             if let Some(out) = ($int)(py, &arr, axis, dt.as_str())? {
-                return Ok(out);
+                return crate::conv::scalarize(out);
             }
             // float16 (#956): delegate to numpy (f32-compute, f16-narrow) so the
             // result stays float16. MUST branch BEFORE the float64 coercion below
@@ -2150,7 +2183,8 @@ macro_rules! bind_nan_reduction {
                 coerce_dtype(py, &arr, "float64")?
             };
             let dt = dtype_name(&arr)?;
-            Ok(match_dtype_float!(dt.as_str(), T => {
+            // REQ-21: full nan-reduction (axis=None) -> numpy scalar; axis stays ndarray.
+            crate::conv::scalarize(match_dtype_float!(dt.as_str(), T => {
                 let view: PyReadonlyArrayDyn<T> = arr.extract()?;
                 let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
                 let r = $ferr_path(&fa, axis).map_err(ferr_to_pyerr)?;
@@ -2259,7 +2293,8 @@ where
             let r = pick(&vals);
             let rd =
                 ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[]), vec![r]).map_err(ferr_to_pyerr)?;
-            complex_ferray_to_pyarray(py, rd)
+            // REQ-21: full complex nanmin/nanmax (axis=None) is 0-d -> complex scalar.
+            crate::conv::scalarize(complex_ferray_to_pyarray(py, rd)?)
         }
         Some(ax) => {
             let (out_shape, vals) = cplx_axis_lanes(&fa, ax, |lane| pick(lane))?;
@@ -2584,7 +2619,8 @@ where
             let vals: Vec<Complex<T>> = fa.iter().copied().collect();
             let v = var_of(&vals);
             let r = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![v]).map_err(ferr_to_pyerr)?;
-            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+            // REQ-21: full complex nanvar/nanstd (axis=None) is 0-d -> real scalar.
+            crate::conv::scalarize(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
         }
         Some(ax) => {
             if ax >= ndim {
@@ -2664,7 +2700,8 @@ pub fn nanvar<'py>(
         coerce_dtype(py, &arr, "float64")?
     };
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_float!(dt.as_str(), T => {
+    // REQ-21: full nanvar (axis=None) -> numpy scalar; axis result stays ndarray.
+    crate::conv::scalarize(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::nanvar(&fa, axis, ddof).map_err(ferr_to_pyerr)?;
@@ -2706,7 +2743,8 @@ pub fn nanstd<'py>(
         coerce_dtype(py, &arr, "float64")?
     };
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_float!(dt.as_str(), T => {
+    // REQ-21: full nanstd (axis=None) -> numpy scalar; axis result stays ndarray.
+    crate::conv::scalarize(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::nanstd(&fa, axis, ddof).map_err(ferr_to_pyerr)?;
@@ -2763,7 +2801,8 @@ where
             let r = median_of(&vals);
             let rd =
                 ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[]), vec![r]).map_err(ferr_to_pyerr)?;
-            complex_ferray_to_pyarray(py, rd)
+            // REQ-21: full complex nanmedian (axis=None) is 0-d -> complex scalar.
+            crate::conv::scalarize(complex_ferray_to_pyarray(py, rd)?)
         }
         Some(ax) => {
             if ax >= ndim {
@@ -2816,7 +2855,8 @@ pub fn nanmedian<'py>(
         coerce_dtype(py, &arr, "float64")?
     };
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_float!(dt.as_str(), T => {
+    // REQ-21: full nanmedian (axis=None) -> numpy scalar; axis result stays ndarray.
+    crate::conv::scalarize(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::nanmedian(&fa, axis).map_err(ferr_to_pyerr)?;
@@ -2845,7 +2885,8 @@ pub fn nanargmin<'py>(
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         ferray_stats::nanargmin(&fa, axis).map_err(ferr_to_pyerr)?
     });
-    u64_arrd_to_i64_pyarray(py, r)
+    // REQ-21: full nanargmin (axis=None) is 0-d -> numpy int64 scalar.
+    crate::conv::scalarize(u64_arrd_to_i64_pyarray(py, r)?)
 }
 
 /// `numpy.nanargmax(a, axis=None)`.
@@ -2869,7 +2910,8 @@ pub fn nanargmax<'py>(
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         ferray_stats::nanargmax(&fa, axis).map_err(ferr_to_pyerr)?
     });
-    u64_arrd_to_i64_pyarray(py, r)
+    // REQ-21: full nanargmax (axis=None) is 0-d -> numpy int64 scalar.
+    crate::conv::scalarize(u64_arrd_to_i64_pyarray(py, r)?)
 }
 
 // ---------------------------------------------------------------------------
@@ -3481,7 +3523,8 @@ pub fn count_nonzero<'py>(
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         ferray_stats::count_nonzero(&fa, axis).map_err(ferr_to_pyerr)?
     });
-    u64_arrd_to_i64_pyarray(py, r)
+    // REQ-21: full count_nonzero (axis=None) is 0-d -> numpy int64 scalar.
+    crate::conv::scalarize(u64_arrd_to_i64_pyarray(py, r)?)
 }
 
 // ---------------------------------------------------------------------------
@@ -4273,7 +4316,10 @@ fn quantile_dispatch<'py>(
     };
 
     match extract_q(q)? {
-        Err(scalar) => single(scalar),
+        // REQ-21: a scalar-`q` full reduction (axis=None) is 0-d -> numpy scalar;
+        // a scalar-`q` axis reduction stays >= 1-d (scalarize no-op). The sequence-`q`
+        // branch always `stack`s along a new leading axis, so it is never 0-d.
+        Err(scalar) => crate::conv::scalarize(single(scalar)?),
         Ok(seq) => {
             let mut results: Vec<Bound<'py, PyAny>> = Vec::with_capacity(seq.len());
             for q_val in seq {
@@ -4402,7 +4448,8 @@ pub fn median<'py>(
         "float64".to_string()
     };
     let arr = coerce_dtype(py, &arr, &real_dt)?;
-    Ok(match_dtype_float!(real_dt.as_str(), T => {
+    // REQ-21: full median (axis=None) -> numpy scalar; axis result stays ndarray.
+    crate::conv::scalarize(match_dtype_float!(real_dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r = ferray_stats::median(&fa, axis).map_err(ferr_to_pyerr)?;
@@ -4485,7 +4532,8 @@ where
             let r = median_of(&vals);
             let rd =
                 ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[]), vec![r]).map_err(ferr_to_pyerr)?;
-            complex_ferray_to_pyarray(py, rd)
+            // REQ-21: full complex median (axis=None) is 0-d -> complex scalar.
+            crate::conv::scalarize(complex_ferray_to_pyarray(py, rd)?)
         }
         Some(ax) => {
             if ax >= ndim {
@@ -4820,7 +4868,10 @@ fn nan_quantile_dispatch<'py>(
     };
 
     match extract_q(q)? {
-        Err(scalar) => single(scalar),
+        // REQ-21: a scalar-`q` full reduction (axis=None) is 0-d -> numpy scalar;
+        // a scalar-`q` axis reduction stays >= 1-d (scalarize no-op). The sequence-`q`
+        // branch always `stack`s along a new leading axis, so it is never 0-d.
+        Err(scalar) => crate::conv::scalarize(single(scalar)?),
         Ok(seq) => {
             let mut results: Vec<Bound<'py, PyAny>> = Vec::with_capacity(seq.len());
             for q_val in seq {
@@ -4959,7 +5010,9 @@ pub fn average<'py>(
             ferray_stats::average(&fa, Some(&fw), axis).map_err(ferr_to_pyerr)?
         }
     };
-    Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    // REQ-21: full average (axis=None) is 0-d -> numpy float64 scalar; axis result
+    // stays >= 1-d (scalarize no-op).
+    crate::conv::scalarize(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 
 // ---------------------------------------------------------------------------

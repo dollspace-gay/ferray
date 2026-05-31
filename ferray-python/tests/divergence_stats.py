@@ -255,3 +255,107 @@ def test_divergence_isin_kind_kwarg():
     expected = np.isin(element, test, kind="sort")  # live oracle (R-CHAR-3)
     got = fr.isin(element, test, kind="sort")
     np.testing.assert_array_equal(got, expected)
+
+
+# ---------------------------------------------------------------------------
+# REQ-21 (#992): a FULL reduction (axis=None / inherently scalar) must return a
+# numpy SCALAR (numpy.int64 / float64 / bool_ / complex128), NOT a 0-d
+# numpy.ndarray — numpy's `$OUT_SCALAR` contract
+# (numpy/_core/code_generators/ufunc_docstrings.py: `'OUT_SCALAR_1'`). numpy
+# realises this by returning the bare `ufunc.reduce(...)` / method-reduce result
+# (numpy/_core/fromnumeric.py:83 for sum/prod/min/max/ptp; :2539/:2634 for
+# any/all; numpy/_core/_methods.py for mean/var/std/amin/amax;
+# numpy/lib/_function_base_impl.py for median/average/percentile/quantile), and a
+# 0-d reduce auto-boxes to a numpy scalar. An AXIS reduction that leaves >= 1
+# dimension stays an ndarray. The oracle type/value are computed LIVE (R-CHAR-3).
+# ---------------------------------------------------------------------------
+
+# (name, ferray fn, numpy fn, input) for the representative scalar-collapse set.
+# Each input is chosen so the full reduction is well-defined and the numpy oracle
+# returns a genuine scalar.
+_REQ21_FULL_REDUCTIONS = [
+    ("sum", fr.sum, np.sum, [1, 2, 3]),
+    ("prod", fr.prod, np.prod, [1, 2, 3, 4]),
+    ("mean", fr.mean, np.mean, [1.0, 2.0, 3.0]),
+    ("max", fr.max, np.max, [3, 1, 2]),
+    ("min", fr.min, np.min, [3, 1, 2]),
+    ("argmax", fr.argmax, np.argmax, [3, 1, 2]),
+    ("argmin", fr.argmin, np.argmin, [3, 1, 2]),
+    ("all", fr.all, np.all, [True, True, False]),
+    ("any", fr.any, np.any, [False, True, False]),
+    ("ptp", fr.ptp, np.ptp, [3, 1, 7, 2]),
+    ("var", fr.var, np.var, [1.0, 2.0, 3.0, 4.0]),
+    ("std", fr.std, np.std, [1.0, 2.0, 3.0, 4.0]),
+    ("median", fr.median, np.median, [1.0, 2.0, 3.0, 4.0]),
+    ("average", fr.average, np.average, [1.0, 2.0, 3.0]),
+    ("count_nonzero", fr.count_nonzero, np.count_nonzero, [0, 1, 2, 0, 3]),
+    ("nansum", fr.nansum, np.nansum, [1.0, np.nan, 3.0]),
+    ("nanmean", fr.nanmean, np.nanmean, [1.0, np.nan, 3.0]),
+    ("nanmax", fr.nanmax, np.nanmax, [1.0, np.nan, 3.0]),
+    ("nanargmax", fr.nanargmax, np.nanargmax, [1.0, np.nan, 3.0]),
+]
+
+
+@pytest.mark.parametrize(
+    "name,frfn,npfn,x",
+    _REQ21_FULL_REDUCTIONS,
+    ids=[t[0] for t in _REQ21_FULL_REDUCTIONS],
+)
+def test_req21_full_reduction_returns_numpy_scalar(name, frfn, npfn, x):
+    expected = _np_value(lambda: npfn(x))  # live oracle (R-CHAR-3)
+    got = _np_value(lambda: frfn(x))
+    # 1. NOT a 0-d ndarray — the $OUT_SCALAR contract.
+    assert not isinstance(got, np.ndarray), f"{name}: got a {type(got)}, want a numpy scalar"
+    # 2. Exact numpy scalar TYPE parity with the oracle.
+    assert type(got) is type(expected), f"{name}: {type(got)} != {type(expected)}"
+    # 3. Value parity (NaN-aware) — the collapse must not perturb the value.
+    np.testing.assert_array_equal(got, expected)
+
+
+def test_req21_full_complex_reduction_is_complex128_scalar():
+    # A full complex reduction collapses to a numpy.complex128 scalar, not a 0-d
+    # complex ndarray. numpy: `type(np.sum([1+2j,3+4j])) is np.complex128`.
+    x = [1 + 2j, 3 + 4j]
+    expected = np.sum(x)  # live oracle (R-CHAR-3)
+    got = fr.sum(x)
+    assert not isinstance(got, np.ndarray)
+    assert type(got) is type(expected) is np.complex128
+    assert got == expected
+
+
+def test_req21_full_complex_mean_is_complex128_scalar():
+    x = [1 + 2j, 3 - 1j]
+    expected = np.mean(x)  # live oracle (R-CHAR-3)
+    got = fr.mean(x)
+    assert not isinstance(got, np.ndarray)
+    assert type(got) is type(expected) is np.complex128
+    np.testing.assert_array_equal(got, expected)
+
+
+def test_req21_axis_reduction_stays_ndarray():
+    # An AXIS reduction that leaves >= 1 dimension must REMAIN an ndarray —
+    # `scalarize` must be a no-op for ndim != 0. numpy:
+    # `fr.sum([[1,2],[3,4]], axis=0) -> array([4, 6])`.
+    x = [[1, 2], [3, 4]]
+    expected = np.sum(x, axis=0)  # live oracle (R-CHAR-3)
+    got = fr.sum(x, axis=0)
+    assert isinstance(got, np.ndarray)
+    assert got.shape == expected.shape == (2,)
+    np.testing.assert_array_equal(got, expected)
+
+
+def test_req21_percentile_scalar_q_is_scalar_axis_q_stays_ndarray():
+    # A scalar-`q` full percentile collapses to a numpy float64 scalar; an axis
+    # percentile (still scalar `q`) leaves >= 1 dim and stays an ndarray.
+    x = [[1.0, 2.0], [3.0, 4.0]]
+    exp_full = np.percentile(x, 50)  # live oracle (R-CHAR-3)
+    got_full = fr.percentile(x, 50)
+    assert not isinstance(got_full, np.ndarray)
+    assert type(got_full) is type(exp_full) is np.float64
+    np.testing.assert_array_equal(got_full, exp_full)
+
+    exp_axis = np.percentile(x, 50, axis=0)  # live oracle (R-CHAR-3)
+    got_axis = fr.percentile(x, 50, axis=0)
+    assert isinstance(got_axis, np.ndarray)
+    assert got_axis.shape == exp_axis.shape == (2,)
+    np.testing.assert_array_equal(got_axis, exp_axis)
