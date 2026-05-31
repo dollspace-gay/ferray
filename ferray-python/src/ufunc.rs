@@ -3065,25 +3065,6 @@ pub fn trapezoid<'py>(
     }))
 }
 
-/// Resolve an `ediff1d` `to_end`/`to_begin` appendage into a flat `Vec<f64>`.
-/// numpy accepts a SCALAR or any array-like and ravels it
-/// (`numpy/lib/_arraysetops_impl.py`: `np.asanyarray(to_end).ravel()`), so a
-/// bare `to_end=99` is valid — the prior `Option<Vec<f64>>` signature rejected
-/// scalars with a `not an instance of Sequence` TypeError. Try the sequence
-/// form first, then fall back to a single scalar.
-fn ediff1d_appendage(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Vec<f64>>> {
-    match obj {
-        None => Ok(None),
-        Some(o) => {
-            if let Ok(v) = o.extract::<Vec<f64>>() {
-                Ok(Some(v))
-            } else {
-                Ok(Some(vec![o.extract::<f64>()?]))
-            }
-        }
-    }
-}
-
 /// `numpy.ediff1d(ary, to_end=None, to_begin=None)` — first differences.
 /// `to_end`/`to_begin` accept a scalar or any array-like (numpy ravels them).
 #[pyfunction]
@@ -3135,14 +3116,31 @@ pub fn ediff1d<'py>(
         }
         return crate::conv::f16_delegate(py, "ediff1d", (&arr,), Some(&kwargs));
     }
-    let to_end = ediff1d_appendage(to_end)?;
-    let to_begin = ediff1d_appendage(to_begin)?;
+    // Appendage present (#1002/#1003): numpy owns the appendage semantics —
+    // `np.asanyarray(x).ravel()` (so an N-D appendage is flattened, #1002) plus
+    // the `np.can_cast(x, ary.dtype, casting="same_kind")` gate that RAISES
+    // TypeError on an incompatible appendage (e.g. a float on an int array, #1003)
+    // (`numpy/lib/_arraysetops_impl.py:98-115`). The prior native path funnelled
+    // every appendage through `Vec<f64>` then cast `as T`, which both rejected
+    // N-D array-likes and silently truncated 0.5 -> 0 (R-CODE-4). Delegate the
+    // whole real-numeric case to numpy when an appendage is supplied, forwarding
+    // the raw `to_end`/`to_begin` objects; keep the native kernel only when both
+    // appendages are absent.
+    if to_end.is_some() || to_begin.is_some() {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(e) = to_end {
+            kwargs.set_item("to_end", e)?;
+        }
+        if let Some(b) = to_begin {
+            kwargs.set_item("to_begin", b)?;
+        }
+        let np = py.import("numpy")?;
+        return np.call_method("ediff1d", (&arr,), Some(&kwargs));
+    }
     Ok(crate::match_dtype_numeric!(dt.as_str(), T => {
         let view: numpy::PyReadonlyArray1<T> = arr.extract()?;
         let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        let end: Option<Vec<T>> = to_end.as_ref().map(|v| v.iter().map(|&x| x as T).collect());
-        let begin: Option<Vec<T>> = to_begin.as_ref().map(|v| v.iter().map(|&x| x as T).collect());
-        let r: Array1<T> = ferray_ufunc::ediff1d(&fa, end.as_deref(), begin.as_deref())
+        let r: Array1<T> = ferray_ufunc::ediff1d(&fa, None, None)
             .map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
