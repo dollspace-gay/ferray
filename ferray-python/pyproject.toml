@@ -33,6 +33,11 @@ Homepage = "https://github.com/dollspace-gay/ferray"
 [tool.maturin]
 module-name = "ferray._ferray"
 python-source = "python"
+# pyo3's `extension-module` is gated behind a Cargo feature (see
+# ferray-python/Cargo.toml `[features]`) so that plain `cargo test
+# --workspace` links libpython instead of leaving CPython symbols
+# unresolved. maturin must turn it back on for every wheel/develop build.
+features = ["extension-module"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

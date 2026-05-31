@@ -14,16 +14,30 @@ publish = false
 
 [lib]
 # Wheel-only crate: only the cdylib gets distributed (loaded by CPython
-# as ferray._ferray). `extension-module` is unconditional because there
-# is no scenario where this crate is consumed as a Rust library — the
-# Python test suite under tests/*.py is the test surface, run with
-# `maturin develop` + pytest. Disabling test/doctest harnesses prevents
-# `cargo test` from trying to link a binary that pulls libpython into
-# the linker line.
+# as ferray._ferray). The Python test suite under tests/*.py is the test
+# surface, run with `maturin develop` + pytest; disabling the test/doctest
+# harnesses keeps `cargo test` from building a binary for this crate.
+#
+# `pyo3/extension-module` is gated behind the `extension-module` feature
+# (below), NOT enabled unconditionally. Reason: pyo3's `extension-module`
+# tells the linker to leave CPython symbols unresolved (the host
+# interpreter provides them at load time). Under `cargo test --workspace`,
+# resolver-v2 feature unification would otherwise spread that flag to every
+# pyo3-linking crate in the graph (e.g. ferray-numpy-interop's `python`
+# test binary), which then fails to link with "undefined symbol:
+# PyUnicode_AsEncodedString". By gating it, plain cargo builds link
+# libpython normally, while `maturin` turns the feature on for wheels via
+# `[tool.maturin] features` in pyproject.toml.
 name = "ferray"
 crate-type = ["cdylib"]
 test = false
 doctest = false
+
+[features]
+# Enabled by maturin for wheel/develop builds (see pyproject.toml
+# `[tool.maturin] features`). Off for plain `cargo build`/`cargo test` so
+# the workspace test graph links libpython instead of deferring symbols.
+extension-module = ["pyo3/extension-module"]
 
 [dependencies]
 ferray = { workspace = true, features = ["full", "numpy", "io"] }
@@ -40,6 +54,6 @@ ferray-stride-tricks = { workspace = true }
 ferray-strings = { workspace = true }
 ferray-ma = { workspace = true }
 ferray-autodiff = { workspace = true }
-pyo3 = { workspace = true, features = ["extension-module"] }
+pyo3 = { workspace = true }
 numpy = { workspace = true }
 num-complex = { workspace = true }
