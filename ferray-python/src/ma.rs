@@ -4190,7 +4190,7 @@ impl PyMaskedArray {
         if let Some(r) = self.reduce_kwargs(py, "prod", axis, dtype, keepdims)? {
             return Ok(r);
         }
-        prod(py, self)
+        prod_full(py, self)
     }
 
     /// `MaskedArray.cumsum([axis, dtype])` — cumulative sum over the masked
@@ -6947,10 +6947,10 @@ pub fn mod_<'py>(
 // Masked reductions (free functions accepting a MaskedArray)
 // ---------------------------------------------------------------------------
 
-/// `numpy.ma.prod(a)` — product of unmasked elements (full reduction).
+/// Full-reduction product of unmasked elements (the no-kwarg fast path shared
+/// by the `MaskedArray.prod` method and the module-level [`prod`] wrapper).
 /// All-masked reduces to the `numpy.ma.masked` singleton.
-#[pyfunction]
-pub fn prod<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
+fn prod_full<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
     if a.all_masked()? {
         return ma_masked_singleton(py);
     }
@@ -6967,6 +6967,27 @@ pub fn prod<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAn
             scalar_pyobject(py, ma_prod_acc(m))
         }, complex => { unreachable_complex_egress() }),
     }
+}
+
+/// `numpy.ma.prod(a, axis=None, dtype=None, out=None, keepdims=<no value>)` —
+/// product of unmasked elements. numpy.ma binds this via `_frommethod('prod')`,
+/// forwarding `axis`/`dtype`/`keepdims` to `MaskedArray.prod`; this wrapper
+/// delegates to the [`PyMaskedArray::prod`] method (which routes the kwargs
+/// through `reduce_kwargs`). `out` is accepted for ABI parity (numpy.ma exposes
+/// it) and ignored when `None` — ferray has no `out=` reduction target and the
+/// common call passes `out=None`.
+#[pyfunction]
+#[pyo3(signature = (a, axis = None, dtype = None, out = None, keepdims = false))]
+pub fn prod<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    dtype: Option<&Bound<'py, PyAny>>,
+    out: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let _ = out;
+    a.prod(py, axis, dtype, keepdims)
 }
 
 /// `numpy.ma.median(a)` — median of unmasked elements. All-masked reduces
@@ -7000,15 +7021,32 @@ pub fn median<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, Py
     Ok(v.into_pyobject(py)?.into_any())
 }
 
-/// `numpy.ma.ptp(a)` — peak-to-peak (max − min) of unmasked elements.
-/// All-masked reduces to the `numpy.ma.masked` singleton.
+/// `numpy.ma.ptp(obj, axis=None, out=None, fill_value=None, keepdims=<no
+/// value>)` — peak-to-peak (max − min) of unmasked elements. numpy.ma binds
+/// this via `_frommethod('ptp')`, forwarding `axis`/`keepdims` to
+/// `MaskedArray.ptp`. With no `axis` the wrapper keeps the dtype-preserving
+/// native full reduction; with `axis=` it delegates to the [`PyMaskedArray::ptp`]
+/// method (which routes through numpy.ma). `out`/`fill_value` are accepted for
+/// ABI parity (numpy.ma exposes them) and ignored when `None`.
 #[pyfunction]
-pub fn ptp<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    if a.all_masked()? {
-        return ma_masked_singleton(py);
+#[pyo3(signature = (a, axis = None, out = None, fill_value = None, keepdims = false))]
+pub fn ptp<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    out: Option<&Bound<'py, PyAny>>,
+    fill_value: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let _ = (out, fill_value, keepdims);
+    if axis.is_none() {
+        if a.all_masked()? {
+            return ma_masked_singleton(py);
+        }
+        let v = a.to_f64_ma()?.ptp().map_err(ferr_to_pyerr)?;
+        return Ok(v.into_pyobject(py)?.into_any());
     }
-    let v = a.to_f64_ma()?.ptp().map_err(ferr_to_pyerr)?;
-    Ok(v.into_pyobject(py)?.into_any())
+    a.ptp(py, axis)
 }
 
 /// `numpy.ma.argmin(a, axis=None, fill_value=None, *, keepdims=...)` — index of
@@ -7067,10 +7105,29 @@ pub fn argmax<'py>(
     a.as_numpy_ma(py)?.call_method("argmax", (), Some(&kwargs))
 }
 
-/// `numpy.ma.count(a)` — number of unmasked elements.
+/// `numpy.ma.count(a, axis=None, keepdims=<no value>)` — number of unmasked
+/// elements. numpy.ma binds this via `_frommethod('count')`, forwarding
+/// `axis`/`keepdims` to `MaskedArray.count`; this wrapper delegates to the
+/// [`PyMaskedArray::count`] method (full-reduction count for `axis=None`, a
+/// per-axis count ndarray for `axis=`). `keepdims` is accepted for ABI parity
+/// and forwarded to numpy.ma when set (numpy.ma's `count` honors it).
 #[pyfunction]
-pub fn count(a: &PyMaskedArray) -> PyResult<usize> {
-    a.snapshot_gil()?.count()
+#[pyo3(signature = (a, axis = None, keepdims = None))]
+pub fn count<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    keepdims: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(kd) = keepdims {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        kwargs.set_item("keepdims", kd)?;
+        return a.as_numpy_ma(py)?.call_method("count", (), Some(&kwargs));
+    }
+    a.count(py, axis)
 }
 
 /// `numpy.ma.average(a, weights=None)` — weighted average over unmasked
@@ -7096,27 +7153,41 @@ pub fn average<'py>(
     Ok(v.into_pyobject(py)?.into_any())
 }
 
-/// `numpy.ma.all(a)` — true iff every unmasked element is truthy
-/// (non-zero). Masked elements are ignored (numpy treats `masked` as
-/// `True` for `all`).
+/// `numpy.ma.all(a, axis=None, out=None, keepdims=<no value>)` — true iff every
+/// unmasked element is truthy (non-zero); masked elements are ignored (numpy
+/// treats `masked` as `True` for `all`). numpy.ma binds this via
+/// `_frommethod('all')`, forwarding `axis`/`keepdims` to `MaskedArray.all`; this
+/// wrapper delegates to the [`PyMaskedArray::all`] method (#892), which routes
+/// through numpy.ma — a numpy bool scalar for `axis=None`, a `MaskedArray` per
+/// axis. `out` is accepted for ABI parity and ignored when `None`.
 #[pyfunction]
-pub fn all(a: &PyMaskedArray) -> PyResult<bool> {
-    let m = a.to_f64_ma()?;
-    let data = fma::getdata(&m).map_err(ferr_to_pyerr)?;
-    let mask = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
-    Ok(data.iter().zip(mask.iter()).all(|(&v, &mk)| mk || v != 0.0))
+#[pyo3(signature = (a, axis = None, out = None, keepdims = false))]
+pub fn all<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    out: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let _ = out;
+    a.all(py, axis, keepdims)
 }
 
-/// `numpy.ma.any(a)` — true iff at least one unmasked element is truthy.
+/// `numpy.ma.any(a, axis=None, out=None, keepdims=<no value>)` — true iff at
+/// least one unmasked element is truthy. Same `_frommethod` delegation as
+/// [`all`]; forwards to the [`PyMaskedArray::any`] method (#892). `out` accepted
+/// for ABI parity, ignored when `None`.
 #[pyfunction]
-pub fn any(a: &PyMaskedArray) -> PyResult<bool> {
-    let m = a.to_f64_ma()?;
-    let data = fma::getdata(&m).map_err(ferr_to_pyerr)?;
-    let mask = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?;
-    Ok(data
-        .iter()
-        .zip(mask.iter())
-        .any(|(&v, &mk)| !mk && v != 0.0))
+#[pyo3(signature = (a, axis = None, out = None, keepdims = false))]
+pub fn any<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    out: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let _ = out;
+    a.any(py, axis, keepdims)
 }
 
 /// `numpy.ma.anom(a)` — deviations from the unmasked mean (a.k.a.
@@ -9235,41 +9306,119 @@ pub fn angle<'py>(py: Python<'py>, z: &Bound<'py, PyAny>, deg: bool) -> PyResult
 // Reduction free-functions + aliases mirroring the MaskedArray methods
 // ---------------------------------------------------------------------------
 
-/// `numpy.ma.max(a)` / `amax(a)` — maximum unmasked element. All-masked
-/// reduces to the `numpy.ma.masked` singleton.
+/// `numpy.ma.max(obj, axis=None, out=None, fill_value=None, keepdims=<no
+/// value>)` / `amax` — maximum unmasked element. numpy.ma binds this via
+/// `_frommethod('max')`, forwarding `axis`/`keepdims` to `MaskedArray.max`; this
+/// wrapper delegates to the [`PyMaskedArray::max`] method. `out`/`fill_value`
+/// are accepted for ABI parity (numpy.ma exposes them) and ignored when `None`.
 #[pyfunction]
-pub fn max<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.max(py, None, false)
+#[pyo3(signature = (a, axis = None, out = None, fill_value = None, keepdims = false))]
+pub fn max<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    out: Option<&Bound<'py, PyAny>>,
+    fill_value: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let _ = (out, fill_value);
+    a.max(py, axis, keepdims)
 }
 
-/// `numpy.ma.min(a)` / `amin(a)` — minimum unmasked element.
+/// `numpy.ma.min(obj, axis=None, out=None, fill_value=None, keepdims=<no
+/// value>)` / `amin` — minimum unmasked element. Same `_frommethod` delegation
+/// as [`max`]; forwards to the [`PyMaskedArray::min`] method. `out`/`fill_value`
+/// accepted for ABI parity, ignored when `None`.
 #[pyfunction]
-pub fn min<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.min(py, None, false)
+#[pyo3(signature = (a, axis = None, out = None, fill_value = None, keepdims = false))]
+pub fn min<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    out: Option<&Bound<'py, PyAny>>,
+    fill_value: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let _ = (out, fill_value);
+    a.min(py, axis, keepdims)
 }
 
-/// `numpy.ma.sum(a)` — sum of unmasked elements.
+/// `numpy.ma.sum(a, axis=None, dtype=None, out=None, keepdims=<no value>)` — sum
+/// of unmasked elements. numpy.ma binds this via `_frommethod('sum')`,
+/// forwarding `axis`/`dtype`/`keepdims` to `MaskedArray.sum`; this wrapper
+/// delegates to the [`PyMaskedArray::sum`] method (the no-kwarg path keeps the
+/// dtype-preserving native reduction, #858). `out` accepted for ABI parity,
+/// ignored when `None`.
 #[pyfunction]
-pub fn sum<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.sum(py, None, None, false)
+#[pyo3(signature = (a, axis = None, dtype = None, out = None, keepdims = false))]
+pub fn sum<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    dtype: Option<&Bound<'py, PyAny>>,
+    out: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let _ = out;
+    a.sum(py, axis, dtype, keepdims)
 }
 
-/// `numpy.ma.mean(a)` — mean of unmasked elements.
+/// `numpy.ma.mean(a, axis=None, dtype=None, out=None, keepdims=<no value>)` —
+/// mean of unmasked elements. Same `_frommethod` delegation as [`sum`]; forwards
+/// to the [`PyMaskedArray::mean`] method. `out` accepted for ABI parity, ignored
+/// when `None`.
 #[pyfunction]
-pub fn mean<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.mean(py, None, None, false)
+#[pyo3(signature = (a, axis = None, dtype = None, out = None, keepdims = false))]
+pub fn mean<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    dtype: Option<&Bound<'py, PyAny>>,
+    out: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let _ = out;
+    a.mean(py, axis, dtype, keepdims)
 }
 
-/// `numpy.ma.std(a)` — standard deviation of unmasked elements.
+/// `numpy.ma.std(a, axis=None, dtype=None, out=None, ddof=0, keepdims=<no
+/// value>, mean=<no value>)` — standard deviation of unmasked elements. numpy.ma
+/// binds this via `_frommethod('std')`, forwarding `axis`/`dtype`/`ddof`/
+/// `keepdims` to `MaskedArray.std`; this wrapper delegates to the
+/// [`PyMaskedArray::std`] method. `out` accepted for ABI parity, ignored when
+/// `None`.
 #[pyfunction]
-pub fn std<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.std(py, None, None, 0, false)
+#[pyo3(signature = (a, axis = None, dtype = None, out = None, ddof = 0, keepdims = false))]
+pub fn std<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    dtype: Option<&Bound<'py, PyAny>>,
+    out: Option<&Bound<'py, PyAny>>,
+    ddof: i64,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let _ = out;
+    a.std(py, axis, dtype, ddof, keepdims)
 }
 
-/// `numpy.ma.var(a)` — variance of unmasked elements.
+/// `numpy.ma.var(a, axis=None, dtype=None, out=None, ddof=0, keepdims=<no
+/// value>, mean=<no value>)` — variance of unmasked elements. Same
+/// `_frommethod` delegation as [`std`]; forwards to the [`PyMaskedArray::var`]
+/// method. `out` accepted for ABI parity, ignored when `None`.
 #[pyfunction]
-pub fn var<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.var(py, None, None, 0, false)
+#[pyo3(signature = (a, axis = None, dtype = None, out = None, ddof = 0, keepdims = false))]
+pub fn var<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    dtype: Option<&Bound<'py, PyAny>>,
+    out: Option<&Bound<'py, PyAny>>,
+    ddof: i64,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let _ = out;
+    a.var(py, axis, dtype, ddof, keepdims)
 }
 
 /// `numpy.ma.anomalies(a)` — alias of [`anom`] (deviation from the unmasked
