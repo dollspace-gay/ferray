@@ -76,10 +76,12 @@ where
     Complex<T>: Element,
     D: Dimension,
 {
-    let data: Vec<T> = input
-        .iter()
-        .map(|c| (c.re * c.re + c.im * c.im).sqrt())
-        .collect();
+    // Use C99 overflow-safe hypot (== numpy's npy_cabs/npy_hypot) instead of
+    // the naive `(re*re + im*im).sqrt()`, which overflows for large magnitudes,
+    // underflows for tiny ones, and yields NaN where C99 hypot yields +inf
+    // (hypot(inf, x) == inf for any x, including NaN). `Float::hypot` delegates
+    // to the std/libm hypot, matching numpy bit-for-bit on these edge cases.
+    let data: Vec<T> = input.iter().map(|c| c.re.hypot(c.im)).collect();
     Array::from_vec(input.dim().clone(), data)
 }
 
