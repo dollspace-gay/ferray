@@ -249,3 +249,149 @@ def test_fft_accepts_out_kwarg():
     got = np.asarray(ret)
     assert got.shape == expected.shape
     np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+# ===========================================================================
+# 10. The ``out=`` kwarg is part of the PUBLIC ABI of EVERY fft transform,
+#     not just fft/ifft.  [NEW — acto-critic re-audit, tracking #1016]
+#
+# numpy/fft/_pocketfft.py — every transform signature carries out=None:
+#     rfft   (a, n=None, axis=-1, norm=None, out=None)   :325
+#     irfft  (a, n=None, axis=-1, norm=None, out=None)   :422
+#     hfft   (a, n=None, axis=-1, norm=None, out=None)   :530
+#     ihfft  (a, n=None, axis=-1, norm=None, out=None)   :633
+#     fftn   (a, s=None, axes=None, norm=None, out=None) :756
+#     ifftn  (a, s=None, axes=None, norm=None, out=None) :888
+#     fft2   (a, s=None, axes=(-2,-1), norm=None, out=None)   :1020
+#     ifft2  (a, s=None, axes=(-2,-1), norm=None, out=None)   :1145
+#     rfftn  (a, s=None, axes=None, norm=None, out=None) :1267
+#     rfft2  (a, s=None, axes=(-2,-1), norm=None, out=None)   :1394
+#     irfftn (a, s=None, axes=None, norm=None, out=None) :1474
+#     irfft2 (a, s=None, axes=(-2,-1), norm=None, out=None)   :1613
+#
+# ferray-python/src/fft.rs binds out= ONLY on fft (line 187) and ifft (line
+# 222). The 12 nd/real/hermitian #[pyfunction]s omit it, so passing out=
+# raises TypeError ("got an unexpected keyword argument 'out'") at the PyO3
+# boundary, where numpy accepts it. Expected (RED) result values come from a
+# live numpy call (R-CHAR-3), compared with the no-out plain call.
+# ===========================================================================
+
+
+def _vec_real():
+    return np.array([1.0, 2.0, 3.0, 4.0])
+
+
+def _vec_cplx():
+    return np.array([1 + 1j, 2 + 0j, 3 - 1j, 4 + 2j])
+
+
+def _mat_real():
+    return np.arange(12.0).reshape(3, 4)
+
+
+def test_rfft_accepts_out_kwarg():
+    """numpy _pocketfft.py:325 — rfft(a, out=...) writes into & returns out."""
+    a = _vec_real()
+    expected = np.fft.rfft(a)  # live oracle
+    out = np.empty(expected.shape, dtype=np.complex128)
+    got = np.asarray(fr.fft.rfft(a, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_irfft_accepts_out_kwarg():
+    """numpy _pocketfft.py:422 — irfft(a, out=...) writes into & returns out."""
+    ca = _vec_cplx()
+    expected = np.fft.irfft(ca)  # live oracle
+    out = np.empty(expected.shape, dtype=np.float64)
+    got = np.asarray(fr.fft.irfft(ca, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_hfft_accepts_out_kwarg():
+    """numpy _pocketfft.py:530 — hfft(a, out=...) writes into & returns out."""
+    ca = _vec_cplx()
+    expected = np.fft.hfft(ca)  # live oracle
+    out = np.empty(expected.shape, dtype=np.float64)
+    got = np.asarray(fr.fft.hfft(ca, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_ihfft_accepts_out_kwarg():
+    """numpy _pocketfft.py:633 — ihfft(a, out=...) writes into & returns out."""
+    a = _vec_real()
+    expected = np.fft.ihfft(a)  # live oracle
+    out = np.empty(expected.shape, dtype=np.complex128)
+    got = np.asarray(fr.fft.ihfft(a, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_fftn_accepts_out_kwarg():
+    """numpy _pocketfft.py:756 — fftn(a, out=...) writes into & returns out."""
+    a = _vec_real()
+    expected = np.fft.fftn(a)  # live oracle
+    out = np.empty(expected.shape, dtype=np.complex128)
+    got = np.asarray(fr.fft.fftn(a, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_ifftn_accepts_out_kwarg():
+    """numpy _pocketfft.py:888 — ifftn(a, out=...) writes into & returns out."""
+    a = _vec_real()
+    expected = np.fft.ifftn(a)  # live oracle
+    out = np.empty(expected.shape, dtype=np.complex128)
+    got = np.asarray(fr.fft.ifftn(a, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_fft2_accepts_out_kwarg():
+    """numpy _pocketfft.py:1020 — fft2(a, out=...) writes into & returns out."""
+    m = _mat_real()
+    expected = np.fft.fft2(m)  # live oracle
+    out = np.empty(expected.shape, dtype=np.complex128)
+    got = np.asarray(fr.fft.fft2(m, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_ifft2_accepts_out_kwarg():
+    """numpy _pocketfft.py:1145 — ifft2(a, out=...) writes into & returns out."""
+    m = _mat_real()
+    expected = np.fft.ifft2(m)  # live oracle
+    out = np.empty(expected.shape, dtype=np.complex128)
+    got = np.asarray(fr.fft.ifft2(m, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_rfft2_accepts_out_kwarg():
+    """numpy _pocketfft.py:1394 — rfft2(a, out=...) writes into & returns out."""
+    m = _mat_real()
+    expected = np.fft.rfft2(m)  # live oracle
+    out = np.empty(expected.shape, dtype=np.complex128)
+    got = np.asarray(fr.fft.rfft2(m, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_irfft2_accepts_out_kwarg():
+    """numpy _pocketfft.py:1613 — irfft2(a, out=...) writes into & returns out."""
+    cm = _mat_real() + 0j
+    expected = np.fft.irfft2(cm)  # live oracle
+    out = np.empty(expected.shape, dtype=np.float64)
+    got = np.asarray(fr.fft.irfft2(cm, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_rfftn_accepts_out_kwarg():
+    """numpy _pocketfft.py:1267 — rfftn(a, out=...) writes into & returns out."""
+    m = _mat_real()
+    expected = np.fft.rfftn(m)  # live oracle
+    out = np.empty(expected.shape, dtype=np.complex128)
+    got = np.asarray(fr.fft.rfftn(m, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
+
+
+def test_irfftn_accepts_out_kwarg():
+    """numpy _pocketfft.py:1474 — irfftn(a, out=...) writes into & returns out."""
+    cm = _mat_real() + 0j
+    expected = np.fft.irfftn(cm)  # live oracle
+    out = np.empty(expected.shape, dtype=np.float64)
+    got = np.asarray(fr.fft.irfftn(cm, out=out))
+    np.testing.assert_allclose(got, expected, atol=1e-10)
