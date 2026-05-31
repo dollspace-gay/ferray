@@ -382,3 +382,101 @@ def test_masked_array_has_dot_method():
     np.testing.assert_array_equal(oracle, np.array([[7.0, 10.0], [15.0, 22.0]]))
     got = fr.ma.masked_array(data).dot(fr.ma.masked_array(data)).filled(-99.0)
     np.testing.assert_array_equal(np.asarray(got), oracle)
+
+
+# ---------------------------------------------------------------------------
+# 18. ma.corrcoef of a 1-D input reduces to the masked singleton, shape ().
+#     numpy/ma/extras.py def corrcoef -> wraps numpy.corrcoef; a 1-D input
+#     yields a 0-d masked result (np.ma.masked). ferray returns [[1.]] (1,1).
+# ---------------------------------------------------------------------------
+
+
+def test_corrcoef_1d_is_masked_singleton():
+    oracle = np.ma.corrcoef([1.0, 2.0, 3.0, 4.0])
+    # Non-tautology: numpy's 1-D corrcoef is the masked singleton, shape ().
+    assert oracle is np.ma.masked
+    assert np.asarray(oracle).shape == ()
+    got = fr.ma.corrcoef([1.0, 2.0, 3.0, 4.0])
+    assert got is fr.ma.masked, f"expected masked singleton, got {got!r}"
+
+
+# ---------------------------------------------------------------------------
+# 19. ma.cov of a 1-D input is a 0-d scalar (shape ()), matching numpy.cov.
+#     numpy/ma/extras.py def cov -> numpy.cov; 1-D -> scalar variance.
+#     ferray returns a (1,1) 2-D array.
+# ---------------------------------------------------------------------------
+
+
+def test_cov_1d_is_scalar_shape():
+    oracle = np.ma.cov(np.ma.masked_array([1.0, 2.0, 3.0, 4.0]))
+    # Non-tautology: numpy's 1-D cov is a 0-d scalar variance, shape ().
+    assert np.asarray(oracle).shape == ()
+    assert float(oracle) == 1.6666666666666667
+    got = fr.ma.cov(fr.ma.masked_array(np.array([1.0, 2.0, 3.0, 4.0])))
+    assert np.asarray(got).shape == np.asarray(oracle).shape, (
+        f"expected scalar shape {np.asarray(oracle).shape}, got {np.asarray(got).shape}"
+    )
+    np.testing.assert_allclose(np.asarray(got), np.asarray(oracle))
+
+
+# ---------------------------------------------------------------------------
+# 20. ma.notmasked_edges with an explicit axis on a 2-D array returns the
+#     first/last unmasked index pairs per slice.
+#     numpy/ma/extras.py def notmasked_edges(a, axis=None) -> apply_along_axis
+#     of flatnotmasked_edges. ferray raises ValueError (acknowledged #835 gap).
+# ---------------------------------------------------------------------------
+
+
+def test_notmasked_edges_2d_axis():
+    data = np.array([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]])
+    mask = np.array([[0, 1, 0, 0], [0, 0, 1, 1]], dtype=bool)
+    oracle = np.ma.notmasked_edges(np.ma.masked_array(data, mask=mask), axis=1)
+    # Non-tautology: oracle is a 2-element list of (row, col) index arrays.
+    assert len(oracle) == 2
+    np.testing.assert_array_equal(np.asarray(oracle[0][1]), np.array([0, 0]))
+    np.testing.assert_array_equal(np.asarray(oracle[1][1]), np.array([3, 1]))
+    got = fr.ma.notmasked_edges(fr.ma.masked_array(data, mask=mask), axis=1)
+    assert len(got) == len(oracle)
+    np.testing.assert_array_equal(np.asarray(got[0][1]), np.asarray(oracle[0][1]))
+    np.testing.assert_array_equal(np.asarray(got[1][1]), np.asarray(oracle[1][1]))
+
+
+# ---------------------------------------------------------------------------
+# 21. ma.median accepts an `axis` argument (per-slice median).
+#     numpy/ma/extras.py def median(a, axis=None, ...). ferray's median()
+#     signature omits axis entirely (TypeError: unexpected keyword 'axis').
+# ---------------------------------------------------------------------------
+
+
+def test_median_axis_kwarg():
+    data = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    mask = np.array([[0, 1, 0], [0, 0, 1]], dtype=bool)
+    oracle = np.ma.median(np.ma.masked_array(data, mask=mask), axis=1)
+    # Non-tautology: row0 unmasked {1,3}->2.0; row1 unmasked {4,5}->4.5.
+    np.testing.assert_array_equal(np.asarray(oracle), np.array([2.0, 4.5]))
+    got = fr.ma.median(fr.ma.masked_array(data, mask=mask), axis=1)
+    np.testing.assert_array_equal(np.asarray(got), np.asarray(oracle))
+
+
+# ---------------------------------------------------------------------------
+# 22. ma.average accepts the `returned=True` kwarg, yielding
+#     (average, sum_of_weights). numpy/ma/extras.py def average(a, axis=None,
+#     weights=None, returned=False, ...). ferray's average() omits `returned`.
+# ---------------------------------------------------------------------------
+
+
+def test_average_returned_kwarg():
+    data = np.array([1.0, 2.0, 3.0, 4.0])
+    mask = np.array([0, 0, 0, 1], dtype=bool)
+    weights = [1.0, 2.0, 3.0, 4.0]
+    avg_o, wsum_o = np.ma.average(
+        np.ma.masked_array(data, mask=mask), weights=weights, returned=True
+    )
+    # Non-tautology: weighted mean over unmasked {1,2,3} w {1,2,3}; wsum=6.
+    assert float(avg_o) == 2.3333333333333335
+    assert float(wsum_o) == 6.0
+    avg_g, wsum_g = fr.ma.average(
+        fr.ma.masked_array(data, mask=mask), weights=weights, returned=True
+    )
+    np.testing.assert_allclose(float(avg_g), float(avg_o))
+    np.testing.assert_allclose(float(wsum_g), float(wsum_o))
