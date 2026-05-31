@@ -330,3 +330,48 @@ def test_interp_basic_unchanged():
         ferray.interp([1.5, 2.5], [1, 2, 3], [10, 20, 30]),
         np.interp([1.5, 2.5], [1, 2, 3], [10, 20, 30]),
     )
+
+
+# ---------------------------------------------------------------------------
+# fmax/fmin integer dtype preservation (#987)
+# ---------------------------------------------------------------------------
+# numpy.fmax/fmin have integer loops and keep the promoted integer dtype (for
+# non-NaN ints they equal maximum/minimum). The prior float-promote binding
+# upcast int -> float64.
+
+
+def test_fmax_int_preserves_dtype():
+    r = ferray.fmax([1, 5, 3], [4, 2, 6])
+    n = np.fmax([1, 5, 3], [4, 2, 6])
+    assert np.asarray(r).dtype == n.dtype == np.int64
+    np.testing.assert_array_equal(r, n)
+
+
+def test_fmin_int_preserves_dtype():
+    r = ferray.fmin([1, 5, 3], [4, 2, 6])
+    n = np.fmin([1, 5, 3], [4, 2, 6])
+    assert np.asarray(r).dtype == n.dtype == np.int64
+    np.testing.assert_array_equal(r, n)
+
+
+def test_fmax_uint8_preserved():
+    a = np.array([1, 5], np.uint8)
+    b = np.array([3, 2], np.uint8)
+    assert np.asarray(ferray.fmax(a, b)).dtype == np.uint8
+
+
+def test_fmax_float_nan_suppress_unchanged():
+    np.testing.assert_array_equal(
+        ferray.fmax([1.0, np.nan, 3], [np.nan, 2, np.nan]),
+        np.fmax([1.0, np.nan, 3], [np.nan, 2, np.nan]),
+    )
+
+
+def test_fmax_mixed_int_float_promotes():
+    assert np.asarray(ferray.fmax([1, 5], [4.0, 2])).dtype == np.float64
+
+
+def test_fmax_complex_preserved():
+    r = ferray.fmax([1 + 1j, 2], [3, 1 + 5j])
+    assert np.asarray(r).dtype == np.complex128
+    np.testing.assert_array_equal(r, np.fmax([1 + 1j, 2], [3, 1 + 5j]))

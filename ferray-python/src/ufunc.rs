@@ -609,6 +609,22 @@ fn binary_is_complex(py: Python<'_>, a: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>)
     ))
 }
 
+/// `true` if BOTH operands have an integer / unsigned / bool dtype
+/// (`dtype.kind ∈ {i, u, b}`). Used by `fmax`/`fmin` to keep numpy's integer
+/// result (their float-promote body would upcast int -> float64).
+fn binary_both_integer(
+    py: Python<'_>,
+    a: &Bound<'_, PyAny>,
+    b: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
+    let kind = |o: &Bound<'_, PyAny>| -> PyResult<bool> {
+        let arr = as_ndarray(py, o)?;
+        let k: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+        Ok(matches!(k.as_str(), "i" | "u" | "b"))
+    };
+    Ok(kind(a)? && kind(b)?)
+}
+
 /// Broadcast both operands to a common shape and coerce both to the common
 /// complex dtype (`result_type`, then `broadcast_arrays`), returning the two
 /// numpy ndarrays plus the resolved complex dtype name. Centralizes the
@@ -1993,6 +2009,15 @@ macro_rules! bind_binary_float_promote {
             x1: &Bound<'py, PyAny>,
             x2: &Bound<'py, PyAny>,
         ) -> PyResult<Bound<'py, PyAny>> {
+            // Integer/bool operands: numpy's `fmax`/`fmin` have integer loops and
+            // KEEP the promoted integer dtype (for non-NaN-capable ints they equal
+            // `maximum`/`minimum`). The float-promote body below would upcast to
+            // float64, so delegate the all-integer case to numpy, which returns
+            // the correct int result (and the right scalar-vs-array shape).
+            if binary_both_integer(py, x1, x2)? {
+                let np = py.import("numpy")?;
+                return np.call_method1(stringify!($name), (x1, x2));
+            }
             let scalar = all_scalar_inputs(py, &[x1, x2])?;
             let out = if binary_is_complex(py, x1, x2)? {
                 complex_minmax_dispatch(py, x1, x2, $want_max, false)?
