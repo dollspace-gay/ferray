@@ -323,6 +323,444 @@ pub fn subtract_time<'py>(
 }
 
 // ---------------------------------------------------------------------------
+// datetime64 / timedelta64 reductions (REQ-4, #944)
+//
+// Prior to this build the `stats.rs` reduction dispatch was real-only and a
+// datetime/timedelta input took one of two divergent paths, both verified live
+// (numpy 2.4.5):
+//
+//   * `mean`/`std`/`var` coerced the input to `float64` ahead of the float
+//     dispatch, SILENTLY dropping the datetime/timedelta contract and returning
+//     a bare float — `fr.mean(datetime64) -> array(18268.5)`, `fr.std(td) ->
+//     0.5`. numpy RAISES for both (`mean(dt)`/`std(td)` are undefined). This is
+//     the R-CODE-4 boundary corruption REQ-4 eliminates.
+//   * `sum`/`min`/`max`/`ptp`/`argmin`/`argmax`/`cumsum` hit the numeric/
+//     orderable macros with no `M`/`m` arm and raised a ferray-side `TypeError`
+//     where numpy COMPUTES (e.g. `sum(td)`, `min(dt)`, `ptp(dt)`).
+//
+// The compute-vs-raise contract, derived LIVE from numpy 2.4.5 (R-CHAR-3):
+//
+//   timedelta64 (m):  sum -> timedelta, mean -> timedelta (int64 trunc-toward-
+//                     zero of sum/n), min/max -> timedelta, ptp -> timedelta,
+//                     cumsum -> timedelta, argmin/argmax -> int64;
+//                     std/var -> RAISE TypeError ("ufunc 'square' not
+//                     supported"); prod -> RAISE UFuncTypeError ('multiply').
+//   datetime64  (M):  min/max -> datetime, ptp -> timedelta (max-min),
+//                     argmin/argmax -> int64;
+//                     sum/mean/std/var/cumsum -> RAISE UFuncTypeError
+//                     ('add'/'multiply' cannot use two datetimes); prod -> RAISE.
+//
+// All compute paths run over the int64 ticks (the existing `.view('int64')`
+// transport, #831), NaT (`i64::MIN`) propagating: any NaT operand makes
+// sum/mean/min/max/ptp/cumsum produce NaT (verified live), and makes
+// argmin/argmax return the FIRST NaT index (numpy treats NaT as both the min
+// AND the max winner — `argmin`/`argmax` of a NaT-containing array both return
+// the first NaT index, live). The RAISE cases delegate the reduction to numpy
+// on the original array so numpy's EXACT exception type + message surface
+// (R-DEV-2), instead of fabricating a value.
+// ---------------------------------------------------------------------------
+
+/// Which reduction a `time_reduce` call performs. Mirrors the `stats.rs`
+/// `#[pyfunction]` surface that carries an `M`/`m` arm.
+#[derive(Clone, Copy)]
+pub enum TimeReduce {
+    Sum,
+    Mean,
+    Min,
+    Max,
+    Ptp,
+    Cumsum,
+    Argmin,
+    Argmax,
+    Std,
+    Var,
+    Prod,
+}
+
+impl TimeReduce {
+    /// The numpy top-level function name this reduction delegates to when the
+    /// (kind, op) pair is one numpy RAISES on — so numpy raises its own exact
+    /// `UFuncTypeError`/`TypeError` (R-DEV-2).
+    fn numpy_name(self) -> &'static str {
+        match self {
+            TimeReduce::Sum => "sum",
+            TimeReduce::Mean => "mean",
+            TimeReduce::Min => "min",
+            TimeReduce::Max => "max",
+            TimeReduce::Ptp => "ptp",
+            TimeReduce::Cumsum => "cumsum",
+            TimeReduce::Argmin => "argmin",
+            TimeReduce::Argmax => "argmax",
+            TimeReduce::Std => "std",
+            TimeReduce::Var => "var",
+            TimeReduce::Prod => "prod",
+        }
+    }
+}
+
+/// Returns `true` if `arr` is a datetime64 / timedelta64 ndarray, so the
+/// `stats.rs` reduction `#[pyfunction]`s can branch to [`time_reduce`] ahead of
+/// their real-only dispatch macros.
+pub fn is_time_array(arr: &Bound<'_, PyAny>) -> PyResult<bool> {
+    Ok(time_kind(arr)?.is_some())
+}
+
+/// Delegate a reduction to numpy on the original array so numpy raises its own
+/// exact exception (`UFuncTypeError`/`TypeError`) for an op it does not define
+/// over the dtype. If numpy unexpectedly does NOT raise, the (computed) result
+/// is returned — but every `delegate_to_numpy` call site below is a (kind, op)
+/// pair verified live to raise, so this is the exact-exception path (R-DEV-2).
+fn delegate_to_numpy<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    kind: TimeReduce,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    if let Some(ax) = axis {
+        kwargs.set_item("axis", ax)?;
+    }
+    np.call_method(kind.numpy_name(), (arr,), Some(&kwargs))
+}
+
+/// Reduce the flat int64 tick buffer of one lane, NaT (`i64::MIN`)
+/// propagating, into a single int64 tick (NaT-result for the propagating
+/// reductions). `which` selects sum / min / max. Empty min/max return `None`
+/// (the caller raises ValueError, matching numpy's empty-min/max). Empty sum
+/// returns `Some(0)` (numpy: `sum([],timedelta)==0`).
+fn lane_reduce_i64(vals: &[i64], which: TimeReduce) -> Option<i64> {
+    let any_nat = vals.contains(&NAT);
+    match which {
+        TimeReduce::Sum => {
+            if any_nat {
+                return Some(NAT);
+            }
+            // Wrapping add mirrors numpy's int64 tick accumulation (overflow
+            // wraps, as numpy's datetime64 arithmetic does).
+            Some(vals.iter().fold(0i64, |acc, &v| acc.wrapping_add(v)))
+        }
+        TimeReduce::Mean => {
+            if any_nat {
+                return Some(NAT);
+            }
+            let n = vals.len();
+            if n == 0 {
+                // numpy mean of an empty timedelta raises (handled by caller).
+                return None;
+            }
+            let s = vals.iter().fold(0i64, |acc, &v| acc.wrapping_add(v));
+            // numpy timedelta mean truncates toward zero (`-7/3 -> -2`,
+            // `5/3 -> 1`), which is exactly Rust's integer `/` (verified live).
+            Some(s / n as i64)
+        }
+        TimeReduce::Min => {
+            if vals.is_empty() {
+                return None;
+            }
+            if any_nat {
+                return Some(NAT);
+            }
+            Some(*vals.iter().min().unwrap_or(&NAT))
+        }
+        TimeReduce::Max => {
+            if vals.is_empty() {
+                return None;
+            }
+            if any_nat {
+                return Some(NAT);
+            }
+            Some(*vals.iter().max().unwrap_or(&NAT))
+        }
+        TimeReduce::Ptp => {
+            if vals.is_empty() {
+                return None;
+            }
+            if any_nat {
+                return Some(NAT);
+            }
+            let lo = *vals.iter().min().unwrap_or(&NAT);
+            let hi = *vals.iter().max().unwrap_or(&NAT);
+            Some(hi.wrapping_sub(lo))
+        }
+        _ => None,
+    }
+}
+
+/// Index of the first NaT (`i64::MIN`) in a lane, if any — numpy's
+/// argmin/argmax both return the first NaT index when a NaT is present (live).
+fn first_nat(vals: &[i64]) -> Option<usize> {
+    vals.iter().position(|&v| v == NAT)
+}
+
+/// argmin / argmax of a non-empty int64 lane, NaT first-occurrence winning
+/// (numpy: a NaT-containing lane returns the FIRST NaT index for BOTH argmin
+/// and argmax, live). With no NaT, first-occurrence min/max index.
+fn lane_arg(vals: &[i64], want_max: bool) -> usize {
+    if let Some(i) = first_nat(vals) {
+        return i;
+    }
+    let mut best = 0usize;
+    for (i, &v) in vals.iter().enumerate().skip(1) {
+        let better = if want_max {
+            v > vals[best]
+        } else {
+            v < vals[best]
+        };
+        if better {
+            best = i;
+        }
+    }
+    best
+}
+
+/// Row-major strides for a shape.
+fn row_major_strides(shape: &[usize]) -> Vec<usize> {
+    let ndim = shape.len();
+    let mut strides = vec![1usize; ndim];
+    for d in (0..ndim.saturating_sub(1)).rev() {
+        strides[d] = strides[d + 1] * shape[d + 1];
+    }
+    strides
+}
+
+/// Walk every output coordinate of an axis reduction over a flat row-major i64
+/// buffer, returning `(out_shape, per_lane_results)`.
+fn axis_lanes_i64<R>(
+    flat: &[i64],
+    shape: &[usize],
+    ax: usize,
+    mut f: impl FnMut(&[i64]) -> R,
+) -> PyResult<(Vec<usize>, Vec<R>)> {
+    let ndim = shape.len();
+    if ax >= ndim {
+        return Err(PyValueError::new_err(
+            "axis out of bounds for time reduction",
+        ));
+    }
+    let out_shape: Vec<usize> = shape
+        .iter()
+        .enumerate()
+        .filter_map(|(d, &s)| if d == ax { None } else { Some(s) })
+        .collect();
+    let axis_len = shape[ax];
+    let strides = row_major_strides(shape);
+    let out_dims: Vec<usize> = (0..ndim).filter(|&d| d != ax).collect();
+    let out_extents: Vec<usize> = out_dims.iter().map(|&d| shape[d]).collect();
+    let out_n: usize = out_extents.iter().product::<usize>().max(1);
+    let mut results: Vec<R> = Vec::with_capacity(out_n);
+    for lin in 0..out_n {
+        let mut rem = lin;
+        let mut base = 0usize;
+        for (i, &d) in out_dims.iter().enumerate() {
+            let ext = out_extents[i];
+            let c = rem % ext;
+            rem /= ext;
+            base += c * strides[d];
+        }
+        let lane: Vec<i64> = (0..axis_len)
+            .map(|k| flat[base + k * strides[ax]])
+            .collect();
+        results.push(f(&lane));
+    }
+    Ok((out_shape, results))
+}
+
+/// Build a 0-D-or-axis-reduced int64 ndarray of `ticks` with `out_shape`, then
+/// re-tag it as the requested time dtype (`datetime64`/`timedelta64` of
+/// `unit_str`) via the int64-view transport.
+fn emit_time<'py>(
+    py: Python<'py>,
+    ticks: Vec<i64>,
+    out_shape: &[usize],
+    as_datetime: bool,
+    unit_str: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr = ArrayD::from_vec(IxDyn::new(out_shape), ticks).map_err(ferr_to_pyerr)?;
+    if as_datetime {
+        int64_to_datetime64(py, arr, unit_str)
+    } else {
+        int64_to_timedelta64(py, arr, unit_str)
+    }
+}
+
+/// Emit an int64 index ndarray (argmin/argmax result) of `out_shape`.
+fn emit_index<'py>(
+    py: Python<'py>,
+    idx: Vec<i64>,
+    out_shape: &[usize],
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_numpy_interop::IntoNumPy;
+    let arr = ArrayD::from_vec(IxDyn::new(out_shape), idx).map_err(ferr_to_pyerr)?;
+    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// `numpy.<reduction>(a, axis=...)` for a datetime64 / timedelta64 input —
+/// the REQ-4 (#944) dispatch the `stats.rs` reduction `#[pyfunction]`s route
+/// to when their input dtype kind is `"M"`/`"m"`.
+///
+/// Compute-or-raise per the live numpy contract (module comment): the
+/// computable reductions fold over the int64 ticks with NaT propagation and
+/// re-tag the result; the undefined (kind, op) pairs delegate to numpy so its
+/// exact `UFuncTypeError`/`TypeError` surfaces. This eliminates the
+/// silent-float corruption (`fr.mean(dt)->18268.5`, `fr.std(td)->0.5`).
+pub fn time_reduce<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    kind: TimeReduce,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let tkind = time_kind(arr)?.ok_or_else(|| {
+        PyTypeError::new_err("time_reduce requires a datetime64 / timedelta64 array")
+    })?;
+    let is_datetime = tkind == TimeKind::Datetime;
+
+    // The (kind, op) pairs numpy RAISES on -> delegate so numpy's exact
+    // exception surfaces (verified live, R-DEV-2):
+    //   timedelta: std / var / prod
+    //   datetime:  sum / mean / std / var / cumsum / prod
+    let raises = match kind {
+        TimeReduce::Std | TimeReduce::Var | TimeReduce::Prod => true,
+        TimeReduce::Sum | TimeReduce::Mean | TimeReduce::Cumsum => is_datetime,
+        _ => false,
+    };
+    if raises {
+        return delegate_to_numpy(py, arr, kind, axis);
+    }
+
+    // Marshal the int64 ticks + unit via the existing transport.
+    let (ticks, _unit, unit_str) = extract_ticks(py, arr)?;
+    let shape: Vec<usize> = ticks.shape().to_vec();
+    let flat: Vec<i64> = ticks.iter().copied().collect();
+
+    // The result dtype of a COMPUTED reduction:
+    //   sum/mean/min/max/cumsum -> same kind as input (datetime stays datetime
+    //     for min/max; only timedelta reaches sum/mean/cumsum here since the
+    //     datetime cases were delegated above).
+    //   ptp -> ALWAYS timedelta (datetime ptp = max-min; timedelta ptp stays
+    //     timedelta).
+    let result_datetime = match kind {
+        TimeReduce::Ptp => false,
+        _ => is_datetime,
+    };
+
+    match kind {
+        TimeReduce::Sum
+        | TimeReduce::Mean
+        | TimeReduce::Min
+        | TimeReduce::Max
+        | TimeReduce::Ptp => {
+            match axis {
+                None => {
+                    let r = lane_reduce_i64(&flat, kind).ok_or_else(|| {
+                        // Only reachable for empty min/max/ptp/mean (numpy raises
+                        // ValueError on empty min/max; mean of empty timedelta
+                        // raises too).
+                        PyValueError::new_err(
+                            "zero-size array to reduction operation (no identity)",
+                        )
+                    })?;
+                    emit_time(py, vec![r], &[], result_datetime, &unit_str)
+                }
+                Some(ax) => {
+                    let (out_shape, opt) =
+                        axis_lanes_i64(&flat, &shape, ax, |lane| lane_reduce_i64(lane, kind))?;
+                    let mut out = Vec::with_capacity(opt.len());
+                    for v in opt {
+                        out.push(v.ok_or_else(|| {
+                            PyValueError::new_err(
+                                "zero-size array to reduction operation (no identity)",
+                            )
+                        })?);
+                    }
+                    emit_time(py, out, &out_shape, result_datetime, &unit_str)
+                }
+            }
+        }
+        TimeReduce::Cumsum => {
+            // Only timedelta reaches here (datetime cumsum delegated/raised).
+            // numpy cumsum keeps the input shape; `axis=None` flattens row-major.
+            // NaT propagates forward: once a lane hits NaT, every later prefix
+            // is NaT (verified live).
+            let cum = |lane: &[i64]| -> Vec<i64> {
+                let mut acc = 0i64;
+                let mut nat_seen = false;
+                let mut out = Vec::with_capacity(lane.len());
+                for &v in lane {
+                    if nat_seen || v == NAT {
+                        nat_seen = true;
+                        out.push(NAT);
+                    } else {
+                        acc = acc.wrapping_add(v);
+                        out.push(acc);
+                    }
+                }
+                out
+            };
+            match axis {
+                None => {
+                    let out = cum(&flat);
+                    let n = out.len();
+                    emit_time(py, out, &[n], false, &unit_str)
+                }
+                Some(ax) => {
+                    if ax >= shape.len() {
+                        return Err(PyValueError::new_err("axis out of bounds for cumsum"));
+                    }
+                    // Scatter each lane's prefix sums back into the input shape.
+                    let axis_len = shape[ax];
+                    let strides = row_major_strides(&shape);
+                    let out_dims: Vec<usize> = (0..shape.len()).filter(|&d| d != ax).collect();
+                    let out_extents: Vec<usize> = out_dims.iter().map(|&d| shape[d]).collect();
+                    let out_n: usize = out_extents.iter().product::<usize>().max(1);
+                    let mut out_flat = vec![0i64; flat.len()];
+                    for lin in 0..out_n {
+                        let mut rem = lin;
+                        let mut base = 0usize;
+                        for (i, &d) in out_dims.iter().enumerate() {
+                            let ext = out_extents[i];
+                            let c = rem % ext;
+                            rem /= ext;
+                            base += c * strides[d];
+                        }
+                        let lane: Vec<i64> = (0..axis_len)
+                            .map(|k| flat[base + k * strides[ax]])
+                            .collect();
+                        for (k, v) in cum(&lane).into_iter().enumerate() {
+                            out_flat[base + k * strides[ax]] = v;
+                        }
+                    }
+                    emit_time(py, out_flat, &shape, false, &unit_str)
+                }
+            }
+        }
+        TimeReduce::Argmin | TimeReduce::Argmax => {
+            let want_max = matches!(kind, TimeReduce::Argmax);
+            match axis {
+                None => {
+                    if flat.is_empty() {
+                        return Err(PyValueError::new_err(
+                            "attempt to get argmin/argmax of an empty sequence",
+                        ));
+                    }
+                    let i = lane_arg(&flat, want_max) as i64;
+                    emit_index(py, vec![i], &[])
+                }
+                Some(ax) => {
+                    let (out_shape, idx) =
+                        axis_lanes_i64(&flat, &shape, ax, |lane| lane_arg(lane, want_max) as i64)?;
+                    emit_index(py, idx, &out_shape)
+                }
+            }
+        }
+        // Delegated above.
+        TimeReduce::Std | TimeReduce::Var | TimeReduce::Prod => {
+            delegate_to_numpy(py, arr, kind, axis)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // isnat
 // ---------------------------------------------------------------------------
 

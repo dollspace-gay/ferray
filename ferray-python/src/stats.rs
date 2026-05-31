@@ -1182,6 +1182,13 @@ pub fn sum<'py>(
     let arr = as_ndarray(py, a)?;
     let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 (REQ-4, #944): `sum(timedelta)->timedelta`,
+    // `sum(datetime)` RAISES numpy's `UFuncTypeError`. Branch ahead of the
+    // real-only macros, which would otherwise raise a ferray-side TypeError
+    // (timedelta) or silently mis-handle.
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Sum, axis);
+    }
     // Complex sum folds via the complex `ReduceAcc` (`Acc = Self`), keeping the
     // input width (c64->c64, c128->c128) — numpy: `np.sum([1+2j,3+4j])==(4+6j)`,
     // complex64 stays complex64 (live, numpy 2.4.4). The real-only
@@ -1217,6 +1224,13 @@ pub fn prod<'py>(
     let arr = as_ndarray(py, a)?;
     let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 (#944): `prod` is UNDEFINED for both — numpy
+    // RAISES `UFuncTypeError` ('multiply' cannot use two datetimes/timedeltas,
+    // live). Delegate so numpy's exact exception surfaces (R-DEV-2), rather than
+    // the ferray-side TypeError the numeric macro would emit.
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Prod, axis);
+    }
     // Complex prod folds via the complex `ReduceAcc`, keeping width — numpy:
     // `np.prod([1+2j,3+4j])==(-5+10j)`, complex64 stays complex64 (live).
     if is_complex_dtype(dt.as_str()) {
@@ -1251,6 +1265,11 @@ pub fn min<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 (REQ-3 ordering surfaced via #944): `min` ->
+    // datetime/timedelta by int64 tick value, NaT propagating (live).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Min, axis);
+    }
     // Complex min: lexicographic extremum (NaN propagates, first wins), width
     // preserved — numpy: `np.min([1+2j,3+1j]) == (1+2j)` (live). The real-only
     // `match_dtype_orderable!` below has no complex arm (would raise TypeError).
@@ -1277,6 +1296,11 @@ pub fn max<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 (#944): `max` -> datetime/timedelta by int64 tick
+    // value, NaT propagating (live).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Max, axis);
+    }
     // Complex max: lexicographic extremum (NaN propagates, first wins), width
     // preserved — numpy: `np.max([1+2j,3+1j]) == (3+1j)` (live).
     match dt.as_str() {
@@ -1302,6 +1326,12 @@ pub fn ptp<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 (REQ-4, #944): `ptp` -> timedelta ALWAYS
+    // (datetime ptp = max-min is a timedelta; timedelta ptp stays timedelta),
+    // NaT propagating — numpy `np.ptp(dt)==timedelta64(...)` (live).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Ptp, axis);
+    }
     // Complex ptp: lexicographic max - lexicographic min (complex difference,
     // NaN propagates), width preserved — numpy: `np.ptp([1+2j,-3+4j,0+0j,2-1j])
     // == (5-5j)` (live).
@@ -1331,6 +1361,15 @@ pub fn mean<'py>(
     axis: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // datetime64/timedelta64 (REQ-4, #944): `mean(timedelta)->timedelta`
+    // (int64 trunc-toward-zero of sum/n); `mean(datetime)` RAISES numpy's
+    // `UFuncTypeError`. MUST branch BEFORE the f64 coercion below, which is the
+    // silent-float corruption this REQ eliminates (`fr.mean(dt)->18268.5`).
+    // Also ahead of the empty-array nan-float shortcut: an empty timedelta mean
+    // RAISES, it does not return a float nan.
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Mean, axis);
+    }
     // Empty reduction: NumPy returns nan (float64, 0-D) + RuntimeWarning,
     // it does NOT raise (numpy/_core/_methods.py:122).
     if axis.is_none() && is_empty_array(&arr)? {
@@ -1373,6 +1412,14 @@ pub fn var<'py>(
     ddof: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // datetime64/timedelta64 (REQ-4, #944): `var` is UNDEFINED for both
+    // (numpy RAISES `TypeError: ufunc 'square' not supported` for timedelta,
+    // `UFuncTypeError` for datetime). Branch BEFORE the f64 coercion — returning
+    // a float here is the silent-float corruption (`fr.var(td)->...`). The
+    // delegate path surfaces numpy's exact exception (R-DEV-2).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Var, axis);
+    }
     // Empty reduction: NumPy warns "Degrees of freedom <= 0" and returns
     // nan (float64, 0-D); it does NOT raise (numpy/_core/_methods.py:154).
     if axis.is_none() && is_empty_array(&arr)? {
@@ -1416,6 +1463,14 @@ pub fn std<'py>(
     ddof: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // datetime64/timedelta64 (REQ-4, #944): `std` is UNDEFINED for both —
+    // numpy RAISES (`TypeError 'square' not supported` for timedelta,
+    // `UFuncTypeError` for datetime). Branch BEFORE the f64 coercion that was
+    // the silent-float corruption (`fr.std(td)->0.5`). delegate -> numpy's exact
+    // exception (R-DEV-2).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Std, axis);
+    }
     // Empty reduction: `_std` delegates to `_var`, which returns nan
     // (float64, 0-D) for an empty slice; it does NOT raise
     // (numpy/_core/_methods.py:217 -> :154).
@@ -1463,6 +1518,11 @@ pub fn argmin<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 (#944): `argmin` -> int64 index by int64 tick
+    // ordering; a NaT-containing array returns the FIRST NaT index (live).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Argmin, axis);
+    }
     // Complex argmin: lexicographic min index (NaN propagates, first wins) —
     // numpy: `np.argmin([1+2j,-3+4j,0+0j,2-1j]) == 2` (live).
     match dt.as_str() {
@@ -1488,6 +1548,12 @@ pub fn argmax<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 (#944): `argmax` -> int64 index by int64 tick
+    // ordering; a NaT-containing array returns the FIRST NaT index (numpy
+    // treats NaT as the argmax winner too, live).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Argmax, axis);
+    }
     // Complex argmax: lexicographic max index (NaN propagates, first wins) —
     // numpy: `np.argmax([1+2j,-3+4j,0+0j,2-1j]) == 1`? (live). lexicographic
     // max of that set is `2-1j` at index 3.
@@ -2200,6 +2266,12 @@ pub fn cumsum<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // datetime64/timedelta64 (REQ-4, #944): `cumsum(timedelta)->timedelta`
+    // (NaT propagates forward); `cumsum(datetime)` RAISES numpy's
+    // `UFuncTypeError`.
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Cumsum, axis);
+    }
     // Complex cumsum folds via the complex `ReduceAcc`, keeping width and shape
     // — numpy: `np.cumsum([1+2j,3+4j])==[1+2j,4+6j]`, complex64 stays complex64.
     if is_complex_dtype(dt.as_str()) {
