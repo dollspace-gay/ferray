@@ -249,11 +249,12 @@ fn spacing_f64(x: f64) -> f64 {
     if x.is_nan() || x.is_infinite() {
         return f64::NAN;
     }
-    let ax = x.abs();
-    if ax == 0.0 {
-        return f64::from_bits(1); // smallest positive subnormal
+    if x == 0.0 {
+        return f64::from_bits(1); // smallest positive subnormal (numpy: spacing(±0)=+5e-324)
     }
-    nextafter_f64(ax, f64::INFINITY) - ax
+    // Carry the sign of x: step toward increasing magnitude in x's direction
+    // (numpy/libm npy_spacing = nextafter(x, copysign(inf, x)) - x).
+    nextafter_f64(x, f64::INFINITY.copysign(x)) - x
 }
 
 /// IEEE 754 spacing (ULP) for f32.
@@ -262,11 +263,12 @@ fn spacing_f32(x: f32) -> f32 {
     if x.is_nan() || x.is_infinite() {
         return f32::NAN;
     }
-    let ax = x.abs();
-    if ax == 0.0 {
-        return f32::from_bits(1); // smallest positive subnormal
+    if x == 0.0 {
+        return f32::from_bits(1); // smallest positive subnormal (numpy: spacing(±0)=+1e-45)
     }
-    nextafter_f32(ax, f32::INFINITY) - ax
+    // Carry the sign of x: step toward increasing magnitude in x's direction
+    // (numpy/libm npy_spacing = nextafter(x, copysign(inf, x)) - x).
+    nextafter_f32(x, f32::INFINITY.copysign(x)) - x
 }
 
 /// Return the spacing of values: the ULP (unit in the last place),
