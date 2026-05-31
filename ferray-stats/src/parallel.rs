@@ -533,15 +533,50 @@ where
     }
 }
 
+/// Total-order comparator that sends "unorderable" (NaN) values to the
+/// end, matching `NumPy`'s `np.sort` convention.
+///
+/// Mirrors numpy/_core/src/common/numpy_tag.h:62
+/// `floating_point_type::less(a, b) = a < b || (b != b && a == a)`:
+/// a value is "less than" b iff it is non-NaN and either strictly less
+/// than b or b is NaN. Every NaN (regardless of sign bit) is treated as
+/// the greatest element, so all NaNs sort to the tail — unlike
+/// `f64::total_cmp`, which would order a negative NaN before `-inf`.
+///
+/// Detects NaN without a `Float` bound via self-comparison: for any sane
+/// `PartialOrd`, `x.partial_cmp(&x)` is `Some(Equal)`; only NaN-like
+/// values break that invariant and return `None`. Non-NaN orderable
+/// values keep their natural ordering, so integer and other no-NaN
+/// dtypes are completely unaffected.
+#[inline]
+pub fn nan_last_cmp<T: PartialOrd>(a: &T, b: &T) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    if let Some(ord) = a.partial_cmp(b) {
+        ord
+    } else {
+        let a_nan = a.partial_cmp(a).is_none();
+        let b_nan = b.partial_cmp(b).is_none();
+        match (a_nan, b_nan) {
+            (true, true) => Ordering::Equal,
+            (true, false) => Ordering::Greater,
+            (false, true) => Ordering::Less,
+            // Genuinely incomparable non-NaN values shouldn't exist for
+            // any numeric Element type; keep the sort total by treating
+            // them as equal.
+            (false, false) => Ordering::Equal,
+        }
+    }
+}
+
 /// Parallel sort (unstable) for large slices. Returns a sorted copy.
 pub fn parallel_sort<T>(data: &mut [T])
 where
     T: Copy + Send + Sync + PartialOrd,
 {
     if data.len() >= PARALLEL_SORT_THRESHOLD {
-        data.par_sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        data.par_sort_unstable_by(nan_last_cmp);
     } else {
-        data.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        data.sort_unstable_by(nan_last_cmp);
     }
 }
 
@@ -551,8 +586,72 @@ where
     T: Copy + Send + Sync + PartialOrd,
 {
     if data.len() >= PARALLEL_SORT_THRESHOLD {
-        data.par_sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        data.par_sort_by(nan_last_cmp);
     } else {
-        data.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        data.sort_by(nan_last_cmp);
+    }
+}
+
+#[cfg(test)]
+mod sort_cmp_tests {
+    use super::nan_last_cmp;
+
+    // Expected values pulled from live numpy 2.4:
+    //   np.sort([3., nan, 1.])            -> [1., 3., nan]
+    //   np.sort([nan, nan, 1., 2.])       -> [1., 2., nan, nan]
+    //   np.sort([inf, -inf, 0., nan, 1.]) -> [-inf, 0., 1., inf, nan]
+    //   np.sort([1., nan, -nan, 2.])      -> [1., 2., nan, nan] (both NaN last)
+    #[test]
+    fn nan_last_basic() {
+        let mut v = [3.0f64, f64::NAN, 1.0];
+        v.sort_by(nan_last_cmp);
+        assert_eq!(v[0], 1.0);
+        assert_eq!(v[1], 3.0);
+        assert!(v[2].is_nan());
+    }
+
+    #[test]
+    fn multiple_nans_last() {
+        let mut v = [f64::NAN, f64::NAN, 1.0, 2.0];
+        v.sort_by(nan_last_cmp);
+        assert_eq!(v[0], 1.0);
+        assert_eq!(v[1], 2.0);
+        assert!(v[2].is_nan() && v[3].is_nan());
+    }
+
+    #[test]
+    fn inf_order_then_nan() {
+        let mut v = [f64::INFINITY, f64::NEG_INFINITY, 0.0, f64::NAN, 1.0];
+        v.sort_by(nan_last_cmp);
+        assert_eq!(v[0], f64::NEG_INFINITY);
+        assert_eq!(v[1], 0.0);
+        assert_eq!(v[2], 1.0);
+        assert_eq!(v[3], f64::INFINITY);
+        assert!(v[4].is_nan());
+    }
+
+    #[test]
+    fn negative_nan_also_last() {
+        let mut v = [1.0f64, f64::NAN, -f64::NAN, 2.0];
+        v.sort_by(nan_last_cmp);
+        assert_eq!(v[0], 1.0);
+        assert_eq!(v[1], 2.0);
+        assert!(v[2].is_nan() && v[3].is_nan());
+    }
+
+    #[test]
+    fn integers_unaffected() {
+        let mut v = [5i32, 2, 8, 1];
+        v.sort_by(nan_last_cmp);
+        assert_eq!(v, [1, 2, 5, 8]);
+    }
+
+    #[test]
+    fn f32_nan_last() {
+        let mut v = [3.0f32, f32::NAN, 1.0];
+        v.sort_by(nan_last_cmp);
+        assert_eq!(v[0], 1.0);
+        assert_eq!(v[1], 3.0);
+        assert!(v[2].is_nan());
     }
 }

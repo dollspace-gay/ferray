@@ -436,9 +436,19 @@ parity_ops = ["mean", "var", "std", "average", "ptp"]
 crate_pattern = "ferray-stats/src/parallel.rs"
 upstream = [
   "/home/doll/numpy-ref/numpy/_core/_methods.py",
+  "/home/doll/numpy-ref/numpy/_core/src/common/numpy_tag.h",
 ]
 design = ".design/ferray-stats.md"
 parity_ops = ["parallel_sum", "parallel_prod"]
+
+[[route]]
+crate_pattern = "ferray-stats/src/sorting.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/src/common/numpy_tag.h",
+  "/home/doll/numpy-ref/numpy/_core/fromnumeric.py",
+]
+design = ".design/ferray-stats.md"
+parity_ops = ["sort", "argsort", "searchsorted", "partition", "argpartition", "lexsort", "sort_complex"]
 
 # ─────────────────────────────────────────────────────────────────────────
 # ferray-linalg — linear algebra (faer-backed; depends on ferray-core)

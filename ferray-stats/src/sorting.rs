@@ -4,6 +4,7 @@ use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, Ix1, IxDyn};
 
 use crate::parallel;
+use crate::parallel::nan_last_cmp;
 use crate::reductions::{compute_strides, flat_index, increment_multi_index};
 
 // ---------------------------------------------------------------------------
@@ -185,11 +186,7 @@ where
             let data: Vec<T> = a.iter().copied().collect();
             let n = data.len();
             let mut indices: Vec<usize> = (0..n).collect();
-            indices.sort_by(|&i, &j| {
-                data[i]
-                    .partial_cmp(&data[j])
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
+            indices.sort_by(|&i, &j| nan_last_cmp(&data[i], &data[j]));
             let result: Vec<u64> = indices.into_iter().map(|i| i as u64).collect();
             Array::from_vec(IxDyn::new(&[n]), result)
         }
@@ -241,7 +238,7 @@ where
                 }
 
                 // Sort by value, tracking original axis-local index
-                lane.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+                lane.sort_by(|a, b| nan_last_cmp(&a.1, &b.1));
 
                 // Scatter the original axis-local indices into the result
                 for (k, &flat_idx) in lane_flat_indices.iter().enumerate() {
@@ -283,9 +280,7 @@ where
         )));
     }
     let mut data: Vec<T> = a.iter().copied().collect();
-    data.select_nth_unstable_by(kth, |x, y| {
-        x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
-    });
+    data.select_nth_unstable_by(kth, nan_last_cmp);
     Array::from_vec(Ix1::new([n]), data)
 }
 
@@ -308,9 +303,7 @@ where
     let data: Vec<T> = a.iter().copied().collect();
     let mut idx: Vec<u64> = (0..n as u64).collect();
     idx.select_nth_unstable_by(kth, |&a_i, &b_i| {
-        let va = data[a_i as usize];
-        let vb = data[b_i as usize];
-        va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
+        nan_last_cmp(&data[a_i as usize], &data[b_i as usize])
     });
     Array::from_vec(Ix1::new([n]), idx)
 }
@@ -365,10 +358,7 @@ where
         let bi = b as usize;
         // Iterate keys from primary (last) to secondary (earlier).
         for k in key_data.iter().rev() {
-            match k[ai]
-                .partial_cmp(&k[bi])
-                .unwrap_or(std::cmp::Ordering::Equal)
-            {
+            match nan_last_cmp(&k[ai], &k[bi]) {
                 std::cmp::Ordering::Equal => {}
                 ord => return ord,
             }
@@ -461,13 +451,12 @@ where
     let mut result = Vec::with_capacity(v.size());
     for &val in v.iter() {
         let idx = match side {
-            Side::Left => sorted.partition_point(|x| {
-                x.partial_cmp(&val).unwrap_or(std::cmp::Ordering::Less) == std::cmp::Ordering::Less
-            }),
-            Side::Right => sorted.partition_point(|x| {
-                x.partial_cmp(&val).unwrap_or(std::cmp::Ordering::Less)
-                    != std::cmp::Ordering::Greater
-            }),
+            Side::Left => {
+                sorted.partition_point(|x| nan_last_cmp(x, &val) == std::cmp::Ordering::Less)
+            }
+            Side::Right => {
+                sorted.partition_point(|x| nan_last_cmp(x, &val) != std::cmp::Ordering::Greater)
+            }
         };
         result.push(idx as u64);
     }
@@ -492,11 +481,11 @@ where
 {
     let mut data: Vec<num_complex::Complex<T>> = a.iter().copied().collect();
     data.sort_by(|x, y| {
-        let r = x.re.partial_cmp(&y.re).unwrap_or(std::cmp::Ordering::Equal);
+        let r = nan_last_cmp(&x.re, &y.re);
         if r != std::cmp::Ordering::Equal {
             r
         } else {
-            x.im.partial_cmp(&y.im).unwrap_or(std::cmp::Ordering::Equal)
+            nan_last_cmp(&x.im, &y.im)
         }
     });
     let n = data.len();
