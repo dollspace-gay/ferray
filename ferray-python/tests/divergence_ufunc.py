@@ -386,3 +386,71 @@ def test_add_out_kwarg():
     got_out = np.empty(2)
     fr.add(a, b, out=got_out)
     np.testing.assert_array_equal(got_out, expected_out)
+
+
+# ===========================================================================
+# GROUP F — acto-critic re-audit of the directly-edited ufunc.rs helpers
+#   (ediff1d scalar/array-like appendage, trapezoid x-dtype promotion).
+#   numpy oracle: live 2.4.4 at /home/doll/ferray/.venv numpy.
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# F1: ediff1d to_end / to_begin accept ANY array_like and numpy RAVELS it
+#   (numpy/lib/_arraysetops_impl.py:110 `to_end = np.asanyarray(to_end)` then
+#   :115 `to_end = to_end.ravel()`). A 2-D appendage is flattened.
+# ferray's `ediff1d_appendage` (ufunc.rs:3074) only tries `Vec<f64>` (1-D) then
+#   a scalar `f64`, so a 2-D list raises before reaching the kernel.
+# Expected (numpy): ediff1d([1,2,4], to_end=[[97,98],[1,2]]) -> [1,2,97,98,1,2].
+# Actual (ferray): TypeError "must be real number, not list".
+# ---------------------------------------------------------------------------
+def test_ediff1d_to_end_2d_ravel():
+    ary = [1, 2, 4]
+    to_end = [[97, 98], [1, 2]]
+    expected = np.ediff1d(ary, to_end=to_end)
+    got = fr.ediff1d(ary, to_end=to_end)
+    np.testing.assert_array_equal(got, expected)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+
+
+# ---------------------------------------------------------------------------
+# F2: ediff1d enforces the `same_kind` casting rule on the appendage
+#   (numpy/lib/_arraysetops_impl.py:111-113 `if not np.can_cast(to_end,
+#   dtype_req, casting="same_kind"): raise TypeError`). A float appendage on an
+#   integer input is NOT castable same_kind -> numpy raises TypeError.
+# ferray funnels every appendage through `Vec<f64>` then casts back to the
+#   element type `as T` (ufunc.rs:3143-3144), silently TRUNCATING 0.5 -> 0
+#   (R-CODE-4 silent data corruption) instead of raising.
+# Expected (numpy): ediff1d(int_array, to_end=0.5) raises TypeError.
+# Actual (ferray): returns [1, 2, 0] (0.5 truncated to int 0).
+# ---------------------------------------------------------------------------
+def test_ediff1d_int_float_appendage_same_kind_error():
+    ary = np.array([1, 2, 4], dtype=np.int64)
+    # numpy raises; assert ferray raises the same error type.
+    raised_np = False
+    try:
+        np.ediff1d(ary, to_end=0.5)
+    except TypeError:
+        raised_np = True
+    assert raised_np, "oracle precondition: numpy must reject float appendage on int input"
+    with pytest.raises(TypeError):
+        fr.ediff1d(ary, to_end=0.5)
+
+
+# ---------------------------------------------------------------------------
+# F3: trapezoid result dtype follows result_type(y, x), NOT y alone.
+#   numpy computes `d = diff(x)` (numpy/lib/_function_base_impl.py:5035) keeping
+#   x's dtype, then `d * (y[1:]+y[:-1]) / 2.0` (:5048) — NEP-50 promotes a
+#   float32 y times a float64 d to float64. ferray derives `real_dt` from `y`
+#   alone (ufunc.rs:3037-3041) and coerces x DOWN to y's dtype, returning
+#   float32 and computing the sum in float32 (R-CODE-4 lossy round-trip).
+# Expected (numpy): trapezoid(f32 y, x=f64) -> np.float64.
+# Actual (ferray): np.float32 (wrong dtype AND wrong value at large magnitudes).
+# ---------------------------------------------------------------------------
+def test_trapezoid_f32y_f64x_promotes_to_float64():
+    y = np.array([1e8, 2e8, 3e8], dtype=np.float32)
+    x = np.array([0.0, 1.0000001, 3.0000003], dtype=np.float64)
+    expected = np.trapezoid(y, x=x)
+    got = fr.trapezoid(y, x=x)
+    assert got.dtype == expected.dtype, (got.dtype, expected.dtype)
+    np.testing.assert_array_equal(got, expected)
