@@ -1,6 +1,19 @@
 // ferray-linalg: tensordot (REQ-5)
 //
 // Contraction over specified axis pairs.
+//
+// ## REQ status
+//
+// Two states only (SHIPPED / NOT-STARTED), per goal.md. Tracks the
+// tensordot surface (REQ-5) of `numpy.tensordot`. Audited + green.
+//
+//  - REQ-5 (tensordot: all axes forms) — SHIPPED: `tensordot` (this file)
+//    dispatches the `TensordotAxes::{Scalar,Pairs}` enum, covering both
+//    the scalar `axes=N` form (contract the last N axes of `a` with the
+//    first N of `b`) and the explicit `(axes_a, axes_b)` pair form, matching
+//    `numpy.tensordot` (numpy/_core/numeric.py:997 tensordot). Consumer:
+//    the `tensordot` `#[pyfunction]` in `ferray-python/src/linalg.rs`
+//    calls `fl::tensordot` with `fl::TensordotAxes::Scalar`/`Pairs`.
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::IxDyn;

@@ -1,6 +1,41 @@
 // ferray-linalg: Solvers and inversion (REQ-15 through REQ-18c)
 //
 // solve, lstsq, inv, pinv, matrix_power, tensorsolve, tensorinv
+//
+// ## REQ status
+//
+// Two states only (SHIPPED / NOT-STARTED), per goal.md. Tracks the
+// solving-and-inversion surface (REQ-15 through REQ-18c) of
+// `numpy.linalg`. Audited + green; singularity is detected from the
+// LU U-diagonal pivot floor (`lu_is_singular`, this file) so
+// exactly-singular and rank-deficient inputs raise `SingularMatrix`
+// rather than returning NaN/Inf (#1077/#1078).
+//
+//  - REQ-15 (solve) — SHIPPED: `solve` / `solve_dyn` (this file, faer LU)
+//    plus the stacked 3-D+ `solve_batched`. Consumer: the `solve`
+//    `#[pyfunction]` in `ferray-python/src/linalg.rs` calls `fl::solve`;
+//    `solve_batched` for stacked input.
+//  - REQ-16 (lstsq) — SHIPPED: `lstsq` (this file) returns
+//    `(x, residuals, rank, singular_values)`. Consumer: the `lstsq`
+//    `#[pyfunction]` in `ferray-python/src/linalg.rs` calls `fl::lstsq`.
+//  - REQ-17 (inv) — SHIPPED: `inv` (this file, faer LU; `SingularMatrix`
+//    via `lu_is_singular`) plus `inv_batched`. Consumer: the `inv`
+//    `#[pyfunction]` in `ferray-python/src/linalg.rs` calls `fl::inv`;
+//    `inv_batched` for stacked input.
+//  - REQ-18 (pinv) — SHIPPED: `pinv` (this file, via SVD + `rcond`
+//    truncation) plus `pinv_batched`. Consumer: the `pinv`
+//    `#[pyfunction]` in `ferray-python/src/linalg.rs` calls `fl::pinv`;
+//    `pinv_batched` for stacked input.
+//  - REQ-18a (matrix_power) — SHIPPED: `matrix_power` (this file; negative
+//    `n` via `inv`, `n==0` is identity) plus `matrix_power_batched`.
+//    Consumer: the `matrix_power` `#[pyfunction]` in
+//    `ferray-python/src/linalg.rs` calls `fl::matrix_power`.
+//  - REQ-18b (tensorsolve) — SHIPPED: `tensorsolve` (this file; reshapes
+//    to a square system then `solve`). Consumer: the `tensorsolve`
+//    `#[pyfunction]` in `ferray-python/src/linalg.rs` calls `fl::tensorsolve`.
+//  - REQ-18c (tensorinv) — SHIPPED: `tensorinv` (this file; reshapes to a
+//    square matrix then `inv`). Consumer: the `tensorinv` `#[pyfunction]`
+//    in `ferray-python/src/linalg.rs` calls `fl::tensorinv`.
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix1, Ix2, IxDyn};

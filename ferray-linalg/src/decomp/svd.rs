@@ -1,6 +1,22 @@
 // ferray-linalg: SVD decomposition (REQ-10)
 //
 // Wraps faer::Svd. Returns (U, S, Vt).
+//
+// ## REQ status
+//
+// Two states only (SHIPPED / NOT-STARTED), per goal.md. Tracks the
+// SVD surface (REQ-10) of `numpy.linalg`. Audited + green.
+//
+//  - REQ-10 (svd: `full_matrices`, `compute_uv`; svdvals) — SHIPPED:
+//    `svd` (this file) returns `(U, S, Vt)` with `full_matrices` choosing
+//    full `(m, m)`/`(n, n)` vs thin `(m, k)`/`(k, n)` factors; `svdvals`
+//    is the `compute_uv=False` singular-values-only path
+//    (numpy/linalg/_linalg.py `def svdvals(x): return svd(..., compute_uv=False)`);
+//    `svd_hermitian` is the Hermitian fast path and `svd_batched` the
+//    stacked 3-D+ form. Consumer: the `svd` `#[pyfunction]` in
+//    `ferray-python/src/linalg.rs` calls `fl::svd` (and `fl::svdvals` on
+//    its `compute_uv=False` branch); the `svdvals` `#[pyfunction]` calls
+//    `fl::svdvals`; `svd_batched` for stacked input.
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix1, Ix2, IxDyn};

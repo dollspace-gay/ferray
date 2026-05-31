@@ -1,6 +1,22 @@
 // ferray-linalg: QR decomposition (REQ-9)
 //
 // Wraps faer::Qr. Supports Reduced and Complete modes.
+//
+// ## REQ status
+//
+// Two states only (SHIPPED / NOT-STARTED), per goal.md. Tracks the
+// QR-decomposition surface (REQ-9) of `numpy.linalg`. Audited + green.
+//
+//  - REQ-9 (qr: reduced / complete / r / raw modes) — SHIPPED: `qr`
+//    (this file) dispatches the `QrMode::{Reduced,Complete}` enum over
+//    faer's thin/full `Q`/`R`, padding `R` to `(m, n)` for `Complete`
+//    to match `numpy.linalg.qr(mode='complete')` (#756); the batched
+//    3-D+ form is `qr_batched`. The numpy `mode='r'` (bare R) and
+//    `mode='raw'` modes are composed at the boundary from `QrMode::Reduced`
+//    rather than as new library variants. Consumer: the `qr`
+//    `#[pyfunction]` in `ferray-python/src/linalg.rs` calls `fl::qr`
+//    (its `r_only` branch returns the bare `R` of `QrMode::Reduced`), and
+//    `qr_batched` for stacked input.
 
 use ferray_core::array::owned::Array;
 use ferray_core::dimension::{Ix2, IxDyn};

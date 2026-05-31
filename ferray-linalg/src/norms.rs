@@ -1,6 +1,38 @@
 // ferray-linalg: Norms and measures (REQ-19 through REQ-22)
 //
 // norm, cond, det, slogdet, matrix_rank, trace
+//
+// ## REQ status
+//
+// Two states only (SHIPPED / NOT-STARTED), per goal.md. Tracks the
+// norms-and-measures surface (REQ-19 through REQ-22) of `numpy.linalg`.
+// All rows are audited + green; the singular-detection floor used by
+// `det`/`slogdet` mirrors `crate::solve::lu_is_singular` (#1077/#1078).
+//
+//  - REQ-19 (norm: full `ord` set 1/-1/2/-2/inf/-inf/fro/nuc, vector +
+//    matrix, axis/keepdims) — SHIPPED: `norm` dispatches vector vs matrix
+//    over the `NormOrder::{Fro,Nuc,Inf,NegInf,L1,L2,NegL1,NegL2,P}` enum
+//    (this file), `norm_axis` covers the per-axis `keepdims` form, and
+//    `vector_norm`/`matrix_norm` are the explicit-shape entry points. The
+//    `NegL1` min-column-abs-sum and `NegL2` smallest-singular-value arms
+//    close numpy `ord=-1`/`-2` (numpy/linalg/_linalg.py:2657/2659).
+//    Consumer: `cond` (this file) routes every non-L2/Fro `NormOrder`
+//    through `norm` → `matrix_norm`; the `norm`/`matrix_norm`/`vector_norm`
+//    `#[pyfunction]`s in `ferray-python/src/linalg.rs` call `fl::norm` /
+//    `fl::norm_axis`.
+//  - REQ-20 (cond) — SHIPPED: `cond` (this file) — L2/-2 condition via
+//    singular-value ratio, other `p` via `norm(a) * norm(inv(a))`.
+//    Consumer: `cond` `#[pyfunction]` in `ferray-python/src/linalg.rs`.
+//  - REQ-21 (det / slogdet) — SHIPPED: `det` / `slogdet` (this file, faer
+//    LU, singularity via the relative U-diagonal pivot floor, #1077/#1078)
+//    plus the batched `det_batched` / `slogdet_batched`. Consumer:
+//    `det`/`slogdet` (+ `det_batched`/`slogdet_batched`) `#[pyfunction]`s
+//    in `ferray-python/src/linalg.rs` call `fl::det`/`fl::slogdet`.
+//  - REQ-22 (matrix_rank / trace) — SHIPPED: `matrix_rank` (singular-value
+//    count above tol) and `trace`/`trace_offset` (this file), plus
+//    `matrix_rank_batched`. Consumer: `matrix_rank`/`trace`
+//    `#[pyfunction]`s in `ferray-python/src/linalg.rs` call
+//    `fl::matrix_rank`/`fl::trace`.
 
 use ferray_core::array::owned::Array;
 use ferray_core::array::view::ArrayView;
