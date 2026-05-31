@@ -235,3 +235,68 @@ def test_as_strided_exists_and_works():
     out = fr.lib.stride_tricks.as_strided(x, shape=(5,), strides=(8,))
     assert out.shape == exp.shape
     np.testing.assert_array_equal(out, exp)
+
+
+# ---------------------------------------------------------------------------
+# Negative-dimension handling — wrong EXCEPTION TYPE (OverflowError/TypeError
+# vs numpy's ValueError). The sliding_window_view negative-window case was
+# already pinned + fixed (test_sliding_window_view_negative_window_valueerror),
+# but the same numpy contract — "a negative dimension is a ValueError" — was
+# NOT applied to broadcast_to / broadcast_shapes, which extract their shape as
+# an unsigned `usize` and surface the raw conversion OverflowError/TypeError.
+# ---------------------------------------------------------------------------
+
+def test_broadcast_to_negative_shape_tuple_valueerror():
+    """numpy broadcast_to raises ValueError for a negative shape entry.
+
+    _stride_tricks_impl.py:452-454
+        `if any(size < 0 for size in shape):
+             raise ValueError('all elements of broadcast shape must be '
+                              'non-negative')`
+    Oracle (live): np.broadcast_to(np.array([1,2,3]), (-1, 3)) -> ValueError.
+    ferray extracts the shape as unsigned `usize` and surfaces the raw
+    conversion OverflowError ("can't convert negative int to unsigned"),
+    which is NOT a ValueError subclass.
+    Tracking: #1013 (-l blocker).
+    """
+    x = np.array([1, 2, 3])
+    # Oracle confirms numpy's exception type:
+    with pytest.raises(ValueError):
+        np.broadcast_to(x, (-1, 3))
+    with pytest.raises(ValueError):
+        fr.broadcast_to(x, (-1, 3))
+
+
+def test_broadcast_to_negative_single_int_valueerror():
+    """numpy broadcast_to(scalar, -3) (single int shape) raises ValueError.
+
+    _stride_tricks_impl.py:448 `shape = tuple(shape) if np.iterable(shape)
+    else (shape,)` then :452-454 negative-check -> ValueError.
+    Oracle (live): np.broadcast_to(np.array(5), -3) -> ValueError.
+    ferray's `shape.extract::<usize>()` fails on the negative int, then falls
+    through to a `Vec<usize>` extract that fails on a scalar int, surfacing
+    TypeError ("'int' object is not an instance of 'Sequence'"), NOT ValueError.
+    Tracking: #1014 (-l blocker).
+    """
+    s = np.array(5)
+    with pytest.raises(ValueError):
+        np.broadcast_to(s, -3)  # oracle: numpy's exception type
+    with pytest.raises(ValueError):
+        fr.broadcast_to(s, -3)
+
+
+def test_broadcast_shapes_negative_dim_valueerror():
+    """numpy broadcast_shapes raises ValueError for a negative dimension.
+
+    broadcast_shapes builds `np.empty(x, dtype=_size0_dtype)` per shape
+    (_stride_tricks_impl.py:580); a negative dim makes np.empty raise
+    ValueError ('negative dimensions are not allowed').
+    Oracle (live): np.broadcast_shapes((-1, 3)) -> ValueError.
+    ferray extracts each shape as `Vec<usize>` and surfaces the raw
+    OverflowError ("can't convert negative int to unsigned"), NOT a ValueError.
+    Tracking: #1015 (-l blocker).
+    """
+    with pytest.raises(ValueError):
+        np.broadcast_shapes((-1, 3))  # oracle: numpy's exception type
+    with pytest.raises(ValueError):
+        fr.broadcast_shapes((-1, 3))
