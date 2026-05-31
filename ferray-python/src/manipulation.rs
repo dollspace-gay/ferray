@@ -1158,130 +1158,73 @@ pub fn hstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
 // Padding / tiling / repeating / element insertion
 // ---------------------------------------------------------------------------
 
-/// `numpy.pad(array, pad_width, mode='constant', constant_values=0)`.
+/// `numpy.pad(array, pad_width, mode='constant', **kwargs)`.
 ///
-/// Supports the most common modes: `constant`, `edge`, `reflect`,
-/// `symmetric`, `wrap`. The `linear_ramp`/`maximum`/`minimum`/`mean`/
-/// `median` modes are deferred to a smaller follow-up.
+/// Delegates every mode to `numpy.pad` (#973): numpy owns the correct
+/// `reflect` algorithm (mirror WITHOUT the edge element — the prior
+/// ferray path mirrored WITH the edge, i.e. did `symmetric`, giving
+/// `[2,1,1,2,…]` where numpy gives `[3,2,1,2,…]`), plus `symmetric`,
+/// `edge`, `wrap`, `constant`, and the previously-missing
+/// `linear_ramp`/`maximum`/`mean`/`minimum`/`median`/`empty`. All
+/// mode-specific kwargs (`constant_values`, `reflect_type`,
+/// `stat_length`, `end_values`) flow through `**kwargs`. The numpy
+/// result is re-marshalled through the `match_dtype_all_complex!`
+/// extract/emit seam (#933) so the dtype/shape contract is preserved and
+/// a fresh ferray-owned buffer is returned (R-CODE-4), not a raw numpy
+/// view. datetime64/timedelta64 (#948), string `<U`/`<S` (#960) and
+/// float16 (#955) keep their dedicated marshalling arms.
 #[pyfunction]
-#[pyo3(signature = (array, pad_width, mode = "constant", constant_values = 0.0))]
+#[pyo3(signature = (array, pad_width, mode = "constant", **kwargs))]
 pub fn pad<'py>(
     py: Python<'py>,
     array: &Bound<'py, PyAny>,
     pad_width: &Bound<'py, PyAny>,
     mode: &str,
-    constant_values: f64,
+    kwargs: Option<&Bound<'py, pyo3::types::PyDict>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    use ferray_core::manipulation::extended::PadMode;
     let arr = as_ndarray(py, array)?;
+
+    // Build the kwargs dict forwarded to numpy.pad: `mode` plus every
+    // mode-specific kwarg the caller supplied (`constant_values`,
+    // `reflect_type`, `stat_length`, `end_values`).
+    let np_kwargs = pyo3::types::PyDict::new(py);
+    np_kwargs.set_item("mode", mode)?;
+    if let Some(kw) = kwargs {
+        for (k, v) in kw.iter() {
+            np_kwargs.set_item(k, v)?;
+        }
+    }
+
     // datetime64/timedelta64 (#948): numpy pads with the epoch tick (0) for the
     // default `constant_values=0` and preserves the dtype+unit
     // (`np.pad(M8[D],(1,1))` -> '1970-01-01' fill, live). Delegate and marshal.
     if crate::datetime::is_time_array(&arr)? {
-        let kwargs = pyo3::types::PyDict::new(py);
-        kwargs.set_item("mode", mode)?;
-        if mode == "constant" {
-            kwargs.set_item("constant_values", constant_values)?;
-        }
-        return crate::datetime::delegate_manip(py, "pad", (&arr, pad_width), Some(&kwargs));
+        return crate::datetime::delegate_manip(py, "pad", (&arr, pad_width), Some(&np_kwargs));
     }
     // string `<U`/`<S` (REQ-2, #960): numpy pads with the empty string `''` for
     // the default `constant_values=0` and preserves the dtype+width
-    // (`np.pad(<U2,(1,1))` -> `''` fill, live); delegate to numpy. The f64
-    // `constant_values` is only forwarded for `constant` mode (numpy coerces a
-    // numeric 0 fill to `''` for a string array).
+    // (`np.pad(<U2,(1,1))` -> `''` fill, live); delegate to numpy.
     if is_flexible_array(&arr)? {
-        let kwargs = pyo3::types::PyDict::new(py);
-        kwargs.set_item("mode", mode)?;
-        if mode == "constant" {
-            kwargs.set_item("constant_values", constant_values)?;
-        }
-        return string_delegate(py, "pad", (&arr, pad_width), Some(&kwargs));
+        return string_delegate(py, "pad", (&arr, pad_width), Some(&np_kwargs));
     }
     if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
-        let kwargs = pyo3::types::PyDict::new(py);
-        kwargs.set_item("mode", mode)?;
-        if mode == "constant" {
-            kwargs.set_item("constant_values", constant_values)?;
-        }
-        return crate::conv::f16_delegate(py, "pad", (&arr, pad_width), Some(&kwargs));
+        return crate::conv::f16_delegate(py, "pad", (&arr, pad_width), Some(&np_kwargs));
     }
     let dt = dtype_name(&arr)?;
 
-    // pad_width can be:
-    //   int n        -> apply (n, n) on every axis
-    //   (before, after) tuple -> apply same to every axis
-    //   sequence of (before, after) tuples -> per-axis
-    let arr_ndim: usize = arr.getattr("ndim")?.extract()?;
-    let widths: Vec<(usize, usize)> = if let Ok(n) = pad_width.extract::<usize>() {
-        vec![(n, n); arr_ndim]
-    } else if let Ok((b, a)) = pad_width.extract::<(usize, usize)>() {
-        vec![(b, a); arr_ndim]
-    } else {
-        pad_width.extract::<Vec<(usize, usize)>>()?
-    };
-
-    // `pad` is a pure data-move op (generic over `T: Element` in ferray-core),
-    // so it works unchanged for `Complex<T>`. numpy keeps complex dtype and the
-    // `constant_values=0` fill becomes `0+0j` (`np.pad(complex, (1,1))`, verified
-    // live). Route through the DynMarshal seam (#933) so the imaginary part
-    // survives extract/emit; the constant cast gained a complex arm below.
+    // Real/complex path (#973): delegate to numpy.pad so reflect is correct
+    // and all modes/kwargs are supported, then re-marshal the result through
+    // the DynMarshal seam (#933) to return a fresh ferray-owned buffer with
+    // the dtype/shape contract preserved (the complex arm keeps the imaginary
+    // part). `np.pad` keeps the input dtype, so the result dtype == `dt`.
+    let np = py.import("numpy")?;
+    let result = np
+        .getattr("pad")?
+        .call((&arr, pad_width), Some(&np_kwargs))?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
-        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
-        let pad_mode: PadMode<T> = match mode {
-            "constant" => {
-                // Coerce f64 → T via the FromF64Lossy trait used in `full`,
-                // but it lives in creation.rs. Inline the conversion for
-                // the small number of supported types.
-                let cv: T = ferray_python_constant_cast::<T>(constant_values);
-                PadMode::Constant(cv)
-            }
-            "edge" => PadMode::Edge,
-            "reflect" => PadMode::Reflect,
-            "symmetric" => PadMode::Symmetric,
-            "wrap" => PadMode::Wrap,
-            other => {
-                return Err(PyValueError::new_err(format!(
-                    "pad mode {other:?} not supported (try constant/edge/reflect/symmetric/wrap)"
-                )));
-            }
-        };
-        let r: ArrayD<T> = fme::pad(&fa, &widths, &pad_mode).map_err(ferr_to_pyerr)?;
+        let r: ArrayD<T> = T::extract_dyn(&result)?;
         T::emit_dyn(py, r)?
     }))
-}
-
-/// Helper for `pad` — coerce an `f64` constant to the dispatched element
-/// type. Local to this module so we don't have to expose the
-/// `FromF64Lossy` trait from `creation`.
-trait PadConstantCast {
-    fn from_f64(v: f64) -> Self;
-}
-macro_rules! impl_pad_cast {
-    ($($t:ty),*) => {
-        $(impl PadConstantCast for $t { fn from_f64(v: f64) -> Self { v as Self } })*
-    };
-}
-impl_pad_cast!(f64, f32, i64, i32, i16, i8, u64, u32, u16, u8);
-impl PadConstantCast for bool {
-    fn from_f64(v: f64) -> Self {
-        v != 0.0
-    }
-}
-// Complex constant fill: the real `constant_values` maps to `(v + 0j)`, matching
-// numpy's promotion of a real `constant_values` against a complex array.
-impl PadConstantCast for num_complex::Complex<f32> {
-    fn from_f64(v: f64) -> Self {
-        num_complex::Complex::new(v as f32, 0.0)
-    }
-}
-impl PadConstantCast for num_complex::Complex<f64> {
-    fn from_f64(v: f64) -> Self {
-        num_complex::Complex::new(v, 0.0)
-    }
-}
-fn ferray_python_constant_cast<T: PadConstantCast>(v: f64) -> T {
-    T::from_f64(v)
 }
 
 /// `numpy.tile(A, reps)` — construct an array by repeating A `reps` times.
