@@ -64,6 +64,25 @@ use crate::match_dtype_float;
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// True when `arr`'s dtype is one the real-only `match_dtype_float!` dispatch
+/// cannot represent without loss: float16, datetime64/timedelta64, string
+/// (`<U`/`<S`), or object/structured (`'O'`/`'V'`). Complex (`kind == 'c'`) is
+/// detected separately by the einsum caller. Mirrors the
+/// `stride_tricks::is_non_real_dtype` detect seam (#962).
+fn is_non_real_dtype(arr: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if crate::datetime::is_time_array(arr)? {
+        return Ok(true);
+    }
+    if crate::manipulation::is_string_array(arr)? {
+        return Ok(true);
+    }
+    if crate::conv::is_float16_dtype(dtype_name(arr)?.as_str()) {
+        return Ok(true);
+    }
+    let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+    Ok(kind == "O" || kind == "V")
+}
+
 fn parse_norm_order(ord: &Bound<'_, PyAny>) -> PyResult<fl::NormOrder> {
     use fl::NormOrder;
     if ord.is_none() {
@@ -2405,6 +2424,34 @@ pub fn einsum<'py>(
     if operands.is_empty() {
         return Err(PyValueError::new_err("einsum: need at least one operand"));
     }
+
+    // The real-only path below coerces EVERY operand to `float32`/`float64`
+    // (`coerce_dtype`), which silently DROPS the imaginary part of a complex
+    // operand (R-CODE-4 data corruption #965) and would lose float16 precision /
+    // misroute datetime etc. numpy's `einsum` performs the full complex
+    // contraction (no conjugation) and applies NEP-50 promotion for mixed
+    // real+complex inputs (live numpy 2.4.4: `einsum('ij,jk->ik', [[1+1j,0],[0,1]],
+    // [[1+1j,0],[0,1]])` -> `[[2j,0],[0,1]]` complex128). So if ANY operand carries
+    // a non-real dtype (complex64/128, float16, datetime64/timedelta64, string,
+    // object/structured), delegate the WHOLE einsum to `numpy.einsum(subscripts,
+    // *operands)` ahead of the real path — numpy owns the complex contraction +
+    // NEP-50 + dtype preservation. The real einsum path stays byte-identical.
+    let mut materialised: Vec<Bound<'py, PyAny>> = Vec::with_capacity(operands.len());
+    let mut any_non_real = false;
+    for op in operands.iter() {
+        let arr = as_ndarray(py, &op)?;
+        let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+        any_non_real |= kind == "c" || is_non_real_dtype(&arr)?;
+        materialised.push(arr);
+    }
+    if any_non_real {
+        let np = py.import("numpy")?;
+        let mut args: Vec<Bound<'py, PyAny>> = Vec::with_capacity(operands.len() + 1);
+        args.push(subscripts.into_pyobject(py)?.into_any());
+        args.extend(materialised);
+        return np.call_method1("einsum", PyTuple::new(py, args)?);
+    }
+
     let first = as_ndarray(py, &operands.get_item(0)?)?;
     let dt = dtype_name(&first)?;
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
