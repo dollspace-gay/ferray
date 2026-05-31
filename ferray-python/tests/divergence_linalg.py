@@ -266,3 +266,60 @@ def test_matmul_1d_1d_returns_scalar():
 def test_eigvals_symbol_exists():
     assert hasattr(np.linalg, "eigvals")  # oracle
     assert hasattr(fr.linalg, "eigvals"), "fr.linalg.eigvals is missing"
+
+
+# ---------------------------------------------------------------------------
+# 6. ACToR critic sweep (#985 trace direct-edit): the native float-dtype
+#    `trace` path returns a 0-D `ndarray`, but numpy.trace of a 2-D matrix
+#    returns a TRUE numpy SCALAR (np.float64 / np.complex128), for which
+#    `np.isscalar(...)` is True. ferray's OWN integer/bool `trace` path (which
+#    delegates to numpy, #971) and complex path return a true scalar, so the
+#    float native path is BOTH wrong vs numpy AND internally inconsistent.
+#
+#    numpy upstream: `numpy/_core/fromnumeric.py trace()` -> ndarray.trace,
+#    whose 2-D reduction returns a numpy scalar (verified live:
+#    `np.isscalar(np.trace(np.eye(2))) is True`,
+#    `type(np.trace(np.eye(2))) is np.float64`).
+# ---------------------------------------------------------------------------
+
+
+def test_trace_float_returns_numpy_scalar_not_0d_array():
+    """np.trace(2-D float) is a numpy scalar; ferray returns a 0-D ndarray."""
+    m = np.array([[1.0, 2.0], [3.0, 4.0]])
+    oracle = np.trace(m)  # live oracle
+    assert np.isscalar(oracle)  # numpy: True (numpy scalar, not 0-D array)
+    result = fr.linalg.trace(m)
+    # Pin: ferray must also yield a numpy scalar, matching numpy's return type.
+    assert np.isscalar(result), (
+        f"fr.linalg.trace returned {type(result).__name__} "
+        f"(np.isscalar={np.isscalar(result)}); numpy returns a scalar "
+        f"{type(oracle).__name__}"
+    )
+
+
+def test_trace_complex_returns_numpy_scalar_not_0d_array():
+    """np.trace(2-D complex) is np.complex128; ferray returns a 0-D ndarray."""
+    m = np.array([[1 + 1j, 2 + 0j], [3 + 0j, 4 + 2j]])
+    oracle = np.trace(m)  # live oracle -> np.complex128(5+3j)
+    assert np.isscalar(oracle)  # numpy: True
+    assert type(oracle).__name__ == "complex128"
+    result = fr.linalg.trace(m)
+    assert np.isscalar(result), (
+        f"fr.linalg.trace(complex) returned {type(result).__name__} "
+        f"(np.isscalar={np.isscalar(result)}); numpy returns np.complex128 scalar"
+    )
+
+
+def test_trace_float_return_type_matches_int_path():
+    """ferray's int `trace` returns a scalar; the float path must too (internal
+    consistency + numpy parity). numpy oracle: both ranks scalar."""
+    mi = np.array([[1, 2], [3, 4]])
+    mf = np.array([[1.0, 2.0], [3.0, 4.0]])
+    # Oracle: numpy returns a scalar for both int and float input.
+    assert np.isscalar(np.trace(mi)) and np.isscalar(np.trace(mf))
+    int_scalar = np.isscalar(fr.linalg.trace(mi))   # ferray int path -> True
+    float_scalar = np.isscalar(fr.linalg.trace(mf))  # ferray float path -> False (bug)
+    assert int_scalar == float_scalar, (
+        "ferray.linalg.trace is inconsistent: int path scalar="
+        f"{int_scalar}, float path scalar={float_scalar}; numpy: both True"
+    )
