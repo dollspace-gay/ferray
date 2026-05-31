@@ -114,6 +114,37 @@ fn shape_from_pyany(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<usize>> {
     }
 }
 
+/// Resolve a numpy `size` argument for a *distribution* function to the shape
+/// the library kernel must draw, plus whether the result is a scalar.
+///
+/// numpy's distribution methods (`mtrand.pyx` / `_generator.pyx`) return a 0-d
+/// numpy scalar (`numpy.float64` / `numpy.int64`) when `size is None`, and an
+/// array of the requested shape otherwise. ferray's library kernels reject an
+/// empty shape (`ValueError("shape must have at least one axis")`), so for the
+/// `size=None` case we draw a single-element `[1]` sample and flag it for
+/// scalarization (collapse to a numpy scalar via [`finish_dist`]). This is the
+/// same `size=None -> scalar` mechanism the hand-written `random`/`normal`/
+/// `uniform`/`integers` paths already implement, factored for uniform reuse
+/// across every distribution binding and `PyGenerator` method.
+fn dist_shape(size: Option<&Bound<'_, PyAny>>) -> PyResult<(Vec<usize>, bool)> {
+    match size {
+        None => Ok((vec![1], true)),
+        Some(o) if o.is_none() => Ok((vec![1], true)),
+        Some(_) => Ok((shape_from_pyany(size)?, false)),
+    }
+}
+
+/// Finalize a distribution result: when `scalar` (numpy `size=None`), collapse
+/// the single-element draw to a 0-d numpy scalar via [`scalarize`]; otherwise
+/// return the shaped array unchanged.
+fn finish_dist(arr: Bound<'_, PyAny>, scalar: bool) -> PyResult<Bound<'_, PyAny>> {
+    if scalar {
+        let zerod = arr.call_method1("reshape", (pyo3::types::PyTuple::empty(arr.py()),))?;
+        return scalarize(zerod);
+    }
+    Ok(arr)
+}
+
 /// Which entry point a seed is being resolved for. numpy's two seeding
 /// surfaces apply *different* integer bounds to a scalar int seed
 /// (R-DEV-2, exception type + message family):
@@ -671,10 +702,13 @@ macro_rules! bind_dist_1param {
             $param: f64,
             size: Option<&Bound<'py, PyAny>>,
         ) -> PyResult<Bound<'py, PyAny>> {
-            let shape = shape_from_pyany(size)?;
+            let (shape, scalar) = dist_shape(size)?;
             let arr: ArrayD<f64> =
                 with_rng(|rng| rng.$method($param, shape.as_slice())).map_err(ferr_to_pyerr)?;
-            Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+            finish_dist(
+                arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+                scalar,
+            )
         }
     };
 }
@@ -693,10 +727,13 @@ pub fn geometric<'py>(
     p: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<i64> =
         with_rng(|rng| rng.geometric(p, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.poisson(lam=1.0, size=None)` — returns int64.
@@ -707,10 +744,13 @@ pub fn poisson<'py>(
     lam: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<i64> =
         with_rng(|rng| rng.poisson(lam, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.lognormal(mean=0, sigma=1, size=None)`.
@@ -722,10 +762,13 @@ pub fn lognormal<'py>(
     sigma: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.lognormal(mean, sigma, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.binomial(n, p, size=None)`.
@@ -746,10 +789,13 @@ pub fn binomial<'py>(
     if n < 0 {
         return Err(pyo3::exceptions::PyValueError::new_err("n < 0"));
     }
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<i64> =
         with_rng(|rng| rng.binomial(n as u64, p, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.gamma(shape, scale=1.0, size=None)`.
@@ -761,10 +807,13 @@ pub fn gamma<'py>(
     scale: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape_vec = shape_from_pyany(size)?;
+    let (shape_vec, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.gamma(shape, scale, shape_vec.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.beta(a, b, size=None)`.
@@ -776,10 +825,13 @@ pub fn beta<'py>(
     b: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.beta(a, b, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.laplace(loc=0, scale=1, size=None)`.
@@ -791,10 +843,13 @@ pub fn laplace<'py>(
     scale: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.laplace(loc, scale, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.gumbel(loc=0, scale=1, size=None)`.
@@ -806,10 +861,13 @@ pub fn gumbel<'py>(
     scale: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.gumbel(loc, scale, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.triangular(left, mode, right, size=None)`.
@@ -822,10 +880,13 @@ pub fn triangular<'py>(
     right: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> = with_rng(|rng| rng.triangular(left, mode, right, shape.as_slice()))
         .map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -844,10 +905,13 @@ pub fn logistic<'py>(
     scale: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.logistic(loc, scale, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.power(a, size=None)` (`numpy/random/__init__.py:153`).
@@ -858,9 +922,12 @@ pub fn power<'py>(
     a: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> = with_rng(|rng| rng.power(a, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.standard_t(df, size=None)` (`numpy/random/__init__.py:169`).
@@ -871,10 +938,13 @@ pub fn standard_t<'py>(
     df: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.standard_t(df, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.f(dfnum, dfden, size=None)` (`numpy/random/__init__.py:134`).
@@ -886,10 +956,13 @@ pub fn f_dist<'py>(
     dfden: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.f(dfnum, dfden, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.vonmises(mu, kappa, size=None)`
@@ -902,10 +975,13 @@ pub fn vonmises<'py>(
     kappa: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.vonmises(mu, kappa, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.wald(mean, scale, size=None)`
@@ -918,10 +994,13 @@ pub fn wald<'py>(
     scale: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.wald(mean, scale, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.standard_cauchy(size=None)`
@@ -932,10 +1011,13 @@ pub fn standard_cauchy<'py>(
     py: Python<'py>,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.standard_cauchy(shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.standard_exponential(size=None)`
@@ -946,10 +1028,13 @@ pub fn standard_exponential<'py>(
     py: Python<'py>,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.standard_exponential(shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.standard_gamma(shape, size=None)`
@@ -962,10 +1047,13 @@ pub fn standard_gamma<'py>(
     shape: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let size_shape = shape_from_pyany(size)?;
+    let (size_shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> =
         with_rng(|rng| rng.standard_gamma(shape, size_shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.negative_binomial(n, p, size=None)` — returns int64
@@ -978,10 +1066,13 @@ pub fn negative_binomial<'py>(
     p: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<i64> =
         with_rng(|rng| rng.negative_binomial(n, p, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.hypergeometric(ngood, nbad, nsample, size=None)` — returns
@@ -1002,12 +1093,15 @@ pub fn hypergeometric<'py>(
             "ngood, nbad, and nsample must be non-negative",
         ));
     }
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<i64> = with_rng(|rng| {
         rng.hypergeometric(ngood as u64, nbad as u64, nsample as u64, shape.as_slice())
     })
     .map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -1182,10 +1276,13 @@ pub fn logseries<'py>(
     p: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<i64> =
         with_rng(|rng| rng.logseries(p, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.noncentral_chisquare(df, nonc, size=None)` — float64
@@ -1198,10 +1295,13 @@ pub fn noncentral_chisquare<'py>(
     nonc: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> = with_rng(|rng| rng.noncentral_chisquare(df, nonc, shape.as_slice()))
         .map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.noncentral_f(dfnum, dfden, nonc, size=None)` — float64
@@ -1215,10 +1315,13 @@ pub fn noncentral_f<'py>(
     nonc: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<f64> = with_rng(|rng| rng.noncentral_f(dfnum, dfden, nonc, shape.as_slice()))
         .map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.zipf(a, size=None)` — int64 in `{1, 2, ...}` with `a > 1`
@@ -1230,9 +1333,12 @@ pub fn zipf<'py>(
     a: f64,
     size: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let shape = shape_from_pyany(size)?;
+    let (shape, scalar) = dist_shape(size)?;
     let arr: ArrayD<i64> = with_rng(|rng| rng.zipf(a, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    finish_dist(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        scalar,
+    )
 }
 
 /// `numpy.random.choice(a, size=None, replace=True, p=None)`.
@@ -1419,12 +1525,15 @@ impl PyGenerator {
         scale: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .normal(loc, scale, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.uniform(low=0, high=1, size=None)`.
@@ -1436,12 +1545,15 @@ impl PyGenerator {
         high: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .uniform(low, high, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.integers(low, high=None, size=None)`.
@@ -1457,12 +1569,15 @@ impl PyGenerator {
             Some(h) => (low, h),
             None => (0, low),
         };
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<i64> = self
             .inner
             .integers(lo, hi, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.exponential(scale=1.0, size=None)`.
@@ -1473,12 +1588,15 @@ impl PyGenerator {
         scale: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .exponential(scale, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.poisson(lam=1.0, size=None)`.
@@ -1489,12 +1607,15 @@ impl PyGenerator {
         lam: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<i64> = self
             .inner
             .poisson(lam, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.binomial(n, p, size=None)` — `n < 0` -> `ValueError`
@@ -1510,12 +1631,15 @@ impl PyGenerator {
         if n < 0 {
             return Err(pyo3::exceptions::PyValueError::new_err("n < 0"));
         }
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<i64> = self
             .inner
             .binomial(n as u64, p, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.gamma(shape, scale=1.0, size=None)`.
@@ -1527,12 +1651,15 @@ impl PyGenerator {
         scale: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape_vec = shape_from_pyany(size)?;
+        let (shape_vec, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .gamma(shape, scale, shape_vec.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.beta(a, b, size=None)`.
@@ -1544,12 +1671,15 @@ impl PyGenerator {
         b: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .beta(a, b, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.laplace(loc=0, scale=1, size=None)`.
@@ -1561,12 +1691,15 @@ impl PyGenerator {
         scale: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .laplace(loc, scale, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.gumbel(loc=0, scale=1, size=None)`.
@@ -1578,12 +1711,15 @@ impl PyGenerator {
         scale: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .gumbel(loc, scale, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.triangular(left, mode, right, size=None)`.
@@ -1596,12 +1732,15 @@ impl PyGenerator {
         right: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .triangular(left, mode, right, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.rayleigh(scale=1.0, size=None)`.
@@ -1612,12 +1751,15 @@ impl PyGenerator {
         scale: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .rayleigh(scale, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.weibull(a, size=None)`.
@@ -1628,12 +1770,15 @@ impl PyGenerator {
         a: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .weibull(a, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.lognormal(mean=0, sigma=1, size=None)`.
@@ -1645,12 +1790,15 @@ impl PyGenerator {
         sigma: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .lognormal(mean, sigma, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.geometric(p, size=None)` — returns int64.
@@ -1661,12 +1809,15 @@ impl PyGenerator {
         p: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<i64> = self
             .inner
             .geometric(p, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.choice(a, size=None, replace=True, p=None)` — mirrors the
@@ -1884,12 +2035,15 @@ impl PyGenerator {
         p: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<i64> = self
             .inner
             .logseries(p, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.noncentral_chisquare(df, nonc, size=None)` — float64.
@@ -1901,12 +2055,15 @@ impl PyGenerator {
         nonc: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .noncentral_chisquare(df, nonc, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.noncentral_f(dfnum, dfden, nonc, size=None)` — float64.
@@ -1919,12 +2076,15 @@ impl PyGenerator {
         nonc: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<f64> = self
             .inner
             .noncentral_f(dfnum, dfden, nonc, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 
     /// `Generator.zipf(a, size=None)` — int64 in `{1, 2, ...}`, `a > 1`.
@@ -1935,12 +2095,15 @@ impl PyGenerator {
         a: f64,
         size: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let shape = shape_from_pyany(size)?;
+        let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<i64> = self
             .inner
             .zipf(a, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        finish_dist(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            scalar,
+        )
     }
 }
 
