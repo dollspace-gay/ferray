@@ -13,6 +13,13 @@ dist/
 build/
 *.egg
 
+# === Maturin / PyO3 compiled extension (build artifact, never commit) ===
+*.so
+ferray-python/python/ferray/_ferray.*.so
+
+# === Coverage output (regenerated) ===
+coverage/
+
 # === IDE / Editor ===
 .vscode/
 .idea/
