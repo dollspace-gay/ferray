@@ -1556,16 +1556,24 @@ pub fn nan_to_num<'py>(
 }
 
 /// `numpy.unwrap(p, discont=None, axis=-1, period=2*pi)` — unwrap a phase
-/// angle by changing deltas greater than `discont` to their `2*pi`
+/// angle by changing deltas greater than `discont` to their `period`
 /// complement (numpy/lib/_function_base_impl.py:1734). The library
-/// `ferray_ufunc::unwrap` is the 1-D unwrap with `discont` defaulting to pi.
-/// Integer/bool input promotes to `float64` (numpy computes in inexact).
+/// `ferray_ufunc::unwrap` is the 1-D unwrap with `discont` defaulting to pi over
+/// the default `2*pi` period. A non-default `period`, a non-default `axis`, or an
+/// N-D input delegates to numpy, which owns the period-based wrapping and the
+/// N-D/axis reduction. Integer/bool input promotes to `float64`.
 #[pyfunction]
-#[pyo3(signature = (p, discont = None))]
+#[pyo3(signature = (p, discont = None, axis = -1, period = None))]
 pub fn unwrap<'py>(
     py: Python<'py>,
     p: &Bound<'py, PyAny>,
     discont: Option<f64>,
+    axis: isize,
+    // `period` is forwarded to numpy as the ORIGINAL object (not coerced to
+    // f64): numpy keeps an integer result when both the input and the period are
+    // integer (`np.unwrap([0,5,10], period=6).dtype == int64`), so passing a
+    // float `6.0` here would wrongly upcast the result to float64.
+    period: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, p)?;
     let dt = dtype_name(&arr)?;
@@ -1578,6 +1586,22 @@ pub fn unwrap<'py>(
         return Err(pyo3::exceptions::PyTypeError::new_err(
             "ufunc 'remainder' not supported for the input types: numpy.unwrap does not accept complex input",
         ));
+    }
+    // The native 1-D kernel only covers the default 2*pi period along a 1-D
+    // array's only axis; a non-default period, a non-default axis, or an N-D
+    // input delegates to numpy.unwrap.
+    let ndim: usize = arr.getattr("ndim")?.extract()?;
+    if period.is_some() || ndim != 1 || !(axis == -1 || axis == 0) {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(d) = discont {
+            kwargs.set_item("discont", d)?;
+        }
+        kwargs.set_item("axis", axis)?;
+        if let Some(pp) = period {
+            kwargs.set_item("period", pp)?;
+        }
+        return np.call_method("unwrap", (&arr,), Some(&kwargs));
     }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32") {
         "float32"

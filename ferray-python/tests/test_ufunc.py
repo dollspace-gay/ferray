@@ -275,3 +275,33 @@ def test_ediff1d_both_appendages():
         ferray.ediff1d([1, 2, 4], to_end=[9, 8], to_begin=0),
         np.ediff1d([1, 2, 4], to_end=[9, 8], to_begin=0),
     )
+
+
+# ---------------------------------------------------------------------------
+# unwrap period= / axis= (#983)
+# ---------------------------------------------------------------------------
+# numpy.unwrap(p, discont, axis=-1, period=2*pi). The prior binding lacked
+# period=/axis=. An INTEGER input + INTEGER period keeps an int64 result.
+
+
+def test_unwrap_period_int_keeps_int():
+    r = ferray.unwrap([0, 5, 10], period=6)
+    n = np.unwrap([0, 5, 10], period=6)
+    assert np.asarray(r).dtype == n.dtype == np.int64
+    np.testing.assert_array_equal(r, n)
+
+
+def test_unwrap_period_float():
+    np.testing.assert_allclose(
+        ferray.unwrap([0.0, 5, 10], period=6.0), np.unwrap([0.0, 5, 10], period=6.0)
+    )
+
+
+def test_unwrap_axis():
+    np.testing.assert_allclose(
+        ferray.unwrap([[0.0, 5], [10, 15]], axis=0), np.unwrap([[0.0, 5], [10, 15]], axis=0)
+    )
+
+
+def test_unwrap_default_unchanged():
+    np.testing.assert_allclose(ferray.unwrap([0.0, 5, 10]), np.unwrap([0.0, 5, 10]))

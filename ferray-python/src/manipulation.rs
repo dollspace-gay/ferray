@@ -1843,40 +1843,20 @@ pub fn row_stack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<B
     vstack(py, arrays)
 }
 
-/// `numpy.block(arrays)` — assemble an array from a 2-D nested-list grid.
+/// `numpy.block(arrays)` — assemble an array from nested lists of blocks.
+///
+/// numpy.block's output dimensionality is `max(nesting_depth, max_atom_ndim)`
+/// and it concatenates recursively at every nesting level: `block([a, b])`
+/// (depth 1, 1-D atoms) is 1-D, while `block([[a, b]])` (depth 2) is 2-D, and a
+/// list of scalars `block([1, 2, 3])` is 1-D. The prior binding required a
+/// strict 2-D list-of-lists grid — it raised TypeError on a depth-1 list or a
+/// list of scalars, and flattened a single-row `[[a, b]]` to 1-D instead of 2-D.
+/// numpy owns the recursive depth/concatenation/promotion algorithm (and every
+/// dtype: complex, datetime, string, f16, mixed), so delegate the whole op.
 #[pyfunction]
 pub fn block<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    let outer = arrays.cast::<PyList>()?;
-    if outer.is_empty() {
-        return Err(PyValueError::new_err("block: empty input"));
-    }
-    // Sniff dtype from the first inner element of the first row.
-    let first_row = outer.get_item(0)?;
-    let first_row_list = first_row.cast::<PyList>()?;
-    if first_row_list.is_empty() {
-        return Err(PyValueError::new_err("block: empty row"));
-    }
-    let first = as_ndarray(py, &first_row_list.get_item(0)?)?;
-    if crate::datetime::is_time_array(&first)? {
-        return crate::datetime::delegate_manip(py, "block", (arrays,), None);
-    }
-    if is_flexible_array(&first)? {
-        return string_delegate(py, "block", (arrays,), None);
-    }
-    if crate::conv::is_float16_dtype(dtype_name(&first)?.as_str()) {
-        return crate::conv::f16_delegate(py, "block", (arrays,), None);
-    }
-    let dt = dtype_name(&first)?;
-
-    Ok(match_dtype_all_complex!(dt.as_str(), T => {
-        let mut grid: Vec<Vec<ArrayD<T>>> = Vec::with_capacity(outer.len());
-        for row_obj in outer.iter() {
-            let row_list = row_obj.cast::<PyList>()?;
-            grid.push(collect_typed::<T>(py, row_list.as_any(), dt.as_str())?);
-        }
-        let r: ArrayD<T> = fm::block(&grid).map_err(ferr_to_pyerr)?;
-        T::emit_dyn(py, r)?
-    }))
+    let np = py.import("numpy")?;
+    np.call_method1("block", (arrays,))
 }
 
 /// Functional form of `numpy.r_[a, b, c, ...]` for the common

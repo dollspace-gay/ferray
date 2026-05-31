@@ -309,3 +309,45 @@ def test_insert_promotes_dtype():
     np_r = np.insert([1, 2, 3], 1, 9.5)
     assert np.asarray(fr_r).dtype == np_r.dtype
     np.testing.assert_array_equal(fr_r, np_r)
+
+
+# ---------------------------------------------------------------------------
+# block recursive nesting depth (#983)
+# ---------------------------------------------------------------------------
+# numpy.block's output ndim is max(nesting_depth, max_atom_ndim) and it
+# concatenates recursively. The prior binding required a strict 2-D list-of-
+# lists grid (TypeError on depth-1 lists / scalar lists; flattened a single-row
+# [[a, b]] to 1-D instead of 2-D).
+
+
+def test_block_single_row_is_2d():
+    r = ferray.block([[np.array([1, 2]), np.array([3])]])
+    n = np.block([[np.array([1, 2]), np.array([3])]])
+    assert np.asarray(r).shape == n.shape == (1, 3)
+    np.testing.assert_array_equal(r, n)
+
+
+def test_block_depth1_list_is_1d():
+    r = ferray.block([np.array([1, 2]), np.array([3])])
+    n = np.block([np.array([1, 2]), np.array([3])])
+    assert np.asarray(r).shape == n.shape == (3,)
+    np.testing.assert_array_equal(r, n)
+
+
+def test_block_list_of_scalars():
+    np.testing.assert_array_equal(ferray.block([1, 2, 3]), np.block([1, 2, 3]))
+
+
+def test_block_2x2_grid():
+    blocks = [
+        [np.array([[1, 2]]), np.array([[3]])],
+        [np.array([[4, 5]]), np.array([[6]])],
+    ]
+    np.testing.assert_array_equal(ferray.block(blocks), np.block(blocks))
+
+
+def test_block_complex():
+    r = ferray.block([[np.array([1 + 1j, 2])]])
+    n = np.block([[np.array([1 + 1j, 2])]])
+    assert np.asarray(r).dtype == n.dtype == np.complex128
+    np.testing.assert_array_equal(r, n)
