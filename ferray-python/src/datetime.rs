@@ -127,6 +127,63 @@ fn timedelta_result<'py>(
 // datetime-aware arithmetic dispatch (used by ufunc::add / ufunc::subtract)
 // ---------------------------------------------------------------------------
 
+/// Returns `true` if a numpy dtype name string denotes a datetime64 /
+/// timedelta64 dtype (i.e. starts with `"datetime64"` / `"timedelta64"`).
+///
+/// Used by the creation/coercion bindings (`array`/`asarray`/`zeros`/`ones`/
+/// `empty`/`full` and the `*_like` siblings) to branch on the time dtypes
+/// *ahead* of the real-only `match_dtype_all!` / `creation_dispatch!` macros,
+/// which would otherwise hit their `TypeError` fallthrough (R-1 input
+/// coercion). The name is read with `numpy.dtype(...).name`, e.g.
+/// `"datetime64[D]"` / `"timedelta64[ns]"`.
+pub fn is_time_dtype_name(name: &str) -> bool {
+    name.starts_with("datetime64") || name.starts_with("timedelta64")
+}
+
+/// Round-trip an already-constructed numpy datetime64 / timedelta64 ndarray
+/// through the ferray int64-view transport, returning a fresh numpy
+/// datetime64 / timedelta64 ndarray of the SAME unit + shape + values.
+///
+/// This is the R-1 input-coercion seam: `array`/`asarray`/`zeros`/`ones`/
+/// `empty`/`full` (and the `*_like` siblings) delegate the parse / fill /
+/// shape construction to numpy (which owns the string→datetime64 parse and
+/// the zeros/ones/full fill semantics), then push the resulting buffer across
+/// the ferray boundary via the zero-copy `.view('int64')` bridge
+/// ([`as_int64_view`]) and reconstruct the typed array with
+/// [`int64_to_datetime64`] / [`int64_to_timedelta64`]. This produces a fresh
+/// ferray-marshalled buffer while preserving numpy's dtype + unit + shape with
+/// no lossy cast (R-CODE-4); NaT (`i64::MIN`) is carried through unchanged as a
+/// plain int64 tick. The unit string is read directly from the dtype
+/// ([`datetime64_unit`]), so calendar units (`Y`/`M`/`W`) and the full
+/// sub-second range round-trip even though ferray-core's arithmetic `TimeUnit`
+/// only models `D..ns` — this path performs no arithmetic, only marshalling.
+///
+/// `arr` must already be a numpy datetime64 / timedelta64 ndarray (the caller
+/// constructs it via `np.asarray(obj, dtype)` / `np.zeros(shape, dtype)` /
+/// etc.); a non-time dtype is rejected so the caller only invokes this for the
+/// `"M"`/`"m"` arms.
+pub fn datetime_roundtrip<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let kind = time_kind(arr)?.ok_or_else(|| {
+        PyTypeError::new_err("datetime_roundtrip requires a datetime64 / timedelta64 array")
+    })?;
+    // Read the unit string straight from the dtype (no TimeUnit parse, so
+    // Y/M/W and the full sub-second range pass through — this is pure
+    // marshalling, not arithmetic).
+    let (unit_str, _count) = datetime64_unit(py, arr)?;
+    // Zero-copy reinterpret as int64, then materialise an owned ferray ArrayD
+    // (the round-trip across the boundary that this binding exists to perform).
+    let i64_view = as_int64_view(py, arr)?;
+    let view: PyReadonlyArrayDyn<i64> = i64_view.extract()?;
+    let ticks: ArrayD<i64> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    match kind {
+        TimeKind::Datetime => int64_to_datetime64(py, ticks, &unit_str),
+        TimeKind::Timedelta => int64_to_timedelta64(py, ticks, &unit_str),
+    }
+}
+
 /// Returns `true` if either operand is a datetime64 / timedelta64 array, so
 /// the ufunc `add` / `subtract` bindings can route to [`add_time`] /
 /// [`subtract_time`] instead of the numeric path.

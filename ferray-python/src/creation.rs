@@ -39,6 +39,7 @@
 //! | RC-CARANGE (complex-dtype arange, real args) | SHIPPED | `complex_arange` (consumed by the `arange` `#[pyfunction]` here for `dtype=complex64\|complex128`) builds the real `(start,stop,step)` ramp via `fc::arange::<f64>` then lifts each value to `Complex` with a zero imaginary part, marshalled out via `complex_ferray_to_pyarray`. numpy: `np.arange(0,3,1,dtype='complex128') == [0j,1+0j,2+0j]` (live, numpy 2.4.5). Pinned green: `tests/test_divergence_complex_sweep_audit.py::test_divergence_arange_complex_dtype_raises`; `tests/test_expansion_complex_misc.py::test_arange_complex128_dtype_matches_numpy`, `::test_arange_complex64_dtype_matches_numpy`, `::test_arange_complex_single_arg`. |
 //! | RC-CLINSPACE (complex-endpoint linspace) | SHIPPED | `complex_linspace` (consumed by the `linspace` `#[pyfunction]` here when an endpoint is complex or `dtype` is complex) computes `y = arange(0,num)*step + start` with `step = (stop-start)/div`, pinning `y[-1]=stop` on `endpoint`, marshalled via `complex_ferray_to_pyarray`; `retstep` returns `(samples, complex step)` (`numpy/_core/function_base.py:130-176,185-186`). numpy: `np.linspace(0j,1+1j,5) == [0j,0.25+0.25j,0.5+0.5j,0.75+0.75j,1+1j]` (live). Pinned green: `tests/test_divergence_complex_sweep_audit.py::test_divergence_linspace_complex_endpoints_raises`; `tests/test_expansion_complex_misc.py::test_linspace_complex_endpoints_matches_numpy`, `::test_linspace_complex_endpoint_pinned_exact`, `::test_linspace_complex_dtype_real_endpoints`. |
 //! | RC-CDCLASS (#938 complex eye/identity/vander/geomspace) | SHIPPED | `eye`/`identity` route their fill (`fc::eye`/`fc::identity`, `Element`-generic) through `match_dtype_all_complex!` + `T::emit_dyn` so `dtype=complex` yields `1+0j`/`0j`; `vander` dispatches complex to `complex_vander_dispatch` (`fc::vander` over `Complex<T>`, complex powers `x^j`); `geomspace` accepts complex endpoints (`extract_complex_scalar`) and computes `complex_geomspace` (`start*(stop/start)**linspace(0,1,num)`). Consumer: the `eye`/`identity`/`vander`/`geomspace` `#[pyfunction]`s registered top-level in `lib.rs` `_ferray`. numpy: `np.eye(2,dtype=complex)`, `np.vander([3+4j,...])`, `np.geomspace(1+1j,8+8j,3)` (live 2.4.5). Pinned green: `tests/test_divergence_complex_converge_audit.py::test_D_eye_complex`/`::test_D_identity_complex`/`::test_D_vander`/`::test_D_geomspace`; `tests/test_expansion_complex_dclass.py` (eye/identity/vander/geomspace cases). |
+//! | RC-DATETIME (#941 datetime64/timedelta64 input coercion) | SHIPPED | `array`/`asarray` branch on `crate::datetime::is_time_dtype_name` ahead of `match_dtype_all!`, and `zeros`/`ones`/`empty`/`full`/`zeros_like`/`ones_like`/`empty_like`/`full_like` route the `"M"`/`"m"` case through `time_shape_create` (numpy builds the buffer; the int64-view transport `crate::datetime::datetime_roundtrip` marshals it, preserving unit+shape+NaT, R-CODE-4). Consumer: the `array`/`asarray`/`zeros`/`ones`/`empty`/`full`/`*_like` `#[pyfunction]`s registered top-level in `lib.rs`. numpy: `np.array(['2020-01-01'],dtype='datetime64[D]')`, `np.zeros(3,dtype='datetime64[s]')`, `np.full(2,'2021-06-15',dtype='datetime64[D]')` (live 2.4.5). Pinned green: `tests/test_expansion_datetime_construct.py` (57 cases). |
 //! | RC-ARANGE-FLOAT (per-element float construction) | NOT-STARTED | `np.arange(1.0,2.0,0.3)` last element is `1.9000000000000001`; ferray-core's float `arange` diverges. Root cause is in ferray-core (`creation/mod.rs`), not this binding — open ferray-core follow-up. Pin: `test_arange_float_last_element_matches_numpy`. |
 //! | RC-GEOM-EXACT (geomspace endpoint pinning) | NOT-STARTED | `np.geomspace(-1,-1000,4)` is exactly `[-1,-10,-100,-1000]` via sign rotation + endpoint pinning; ferray-core's `geomspace` lacks both. Root cause in ferray-core, not this binding — open ferray-core follow-up. Pin: `test_geomspace_negative_endpoints_exact`. |
 
@@ -214,7 +215,42 @@ pub fn zeros<'py>(
         Some(d) => normalize_dtype(py, d)?,
         None => "float64".to_string(),
     };
+    if crate::datetime::is_time_dtype_name(dt.as_str()) {
+        return time_shape_create(py, "zeros", &shape_vec, &dt, None);
+    }
     Ok(creation_dispatch!(fc::zeros, py, shape_vec, dt.as_str()))
+}
+
+/// Build a datetime64 / timedelta64 array of a given `shape` for a shape-based
+/// creation function (`zeros`/`ones`/`empty`/`full`), routed through the
+/// int64-view transport.
+///
+/// numpy owns the fill semantics for the time dtypes — `np.zeros(n,
+/// dtype='datetime64[s]')` is the epoch (ticks `0`), `np.ones(n,
+/// dtype='datetime64[D]')` is ticks `1` (NOT the epoch), and
+/// `np.full(n, '2021-06-15', dtype='datetime64[D]')` parses the fill string —
+/// so this delegates the construction to numpy's `np_func`(shape[, fill],
+/// dtype) and then round-trips the resulting datetime64 / timedelta64 buffer
+/// through the ferray int64-view transport ([`crate::datetime::datetime_roundtrip`]),
+/// preserving unit + shape + NaT with no lossy cast (R-1, R-CODE-4). `empty`
+/// maps to numpy's `zeros` (the binding's defined-buffer contract, matching the
+/// real-dtype `empty` arm).
+fn time_shape_create<'py>(
+    py: Python<'py>,
+    np_func: &str,
+    shape: &[usize],
+    dt: &str,
+    fill: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let shape_tuple = pyo3::types::PyTuple::new(py, shape)?;
+    // `empty` -> numpy `zeros` (defined buffer), matching the real-dtype arm.
+    let func = if np_func == "empty" { "zeros" } else { np_func };
+    let built = match fill {
+        Some(fv) => np.call_method1(func, (shape_tuple, fv, dt))?,
+        None => np.call_method1(func, (shape_tuple, dt))?,
+    };
+    crate::datetime::datetime_roundtrip(py, &built)
 }
 
 /// `numpy.ones(shape, dtype="float64")` equivalent. `dtype` accepts a string,
@@ -231,6 +267,9 @@ pub fn ones<'py>(
         Some(d) => normalize_dtype(py, d)?,
         None => "float64".to_string(),
     };
+    if crate::datetime::is_time_dtype_name(dt.as_str()) {
+        return time_shape_create(py, "ones", &shape_vec, &dt, None);
+    }
     Ok(creation_dispatch!(fc::ones, py, shape_vec, dt.as_str()))
 }
 
@@ -254,6 +293,9 @@ pub fn empty<'py>(
         Some(d) => normalize_dtype(py, d)?,
         None => "float64".to_string(),
     };
+    if crate::datetime::is_time_dtype_name(dt.as_str()) {
+        return time_shape_create(py, "empty", &shape_vec, &dt, None);
+    }
     Ok(creation_dispatch!(fc::zeros, py, shape_vec, dt.as_str()))
 }
 
@@ -911,6 +953,9 @@ pub fn zeros_like<'py>(
         None => dtype_name(&arr)?,
     };
     let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
+    if crate::datetime::is_time_dtype_name(dt.as_str()) {
+        return time_shape_create(py, "zeros", &shape, &dt, None);
+    }
     Ok(creation_dispatch!(fc::zeros, py, shape, dt.as_str()))
 }
 
@@ -928,6 +973,9 @@ pub fn ones_like<'py>(
         None => dtype_name(&arr)?,
     };
     let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
+    if crate::datetime::is_time_dtype_name(dt.as_str()) {
+        return time_shape_create(py, "ones", &shape, &dt, None);
+    }
     Ok(creation_dispatch!(fc::ones, py, shape, dt.as_str()))
 }
 
@@ -951,6 +999,9 @@ pub fn empty_like<'py>(
         None => dtype_name(&arr)?,
     };
     let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
+    if crate::datetime::is_time_dtype_name(dt.as_str()) {
+        return time_shape_create(py, "empty", &shape, &dt, None);
+    }
     Ok(creation_dispatch!(fc::zeros, py, shape, dt.as_str()))
 }
 
@@ -1013,6 +1064,14 @@ fn full_impl<'py>(
     fill_value: &Bound<'py, PyAny>,
     dtype: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // datetime64 / timedelta64 fill: numpy parses the fill (e.g. the string
+    // `'2021-06-15'`) and owns the unit math, so delegate `np.full(shape,
+    // fill, dtype)` and round-trip the resulting time buffer through the
+    // int64-view transport (R-1, R-CODE-4). Routed before the f64 extraction
+    // below, which would raise on a datetime string.
+    if crate::datetime::is_time_dtype_name(dtype) {
+        return time_shape_create(py, "full", shape, dtype, Some(fill_value));
+    }
     let dim = IxDyn::new(shape);
     // Complex fills carry both parts; extract a `Complex<f64>` from the Python
     // object (a Python `complex`, a numpy complex scalar, or a real number all
@@ -1172,6 +1231,16 @@ pub fn array<'py>(
     // `fr.array([1+2j])` builds a complex ndarray instead of raising.
     if is_complex_dtype(dt.as_str()) {
         return complex_roundtrip_copy(py, &arr, dt.as_str());
+    }
+    // datetime64 / timedelta64 input (a string-list + `dtype='datetime64[D]'`,
+    // or a numpy datetime/timedelta array) likewise can't ride the real-only
+    // macro (no `M`/`m` arm → `TypeError`). numpy has already parsed the strings
+    // / preserved the unit in `arr`; round-trip it through the int64-view
+    // transport so `fr.array(['2020-01-01'], dtype='datetime64[D]')` builds a
+    // datetime64 ndarray preserving unit + shape + NaT instead of raising
+    // (R-1, R-CODE-4).
+    if crate::datetime::is_time_dtype_name(dt.as_str()) {
+        return crate::datetime::datetime_roundtrip(py, &arr);
     }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
