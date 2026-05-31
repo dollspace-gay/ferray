@@ -5,6 +5,43 @@
 // alignment/padding, stripping, find/replace, splitting/joining, and regex
 // support. Operates on `StringArray` — a separate array type backed by
 // `Vec<String>`.
+//
+// ## REQ status
+//
+// This crate root is the re-export / namespace-registration surface: it
+// re-exports every operation under a flat namespace (mirroring
+// `numpy.strings.upper`, `numpy.strings.find`, ...) and is itself the
+// production consumer that the `ferray-python` `#[pyfunction]` shims import
+// (`use ferray_strings as fs;` in `ferray-python/src/char.rs`). Per-op REQ
+// evidence lives in each module's own `## REQ status` block; this block
+// records which design-doc REQ each `pub use` here satisfies.
+//
+// SHIPPED (all re-exported below; module impl + Python consumer cited in
+// the named module's `## REQ status`):
+//   - REQ-1/REQ-2 StringArray type + `array` constructor — `pub use
+//     string_array::{StringArray, StringArray1, StringArray2, array}`.
+//   - REQ-3/REQ-4 concat/repeat — `pub use concat::{add, add_same,
+//     multiply}` (see `concat.rs`).
+//   - REQ-5 case — `pub use case::{capitalize, lower, title, upper}`
+//     (see `case.rs`).
+//   - REQ-6 alignment — `pub use align::{center, ljust, ljust_with, rjust,
+//     rjust_with, zfill}` (see `align.rs`).
+//   - REQ-7 stripping — `pub use strip::{lstrip, rstrip, strip}`
+//     (see `strip.rs`).
+//   - REQ-8/REQ-9/REQ-10 replace + search predicates/indices — `pub use
+//     search::{count, endswith, find, index, replace, rfind, rindex,
+//     startswith}` (see `search.rs`).
+//   - REQ-11 split/join — `pub use split_join::{join, join_array, rsplit,
+//     split, split_ragged, splitlines}` (see `split_join.rs`).
+//   - REQ-12/REQ-13 regex match/extract — `pub use regex_ops::{extract,
+//     extract_compiled, match_, match_compiled}` (see `regex_ops.rs`).
+//   - REQ-14 classification — `pub use classify::{isalnum, isalpha,
+//     isdecimal, isdigit, islower, isnumeric, isspace, istitle, isupper}`
+//     (see `classify.rs`).
+//   - Extras (#515/#516/#518) — `pub use str_ops::{equal, greater,
+//     greater_equal, less, less_equal, not_equal, str_len, swapcase}`
+//     and `pub use extras::{decode, encode, expandtabs, mod_, partition,
+//     rpartition, slice, translate}`.
 
 //! # ferray-strings
 //!

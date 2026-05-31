@@ -1,6 +1,31 @@
 // ferray-strings: Miscellaneous string operations
 //
 // str_len, swapcase, and elementwise comparison functions.
+//
+// ## REQ status
+//
+// These ops are not numbered in the `.design/ferray-strings.md` REQ list
+// (which enumerates REQ-1..14 for the core surface); they are the
+// `numpy.strings` extras tracked by their issue ids. All SHIPPED & audited:
+//
+// SHIPPED:
+//   - `str_len` (`pub fn`, #518) -> `Array<i64, D>`: counts Unicode code
+//     points (`s.chars().count()`), matching numpy's `str_len` ufunc which
+//     writes a signed `npy_intp` from `buf.num_codepoints()` (NOT bytes).
+//   - `swapcase` (`pub fn`, #515): per-character case inversion, matching
+//     CPython `str.swapcase` / `numpy.strings.swapcase`.
+//   - Elementwise comparisons (#516) `equal`, `not_equal`, `less`,
+//     `greater`, `less_equal`, `greater_equal` (all `pub fn`) ->
+//     `Array<bool, D>`, lexicographic by Unicode scalar value, matching
+//     `numpy.strings`/`numpy.char` comparison ufuncs.
+//
+// Consumers (non-test): re-exported from the crate root
+// (`ferray-strings/src/lib.rs` `pub use str_ops::{equal, greater,
+// greater_equal, less, less_equal, not_equal, str_len, swapcase}`) and bound
+// at the Python surface in `ferray-python/src/char.rs` — `str_len` and
+// `swapcase` (`bind_unary_string_op!(swapcase, fs::swapcase)`) shims, and the
+// comparison shims generated via `bind_string_compare!(equal, fs::equal)`
+// (and the other five) — which back `numpy.char`/`numpy.strings`.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;

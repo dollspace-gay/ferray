@@ -2,6 +2,28 @@
 //
 // Implements find, rfind, index, rindex, count, startswith, endswith, replace —
 // elementwise on StringArray.
+//
+// ## REQ status
+//
+// SHIPPED:
+//   - REQ-8 replace — `replace` (`pub fn`): elementwise substring
+//     replacement with an optional count, matching `numpy.strings.replace`.
+//   - REQ-9 search predicates — `startswith`, `endswith` (`pub fn`) ->
+//     `Array<bool, D>`, matching `numpy.strings.startswith`/`endswith`.
+//   - REQ-10 search indices — `find`, `count` (`pub fn`) -> `Array<i64, D>`
+//     (`find` returns `-1` when absent; both return **character** indices /
+//     counts, the published `numpy.strings.find`/`count` contract writing a
+//     signed `npy_intp`). The full search family `rfind`, `index`, `rindex`
+//     ships alongside (`index`/`rindex` raise `ValueError` when `sub` is
+//     absent, like CPython `str.index`/`rindex`). Audited NO DIVERGENCE.
+//
+// Consumers (non-test): re-exported from the crate root
+// (`ferray-strings/src/lib.rs` `pub use search::{count, endswith, find,
+// index, replace, rfind, rindex, startswith}`) and bound at the Python
+// surface by the `#[pyfunction]` shims `count`, `find`, `startswith`,
+// `endswith`, `replace`, `rfind` in `ferray-python/src/char.rs` (each
+// calling the matching `fs::` function); the `index`/`rindex` shims build on
+// `fs::find`/`fs::rfind`. These back `numpy.char`/`numpy.strings`.
 
 // `find` returns an `i64` array following NumPy's `numpy.strings.find`
 // contract (with `-1` for "not found"); converting the `usize` char count

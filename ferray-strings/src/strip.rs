@@ -1,6 +1,22 @@
 // ferray-strings: Stripping operations (REQ-7)
 //
 // Implements strip, lstrip, rstrip — elementwise on StringArray.
+//
+// ## REQ status
+//
+// SHIPPED:
+//   - REQ-7 stripping — `strip`, `lstrip`, `rstrip` (all `pub fn`).
+//     With `chars = None` they trim Unicode whitespace (CPython
+//     `str.strip()` default); with an explicit `chars` they trim any
+//     character in that set from the relevant end(s), matching
+//     `numpy.strings.strip`/`lstrip`/`rstrip`. Audited.
+//
+// Consumers (non-test): re-exported from the crate root
+// (`ferray-strings/src/lib.rs` `pub use strip::{lstrip, rstrip, strip}`)
+// and bound at the Python surface by the `#[pyfunction]` shims generated via
+// `bind_strip!(strip, fs::strip)`, `(lstrip, fs::lstrip)`,
+// `(rstrip, fs::rstrip)` in `ferray-python/src/char.rs`, which back
+// `numpy.char`/`numpy.strings`.
 
 use ferray_core::dimension::Dimension;
 use ferray_core::error::FerrayResult;

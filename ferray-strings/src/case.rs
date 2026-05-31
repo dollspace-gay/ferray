@@ -12,6 +12,26 @@
 // `str::to_lowercase` already implements the Unicode Final_Sigma rule, so the
 // tail is routed through it; only the word-initial titlecase needs a table,
 // since Rust's stdlib has no `to_titlecase`.
+//
+// ## REQ status
+//
+// SHIPPED:
+//   - REQ-5 case manipulation — `upper`, `lower`, `capitalize`, `title`
+//     (all `pub fn` in this file). `upper`/`lower` route through Rust's
+//     Unicode `to_uppercase`/`to_lowercase` (full case folding, e.g.
+//     `ß` -> `SS`), matching CPython `str.upper`/`str.lower`.
+//     `capitalize`/`title` reproduce CPython `str.capitalize`/`str.title`
+//     (the semantics `numpy.char`/`numpy.strings` delegate to via
+//     `_vec_string`): word-initial characters use the Unicode TITLECASE
+//     mapping, tails use lowercase with the Final_Sigma rule.
+//     (`swapcase` lives in `str_ops.rs`.)
+//
+// Consumers (non-test): re-exported from the crate root
+// (`ferray-strings/src/lib.rs` `pub use case::{capitalize, lower, title,
+// upper}`) and bound at the Python surface by the `#[pyfunction]` shims
+// generated via `bind_unary_string_op!(lower, fs::lower)`,
+// `(upper, fs::upper)`, `(capitalize, fs::capitalize)`, `(title, fs::title)`
+// in `ferray-python/src/char.rs`, which back `numpy.char`/`numpy.strings`.
 
 use ferray_core::dimension::Dimension;
 use ferray_core::error::FerrayResult;

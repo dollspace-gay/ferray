@@ -1,6 +1,25 @@
 // ferray-strings: Alignment and padding operations (REQ-6)
 //
 // Implements center, ljust, rjust, zfill — elementwise on StringArray.
+//
+// ## REQ status
+//
+// SHIPPED:
+//   - REQ-6 alignment/padding — `center`, `ljust`, `ljust_with`, `rjust`,
+//     `rjust_with`, `zfill` (all `pub fn` in this file). Padding is measured
+//     in Unicode code points (`s.chars().count()`), matching what
+//     `numpy.strings`/`numpy.char` delegate to via CPython `str` methods.
+//     `center` reproduces CPython's left-bias rule exactly
+//     (`unicode_center_impl`: extra pad column goes LEFT iff both the margin
+//     and the target width are odd) — the #1086 left-bias fix. `zfill`
+//     preserves a leading sign before the zero-fill, like `str.zfill`.
+//
+// Consumers (non-test): re-exported from the crate root
+// (`ferray-strings/src/lib.rs` `pub use align::{center, ljust, ljust_with,
+// rjust, rjust_with, zfill}`) and bound at the Python surface by the
+// `#[pyfunction]` shims `center`, `ljust`, `rjust`, `zfill` in
+// `ferray-python/src/char.rs` (calling `fs::center`, `fs::ljust_with`,
+// `fs::rjust_with`, `fs::zfill`), which back `numpy.char`/`numpy.strings`.
 
 use ferray_core::dimension::Dimension;
 use ferray_core::error::FerrayResult;

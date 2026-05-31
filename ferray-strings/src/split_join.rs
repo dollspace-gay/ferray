@@ -1,6 +1,25 @@
 // ferray-strings: Split and join operations (REQ-11)
 //
 // Implements split and join — elementwise on StringArray.
+//
+// ## REQ status
+//
+// SHIPPED:
+//   - REQ-11 split/join — `split`, `rsplit`, `splitlines` (`pub fn`) produce
+//     a rectangular 2-D `StringArray2` (right-padded with empty strings to
+//     the widest row); `split_ragged` (`pub fn`) keeps the ragged
+//     `Vec<Vec<String>>` form for callers that need it. `join` /
+//     `join_array` (`pub fn`) concatenate parts with a separator. An empty
+//     separator is rejected (CPython/`np.char.split` raise on it), and
+//     `splitlines` recognizes the full CPython line-boundary set. Matches
+//     `numpy.strings.split`/`rsplit`/`splitlines`/`join`.
+//
+// Consumers (non-test): re-exported from the crate root
+// (`ferray-strings/src/lib.rs` `pub use split_join::{join, join_array,
+// rsplit, split, split_ragged, splitlines}`) and bound at the Python surface
+// in `ferray-python/src/char.rs` (`fs::split_ragged` backs the `split` shim,
+// `fs::rsplit` the `rsplit` shim, `fs::splitlines` the `splitlines` shim, and
+// the `join` shim), which back `numpy.char`/`numpy.strings`.
 
 use ferray_core::dimension::{Dimension, Ix1, Ix2};
 use ferray_core::error::{FerrayError, FerrayResult};
