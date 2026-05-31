@@ -12,9 +12,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use ferray_strings::{self, StringArray1, StringArray2};
-use ferray_test_oracle::{
-    fixtures_dir, load_fixture, parse_bool_data, parse_string_data,
-};
+use ferray_test_oracle::{fixtures_dir, load_fixture, parse_bool_data, parse_string_data};
 
 fn strings_fx(name: &str) -> std::path::PathBuf {
     fixtures_dir().join("strings").join(name)
@@ -22,10 +20,7 @@ fn strings_fx(name: &str) -> std::path::PathBuf {
 
 fn make_array(value: &ferray_test_oracle::serde_json::Value) -> StringArray1 {
     let data = parse_string_data(&value["data"]);
-    ferray_strings::array(
-        &data.iter().map(String::as_str).collect::<Vec<_>>(),
-    )
-    .unwrap()
+    ferray_strings::array(&data.iter().map(String::as_str).collect::<Vec<_>>()).unwrap()
 }
 
 // ---------------------------------------------------------------------------
@@ -240,7 +235,10 @@ fn split_produces_padded_2d_array() {
     let arr = ferray_strings::array(&["a-b-c", "x-y", "lone"]).unwrap();
     let out: StringArray2 = ferray_strings::split(&arr, "-").unwrap();
     assert_eq!(out.shape(), &[3, 3]);
-    assert_eq!(out.as_slice(), &["a", "b", "c", "x", "y", "", "lone", "", ""]);
+    assert_eq!(
+        out.as_slice(),
+        &["a", "b", "c", "x", "y", "", "lone", "", ""]
+    );
 }
 
 /// Covers: `ferray_strings::rsplit` and `ferray_strings::split_join::rsplit`.
@@ -267,7 +265,10 @@ fn split_ragged_preserves_uneven_rows() {
     let arr = ferray_strings::array(&["a-b-c", "x"]).unwrap();
     let out = ferray_strings::split_ragged(&arr, "-").unwrap();
     assert_eq!(out.len(), 2);
-    assert_eq!(out[0], vec!["a".to_string(), "b".to_string(), "c".to_string()]);
+    assert_eq!(
+        out[0],
+        vec!["a".to_string(), "b".to_string(), "c".to_string()]
+    );
     assert_eq!(out[1], vec!["x".to_string()]);
 }
 

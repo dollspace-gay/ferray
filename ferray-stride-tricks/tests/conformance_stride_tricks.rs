@@ -105,11 +105,9 @@ fn broadcast_to_matches_numpy() {
             }
             2 => {
                 let data = parse_f64_data(&case.inputs["source"]["data"]);
-                let arr = Array::<f64, Ix2>::from_vec(
-                    Ix2::new([source_shape[0], source_shape[1]]),
-                    data,
-                )
-                .unwrap();
+                let arr =
+                    Array::<f64, Ix2>::from_vec(Ix2::new([source_shape[0], source_shape[1]]), data)
+                        .unwrap();
                 let view = ferray_stride_tricks::broadcast_to(&arr, &target_shape)
                     .unwrap_or_else(|e| panic!("broadcast_to {}: {e}", case.name));
                 assert_eq!(
@@ -121,7 +119,10 @@ fn broadcast_to_matches_numpy() {
                 let actual = view_to_vec(&view);
                 assert_f64_slice_ulp(&actual, &expected, case.tolerance_ulps, &case.name);
             }
-            other => panic!("broadcast_to fixture {}: unsupported source rank {other}", case.name),
+            other => panic!(
+                "broadcast_to fixture {}: unsupported source rank {other}",
+                case.name
+            ),
         }
     }
 }
@@ -280,11 +281,9 @@ fn sliding_window_view_matches_numpy() {
             }
             2 => {
                 let data = parse_f64_data(&case.inputs["source"]["data"]);
-                let arr = Array::<f64, Ix2>::from_vec(
-                    Ix2::new([source_shape[0], source_shape[1]]),
-                    data,
-                )
-                .unwrap();
+                let arr =
+                    Array::<f64, Ix2>::from_vec(Ix2::new([source_shape[0], source_shape[1]]), data)
+                        .unwrap();
                 let view = ferray_stride_tricks::sliding_window_view(&arr, &window_shape)
                     .unwrap_or_else(|e| panic!("sliding_window_view {}: {e}", case.name));
                 assert_eq!(

@@ -43,11 +43,11 @@ fn irfft_1d_non_hermitian_silent_projection() {
     // Both DC (index 0) and Nyquist (index 4) carry non-zero imaginary
     // parts; scipy.fft.irfft accepts this without error.
     let spec = vec![
-        c(1.0, 1.0),  // DC: imag should be projected to 0
+        c(1.0, 1.0), // DC: imag should be projected to 0
         c(2.0, 3.0),
         c(4.0, -1.0),
         c(-1.0, 0.5),
-        c(7.0, 9.0),  // Nyquist (n=8 is even): imag should be projected to 0
+        c(7.0, 9.0), // Nyquist (n=8 is even): imag should be projected to 0
     ];
     let a = Array::<Complex<f64>, Ix1>::from_vec(Ix1::new([5]), spec).unwrap();
     let result = irfft(&a, Some(8), None, FftNorm::Backward)
@@ -86,9 +86,21 @@ fn irfftn_2d_multi_lane_non_hermitian_no_panic() {
     // s=(3,8) the c2r runs on axis 1 with output length 8 (even, so
     // Nyquist exists at index 4 of every row).
     let spec = vec![
-        c(1.0, 1.0), c(2.0, 3.0), c(4.0, -1.0), c(-1.0, 0.5), c(7.0, 9.0),
-        c(0.5, -0.25), c(1.5, 2.0), c(-3.0, 1.5), c(2.5, -0.5), c(-1.0, 4.0),
-        c(-2.0, 3.5), c(0.0, 1.0), c(1.5, -2.0), c(-0.5, 0.25), c(3.0, -1.5),
+        c(1.0, 1.0),
+        c(2.0, 3.0),
+        c(4.0, -1.0),
+        c(-1.0, 0.5),
+        c(7.0, 9.0),
+        c(0.5, -0.25),
+        c(1.5, 2.0),
+        c(-3.0, 1.5),
+        c(2.5, -0.5),
+        c(-1.0, 4.0),
+        c(-2.0, 3.5),
+        c(0.0, 1.0),
+        c(1.5, -2.0),
+        c(-0.5, 0.25),
+        c(3.0, -1.5),
     ];
     let a = Array::<Complex<f64>, Ix2>::from_vec(Ix2::new([3, 5]), spec).unwrap();
     let result = irfftn(&a, Some(&[3, 8]), None, FftNorm::Backward)
@@ -100,12 +112,30 @@ fn irfftn_2d_multi_lane_non_hermitian_no_panic() {
     // including non-zero imaginary parts on DC and Nyquist of every
     // row of axis 1, which scipy projects silently).
     let expected: [f64; 24] = [
-        0.9375, -0.4918042024541294, -0.3333333333333333, -1.0364320279485242,
-        0.1875, -0.04986246421253722, 0.625, -0.0052346387181424845,
-        0.32246937562474765, 0.29130410127242934, 0.15186289921756746, -0.6876224976306726,
-        0.48355376744909917, 0.7966095336497376, 0.08118988160479113, 0.22649802687618184,
-        0.9900306243752521, -0.38788824646661846, -0.4435295658842341, -0.4249939938489427,
-        1.0789462325509007, -1.1583587217888818, -0.08118988160479113, -0.07221486872989968,
+        0.9375,
+        -0.4918042024541294,
+        -0.3333333333333333,
+        -1.0364320279485242,
+        0.1875,
+        -0.04986246421253722,
+        0.625,
+        -0.0052346387181424845,
+        0.32246937562474765,
+        0.29130410127242934,
+        0.15186289921756746,
+        -0.6876224976306726,
+        0.48355376744909917,
+        0.7966095336497376,
+        0.08118988160479113,
+        0.22649802687618184,
+        0.9900306243752521,
+        -0.38788824646661846,
+        -0.4435295658842341,
+        -0.4249939938489427,
+        1.0789462325509007,
+        -1.1583587217888818,
+        -0.08118988160479113,
+        -0.07221486872989968,
     ];
     let got: Vec<f64> = result.iter().copied().collect();
     assert_eq!(got.len(), expected.len());
@@ -125,11 +155,11 @@ fn irfftn_2d_multi_lane_non_hermitian_no_panic() {
 fn hfft_non_hermitian_silent_projection() {
     // 5 complex bins → hfft output length 8.
     let spec = vec![
-        c(1.0, 1.0),  // DC
+        c(1.0, 1.0), // DC
         c(2.0, 3.0),
         c(4.0, -1.0),
         c(-1.0, 0.5),
-        c(7.0, 9.0),  // Nyquist (n=8 is even)
+        c(7.0, 9.0), // Nyquist (n=8 is even)
     ];
     let a = Array::<Complex<f64>, Ix1>::from_vec(Ix1::new([5]), spec).unwrap();
     let result = hfft(&a, Some(8), None, FftNorm::Backward)
@@ -164,11 +194,11 @@ fn hfft_non_hermitian_silent_projection() {
 fn irfft_already_hermitian_unchanged() {
     // Hermitian: DC.im = 0, Nyquist.im = 0.
     let spec = vec![
-        c(2.0, 0.0),  // DC, im = 0
+        c(2.0, 0.0), // DC, im = 0
         c(1.0, -0.5),
         c(-0.5, 0.25),
         c(0.75, -1.0),
-        c(3.0, 0.0),  // Nyquist, im = 0
+        c(3.0, 0.0), // Nyquist, im = 0
     ];
     let a = Array::<Complex<f64>, Ix1>::from_vec(Ix1::new([5]), spec).unwrap();
     let result = irfft(&a, Some(8), None, FftNorm::Backward).unwrap();
@@ -208,7 +238,7 @@ fn irfft_odd_output_only_projects_dc() {
     // Output length 7 (odd) → input has 7/2 + 1 = 4 bins. DC.im is
     // non-zero; there is no Nyquist bin.
     let spec = vec![
-        c(1.0, 2.5),  // DC: imag should be projected
+        c(1.0, 2.5), // DC: imag should be projected
         c(0.5, 1.0),
         c(-1.0, 0.5),
         c(0.25, -0.75),

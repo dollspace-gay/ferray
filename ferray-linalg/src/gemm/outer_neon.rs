@@ -17,7 +17,9 @@ use super::kernel_neon_complex_f32::{
 use super::kernel_neon_complex_f64::{
     MR_NEON_C64, NR_NEON_C64, kernel_4x2_neon_c64, kernel_edge_neon_c64,
 };
-use super::kernel_neon_f32::{MR_NEON_F32, NR_NEON_F32, kernel_4x16_neon_f32, kernel_edge_neon_f32};
+use super::kernel_neon_f32::{
+    MR_NEON_F32, NR_NEON_F32, kernel_4x16_neon_f32, kernel_edge_neon_f32,
+};
 use super::kernel_neon_f64::{MR_NEON_F64, NR_NEON_F64, kernel_4x8_neon_f64, kernel_edge_neon_f64};
 use super::kernel_neon_i8::{MR_NEON_I8, NR_NEON_I8, kernel_4x8_neon_i8, kernel_edge_neon_i8};
 use super::kernel_neon_i8s::{
@@ -105,8 +107,7 @@ pub unsafe fn gemm_neon_f64(
                     for ir in 0..n_strips_m {
                         let m_tile = (mc - ir * MR_NEON_F64).min(MR_NEON_F64);
                         let a_strip = a_pack.as_ptr().add(ir * MR_NEON_F64 * kc);
-                        let c_tile =
-                            c.add((ic + ir * MR_NEON_F64) * ldc + jc + jr * NR_NEON_F64);
+                        let c_tile = c.add((ic + ir * MR_NEON_F64) * ldc + jc + jr * NR_NEON_F64);
                         if m_tile == MR_NEON_F64 && n_tile == NR_NEON_F64 {
                             kernel_4x8_neon_f64(
                                 kc,
@@ -205,8 +206,7 @@ pub unsafe fn gemm_neon_f32(
                     for ir in 0..n_strips_m {
                         let m_tile = (mc - ir * MR_NEON_F32).min(MR_NEON_F32);
                         let a_strip = a_pack.as_ptr().add(ir * MR_NEON_F32 * kc);
-                        let c_tile =
-                            c.add((ic + ir * MR_NEON_F32) * ldc + jc + jr * NR_NEON_F32);
+                        let c_tile = c.add((ic + ir * MR_NEON_F32) * ldc + jc + jr * NR_NEON_F32);
                         if m_tile == MR_NEON_F32 && n_tile == NR_NEON_F32 {
                             kernel_4x16_neon_f32(
                                 kc,
@@ -516,8 +516,7 @@ pub unsafe fn gemm_neon_i16(
                     for ir in 0..n_strips_m {
                         let m_tile = (mc - ir * MR_NEON_I16).min(MR_NEON_I16);
                         let a_strip = a_pack.as_ptr().add(ir * MR_NEON_I16 * kc);
-                        let c_tile =
-                            c.add((ic + ir * MR_NEON_I16) * ldc + jc + jr * NR_NEON_I16);
+                        let c_tile = c.add((ic + ir * MR_NEON_I16) * ldc + jc + jr * NR_NEON_I16);
                         if m_tile == MR_NEON_I16 && n_tile == NR_NEON_I16 {
                             kernel_4x8_neon_i16(
                                 kc,
@@ -605,8 +604,7 @@ pub unsafe fn gemm_neon_i8(
                     for ir in 0..n_strips_m {
                         let m_tile = (mc - ir * MR_NEON_I8).min(MR_NEON_I8);
                         let a_strip = a_pack.as_ptr().add(ir * MR_NEON_I8 * kc);
-                        let c_tile =
-                            c.add((ic + ir * MR_NEON_I8) * ldc + jc + jr * NR_NEON_I8);
+                        let c_tile = c.add((ic + ir * MR_NEON_I8) * ldc + jc + jr * NR_NEON_I8);
                         if m_tile == MR_NEON_I8 && n_tile == NR_NEON_I8 {
                             kernel_4x8_neon_i8(
                                 kc,
@@ -694,8 +692,7 @@ pub unsafe fn gemm_neon_i8s(
                     for ir in 0..n_strips_m {
                         let m_tile = (mc - ir * MR_NEON_I8S).min(MR_NEON_I8S);
                         let a_strip = a_pack.as_ptr().add(ir * MR_NEON_I8S * kc);
-                        let c_tile =
-                            c.add((ic + ir * MR_NEON_I8S) * ldc + jc + jr * NR_NEON_I8S);
+                        let c_tile = c.add((ic + ir * MR_NEON_I8S) * ldc + jc + jr * NR_NEON_I8S);
                         if m_tile == MR_NEON_I8S && n_tile == NR_NEON_I8S {
                             kernel_4x8_neon_i8_signed(
                                 kc,

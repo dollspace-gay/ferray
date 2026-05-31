@@ -95,7 +95,12 @@ fn fixture_arange_matches_numpy() {
         let got = creation::arange(start, stop, step).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
         let expected_shape = parse_shape(&case.expected["shape"]);
-        assert_eq!(got.shape(), expected_shape.as_slice(), "{}: shape", case.name);
+        assert_eq!(
+            got.shape(),
+            expected_shape.as_slice(),
+            "{}: shape",
+            case.name
+        );
         assert_f64_slice_ulp(
             got.as_slice().unwrap(),
             &expected,
@@ -124,7 +129,12 @@ fn fixture_linspace_matches_numpy() {
         let got = creation::linspace::<f64>(start, stop, num, true).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
         let expected_shape = parse_shape(&case.expected["shape"]);
-        assert_eq!(got.shape(), expected_shape.as_slice(), "{}: shape", case.name);
+        assert_eq!(
+            got.shape(),
+            expected_shape.as_slice(),
+            "{}: shape",
+            case.name
+        );
         assert_f64_slice_ulp(
             got.as_slice().unwrap(),
             &expected,
@@ -239,7 +249,12 @@ fn fixture_eye_matches_numpy() {
         let got = creation::eye::<f64>(n, m, k).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
         let expected_shape = parse_shape(&case.expected["shape"]);
-        assert_eq!(got.shape(), expected_shape.as_slice(), "{}: shape", case.name);
+        assert_eq!(
+            got.shape(),
+            expected_shape.as_slice(),
+            "{}: shape",
+            case.name
+        );
         assert_f64_slice_ulp(
             got.as_slice().unwrap(),
             &expected,
@@ -284,7 +299,10 @@ fn inline_identity_is_square_eye() {
         for j in 0..4 {
             let want = if i == j { 1.0 } else { 0.0 };
             let got = id.as_slice().unwrap()[i * 4 + j];
-            assert!((got - want).abs() < TOL_REDUCTION_F64_ABS, "id[{i},{j}] = {got}");
+            assert!(
+                (got - want).abs() < TOL_REDUCTION_F64_ABS,
+                "id[{i},{j}] = {got}"
+            );
         }
     }
 }
@@ -326,8 +344,7 @@ fn inline_array_asarray_roundtrip() {
     let chk = creation::asarray_chkfinite(&a).unwrap();
     assert_eq!(chk.as_slice().unwrap(), a.as_slice().unwrap());
 
-    let bad =
-        Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, f64::NAN, 3.0]).unwrap();
+    let bad = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, f64::NAN, 3.0]).unwrap();
     assert!(creation::asarray_chkfinite(&bad).is_err());
 }
 
@@ -353,11 +370,13 @@ fn inline_fromiter_fromfunction_fromstring() {
     assert_eq!(it.shape(), [5]);
     assert_eq!(it.as_slice().unwrap(), &[0u64, 1, 2, 3, 4]);
 
-    let f = creation::fromfunction::<f64, _, _>(Ix2::new([3, 3]), |idx| {
-        idx[0] as f64 + idx[1] as f64
-    })
-    .unwrap();
-    assert_eq!(f.as_slice().unwrap(), &[0.0, 1., 2., 1., 2., 3., 2., 3., 4.]);
+    let f =
+        creation::fromfunction::<f64, _, _>(Ix2::new([3, 3]), |idx| idx[0] as f64 + idx[1] as f64)
+            .unwrap();
+    assert_eq!(
+        f.as_slice().unwrap(),
+        &[0.0, 1., 2., 1., 2., 3., 2., 3., 4.]
+    );
 
     let s = creation::fromstring::<f64>("1.0 2.0 3.0", " ").unwrap();
     assert_eq!(s.shape(), [3]);
@@ -442,9 +461,10 @@ fn inline_diag_and_diagflat() {
     //   - `ferray_core::creation::diag`
     //   - `ferray_core::creation::diagflat`
     // 2D -> 1D extracts the main diagonal.
-    let m = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 3]), vec![
-        1., 2., 3., 4., 5., 6., 7., 8., 9.,
-    ])
+    let m = Array::<f64, IxDyn>::from_vec(
+        IxDyn::new(&[3, 3]),
+        vec![1., 2., 3., 4., 5., 6., 7., 8., 9.],
+    )
     .unwrap();
     let d = creation::diag(&m, 0).unwrap();
     assert_eq!(d.shape(), [3]);
@@ -474,9 +494,10 @@ fn inline_tri_tril_triu_lower_upper_triangles() {
     let expected = [1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0];
     assert_eq!(t.as_slice().unwrap(), &expected);
 
-    let m = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[3, 3]), vec![
-        1., 2., 3., 4., 5., 6., 7., 8., 9.,
-    ])
+    let m = Array::<f64, IxDyn>::from_vec(
+        IxDyn::new(&[3, 3]),
+        vec![1., 2., 3., 4., 5., 6., 7., 8., 9.],
+    )
     .unwrap();
     let lo = creation::tril(&m, 0).unwrap();
     let lo_s = lo.as_slice().unwrap();

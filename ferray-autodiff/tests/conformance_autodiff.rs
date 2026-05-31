@@ -70,14 +70,12 @@ fn gradient_matches_analytic() {
         let point = parse_f64_data(&case.inputs["point"]);
         let fn_id = fn_id_to_str(&case.inputs["fn_id"]);
         let grad = match fn_id {
-            "sum_of_squares" => ferray_autodiff::gradient(
-                |v: &[DualNumber<f64>]| v[0] * v[0] + v[1] * v[1],
-                &point,
-            ),
-            "product_of_three" => ferray_autodiff::gradient(
-                |v: &[DualNumber<f64>]| v[0] * v[1] * v[2],
-                &point,
-            ),
+            "sum_of_squares" => {
+                ferray_autodiff::gradient(|v: &[DualNumber<f64>]| v[0] * v[0] + v[1] * v[1], &point)
+            }
+            "product_of_three" => {
+                ferray_autodiff::gradient(|v: &[DualNumber<f64>]| v[0] * v[1] * v[2], &point)
+            }
             other => panic!("unknown fn_id '{other}' in gradient.json"),
         };
         let expected = parse_f64_data(&case.expected["gradient"]);
@@ -167,9 +165,7 @@ fn value_and_derivative_elementwise_matches_analytic() {
                         panic!("value_and_derivative_elementwise {}: {e}", case.name)
                     })
             }
-            other => panic!(
-                "unknown fn_id '{other}' in value_and_derivative_elementwise.json"
-            ),
+            other => panic!("unknown fn_id '{other}' in value_and_derivative_elementwise.json"),
         };
         let expected_values = parse_f64_data(&case.expected["values"]["data"]);
         let expected_derivs = parse_f64_data(&case.expected["derivs"]["data"]);
@@ -205,9 +201,7 @@ fn gradient_vector_matches_analytic() {
         let fn_id = fn_id_to_str(&case.inputs["fn_id"]);
         let grad = match fn_id {
             "weighted_squares" => ferray_autodiff::array_ops::gradient_vector(
-                |xs: &[DualNumber<f64>]| {
-                    xs[0] * xs[0] + xs[1] * xs[1] * 2.0 + xs[2] * xs[2] * 3.0
-                },
+                |xs: &[DualNumber<f64>]| xs[0] * xs[0] + xs[1] * xs[1] * 2.0 + xs[2] * xs[2] * 3.0,
                 &x,
             )
             .unwrap_or_else(|e| panic!("gradient_vector {}: {e}", case.name)),

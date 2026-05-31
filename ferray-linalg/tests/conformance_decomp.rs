@@ -75,7 +75,12 @@ fn assert_eigenvalues_match(actual: &[f64], expected: &[f64], tol_ulps: u64, con
     let mut e_sorted = expected.to_vec();
     a_sorted.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
     e_sorted.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
-    assert_f64_slice_ulp(&a_sorted, &e_sorted, tol_ulps.max(MIN_ULP_TOLERANCE), context);
+    assert_f64_slice_ulp(
+        &a_sorted,
+        &e_sorted,
+        tol_ulps.max(MIN_ULP_TOLERANCE),
+        context,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +101,10 @@ fn fixture_cholesky() {
         }
         let arr = to_ix2(&make_f64_array(input));
         let result = ferray_linalg::cholesky(&arr).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::cholesky returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::cholesky returned error: {e}",
+                case.name
+            )
         });
         let expected = parse_f64_data(&case.expected["data"]);
         assert_f64_slice_ulp(
@@ -133,7 +141,10 @@ fn fixture_eig() {
         }
         let arr = to_ix2(&make_f64_array(input));
         let (vals, _vecs) = ferray_linalg::eig(&arr).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::eig returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::eig returned error: {e}",
+                case.name
+            )
         });
         let actual_re: Vec<f64> = vals.iter().map(|c| c.re).collect();
         let actual_im_max = vals.iter().map(|c| c.im.abs()).fold(0.0f64, f64::max);
@@ -174,7 +185,10 @@ fn fixture_eigh() {
         }
         let arr = to_ix2(&make_f64_array(input));
         let (eigenvalues, _eigenvectors) = ferray_linalg::eigh(&arr).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::eigh returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::eigh returned error: {e}",
+                case.name
+            )
         });
         let expected_w = parse_f64_data(&case.expected["eigenvalues"]["data"]);
         assert_f64_slice_ulp(
@@ -208,7 +222,10 @@ fn fixture_eigvals() {
         }
         let arr = to_ix2(&make_f64_array(input));
         let vals = ferray_linalg::eigvals(&arr).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::eigvals returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::eigvals returned error: {e}",
+                case.name
+            )
         });
         let actual_re: Vec<f64> = vals.iter().map(|c| c.re).collect();
         let actual_im_max = vals.iter().map(|c| c.im.abs()).fold(0.0f64, f64::max);
@@ -254,18 +271,17 @@ fn fixture_qr() {
         };
         let arr = to_ix2(&make_f64_array(input));
         let (q, r) = ferray_linalg::qr(&arr, mode).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::qr returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::qr returned error: {e}",
+                case.name
+            )
         });
-        let q_dyn = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(q.shape()),
-            q.as_slice().unwrap().to_vec(),
-        )
-        .unwrap();
-        let r_dyn = Array::<f64, IxDyn>::from_vec(
-            IxDyn::new(r.shape()),
-            r.as_slice().unwrap().to_vec(),
-        )
-        .unwrap();
+        let q_dyn =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(q.shape()), q.as_slice().unwrap().to_vec())
+                .unwrap();
+        let r_dyn =
+            Array::<f64, IxDyn>::from_vec(IxDyn::new(r.shape()), r.as_slice().unwrap().to_vec())
+                .unwrap();
         let reconstructed = ferray_linalg::matmul(&q_dyn, &r_dyn).unwrap();
         let expected_a = parse_f64_data(&input["data"]);
         assert_f64_slice_ulp(
@@ -308,7 +324,10 @@ fn fixture_svd() {
             .unwrap_or(false);
         let arr = to_ix2(&make_f64_array(input));
         let (_u, s, _vt) = ferray_linalg::svd(&arr, full_matrices).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::svd returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::svd returned error: {e}",
+                case.name
+            )
         });
         let expected_s = parse_f64_data(&case.expected["S"]["data"]);
         assert_f64_slice_ulp(

@@ -1,0 +1,238 @@
+# Build, test, and publish ferray-python wheels.
+#
+# - On push to main and on pull requests touching ferray-python: build
+#   and smoke-test wheels for every (platform × Python version) cell in
+#   the matrix, but don't publish.
+# - On push of a `ferray-python-v*` tag: same matrix plus an sdist, then
+#   publish to PyPI via OIDC trusted publishing.
+# - workflow_dispatch lets a maintainer trigger a build manually.
+#
+# Trusted publishing setup (one-time on PyPI side): visit
+# https://pypi.org/manage/account/publishing/ and add this repo +
+# workflow file path + environment name `pypi`. No API token needed.
+
+name: ferray-python wheels
+
+on:
+  push:
+    branches: [main]
+    tags: ['ferray-python-v*']
+    paths:
+      - 'ferray-python/**'
+      - 'ferray-numpy-interop/**'
+      - 'ferray-core/**'
+      - 'ferray/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/ferray-python-wheels.yml'
+  pull_request:
+    paths:
+      - 'ferray-python/**'
+      - 'ferray-numpy-interop/**'
+      - 'ferray-core/**'
+      - 'ferray/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/ferray-python-wheels.yml'
+  workflow_dispatch:
+
+# Cancel an in-flight run on the same branch/PR when a new commit lands.
+concurrency:
+  group: ferray-python-wheels-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Linux: x86_64 (manylinux) + aarch64 (cross-compile via QEMU)
+  # ---------------------------------------------------------------------
+  linux:
+    name: Linux ${{ matrix.target }} py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64, aarch64]
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: >-
+            --release
+            --out dist
+            --interpreter python${{ matrix.python-version }}
+            --manifest-path ferray-python/Cargo.toml
+          manylinux: auto
+
+      - name: Smoke-test wheel (x86_64 only — aarch64 is cross-compiled)
+        if: matrix.target == 'x86_64'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --find-links dist ferray
+          python -c "
+          import ferray, numpy as np
+          assert ferray.__version__
+          assert ferray.array_equal(ferray.zeros((3, 4)), np.zeros((3, 4)))
+          assert ferray.allclose(ferray.sin(np.array([0.0])), [0.0])
+          print(f'ferray {ferray.__version__} wheel smoke OK on Python {__import__(\"sys\").version}')
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.target }}-py${{ matrix.python-version }}
+          path: dist
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------
+  # macOS: x86_64 (Intel) + arm64 (Apple Silicon)
+  # ---------------------------------------------------------------------
+  macos:
+    name: macOS ${{ matrix.target }} py${{ matrix.python-version }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64, aarch64]
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: >-
+            --release
+            --out dist
+            --interpreter python${{ matrix.python-version }}
+            --manifest-path ferray-python/Cargo.toml
+
+      - name: Smoke-test wheel (native arch only)
+        if: matrix.target == 'aarch64'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --find-links dist ferray
+          python -c "
+          import ferray, numpy as np
+          assert ferray.__version__
+          assert ferray.array_equal(ferray.zeros((3, 4)), np.zeros((3, 4)))
+          assert ferray.allclose(ferray.sin(np.array([0.0])), [0.0])
+          print(f'ferray {ferray.__version__} wheel smoke OK on macOS arm64 Python {__import__(\"sys\").version}')
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.target }}-py${{ matrix.python-version }}
+          path: dist
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------
+  # Windows: x64
+  # ---------------------------------------------------------------------
+  windows:
+    name: Windows x64 py${{ matrix.python-version }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x86_64-pc-windows-msvc
+          args: >-
+            --release
+            --out dist
+            --interpreter python${{ matrix.python-version }}
+            --manifest-path ferray-python/Cargo.toml
+
+      - name: Smoke-test wheel
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --find-links dist ferray
+          python -c "
+          import ferray, numpy as np
+          assert ferray.__version__
+          assert ferray.array_equal(ferray.zeros((3, 4)), np.zeros((3, 4)))
+          assert ferray.allclose(ferray.sin(np.array([0.0])), [0.0])
+          print(f'ferray {ferray.__version__} wheel smoke OK on Windows Python {__import__(\"sys\").version}')
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-x64-py${{ matrix.python-version }}
+          path: dist
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------
+  # Source distribution
+  # ---------------------------------------------------------------------
+  sdist:
+    name: Build sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: >-
+            --out dist
+            --manifest-path ferray-python/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------
+  # Publish — only when a `ferray-python-vX.Y.Z` tag is pushed.
+  #
+  # Uses PyPI's OIDC trusted publisher flow: no API token in repo
+  # secrets, the `id-token: write` permission lets PyPI verify the
+  # GitHub workflow identity. Set up the trusted publisher on PyPI
+  # before the first tag push.
+  # ---------------------------------------------------------------------
+  publish:
+    name: Publish to PyPI
+    needs: [linux, macos, windows, sdist]
+    if: startsWith(github.ref, 'refs/tags/ferray-python-v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ferray
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts (sanity check)
+        run: ls -la dist
+
+      - name: Publish to PyPI
+        uses: PyO3/maturin-action@v1
+        with:
+          command: upload
+          args: --non-interactive --skip-existing dist/*

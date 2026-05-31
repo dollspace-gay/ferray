@@ -106,7 +106,12 @@ fn fixture_reshape_matches_numpy() {
         let got = manipulation::reshape(&arr, &new_shape).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
         let expected_shape = parse_shape(&case.expected["shape"]);
-        assert_eq!(got.shape(), expected_shape.as_slice(), "{}: shape", case.name);
+        assert_eq!(
+            got.shape(),
+            expected_shape.as_slice(),
+            "{}: shape",
+            case.name
+        );
         assert_f64_slice_ulp(
             got.as_slice().unwrap(),
             &expected,
@@ -125,7 +130,12 @@ fn fixture_transpose_matches_numpy() {
         let got = manipulation::transpose(&arr, None).unwrap();
         let expected = parse_f64_data(&case.expected["data"]);
         let expected_shape = parse_shape(&case.expected["shape"]);
-        assert_eq!(got.shape(), expected_shape.as_slice(), "{}: shape", case.name);
+        assert_eq!(
+            got.shape(),
+            expected_shape.as_slice(),
+            "{}: shape",
+            case.name
+        );
         let contig = ferray_core::creation::ascontiguousarray(&got);
         assert_f64_slice_ulp(
             contig.as_slice().unwrap(),
@@ -146,7 +156,12 @@ fn fixture_expand_dims_matches_numpy() {
         let got = manipulation::expand_dims(&arr, axis).unwrap();
         let expected_shape = parse_shape(&case.expected["shape"]);
         let expected = parse_f64_data(&case.expected["data"]);
-        assert_eq!(got.shape(), expected_shape.as_slice(), "{}: shape", case.name);
+        assert_eq!(
+            got.shape(),
+            expected_shape.as_slice(),
+            "{}: shape",
+            case.name
+        );
         assert_f64_slice_ulp(
             got.as_slice().unwrap(),
             &expected,
@@ -165,7 +180,12 @@ fn fixture_squeeze_matches_numpy() {
         let got = manipulation::squeeze(&arr, None).unwrap();
         let expected_shape = parse_shape(&case.expected["shape"]);
         let expected = parse_f64_data(&case.expected["data"]);
-        assert_eq!(got.shape(), expected_shape.as_slice(), "{}: shape", case.name);
+        assert_eq!(
+            got.shape(),
+            expected_shape.as_slice(),
+            "{}: shape",
+            case.name
+        );
         assert_f64_slice_ulp(
             got.as_slice().unwrap(),
             &expected,
@@ -185,7 +205,12 @@ fn fixture_flatten_matches_numpy() {
         let got = manipulation::flatten(&arr).unwrap();
         let expected_shape = parse_shape(&case.expected["shape"]);
         let expected = parse_f64_data(&case.expected["data"]);
-        assert_eq!(got.shape(), expected_shape.as_slice(), "{}: shape", case.name);
+        assert_eq!(
+            got.shape(),
+            expected_shape.as_slice(),
+            "{}: shape",
+            case.name
+        );
         assert_f64_slice_ulp(
             got.as_slice().unwrap(),
             &expected,
@@ -314,11 +339,8 @@ fn inline_split_family_returns_n_chunks() {
     //   - `ferray_core::manipulation::vsplit`
     //   - `ferray_core::manipulation::hsplit`
     //   - `ferray_core::manipulation::dsplit`
-    let m = Array::<f64, IxDyn>::from_vec(
-        IxDyn::new(&[4, 4]),
-        (0..16).map(|x| x as f64).collect(),
-    )
-    .unwrap();
+    let m = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[4, 4]), (0..16).map(|x| x as f64).collect())
+        .unwrap();
 
     let parts = manipulation::split(&m, 2, 0).unwrap();
     assert_eq!(parts.len(), 2);
@@ -336,11 +358,9 @@ fn inline_split_family_returns_n_chunks() {
     let hs = manipulation::hsplit(&m, 2).unwrap();
     assert_eq!(hs.len(), 2);
 
-    let m3 = Array::<f64, IxDyn>::from_vec(
-        IxDyn::new(&[2, 2, 4]),
-        (0..16).map(|x| x as f64).collect(),
-    )
-    .unwrap();
+    let m3 =
+        Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 2, 4]), (0..16).map(|x| x as f64).collect())
+            .unwrap();
     let ds = manipulation::dsplit(&m3, 2).unwrap();
     assert_eq!(ds.len(), 2);
 }
@@ -439,8 +459,7 @@ fn inline_delete_insert_append_resize_trim_zeros() {
     assert_eq!(d.shape(), [3]);
     assert_eq!(d.as_slice().unwrap(), &[2.0, 3., 4.]);
 
-    let values =
-        Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1]), vec![99.0]).unwrap();
+    let values = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[1]), vec![99.0]).unwrap();
     let ins = ext::insert(&a, 2, &values, 0).unwrap();
     assert_eq!(ins.shape(), [6]);
 

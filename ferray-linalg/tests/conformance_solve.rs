@@ -84,7 +84,10 @@ fn fixture_solve() {
         let b_data = parse_f64_data(&input_b["data"]);
         let b = Array::<f64, IxDyn>::from_vec(IxDyn::new(&b_shape), b_data).unwrap();
         let result = ferray_linalg::solve(&a, &b).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::solve returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::solve returned error: {e}",
+                case.name
+            )
         });
         let expected = parse_f64_data(&case.expected["data"]);
         assert_f64_slice_ulp(
@@ -127,7 +130,10 @@ fn fixture_lstsq() {
 
         let (x, _residuals, rank, _svals) =
             ferray_linalg::lstsq(&a, &b, None).unwrap_or_else(|e| {
-                panic!("case '{}': ferray_linalg::lstsq returned error: {e}", case.name)
+                panic!(
+                    "case '{}': ferray_linalg::lstsq returned error: {e}",
+                    case.name
+                )
             });
 
         let expected_x = parse_f64_data(&case.expected["x"]["data"]);
@@ -140,7 +146,8 @@ fn fixture_lstsq() {
         if let Some(expected_rank) = case.expected.get("rank").and_then(|v| v.as_u64()) {
             assert_eq!(
                 rank, expected_rank as usize,
-                "case '{}': rank mismatch", case.name
+                "case '{}': rank mismatch",
+                case.name
             );
         }
         tested += 1;
@@ -166,7 +173,10 @@ fn fixture_inv() {
         }
         let arr = to_ix2(&make_f64_array(input));
         let result = ferray_linalg::inv(&arr).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::inv returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::inv returned error: {e}",
+                case.name
+            )
         });
         let expected = parse_f64_data(&case.expected["data"]);
         assert_f64_slice_ulp(
@@ -223,7 +233,10 @@ fn fixture_cond() {
             _ => ferray_linalg::NormOrder::Fro,
         };
         let result = ferray_linalg::cond(&arr, p).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::cond returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::cond returned error: {e}",
+                case.name
+            )
         });
         let expected = parse_f64_value(&case.expected["data"]);
         assert_f64_ulp(
@@ -263,9 +276,9 @@ fn fixture_matrix_rank() {
                 case.name
             )
         });
-        let expected = case.expected["data"].as_u64().expect(
-            "matrix_rank expected.data must be an integer",
-        ) as usize;
+        let expected = case.expected["data"]
+            .as_u64()
+            .expect("matrix_rank expected.data must be an integer") as usize;
         assert_eq!(result, expected, "case '{}': rank mismatch", case.name);
         tested += 1;
     }
@@ -290,7 +303,10 @@ fn fixture_det() {
         }
         let arr = to_ix2(&make_f64_array(input));
         let result = ferray_linalg::det(&arr).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::det returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::det returned error: {e}",
+                case.name
+            )
         });
         let expected = parse_f64_value(&case.expected["data"]);
         assert_f64_ulp(

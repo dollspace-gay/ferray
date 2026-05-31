@@ -1,0 +1,51 @@
+ferray-python: ma.MaskedArray object API — methods copy/reshape/flatten/ravel/transpose/T/astype/tolist/count(axis) + .mask/.fill_value setters + fill_value= kwarg (closes #887 #888 #890 refs #850)
+
+UPSTREAM NUMPY FILES OPENED THIS ITERATION:
+  - numpy/ma/core.py:3494 __setmask__ — a.mask=True masks all; =False -> real
+    all-False _mask (not nomask); =nomask keeps the nomask sentinel.
+  - numpy/ma/core.py:3531 — hardmask setter is OR-only (current_mask |= mask).
+  - numpy/ma/core.py:4900 count — sums ~mask along axis (axis= path).
+  - numpy/ma/core.py:6395 tolist — masked entries substituted with None.
+  - numpy/ma/core.py fill_value.setter / set_fill_value — casts to self.dtype,
+    materializes _fill_value; MaskedArray.__new__ stores an explicit fill_value=.
+
+#888 — object methods (PyMaskedArray #[pymethods], dtype-preserving):
+  copy/reshape(*shape|tuple)/flatten/ravel/transpose(*axes)/T getter/astype/
+  tolist/count(axis=). Each delegates to numpy.ma over the array's equivalent
+  snapshot (as_numpy_ma — the oracle) and rebuilds an owned native-dtype
+  PyMaskedArray via the new from_numpy_ma helper (result .data + getmask routed
+  through construct_masked, preserving native dtype AND nomask-vs-real-mask).
+  count gains axis=: no-axis keeps the cheap native scalar count; axis= returns
+  numpy.ma's integer ndarray. tolist substitutes None for masked (numpy parity).
+  astype complex->real discards the imaginary part with a ComplexWarning (numpy
+  parity, not an error). Methods on a VIEW return owned results matching numpy
+  VALUES.
+
+#890 — attribute setters: .mask #[setter] (True/False/nomask/list/2-D/hardmask
+  OR-only; Owned rewraps DynMa with the new real mask or strips to nomask; View
+  writes each bit through with_buffer_mut), .fill_value #[setter] + a
+  set_fill_value(value) method (both delegate to the per-object set_fill_value:
+  Owned flips fill_set #883, View sets own_fill #880).
+
+#887 — fill_value= kwarg on array / masked_array / MaskedArray.__new__: when
+  supplied, routes through set_fill_value, materializing _fill_value so the #885
+  binary-op carry and #880 slice carry propagate it; threads through the #886
+  mask tri-state unchanged.
+
+VERIFICATION (ferray-python pytest oracle vs numpy.ma 2.4.4):
+  pytest tests/test_expansion_ma_object_api.py: 68 passed (methods/setters/kwarg
+    across int/float/bool/complex, 1-D/2-D/3-D, view + owned receivers).
+  test_divergence_ma_convergence_sweep.py: all 16 of the #887/#888/#890 pins
+    flip GREEN; the remaining 5 red are #889 (AREA 1 comparison/less/bitwise
+    mask-collapse x4) + #891 (AREA 4 array-from-MA view-by-default x1) — separate
+    blockers, expected red.
+  pytest tests/ -q: 2611 passed, 5 failed (only the #889+#891 sweep pins).
+  cargo clippy -p ferray-python --all-targets -- -D warnings: PASS.
+  cargo fmt -p ferray-python --check: clean.
+
+Closes #887
+Closes #888
+Closes #890
+Refs #850
+
+Co-Authored-By: Claude <noreply@anthropic.com>

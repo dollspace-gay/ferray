@@ -1891,24 +1891,41 @@ pub fn fromfunction<'py>(
     }))
 }
 
-/// `numpy.meshgrid(*xi, indexing='xy')` — coordinate grids for evaluating
-/// a function over a regular grid. All inputs are coerced to `float64`.
+/// `numpy.meshgrid(*xi, copy=True, sparse=False, indexing='xy')` — coordinate
+/// grids for evaluating a function over a regular grid.
+///
+/// numpy preserves EACH input's own dtype (int->int64, float32->float32,
+/// `<U`->`<U`, complex->complex, mixed kept per-input — verified live numpy
+/// 2.4.5) and supports `sparse=`/`copy=`. The native float64 tiling path
+/// ([`ferray_core::creation::meshgrid`]) is only observably correct for the
+/// default `copy=True, sparse=False` case when EVERY input is plain `float64`;
+/// any other dtype (int, float32, float16, complex, string, datetime,
+/// structured/object), a mixed-dtype set, or a non-default `sparse`/`copy`
+/// delegates to `numpy.meshgrid` so output dtype(s) and sparseness match
+/// exactly. The prior code coerced ALL inputs to `float64` — silently widening
+/// int/float32, dropping the imaginary part of complex inputs, and CRASHING on
+/// string input (R-CODE-4).
 #[pyfunction]
-#[pyo3(signature = (*xi, indexing = "xy"))]
+#[pyo3(signature = (*xi, copy = true, sparse = false, indexing = "xy"))]
 pub fn meshgrid<'py>(
     py: Python<'py>,
     xi: &Bound<'py, pyo3::types::PyTuple>,
+    copy: bool,
+    sparse: bool,
     indexing: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
     use ferray_core::array::aliases::Array1;
     use ferray_core::dimension::Ix1;
-    // Complex passthrough (#937): numpy.meshgrid is a pure coordinate-tiling op
-    // with NO arithmetic — it preserves the input dtype, so a complex input
-    // yields a complex128/complex64 grid (verified live numpy 2.4.4). The prior
-    // path coerced every input to float64, DROPPING the imaginary part (R-CODE-4).
-    // If ANY input is complex, build the grids over the common complex width.
-    if meshgrid_any_complex(py, xi)? {
-        return complex_meshgrid(py, xi, indexing);
+    // Native float64 fast path only for default copy/sparse with all-float64
+    // inputs; everything else delegates to numpy.meshgrid for exact per-input
+    // dtype + sparseness parity.
+    if !(copy && !sparse && meshgrid_all_float64(py, xi)?) {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("copy", copy)?;
+        kwargs.set_item("sparse", sparse)?;
+        kwargs.set_item("indexing", indexing)?;
+        return np.call_method("meshgrid", xi, Some(&kwargs));
     }
     let np = py.import("numpy")?;
     let mut owned: Vec<Array1<f64>> = Vec::with_capacity(xi.len());
@@ -1932,126 +1949,23 @@ pub fn meshgrid<'py>(
     Ok(pyo3::types::PyList::new(py, py_arrays)?.into_any())
 }
 
-/// `true` if any `meshgrid` input has a complex dtype (numpy promotes a mixed
-/// real/complex meshgrid to the common complex width — checked via `numpy.asarray`
-/// + `numpy.iscomplexobj`).
-fn meshgrid_any_complex<'py>(
+/// `true` if every `meshgrid` input is a plain `float64` array/sequence, so the
+/// native f64 tiling path preserves observable dtype. Checked via the stable
+/// `numpy.asarray(item).dtype.name` (`"float64"`); anything else (int, float32,
+/// complex, string, datetime, mixed) routes to the numpy delegate.
+fn meshgrid_all_float64<'py>(
     py: Python<'py>,
     xi: &Bound<'py, pyo3::types::PyTuple>,
 ) -> PyResult<bool> {
     let np = py.import("numpy")?;
     for item in xi.iter() {
         let a = np.call_method1("asarray", (&item,))?;
-        if np.call_method1("iscomplexobj", (&a,))?.extract::<bool>()? {
-            return Ok(true);
+        let name: String = a.getattr("dtype")?.getattr("name")?.extract()?;
+        if name != "float64" {
+            return Ok(false);
         }
     }
-    Ok(false)
-}
-
-/// Complex `meshgrid`: the same coordinate-tiling as [`ferray_core::creation::meshgrid`]
-/// but over `Complex<T>`, with a dtype-passthrough (no arithmetic). All inputs are
-/// promoted to the common complex width (`complex64` only when EVERY complex input
-/// is `complex64` and no `float64`/`complex128` widens it — numpy's promotion;
-/// here the simplest matching rule is `complex128` unless all inputs are at most
-/// `complex64`/`float32`/integer widths). To stay faithful to numpy's observable
-/// width without re-deriving the full promotion table, the common dtype is taken
-/// from `numpy.result_type` over the inputs (cast to a complex type if needed).
-fn complex_meshgrid<'py>(
-    py: Python<'py>,
-    xi: &Bound<'py, pyo3::types::PyTuple>,
-    indexing: &str,
-) -> PyResult<Bound<'py, PyAny>> {
-    let np = py.import("numpy")?;
-    // numpy's own result_type gives the exact promoted dtype (e.g. complex64 + complex64
-    // -> complex64; complex64 + float64 -> complex128). Coerce every input to it.
-    let arrs: Vec<Bound<'py, PyAny>> = xi
-        .iter()
-        .map(|it| np.call_method1("asarray", (&it,)))
-        .collect::<PyResult<_>>()?;
-    let args = pyo3::types::PyTuple::new(py, &arrs)?;
-    let common = np.getattr("result_type")?.call1(args)?;
-    let common_name: String = common.getattr("name")?.extract()?;
-    // result_type over complex inputs is always a complex dtype here; pin to the
-    // marshalled widths.
-    let (cdt, is_c64) = match common_name.as_str() {
-        "complex64" => ("complex64", true),
-        _ => ("complex128", false),
-    };
-    if is_c64 {
-        complex_meshgrid_width::<f32>(py, &arrs, indexing, cdt)
-    } else {
-        complex_meshgrid_width::<f64>(py, &arrs, indexing, cdt)
-    }
-}
-
-/// Tile `meshgrid` coordinate grids over one complex width `T`, mirroring the
-/// `ferray_core::creation::meshgrid` index math (no arithmetic — pure gather).
-fn complex_meshgrid_width<'py, T>(
-    py: Python<'py>,
-    arrs: &[Bound<'py, PyAny>],
-    indexing: &str,
-    cdt: &str,
-) -> PyResult<Bound<'py, PyAny>>
-where
-    T: ferray_core::Element + Copy + numpy::Element + Default,
-    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
-{
-    use num_complex::Complex;
-    if indexing != "xy" && indexing != "ij" {
-        return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
-            "meshgrid: indexing must be 'xy' or 'ij'",
-        )));
-    }
-    let np = py.import("numpy")?;
-    // Extract each 1-D complex coordinate vector at the common width.
-    let mut coords: Vec<Vec<Complex<T>>> = Vec::with_capacity(arrs.len());
-    for a in arrs {
-        let coerced = np.call_method1("asarray", (a, cdt))?;
-        let flat = coerced.call_method0("ravel")?;
-        let fa = complex_pyarray_to_ferray::<T>(&flat)?;
-        coords.push(fa.iter().copied().collect());
-    }
-    let ndim = coords.len();
-    if ndim == 0 {
-        return Ok(pyo3::types::PyList::new(py, Vec::<Bound<'py, PyAny>>::new())?.into_any());
-    }
-    let mut shapes: Vec<usize> = coords.iter().map(|c| c.len()).collect();
-    if indexing == "xy" && ndim >= 2 {
-        shapes.swap(0, 1);
-    }
-    let total: usize = shapes.iter().product();
-    let mut results: Vec<Bound<'py, PyAny>> = Vec::with_capacity(ndim);
-    for (k, src) in coords.iter().enumerate() {
-        let effective_k = if indexing == "xy" && ndim >= 2 {
-            match k {
-                0 => 1,
-                1 => 0,
-                other => other,
-            }
-        } else {
-            k
-        };
-        let mut data: Vec<Complex<T>> = Vec::with_capacity(total);
-        for flat in 0..total {
-            let mut rem = flat;
-            let mut idx_k = 0usize;
-            for (d, &s) in shapes.iter().enumerate().rev() {
-                if d == effective_k {
-                    idx_k = rem % s;
-                }
-                rem /= s;
-            }
-            data.push(src[idx_k]);
-        }
-        let grid = ferray_core::array::aliases::ArrayD::<Complex<T>>::from_vec(
-            ferray_core::dimension::IxDyn::new(&shapes),
-            data,
-        )
-        .map_err(ferr_to_pyerr)?;
-        results.push(complex_ferray_to_pyarray::<T>(py, grid)?);
-    }
-    Ok(pyo3::types::PyList::new(py, results)?.into_any())
+    Ok(true)
 }
 
 /// `numpy.mgrid` access via call form: `mgrid([(start, stop, step), ...])`.

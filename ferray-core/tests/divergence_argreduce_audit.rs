@@ -101,19 +101,35 @@ fn argmax_argmin_axis_nan_in_lane() {
         Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, f64::NAN, f64::NAN, 2.0]).unwrap();
 
     assert_eq!(
-        a.argmax_axis(Axis(0)).unwrap().iter().copied().collect::<Vec<_>>(),
+        a.argmax_axis(Axis(0))
+            .unwrap()
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
         vec![1, 0]
     );
     assert_eq!(
-        a.argmax_axis(Axis(1)).unwrap().iter().copied().collect::<Vec<_>>(),
+        a.argmax_axis(Axis(1))
+            .unwrap()
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
         vec![1, 0]
     );
     assert_eq!(
-        a.argmin_axis(Axis(0)).unwrap().iter().copied().collect::<Vec<_>>(),
+        a.argmin_axis(Axis(0))
+            .unwrap()
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
         vec![1, 0]
     );
     assert_eq!(
-        a.argmin_axis(Axis(1)).unwrap().iter().copied().collect::<Vec<_>>(),
+        a.argmin_axis(Axis(1))
+            .unwrap()
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
         vec![1, 0]
     );
 }
@@ -141,7 +157,10 @@ fn argmax_axis_3d_shape_and_indices() {
 
     let m2 = a.argmax_axis(Axis(2)).unwrap();
     assert_eq!(m2.shape(), &[2, 3]);
-    assert_eq!(m2.iter().copied().collect::<Vec<_>>(), vec![1, 1, 1, 1, 0, 1]);
+    assert_eq!(
+        m2.iter().copied().collect::<Vec<_>>(),
+        vec![1, 1, 1, 1, 0, 1]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -179,17 +198,22 @@ fn mean_axis_i8_returns_f64_values() {
     // EXPECT: np.mean(a,axis=0) == [2.0,3.0] dtype float64
     let a = Array::<i8, Ix2>::from_vec(Ix2::new([2, 2]), vec![1, 2, 3, 4]).unwrap();
     let m: Array<f64, _> = a.mean_axis(Axis(0)).unwrap();
-    assert_eq!(m.iter().copied().collect::<Vec<_>>(), vec![2.0_f64, 3.0_f64]);
+    assert_eq!(
+        m.iter().copied().collect::<Vec<_>>(),
+        vec![2.0_f64, 3.0_f64]
+    );
 }
 
 #[test]
 fn mean_axis_bool_returns_f64_values() {
     // a = [[True,False],[True,True]]
     // EXPECT: np.mean(a,axis=0) == [1.0, 0.5] dtype float64
-    let a =
-        Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![true, false, true, true]).unwrap();
+    let a = Array::<bool, Ix2>::from_vec(Ix2::new([2, 2]), vec![true, false, true, true]).unwrap();
     let m: Array<f64, _> = a.mean_axis(Axis(0)).unwrap();
-    assert_eq!(m.iter().copied().collect::<Vec<_>>(), vec![1.0_f64, 0.5_f64]);
+    assert_eq!(
+        m.iter().copied().collect::<Vec<_>>(),
+        vec![1.0_f64, 0.5_f64]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -232,5 +256,8 @@ fn mean_axis1_int_returns_f64() {
     // EXPECT: np.mean(a,axis=1) == [2.0,5.0] dtype float64
     let a = Array::<i32, Ix2>::from_vec(Ix2::new([2, 3]), vec![1, 2, 3, 4, 5, 6]).unwrap();
     let m: Array<f64, _> = a.mean_axis(Axis(1)).unwrap();
-    assert_eq!(m.iter().copied().collect::<Vec<_>>(), vec![2.0_f64, 5.0_f64]);
+    assert_eq!(
+        m.iter().copied().collect::<Vec<_>>(),
+        vec![2.0_f64, 5.0_f64]
+    );
 }

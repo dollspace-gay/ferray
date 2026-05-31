@@ -10,7 +10,9 @@
 // Tolerance: 1e-9 for f64, 1e-3 (relative) for f32, exact-equal for
 // integer types.
 
-use super::{cpu_supports_neon, gemm_c32, gemm_c64, gemm_f32, gemm_f64, gemm_i8, gemm_i8_signed, gemm_i16};
+use super::{
+    cpu_supports_neon, gemm_c32, gemm_c64, gemm_f32, gemm_f64, gemm_i8, gemm_i8_signed, gemm_i16,
+};
 
 // ------------- naive references ----------
 
@@ -397,13 +399,18 @@ fn gemm_i16_accumulate() {
 
 fn test_i8_at(m: usize, n: usize, k: usize) {
     let a: Vec<u8> = (0..m * k).map(|i| ((i * 7) % 200) as u8).collect();
-    let b: Vec<i8> = (0..k * n).map(|i| (((i as i32) * 5 - 100) % 127) as i8).collect();
+    let b: Vec<i8> = (0..k * n)
+        .map(|i| (((i as i32) * 5 - 100) % 127) as i8)
+        .collect();
     let mut c = vec![0_i32; m * n];
     let ok = unsafe { gemm_i8(m, n, k, a.as_ptr(), b.as_ptr(), c.as_mut_ptr(), false) };
     assert!(ok);
     let expected = naive_i8_us(m, n, k, &a, &b);
     for (i, (got, want)) in c.iter().zip(expected.iter()).enumerate() {
-        assert_eq!(*got, *want, "i8 (u8×i8) mismatch at idx {i} (m={m} n={n} k={k})");
+        assert_eq!(
+            *got, *want,
+            "i8 (u8×i8) mismatch at idx {i} (m={m} n={n} k={k})"
+        );
     }
 }
 
@@ -418,8 +425,12 @@ fn gemm_i8_misaligned() {
 }
 
 fn test_i8s_at(m: usize, n: usize, k: usize) {
-    let a: Vec<i8> = (0..m * k).map(|i| (((i as i32) * 7 - 100) % 127) as i8).collect();
-    let b: Vec<i8> = (0..k * n).map(|i| (((i as i32) * 5 + 50) % 127) as i8).collect();
+    let a: Vec<i8> = (0..m * k)
+        .map(|i| (((i as i32) * 7 - 100) % 127) as i8)
+        .collect();
+    let b: Vec<i8> = (0..k * n)
+        .map(|i| (((i as i32) * 5 + 50) % 127) as i8)
+        .collect();
     let mut c = vec![0_i32; m * n];
     let ok = unsafe { gemm_i8_signed(m, n, k, a.as_ptr(), b.as_ptr(), c.as_mut_ptr(), false) };
     assert!(ok);

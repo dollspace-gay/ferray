@@ -130,7 +130,10 @@ fn fixture_matmul() {
         let a = make_f64_array(input_a);
         let b = make_f64_array(input_b);
         let result = ferray_linalg::matmul(&a, &b).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::matmul returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::matmul returned error: {e}",
+                case.name
+            )
         });
         let expected = parse_f64_data(&case.expected["data"]);
         assert_f64_slice_ulp(
@@ -171,7 +174,10 @@ fn fixture_dot() {
         let a = make_f64_array(input_a);
         let b = make_f64_array(input_b);
         let result = ferray_linalg::dot(&a, &b).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::dot returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::dot returned error: {e}",
+                case.name
+            )
         });
         assert_case_matches(
             &result,
@@ -204,7 +210,10 @@ fn fixture_inner() {
         let a = make_f64_array(input_a);
         let b = make_f64_array(input_b);
         let result = ferray_linalg::inner(&a, &b).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::inner returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::inner returned error: {e}",
+                case.name
+            )
         });
         assert_case_matches(
             &result,
@@ -237,7 +246,10 @@ fn fixture_outer() {
         let a = make_f64_array(input_a);
         let b = make_f64_array(input_b);
         let result = ferray_linalg::outer(&a, &b).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::outer returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::outer returned error: {e}",
+                case.name
+            )
         });
         let expected = parse_f64_data(&case.expected["data"]);
         assert_f64_slice_ulp(
@@ -275,7 +287,10 @@ fn fixture_vdot() {
         let a = make_f64_array(input_a);
         let b = make_f64_array(input_b);
         let result = ferray_linalg::vdot(&a, &b).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::vdot returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::vdot returned error: {e}",
+                case.name
+            )
         });
         let expected = parse_f64_value(&case.expected["data"]);
         assert_f64_ulp(
@@ -373,7 +388,10 @@ fn fixture_kron() {
         let a = make_f64_array(input_a);
         let b = make_f64_array(input_b);
         let result = ferray_linalg::kron(&a, &b).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::kron returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::kron returned error: {e}",
+                case.name
+            )
         });
         let expected = parse_f64_data(&case.expected["data"]);
         assert_f64_slice_ulp(
@@ -405,7 +423,10 @@ fn fixture_trace() {
         }
         let arr = to_ix2(&make_f64_array(input));
         let result = ferray_linalg::trace(&arr).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::trace returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::trace returned error: {e}",
+                case.name
+            )
         });
         let expected = parse_f64_value(&case.expected["data"]);
         assert_f64_ulp(
@@ -473,7 +494,10 @@ fn fixture_norm() {
             }
         };
         let result = ferray_linalg::norm(&arr, ord).unwrap_or_else(|e| {
-            panic!("case '{}': ferray_linalg::norm returned error: {e}", case.name)
+            panic!(
+                "case '{}': ferray_linalg::norm returned error: {e}",
+                case.name
+            )
         });
         let expected = parse_f64_value(&case.expected["data"]);
         assert_f64_ulp(

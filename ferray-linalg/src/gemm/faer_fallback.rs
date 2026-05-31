@@ -99,13 +99,17 @@ pub unsafe fn gemm_fallback_f32(
         if beta == 0.0 {
             for i in 0..m {
                 for j in 0..n {
-                    unsafe { *c.add(i * ldc + j) = 0.0; }
+                    unsafe {
+                        *c.add(i * ldc + j) = 0.0;
+                    }
                 }
             }
         } else if beta != 1.0 {
             for i in 0..m {
                 for j in 0..n {
-                    unsafe { *c.add(i * ldc + j) *= beta; }
+                    unsafe {
+                        *c.add(i * ldc + j) *= beta;
+                    }
                 }
             }
         }
@@ -114,12 +118,18 @@ pub unsafe fn gemm_fallback_f32(
     let lhs = Mat::<f32>::from_fn(m, k, |i, j| unsafe { *a.add(i * lda + j) });
     let rhs = Mat::<f32>::from_fn(k, n, |i, j| unsafe { *b.add(i * ldb + j) });
     let mut dst = Mat::<f32>::from_fn(m, n, |i, j| {
-        if beta == 0.0 { 0.0 } else { beta * unsafe { *c.add(i * ldc + j) } }
+        if beta == 0.0 {
+            0.0
+        } else {
+            beta * unsafe { *c.add(i * ldc + j) }
+        }
     });
     faer_matmul(&mut dst, Accum::Add, &lhs, &rhs, alpha, Par::Seq);
     for i in 0..m {
         for j in 0..n {
-            unsafe { *c.add(i * ldc + j) = dst[(i, j)]; }
+            unsafe {
+                *c.add(i * ldc + j) = dst[(i, j)];
+            }
         }
     }
 }
@@ -161,13 +171,19 @@ pub unsafe fn gemm_fallback_c64(
             let p_re = unsafe { c.add(i * ldc * 2 + j * 2) };
             let p_im = unsafe { p_re.add(1) };
             if beta_re == 0.0 && beta_im == 0.0 {
-                unsafe { *p_re = new_re; *p_im = new_im; }
+                unsafe {
+                    *p_re = new_re;
+                    *p_im = new_im;
+                }
             } else {
                 let cur_re = unsafe { *p_re };
                 let cur_im = unsafe { *p_im };
                 let scaled_re = beta_re * cur_re - beta_im * cur_im;
                 let scaled_im = beta_re * cur_im + beta_im * cur_re;
-                unsafe { *p_re = scaled_re + new_re; *p_im = scaled_im + new_im; }
+                unsafe {
+                    *p_re = scaled_re + new_re;
+                    *p_im = scaled_im + new_im;
+                }
             }
         }
     }
@@ -206,13 +222,19 @@ pub unsafe fn gemm_fallback_c32(
             let p_re = unsafe { c.add(i * ldc * 2 + j * 2) };
             let p_im = unsafe { p_re.add(1) };
             if beta_re == 0.0 && beta_im == 0.0 {
-                unsafe { *p_re = new_re; *p_im = new_im; }
+                unsafe {
+                    *p_re = new_re;
+                    *p_im = new_im;
+                }
             } else {
                 let cur_re = unsafe { *p_re };
                 let cur_im = unsafe { *p_im };
                 let scaled_re = beta_re * cur_re - beta_im * cur_im;
                 let scaled_im = beta_re * cur_im + beta_im * cur_re;
-                unsafe { *p_re = scaled_re + new_re; *p_im = scaled_im + new_im; }
+                unsafe {
+                    *p_re = scaled_re + new_re;
+                    *p_im = scaled_im + new_im;
+                }
             }
         }
     }
@@ -242,7 +264,11 @@ pub unsafe fn gemm_fallback_i16(
             }
             let cell = unsafe { c.add(i * ldc + j) };
             unsafe {
-                *cell = if accumulate { (*cell).wrapping_add(acc) } else { acc };
+                *cell = if accumulate {
+                    (*cell).wrapping_add(acc)
+                } else {
+                    acc
+                };
             }
         }
     }
@@ -271,7 +297,11 @@ pub unsafe fn gemm_fallback_i8(
             }
             let cell = unsafe { c.add(i * ldc + j) };
             unsafe {
-                *cell = if accumulate { (*cell).wrapping_add(acc) } else { acc };
+                *cell = if accumulate {
+                    (*cell).wrapping_add(acc)
+                } else {
+                    acc
+                };
             }
         }
     }
@@ -300,7 +330,11 @@ pub unsafe fn gemm_fallback_i8s(
             }
             let cell = unsafe { c.add(i * ldc + j) };
             unsafe {
-                *cell = if accumulate { (*cell).wrapping_add(acc) } else { acc };
+                *cell = if accumulate {
+                    (*cell).wrapping_add(acc)
+                } else {
+                    acc
+                };
             }
         }
     }

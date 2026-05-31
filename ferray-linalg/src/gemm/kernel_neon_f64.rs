@@ -371,7 +371,12 @@ mod tests {
 
         for i in 0..MR_NEON_F64 * NR_NEON_F64 {
             let diff = (c_ours[i] - c_ref[i]).abs();
-            assert!(diff < 1e-9, "mismatch at {i}: ours={} ref={}", c_ours[i], c_ref[i]);
+            assert!(
+                diff < 1e-9,
+                "mismatch at {i}: ours={} ref={}",
+                c_ours[i],
+                c_ref[i]
+            );
         }
     }
 }

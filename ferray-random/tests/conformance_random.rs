@@ -49,7 +49,10 @@ fn standard_normal_distribution_moments() {
     let arr = rng.standard_normal(N).expect("standard_normal");
     let s = arr.as_slice().expect("contiguous");
     let (mean, var) = mean_var_f64(s);
-    assert!(mean.abs() < 0.05, "standard_normal mean={mean}, expected ~0");
+    assert!(
+        mean.abs() < 0.05,
+        "standard_normal mean={mean}, expected ~0"
+    );
     assert!(
         (var - 1.0).abs() < 0.05,
         "standard_normal var={var}, expected ~1"
@@ -71,7 +74,10 @@ fn uniform_distribution_moments() {
     let arr = rng.uniform(0.0, 1.0, N).expect("uniform");
     let s = arr.as_slice().expect("contiguous");
     let (mean, var) = mean_var_f64(s);
-    assert!((mean - 0.5).abs() < 0.02, "uniform mean={mean}, expected ~0.5");
+    assert!(
+        (mean - 0.5).abs() < 0.02,
+        "uniform mean={mean}, expected ~0.5"
+    );
     assert!(
         (var - 1.0 / 12.0).abs() < 0.02,
         "uniform var={var}, expected ~1/12"
@@ -216,7 +222,9 @@ fn choice_samples_lie_in_source_set() {
     assert!(sampled.as_slice().unwrap().iter().all(|x| pool.contains(x)));
 
     // Without replacement — all samples distinct.
-    let sampled2 = rng.choice(&arr, 10, false, None).expect("choice no-replace");
+    let sampled2 = rng
+        .choice(&arr, 10, false, None)
+        .expect("choice no-replace");
     let mut s: Vec<i64> = sampled2.as_slice().unwrap().to_vec();
     s.sort_unstable();
     s.dedup();
@@ -235,7 +243,9 @@ fn choice_samples_lie_in_source_set() {
 #[test]
 fn standard_normal_2d_shape_moments() {
     let mut rng = default_rng_seeded(7);
-    let arr: Array<f64, IxDyn> = rng.standard_normal([100usize, 100usize]).expect("2d normal");
+    let arr: Array<f64, IxDyn> = rng
+        .standard_normal([100usize, 100usize])
+        .expect("2d normal");
     assert_eq!(arr.shape(), &[100, 100]);
     let s = arr.as_slice().expect("contiguous");
     let (mean, var) = mean_var_f64(s);

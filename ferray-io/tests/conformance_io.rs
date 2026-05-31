@@ -103,9 +103,8 @@ fn npy_dtype_descriptors_match_numpy() {
     for case in &suite.test_cases {
         let numpy_descr = case.inputs["numpy_dtype_str"].as_str().unwrap();
         let dtype_label = case.inputs["data"]["dtype"].as_str().unwrap();
-        let (parsed_dtype, endian) = parse_dtype_str(numpy_descr).unwrap_or_else(|e| {
-            panic!("parse_dtype_str failed for case '{}': {e}", case.name)
-        });
+        let (parsed_dtype, endian) = parse_dtype_str(numpy_descr)
+            .unwrap_or_else(|e| panic!("parse_dtype_str failed for case '{}': {e}", case.name));
         let expected_dtype = expected_dtype_from_label(dtype_label);
         assert_eq!(
             parsed_dtype, expected_dtype,
@@ -412,10 +411,7 @@ fn text_savetxt_loadtxt_round_trip_2d() {
     let actual = loaded.as_slice().unwrap();
     let expected = arr.as_slice().unwrap();
     for (i, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
-        assert!(
-            (a - e).abs() < 1e-6,
-            "element {i}: {a} != {e}"
-        );
+        assert!((a - e).abs() < 1e-6, "element {i}: {a} != {e}");
     }
     let _ = std::fs::remove_file(&path);
 }
@@ -473,7 +469,12 @@ fn text_writer_and_str_variants_round_trip() {
     let s = String::from_utf8(buf).unwrap();
     let loaded: Array<f64, Ix2> = loadtxt_from_str(&s, ',', 0).unwrap();
     assert_eq!(loaded.shape(), arr.shape());
-    for (a, e) in loaded.as_slice().unwrap().iter().zip(arr.as_slice().unwrap()) {
+    for (a, e) in loaded
+        .as_slice()
+        .unwrap()
+        .iter()
+        .zip(arr.as_slice().unwrap())
+    {
         assert!((a - e).abs() < 1e-6);
     }
 
@@ -623,8 +624,7 @@ fn format_helpers_round_trip() {
     let arr = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0; 6]).unwrap();
     let dyn_arr = DynArray::F64(arr.clone());
     let header_inner: HeaderData = format::header_data_from_array_1_0(&dyn_arr).unwrap();
-    let header_re: ferray_io::HeaderData =
-        ferray_io::header_data_from_array_1_0(&dyn_arr).unwrap();
+    let header_re: ferray_io::HeaderData = ferray_io::header_data_from_array_1_0(&dyn_arr).unwrap();
     assert_eq!(header_inner, header_re);
     assert_eq!(header_inner.shape, vec![2, 3]);
     assert!(!header_inner.fortran_order);
@@ -668,14 +668,14 @@ fn format_helpers_round_trip() {
 /// memory-map mutably and flush a change back.
 #[test]
 fn memmap_readonly_and_mut_round_trip() {
-    use ferray_io::memmap::{MemmapArray, MemmapArrayMut, memmap_mut, memmap_readonly, open_memmap};
+    use ferray_io::memmap::{
+        MemmapArray, MemmapArrayMut, memmap_mut, memmap_readonly, open_memmap,
+    };
 
     let path = scratch_path("memmap", "npy");
-    let original = Array::<f64, IxDyn>::from_vec(
-        IxDyn::new(&[2, 3]),
-        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-    )
-    .unwrap();
+    let original =
+        Array::<f64, IxDyn>::from_vec(IxDyn::new(&[2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .unwrap();
     ferray_io::npy::save_dynamic(&path, &DynArray::F64(original.clone())).unwrap();
 
     // Read-only memmap.

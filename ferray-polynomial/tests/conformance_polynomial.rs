@@ -62,7 +62,7 @@
 //! analytical expression is closed-form bit-exact (e.g. integer
 //! coefficients), in which case `1e-12` is used.
 
-use ferray_polynomial::{Poly, Polynomial};
+use ferray_polynomial::companion::companion_matrix;
 use ferray_polynomial::extras::{
     cheb2poly, chebfromroots, chebgauss, chebinterpolate, chebline, chebmulx, chebpts1, chebpts2,
     chebweight, herm2poly, herme2poly, hermefromroots, hermegauss, hermeline, hermemulx,
@@ -71,13 +71,13 @@ use ferray_polynomial::extras::{
     poly2herme, poly2lag, poly2leg, polyfromroots, polygrid2d, polygrid3d, polyline, polymulx,
     polyval2d, polyval3d, polyvalfromroots, polyvander2d, polyvander3d,
 };
-use ferray_polynomial::companion::companion_matrix;
 use ferray_polynomial::fitting::{
     chebyshev_vandermonde, hermite_e_vandermonde, hermite_vandermonde, laguerre_vandermonde,
     least_squares_fit, legendre_vandermonde, power_vandermonde,
 };
 use ferray_polynomial::mapping::{auto_domain, map_x, mapparms, validate_domain_window};
 use ferray_polynomial::roots::find_roots_from_power_coeffs;
+use ferray_polynomial::{Poly, Polynomial};
 
 use ferray_test_oracle::{TOL_POLYNOMIAL_F64_REL, fixtures_dir, load_fixture, parse_f64_data};
 
@@ -122,10 +122,20 @@ fn polyval_fixture_matches_numpy() {
         assert_eq!(poly.degree() + 1, coeffs.len().max(1));
         let result = poly.eval_many(&x_data).expect("eval_many");
         for (i, (&got, &want)) in result.iter().zip(expected.iter()).enumerate() {
-            close_rel(got, want, TOL_POLYNOMIAL_F64_REL, &format!("{} [{i}]", case.name));
+            close_rel(
+                got,
+                want,
+                TOL_POLYNOMIAL_F64_REL,
+                &format!("{} [{i}]", case.name),
+            );
             // also exercise Poly::eval directly
             let single = poly.eval(x_data[i]).expect("eval");
-            close_rel(single, want, TOL_POLYNOMIAL_F64_REL, &format!("{} scalar [{i}]", case.name));
+            close_rel(
+                single,
+                want,
+                TOL_POLYNOMIAL_F64_REL,
+                &format!("{} scalar [{i}]", case.name),
+            );
         }
     }
 }
@@ -158,7 +168,12 @@ fn polyfit_fixture_matches_numpy() {
             close_rel(a, b, TOL_POLYNOMIAL_F64_REL, "fit vs fit_with_domain @x");
         }
         for (i, (&got, &want)) in poly.coeffs().iter().zip(expected.iter()).enumerate() {
-            close_rel(got, want, TOL_POLYNOMIAL_F64_REL, &format!("{} [{i}]", case.name));
+            close_rel(
+                got,
+                want,
+                TOL_POLYNOMIAL_F64_REL,
+                &format!("{} [{i}]", case.name),
+            );
         }
     }
 }
@@ -182,12 +197,7 @@ fn polyroots_fixture_matches_numpy_real_case() {
         let expected = parse_f64_data(&case.expected["roots_real_sorted"]["data"]);
 
         let poly = Polynomial::new(&coeffs);
-        let mut roots: Vec<f64> = poly
-            .roots()
-            .expect("roots")
-            .iter()
-            .map(|c| c.re)
-            .collect();
+        let mut roots: Vec<f64> = poly.roots().expect("roots").iter().map(|c| c.re).collect();
         roots.sort_by(|a, b| a.partial_cmp(b).unwrap());
         for (i, (&got, &want)) in roots.iter().zip(expected.iter()).enumerate() {
             close_rel(got, want, TOL_POLYNOMIAL_F64_REL, &format!("root {i}"));
@@ -314,7 +324,12 @@ fn polynomial_trim_truncate_basis_identity_from_coeffs_from_roots() {
 
     // integ_with_bounds with lbnd=2, scl=1, k=[0]: integ of p with eval at 2 = 0.
     let ib = p.integ_with_bounds(1, &[0.0], 2.0, 1.0).unwrap();
-    close_rel(ib.eval(2.0).unwrap(), 0.0, TOL_EXACT, "integ_with_bounds anchor");
+    close_rel(
+        ib.eval(2.0).unwrap(),
+        0.0,
+        TOL_EXACT,
+        "integ_with_bounds anchor",
+    );
 
     // linspace: 5 points from the default domain.
     let (xs_ls, ys_ls) = <Polynomial as Poly>::linspace(&p, 5, None).unwrap();
@@ -350,14 +365,21 @@ fn polynomial_trim_truncate_basis_identity_from_coeffs_from_roots() {
 // ---------------------------------------------------------------------------
 #[test]
 fn orthogonal_basis_evaluators_match_recurrences() {
-    use ferray_polynomial::{Chebyshev, FromPowerBasis, Hermite, HermiteE, Laguerre, Legendre, ToPowerBasis};
+    use ferray_polynomial::{
+        Chebyshev, FromPowerBasis, Hermite, HermiteE, Laguerre, Legendre, ToPowerBasis,
+    };
 
     // T_2(x) = 2x^2 - 1  (Chebyshev T_2 at x=0.5 = -0.5).
     let t = Chebyshev::new(&[0.0, 0.0, 1.0]);
     close_rel(t.eval(0.5).unwrap(), -0.5, TOL_EXACT, "Chebyshev T_2(0.5)");
     let t_pow = t.to_power_basis().unwrap();
     let t_round: Chebyshev = Chebyshev::from_power_basis(&t_pow).unwrap();
-    close_rel(t_round.eval(0.5).unwrap(), -0.5, TOL_POLYNOMIAL_F64_REL, "Chebyshev round-trip");
+    close_rel(
+        t_round.eval(0.5).unwrap(),
+        -0.5,
+        TOL_POLYNOMIAL_F64_REL,
+        "Chebyshev round-trip",
+    );
 
     // P_2(x) = 0.5 (3x^2 - 1)  at x=0.5 = 0.5*(0.75 - 1) = -0.125
     let l = Legendre::new(&[0.0, 0.0, 1.0]);
@@ -460,7 +482,9 @@ fn extras_match_numpy_contract() {
         &[2.0],
         &[3.0],
         &[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
-        2, 2, 2,
+        2,
+        2,
+        2,
     )
     .unwrap();
     close_rel(v3[0], 1.0 + 1.0 * 2.0 * 3.0, TOL_EXACT, "polyval3d");
@@ -472,7 +496,9 @@ fn extras_match_numpy_contract() {
         &[2.0],
         &[3.0],
         &[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
-        2, 2, 2,
+        2,
+        2,
+        2,
     )
     .unwrap();
     assert_eq!(g3.len(), 1);
@@ -508,7 +534,12 @@ fn extras_match_numpy_contract() {
 
     // chebinterpolate of a quadratic should reproduce it.
     let interp = chebinterpolate(|x| 1.0 + x + x * x, 2).unwrap();
-    close_rel(interp.eval(0.5).unwrap(), 1.75, 1e-10, "chebinterpolate quadratic");
+    close_rel(
+        interp.eval(0.5).unwrap(),
+        1.75,
+        1e-10,
+        "chebinterpolate quadratic",
+    );
 
     // Gauss quadrature: nodes + weights sum to integral of 1 over reference domain.
     let (cg_n, cg_w) = chebgauss(8).unwrap();

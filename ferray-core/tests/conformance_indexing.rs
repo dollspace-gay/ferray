@@ -94,7 +94,10 @@ fn choose_compress_select_dispatch_correctly() {
     let c0 = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![10, 20, 30, 40]).unwrap();
     let c1 = Array::<i32, Ix1>::from_vec(Ix1::new([4]), vec![100, 200, 300, 400]).unwrap();
     let ch = ext::choose(&idx, &[c0, c1]).unwrap();
-    assert_eq!(ch.iter().copied().collect::<Vec<_>>(), vec![10, 200, 30, 400]);
+    assert_eq!(
+        ch.iter().copied().collect::<Vec<_>>(),
+        vec![10, 200, 30, 400]
+    );
 
     let a = i32_2d(2, 3, vec![1, 2, 3, 4, 5, 6]);
     let comp = ext::compress(&[true, false, true], &a, Axis(1)).unwrap();

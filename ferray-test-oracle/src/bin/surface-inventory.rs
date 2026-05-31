@@ -410,10 +410,7 @@ fn collect_items_for_crate(crate_dir: &Path, crate_name: &str) -> Vec<SurfaceIte
         .sort_by_file_name()
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.file_type().is_file()
-                && e.path().extension().is_some_and(|ext| ext == "rs")
-        });
+        .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "rs"));
 
     for entry in walker {
         let file_path = entry.path();
@@ -520,8 +517,8 @@ fn write_inventory(crate_dir: &Path, crate_name: &str) -> Result<(), Box<dyn std
         items,
     };
 
-    let json = serde_json::to_string_pretty(&inventory)
-        .expect("JSON serialization should not fail");
+    let json =
+        serde_json::to_string_pretty(&inventory).expect("JSON serialization should not fail");
 
     // Write to <crate>/tests/conformance/_surface.json with exactly one
     // trailing newline.
@@ -583,8 +580,7 @@ fn main() {
 
     // Determine the workspace root relative to this binary's manifest.
     // CARGO_MANIFEST_DIR is set by Cargo when running via `cargo run`.
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .unwrap_or_else(|_| ".".to_string());
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let manifest_path = PathBuf::from(&manifest_dir);
     // ferray-test-oracle is one level below the workspace root.
     let workspace_root = manifest_path
@@ -593,9 +589,7 @@ fn main() {
         .to_path_buf();
 
     if args.len() < 2 {
-        eprintln!(
-            "Usage:\n  surface-inventory <crate-name>\n  surface-inventory --all"
-        );
+        eprintln!("Usage:\n  surface-inventory <crate-name>\n  surface-inventory --all");
         std::process::exit(1);
     }
 

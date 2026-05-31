@@ -76,8 +76,7 @@ fn conformance_fft_1d() {
             make_complex_array(input)
         } else if dtype == "float64" {
             let data = ferray_test_oracle::parse_f64_data(&input["data"]);
-            let cdata: Vec<Complex<f64>> =
-                data.into_iter().map(|r| Complex::new(r, 0.0)).collect();
+            let cdata: Vec<Complex<f64>> = data.into_iter().map(|r| Complex::new(r, 0.0)).collect();
             Array::from_vec(IxDyn::new(&shape), cdata).unwrap()
         } else {
             continue;
@@ -145,8 +144,7 @@ fn conformance_fft2() {
             make_complex_array(input)
         } else if dtype == "float64" {
             let data = ferray_test_oracle::parse_f64_data(&input["data"]);
-            let cdata: Vec<Complex<f64>> =
-                data.into_iter().map(|r| Complex::new(r, 0.0)).collect();
+            let cdata: Vec<Complex<f64>> = data.into_iter().map(|r| Complex::new(r, 0.0)).collect();
             Array::from_vec(IxDyn::new(&shape), cdata).unwrap()
         } else {
             continue;

@@ -197,7 +197,7 @@ fn translate_replaces_and_drops_chars() {
 mod compact_tests {
     use super::*;
     use ferray_strings::compact::{
-        estimated_string_array_bytes, CompactStringArray, CompactStringIter,
+        CompactStringArray, CompactStringIter, estimated_string_array_bytes,
     };
 
     /// Covers: `ferray_strings::CompactStringArray` (re-export) and
@@ -246,8 +246,7 @@ mod compact_tests {
         let collected: Vec<&str> = iter.collect();
         assert_eq!(collected, vec!["alpha", "beta"]);
 
-        let raw =
-            CompactStringArray::from_raw_parts(b"abc".to_vec(), vec![0, 1, 3]).unwrap();
+        let raw = CompactStringArray::from_raw_parts(b"abc".to_vec(), vec![0, 1, 3]).unwrap();
         assert_eq!(raw.as_str(0), Some("a"));
         assert_eq!(raw.as_str(1), Some("bc"));
         let _bytes_owned = c.estimated_bytes();

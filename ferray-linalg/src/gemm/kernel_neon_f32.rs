@@ -265,8 +265,12 @@ mod tests {
     #[test]
     fn kernel_4x16_neon_matches_naive() {
         let kc = 32;
-        let a: Vec<f32> = (0..MR_NEON_F32 * kc).map(|i| (i as f32) * 0.01 - 1.0).collect();
-        let b: Vec<f32> = (0..kc * NR_NEON_F32).map(|i| (i as f32) * 0.013 + 0.5).collect();
+        let a: Vec<f32> = (0..MR_NEON_F32 * kc)
+            .map(|i| (i as f32) * 0.01 - 1.0)
+            .collect();
+        let b: Vec<f32> = (0..kc * NR_NEON_F32)
+            .map(|i| (i as f32) * 0.013 + 0.5)
+            .collect();
         let mut c_ours = vec![0.0_f32; MR_NEON_F32 * NR_NEON_F32];
         let mut c_ref = vec![0.0_f32; MR_NEON_F32 * NR_NEON_F32];
 
@@ -296,7 +300,13 @@ mod tests {
 
         for i in 0..MR_NEON_F32 * NR_NEON_F32 {
             let diff = (c_ours[i] - c_ref[i]).abs();
-            assert!(diff < 1e-3, "mismatch at {i}: ours={} ref={} diff={}", c_ours[i], c_ref[i], diff);
+            assert!(
+                diff < 1e-3,
+                "mismatch at {i}: ours={} ref={} diff={}",
+                c_ours[i],
+                c_ref[i],
+                diff
+            );
         }
     }
 }

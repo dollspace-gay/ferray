@@ -9,9 +9,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use ferray_strings::{self, StringArray1};
-use ferray_test_oracle::{
-    fixtures_dir, load_fixture, parse_bool_data, parse_string_data,
-};
+use ferray_test_oracle::{fixtures_dir, load_fixture, parse_bool_data, parse_string_data};
 
 fn strings_fx(name: &str) -> std::path::PathBuf {
     fixtures_dir().join("strings").join(name)
@@ -19,10 +17,7 @@ fn strings_fx(name: &str) -> std::path::PathBuf {
 
 fn make_array(value: &ferray_test_oracle::serde_json::Value) -> StringArray1 {
     let data = parse_string_data(&value["data"]);
-    ferray_strings::array(
-        &data.iter().map(String::as_str).collect::<Vec<_>>(),
-    )
-    .unwrap()
+    ferray_strings::array(&data.iter().map(String::as_str).collect::<Vec<_>>()).unwrap()
 }
 
 // ---------------------------------------------------------------------------
@@ -45,7 +40,12 @@ fn find_matches_numpy() {
             .iter()
             .map(|v| v.as_i64().unwrap())
             .collect();
-        assert_eq!(out.as_slice().unwrap(), expected.as_slice(), "case '{}'", case.name);
+        assert_eq!(
+            out.as_slice().unwrap(),
+            expected.as_slice(),
+            "case '{}'",
+            case.name
+        );
     }
 }
 
@@ -64,7 +64,12 @@ fn count_matches_numpy() {
             .iter()
             .map(|v| v.as_i64().unwrap())
             .collect();
-        assert_eq!(out.as_slice().unwrap(), expected.as_slice(), "case '{}'", case.name);
+        assert_eq!(
+            out.as_slice().unwrap(),
+            expected.as_slice(),
+            "case '{}'",
+            case.name
+        );
     }
 }
 
@@ -78,7 +83,12 @@ fn startswith_matches_numpy() {
         let prefix = case.inputs["substr"].as_str().unwrap();
         let out = ferray_strings::startswith(&arr, prefix).unwrap();
         let expected = parse_bool_data(&case.expected["data"]);
-        assert_eq!(out.as_slice().unwrap(), expected.as_slice(), "case '{}'", case.name);
+        assert_eq!(
+            out.as_slice().unwrap(),
+            expected.as_slice(),
+            "case '{}'",
+            case.name
+        );
     }
 }
 
@@ -92,7 +102,12 @@ fn endswith_matches_numpy() {
         let suffix = case.inputs["substr"].as_str().unwrap();
         let out = ferray_strings::endswith(&arr, suffix).unwrap();
         let expected = parse_bool_data(&case.expected["data"]);
-        assert_eq!(out.as_slice().unwrap(), expected.as_slice(), "case '{}'", case.name);
+        assert_eq!(
+            out.as_slice().unwrap(),
+            expected.as_slice(),
+            "case '{}'",
+            case.name
+        );
     }
 }
 
@@ -161,7 +176,12 @@ fn match_matches_numpy() {
         let pattern = case.inputs["pattern"].as_str().unwrap();
         let out = ferray_strings::match_(&arr, pattern).unwrap();
         let expected = parse_bool_data(&case.expected["data"]);
-        assert_eq!(out.as_slice().unwrap(), expected.as_slice(), "case '{}'", case.name);
+        assert_eq!(
+            out.as_slice().unwrap(),
+            expected.as_slice(),
+            "case '{}'",
+            case.name
+        );
     }
 }
 
