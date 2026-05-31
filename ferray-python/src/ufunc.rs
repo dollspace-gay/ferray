@@ -2603,6 +2603,14 @@ pub fn gradient<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     use ferray_core::array::aliases::Array1;
     let arr = as_ndarray(py, f)?;
+    // datetime64/timedelta64 (#946): `gradient` of a time array is ALWAYS a
+    // timedelta64 (central differences of datetimes/timedeltas), computed on the
+    // int64 ticks. Branch BEFORE the float64 coercion below — that coercion is
+    // the R-CODE-4 silent-float corruption this REQ eliminates (`fr.gradient(td)`
+    // returned a bare float64 array).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_gradient(py, &arr, dx);
+    }
     let dt = dtype_name(&arr)?;
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()

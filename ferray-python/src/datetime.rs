@@ -1103,6 +1103,348 @@ pub fn time_reduce<'py>(
 }
 
 // ---------------------------------------------------------------------------
+// datetime64 / timedelta64 order-statistic reductions (#946)
+//
+// median / nanmedian / nanmax / nanmin / nansum / percentile / quantile /
+// gradient over datetime64 / timedelta64 inputs. The PRIOR `stats.rs` /
+// `ufunc.rs` arms coerced the array to float64 (`coerce_dtype(.., "float64")`)
+// and returned a bare float — the R-CODE-4 silent-float corruption this fixes
+// (`fr.median(td) -> 4.0` instead of `timedelta64(4,'D')`).
+//
+// Compute-or-raise per the LIVE numpy 2.4 contract (each derived live, R-CHAR-3):
+//   median(td)        -> timedelta   ; median(dt)        RAISES UFuncTypeError
+//   nanmedian(td)     -> timedelta   ; nanmedian(dt)     RAISES UFuncTypeError
+//   nanmax/nanmin(td) -> timedelta   ; nanmax/nanmin(dt) -> datetime
+//   nansum(td)        -> timedelta   ; nansum(dt)        RAISES UFuncTypeError
+//   percentile/quantile(td) -> timedelta ; (dt) -> datetime
+//   gradient(td)      -> timedelta   ; gradient(dt)      -> timedelta
+//   average(td/dt), histogram(td/dt)  RAISE (delegated by the binding)
+//
+// numpy's `median` / `_quantile` route through `add` (median: `mean` of the two
+// middle elements; percentile: `_lerp`). For two datetime64 operands numpy's
+// `add` ufunc is undefined (`ufunc 'add' cannot use operands with types
+// '<M8[D]' and '<M8[D]'`, numpy/_core/src/umath/loops.c.src) so even-length
+// datetime median RAISES — the binding delegates the datetime median/nanmedian
+// to numpy so its EXACT exception surfaces (R-DEV-2). datetime
+// percentile/min/max stay datetime because numpy never `add`s two datetimes
+// there (percentile interpolates via `subtract` + `add` of a timedelta, which
+// IS defined). NaT (`i64::MIN`) handling:
+//   * median / percentile / quantile (non-nan): any NaT in a lane -> NaT result
+//     (numpy's `slices_having_nans` overwrites the lane with NaT, live).
+//   * nanmedian / nanmax / nanmin: NaT skipped; an all-NaT lane -> NaT.
+//   * nansum: numpy does NOT skip NaT (it is plain `sum`) -> NaT propagates.
+// ---------------------------------------------------------------------------
+
+/// Sort a lane's int64 ticks ascending, separating real ticks from NaT.
+/// Returns `(sorted_real_ticks, any_nat)`.
+fn sorted_real_ticks(lane: &[i64]) -> (Vec<i64>, bool) {
+    let any_nat = lane.contains(&NAT);
+    let mut real: Vec<i64> = lane.iter().copied().filter(|&v| v != NAT).collect();
+    real.sort_unstable();
+    (real, any_nat)
+}
+
+/// Median of a sorted, NaT-free int64 tick lane. Odd length -> middle tick;
+/// even length -> `(lo + hi) / 2` truncated toward zero — numpy computes the
+/// even-case median as `mean([lo, hi])`, and timedelta `mean` truncates toward
+/// zero (`(2+5)/2 -> 3`, live numpy 2.4). Empty -> `None`.
+fn median_of_sorted(sorted: &[i64]) -> Option<i64> {
+    let n = sorted.len();
+    if n == 0 {
+        return None;
+    }
+    if n % 2 == 1 {
+        Some(sorted[n / 2])
+    } else {
+        let lo = sorted[n / 2 - 1];
+        let hi = sorted[n / 2];
+        // Sum in i128 then truncate toward zero on the /2 to mirror numpy's
+        // timedelta `mean` (avoids i64 overflow on extreme ticks).
+        Some(((lo as i128 + hi as i128) / 2) as i64)
+    }
+}
+
+/// median (`skip_nat = false`) / nanmedian (`skip_nat = true`) of a datetime64 /
+/// timedelta64 array. Datetime medians delegate to numpy (its `add` of two
+/// datetimes RAISES); only timedelta reaches the compute path here.
+pub fn time_median<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+    skip_nat: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let tkind = time_kind(arr)?.ok_or_else(|| {
+        PyTypeError::new_err("time_median requires a datetime64 / timedelta64 array")
+    })?;
+    if tkind == TimeKind::Datetime {
+        // numpy `median`/`nanmedian` average the two middle elements via `add`,
+        // which is undefined for two datetime64 -> RAISES UFuncTypeError. Even
+        // an odd-length datetime median calls `mean` on the single middle slice,
+        // which still hits `add.reduce` and raises (verified live). Delegate so
+        // numpy's exact exception surfaces (R-DEV-2).
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        let name = if skip_nat { "nanmedian" } else { "median" };
+        return np.call_method(name, (arr,), Some(&kwargs));
+    }
+
+    let (ticks, _unit, unit_str) = extract_ticks(py, arr)?;
+    let shape: Vec<usize> = ticks.shape().to_vec();
+    let flat: Vec<i64> = ticks.iter().copied().collect();
+
+    let lane_median = |lane: &[i64]| -> Option<i64> {
+        let (sorted, any_nat) = sorted_real_ticks(lane);
+        if !skip_nat && any_nat {
+            // Plain median: a NaT anywhere in the lane yields a NaT result.
+            return Some(NAT);
+        }
+        // nanmedian: NaT skipped; an all-NaT (now empty) lane -> NaT.
+        match median_of_sorted(&sorted) {
+            Some(v) => Some(v),
+            None => {
+                if skip_nat {
+                    Some(NAT)
+                } else {
+                    // Empty non-nan lane: numpy warns + returns nan (float). Not
+                    // reachable for timedelta with axis=None empty (the binding
+                    // handles empty earlier); axis lanes are non-empty here.
+                    None
+                }
+            }
+        }
+    };
+
+    match axis {
+        None => {
+            let r = lane_median(&flat)
+                .ok_or_else(|| PyValueError::new_err("zero-size array to reduction operation"))?;
+            emit_time(py, vec![r], &[], false, &unit_str)
+        }
+        Some(ax) => {
+            let (out_shape, opt) = axis_lanes_i64(&flat, &shape, ax, lane_median)?;
+            let mut out = Vec::with_capacity(opt.len());
+            for v in opt {
+                out.push(v.ok_or_else(|| {
+                    PyValueError::new_err("zero-size array to reduction operation")
+                })?);
+            }
+            emit_time(py, out, &out_shape, false, &unit_str)
+        }
+    }
+}
+
+/// nansum / nanmax / nanmin over a datetime64 / timedelta64 array.
+///
+/// * `nansum`: numpy's `nansum` does NOT skip NaT for timedelta (it is plain
+///   `sum`) so NaT propagates; datetime `nansum` RAISES (delegated).
+/// * `nanmax` / `nanmin`: NaT skipped; an all-NaT lane -> NaT. Datetime stays
+///   datetime; timedelta stays timedelta.
+pub fn time_nan_reduce<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    which: TimeReduce,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let tkind = time_kind(arr)?.ok_or_else(|| {
+        PyTypeError::new_err("time_nan_reduce requires a datetime64 / timedelta64 array")
+    })?;
+    let is_datetime = tkind == TimeKind::Datetime;
+
+    if matches!(which, TimeReduce::Sum) {
+        // nansum == plain sum for time arrays (no NaT skip). datetime sum RAISES
+        // -> the existing `time_reduce` Sum arm already delegates to numpy.
+        return time_reduce(py, arr, TimeReduce::Sum, axis);
+    }
+
+    let (ticks, _unit, unit_str) = extract_ticks(py, arr)?;
+    let shape: Vec<usize> = ticks.shape().to_vec();
+    let flat: Vec<i64> = ticks.iter().copied().collect();
+    let want_max = matches!(which, TimeReduce::Max);
+
+    let lane_nan_extremum = |lane: &[i64]| -> Option<i64> {
+        if lane.is_empty() {
+            return None;
+        }
+        let real: Vec<i64> = lane.iter().copied().filter(|&v| v != NAT).collect();
+        if real.is_empty() {
+            // All-NaT lane -> NaT (numpy: RuntimeWarning + NaT, live).
+            return Some(NAT);
+        }
+        if want_max {
+            real.iter().copied().max()
+        } else {
+            real.iter().copied().min()
+        }
+    };
+
+    match axis {
+        None => {
+            let r = lane_nan_extremum(&flat).ok_or_else(|| {
+                PyValueError::new_err("zero-size array to reduction operation (no identity)")
+            })?;
+            emit_time(py, vec![r], &[], is_datetime, &unit_str)
+        }
+        Some(ax) => {
+            let (out_shape, opt) = axis_lanes_i64(&flat, &shape, ax, lane_nan_extremum)?;
+            let mut out = Vec::with_capacity(opt.len());
+            for v in opt {
+                out.push(v.ok_or_else(|| {
+                    PyValueError::new_err("zero-size array to reduction operation (no identity)")
+                })?);
+            }
+            emit_time(py, out, &out_shape, is_datetime, &unit_str)
+        }
+    }
+}
+
+/// numpy's `_lerp` over two int64 ticks at fraction `t in [0, 1]`, exactly
+/// mirroring `numpy/lib/_function_base_impl.py:4594` _lerp:
+///   `diff = b - a; lerp = a + (i64)(diff * t)`, but for `t >= 0.5`
+///   `lerp = b - (i64)(diff * (1 - t))`.
+/// The `(i64)(diff * t)` is numpy's timedelta×double multiply
+/// (`TIMEDELTA_md_m_multiply`, loops.c.src:933): a C `(npy_timedelta)double`
+/// cast = truncation toward zero. This reproduces `percentile([2,5,8],25) -> 4`
+/// (= `5 - trunc(3*0.5) = 5 - 1`) exactly.
+fn lerp_ticks(a: i64, b: i64, t: f64) -> i64 {
+    let diff = (b as f64) - (a as f64);
+    if t >= 0.5 {
+        // b - trunc(diff * (1 - t))
+        (b as f64 - (diff * (1.0 - t)).trunc()) as i64
+    } else {
+        // a + trunc(diff * t)
+        (a as f64 + (diff * t).trunc()) as i64
+    }
+}
+
+/// Linear-interpolation (Hyndman&Fan method 7) quantile of a sorted, NaT-free
+/// int64 tick lane at fraction `q in [0, 1]`. `virtual_index = q*(n-1)`; the
+/// result interpolates between the floor/ceil neighbours via [`lerp_ticks`].
+fn quantile_of_sorted(sorted: &[i64], q: f64) -> Option<i64> {
+    let n = sorted.len();
+    if n == 0 {
+        return None;
+    }
+    if n == 1 {
+        return Some(sorted[0]);
+    }
+    let vi = q * ((n - 1) as f64);
+    let prev = vi.floor() as usize;
+    let next = vi.ceil() as usize;
+    if prev == next {
+        return Some(sorted[prev]);
+    }
+    let gamma = vi - prev as f64;
+    Some(lerp_ticks(sorted[prev], sorted[next], gamma))
+}
+
+/// percentile / quantile over a datetime64 / timedelta64 array at a single
+/// `q` fraction (`q in [0, 1]`; the binding rescales percentile's `0..100`).
+/// Both kinds COMPUTE (datetime stays datetime — numpy never `add`s two
+/// datetimes here, it interpolates a timedelta offset). A lane containing any
+/// NaT yields NaT (numpy's non-nan percentile, live).
+pub fn time_quantile<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    q: f64,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let tkind = time_kind(arr)?.ok_or_else(|| {
+        PyTypeError::new_err("time_quantile requires a datetime64 / timedelta64 array")
+    })?;
+    let is_datetime = tkind == TimeKind::Datetime;
+
+    let (ticks, _unit, unit_str) = extract_ticks(py, arr)?;
+    let shape: Vec<usize> = ticks.shape().to_vec();
+    let flat: Vec<i64> = ticks.iter().copied().collect();
+
+    let lane_q = |lane: &[i64]| -> Option<i64> {
+        let (sorted, any_nat) = sorted_real_ticks(lane);
+        if any_nat {
+            return Some(NAT);
+        }
+        quantile_of_sorted(&sorted, q)
+    };
+
+    match axis {
+        None => {
+            let r = lane_q(&flat)
+                .ok_or_else(|| PyValueError::new_err("zero-size array to reduction operation"))?;
+            emit_time(py, vec![r], &[], is_datetime, &unit_str)
+        }
+        Some(ax) => {
+            let (out_shape, opt) = axis_lanes_i64(&flat, &shape, ax, lane_q)?;
+            let mut out = Vec::with_capacity(opt.len());
+            for v in opt {
+                out.push(v.ok_or_else(|| {
+                    PyValueError::new_err("zero-size array to reduction operation")
+                })?);
+            }
+            emit_time(py, out, &out_shape, is_datetime, &unit_str)
+        }
+    }
+}
+
+/// `numpy.gradient(f, dx)` for a 1-D datetime64 / timedelta64 array. The result
+/// is ALWAYS timedelta (datetime differences are timedeltas). Central
+/// differences on the int64 ticks: interior `(f[i+1]-f[i-1])/(2*dx)`, edges
+/// one-sided `(f[1]-f[0])/dx` and `(f[-1]-f[-2])/dx`. Each division is numpy's
+/// timedelta÷double = truncation toward zero (`(8-5)/2 -> 1`, live).
+/// NaT propagates: any operand NaT in a difference yields NaT.
+pub fn time_gradient<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dx: f64,
+) -> PyResult<Bound<'py, PyAny>> {
+    // Validate the input is a time array (result is ALWAYS timedelta, so the
+    // specific kind is not used).
+    time_kind(arr)?.ok_or_else(|| {
+        PyTypeError::new_err("time_gradient requires a datetime64 / timedelta64 array")
+    })?;
+    let (ticks, _unit, unit_str) = extract_ticks(py, arr)?;
+    if ticks.ndim() != 1 {
+        return Err(PyValueError::new_err(
+            "ferray gradient supports a 1-D array",
+        ));
+    }
+    let f: Vec<i64> = ticks.iter().copied().collect();
+    let n = f.len();
+    if n < 2 {
+        return Err(PyValueError::new_err(
+            "Shape of array too small to calculate a numerical gradient, \
+             at least 2 elements are required.",
+        ));
+    }
+    // Subtract two ticks with NaT propagation; `None` marks NaT.
+    let sub = |hi: i64, lo: i64| -> Option<i64> {
+        if hi == NAT || lo == NAT {
+            None
+        } else {
+            Some(hi.wrapping_sub(lo))
+        }
+    };
+    // Divide a tick difference by a double, truncating toward zero (numpy
+    // timedelta÷double). `None` (NaT) stays NaT.
+    let div = |diff: Option<i64>, denom: f64| -> i64 {
+        match diff {
+            None => NAT,
+            Some(d) => ((d as f64) / denom).trunc() as i64,
+        }
+    };
+    let mut out = vec![0i64; n];
+    // Edges (one-sided).
+    out[0] = div(sub(f[1], f[0]), dx);
+    out[n - 1] = div(sub(f[n - 1], f[n - 2]), dx);
+    // Interior (central).
+    for i in 1..n - 1 {
+        out[i] = div(sub(f[i + 1], f[i - 1]), 2.0 * dx);
+    }
+    emit_time(py, out, &[n], false, &unit_str)
+}
+
+// ---------------------------------------------------------------------------
 // datetime64 / timedelta64 comparison + ordering (REQ-3, #943)
 //
 // numpy orders / compares datetime64 and timedelta64 by their int64 TICK value,

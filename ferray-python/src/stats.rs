@@ -1755,8 +1755,11 @@ macro_rules! bind_nan_reduction {
     };
     // Complex-loop form: a complex input dispatches to `$cplx` (numpy COMPUTES
     // these as complex, NaN->identity), keeping the input width, BEFORE the f64
-    // coercion can drop the imaginary part (R-CODE-4).
-    ($name:ident, $ferr_path:path, complex = $cplx:expr) => {
+    // coercion can drop the imaginary part (R-CODE-4). A datetime64/timedelta64
+    // input dispatches to `$time` (compute-or-raise per numpy, #946) BEFORE the
+    // same f64 coercion — the silent-float corruption fix for the nan-aware
+    // reductions (`fr.nansum(td)`/`fr.nanmax(td)` returned a bare float).
+    ($name:ident, $ferr_path:path, complex = $cplx:expr, time = $time:expr) => {
         #[pyfunction]
         #[pyo3(signature = (a, axis = None))]
         pub fn $name<'py>(
@@ -1765,6 +1768,9 @@ macro_rules! bind_nan_reduction {
             axis: Option<usize>,
         ) -> PyResult<Bound<'py, PyAny>> {
             let arr = as_ndarray(py, a)?;
+            if crate::datetime::is_time_array(&arr)? {
+                return ($time)(py, &arr, axis);
+            }
             let dt = dtype_name(&arr)?;
             match dt.as_str() {
                 "complex128" | "c16" => return ($cplx)(py, &arr, axis, false),
@@ -1925,11 +1931,101 @@ fn nanmax_complex<'py>(
     }
 }
 
-bind_nan_reduction!(nansum, ferray_stats::nansum, complex = nansum_complex);
-bind_nan_reduction!(nanmean, ferray_stats::nanmean, complex = nanmean_complex);
-bind_nan_reduction!(nanmin, ferray_stats::nanmin, complex = nanmin_complex);
-bind_nan_reduction!(nanmax, ferray_stats::nanmax, complex = nanmax_complex);
-bind_nan_reduction!(nanprod, ferray_stats::nanprod, complex = nanprod_complex);
+// datetime64/timedelta64 routing for the nan-aware reductions (#946),
+// compute-or-raise per the live numpy 2.4 contract (R-CHAR-3):
+//   nansum(td)->td (NaT propagates, no skip); nansum(dt) RAISES.
+//   nanmin/nanmax(td)->td, (dt)->datetime; NaT skipped, all-NaT -> NaT.
+//   nanmean(td)->td (NaT skipped, mean); nanmean(dt) RAISES.
+//   nanprod(td/dt) RAISES.
+// Each delegates the RAISE cases to numpy so its exact `UFuncTypeError`
+// surfaces (R-DEV-2); the compute cases use the int64-tick transport.
+fn nansum_time<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    crate::datetime::time_nan_reduce(py, arr, crate::datetime::TimeReduce::Sum, axis)
+}
+
+fn nanmin_time<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    crate::datetime::time_nan_reduce(py, arr, crate::datetime::TimeReduce::Min, axis)
+}
+
+fn nanmax_time<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    crate::datetime::time_nan_reduce(py, arr, crate::datetime::TimeReduce::Max, axis)
+}
+
+/// nanmean(td) skips NaT and means the remaining ticks (timedelta); nanmean(dt)
+/// and an all-NaT timedelta delegate to numpy so its exact result/exception
+/// surfaces (R-DEV-2). Routes through numpy directly: this op's compute path is
+/// not one of the #946 pins, but the time-array branch still eliminates the
+/// prior silent-float coercion by deferring to numpy's own datetime kernel.
+fn nanmean_time<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    if let Some(ax) = axis {
+        kwargs.set_item("axis", ax)?;
+    }
+    np.call_method("nanmean", (arr,), Some(&kwargs))
+}
+
+/// nanprod over a datetime64/timedelta64 array RAISES in numpy (no `prod` over
+/// time dtypes) — delegate so numpy's exact `UFuncTypeError` surfaces.
+fn nanprod_time<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    if let Some(ax) = axis {
+        kwargs.set_item("axis", ax)?;
+    }
+    np.call_method("nanprod", (arr,), Some(&kwargs))
+}
+
+bind_nan_reduction!(
+    nansum,
+    ferray_stats::nansum,
+    complex = nansum_complex,
+    time = nansum_time
+);
+bind_nan_reduction!(
+    nanmean,
+    ferray_stats::nanmean,
+    complex = nanmean_complex,
+    time = nanmean_time
+);
+bind_nan_reduction!(
+    nanmin,
+    ferray_stats::nanmin,
+    complex = nanmin_complex,
+    time = nanmin_time
+);
+bind_nan_reduction!(
+    nanmax,
+    ferray_stats::nanmax,
+    complex = nanmax_complex,
+    time = nanmax_time
+);
+bind_nan_reduction!(
+    nanprod,
+    ferray_stats::nanprod,
+    complex = nanprod_complex,
+    time = nanprod_time
+);
 
 /// Complex `nanvar`/`nanstd` over a width `T`: the REAL `mean(|x - mean|^2)` over
 /// the NON-NaN-complex elements per lane, where `|z|^2 = re^2 + im^2` (numpy's
@@ -2181,6 +2277,12 @@ pub fn nanmedian<'py>(
     axis: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // datetime64/timedelta64 (#946): `nanmedian(timedelta)->timedelta` (NaT
+    // skipped, all-NaT lane -> NaT); `nanmedian(datetime)` RAISES numpy's
+    // `UFuncTypeError`. Branch BEFORE the float64 coercion (silent-float fix).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_median(py, &arr, axis, true);
+    }
     let dt = dtype_name(&arr)?;
     // Complex nanmedian: lexicographic median over the non-NaN-complex data. MUST
     // branch BEFORE the float64 coercion that drops the imaginary part (R-CODE-4:
@@ -2816,6 +2918,21 @@ pub fn histogram<'py>(
             "index out of bounds for axis 0: numpy.histogram does not support complex input",
         ));
     }
+    // datetime64/timedelta64 (#946): numpy's `histogram` RAISES on time inputs
+    // (`DTypePromotionError`: a timedelta/datetime cannot be promoted with the
+    // float64 bin edges — verified live). Delegate so numpy's EXACT exception
+    // surfaces (R-DEV-2), eliminating the prior silent-float corruption
+    // (`fr.histogram(td)` returned bogus float bin counts/edges).
+    if crate::datetime::is_time_array(&arr)? {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("bins", bins)?;
+        if let Some(r) = range {
+            kwargs.set_item("range", r)?;
+        }
+        kwargs.set_item("density", density)?;
+        return np.call_method("histogram", (&arr,), Some(&kwargs));
+    }
     let arr_f64 = coerce_dtype(py, &arr, "float64")?;
     let view: PyReadonlyArray1<f64> = arr_f64.extract()?;
     let fa: Array1<f64> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -2981,6 +3098,49 @@ fn quantile_dispatch<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let axis = norm_axis(py, &arr, axis)?;
+
+    // datetime64/timedelta64 (#946): `percentile`/`quantile` interpolate the
+    // int64 ticks (linear method) and re-tag the result — timedelta stays
+    // timedelta, datetime stays datetime. Branch BEFORE the float64 coercion
+    // below (the R-CODE-4 silent-float corruption: ferray returned a bare
+    // float). `q` is rescaled to a `[0, 1]` fraction (percentile divides by
+    // 100) and range-validated to mirror numpy's ValueError.
+    if crate::datetime::is_time_array(&arr)? {
+        let single_time = |q_val: f64| -> PyResult<Bound<'py, PyAny>> {
+            let frac = match kind {
+                QuantileKind::Percentile => {
+                    if !(0.0..=100.0).contains(&q_val) {
+                        return Err(pyo3::exceptions::PyValueError::new_err(
+                            "Percentiles must be in the range [0, 100]",
+                        ));
+                    }
+                    q_val / 100.0
+                }
+                QuantileKind::Quantile => {
+                    if !(0.0..=1.0).contains(&q_val) {
+                        return Err(pyo3::exceptions::PyValueError::new_err(
+                            "Quantiles must be in the range [0, 1]",
+                        ));
+                    }
+                    q_val
+                }
+            };
+            crate::datetime::time_quantile(py, &arr, frac, axis)
+        };
+        return match extract_q(q)? {
+            Err(scalar) => single_time(scalar),
+            Ok(seq) => {
+                let mut results: Vec<Bound<'py, PyAny>> = Vec::with_capacity(seq.len());
+                for q_val in seq {
+                    results.push(single_time(q_val)?);
+                }
+                let np = py.import("numpy")?;
+                let list = pyo3::types::PyList::new(py, results)?;
+                np.call_method1("stack", (list,))
+            }
+        };
+    }
+
     let dt = dtype_name(&arr)?;
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
@@ -3056,6 +3216,15 @@ pub fn median<'py>(
     // (numpy/lib/_function_base_impl.py:4003).
     if axis.is_none() && is_empty_array(&arr)? {
         return nan_scalar_f64(py);
+    }
+    // datetime64/timedelta64 (#946): `median(timedelta)->timedelta` (sort int64
+    // ticks, average the two middles truncating toward zero); `median(datetime)`
+    // RAISES numpy's `UFuncTypeError` (`add` of two datetimes is undefined).
+    // Branch BEFORE the float64 coercion below — that coercion is the R-CODE-4
+    // silent-float corruption this REQ eliminates (`fr.median(td)` returned a
+    // bare float).
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::time_median(py, &arr, axis, false);
     }
     let dt = dtype_name(&arr)?;
     // Complex median: numpy sorts complex LEXICOGRAPHICALLY (real, then imag)
@@ -3482,6 +3651,22 @@ pub fn average<'py>(
     weights: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // datetime64/timedelta64 (#946): numpy's `average` RAISES on time inputs
+    // (unweighted `average(td)` -> ValueError "Could not convert object to NumPy
+    // timedelta"; weighted -> DTypePromotionError; datetime -> UFuncTypeError —
+    // all verified live). Delegate so numpy's EXACT exception surfaces (R-DEV-2),
+    // eliminating the prior silent-float corruption (`fr.average(td) -> 5.0`).
+    if crate::datetime::is_time_array(&arr)? {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        if let Some(w) = weights {
+            kwargs.set_item("weights", w)?;
+        }
+        return np.call_method("average", (&arr,), Some(&kwargs));
+    }
     // Complex average: branch BEFORE the `coerce_dtype(arr,"float64")` below,
     // which drops the imaginary part (R-CODE-4). No-weights complex average is
     // the complex mean (width preserved, c64->c64/c128->c128). Weighted complex
