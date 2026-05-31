@@ -1791,6 +1791,49 @@ macro_rules! bind_nan_reduction {
             }))
         }
     };
+    // Native-dtype-preserving form (#950): nanmin/nanmax/nanprod over an
+    // integer/bool input have no NaN to skip, so they reduce in the NATIVE
+    // dtype via `$int` (returning `Some(result)`) BEFORE the float64 coercion
+    // — numpy keeps the integer dtype there (`np.nanmin(int8)->int8`,
+    // `np.nanprod(int8)->int64`). `$int` returns `None` for a non-int/bool
+    // dtype, so float/complex/time inputs fall through to the existing paths
+    // unchanged.
+    ($name:ident, $ferr_path:path, complex = $cplx:expr, time = $time:expr, int = $int:expr) => {
+        #[pyfunction]
+        #[pyo3(signature = (a, axis = None))]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            a: &Bound<'py, PyAny>,
+            axis: Option<usize>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let arr = as_ndarray(py, a)?;
+            if crate::datetime::is_time_array(&arr)? {
+                return ($time)(py, &arr, axis);
+            }
+            let dt = dtype_name(&arr)?;
+            match dt.as_str() {
+                "complex128" | "c16" => return ($cplx)(py, &arr, axis, false),
+                "complex64" | "c8" => return ($cplx)(py, &arr, axis, true),
+                _ => {}
+            }
+            // Integer/bool: native-dtype reduction (no NaN possible), #950.
+            if let Some(out) = ($int)(py, &arr, axis, dt.as_str())? {
+                return Ok(out);
+            }
+            let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
+                arr
+            } else {
+                coerce_dtype(py, &arr, "float64")?
+            };
+            let dt = dtype_name(&arr)?;
+            Ok(match_dtype_float!(dt.as_str(), T => {
+                let view: PyReadonlyArrayDyn<T> = arr.extract()?;
+                let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+                let r = $ferr_path(&fa, axis).map_err(ferr_to_pyerr)?;
+                r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+            }))
+        }
+    };
 }
 
 /// Complex `nansum` arm: width-keyed [`complex_nan_fold_dispatch`] (`is_c64`
@@ -1996,6 +2039,94 @@ fn nanprod_time<'py>(
     np.call_method("nanprod", (arr,), Some(&kwargs))
 }
 
+// ---------------------------------------------------------------------------
+// Integer/bool nan-min/max/prod preserve the native dtype (#950).
+//
+// Integers and bool have no NaN, so `nanmin == min`, `nanmax == max`,
+// `nanprod == prod` for those dtypes — and numpy keeps the native dtype
+// rather than coercing to float64 (verified live numpy 2.4.5:
+// `np.nanmin(np.array([3,1,2],dtype='int8')).dtype == int8`,
+// `np.nanmin(np.array([True,False])).dtype == bool`;
+// `np.nanprod(int8).dtype == int64`, `np.nanprod(uint8).dtype == uint64`,
+// `np.nanprod(bool).dtype == int64` — the `prod` accumulator upcast). The
+// shared `bind_nan_reduction!` macro otherwise coerces every non-float,
+// non-complex, non-time input to float64 before folding, which dropped the
+// integer dtype (`fr.nanmin([3,1,2])` returned `1.0`). These helpers route the
+// integer/bool case to the #858 native reductions (`ferray_stats::min`/`max`/
+// `prod`) BEFORE that f64 coercion. nanmean/nansum keep the float64 path:
+// numpy `nanmean` is always float64, and `nansum` over integers is out of this
+// fix's scope (its own divergence).
+// ---------------------------------------------------------------------------
+
+/// Native-dtype `nanmin`/`nanmax` over an integer or bool array (ints/bool have
+/// no NaN, so `nanmin == min`). `want_max` selects max. Returns `None` for a
+/// float/other dtype so the caller falls through to the float NaN-skip path.
+fn nan_minmax_int_native<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+    axis: Option<usize>,
+    want_max: bool,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    macro_rules! native_minmax {
+        ($T:ty) => {{
+            let view: PyReadonlyArrayDyn<$T> = arr.extract()?;
+            let fa: ArrayD<$T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+            let r = if want_max {
+                ferray_stats::max(&fa, axis).map_err(ferr_to_pyerr)?
+            } else {
+                ferray_stats::min(&fa, axis).map_err(ferr_to_pyerr)?
+            };
+            Some(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }};
+    }
+    Ok(match dt {
+        "int64" | "i64" => native_minmax!(i64),
+        "int32" | "i32" => native_minmax!(i32),
+        "int16" | "i16" => native_minmax!(i16),
+        "int8" | "i8" => native_minmax!(i8),
+        "uint64" | "u64" => native_minmax!(u64),
+        "uint32" | "u32" => native_minmax!(u32),
+        "uint16" | "u16" => native_minmax!(u16),
+        "uint8" | "u8" => native_minmax!(u8),
+        "bool" => native_minmax!(bool),
+        _ => None,
+    })
+}
+
+/// Native-dtype `nanprod` over an integer or bool array (no NaN, so
+/// `nanprod == prod`). Reuses the #858 `ferray_stats::prod`, which upcasts the
+/// accumulator to numpy's `prod` dtype (int8/16/32->int64, uint*->uint64,
+/// bool->int64). Returns `None` for a float/other dtype so the caller falls
+/// through to the float NaN-skip path.
+fn nanprod_int_native<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+    axis: Option<usize>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    macro_rules! native_prod {
+        ($T:ty) => {{
+            let view: PyReadonlyArrayDyn<$T> = arr.extract()?;
+            let fa: ArrayD<$T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+            let r = ferray_stats::prod(&fa, axis).map_err(ferr_to_pyerr)?;
+            Some(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }};
+    }
+    Ok(match dt {
+        "int64" | "i64" => native_prod!(i64),
+        "int32" | "i32" => native_prod!(i32),
+        "int16" | "i16" => native_prod!(i16),
+        "int8" | "i8" => native_prod!(i8),
+        "uint64" | "u64" => native_prod!(u64),
+        "uint32" | "u32" => native_prod!(u32),
+        "uint16" | "u16" => native_prod!(u16),
+        "uint8" | "u8" => native_prod!(u8),
+        "bool" => native_prod!(bool),
+        _ => None,
+    })
+}
+
 bind_nan_reduction!(
     nansum,
     ferray_stats::nansum,
@@ -2012,19 +2143,22 @@ bind_nan_reduction!(
     nanmin,
     ferray_stats::nanmin,
     complex = nanmin_complex,
-    time = nanmin_time
+    time = nanmin_time,
+    int = |py, arr, axis, dt| nan_minmax_int_native(py, arr, dt, axis, false)
 );
 bind_nan_reduction!(
     nanmax,
     ferray_stats::nanmax,
     complex = nanmax_complex,
-    time = nanmax_time
+    time = nanmax_time,
+    int = |py, arr, axis, dt| nan_minmax_int_native(py, arr, dt, axis, true)
 );
 bind_nan_reduction!(
     nanprod,
     ferray_stats::nanprod,
     complex = nanprod_complex,
-    time = nanprod_time
+    time = nanprod_time,
+    int = |py, arr, axis, dt| nanprod_int_native(py, arr, dt, axis)
 );
 
 /// Complex `nanvar`/`nanstd` over a width `T`: the REAL `mean(|x - mean|^2)` over
