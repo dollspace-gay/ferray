@@ -104,6 +104,19 @@ fn is_complex_dtype(dt: &str) -> bool {
     matches!(dt, "complex128" | "c16" | "complex64" | "c8")
 }
 
+/// `true` for the float16 dtype name (plus its `f16` alias).
+///
+/// float16 cannot ride the 11-real-dtype `match_dtype_all!` macro: the
+/// installed pyo3-numpy build has no `NumpyElement`/`PyReadonlyArrayDyn`
+/// for `half::f16` (the `numpy/half` feature is off, see
+/// `.design/ferray-core-float16.md`), so a `PyReadonlyArrayDyn<f16>` view
+/// cannot be taken at the boundary. The `array`/`asarray`/`full` coercion
+/// paths therefore detect float16 here and let numpy own the buffer + the
+/// f32->f16 narrow, mirroring the SHIPPED `creation_dispatch!` float16 arm.
+fn is_float16_dtype(dt: &str) -> bool {
+    matches!(dt, "float16" | "f16")
+}
+
 // ---------------------------------------------------------------------------
 // Shape + dtype creation
 // ---------------------------------------------------------------------------
@@ -1148,6 +1161,17 @@ fn full_impl<'py>(
         let arr: ArrayD<Complex<f32>> = fc::full(dim, fv).map_err(ferr_to_pyerr)?;
         return complex_ferray_to_pyarray(py, arr);
     }
+    // float16 fill: the macro below has no `half::f16` arm (no `NumpyElement`),
+    // so delegate `np.full(shape, fill, 'float16')` to numpy, which owns the
+    // f32->f16 round-to-nearest-even narrow of the fill value and builds the
+    // float16 buffer directly. Preserves numpy's exact float16 dtype + shape
+    // contract instead of raising (REQ-1, R-CODE-4); mirrors the SHIPPED
+    // `creation_dispatch!` float16 arm.
+    if is_float16_dtype(dtype) {
+        let np = py.import("numpy")?;
+        let shape_tuple = pyo3::types::PyTuple::new(py, shape)?;
+        return np.call_method1("full", (shape_tuple, fill_value, "float16"));
+    }
     let fill_f: f64 = fill_value.extract()?;
     Ok(match_dtype_all!(dtype, T => {
         let fv = T::from_f64_lossy(fill_f);
@@ -1302,6 +1326,18 @@ pub fn array<'py>(
     // (R-1, R-CODE-4).
     if crate::datetime::is_time_dtype_name(dt.as_str()) {
         return crate::datetime::datetime_roundtrip(py, &arr);
+    }
+    // float16 input (a number-list + `dtype='float16'`, or a numpy float16
+    // array) cannot ride the 11-real-dtype macro (no `NumpyElement` for
+    // `half::f16` -> the macro's `TypeError`). numpy has already parsed the
+    // values into a float16 buffer in `arr` (via `np.asarray(obj, 'float16')`
+    // above, applying its own round-to-nearest-even f32->f16 narrow), so return
+    // a fresh owned copy of that float16 ndarray — matching numpy's `array`
+    // always-copies contract and preserving the float16 dtype + shape across the
+    // boundary instead of raising (REQ-1, R-CODE-4). Mirrors the SHIPPED
+    // `creation_dispatch!` float16 arm.
+    if is_float16_dtype(dt.as_str()) {
+        return arr.call_method0("copy");
     }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;

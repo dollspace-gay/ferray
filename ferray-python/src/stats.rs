@@ -1145,6 +1145,59 @@ fn nan_scalar_f64<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
     Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 
+/// `true` for the float16 dtype name (plus its `f16` alias).
+///
+/// float16 cannot ride the real-only reduction macros (`match_dtype_numeric!`
+/// / `match_dtype_orderable!` / `match_dtype_float!`): the installed pyo3-numpy
+/// build has no `NumpyElement`/`PyReadonlyArrayDyn` for `half::f16` (the
+/// `numpy/half` feature is off, see `.design/ferray-core-float16.md`), so a
+/// typed view can't be taken at the boundary. The reductions detect float16
+/// here and delegate to numpy (see [`f16_reduce`]).
+fn is_float16_dtype(dt: &str) -> bool {
+    matches!(dt, "float16" | "f16")
+}
+
+/// Delegate a float16 reduction to numpy's own top-level reduction function
+/// (REQ-4, #954), keeping `half::f16` out of the Rust boundary entirely.
+///
+/// numpy computes float16 reductions at float32 width internally and rounds the
+/// reduced result back to float16 (`.design/ferray-core-float16.md` compute
+/// contract: `np.sum/mean/prod/min/max/std/var(f16).dtype == float16`, verified
+/// live numpy 2.4.4 — `np.mean([1,2,3]f16) -> float16(2.0)`,
+/// `np.std(f16) -> float16(0.816)`, `np.sum([60000,60000]f16) -> float16(inf)`).
+/// Delegating the whole reduction to numpy on the ORIGINAL float16 array makes
+/// numpy own that exact f32-compute + f16-narrow, so the binding never
+/// constructs a `half::f16` value in Rust and the result carries numpy's exact
+/// float16 dtype + value. This is the SAME detect-and-delegate pattern the
+/// datetime reductions use (`crate::datetime::time_reduce`, #944).
+///
+/// This REPLACES (for the float16 case only) the `coerce_dtype(arr, "float64")`
+/// path that `mean`/`var`/`std` ran for non-float inputs — that path widened a
+/// float16 input's *output* to float64 (`fr.mean(f16) -> float64`), the active
+/// silent-widening divergence this REQ eliminates (R-DEV-3 / R-CODE-4). `func`
+/// is the numpy function name (`"sum"`, `"mean"`, …); `axis` the already-
+/// normalized reduction axis (`None` = whole array); `ddof` the delta-degrees-
+/// of-freedom for `var`/`std` (ignored by numpy for the other reductions, so
+/// passed only when `Some`).
+fn f16_reduce<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    func: &str,
+    axis: Option<usize>,
+    ddof: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    match axis {
+        Some(ax) => kwargs.set_item("axis", ax)?,
+        None => kwargs.set_item("axis", py.None())?,
+    }
+    if let Some(d) = ddof {
+        kwargs.set_item("ddof", d)?;
+    }
+    np.call_method(func, (arr,), Some(&kwargs))
+}
+
 // ---------------------------------------------------------------------------
 // Reductions: numeric (sum, prod) — accept any numeric dtype
 // ---------------------------------------------------------------------------
@@ -1196,6 +1249,12 @@ pub fn sum<'py>(
     if is_complex_dtype(dt.as_str()) {
         return complex_fold_dispatch(py, &arr, dt.as_str(), axis, ComplexFold::Sum);
     }
+    // float16 (#954): delegate to numpy (f32-compute, f16-narrow) — the macro
+    // below has no `half::f16` arm. numpy: `np.sum(f16) -> float16` (overflow ->
+    // inf). Branch ahead of the real-only macro that raised TypeError.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "sum", axis, None);
+    }
     // bool sums in the platform integer (int64) — numpy/_core/fromnumeric.py:2325
     // ("`a` is signed then the platform integer is used"). ferray's library
     // ReduceAcc maps bool -> i64, so dispatch bool to the same promoting path.
@@ -1235,6 +1294,11 @@ pub fn prod<'py>(
     // `np.prod([1+2j,3+4j])==(-5+10j)`, complex64 stays complex64 (live).
     if is_complex_dtype(dt.as_str()) {
         return complex_fold_dispatch(py, &arr, dt.as_str(), axis, ComplexFold::Prod);
+    }
+    // float16 (#954): delegate to numpy (f32-compute, f16-narrow). numpy:
+    // `np.prod(f16) -> float16`. Branch ahead of the real-only macro.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "prod", axis, None);
     }
     // bool products promote to int64 like sum — numpy/_core/fromnumeric.py:2692.
     if dt.as_str() == "bool" {
@@ -1278,6 +1342,12 @@ pub fn min<'py>(
         "complex64" | "c8" => return complex_minmax_reduce::<f32>(py, &arr, axis, false),
         _ => {}
     }
+    // float16 (#954): delegate to numpy. min/max are width-preserving (no
+    // narrowing needed beyond the float16 element value). numpy:
+    // `np.min(f16) -> float16`. Branch ahead of the real-only orderable macro.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "min", axis, None);
+    }
     Ok(match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -1307,6 +1377,10 @@ pub fn max<'py>(
         "complex128" | "c16" => return complex_minmax_reduce::<f64>(py, &arr, axis, true),
         "complex64" | "c8" => return complex_minmax_reduce::<f32>(py, &arr, axis, true),
         _ => {}
+    }
+    // float16 (#954): delegate to numpy. numpy: `np.max(f16) -> float16`.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "max", axis, None);
     }
     Ok(match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
@@ -1339,6 +1413,11 @@ pub fn ptp<'py>(
         "complex128" | "c16" => return complex_ptp_reduce::<f64>(py, &arr, axis),
         "complex64" | "c8" => return complex_ptp_reduce::<f32>(py, &arr, axis),
         _ => {}
+    }
+    // float16 (#954): delegate to numpy. ptp = max - min stays float16. numpy:
+    // `np.ptp(f16) -> float16`. Branch ahead of the real-only numeric macro.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "ptp", axis, None);
     }
     Ok(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
@@ -1386,6 +1465,13 @@ pub fn mean<'py>(
         "complex128" | "c16" => return complex_mean_dispatch::<f64>(py, &arr, axis),
         "complex64" | "c8" => return complex_mean_dispatch::<f32>(py, &arr, axis),
         _ => {}
+    }
+    // float16 (#954): delegate to numpy so the result stays float16. MUST branch
+    // BEFORE the `coerce_dtype(arr, "float64")` below — that coercion is exactly
+    // the silent-widening bug this REQ eliminates (`fr.mean(f16) -> float64`;
+    // numpy: `np.mean(f16) -> float16(2.0)`, R-DEV-3 / R-CODE-4).
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "mean", axis, None);
     }
     // Promote integer inputs to float64 to match NumPy's mean semantics.
     let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
@@ -1439,6 +1525,13 @@ pub fn var<'py>(
         }
         _ => {}
     }
+    // float16 (#954): delegate to numpy (computes via f32 `square`, narrows to
+    // float16). MUST branch BEFORE the float64 coercion below — that widening is
+    // the bug this REQ eliminates (`fr.var(f16) -> float64`; numpy:
+    // `np.var(f16) -> float16`). `ddof` is forwarded to numpy.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "var", axis, Some(ddof));
+    }
     let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
         arr
     } else {
@@ -1489,6 +1582,13 @@ pub fn std<'py>(
             return complex_var_std_dispatch::<f32>(py, &arr, axis, ddof, true);
         }
         _ => {}
+    }
+    // float16 (#954): delegate to numpy (sqrt of the f32-computed variance,
+    // narrowed to float16). MUST branch BEFORE the float64 coercion that was the
+    // silent-widening bug (`fr.std(f16) -> float64`; numpy: `np.std(f16) ->
+    // float16(0.816)`). `ddof` is forwarded to numpy.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "std", axis, Some(ddof));
     }
     let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
         arr
@@ -2512,6 +2612,11 @@ pub fn cumsum<'py>(
     // — numpy: `np.cumsum([1+2j,3+4j])==[1+2j,4+6j]`, complex64 stays complex64.
     if is_complex_dtype(dt.as_str()) {
         return complex_fold_dispatch(py, &arr, dt.as_str(), axis, ComplexFold::CumSum);
+    }
+    // float16 (#954): delegate to numpy (f32-compute running sum, narrowed to
+    // float16 elementwise). numpy: `np.cumsum([1,2,3]f16) -> [1,3,6] float16`.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "cumsum", axis, None);
     }
     Ok(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
