@@ -19,9 +19,25 @@
 //! - [`inv_complex`]     — complex matrix inverse via LU
 //! - [`solve_complex`]   — A x = b with complex A, b
 //! - [`det_complex`]     — complex determinant
+//! - `svd_complex_f64` / `svd_complex_f32` — complex SVD (U, real S, Vh)
+//! - `qr_complex_f64` / `qr_complex_f32`   — complex QR (Q unitary, R)
 //!
-//! Batched variants, SVD, eig, and the rest can be layered on later
-//! as demand appears.
+//! Batched variants and the rest can be layered on later as demand appears.
+//!
+//! ## REQ status
+//!
+//! Two states only (SHIPPED / NOT-STARTED), per goal.md. Tracks the complex
+//! matrix-op surface that `numpy.linalg` exposes over a complex-valued matrix
+//! (`numpy/linalg/_linalg.py` accepts "a complex- or real-valued matrix").
+//! Verified by this module's `#[cfg(test)]` reconstruction tests plus
+//! `ferray-python/tests/test_expansion_complex_decomp.py` against live numpy.
+//!
+//! | REQ | Status | Evidence |
+//! | --- | --- | --- |
+//! | complex matmul/inv/solve/det (#931) | SHIPPED | Impl: `matmul_complex`/`inv_complex`/`solve_complex`/`det_complex`. Consumer: `det`/`inv`/`solve`/`matmul` complex arms in `ferray-python/src/linalg.rs`. |
+//! | complex eig/eigvals (#937) | SHIPPED | Impl: `eig_complex_f64`/`eigvals_complex_f64` (+f32). Consumer: `eig`/`eigvals` complex arms in `ferray-python/src/linalg.rs`. |
+//! | complex svd/qr (#939) | SHIPPED | Impl: `svd_complex_f64`/`svd_complex_f32` (faer complex `Svd`, U/Vh complex, S real), `qr_complex_f64`/`qr_complex_f32` (faer complex `Qr`, Q unitary, R). Consumer: `svd`/`qr`/`pinv`/`matrix_rank` complex arms in `ferray-python/src/linalg.rs`. |
+//! | complex pinv/matrix_rank/slogdet/matrix_power (#939) | SHIPPED | Composed from the above: pinv = `Vh^H diag(1/s) U^H`, matrix_rank = `#{s > tol}`, slogdet = `det/|det|` + `ln|det|` (via `det_complex`), matrix_power = repeated `matmul_complex` (`inv_complex` for n<0). Consumer: `pinv`/`matrix_rank`/`slogdet`/`matrix_power` complex arms in `ferray-python/src/linalg.rs`. |
 
 use num_complex::Complex;
 
@@ -430,6 +446,127 @@ macro_rules! impl_complex_eig {
 impl_complex_eig!(eig_complex_f64, eigvals_complex_f64, f64);
 impl_complex_eig!(eig_complex_f32, eigvals_complex_f32, f32);
 
+// Complex SVD / QR (#939). faer's `Mat::svd()` / `Mat::qr()` work over a
+// complex `Mat<Complex<T>>` exactly as for the real case — the singular
+// values come back in faer's REAL associated type (`<Complex<T> as
+// ComplexField>::Real == T`), which is opaque to the type checker, so (like
+// `impl_complex_eig!`) these are emitted as concrete `f32`/`f64`
+// monomorphisations. numpy.linalg.svd / qr accept "a complex- or real-valued
+// matrix" and return complex U/Vh (resp. Q/R) with REAL singular values
+// (numpy/linalg/_linalg.py:1681 svd, :1083 qr). SVD/QR factors are NOT unique
+// (U/Vh column phase, Q/R sign), so callers verify by reconstruction
+// (`U diag(s) Vh == A`, `Q R == A`) and compare `s` directly.
+macro_rules! impl_complex_svd_qr {
+    ($svd_fn:ident, $qr_fn:ident, $T:ty) => {
+        /// Full Singular Value Decomposition of a complex matrix over
+        #[doc = concat!("`Complex<", stringify!($T), ">`. Returns `(U, s, Vh)` with")]
+        /// `U` (m×m, complex, unitary), `s` (the REAL singular values, length
+        /// `min(m,n)`, descending), and `Vh = V^H` (n×n, complex). Satisfies
+        /// `U[:, :k] diag(s) Vh[:k, :] == A`. See [`crate::svd`].
+        ///
+        /// # Errors
+        /// - [`FerrayError::InvalidValue`] if the SVD fails to converge.
+        pub fn $svd_fn(
+            a: &Array<Complex<$T>, Ix2>,
+        ) -> FerrayResult<(
+            Array<Complex<$T>, Ix2>,
+            Array<$T, Ix1>,
+            Array<Complex<$T>, Ix2>,
+        )> {
+            let shape = a.shape();
+            let (m, n) = (shape[0], shape[1]);
+            let mat = array2c_to_faer(a);
+            let decomp = mat.as_ref().svd().map_err(|e| FerrayError::InvalidValue {
+                message: format!("complex SVD failed to converge: {e:?}"),
+            })?;
+
+            let u = decomp.U();
+            let v = decomp.V();
+            let s_diag = decomp.S();
+
+            // faer returns the full U (m×m) and V (n×n). numpy's full
+            // `svd(full_matrices=True)` returns U (m×m), Vh (n×n).
+            let (um, un) = u.shape();
+            let mut u_data: Vec<Complex<$T>> = Vec::with_capacity(um * un);
+            for i in 0..um {
+                for j in 0..un {
+                    u_data.push(u[(i, j)]);
+                }
+            }
+
+            let min_dim = m.min(n);
+            let mut s_vals: Vec<$T> = Vec::with_capacity(min_dim);
+            for i in 0..min_dim {
+                // faer stores the singular values of a complex SVD in the
+                // complex field with a zero imaginary part; the mathematical
+                // singular values are the real magnitudes. numpy returns the
+                // REAL `s` (numpy/linalg/_linalg.py:1810 `s` is float).
+                s_vals.push(s_diag.column_vector()[i].re);
+            }
+
+            // numpy returns Vh = V^H (conjugate transpose of V).
+            let (vn, vk) = v.shape();
+            let mut vh_data: Vec<Complex<$T>> = Vec::with_capacity(vk * vn);
+            for i in 0..vk {
+                for j in 0..vn {
+                    let z = v[(j, i)];
+                    vh_data.push(Complex::new(z.re, -z.im));
+                }
+            }
+
+            let u_arr = Array::from_vec(Ix2::new([um, un]), u_data)?;
+            let s_arr = Array::from_vec(Ix1::new([min_dim]), s_vals)?;
+            let vh_arr = Array::from_vec(Ix2::new([vk, vn]), vh_data)?;
+            Ok((u_arr, s_arr, vh_arr))
+        }
+
+        /// Reduced QR decomposition of a complex matrix over
+        #[doc = concat!("`Complex<", stringify!($T), ">`. Returns `(Q, R)` with")]
+        /// `Q` (m×k, complex, columns orthonormal — `Q^H Q == I`) and `R`
+        /// (k×n, complex, upper-triangular), `k = min(m, n)`. Satisfies
+        /// `Q R == A`. See [`crate::qr`].
+        ///
+        /// # Errors
+        /// - [`FerrayError::InvalidValue`] on allocation failure inside faer.
+        pub fn $qr_fn(
+            a: &Array<Complex<$T>, Ix2>,
+        ) -> FerrayResult<(Array<Complex<$T>, Ix2>, Array<Complex<$T>, Ix2>)> {
+            let shape = a.shape();
+            let (m, n) = (shape[0], shape[1]);
+            let mat = array2c_to_faer(a);
+            let decomp = mat.as_ref().qr();
+
+            let q = decomp.compute_thin_Q();
+            let r_mat = decomp.thin_R();
+
+            let (qm, qk) = q.shape();
+            let mut q_data: Vec<Complex<$T>> = Vec::with_capacity(qm * qk);
+            for i in 0..qm {
+                for j in 0..qk {
+                    q_data.push(q[(i, j)]);
+                }
+            }
+
+            let (rk, rn) = r_mat.shape();
+            let mut r_data: Vec<Complex<$T>> = Vec::with_capacity(rk * rn);
+            for i in 0..rk {
+                for j in 0..rn {
+                    r_data.push(r_mat[(i, j)]);
+                }
+            }
+            // Silence unused-variable lints on m/n for the documented shapes.
+            debug_assert!(qm == m && rn == n);
+
+            let q_arr = Array::from_vec(Ix2::new([qm, qk]), q_data)?;
+            let r_arr = Array::from_vec(Ix2::new([rk, rn]), r_data)?;
+            Ok((q_arr, r_arr))
+        }
+    };
+}
+
+impl_complex_svd_qr!(svd_complex_f64, qr_complex_f64, f64);
+impl_complex_svd_qr!(svd_complex_f32, qr_complex_f32, f32);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -682,5 +819,198 @@ mod tests {
     fn inv_non_square_errors() {
         let a = arr2(2, 3, vec![c64(0.0, 0.0); 6]);
         assert!(inv_complex(&a).is_err());
+    }
+
+    // ----- complex SVD (#939) -------------------------------------------
+
+    #[test]
+    fn svd_complex_reconstructs() {
+        // M = [[1+1j, 2-1j], [3+0j, 4+2j]]. Verify A == U diag(s) Vh and that
+        // s are real and nonnegative (singular values are canonical even
+        // though U/Vh phases are not).
+        let m = arr2(
+            2,
+            2,
+            vec![c64(1.0, 1.0), c64(2.0, -1.0), c64(3.0, 0.0), c64(4.0, 2.0)],
+        );
+        let res = svd_complex_f64(&m);
+        assert!(res.is_ok(), "svd_complex_f64 failed: {res:?}");
+        let Ok((u, s, vh)) = res else { return };
+        let ud: Vec<Complex<f64>> = u.iter().copied().collect();
+        let sd: Vec<f64> = s.iter().copied().collect();
+        let vhd: Vec<Complex<f64>> = vh.iter().copied().collect();
+        assert_eq!(u.shape(), &[2, 2]);
+        assert_eq!(vh.shape(), &[2, 2]);
+        assert_eq!(sd.len(), 2);
+        for &sv in &sd {
+            assert!(sv >= 0.0, "singular value {sv} must be >= 0");
+        }
+        assert!(sd[0] >= sd[1], "singular values must be descending");
+        let mdata = [c64(1.0, 1.0), c64(2.0, -1.0), c64(3.0, 0.0), c64(4.0, 2.0)];
+        for i in 0..2 {
+            for j in 0..2 {
+                let mut acc = c64(0.0, 0.0);
+                for p in 0..2 {
+                    let up = ud[i * 2 + p];
+                    let vp = vhd[p * 2 + j];
+                    acc += up * Complex::new(sd[p], 0.0) * vp;
+                }
+                assert!(
+                    (acc - mdata[i * 2 + j]).norm() < 1e-10,
+                    "U diag(s) Vh[{i},{j}] = {acc} != {}",
+                    mdata[i * 2 + j]
+                );
+            }
+        }
+        // numpy live oracle: np.linalg.svd(M).S (numpy 2.4) descending:
+        //   [5.75034948, 1.71274074]
+        assert!((sd[0] - 5.75034948).abs() < 1e-6, "s0={}", sd[0]);
+        assert!((sd[1] - 1.71274074).abs() < 1e-6, "s1={}", sd[1]);
+    }
+
+    #[test]
+    fn svd_complex_u_unitary() {
+        // U columns are orthonormal: U^H U == I.
+        let m = arr2(
+            2,
+            2,
+            vec![c64(1.0, 1.0), c64(2.0, -1.0), c64(3.0, 0.0), c64(4.0, 2.0)],
+        );
+        let res = svd_complex_f64(&m);
+        assert!(res.is_ok(), "svd_complex_f64 failed: {res:?}");
+        let Ok((u, _s, _vh)) = res else { return };
+        let ud: Vec<Complex<f64>> = u.iter().copied().collect();
+        for a in 0..2 {
+            for b in 0..2 {
+                let mut acc = c64(0.0, 0.0);
+                for i in 0..2 {
+                    let ua = ud[i * 2 + a]; // U[i,a]
+                    let ub = ud[i * 2 + b]; // U[i,b]
+                    acc += Complex::new(ua.re, -ua.im) * ub; // conj(U[i,a]) U[i,b]
+                }
+                let want = if a == b { c64(1.0, 0.0) } else { c64(0.0, 0.0) };
+                assert!((acc - want).norm() < 1e-10, "U^H U[{a},{b}] = {acc}");
+            }
+        }
+    }
+
+    #[test]
+    fn svd_complex_f32_reconstructs() {
+        let m_res = Array::<Complex<f32>, Ix2>::from_vec(
+            Ix2::new([2, 2]),
+            vec![
+                Complex::new(1.0f32, 1.0),
+                Complex::new(2.0, -1.0),
+                Complex::new(3.0, 0.0),
+                Complex::new(4.0, 2.0),
+            ],
+        );
+        assert!(m_res.is_ok());
+        let Ok(m) = m_res else { return };
+        let res = svd_complex_f32(&m);
+        assert!(res.is_ok(), "svd_complex_f32 failed: {res:?}");
+        let Ok((u, s, vh)) = res else { return };
+        let ud: Vec<Complex<f32>> = u.iter().copied().collect();
+        let sd: Vec<f32> = s.iter().copied().collect();
+        let vhd: Vec<Complex<f32>> = vh.iter().copied().collect();
+        let mdata = [
+            Complex::new(1.0f32, 1.0),
+            Complex::new(2.0, -1.0),
+            Complex::new(3.0, 0.0),
+            Complex::new(4.0, 2.0),
+        ];
+        for i in 0..2 {
+            for j in 0..2 {
+                let mut acc = Complex::new(0.0f32, 0.0);
+                for p in 0..2 {
+                    acc += ud[i * 2 + p] * Complex::new(sd[p], 0.0) * vhd[p * 2 + j];
+                }
+                assert!(
+                    (acc - mdata[i * 2 + j]).norm() < 1e-4,
+                    "f32 reconstruct[{i},{j}]"
+                );
+            }
+        }
+    }
+
+    // ----- complex QR (#939) --------------------------------------------
+
+    #[test]
+    fn qr_complex_reconstructs_and_unitary() {
+        // Q R == A and Q^H Q == I.
+        let m = arr2(
+            2,
+            2,
+            vec![c64(1.0, 1.0), c64(2.0, -1.0), c64(3.0, 0.0), c64(4.0, 2.0)],
+        );
+        let res = qr_complex_f64(&m);
+        assert!(res.is_ok(), "qr_complex_f64 failed: {res:?}");
+        let Ok((q, r)) = res else { return };
+        assert_eq!(q.shape(), &[2, 2]);
+        assert_eq!(r.shape(), &[2, 2]);
+        let qd: Vec<Complex<f64>> = q.iter().copied().collect();
+        let rd: Vec<Complex<f64>> = r.iter().copied().collect();
+        let mdata = [c64(1.0, 1.0), c64(2.0, -1.0), c64(3.0, 0.0), c64(4.0, 2.0)];
+        for i in 0..2 {
+            for j in 0..2 {
+                let mut acc = c64(0.0, 0.0);
+                for p in 0..2 {
+                    acc += qd[i * 2 + p] * rd[p * 2 + j];
+                }
+                assert!(
+                    (acc - mdata[i * 2 + j]).norm() < 1e-10,
+                    "Q R[{i},{j}] = {acc} != {}",
+                    mdata[i * 2 + j]
+                );
+            }
+        }
+        for a in 0..2 {
+            for b in 0..2 {
+                let mut acc = c64(0.0, 0.0);
+                for i in 0..2 {
+                    let qa = qd[i * 2 + a];
+                    let qb = qd[i * 2 + b];
+                    acc += Complex::new(qa.re, -qa.im) * qb;
+                }
+                let want = if a == b { c64(1.0, 0.0) } else { c64(0.0, 0.0) };
+                assert!((acc - want).norm() < 1e-10, "Q^H Q[{a},{b}] = {acc}");
+            }
+        }
+        // R is upper-triangular: R[1,0] == 0.
+        assert!(rd[2].norm() < 1e-10, "R[1,0] = {} (must be 0)", rd[2]);
+    }
+
+    #[test]
+    fn qr_complex_tall_thin() {
+        // 3x2 complex matrix: reduced QR has Q (3x2), R (2x2).
+        let m = arr2(
+            3,
+            2,
+            vec![
+                c64(1.0, 1.0),
+                c64(2.0, 0.0),
+                c64(0.0, 1.0),
+                c64(3.0, -1.0),
+                c64(1.0, 0.0),
+                c64(0.0, 2.0),
+            ],
+        );
+        let res = qr_complex_f64(&m);
+        assert!(res.is_ok(), "qr_complex_f64 failed: {res:?}");
+        let Ok((q, r)) = res else { return };
+        assert_eq!(q.shape(), &[3, 2]);
+        assert_eq!(r.shape(), &[2, 2]);
+        let qd: Vec<Complex<f64>> = q.iter().copied().collect();
+        let rd: Vec<Complex<f64>> = r.iter().copied().collect();
+        let mdata: Vec<Complex<f64>> = m.iter().copied().collect();
+        for i in 0..3 {
+            for j in 0..2 {
+                let mut acc = c64(0.0, 0.0);
+                for p in 0..2 {
+                    acc += qd[i * 2 + p] * rd[p * 2 + j];
+                }
+                assert!((acc - mdata[i * 2 + j]).norm() < 1e-10, "tall Q R[{i},{j}]");
+            }
+        }
     }
 }

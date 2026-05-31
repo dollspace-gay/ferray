@@ -424,6 +424,17 @@ pub fn det<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, P
 pub fn slogdet<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex slogdet (#939): numpy `np.linalg.slogdet(complex)` returns a
+    // COMPLEX `sign` (`det/|det|`, a unit complex or 0) and a REAL `logabsdet`
+    // (`ln|det|`). Compose from the faer-backed complex determinant
+    // (`fl::det_complex`) — `sign = det/abs(det)`, `logabsdet = ln(abs(det))`.
+    // (numpy/linalg/_linalg.py:2244 slogdet: `sign`, `logabsdet = log(abs(det))`.)
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return match dt.as_str() {
+            "complex64" | "c8" => complex_slogdet_dispatch::<f32>(py, &arr),
+            _ => complex_slogdet_dispatch::<f64>(py, &arr),
+        };
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -446,6 +457,17 @@ pub fn matrix_rank<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex matrix_rank (#939): numpy counts the singular values of a complex
+    // SVD that exceed a tolerance (`tol`, or the default `max(s) * max(m,n) *
+    // eps`). Route through `fl::svd_complex_*` and count `s > tol`.
+    // (numpy/linalg/_linalg.py:2059 matrix_rank.)
+    if is_complex_linalg_dtype(dt.as_str()) {
+        let rank = match dt.as_str() {
+            "complex64" | "c8" => complex_matrix_rank::<f32>(&arr, tol)?,
+            _ => complex_matrix_rank::<f64>(&arr, tol)?,
+        };
+        return Ok((rank as i64).into_pyobject(py)?.into_any());
+    }
     let rank: usize = match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -514,6 +536,17 @@ pub fn qr<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, mode: &str) -> PyResult<B
     };
     let arr = promote_linalg_input(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex QR via the library faer-backed complex `Qr` (#939): numpy
+    // `np.linalg.qr(complex)` returns a complex unitary Q and complex R with
+    // `Q @ R == A`. The real `match_dtype_float!` rejects complex; route the
+    // complex arm to `qr_complex_*` (reduced; `mode='r'` returns bare R).
+    if is_complex_linalg_dtype(dt.as_str()) {
+        let _ = qmode; // complex path is reduced QR (numpy reduced/'r' share R)
+        return match dt.as_str() {
+            "complex64" | "c8" => complex_qr_dispatch::<f32>(py, &arr, r_only),
+            _ => complex_qr_dispatch::<f64>(py, &arr, r_only),
+        };
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -561,6 +594,19 @@ pub fn svd<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = promote_linalg_input(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex SVD via the library faer-backed complex `Svd` (#939): numpy
+    // `np.linalg.svd(complex)` returns complex U / Vh and REAL singular values
+    // `s`, satisfying `U @ diag(s) @ Vh == A`. The real `match_dtype_float!`
+    // below would reject complex with `TypeError`. Width-preserving (c64->c8
+    // U/Vh + float32 s; c128->c16 + float64 s). full_matrices controls the
+    // U/Vh shapes the same way as the real path; compute_uv=False returns only
+    // the real `s`.
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return match dt.as_str() {
+            "complex64" | "c8" => complex_svd_dispatch::<f32>(py, &arr, full_matrices, compute_uv),
+            _ => complex_svd_dispatch::<f64>(py, &arr, full_matrices, compute_uv),
+        };
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -710,6 +756,16 @@ pub fn pinv<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex pinv (#939): numpy computes the Moore-Penrose pseudoinverse via a
+    // complex SVD: `pinv(A) = V diag(1/s) U^H` for `s > rcond * max(s)`. Route
+    // through `fl::svd_complex_*` and compose. (numpy/linalg/_linalg.py:2169
+    // pinv: `cutoff = rcond * largest s; reciprocal where s > cutoff`.)
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return match dt.as_str() {
+            "complex64" | "c8" => complex_pinv_dispatch::<f32>(py, &arr, rcond),
+            _ => complex_pinv_dispatch::<f64>(py, &arr, rcond),
+        };
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -728,6 +784,16 @@ pub fn matrix_power<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex matrix_power (#939): numpy is repeated complex matmul; `n==0` is
+    // the identity, `n<0` inverts first then powers. Compose from the existing
+    // `fl::matmul_complex` / `fl::inv_complex` complex primitives — no new
+    // library fn. (numpy/linalg/_linalg.py:686 matrix_power.)
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return match dt.as_str() {
+            "complex64" | "c8" => complex_matrix_power_dispatch::<f32>(py, &arr, n),
+            _ => complex_matrix_power_dispatch::<f64>(py, &arr, n),
+        };
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -1585,18 +1651,46 @@ trait ReductionRealNorm:
     + core::ops::Neg<Output = Self>
 {
     const ZERO: Self;
+    const ONE: Self;
+    /// Machine epsilon for this real width (numpy's `finfo(dtype).eps`).
+    const EPS: Self;
     fn hypot(re: Self, im: Self) -> Self;
+    fn ln(self) -> Self;
+    fn recip(self) -> Self;
+    fn from_f64(x: f64) -> Self;
 }
 impl ReductionRealNorm for f32 {
     const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    const EPS: Self = f32::EPSILON;
     fn hypot(re: Self, im: Self) -> Self {
         f32::hypot(re, im)
+    }
+    fn ln(self) -> Self {
+        f32::ln(self)
+    }
+    fn recip(self) -> Self {
+        1.0f32 / self
+    }
+    fn from_f64(x: f64) -> Self {
+        x as f32
     }
 }
 impl ReductionRealNorm for f64 {
     const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    const EPS: Self = f64::EPSILON;
     fn hypot(re: Self, im: Self) -> Self {
         f64::hypot(re, im)
+    }
+    fn ln(self) -> Self {
+        f64::ln(self)
+    }
+    fn recip(self) -> Self {
+        1.0f64 / self
+    }
+    fn from_f64(x: f64) -> Self {
+        x
     }
 }
 
@@ -1607,6 +1701,392 @@ fn cplx_mul<T: ReductionRealNorm>(
     b: num_complex::Complex<T>,
 ) -> num_complex::Complex<T> {
     num_complex::Complex::new(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re)
+}
+
+// ---------------------------------------------------------------------------
+// #939: complex svd / qr / pinv / matrix_rank / slogdet / matrix_power.
+//
+// SVD/QR route to the faer-backed library complex decompositions
+// (`fl::complex::svd_complex_*` / `qr_complex_*`). pinv/matrix_rank are
+// composed from the complex SVD; slogdet from `fl::det_complex`;
+// matrix_power from repeated `fl::matmul_complex` (+ `fl::inv_complex` for
+// n<0). The dispatch is monomorphised over the two real widths ferray
+// marshals, bridged through `ComplexLinalgWidth` so the concrete library
+// fns can be named without re-stating faer's `ComplexField` bound here.
+// ---------------------------------------------------------------------------
+
+type CplxArr2<T> = ferray_core::Array<num_complex::Complex<T>, ferray_core::dimension::Ix2>;
+type RealArr1<T> = ferray_core::Array<T, ferray_core::dimension::Ix1>;
+
+/// Bridge each real width to its concrete `fl::complex::*` entry points.
+trait ComplexLinalgWidth: Sized + Copy + ferray_core::Element + numpy::Element
+where
+    num_complex::Complex<Self>: ferray_core::Element + numpy::Element,
+{
+    fn svd_complex(
+        a: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<(CplxArr2<Self>, RealArr1<Self>, CplxArr2<Self>)>;
+    fn qr_complex(
+        a: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<(CplxArr2<Self>, CplxArr2<Self>)>;
+    fn matmul_complex(
+        a: &CplxArr2<Self>,
+        b: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<CplxArr2<Self>>;
+    fn inv_complex(a: &CplxArr2<Self>) -> ferray_core::error::FerrayResult<CplxArr2<Self>>;
+    fn det_complex(
+        a: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<num_complex::Complex<Self>>;
+}
+impl ComplexLinalgWidth for f32 {
+    fn svd_complex(
+        a: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<(CplxArr2<Self>, RealArr1<Self>, CplxArr2<Self>)> {
+        fl::complex::svd_complex_f32(a)
+    }
+    fn qr_complex(
+        a: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<(CplxArr2<Self>, CplxArr2<Self>)> {
+        fl::complex::qr_complex_f32(a)
+    }
+    fn matmul_complex(
+        a: &CplxArr2<Self>,
+        b: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<CplxArr2<Self>> {
+        fl::matmul_complex(a, b)
+    }
+    fn inv_complex(a: &CplxArr2<Self>) -> ferray_core::error::FerrayResult<CplxArr2<Self>> {
+        fl::inv_complex(a)
+    }
+    fn det_complex(
+        a: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<num_complex::Complex<Self>> {
+        fl::det_complex(a)
+    }
+}
+impl ComplexLinalgWidth for f64 {
+    fn svd_complex(
+        a: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<(CplxArr2<Self>, RealArr1<Self>, CplxArr2<Self>)> {
+        fl::complex::svd_complex_f64(a)
+    }
+    fn qr_complex(
+        a: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<(CplxArr2<Self>, CplxArr2<Self>)> {
+        fl::complex::qr_complex_f64(a)
+    }
+    fn matmul_complex(
+        a: &CplxArr2<Self>,
+        b: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<CplxArr2<Self>> {
+        fl::matmul_complex(a, b)
+    }
+    fn inv_complex(a: &CplxArr2<Self>) -> ferray_core::error::FerrayResult<CplxArr2<Self>> {
+        fl::inv_complex(a)
+    }
+    fn det_complex(
+        a: &CplxArr2<Self>,
+    ) -> ferray_core::error::FerrayResult<num_complex::Complex<Self>> {
+        fl::det_complex(a)
+    }
+}
+
+/// Trait alias bundling every bound the complex-decomp dispatchers need.
+trait ComplexDecompScalar:
+    ReductionRealNorm
+    + ComplexLinalgWidth
+    + ferray_core::Element
+    + numpy::Element
+    + Default
+    + PartialOrd
+where
+    num_complex::Complex<Self>: ferray_core::Element + numpy::Element,
+{
+}
+impl<T> ComplexDecompScalar for T
+where
+    T: ReductionRealNorm
+        + ComplexLinalgWidth
+        + ferray_core::Element
+        + numpy::Element
+        + Default
+        + PartialOrd,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+}
+
+/// `conj(z)`.
+fn cplx_conj<T: ReductionRealNorm>(z: num_complex::Complex<T>) -> num_complex::Complex<T> {
+    num_complex::Complex::new(z.re, -z.im)
+}
+
+/// Build a real 1-D numpy array from a `Vec<T>`.
+fn real_1d_to_pyarray<'py, T>(py: Python<'py>, data: Vec<T>) -> Bound<'py, PyAny>
+where
+    T: numpy::Element,
+{
+    numpy::PyArray1::<T>::from_vec(py, data).into_any()
+}
+
+/// `numpy.linalg.svd` complex arm. Returns `(U, s, Vh)` (or bare real `s` when
+/// `compute_uv=False`). `full_matrices` is honoured the same way numpy does;
+/// the library returns the full U (m×m) / Vh (n×n), so for `full_matrices=False`
+/// we slice to the thin shapes U[:, :k] / Vh[:k, :].
+fn complex_svd_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    full_matrices: bool,
+    compute_uv: bool,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ComplexDecompScalar,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa = complex_pyarray_to_ferray_2d::<T>(arr)?;
+    let (m, n) = (fa.shape()[0], fa.shape()[1]);
+    let k = m.min(n);
+    let (u, s, vh) = T::svd_complex(&fa).map_err(ferr_to_pyerr)?;
+    let sd: Vec<T> = s.iter().copied().collect();
+    if !compute_uv {
+        return Ok(real_1d_to_pyarray(py, sd));
+    }
+    let ud: Vec<num_complex::Complex<T>> = u.iter().copied().collect();
+    let vhd: Vec<num_complex::Complex<T>> = vh.iter().copied().collect();
+    let (u_out, vh_out) = if full_matrices {
+        (
+            build_cplx_2d::<T>(m, m, ud)?,
+            build_cplx_2d::<T>(n, n, vhd)?,
+        )
+    } else {
+        // Thin: U[:, :k] (m×k) and Vh[:k, :] (k×n).
+        let mut u_thin = Vec::with_capacity(m * k);
+        for i in 0..m {
+            for j in 0..k {
+                u_thin.push(ud[i * m + j]);
+            }
+        }
+        let mut vh_thin = Vec::with_capacity(k * n);
+        for i in 0..k {
+            for j in 0..n {
+                vh_thin.push(vhd[i * n + j]);
+            }
+        }
+        (
+            build_cplx_2d::<T>(m, k, u_thin)?,
+            build_cplx_2d::<T>(k, n, vh_thin)?,
+        )
+    };
+    let u_py = complex_2d_ferray_to_pyarray(py, u_out)?;
+    let s_py = real_1d_to_pyarray(py, sd);
+    let vh_py = complex_2d_ferray_to_pyarray(py, vh_out)?;
+    Ok(PyTuple::new(py, [u_py, s_py, vh_py])?.into_any())
+}
+
+/// Assemble a row-major complex `Array<Complex<T>, Ix2>` of shape `(rows, cols)`.
+fn build_cplx_2d<T>(
+    rows: usize,
+    cols: usize,
+    data: Vec<num_complex::Complex<T>>,
+) -> PyResult<CplxArr2<T>>
+where
+    T: ferray_core::Element + Copy,
+    num_complex::Complex<T>: ferray_core::Element,
+{
+    CplxArr2::<T>::from_vec(ferray_core::dimension::Ix2::new([rows, cols]), data)
+        .map_err(ferr_to_pyerr)
+}
+
+/// `numpy.linalg.qr` complex arm (reduced; `r_only` returns bare R).
+fn complex_qr_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    r_only: bool,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ComplexDecompScalar,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa = complex_pyarray_to_ferray_2d::<T>(arr)?;
+    let (q, r) = T::qr_complex(&fa).map_err(ferr_to_pyerr)?;
+    let r_py = complex_2d_ferray_to_pyarray(py, r)?;
+    if r_only {
+        Ok(r_py)
+    } else {
+        let q_py = complex_2d_ferray_to_pyarray(py, q)?;
+        Ok(PyTuple::new(py, [q_py, r_py])?.into_any())
+    }
+}
+
+/// `numpy.linalg.pinv` complex arm: `pinv(A) = V diag(1/s) U^H` for the
+/// singular values above `cutoff = rcond * max(s)`. From the complex SVD
+/// `A = U diag(s) Vh`, `V = Vh^H`, so `pinv = Vh^H diag(sinv) U^H`.
+fn complex_pinv_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    rcond: Option<f64>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ComplexDecompScalar,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa = complex_pyarray_to_ferray_2d::<T>(arr)?;
+    let (m, n) = (fa.shape()[0], fa.shape()[1]);
+    let k = m.min(n);
+    let (u, s, vh) = T::svd_complex(&fa).map_err(ferr_to_pyerr)?;
+    let ud: Vec<num_complex::Complex<T>> = u.iter().copied().collect();
+    let sd: Vec<T> = s.iter().copied().collect();
+    let vhd: Vec<num_complex::Complex<T>> = vh.iter().copied().collect();
+    // numpy default rcond is 1e-15 (`pinv(a, rcond=1e-15)`); cutoff scales the
+    // largest singular value (numpy/linalg/_linalg.py:2169).
+    let rcond_t = T::from_f64(rcond.unwrap_or(1e-15));
+    let smax = sd
+        .iter()
+        .copied()
+        .fold(T::ZERO, |acc, x| if x > acc { x } else { acc });
+    let cutoff = rcond_t * smax;
+    let sinv: Vec<T> = sd
+        .iter()
+        .map(|&sv| if sv > cutoff { sv.recip() } else { T::ZERO })
+        .collect();
+    // pinv[i,j] = sum_p conj(Vh[p,i]) * sinv[p] * conj(U[j,p]).  (V = Vh^H,
+    // U^H[p,j] = conj(U[j,p]).) Result shape is (n, m).
+    let mut data: Vec<num_complex::Complex<T>> =
+        vec![num_complex::Complex::new(T::ZERO, T::ZERO); n * m];
+    for i in 0..n {
+        for j in 0..m {
+            let mut acc = num_complex::Complex::new(T::ZERO, T::ZERO);
+            for p in 0..k {
+                let v = cplx_conj(vhd[p * n + i]); // V[i,p] = conj(Vh[p,i])
+                let uh = cplx_conj(ud[j * m + p]); // U^H[p,j] = conj(U[j,p])
+                let term = cplx_mul(cplx_mul(v, num_complex::Complex::new(sinv[p], T::ZERO)), uh);
+                acc = num_complex::Complex::new(acc.re + term.re, acc.im + term.im);
+            }
+            data[i * m + j] = acc;
+        }
+    }
+    let out = build_cplx_2d::<T>(n, m, data)?;
+    complex_2d_ferray_to_pyarray(py, out)
+}
+
+/// `numpy.linalg.matrix_rank` complex arm: count singular values above the
+/// tolerance. Default tol = `max(s) * max(m, n) * eps`
+/// (numpy/linalg/_linalg.py:2059).
+fn complex_matrix_rank<'py, T>(arr: &Bound<'py, PyAny>, tol: Option<f64>) -> PyResult<usize>
+where
+    T: ComplexDecompScalar,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa = complex_pyarray_to_ferray_2d::<T>(arr)?;
+    let (m, n) = (fa.shape()[0], fa.shape()[1]);
+    let (_u, s, _vh) = T::svd_complex(&fa).map_err(ferr_to_pyerr)?;
+    let sd: Vec<T> = s.iter().copied().collect();
+    let smax = sd
+        .iter()
+        .copied()
+        .fold(T::ZERO, |acc, x| if x > acc { x } else { acc });
+    let tol_t = match tol {
+        Some(t) => T::from_f64(t),
+        None => smax * T::from_f64(m.max(n) as f64) * T::EPS,
+    };
+    Ok(sd.iter().filter(|&&sv| sv > tol_t).count())
+}
+
+/// `numpy.linalg.slogdet` complex arm: `(sign, logabsdet)` where
+/// `sign = det / |det|` (complex unit, or 0) and `logabsdet = ln|det|` (real).
+fn complex_slogdet_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ComplexDecompScalar,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa = complex_pyarray_to_ferray_2d::<T>(arr)?;
+    let det = T::det_complex(&fa).map_err(ferr_to_pyerr)?;
+    let absdet = T::hypot(det.re, det.im);
+    let (sign, logabs) = if absdet == T::ZERO {
+        // Singular: numpy returns sign 0+0j and logabsdet -inf.
+        (
+            num_complex::Complex::new(T::ZERO, T::ZERO),
+            T::from_f64(f64::NEG_INFINITY),
+        )
+    } else {
+        let inv = absdet.recip();
+        (
+            num_complex::Complex::new(det.re * inv, det.im * inv),
+            absdet.ln(),
+        )
+    };
+    let sign_py = complex_scalar_to_pyarray(py, sign)?;
+    // logabsdet is a REAL 0-D scalar (build via PyArray1 + reshape to 0-d so we
+    // only need `numpy::Element`, not the `IntoNumPy`/`NpElement` bound).
+    let l_flat = numpy::PyArray1::<T>::from_vec(py, vec![logabs]);
+    let l_py = l_flat
+        .reshape::<[usize; 0]>([])
+        .map_err(|e| PyValueError::new_err(format!("slogdet logabsdet reshape: {e}")))?
+        .into_any();
+    Ok(PyTuple::new(py, [sign_py, l_py])?.into_any())
+}
+
+/// `numpy.linalg.matrix_power` complex arm: repeated complex matmul. `n==0` is
+/// the identity, `n<0` inverts first. Composed from `matmul_complex` /
+/// `inv_complex` (no new library fn).
+fn complex_matrix_power_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    n: i64,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ComplexDecompScalar,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa = complex_pyarray_to_ferray_2d::<T>(arr)?;
+    let dim = fa.shape()[0];
+    if fa.shape()[0] != fa.shape()[1] {
+        return Err(PyValueError::new_err(
+            "matrix_power: input must be a square 2-D matrix",
+        ));
+    }
+    // Base matrix: A for n>=0, inv(A) for n<0.
+    let (base, p) = if n < 0 {
+        (
+            T::inv_complex(&fa).map_err(ferr_to_pyerr)?,
+            (-(n as i128)) as u128,
+        )
+    } else {
+        (fa, n as u128)
+    };
+    // Identity (n==0 short-circuits to it).
+    let mut acc = identity_cplx::<T>(dim)?;
+    if p == 0 {
+        return complex_2d_ferray_to_pyarray(py, acc);
+    }
+    // Exponentiation by squaring over complex matmul.
+    let mut b = base;
+    let mut e = p;
+    while e > 0 {
+        if e & 1 == 1 {
+            acc = T::matmul_complex(&acc, &b).map_err(ferr_to_pyerr)?;
+        }
+        e >>= 1;
+        if e > 0 {
+            b = T::matmul_complex(&b, &b).map_err(ferr_to_pyerr)?;
+        }
+    }
+    complex_2d_ferray_to_pyarray(py, acc)
+}
+
+/// `n×n` complex identity.
+fn identity_cplx<T>(n: usize) -> PyResult<CplxArr2<T>>
+where
+    T: ReductionRealNorm + ferray_core::Element + Copy,
+    num_complex::Complex<T>: ferray_core::Element,
+{
+    let mut data = vec![num_complex::Complex::new(T::ZERO, T::ZERO); n * n];
+    for i in 0..n {
+        data[i * n + i] = num_complex::Complex::new(T::ONE, T::ZERO);
+    }
+    build_cplx_2d::<T>(n, n, data)
 }
 
 fn coerce_complex_dtype<'py>(

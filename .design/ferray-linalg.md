@@ -113,6 +113,7 @@ by their owning module's `//!` doc REQ tables.
 | REQ | Status | Evidence |
 | --- | --- | --- |
 | REQ-19 (norm — full numpy matrix `ord` set) | SHIPPED | Impl: `NormOrder::{Fro,Nuc,Inf,NegInf,L1,L2,NegL1,NegL2,P}` + `matrix_norm_scalar` in `norms.rs` (the `NegL1` min-column-sum and `NegL2` smallest-singular-value arms close numpy `ord=-1`/`-2`, _linalg.py:2657/2659). Consumer: `cond` in `norms.rs` routes every non-L2/Fro `NormOrder` through `norm` → `matrix_norm_scalar` (its `_ =>` arm calls `norm(&a_dyn, p)`), exercising the new arms in production. Verified by `divergence_norm_matrix_ord_neg1_unrepresentable` / `_neg2_unrepresentable` against the live numpy 2.4.5 oracle (1.0 and 1.2679491924311228). |
+| complex svd/qr/pinv/matrix_rank/slogdet/matrix_power (#939) | SHIPPED | Tracked in the `complex.rs` module `//!` REQ table. Impl: `svd_complex_f64`/`f32` + `qr_complex_f64`/`f32` in `complex.rs` (faer complex `Svd`/`Qr`); pinv/matrix_rank compose the complex SVD, slogdet composes `det_complex`, matrix_power composes `matmul_complex`/`inv_complex` — all in the `svd`/`qr`/`pinv`/`matrix_rank`/`slogdet`/`matrix_power` complex arms of `ferray-python/src/linalg.rs`. Consumer: those `#[pyfunction]`s registered under `linalg` in `ferray-python` `lib.rs`. Verified by `complex.rs` reconstruction unit tests + `ferray-python/tests/test_expansion_complex_decomp.py` and the six `test_D_linalg_*` pins in `tests/test_divergence_complex_converge_audit.py` against live numpy 2.4. |
 
 ## Out of Scope
 - Sparse matrix linear algebra (future ferray-sparse crate)
