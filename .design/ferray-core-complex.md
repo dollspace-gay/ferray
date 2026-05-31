@@ -149,7 +149,8 @@ construct path; R-3/R-4/R-5/R-6 then follow as dispatch threading.
   numpy's "ufunc not supported".
 - REQ-6 (R-6 reductions): `fr.sum`/`fr.prod` over complex yield a complex
   scalar (via the complex `ReduceAcc`); `fr.mean` over complex yields a complex
-  scalar (`complex128`, matching numpy's c64→c128 mean promotion), NOT a real
+  scalar that PRESERVES the input width (c64→c64, c128→c128 — the main-array
+  `mean` does NOT promote to c128; verified live numpy 2.4.4), NOT a real
   collapse.
 
 ## Acceptance criteria
@@ -170,16 +171,28 @@ construct path; R-3/R-4/R-5/R-6 then follow as dispatch threading.
   [True, False]` (lexicographic); `fr.floor_divide(z,z)` raises `TypeError`;
   `fr.bitwise_and(z,z)` raises `TypeError`.
 - AC-6 (REQ-6): `fr.sum([1+2j,3-1j]) == (4+1j)`; `fr.prod == (3+5j... )` equal
-  to `np.prod`; `fr.mean([1+2j,3-1j]) == (2+0.5j)` with dtype `complex128`.
+  to `np.prod`; `fr.mean([1+2j,3-1j]) == (2+0.5j)`, width preserved (a c128 input
+  → `complex128`, a c64 input → `complex64`).
 
 ## REQ status table
 
 REQ-1/REQ-2/REQ-3 are **SHIPPED** (closed by #920/#921/#922 — the
 input-coercion + unary-transcendental complex-dispatch build). REQ-5 is now
 **SHIPPED** (closed by #924 — the binary arithmetic + comparison + raise-guard
-complex-dispatch build). REQ-4/REQ-6 remain **NOT-STARTED** (their binding
-dispatch sites are still real-only; the divergences reproduce live, numpy
-2.4.5). Two states only (R-DEFER-2).
+complex-dispatch build). REQ-6 is now **SHIPPED** (closed by #925 — the
+complex reduction dispatch build). REQ-4 remains **NOT-STARTED** (its binding
+dispatch sites are still real-only; the divergence reproduces live, numpy
+2.4.4). Two states only (R-DEFER-2).
+
+CORRECTION (R-HONEST-4): this doc previously asserted numpy's complex `mean`
+promotes c64→complex128. That is WRONG for the MAIN-array path (it is true only
+for numpy.ma). Verified live numpy 2.4.4: `np.mean(complex64).dtype ==
+complex64`, `np.sum/prod/cumsum/cumprod(complex64).dtype == complex64` — the
+main-array reductions PRESERVE the complex width. `np.var/std(complex)` return a
+REAL result that FOLLOWS the width (c64→float32, c128→float64), and use
+`(x*conj(x)).real == re²+im²` (numpy `_core/_methods.py:_var`), NOT the
+`hypot(re,im)²` numpy.ma uses. The shipped code matches the live main-array
+oracle, not the prior (incorrect) doc claim.
 
 | REQ | Status | Evidence |
 |---|---|---|
@@ -188,7 +201,7 @@ dispatch sites are still real-only; the divergences reproduce live, numpy
 | REQ-3 (complex transcendentals) | SHIPPED | `complex_unary_dispatch!` (`ufunc.rs`) calls the matching `ferray_ufunc::*_complex` op (`sqrt_complex`/`exp_complex`/`ln_complex`/`sin_complex`/… 19 ops) for complex input, preserving width (c64→c64, c128→c128); `exp2` (no `exp2_complex` lib op) is composed via `exp2_complex_dispatch` (num_complex `Complex::exp2`). Non-test consumer: the 20 `bind_unary_float!(…, complex = …)` invocations + `pub fn exp2` in `ufunc.rs`. KNOWN residual: `arcsin`/`arccos`/`arctanh` pick the opposite branch-cut sign to numpy at a real argument `|re|>1, im==+0` (a num_complex vs C99 divergence in `ferray-ufunc/src/ops/complex.rs`, outside this binding's manifest — interior points match). Pinned green: `::test_transcendental_complex128_matches_numpy`, `::test_transcendental_complex64_preserves_width_matches_numpy`, `::test_sqrt_negative_real_complex_takes_complex_branch`; the residual is pinned in `::test_arc_branch_cut_real_axis_known_divergence`. |
 | REQ-4 (abs/negative/positive) | NOT-STARTED | open prereq blocker #923. `fr.abs` is a Python-level alias of `absolute`; `bind_unary_numeric_split!(absolute, …)` (`ufunc.rs`) dispatches `match_dtype_float_or_int!`, real-only → `TypeError: unsupported dtype for numeric op`. `ferray_ufunc::abs(&Array<Complex<T>,D>) -> Array<T,D>` (REAL magnitude) EXISTS (`ops/complex.rs`). `fr.negative` likewise raises; `ferray_ufunc::negative` is `T: Float`-bounded (no Complex) — the one small library gap (a `negative_complex` helper, or bind via `subtract(0+0j, z)`). `fr.positive(complex)` already works (`positive_int_array`-style identity). Fix = complex arm in `absolute`/`negative` dispatch + the tiny complex negate. |
 | REQ-5 (arithmetic/compare/raises) | SHIPPED | closed by #924. `complex_binary_arith_dispatch!` (`ufunc.rs`) routes `add`/`subtract`/`multiply`/`divide` (the complex-capable `add_broadcast`/`subtract_broadcast`/`multiply_broadcast`/`divide_broadcast`, #869) and `power` (the array-array `ferray_ufunc::ops::arithmetic::power_complex`) through a complex arm BEFORE the real `binary_numeric_body!`/`binary_numeric_split_body!` funnel, gated on `binary_is_complex` (numpy `result_type` → complex). `complex_eq_dispatch!` routes `equal`/`not_equal` via the `PartialEq`-bounded `equal_broadcast`/`not_equal_broadcast`. `complex_order_dispatch`/`lexicographic_cmp` compute `less`/`greater`/`less_equal`/`greater_equal` LEXICOGRAPHICALLY (`re<re \|\| (re==re && im<im)`, mirror ma #874 `cmp_complex_arm!`; NaN part → False). `reject_complex_binary` raises numpy's exact `TypeError` for `floor_divide`/`remainder`/`mod`/`bitwise_and`/`or`/`xor`/`left_shift`/`right_shift`. Non-test production consumers: `pub fn add`/`subtract`/`multiply`/`divide`/`power`/`equal`/`not_equal`/`less`/`greater`/`less_equal`/`greater_equal`/`floor_divide`/`remainder`/`mod_`/`bitwise_*`/`left_shift`/`right_shift` in `ufunc.rs` (registered top-level in `lib.rs`). Promotion (complex+real/scalar, reflected) reuses numpy's `result_type`+`broadcast_arrays`. numpy: `np.add([1+2j],[3+4j])==[4+6j]`, `np.less([1+2j,3+2j],[1+5j,3+1j])==[True False]`, `np.floor_divide(z,z)` → TypeError (live, numpy 2.4.5). Pinned green: `tests/test_expansion_complex_binary.py` (42 tests). |
-| REQ-6 (sum/prod/mean) | NOT-STARTED | open prereq blocker #925. `pub fn sum`/`pub fn prod` (`stats.rs`) use `match_dtype_numeric!`, real-only → `TypeError`, though `impl ReduceAcc for Complex<f32>`/`Complex<f64>` (`ferray-core/src/array/reductions.rs`, `Acc = Self`) ALREADY exists so `Array::sum`/`Array::prod` fold complex. `pub fn mean` uses `match_dtype_float!` → coerces complex→f64 DROPPING imag (`fr.mean(z)` → `1.0`, an R-CODE-4 corruption; numpy → `(2+0.5j)`, c64→c128). Fix = complex arms in `sum`/`prod`/`mean` dispatch (`stats.rs`); `mean` computes complex-sum/count → `complex128`, mirroring ma #873. |
+| REQ-6 (sum/prod/mean) | SHIPPED | closed by #925. `stats.rs` gains complex arms ahead of every real-only dispatch: `complex_fold_dispatch` routes `sum`/`prod`/`cumsum`/`cumprod` through the complex `ReduceAcc` (`impl ReduceAcc for Complex<f32>`/`Complex<f64>`, `ferray-core/src/array/reductions.rs`, `Acc = Self`), keeping the input width (c64→c64, c128→c128). `complex_mean_dispatch` computes the complex sum / count as a reciprocal-MULTIPLY (`re*(1/n)`, ma #873), bit-exact vs numpy and WIDTH-PRESERVING (c64→c64, c128→c128 — the main-array `mean` does NOT promote to c128, unlike numpy.ma). `complex_var_std_dispatch` returns the REAL `mean(re²+im²)` width-following (c64→float32, c128→float64), matching numpy's `(x*conj(x)).real` main-array `_var` (NOT ma's `hypot²`). `complex_weighted_average` computes `sum(a·w)/sum(w)` in complex128 (numpy promotes a weighted complex average to c128). All branch BEFORE the `coerce_dtype(arr,"float64")` that previously dropped the imaginary part (the R-CODE-4 corruption: `fr.mean([1+2j,3-1j])` returned `1.0`; now `(2+0.5j)`). Non-test production consumers: `pub fn sum`/`prod`/`mean`/`var`/`std`/`cumsum`/`cumprod`/`average` in `stats.rs` (registered top-level in `lib.rs`). numpy (live 2.4.4): `np.sum([1+2j,3+4j])==(4+6j)`, `np.prod==(-5+10j)`, `np.mean([1+2j,3-1j])==(2+0.5j)`, `np.var([1+2j,3+4j])==2.0` (float64). Pinned green: `tests/test_expansion_complex_reduce.py` (34 tests). |
 
 ## Architecture
 
@@ -267,7 +280,7 @@ path that dispatches to the complex-typed library ops (NOT the f32/f64 funnel):
 | `floor_divide`/`remainder`/`mod` | `TypeError` ('floor_divide' not supported) | live |
 | `bitwise_and`/`or`/`xor` | `TypeError` ('bitwise_and' not supported) | live |
 | `sum`/`prod` | complex scalar | live: `sum → (4+1j)`, `prod → (5+5j)` |
-| `mean` | complex scalar (c64→c128) | live: `mean → (2+0.5j)`; `fromnumeric.py` mean |
+| `mean` | complex scalar, width preserved (c64→c64, c128→c128) | live: `mean → (2+0.5j)`; `fromnumeric.py` mean |
 
 ## Incremental build plan (smallest-highest-value first)
 

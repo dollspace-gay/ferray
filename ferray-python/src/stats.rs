@@ -15,10 +15,13 @@
 //! platforms.
 
 use ferray_core::array::aliases::{Array1, ArrayD};
+use ferray_core::array::reductions::ReduceAcc;
 use ferray_core::dimension::{Ix1, IxDyn};
 use ferray_linalg as fl;
 use ferray_numpy_interop::{AsFerray, IntoNumPy};
+use num_complex::Complex;
 use numpy::{PyReadonlyArray1, PyReadonlyArrayDyn};
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
@@ -26,7 +29,406 @@ use crate::conv::{
     as_ndarray, coerce_dtype, dtype_name, extract_q, ferr_to_pyerr, normalize_axis,
     promote_linalg_input,
 };
+use crate::fft::{complex_ferray_to_pyarray, complex_pyarray_to_ferray};
 use crate::{match_dtype_all, match_dtype_float, match_dtype_numeric, match_dtype_orderable};
+
+// ---------------------------------------------------------------------------
+// Complex-input dispatch for reductions (#925).
+//
+// The prior binding made every reduction real-only, with two distinct failure
+// classes on complex input (both verified live, numpy 2.4.4):
+//
+//   * `sum`/`prod`/`cumsum`/`cumprod` dispatch `match_dtype_numeric!`, which has
+//     NO complex arm — a complex input raised `TypeError: unsupported dtype for
+//     numeric op`. numpy COMPUTES these as complex scalars/arrays.
+//   * `mean`/`var`/`std`/`average` coerced the input to `float64`/`f32` ahead of
+//     `match_dtype_float!`, and numpy's complex->real cast DROPS the imaginary
+//     part with a `ComplexWarning` — an active R-CODE-4 boundary corruption
+//     (`fr.mean([1+2j,3-1j])` returned `1.0`; numpy returns `(2+0.5j)`).
+//
+// The complex library substrate already exists: `impl ReduceAcc for Complex<f32>
+// /Complex<f64>` (`ferray-core/src/array/reductions.rs`, `Acc = Self`) lets
+// `ferray_stats::sum`/`prod`/`cumsum`/`cumprod` fold complex directly, keeping
+// the input width (c64->c64, c128->c128 — verified live, numpy 2.4.4 does NOT
+// promote a complex sum/prod's width). `mean` is NOT foldable directly
+// (`ferray_stats::mean` is `T: Float`-bounded and `Complex` is not `Float`), so
+// it is composed as the complex sum divided by the count, mirroring ma #873's
+// `ma_complex_mean`: with a purely-real divisor the complex-division loop
+// reduces to a reciprocal-MULTIPLY (`re*(1/n)`, `im*(1/n)`), bit-identical to
+// numpy's `dsum / cnt` and one ULP below the naive `re/n`. numpy's MAIN-array
+// `mean` PRESERVES the complex width (c64->c64, c128->c128 — verified live,
+// unlike numpy.ma which promotes to c128). `var`/`std` over complex return a
+// REAL result `mean(|x - mean|^2)`, width-following (c64->float32,
+// c128->float64 — verified live, again unlike ma's always-float64), computed
+// via `|z| = hypot(re, im)` THEN squared to match numpy's
+// `absolute(danom) ** 2` last-bit.
+// ---------------------------------------------------------------------------
+
+/// `true` for the two complex dtype names ferray marshals
+/// (`complex64`/`complex128`, plus their `c8`/`c16` aliases).
+fn is_complex_dtype(dt: &str) -> bool {
+    matches!(dt, "complex128" | "c16" | "complex64" | "c8")
+}
+
+/// The real scalar arithmetic a complex `mean`/`var`/`std` needs, sealed to the
+/// two real component widths ferray marshals (`f32`/`f64`). `num-traits` is not
+/// a direct dependency of `ferray-python`, so this provides the small set of
+/// `Float` operations (`hypot`, `sqrt`, identity/count conversions) used by the
+/// complex reduction helpers without pulling a new crate into the manifest.
+trait ReductionReal:
+    Copy
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+{
+    const ZERO: Self;
+    const ONE: Self;
+    fn from_usize(n: usize) -> Self;
+    fn sqrt(self) -> Self;
+}
+
+impl ReductionReal for f32 {
+    const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    fn from_usize(n: usize) -> Self {
+        n as f32
+    }
+    fn sqrt(self) -> Self {
+        f32::sqrt(self)
+    }
+}
+
+impl ReductionReal for f64 {
+    const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    fn from_usize(n: usize) -> Self {
+        n as f64
+    }
+    fn sqrt(self) -> Self {
+        f64::sqrt(self)
+    }
+}
+
+/// Which fold a complex `sum`/`prod`/`cumsum`/`cumprod` dispatches.
+#[derive(Clone, Copy)]
+enum ComplexFold {
+    Sum,
+    Prod,
+    CumSum,
+    CumProd,
+}
+
+/// Dispatch a complex `sum`/`prod`/`cumsum`/`cumprod` over both complex widths
+/// via the existing complex `ReduceAcc` (`Acc = Self`, so the result keeps the
+/// input width). `sum`/`prod` produce a 0-D (or axis-reduced) complex array;
+/// `cumsum`/`cumprod` keep the input shape. numpy: `np.sum([1+2j,3+4j])==(4+6j)`,
+/// `np.prod([1+2j,3+4j])==(-5+10j)`, `np.cumsum([1+2j,3+4j])==[1+2j,4+6j]`
+/// (live, numpy 2.4.4) — all keep the input complex width.
+fn complex_fold_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+    axis: Option<usize>,
+    fold: ComplexFold,
+) -> PyResult<Bound<'py, PyAny>> {
+    match dt {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(arr)?;
+            let r: ArrayD<Complex<f64>> = match fold {
+                ComplexFold::Sum => ferray_stats::sum(&fa, axis).map_err(ferr_to_pyerr)?,
+                ComplexFold::Prod => ferray_stats::prod(&fa, axis).map_err(ferr_to_pyerr)?,
+                ComplexFold::CumSum => ferray_stats::cumsum(&fa, axis).map_err(ferr_to_pyerr)?,
+                ComplexFold::CumProd => ferray_stats::cumprod(&fa, axis).map_err(ferr_to_pyerr)?,
+            };
+            complex_ferray_to_pyarray(py, r)
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(arr)?;
+            let r: ArrayD<Complex<f32>> = match fold {
+                ComplexFold::Sum => ferray_stats::sum(&fa, axis).map_err(ferr_to_pyerr)?,
+                ComplexFold::Prod => ferray_stats::prod(&fa, axis).map_err(ferr_to_pyerr)?,
+                ComplexFold::CumSum => ferray_stats::cumsum(&fa, axis).map_err(ferr_to_pyerr)?,
+                ComplexFold::CumProd => ferray_stats::cumprod(&fa, axis).map_err(ferr_to_pyerr)?,
+            };
+            complex_ferray_to_pyarray(py, r)
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_fold_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+/// Element-wise complex mean of an axis-lane (or the whole array when
+/// `axis=None`): the complex sum divided by the lane count via a
+/// reciprocal-MULTIPLY (`re*(1/n)`, `im*(1/n)`), the form numpy's `dsum / cnt`
+/// complex-division loop reduces to for a purely-real divisor (ma #873). Keeps
+/// the input complex width `T` (numpy main-array `mean` preserves c64/c128).
+fn complex_mean_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + ReductionReal,
+    Complex<T>: ferray_core::Element + numpy::Element,
+    Complex<T>: ReduceAcc<Acc = Complex<T>> + Send + Sync,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    let n: usize = match axis {
+        None => fa.size(),
+        Some(ax) => *fa.shape().get(ax).ok_or_else(|| {
+            ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+                "complex mean: axis out of bounds",
+            ))
+        })?,
+    };
+    if n == 0 {
+        return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+            "cannot compute mean of empty array",
+        )));
+    }
+    let summed: ArrayD<Complex<T>> = ferray_stats::sum(&fa, axis).map_err(ferr_to_pyerr)?;
+    // Reciprocal-multiply per component: `re*(1/n)`, `im*(1/n)` — numpy's
+    // `dsum / cnt` for a real divisor (ma #873, one ULP below naive `re/n`).
+    let scl = T::ONE / T::from_usize(n);
+    let shape: Vec<usize> = summed.shape().to_vec();
+    let data: Vec<Complex<T>> = summed
+        .iter()
+        .map(|z| Complex::new(z.re * scl, z.im * scl))
+        .collect();
+    let r = ArrayD::<Complex<T>>::from_vec(IxDyn::new(&shape), data).map_err(ferr_to_pyerr)?;
+    complex_ferray_to_pyarray(py, r)
+}
+
+/// Element-wise complex variance of an axis-lane (or whole array): the REAL
+/// `mean(|x - mean|^2)`, where `|z| = hypot(re, im)` THEN squared (numpy's
+/// `absolute(danom) ** 2`, ma #873). `ddof` divides by `n - ddof`. The result
+/// element type `R` is the REAL width following the complex input (c64->f32,
+/// c128->f64, verified live numpy 2.4.4). When `want_std`, the per-lane square
+/// root is taken. Returns a real ndarray (NOT the complex helper) so no
+/// imaginary part is fabricated (R-CODE-4).
+fn complex_var_std_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+    ddof: usize,
+    want_std: bool,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + ReductionReal,
+    ArrayD<T>: IntoNumPy<T, IxDyn>,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    let shape: Vec<usize> = fa.shape().to_vec();
+    let ndim = shape.len();
+
+    // Compute one REAL variance value over a slice of complex elements.
+    let var_of = |vals: &[Complex<T>]| -> Option<T> {
+        let n = vals.len();
+        if n == 0 || n <= ddof {
+            return None;
+        }
+        // Reciprocal-multiply complex mean (matches `complex_mean_dispatch`).
+        let scl = T::ONE / T::from_usize(n);
+        let mut mre = T::ZERO;
+        let mut mim = T::ZERO;
+        for z in vals {
+            mre = mre + z.re;
+            mim = mim + z.im;
+        }
+        let (mre, mim) = (mre * scl, mim * scl);
+        let mut sq_sum = T::ZERO;
+        for z in vals {
+            let dr = z.re - mre;
+            let di = z.im - mim;
+            // `|x - mean|^2` as `dr*dr + di*di` — numpy's MAIN-array `_var`
+            // computes `(x * conjugate(x)).real` (numpy/_core/_methods.py:_var),
+            // i.e. `re^2 + im^2`, NOT the `hypot(re,im)^2` numpy.ma uses (the two
+            // paths differ in the last bit; `np.var([1+2j,3+4j])` is EXACTLY 2.0
+            // only with `re^2 + im^2`, verified live numpy 2.4.4).
+            sq_sum = sq_sum + dr * dr + di * di;
+        }
+        let denom = T::from_usize(n - ddof);
+        let v = sq_sum / denom;
+        Some(if want_std { v.sqrt() } else { v })
+    };
+
+    match axis {
+        None => {
+            let vals: Vec<Complex<T>> = fa.iter().copied().collect();
+            let v = var_of(&vals).ok_or_else(|| {
+                ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+                    "complex var/std: degrees of freedom <= 0",
+                ))
+            })?;
+            let r = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![v]).map_err(ferr_to_pyerr)?;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+        Some(ax) => {
+            if ax >= ndim {
+                return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+                    "complex var/std: axis out of bounds",
+                )));
+            }
+            let out_shape: Vec<usize> = shape
+                .iter()
+                .enumerate()
+                .filter_map(|(d, &s)| if d == ax { None } else { Some(s) })
+                .collect();
+            let axis_len = shape[ax];
+            let flat: Vec<Complex<T>> = fa.iter().copied().collect();
+            // Row-major strides into the flat buffer.
+            let mut strides = vec![1usize; ndim];
+            for d in (0..ndim.saturating_sub(1)).rev() {
+                strides[d] = strides[d + 1] * shape[d + 1];
+            }
+            // The axes that survive the reduction, in order, with their extents.
+            let out_dims: Vec<usize> = (0..ndim).filter(|&d| d != ax).collect();
+            let out_extents: Vec<usize> = out_dims.iter().map(|&d| shape[d]).collect();
+            let out_n: usize = out_extents.iter().product::<usize>().max(1);
+            let mut out: Vec<T> = Vec::with_capacity(out_n);
+            // Linearise each of the `out_n` output coordinates (mixed-radix over
+            // `out_extents`) into a base flat offset, then walk the reduced axis.
+            for lin in 0..out_n {
+                let mut rem = lin;
+                let mut base = 0usize;
+                for (i, &d) in out_dims.iter().enumerate() {
+                    let ext = out_extents[i];
+                    let c = rem % ext;
+                    rem /= ext;
+                    base += c * strides[d];
+                }
+                let lane: Vec<Complex<T>> = (0..axis_len)
+                    .map(|k| flat[base + k * strides[ax]])
+                    .collect();
+                let v = var_of(&lane).ok_or_else(|| {
+                    ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+                        "complex var/std: degrees of freedom <= 0",
+                    ))
+                })?;
+                out.push(v);
+            }
+            let r = ArrayD::<T>::from_vec(IxDyn::new(&out_shape), out).map_err(ferr_to_pyerr)?;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+    }
+}
+
+/// `np.average(complex, weights=w)` over `axis` (or the whole array): the
+/// complex weighted mean `sum(a*w) / sum(w)`, computed in `complex128` (numpy
+/// promotes a weighted complex average to complex128 regardless of the input
+/// width — verified live numpy 2.4.4: a `complex64` input weighted average is
+/// `complex128`). The complex input is read at its native width then widened to
+/// `Complex<f64>`; `w` is coerced to `float64`. The division by the (real)
+/// weight sum is a reciprocal-multiply per component, matching numpy's complex
+/// `wsum`-division for a real divisor.
+fn complex_weighted_average<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    weights: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    // Widen the complex input to complex128 regardless of native width.
+    let arr128 = coerce_dtype(py, arr, "complex128")?;
+    let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr128)?;
+    let shape: Vec<usize> = fa.shape().to_vec();
+    let ndim = shape.len();
+
+    let warr = coerce_dtype(py, weights, "float64")?;
+    let wview: PyReadonlyArrayDyn<f64> = warr.extract()?;
+    let fw: ArrayD<f64> = wview.as_ferray().map_err(ferr_to_pyerr)?;
+
+    // Weighted mean over a paired slice of (value, weight): `sum(v*w)/sum(w)`,
+    // divide-by-real as a reciprocal-multiply (one ULP below naive per-component
+    // divide, matching numpy's complex `wsum` division for a real divisor).
+    let wavg = |vals: &[Complex<f64>], ws: &[f64]| -> PyResult<Complex<f64>> {
+        let mut acc = Complex::<f64>::new(0.0, 0.0);
+        let mut wsum = 0.0f64;
+        for (v, &w) in vals.iter().zip(ws.iter()) {
+            acc.re += v.re * w;
+            acc.im += v.im * w;
+            wsum += w;
+        }
+        if wsum == 0.0 {
+            return Err(pyo3::exceptions::PyZeroDivisionError::new_err(
+                "Weights sum to zero, can't be normalized",
+            ));
+        }
+        let scl = 1.0 / wsum;
+        Ok(Complex::new(acc.re * scl, acc.im * scl))
+    };
+
+    match axis {
+        None => {
+            // numpy requires `weights` to match the flattened length here.
+            let vals: Vec<Complex<f64>> = fa.iter().copied().collect();
+            let ws: Vec<f64> = fw.iter().copied().collect();
+            if ws.len() != vals.len() {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "Axis must be specified when shapes of a and weights differ.",
+                ));
+            }
+            let r = wavg(&vals, &ws)?;
+            let rd = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&[]), vec![r])
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, rd)
+        }
+        Some(ax) => {
+            if ax >= ndim {
+                return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+                    "complex average: axis out of bounds",
+                )));
+            }
+            // numpy allows `weights` to be 1-D along `axis` (length == shape[ax])
+            // or full-shape. Build a per-lane weight lookup.
+            let axis_len = shape[ax];
+            let ws_flat: Vec<f64> = fw.iter().copied().collect();
+            let w_is_1d = ws_flat.len() == axis_len && fw.ndim() == 1;
+            if !w_is_1d && ws_flat.len() != fa.size() {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "Axis must be specified when shapes of a and weights differ.",
+                ));
+            }
+            let out_shape: Vec<usize> = shape
+                .iter()
+                .enumerate()
+                .filter_map(|(d, &s)| if d == ax { None } else { Some(s) })
+                .collect();
+            let flat: Vec<Complex<f64>> = fa.iter().copied().collect();
+            let mut strides = vec![1usize; ndim];
+            for d in (0..ndim.saturating_sub(1)).rev() {
+                strides[d] = strides[d + 1] * shape[d + 1];
+            }
+            let out_dims: Vec<usize> = (0..ndim).filter(|&d| d != ax).collect();
+            let out_extents: Vec<usize> = out_dims.iter().map(|&d| shape[d]).collect();
+            let out_n: usize = out_extents.iter().product::<usize>().max(1);
+            let mut out: Vec<Complex<f64>> = Vec::with_capacity(out_n);
+            for lin in 0..out_n {
+                let mut rem = lin;
+                let mut base = 0usize;
+                for (i, &d) in out_dims.iter().enumerate() {
+                    let ext = out_extents[i];
+                    let c = rem % ext;
+                    rem /= ext;
+                    base += c * strides[d];
+                }
+                let mut lane = Vec::with_capacity(axis_len);
+                let mut lane_w = Vec::with_capacity(axis_len);
+                for k in 0..axis_len {
+                    let off = base + k * strides[ax];
+                    lane.push(flat[off]);
+                    lane_w.push(if w_is_1d { ws_flat[k] } else { ws_flat[off] });
+                }
+                out.push(wavg(&lane, &lane_w)?);
+            }
+            let rd = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&out_shape), out)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, rd)
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Boolean reductions: all / any
@@ -181,6 +583,13 @@ pub fn sum<'py>(
     let arr = as_ndarray(py, a)?;
     let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
+    // Complex sum folds via the complex `ReduceAcc` (`Acc = Self`), keeping the
+    // input width (c64->c64, c128->c128) — numpy: `np.sum([1+2j,3+4j])==(4+6j)`,
+    // complex64 stays complex64 (live, numpy 2.4.4). The real-only
+    // `match_dtype_numeric!` below has no complex arm (would raise TypeError).
+    if is_complex_dtype(dt.as_str()) {
+        return complex_fold_dispatch(py, &arr, dt.as_str(), axis, ComplexFold::Sum);
+    }
     // bool sums in the platform integer (int64) — numpy/_core/fromnumeric.py:2325
     // ("`a` is signed then the platform integer is used"). ferray's library
     // ReduceAcc maps bool -> i64, so dispatch bool to the same promoting path.
@@ -209,6 +618,11 @@ pub fn prod<'py>(
     let arr = as_ndarray(py, a)?;
     let axis = norm_axis(py, &arr, axis)?;
     let dt = dtype_name(&arr)?;
+    // Complex prod folds via the complex `ReduceAcc`, keeping width — numpy:
+    // `np.prod([1+2j,3+4j])==(-5+10j)`, complex64 stays complex64 (live).
+    if is_complex_dtype(dt.as_str()) {
+        return complex_fold_dispatch(py, &arr, dt.as_str(), axis, ComplexFold::Prod);
+    }
     // bool products promote to int64 like sum — numpy/_core/fromnumeric.py:2692.
     if dt.as_str() == "bool" {
         let view: PyReadonlyArrayDyn<bool> = arr.extract()?;
@@ -300,8 +714,19 @@ pub fn mean<'py>(
     if axis.is_none() && is_empty_array(&arr)? {
         return nan_scalar_f64(py);
     }
-    // Promote integer inputs to float64 to match NumPy's mean semantics.
     let dt = dtype_name(&arr)?;
+    // Complex mean: compute the complex sum / count (reciprocal-multiply,
+    // ma #873), keeping the input width (c64->c64, c128->c128, verified live
+    // numpy 2.4.4). MUST branch BEFORE the `coerce_dtype(arr,"float64")` below,
+    // which numpy casts complex->float64 DROPPING the imaginary part with a
+    // `ComplexWarning` — the R-CODE-4 corruption this REQ eliminates
+    // (`fr.mean([1+2j,3-1j])` returned `1.0`; numpy returns `(2+0.5j)`).
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_mean_dispatch::<f64>(py, &arr, axis),
+        "complex64" | "c8" => return complex_mean_dispatch::<f32>(py, &arr, axis),
+        _ => {}
+    }
+    // Promote integer inputs to float64 to match NumPy's mean semantics.
     let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
         arr
     } else {
@@ -332,6 +757,19 @@ pub fn var<'py>(
         return nan_scalar_f64(py);
     }
     let dt = dtype_name(&arr)?;
+    // Complex var: REAL result `mean(|x - mean|^2)` (numpy's
+    // `absolute(danom)**2`, ma #873), width-following (c64->float32,
+    // c128->float64, verified live numpy 2.4.4). MUST branch BEFORE the
+    // `coerce_dtype(arr,"float64")` imag-discard below (R-CODE-4).
+    match dt.as_str() {
+        "complex128" | "c16" => {
+            return complex_var_std_dispatch::<f64>(py, &arr, axis, ddof, false);
+        }
+        "complex64" | "c8" => {
+            return complex_var_std_dispatch::<f32>(py, &arr, axis, ddof, false);
+        }
+        _ => {}
+    }
     let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
         arr
     } else {
@@ -363,6 +801,18 @@ pub fn std<'py>(
         return nan_scalar_f64(py);
     }
     let dt = dtype_name(&arr)?;
+    // Complex std: `sqrt` of the REAL complex variance, width-following
+    // (c64->float32, c128->float64, verified live). Branch BEFORE the f64
+    // coercion imag-discard (R-CODE-4).
+    match dt.as_str() {
+        "complex128" | "c16" => {
+            return complex_var_std_dispatch::<f64>(py, &arr, axis, ddof, true);
+        }
+        "complex64" | "c8" => {
+            return complex_var_std_dispatch::<f32>(py, &arr, axis, ddof, true);
+        }
+        _ => {}
+    }
     let arr = if matches!(dt.as_str(), "float64" | "float32" | "f64" | "f32") {
         arr
     } else {
@@ -590,6 +1040,11 @@ pub fn cumsum<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex cumsum folds via the complex `ReduceAcc`, keeping width and shape
+    // — numpy: `np.cumsum([1+2j,3+4j])==[1+2j,4+6j]`, complex64 stays complex64.
+    if is_complex_dtype(dt.as_str()) {
+        return complex_fold_dispatch(py, &arr, dt.as_str(), axis, ComplexFold::CumSum);
+    }
     Ok(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -611,6 +1066,11 @@ pub fn cumprod<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex cumprod folds via the complex `ReduceAcc`, keeping width and shape
+    // — numpy: `np.cumprod([1+2j,3+4j])==[1+2j,-5+10j]`.
+    if is_complex_dtype(dt.as_str()) {
+        return complex_fold_dispatch(py, &arr, dt.as_str(), axis, ComplexFold::CumProd);
+    }
     Ok(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -1429,6 +1889,21 @@ pub fn average<'py>(
     weights: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // Complex average: branch BEFORE the `coerce_dtype(arr,"float64")` below,
+    // which drops the imaginary part (R-CODE-4). No-weights complex average is
+    // the complex mean (width preserved, c64->c64/c128->c128). Weighted complex
+    // average is `sum(a*w)/sum(w)` computed in complex128 (numpy promotes the
+    // weighted complex average to complex128 — verified live numpy 2.4.4).
+    let dt = dtype_name(&arr)?;
+    if is_complex_dtype(dt.as_str()) {
+        return match weights {
+            None => match dt.as_str() {
+                "complex128" | "c16" => complex_mean_dispatch::<f64>(py, &arr, axis),
+                _ => complex_mean_dispatch::<f32>(py, &arr, axis),
+            },
+            Some(w) => complex_weighted_average(py, &arr, w, axis),
+        };
+    }
     let arr = coerce_dtype(py, &arr, "float64")?;
     let view: PyReadonlyArrayDyn<f64> = arr.extract()?;
     let fa: ArrayD<f64> = view.as_ferray().map_err(ferr_to_pyerr)?;
