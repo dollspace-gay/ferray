@@ -455,3 +455,135 @@ def test_meshgrid_single_float64_input_returns_tuple_fastpath():
         f"container type: numpy={type(oracle).__name__} "
         f"ferray={type(got).__name__}"
     )
+
+
+# ---------------------------------------------------------------------------
+# full / full_like: array_like fill_value broadcasts (no TypeError)
+# [binding] creation.rs full_impl binds fill_value as f64 (single scalar),
+#           so a list/array fill_value cannot extract -> TypeError; numpy
+#           builds the array then `multiarray.copyto(a, fill_value)` which
+#           broadcasts the fill across the shape.
+# Tracking: #1025
+# ---------------------------------------------------------------------------
+
+
+def test_full_array_like_fill_broadcasts_2d():
+    """numpy ``full`` accepts an *array_like* ``fill_value`` and broadcasts it:
+    ``a = empty(shape, dtype); multiarray.copyto(a, fill_value, casting='unsafe')``
+    (numpy/_core/numeric.py:385-386). The docstring example
+    ``np.full((2, 2), [1, 2])`` -> ``[[1, 2], [1, 2]]`` is shipped behaviour.
+
+    So ``np.full((2, 3), [1, 2, 3])`` is ``[[1,2,3],[1,2,3]]`` int64.
+
+    Expected (numpy): (2,3) int64 broadcast of the row fill.
+    Actual (ferray): TypeError — full_impl coerces fill_value to a single f64
+    and a list cannot ``extract::<f64>``.
+    """
+    oracle = np.full((2, 3), [1, 2, 3])  # numeric.py:386 copyto broadcast
+    got = fr.full((2, 3), [1, 2, 3])
+    assert got.dtype == oracle.dtype, (
+        f"numpy dtype={oracle.dtype} ferray dtype={got.dtype}"
+    )
+    assert got.shape == oracle.shape, (
+        f"numpy shape={oracle.shape} ferray shape={got.shape}"
+    )
+    assert np.array_equal(got, oracle), (
+        f"numpy={oracle.tolist()} ferray={got.tolist()}"
+    )
+
+
+def test_full_like_array_like_fill_broadcasts():
+    """numpy ``full_like`` likewise broadcasts an array_like fill via
+    ``multiarray.copyto(res, fill_value, casting='unsafe')``
+    (numpy/_core/numeric.py:475). ``np.full_like(np.zeros((2,2)), [1,2])`` is
+    ``[[1.,2.],[1.,2.]]`` float64.
+
+    Expected (numpy): (2,2) float64 broadcast of the row fill.
+    Actual (ferray): TypeError (full_like routes to full_impl, same f64 bind).
+    """
+    proto = np.zeros((2, 2))
+    oracle = np.full_like(proto, [1, 2])  # numeric.py:475 copyto broadcast
+    got = fr.full_like(proto, [1, 2])
+    assert got.dtype == oracle.dtype, (
+        f"numpy dtype={oracle.dtype} ferray dtype={got.dtype}"
+    )
+    assert got.shape == oracle.shape
+    assert np.array_equal(got, oracle), (
+        f"numpy={oracle.tolist()} ferray={got.tolist()}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# fromiter: an over-large count= raises ValueError (does not silently truncate)
+# [binding] creation.rs fromiter stops at the shorter of count/iterator and
+#           returns the partial array; numpy requires the iterator to supply
+#           exactly `count` items.
+# Tracking: #1026
+# ---------------------------------------------------------------------------
+
+
+def test_fromiter_overlarge_count_raises_valueerror():
+    """When ``count`` exceeds the number of items the iterable yields, numpy
+    raises ``ValueError('iterator too short: Expected N but iterator had only
+    M items.')`` (numpy/_core/src/multiarray/multiarraymodule.c
+    PyArray_FromIter — the count is a hard size, not an upper bound).
+
+    Expected (numpy): ValueError.
+    Actual (ferray): returns a length-3 int64 array (silently truncates
+    `count` to the iterator length).
+    """
+    with pytest.raises(ValueError):
+        np.fromiter(range(3), dtype="int64", count=10)  # oracle TYPE
+    with pytest.raises(ValueError):
+        fr.fromiter(range(3), dtype="int64", count=10)
+
+
+# ---------------------------------------------------------------------------
+# frombuffer: a too-short buffer raises ValueError (not TypeError)
+# [binding] creation.rs frombuffer raises PyTypeError on a short buffer; numpy
+#           raises ValueError('buffer is smaller than requested size').
+# Tracking: #1028
+# ---------------------------------------------------------------------------
+
+
+def test_frombuffer_short_buffer_raises_valueerror():
+    """A ``count`` that requires more bytes than the buffer holds makes numpy
+    raise ``ValueError('buffer is smaller than requested size')``
+    (numpy/_core/src/multiarray/ctors.c PyArray_FromBuffer).
+
+    Here an 8-byte buffer with ``count=5`` int64 needs 40 bytes.
+
+    Expected (numpy): ValueError.
+    Actual (ferray): TypeError ('frombuffer: buffer too short ...').
+    """
+    buf = b"\x01\x00\x00\x00\x00\x00\x00\x00"  # one int64
+    with pytest.raises(ValueError):
+        np.frombuffer(buf, dtype="int64", count=5)  # oracle TYPE
+    with pytest.raises(ValueError):
+        fr.frombuffer(buf, dtype="int64", count=5)
+
+
+# ---------------------------------------------------------------------------
+# vander: an empty input yields an empty (0, 0) matrix (does not raise)
+# [binding/library] ferray rejects an empty x with ValueError; numpy returns
+#           an empty (0, N) array (N defaults to len(x)=0 -> (0,0)).
+# Tracking: #1029
+# ---------------------------------------------------------------------------
+
+
+def test_vander_empty_input_returns_empty_matrix():
+    """numpy ``vander`` of an empty 1-D input returns an empty matrix, not an
+    error: ``N`` defaults to ``len(x)`` (0), giving shape ``(0, 0)`` float64
+    (numpy/lib/_twodim_base_impl.py vander -> ``v = empty((len(x), N), ...)``).
+
+    Expected (numpy): empty ndarray shape (0, 0), dtype float64.
+    Actual (ferray): ValueError('vander: input array must not be empty').
+    """
+    oracle = np.vander([])  # _twodim_base_impl.py vander
+    got = fr.vander([])
+    assert got.dtype == oracle.dtype, (
+        f"numpy dtype={oracle.dtype} ferray dtype={got.dtype}"
+    )
+    assert got.shape == oracle.shape, (
+        f"numpy shape={oracle.shape} ferray shape={got.shape}"
+    )
