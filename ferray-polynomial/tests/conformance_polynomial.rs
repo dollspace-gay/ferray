@@ -506,7 +506,7 @@ fn extras_match_numpy_contract() {
     let vd2 = polyvander2d(&[1.0, 2.0], &[3.0, 4.0], 1, 1).unwrap();
     assert_eq!(vd2.len(), 2 * 4); // 2 points, (1+1)*(1+1) terms
     let vd3 = polyvander3d(&[1.0], &[2.0], &[3.0], 1, 1, 1).unwrap();
-    assert_eq!(vd3.len(), 1 * 8);
+    assert_eq!(vd3.len(), 8); // 1 point, (1+1)^3 terms
 
     // *mulx: multiply by x in the named basis.
     assert_eq!(polymulx(&[1.0, 2.0, 3.0]), vec![0.0, 1.0, 2.0, 3.0]);

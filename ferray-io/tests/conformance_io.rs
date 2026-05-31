@@ -223,7 +223,7 @@ fn npy_save_load_round_trip_f64() {
 fn npy_save_to_writer_load_from_reader_round_trip() {
     use ferray_io::npy::{load_from_reader, save_to_writer};
 
-    let original = arr1_f64(vec![3.14, 2.71, 1.41, 0.577]);
+    let original = arr1_f64(vec![3.5, 2.71, 1.41, 0.577]);
     let mut buf: Vec<u8> = Vec::new();
     save_to_writer(&mut buf, &original).unwrap();
     let mut cursor = Cursor::new(buf);
