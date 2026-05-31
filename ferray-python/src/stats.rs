@@ -3368,15 +3368,29 @@ pub fn unique<'py>(
     }))
 }
 
-/// `numpy.count_nonzero(a, axis=None)`.
+/// `numpy.count_nonzero(a, axis=None, *, keepdims=False)`.
 #[pyfunction]
-#[pyo3(signature = (a, axis = None))]
+#[pyo3(signature = (a, axis = None, keepdims = false))]
 pub fn count_nonzero<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     axis: Option<usize>,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // `keepdims=True` retains the reduced axes as size-1 dimensions. The native
+    // `ferray_stats::count_nonzero` collapses them, so delegate the keepdims case
+    // to numpy uniformly across dtypes (numpy owns the size-1 reshape).
+    if keepdims {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        match axis {
+            Some(ax) => kwargs.set_item("axis", ax)?,
+            None => kwargs.set_item("axis", py.None())?,
+        }
+        kwargs.set_item("keepdims", true)?;
+        return np.call_method("count_nonzero", (&arr,), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     // datetime64/timedelta64 count_nonzero -> int (count of ticks != 0; NaT is
     // nonzero). Routed through the #947 time dispatch ahead of the real-only
@@ -4146,28 +4160,69 @@ fn quantile_dispatch<'py>(
     }
 }
 
-/// `numpy.percentile(a, q, axis=None)` — Linear interpolation method.
+/// `numpy.percentile(a, q, axis=None, method='linear', keepdims=False)`. The
+/// native kernel implements the default `'linear'` method with
+/// `keepdims=False`; any other `method` (the numpy estimators
+/// `'lower'`/`'higher'`/`'nearest'`/`'midpoint'`/...) or `keepdims=True`
+/// delegates to numpy. (numpy 2.0 removed the deprecated `interpolation=`
+/// alias, so it is not accepted here either.)
 #[pyfunction]
-#[pyo3(signature = (a, q, axis = None))]
+#[pyo3(signature = (a, q, axis = None, method = "linear", keepdims = false))]
 pub fn percentile<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     q: &Bound<'py, PyAny>,
     axis: Option<isize>,
+    method: &str,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if method != "linear" || keepdims {
+        return quantile_delegate(py, "percentile", a, q, axis, method, keepdims);
+    }
     quantile_dispatch(py, a, q, axis, QuantileKind::Percentile)
 }
 
-/// `numpy.quantile(a, q, axis=None)` — Linear interpolation method.
+/// `numpy.quantile(a, q, axis=None, method='linear', keepdims=False)` — see
+/// [`percentile`] for the method/keepdims delegation.
 #[pyfunction]
-#[pyo3(signature = (a, q, axis = None))]
+#[pyo3(signature = (a, q, axis = None, method = "linear", keepdims = false))]
 pub fn quantile<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     q: &Bound<'py, PyAny>,
     axis: Option<isize>,
+    method: &str,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if method != "linear" || keepdims {
+        return quantile_delegate(py, "quantile", a, q, axis, method, keepdims);
+    }
     quantile_dispatch(py, a, q, axis, QuantileKind::Quantile)
+}
+
+/// Delegate `percentile`/`quantile` to numpy for the non-default `method` or
+/// `keepdims=True` cases. numpy owns the full estimator family and the keepdims
+/// size-1 reshape.
+fn quantile_delegate<'py>(
+    py: Python<'py>,
+    fn_name: &str,
+    a: &Bound<'py, PyAny>,
+    q: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+    method: &str,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    match axis {
+        Some(ax) => kwargs.set_item("axis", ax)?,
+        None => kwargs.set_item("axis", py.None())?,
+    }
+    kwargs.set_item("method", method)?;
+    if keepdims {
+        kwargs.set_item("keepdims", true)?;
+    }
+    np.call_method(fn_name, (a, q), Some(&kwargs))
 }
 
 /// `numpy.median(a, axis=None)`.

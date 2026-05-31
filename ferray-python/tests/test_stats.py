@@ -373,3 +373,44 @@ def test_cumprod_dtype_kwarg():
     n = np.cumprod([1, 2, 3], dtype="float64")
     assert np.asarray(r).dtype == n.dtype == np.float64
     np.testing.assert_allclose(r, n)
+
+
+# ---------------------------------------------------------------------------
+# count_nonzero keepdims + quantile/percentile method (#984)
+# ---------------------------------------------------------------------------
+
+
+def test_count_nonzero_keepdims():
+    r = ferray.count_nonzero([[1, 0], [1, 1]], axis=0, keepdims=True)
+    n = np.count_nonzero([[1, 0], [1, 1]], axis=0, keepdims=True)
+    assert np.asarray(r).shape == n.shape == (1, 2)
+    np.testing.assert_array_equal(r, n)
+
+
+@pytest.mark.parametrize("method", ["lower", "higher", "nearest", "midpoint", "linear"])
+def test_quantile_methods(method):
+    np.testing.assert_allclose(
+        ferray.quantile([1.0, 2, 3, 4], 0.4, method=method),
+        np.quantile([1.0, 2, 3, 4], 0.4, method=method),
+    )
+
+
+@pytest.mark.parametrize("method", ["lower", "higher", "nearest", "midpoint"])
+def test_percentile_methods(method):
+    np.testing.assert_allclose(
+        ferray.percentile([1.0, 2, 3, 4], 40, method=method),
+        np.percentile([1.0, 2, 3, 4], 40, method=method),
+    )
+
+
+def test_quantile_keepdims():
+    r = ferray.quantile([[1.0, 2], [3, 4]], 0.5, axis=1, keepdims=True)
+    n = np.quantile([[1.0, 2], [3, 4]], 0.5, axis=1, keepdims=True)
+    assert np.asarray(r).shape == n.shape
+    np.testing.assert_allclose(r, n)
+
+
+def test_quantile_interpolation_removed_like_numpy():
+    # numpy 2.0 removed interpolation=; ferray rejects it identically.
+    with pytest.raises(TypeError):
+        ferray.percentile([1.0, 2, 3, 4], 50, interpolation="lower")

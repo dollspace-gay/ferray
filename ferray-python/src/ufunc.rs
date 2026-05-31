@@ -3357,26 +3357,46 @@ pub fn correlate<'py>(
     }))
 }
 
-/// `numpy.interp(x, xp, fp)` — 1-D linear interpolation.
+/// `numpy.interp(x, xp, fp, left=None, right=None, period=None)` — 1-D linear
+/// interpolation. The native kernel covers the default (no `left`/`right`
+/// fill-value overrides, no `period` wraparound); any of those, or a complex
+/// `fp`, delegates to numpy, which owns the fill/periodic semantics.
 #[pyfunction]
+#[pyo3(signature = (x, xp, fp, left = None, right = None, period = None))]
 pub fn interp<'py>(
     py: Python<'py>,
     x: &Bound<'py, PyAny>,
     xp: &Bound<'py, PyAny>,
     fp: &Bound<'py, PyAny>,
+    left: Option<&Bound<'py, PyAny>>,
+    right: Option<&Bound<'py, PyAny>>,
+    period: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     use ferray_core::array::aliases::Array1;
     let arr_x = as_ndarray(py, x)?;
     let dt = dtype_name(&arr_x)?;
-    // numpy.interp supports COMPLEX `fp` values: it interpolates the real and
-    // imaginary parts independently and returns a complex result
-    // (`numpy/lib/_function_base_impl.py` interp's `compiled_interp_complex`).
-    // The real path below coerces `fp` to f64, silently discarding the
-    // imaginary part (R-CODE-4). Delegate the complex-`fp` case to numpy.interp
-    // on the ORIGINAL operands and return its complex result unchanged.
-    if is_complex_dtype(dtype_name(&as_ndarray(py, fp)?)?.as_str()) {
+    // numpy.interp supports COMPLEX `fp` values (interpolated re/im independently,
+    // `numpy/lib/_function_base_impl.py` `compiled_interp_complex`) and the
+    // `left`/`right` fill-value and `period` wraparound kwargs. The real native
+    // path coerces `fp` to f64 (dropping a complex imaginary part, R-CODE-4) and
+    // ignores those kwargs, so delegate whenever any is in play.
+    if is_complex_dtype(dtype_name(&as_ndarray(py, fp)?)?.as_str())
+        || left.is_some()
+        || right.is_some()
+        || period.is_some()
+    {
         let np = py.import("numpy")?;
-        return np.call_method1("interp", (x, xp, fp));
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(l) = left {
+            kwargs.set_item("left", l)?;
+        }
+        if let Some(r) = right {
+            kwargs.set_item("right", r)?;
+        }
+        if let Some(p) = period {
+            kwargs.set_item("period", p)?;
+        }
+        return np.call_method("interp", (x, xp, fp), Some(&kwargs));
     }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()

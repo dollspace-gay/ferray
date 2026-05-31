@@ -305,3 +305,28 @@ def test_unwrap_axis():
 
 def test_unwrap_default_unchanged():
     np.testing.assert_allclose(ferray.unwrap([0.0, 5, 10]), np.unwrap([0.0, 5, 10]))
+
+
+# ---------------------------------------------------------------------------
+# interp left/right/period (#984)
+# ---------------------------------------------------------------------------
+
+
+def test_interp_left_right_fill():
+    np.testing.assert_allclose(
+        ferray.interp([0.0, 4], [1, 2, 3], [10, 20, 30], left=-1, right=99),
+        np.interp([0.0, 4], [1, 2, 3], [10, 20, 30], left=-1, right=99),
+    )
+
+
+def test_interp_period():
+    np.testing.assert_allclose(
+        ferray.interp([0.5], [0, 1], [0, 10], period=2), np.interp([0.5], [0, 1], [0, 10], period=2)
+    )
+
+
+def test_interp_basic_unchanged():
+    np.testing.assert_allclose(
+        ferray.interp([1.5, 2.5], [1, 2, 3], [10, 20, 30]),
+        np.interp([1.5, 2.5], [1, 2, 3], [10, 20, 30]),
+    )
