@@ -750,6 +750,17 @@ pub fn polyval<'py>(
         let np = py.import("numpy")?;
         return np.call_method1("polyval", (p, x));
     }
+    // Narrow-float (float16/float32) coefficients OR evaluation point keep a
+    // narrow-float result: numpy evaluates Horner over `NX.asarray(p)` /
+    // `NX.asanyarray(x)` (`numpy/lib/_polynomial_impl.py:782-790`), so float32 p
+    // and float32 x stay float32. The real path coerces `p` to `Vec<f64>` and `x`
+    // through `as_eval_input`'s `asarray(_, float64)` cast, upcasting to float64.
+    // Delegate the narrow-float case to numpy. (int coeff + float64 x stays
+    // float64: neither is narrow, so the native path below runs.)
+    if operand_is_narrow_float(py, p)? || operand_is_narrow_float(py, x)? {
+        let np = py.import("numpy")?;
+        return np.call_method1("polyval", (p, x));
+    }
     let p: Vec<f64> = p.extract()?;
     let poly = fp::Polynomial::new(&flip(p));
     let (data, shape) = as_eval_input(py, x)?;
@@ -901,12 +912,32 @@ fn operand_is_integer(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<bool> 
     Ok(matches!(kind.as_str(), "i" | "u" | "b"))
 }
 
+/// `true` if a polynomial operand is a NARROW float — `dtype.kind == 'f'` with
+/// `itemsize < 8` (float16 / float32). numpy's poly1d family preserves these
+/// (`numpy/lib/_polynomial_impl.py:850-857,906-918,979-982,782-790` operate over
+/// `atleast_1d`/`asarray`, so float32 + float32 -> float32, float16 -> float16).
+/// The real `poly_binop`/Horner path coerces to `Vec<f64>`, upcasting them to
+/// `float64`; delegating the narrow-float case to numpy keeps the exact dtype.
+/// Plain `float64` (itemsize 8) is NOT narrow, so the native f64 fast path still
+/// runs. Mirrors the complex / all-integer seams.
+fn operand_is_narrow_float(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let np = py.import("numpy")?;
+    let a = np.call_method1("asarray", (obj,))?;
+    let dtype = a.getattr("dtype")?;
+    let kind: String = dtype.getattr("kind")?.extract()?;
+    let itemsize: usize = dtype.getattr("itemsize")?.extract()?;
+    Ok(kind == "f" && itemsize < 8)
+}
+
 /// numpy-delegation for `polyadd` / `polysub` / `polymul`. The real `poly_binop`
 /// path coerces both operands to `Vec<f64>`, which (a) discards every imaginary
 /// part of a complex operand (R-CODE-4) and (b) upcasts an all-integer result to
-/// `float64` where numpy keeps it integer. Returns `Some(numpy_result)` when
-/// EITHER operand is complex OR BOTH are integer-kind (delegating to `numpy.<op>`
-/// on the ORIGINAL operands), or `None` to let the unchanged real f64 path run.
+/// `float64` where numpy keeps it integer, and (c) upcasts a narrow-float
+/// (float16/float32) result to `float64` where numpy preserves the narrow float.
+/// Returns `Some(numpy_result)` when EITHER operand is complex OR a narrow float,
+/// OR BOTH are integer-kind (delegating to `numpy.<op>` on the ORIGINAL
+/// operands), or `None` to let the unchanged real f64 path run (plain float64,
+/// or int + float64, both of which numpy promotes to float64).
 fn poly_binop_delegate<'py>(
     py: Python<'py>,
     op: &str,
@@ -916,7 +947,8 @@ fn poly_binop_delegate<'py>(
     let complex = is_complex_dtype(operand_dtype(py, a1)?.as_str())
         || is_complex_dtype(operand_dtype(py, a2)?.as_str());
     let both_int = operand_is_integer(py, a1)? && operand_is_integer(py, a2)?;
-    if complex || both_int {
+    let narrow_float = operand_is_narrow_float(py, a1)? || operand_is_narrow_float(py, a2)?;
+    if complex || both_int || narrow_float {
         let np = py.import("numpy")?;
         return Ok(Some(np.call_method1(op, (a1, a2))?));
     }
