@@ -36,6 +36,8 @@
 //! | RC-F16 (float16 dtype) | SHIPPED | The `creation_dispatch` `float16` arm builds the values in f32 via ferray-core then narrows to `float16` with numpy's `astype` (the installed pyo3-numpy has no f16 `NumpyElement`); consumed by `zeros`/`ones`/`empty`/`zeros_like`/`ones_like`. Pinned green: `test_zeros_float16_dtype_supported`, `test_zeros_like_preserves_float16_dtype`. |
 //! | RC-DTYPEOBJ (accept dtype type-objects / `np.dtype` instances / str) | SHIPPED | `normalize_dtype`/`normalize_opt_dtype` in `conv.rs` route any `dtype=` object through `numpy.dtype(obj).name` (numpy's `PyArray_DescrConverter` accepts all three forms), consumed by `zeros`/`ones`/`empty`/`full`/`eye`/`identity`/`tri`/`arange`/`linspace`/`logspace`/`geomspace`/`zeros_like`/`ones_like`/`empty_like`/`full_like` here. numpy: `np.zeros(3, dtype=np.float64)` / `np.dtype('int8')` both accepted; `fr.float64 is np.float64`. Pinned green: `tests/test_expansion_dtype_accept.py::test_zeros_accepts_all_dtype_spellings`, `::test_eye_accepts_all_dtype_spellings`, `::test_ferray_reexposed_type_object_is_numpy_type`. |
 //! | RC-COMPLEX (complex64/complex128 creation kernel) | SHIPPED | `creation_dispatch!`'s `complex64`/`complex128` arms build `ArrayD<Complex<f32|f64>>` via ferray-core's `Element`-generic `zeros`/`ones` and push them across the boundary with `complex_ferray_to_pyarray` (the shared fft helper); `full_impl` handles complex fills via `extract_complex`. Consumed by `zeros`/`ones`/`empty`/`full`/`full_like`. numpy: `np.zeros(3, dtype='complex128')`, `np.full((2,), 1+2j).dtype == complex128` (numpy/_core/numeric.py:382-384). Pinned green: `tests/test_expansion_dtype_accept.py::test_zeros_complex_dtype`, `::test_full_complex_fill_default_dtype`, `::test_full_complex_explicit_dtype`. |
+//! | RC-CARANGE (complex-dtype arange, real args) | SHIPPED | `complex_arange` (consumed by the `arange` `#[pyfunction]` here for `dtype=complex64\|complex128`) builds the real `(start,stop,step)` ramp via `fc::arange::<f64>` then lifts each value to `Complex` with a zero imaginary part, marshalled out via `complex_ferray_to_pyarray`. numpy: `np.arange(0,3,1,dtype='complex128') == [0j,1+0j,2+0j]` (live, numpy 2.4.5). Pinned green: `tests/test_divergence_complex_sweep_audit.py::test_divergence_arange_complex_dtype_raises`; `tests/test_expansion_complex_misc.py::test_arange_complex128_dtype_matches_numpy`, `::test_arange_complex64_dtype_matches_numpy`, `::test_arange_complex_single_arg`. |
+//! | RC-CLINSPACE (complex-endpoint linspace) | SHIPPED | `complex_linspace` (consumed by the `linspace` `#[pyfunction]` here when an endpoint is complex or `dtype` is complex) computes `y = arange(0,num)*step + start` with `step = (stop-start)/div`, pinning `y[-1]=stop` on `endpoint`, marshalled via `complex_ferray_to_pyarray`; `retstep` returns `(samples, complex step)` (`numpy/_core/function_base.py:130-176,185-186`). numpy: `np.linspace(0j,1+1j,5) == [0j,0.25+0.25j,0.5+0.5j,0.75+0.75j,1+1j]` (live). Pinned green: `tests/test_divergence_complex_sweep_audit.py::test_divergence_linspace_complex_endpoints_raises`; `tests/test_expansion_complex_misc.py::test_linspace_complex_endpoints_matches_numpy`, `::test_linspace_complex_endpoint_pinned_exact`, `::test_linspace_complex_dtype_real_endpoints`. |
 //! | RC-ARANGE-FLOAT (per-element float construction) | NOT-STARTED | `np.arange(1.0,2.0,0.3)` last element is `1.9000000000000001`; ferray-core's float `arange` diverges. Root cause is in ferray-core (`creation/mod.rs`), not this binding — open ferray-core follow-up. Pin: `test_arange_float_last_element_matches_numpy`. |
 //! | RC-GEOM-EXACT (geomspace endpoint pinning) | NOT-STARTED | `np.geomspace(-1,-1000,4)` is exactly `[-1,-10,-100,-1000]` via sign rotation + endpoint pinning; ferray-core's `geomspace` lacks both. Root cause in ferray-core, not this binding — open ferray-core follow-up. Pin: `test_geomspace_negative_endpoints_exact`. |
 
@@ -406,6 +408,19 @@ pub fn arange<'py>(
         ));
     }
 
+    // Complex-dtype arange: numpy builds the SAME real ramp the float path
+    // produces, then casts each element to complex with a zero imaginary part
+    // (`np.arange(0,3,1,dtype='complex128') == [0j,1+0j,2+0j]`, live, numpy
+    // 2.4.5). The length/fill math is the real `(start, stop, step)` arithmetic;
+    // only the output dtype is complex. (numpy's behaviour for genuinely
+    // *complex-valued* start/stop/step args is degenerate/undocumented — it
+    // collapses to empty or a real-part-driven ramp depending on the operands —
+    // and is NOT in scope here; real numeric args with `dtype=complex*` is the
+    // pinned, well-defined case.) No imag fabrication beyond numpy's own 0j.
+    if matches!(dt, "complex128" | "c16" | "complex64" | "c8") {
+        return complex_arange(py, s, e, st, dt);
+    }
+
     let arr_any = match dt {
         "float64" | "f64" => fc::arange::<f64>(s, e, st)
             .map_err(ferr_to_pyerr)?
@@ -466,6 +481,44 @@ where
     Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 
+/// Build a complex-dtype `arange` for the in-scope case (real numeric
+/// `start`/`stop`/`step`, `dtype=complex64|complex128`): the real ramp numpy's
+/// float path produces, with each element cast to complex with a zero imaginary
+/// part. numpy: `np.arange(0,3,1,dtype='complex128') == [0j,1+0j,2+0j]` (live).
+/// No imag fabrication beyond numpy's `+0j`.
+fn complex_arange<'py>(
+    py: Python<'py>,
+    s: f64,
+    e: f64,
+    st: f64,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    // The real ramp via ferray-core's float `arange` (same length/value math the
+    // real float path uses); lift each value to `Complex` with `im = 0`.
+    let real = fc::arange::<f64>(s, e, st).map_err(ferr_to_pyerr)?;
+    let real_flat: Vec<f64> = real.iter().copied().collect();
+    let n = real_flat.len();
+    macro_rules! ramp_arm {
+        ($Tc:ty) => {{
+            let zero = 0.0 as $Tc;
+            let data: Vec<Complex<$Tc>> = real_flat
+                .iter()
+                .map(|&v| Complex::new(v as $Tc, zero))
+                .collect();
+            let arr: ArrayD<Complex<$Tc>> =
+                ArrayD::<Complex<$Tc>>::from_vec(IxDyn::new(&[n]), data).map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, arr)
+        }};
+    }
+    match dt {
+        "complex128" | "c16" => ramp_arm!(f64),
+        "complex64" | "c8" => ramp_arm!(f32),
+        other => Err(PyTypeError::new_err(format!(
+            "complex_arange: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
 /// `numpy.linspace(start, stop, num=50, endpoint=True, dtype="float64")` equivalent.
 /// True if `dtype` names an integer element type. linspace/logspace/
 /// geomspace accept an integer `dtype`: numpy computes the sequence in
@@ -519,6 +572,101 @@ fn float_range_to_int_array<'py>(
     }))
 }
 
+/// `true` if a Python object is a genuine complex value (a Python `complex` or a
+/// numpy complex scalar). A real number returns `false` (it extracts as `f64`),
+/// so the real linspace/path is unaffected. Mirrors the `extract_complex`
+/// component-reading convention (pyo3's optional num-complex `FromPyObject` is
+/// not enabled in this crate).
+fn is_complex_obj(obj: &Bound<'_, PyAny>) -> bool {
+    if obj.extract::<f64>().is_ok() {
+        return false;
+    }
+    // A `complex`/numpy complex scalar exposes a nonzero-capable `.imag`; treat
+    // any object with both `.real` and `.imag` numeric attributes as complex.
+    obj.getattr("real").and_then(|v| v.extract::<f64>()).is_ok()
+        && obj.getattr("imag").and_then(|v| v.extract::<f64>()).is_ok()
+}
+
+/// The two complex output widths a complex `linspace` can produce.
+#[derive(Clone, Copy)]
+enum ComplexWidth {
+    /// complex128 (f64 components) — the default for complex endpoints.
+    C128,
+    /// complex64 (f32 components) — requested via `dtype='complex64'`.
+    C64,
+}
+
+/// Complex arm for `linspace` (#935): interpolate between complex `start`/`stop`.
+/// numpy computes `dt = result_type(start, stop, ensure_inexact=True)` (complex),
+/// `step = (stop-start)/div` with `div = num-1` (endpoint) else `num`, then
+/// `y = arange(0,num)*step + start`, pinning `y[-1] = stop` when `endpoint` and
+/// `num > 1` (`function_base.py:130-176`). `step` is `nan+nanj` when `div <= 0`.
+/// numpy: `np.linspace(0j,1+1j,5) == [0j,0.25+0.25j,0.5+0.5j,0.75+0.75j,1+1j]`
+/// (live). On `retstep`, returns `(samples, complex step)` matching numpy's tuple
+/// (`function_base.py:185-186`). No imag discard (R-CODE-4).
+fn complex_linspace<'py>(
+    py: Python<'py>,
+    start: &Bound<'py, PyAny>,
+    stop: &Bound<'py, PyAny>,
+    num: usize,
+    endpoint: bool,
+    retstep: bool,
+    width: ComplexWidth,
+) -> PyResult<Bound<'py, PyAny>> {
+    // Read both endpoints as `Complex<f64>` (a real number yields `im = 0`),
+    // reusing the same `.real`/`.imag` component convention as `extract_complex`.
+    let s = extract_complex(start)?;
+    let e = extract_complex(stop)?;
+
+    let div = if endpoint {
+        num as isize - 1
+    } else {
+        num as isize
+    };
+    let step = if div > 0 {
+        (e - s) / (div as f64)
+    } else {
+        Complex::new(f64::NAN, f64::NAN)
+    };
+
+    // y[i] = start + i*step, with the last point pinned exactly to `stop`.
+    let mut data: Vec<Complex<f64>> = Vec::with_capacity(num);
+    for i in 0..num {
+        data.push(s + step * (i as f64));
+    }
+    if endpoint && num > 1 {
+        data[num - 1] = e;
+    }
+
+    let samples = match width {
+        ComplexWidth::C128 => {
+            let arr: ArrayD<Complex<f64>> =
+                ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&[num]), data)
+                    .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, arr)?
+        }
+        ComplexWidth::C64 => {
+            let narrowed: Vec<Complex<f32>> = data
+                .iter()
+                .map(|z| Complex::new(z.re as f32, z.im as f32))
+                .collect();
+            let arr: ArrayD<Complex<f32>> =
+                ArrayD::<Complex<f32>>::from_vec(IxDyn::new(&[num]), narrowed)
+                    .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, arr)?
+        }
+    };
+
+    if retstep {
+        // numpy returns the complex `step` scalar; build a Python `complex`.
+        let step_obj = pyo3::types::PyComplex::from_doubles(py, step.re, step.im);
+        let tuple = pyo3::types::PyTuple::new(py, [samples, step_obj.into_any()])?;
+        Ok(tuple.into_any())
+    } else {
+        Ok(samples)
+    }
+}
+
 /// `numpy.linspace(start, stop, num=50, endpoint=True, retstep=False,
 /// dtype=None)` equivalent.
 ///
@@ -531,6 +679,12 @@ fn float_range_to_int_array<'py>(
 /// - **Integer `dtype`.** Accepted; the float sequence is floored toward
 ///   -inf then cast (`function_base.py:181-182`), so
 ///   `np.linspace(-0.5, -5.5, 6, dtype='int64')` is `[-1,-2,-3,-4,-5,-6]`.
+/// - **Complex endpoints (#935).** When `start`/`stop` are complex (or the
+///   resolved `dtype` is complex), the interpolation is complex: numpy resolves
+///   `dt = result_type(start, stop, ensure_inexact=True)` (complex) and computes
+///   `y = arange(0,num) * step + start` with `step = (stop-start)/div`, pinning
+///   `y[-1] = stop` on `endpoint` (`function_base.py:130-176`). numpy:
+///   `np.linspace(0j,1+1j,5) == [0j,0.25+0.25j,0.5+0.5j,0.75+0.75j,1+1j]` (live).
 #[pyfunction]
 #[pyo3(signature = (start, stop, num = 50, endpoint = true, retstep = false, dtype = None))]
 #[allow(
@@ -539,8 +693,8 @@ fn float_range_to_int_array<'py>(
 )]
 pub fn linspace<'py>(
     py: Python<'py>,
-    start: f64,
-    stop: f64,
+    start: &Bound<'py, PyAny>,
+    stop: &Bound<'py, PyAny>,
     num: isize,
     endpoint: bool,
     retstep: bool,
@@ -548,6 +702,26 @@ pub fn linspace<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let num = validate_num_samples(num)?;
     let dt_owned = normalize_opt_dtype(py, dtype)?;
+
+    // Complex path: either endpoint is a genuine complex, OR an explicit complex
+    // `dtype` was requested (numpy casts a real-endpoint complex linspace to a
+    // complex array with zero imaginary part). Detected before the f64 extraction
+    // below, which would otherwise raise `TypeError` on a Python `complex`.
+    let endpoints_complex = is_complex_obj(start) || is_complex_obj(stop);
+    let dtype_complex = matches!(
+        dt_owned.as_deref(),
+        Some("complex128") | Some("c16") | Some("complex64") | Some("c8")
+    );
+    if endpoints_complex || dtype_complex {
+        let width = match dt_owned.as_deref() {
+            Some("complex64") | Some("c8") => ComplexWidth::C64,
+            _ => ComplexWidth::C128, // explicit c128, or inferred from endpoints
+        };
+        return complex_linspace(py, start, stop, num, endpoint, retstep, width);
+    }
+
+    let start: f64 = start.extract()?;
+    let stop: f64 = stop.extract()?;
     let dt = dt_owned.as_deref().unwrap_or("float64");
 
     // numpy's step: delta / div, with div = (num-1) if endpoint else num;

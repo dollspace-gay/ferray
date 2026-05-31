@@ -1765,12 +1765,54 @@ pub fn cumprod<'py>(
 pub fn diff<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, n: usize) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex diff: numpy applies the SAME `a[1:] - a[:-1]` subtraction the real
+    // path does (`numpy/lib/_function_base_impl.py:1538` `op = ... else
+    // subtract`), dtype-preserving (c64->c64, c128->c128 — verified live, numpy
+    // 2.4.5). The library `ferray_ufunc::diff` is generic over
+    // `T: Sub + Copy`, which `Complex<f32/f64>` satisfy, so it folds complex
+    // directly with NO imag discard (R-CODE-4). `match_dtype_numeric!` has no
+    // complex arm, so a complex input would otherwise raise `TypeError`.
+    if is_complex_dtype(dt.as_str()) {
+        return complex_diff_dispatch(py, &arr, dt.as_str(), n);
+    }
     Ok(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArray1<T> = arr.extract()?;
         let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
         let r: Array1<T> = ferray_ufunc::diff(&fa, n).map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
+}
+
+/// Complex arm for `diff` (#935): n-th successive difference of a 1-D complex
+/// array via the `Sub`-bounded `ferray_ufunc::diff`, keeping the input width.
+/// numpy: `np.diff([1+2j,-3+4j,0j,2-1j]) == [-4+2j, 3-4j, 2-1j]` (live).
+fn complex_diff_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+    n: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    macro_rules! diff_arm {
+        ($Tc:ty) => {{
+            let fa: ArrayD<Complex<$Tc>> = complex_pyarray_to_ferray::<$Tc>(arr)?;
+            // `diff` is 1-D-only; rebuild the (already 1-D) array as `Array1` from
+            // its flat data, mirroring the complex `correlate` arm's `from_vec`
+            // (no `into_dimensionality` on ferray's `Array`).
+            let data: Vec<Complex<$Tc>> = fa.iter().copied().collect();
+            let len = data.len();
+            let fa1: Array1<Complex<$Tc>> =
+                Array1::from_vec(Ix1::new([len]), data).map_err(ferr_to_pyerr)?;
+            let r: Array1<Complex<$Tc>> = ferray_ufunc::diff(&fa1, n).map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r.into_dyn())
+        }};
+    }
+    match dt {
+        "complex128" | "c16" => diff_arm!(f64),
+        "complex64" | "c8" => diff_arm!(f32),
+        other => Err(PyTypeError::new_err(format!(
+            "complex_diff_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
 }
 
 // ---------------------------------------------------------------------------

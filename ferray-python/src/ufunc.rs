@@ -1993,12 +1993,83 @@ bind_comparison!(
 // Logical (any Logical-implementing dtype → bool)
 // ---------------------------------------------------------------------------
 
+/// Which boolean logical reduction a complex binary dispatch should apply.
+#[derive(Clone, Copy)]
+enum LogicalBinOp {
+    And,
+    Or,
+    Xor,
+}
+
+/// Complex arm for `logical_and`/`logical_or`/`logical_xor` (#935): both operands
+/// are broadcast + coerced to the common complex width, then the
+/// `Logical`-bounded `ferray_ufunc::logical_*` reduces each `Complex` via
+/// nonzero-truthiness (`re != 0 || im != 0`) to a bool result. numpy:
+/// `np.logical_and([1+2j,0j,..],[2+0j,1-1j,..]) == [True,False,..]` (live). bool
+/// output, no imag discard (R-CODE-4). `op` selects the reduction so the three
+/// ops share one body; the `Complex<f32>`/`Complex<f64>` arms monomorphise it.
+fn complex_logical_binary_dispatch<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    op: LogicalBinOp,
+) -> PyResult<Bound<'py, PyAny>> {
+    macro_rules! logical_arm {
+        ($Tc:ty, $arr_a:expr, $arr_b:expr) => {{
+            let fa: ArrayD<Complex<$Tc>> = complex_pyarray_to_ferray::<$Tc>(&$arr_a)?;
+            let fb: ArrayD<Complex<$Tc>> = complex_pyarray_to_ferray::<$Tc>(&$arr_b)?;
+            let r: ArrayD<bool> = match op {
+                LogicalBinOp::And => ferray_ufunc::logical_and(&fa, &fb),
+                LogicalBinOp::Or => ferray_ufunc::logical_or(&fa, &fb),
+                LogicalBinOp::Xor => ferray_ufunc::logical_xor(&fa, &fb),
+            }
+            .map_err(ferr_to_pyerr)?;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }};
+    }
+    let (arr_a, arr_b, dt) = complex_binary_operands(py, a, b)?;
+    match dt.as_str() {
+        "complex128" | "c16" => logical_arm!(f64, arr_a, arr_b),
+        "complex64" | "c8" => logical_arm!(f32, arr_a, arr_b),
+        other => Err(PyTypeError::new_err(format!(
+            "complex_logical_binary_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+/// Complex arm for `logical_not` (#935): each `Complex` reduces via
+/// nonzero-truthiness to its boolean NOT. numpy: `np.logical_not([0j,1+0j,0+2j])
+/// == [True,False,False]` (live). bool output, no imag discard (R-CODE-4).
+fn complex_logical_not_dispatch<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    macro_rules! not_arm {
+        ($Tc:ty) => {{
+            let fa: ArrayD<Complex<$Tc>> = complex_pyarray_to_ferray::<$Tc>(arr)?;
+            let r: ArrayD<bool> = ferray_ufunc::logical_not(&fa).map_err(ferr_to_pyerr)?;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }};
+    }
+    match dt {
+        "complex128" | "c16" => not_arm!(f64),
+        "complex64" | "c8" => not_arm!(f32),
+        other => Err(PyTypeError::new_err(format!(
+            "complex_logical_not_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
 #[pyfunction]
 pub fn logical_and<'py>(
     py: Python<'py>,
     x1: &Bound<'py, PyAny>,
     x2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if binary_is_complex(py, x1, x2)? {
+        return complex_logical_binary_dispatch(py, x1, x2, LogicalBinOp::And);
+    }
     Ok(logical_binary_body!(py, x1, x2, ferray_ufunc::logical_and))
 }
 
@@ -2008,6 +2079,9 @@ pub fn logical_or<'py>(
     x1: &Bound<'py, PyAny>,
     x2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if binary_is_complex(py, x1, x2)? {
+        return complex_logical_binary_dispatch(py, x1, x2, LogicalBinOp::Or);
+    }
     Ok(logical_binary_body!(py, x1, x2, ferray_ufunc::logical_or))
 }
 
@@ -2017,11 +2091,26 @@ pub fn logical_xor<'py>(
     x1: &Bound<'py, PyAny>,
     x2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if binary_is_complex(py, x1, x2)? {
+        return complex_logical_binary_dispatch(py, x1, x2, LogicalBinOp::Xor);
+    }
     Ok(logical_binary_body!(py, x1, x2, ferray_ufunc::logical_xor))
 }
 
 #[pyfunction]
 pub fn logical_not<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, x)?;
+    let dt = dtype_name(&arr)?;
+    // Complex logical_not: numpy maps each element to its boolean NOT-truthiness
+    // (a complex is truthy iff EITHER part is nonzero — `np.logical_not([0j,
+    // 1+0j,0+2j]) == [True,False,False]`, live). The library `Logical for
+    // Complex<f32/f64>` (`is_truthy = re!=0 || im!=0`) already encodes this, so
+    // the generic `logical_not` folds complex directly — but `match_dtype_all!`
+    // (inside `logical_unary_body!`) has no complex arm, so a complex input would
+    // otherwise raise `TypeError`. No imag discard (R-CODE-4).
+    if is_complex_dtype(dt.as_str()) {
+        return complex_logical_not_dispatch(py, &arr, dt.as_str());
+    }
     Ok(logical_unary_body!(py, x, ferray_ufunc::logical_not))
 }
 
@@ -2043,6 +2132,15 @@ pub fn array_equal<'py>(
     if dt != dt_b {
         return Ok(false);
     }
+    // Complex array_equal: same-shape element-wise `==`-all over the complex
+    // pair (`numpy/_core/numeric.py:2545` `asarray(a1 == a2).all()`). The library
+    // `array_equal<T>` is `PartialEq`-bounded, which `Complex<f32/f64>` satisfy,
+    // so it compares complex directly — but `match_dtype_all!` has no complex arm
+    // and would raise `TypeError`. numpy: `np.array_equal([1+2j],[1+2j]) == True`
+    // (live). No imag discard (R-CODE-4).
+    if is_complex_dtype(dt.as_str()) {
+        return complex_array_equal(&arr_a, &arr_b, dt.as_str());
+    }
     let result = match_dtype_all!(dt.as_str(), T => {
         let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
         let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
@@ -2055,6 +2153,33 @@ pub fn array_equal<'py>(
         }
     });
     Ok(result)
+}
+
+/// Complex arm for `array_equal` (#935): `True` iff same shape and every complex
+/// element compares equal, via the `PartialEq`-bounded `ferray_ufunc::array_equal`.
+fn complex_array_equal<'py>(
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<bool> {
+    macro_rules! eq_arm {
+        ($Tc:ty) => {{
+            let fa: ArrayD<Complex<$Tc>> = complex_pyarray_to_ferray::<$Tc>(a)?;
+            let fb: ArrayD<Complex<$Tc>> = complex_pyarray_to_ferray::<$Tc>(b)?;
+            Ok(if fa.shape() != fb.shape() {
+                false
+            } else {
+                ferray_ufunc::array_equal(&fa, &fb)
+            })
+        }};
+    }
+    match dt {
+        "complex128" | "c16" => eq_arm!(f64),
+        "complex64" | "c8" => eq_arm!(f32),
+        other => Err(PyTypeError::new_err(format!(
+            "complex_array_equal: expected a complex dtype, got {other:?}"
+        ))),
+    }
 }
 
 /// `numpy.array_equiv(a, b)` — like `array_equal` but allows broadcasting.
@@ -2420,6 +2545,51 @@ fn parse_correlate_mode(mode: &str) -> PyResult<ferray_stats::CorrelateMode> {
     })
 }
 
+/// Complex arm for `convolve` (#935): the discrete linear convolution
+/// `(a * v)[n] = sum_m a[m] v[n-m]` over complex inputs, computed via the
+/// `Add + Mul`-bounded `ferray_ufunc::convolve` at the resolved complex width
+/// (c64 only when BOTH operands are c64, else c128 — numpy `result_type`).
+/// Unlike `correlate`, convolve does NOT conjugate `v`
+/// (`numpy/_core/numeric.py:897`). No imag discard (R-CODE-4). numpy:
+/// `np.convolve([1+2j,-3+4j,0j,2-1j],[2+0j,1-1j,3+3j,1+0j])` -> a length-7
+/// complex array (live, full mode).
+fn complex_convolve_dispatch<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    v: &Bound<'py, PyAny>,
+    dt: &str,
+    mode: ferray_ufunc::ConvolveMode,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::array::aliases::Array1;
+    use ferray_core::dimension::Ix1;
+    macro_rules! convolve_arm {
+        ($Tc:ty, $cdt:expr) => {{
+            let arr_a = coerce_dtype(py, a, $cdt)?;
+            let arr_v = coerce_dtype(py, v, $cdt)?;
+            let fa: ArrayD<Complex<$Tc>> = complex_pyarray_to_ferray::<$Tc>(&arr_a)?;
+            let fv: ArrayD<Complex<$Tc>> = complex_pyarray_to_ferray::<$Tc>(&arr_v)?;
+            // Rebuild each side as `Array1` from its flat data (the library
+            // `convolve` is 1-D; no `into_dimensionality` on ferray's `Array`).
+            let a_data: Vec<Complex<$Tc>> = fa.iter().copied().collect();
+            let v_data: Vec<Complex<$Tc>> = fv.iter().copied().collect();
+            let fa1: Array1<Complex<$Tc>> =
+                Array1::from_vec(Ix1::new([a_data.len()]), a_data).map_err(ferr_to_pyerr)?;
+            let fv1: Array1<Complex<$Tc>> =
+                Array1::from_vec(Ix1::new([v_data.len()]), v_data).map_err(ferr_to_pyerr)?;
+            let r: Array1<Complex<$Tc>> =
+                ferray_ufunc::convolve(&fa1, &fv1, mode).map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r.into_dyn())
+        }};
+    }
+    match dt {
+        "complex128" | "c16" => convolve_arm!(f64, "complex128"),
+        "complex64" | "c8" => convolve_arm!(f32, "complex64"),
+        other => Err(PyTypeError::new_err(format!(
+            "complex_convolve_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
 /// `numpy.convolve(a, v, mode='full')` — discrete linear convolution.
 #[pyfunction]
 #[pyo3(signature = (a, v, mode = "full"))]
@@ -2432,7 +2602,25 @@ pub fn convolve<'py>(
     use ferray_core::array::aliases::Array1;
     let m = parse_convolve_mode(mode)?;
     let arr_a = as_ndarray(py, a)?;
+    let arr_v0 = as_ndarray(py, v)?;
     let dt = dtype_name(&arr_a)?;
+    // Complex convolve: a sliding sum-of-products like correlate, but with NO
+    // conjugation of the second operand (`numpy/_core/numeric.py:897` `convolve`
+    // = `multiarray.correlate(a, v[::-1], mode)` — it reverses `v` WITHOUT
+    // conjugating, unlike `numpy.correlate` which conjugates). The library
+    // `ferray_ufunc::convolve` is generic over `T: Add + Mul + Copy`, satisfied
+    // by `Complex<f32/f64>`, so it computes complex directly. Branch BEFORE the
+    // real coercion below — `match_dtype_numeric!` has no complex arm and would
+    // raise `TypeError`. The common width follows numpy's `result_type` (c64 only
+    // when BOTH operands are c64). numpy: `np.convolve([1+2j,..],[2+0j,..])`
+    // -> `[2+4j, -3+9j, ...]` (live, no imag discard — R-CODE-4).
+    {
+        let dv = dtype_name(&arr_v0)?;
+        if is_complex_dtype(dt.as_str()) || is_complex_dtype(dv.as_str()) {
+            let cdt = binary_result_dtype(py, &arr_a, &arr_v0)?;
+            return complex_convolve_dispatch(py, &arr_a, &arr_v0, cdt.as_str(), m);
+        }
+    }
     let arr_v = coerce_dtype(py, v, dt.as_str())?;
     Ok(crate::match_dtype_numeric!(dt.as_str(), T => {
         let va: numpy::PyReadonlyArray1<T> = arr_a.extract()?;
