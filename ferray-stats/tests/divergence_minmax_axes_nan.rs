@@ -39,8 +39,7 @@ use ferray_stats::reductions::{max_axes, min_axes};
 // ---------------------------------------------------------------------------
 #[test]
 fn divergence_max_axes_propagates_nan() {
-    let m =
-        Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, f64::NAN, 3.0, 4.0]).unwrap();
+    let m = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, f64::NAN, 3.0, 4.0]).unwrap();
 
     // axis=1: lane [1, nan] -> nan ; lane [3, 4] -> 4
     let r1: Vec<f64> = max_axes(&m, Some(&[1]), false)
@@ -54,11 +53,7 @@ fn divergence_max_axes_propagates_nan() {
          (finite-then-NaN lane drops NaN — reductions/mod.rs nan_max else-branch)",
         r1[0]
     );
-    assert_eq!(
-        r1[1], 4.0,
-        "max_axes(axis=1)[1] = {}; numpy = 4.0",
-        r1[1]
-    );
+    assert_eq!(r1[1], 4.0, "max_axes(axis=1)[1] = {}; numpy = 4.0", r1[1]);
 
     // axis=0: lane [1, 3] -> 3 ; lane [nan, 4] -> nan (NaN-first, still nan)
     let r0: Vec<f64> = max_axes(&m, Some(&[0]), false)
@@ -82,8 +77,7 @@ fn divergence_max_axes_propagates_nan() {
 // ---------------------------------------------------------------------------
 #[test]
 fn divergence_min_axes_propagates_nan() {
-    let m =
-        Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, f64::NAN, 3.0, 4.0]).unwrap();
+    let m = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, f64::NAN, 3.0, 4.0]).unwrap();
 
     // axis=1: lane [1, nan] -> nan ; lane [3, 4] -> 3
     let r1: Vec<f64> = min_axes(&m, Some(&[1]), false)
@@ -97,11 +91,7 @@ fn divergence_min_axes_propagates_nan() {
          (finite-then-NaN lane drops NaN — reductions/mod.rs nan_min else-branch)",
         r1[0]
     );
-    assert_eq!(
-        r1[1], 3.0,
-        "min_axes(axis=1)[1] = {}; numpy = 3.0",
-        r1[1]
-    );
+    assert_eq!(r1[1], 3.0, "min_axes(axis=1)[1] = {}; numpy = 3.0", r1[1]);
 
     // axis=0: lane [1, 3] -> 1 ; lane [nan, 4] -> nan (NaN-first, still nan)
     let r0: Vec<f64> = min_axes(&m, Some(&[0]), false)

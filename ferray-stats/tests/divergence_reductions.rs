@@ -376,10 +376,7 @@ fn divergence_argmin_returns_first_nan_index() {
     // Live numpy: np.argmin([nan, 1.0, 3.0]) -> 0
     let b = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![f64::NAN, 1.0, 3.0]).unwrap();
     let got_b = *argmin(&b, None).unwrap().iter().next().unwrap();
-    assert_eq!(
-        got_b, 0u64,
-        "argmin([nan, 1, 3]) = {got_b}; numpy = 0"
-    );
+    assert_eq!(got_b, 0u64, "argmin([nan, 1, 3]) = {got_b}; numpy = 0");
 }
 
 // ---------------------------------------------------------------------------
@@ -410,10 +407,7 @@ fn divergence_argmax_returns_first_nan_index() {
     // Live numpy: np.argmax([nan, 1.0, 3.0]) -> 0
     let b = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![f64::NAN, 1.0, 3.0]).unwrap();
     let got_b = *argmax(&b, None).unwrap().iter().next().unwrap();
-    assert_eq!(
-        got_b, 0u64,
-        "argmax([nan, 1, 3]) = {got_b}; numpy = 0"
-    );
+    assert_eq!(got_b, 0u64, "argmax([nan, 1, 3]) = {got_b}; numpy = 0");
 }
 
 // ---------------------------------------------------------------------------

@@ -36,7 +36,7 @@
 //! Tracking: see crosslink blocker issue referenced in the audit report.
 
 use ferray_core::{Array, Ix1};
-use ferray_stats::{quantile_with_method, QuantileMethod};
+use ferray_stats::{QuantileMethod, quantile_with_method};
 
 fn arr(v: Vec<f64>) -> Array<f64, Ix1> {
     Array::<f64, Ix1>::from_vec(Ix1::new([v.len()]), v).unwrap()
