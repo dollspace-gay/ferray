@@ -2241,6 +2241,49 @@ pub fn float_power<'py>(
 // Comparisons (broadcasting → bool)
 // ---------------------------------------------------------------------------
 
+/// `true` if BOTH operands are fixed-width string operands — i.e. each, viewed
+/// as a numpy array, has `dtype.kind ∈ {'U','S'}`. This covers string array vs
+/// string array, string array vs string scalar (a Python `str`/`bytes` —
+/// `np.asarray('a').dtype.kind == 'U'`, `np.asarray(b'a').dtype.kind == 'S'`,
+/// live numpy 2.4.5), and different widths (`<U2` vs `<U3`, both `'U'`).
+///
+/// numpy's comparison ufuncs define a string loop over `<U`/`<S` operands
+/// (codepoint-lexicographic, broadcasting, bool output), but ferray's real-only
+/// `comparison_body!` / `complex_*_dispatch!` reject the string kinds with
+/// `unsupported dtype for numeric op`. A mixed `'U'`-vs-`'S'` pair still gates
+/// `true` here so the delegate runs and numpy raises its own `UFuncTypeError`
+/// (`ufunc 'less' did not contain a loop with signature ... StrDType, BytesDType`,
+/// live) — matching numpy's own behavior rather than ferray's `unsupported dtype`
+/// (REQ-3, `.design/ferray-core-string.md`). Mirrors the datetime
+/// [`crate::datetime::is_time_compare`] seam, sniffing `.kind` not the
+/// width-encoding `.name` (`np.dtype('U2').name == 'str64'`).
+fn is_string_compare(py: Python<'_>, a: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let np = py.import("numpy")?;
+    let aa = np.call_method1("asarray", (a,))?;
+    let ba = np.call_method1("asarray", (b,))?;
+    Ok(crate::manipulation::is_string_array(&aa)? && crate::manipulation::is_string_array(&ba)?)
+}
+
+/// Element-wise comparison of two fixed-width string (`<U`/`<S`) operands by
+/// delegating to numpy's own `np.<op>(x1, x2)` on the ORIGINAL operands. numpy
+/// owns the codepoint-lexicographic compare, the broadcasting (string array vs
+/// string scalar), the width-independence (`<U2` vs `<U3`), and the bool output;
+/// the result rides the boundary as a numpy bool ndarray with no transport
+/// (strings never enter the Rust library — no `Element`, no `DynArray` variant,
+/// R-CODE-4). The caller gates on [`is_string_compare`] first. `op` is the numpy
+/// ufunc name (`less`/`greater`/`less_equal`/`greater_equal`/`equal`/
+/// `not_equal`). Mirrors [`crate::datetime::compare_time`] minus the int64-view
+/// round-trip (REQ-3, `.design/ferray-core-string.md`).
+fn compare_string<'py>(
+    py: Python<'py>,
+    op: &str,
+    x1: &Bound<'py, PyAny>,
+    x2: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    np.getattr(op)?.call1((x1, x2))
+}
+
 macro_rules! bind_comparison {
     // Equality form (`equal`/`not_equal`): a complex input computes via the
     // `PartialEq`-bounded `$cfn` (`equal_broadcast`/`not_equal_broadcast`,
@@ -2257,6 +2300,16 @@ macro_rules! bind_comparison {
             // NaT-unordered semantics (REQ-3, #943), ahead of the real-only path.
             if crate::datetime::is_time_compare(py, x1, x2)? {
                 let out = crate::datetime::compare_time(py, x1, x2, $tcmp)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
+            // string `<U`/`<S` (REQ-3, #961): numpy compares strings
+            // codepoint-lexicographically → bool (broadcasting, width-independent),
+            // but the real-only body below rejects the string kinds. Detect both
+            // operands as string-kind and delegate `np.<op>` on the ORIGINAL
+            // operands. Mixed `'U'`-vs-`'S'` delegates too, so numpy raises its own
+            // UFuncTypeError (matching numpy). Mirrors the datetime arm above.
+            if is_string_compare(py, x1, x2)? {
+                let out = compare_string(py, stringify!($name), x1, x2)?;
                 return if scalar { scalarize(out) } else { Ok(out) };
             }
             // float16 (REQ-5, #955): numpy registers a float16 compare loop
@@ -2294,6 +2347,16 @@ macro_rules! bind_comparison {
             // NaT-unordered semantics (REQ-3, #943), ahead of the real-only path.
             if crate::datetime::is_time_compare(py, x1, x2)? {
                 let out = crate::datetime::compare_time(py, x1, x2, $tcmp)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
+            // string `<U`/`<S` (REQ-3, #961): numpy orders strings
+            // codepoint-lexicographically → bool (broadcasting, width-independent),
+            // but the real-only body below rejects the string kinds. Detect both
+            // operands as string-kind and delegate `np.<op>` on the ORIGINAL
+            // operands (mixed `'U'`-vs-`'S'` delegates too → numpy raises its own
+            // UFuncTypeError). Mirrors the datetime arm above.
+            if is_string_compare(py, x1, x2)? {
+                let out = compare_string(py, stringify!($name), x1, x2)?;
                 return if scalar { scalarize(out) } else { Ok(out) };
             }
             // float16 (REQ-5, #955): delegate the ordering compare to numpy on the
