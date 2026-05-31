@@ -178,18 +178,41 @@ fn parse_qr_mode(mode: &str) -> PyResult<fl::QrMode> {
 // Norms / measures
 // ---------------------------------------------------------------------------
 
-/// `numpy.linalg.norm(a, ord=None)` — full-array reduction.
+/// `numpy.linalg.norm(x, ord=None, axis=None, keepdims=False)` —
+/// matrix-or-vector norm (`numpy/linalg/_linalg.py:2599`).
 ///
-/// Axis-wise norms (`numpy.linalg.norm(a, ord, axis=k)`) are deferred to
-/// a follow-up since they require an `Option<usize>` parameter through
-/// the `norm_axis` codepath.
+/// With `axis=None` (default) this reduces the whole array: a 2-D input is a
+/// matrix norm (default Frobenius), otherwise the flattened vector 2-norm —
+/// the existing real + complex (#931) reduction. When `axis` is given (an int
+/// for per-row/column vector norms, or a 2-tuple selecting the matrix plane),
+/// numpy owns the full vector × matrix `ord` × `axis` matrix, so delegate to
+/// `numpy.linalg.norm(x, ord=ord, axis=axis, keepdims=keepdims)`.
 #[pyfunction]
-#[pyo3(signature = (a, ord = None))]
+#[pyo3(signature = (a, ord = None, axis = None, keepdims = false))]
 pub fn norm<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     ord: Option<&Bound<'py, PyAny>>,
+    axis: Option<&Bound<'py, PyAny>>,
+    keepdims: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Axis-wise norms (int axis → per-row/column vector norm, 2-tuple axis →
+    // matrix norm over the selected plane) cover numpy's full `ord` × `axis`
+    // surface incl. SVD-based singular-value norms; delegate the whole call to
+    // numpy so every combination matches exactly (`_linalg.py:2599`).
+    if let Some(axis) = axis {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(o) = ord {
+            kwargs.set_item("ord", o)?;
+        }
+        kwargs.set_item("axis", axis)?;
+        kwargs.set_item("keepdims", keepdims)?;
+        return py
+            .import("numpy")?
+            .getattr("linalg")?
+            .getattr("norm")?
+            .call((a,), Some(&kwargs));
+    }
     let arr = promote_linalg_input(py, a)?;
     let dt = dtype_name(&arr)?;
     let ord_value = match ord {
@@ -2647,7 +2670,7 @@ pub fn norm_axis<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     // If no axis, fall through to the scalar `norm`.
     if axis.is_none() {
-        return norm(py, a, ord);
+        return norm(py, a, ord, None, keepdims);
     }
     let ax = axis.unwrap();
     let arr = as_ndarray(py, a)?;

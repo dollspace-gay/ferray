@@ -2909,25 +2909,29 @@ pub fn argsort<'py>(
     u64_arrd_to_i64_pyarray(py, r)
 }
 
-/// `numpy.searchsorted(a, v, side="left")`.
+/// `numpy.searchsorted(a, v, side="left", sorter=None)`.
+///
+/// `v` may be a scalar (numpy returns a 0-d / Python-int index) or an array
+/// (index array), `side` is `"left"`/`"right"`, and `sorter` is an optional
+/// index array sorting `a` (`numpy/_core/fromnumeric.py:1422`
+/// `def searchsorted(a, v, side='left', sorter=None)`).
 #[pyfunction]
-#[pyo3(signature = (a, v, side = "left"))]
+#[pyo3(signature = (a, v, side = "left", sorter = None))]
 pub fn searchsorted<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     v: &Bound<'py, PyAny>,
     side: &str,
+    sorter: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    use ferray_stats::Side;
-    let s = match side {
-        "left" => Side::Left,
-        "right" => Side::Right,
-        other => {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "side must be 'left' or 'right', got {other:?}"
-            )));
-        }
-    };
+    // Validate `side` up front (numpy raises ValueError for any other value);
+    // the special datetime/string/f16/complex branches and the generic numpy
+    // delegation below all forward this validated string.
+    if side != "left" && side != "right" {
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "side must be 'left' or 'right', got {side:?}"
+        )));
+    }
     let arr_a = as_ndarray(py, a)?;
     let dt = dtype_name(&arr_a)?;
     // datetime64/timedelta64 searchsorted: int64 insertion points, NaT last
@@ -2943,6 +2947,9 @@ pub fn searchsorted<'py>(
     if crate::manipulation::is_flexible_array(&arr_a)? {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("side", side)?;
+        if let Some(sorter) = sorter {
+            kwargs.set_item("sorter", sorter)?;
+        }
         return crate::manipulation::string_delegate(
             py,
             "searchsorted",
@@ -2954,9 +2961,11 @@ pub fn searchsorted<'py>(
     if crate::conv::is_float16_dtype(dt.as_str()) {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("side", side)?;
+        if let Some(sorter) = sorter {
+            kwargs.set_item("sorter", sorter)?;
+        }
         return crate::conv::f16_delegate(py, "searchsorted", (&arr_a, v), Some(&kwargs));
     }
-    let arr_v = coerce_dtype(py, v, dt.as_str())?;
     // Complex `searchsorted`: lexicographic insertion points into the (assumed
     // sorted) complex array, matching numpy's lexicographic complex order
     // (`np.searchsorted([1,2,3], 1+1j) == 1`, live). `ferray_stats::searchsorted`
@@ -2966,21 +2975,29 @@ pub fn searchsorted<'py>(
     let v_scalar = !v.hasattr("__len__")?;
     match dt.as_str() {
         "complex128" | "c16" => {
+            let arr_v = coerce_dtype(py, v, dt.as_str())?;
             return complex_searchsorted_dispatch::<f64>(py, &arr_a, &arr_v, side, v_scalar);
         }
         "complex64" | "c8" => {
+            let arr_v = coerce_dtype(py, v, dt.as_str())?;
             return complex_searchsorted_dispatch::<f32>(py, &arr_a, &arr_v, side, v_scalar);
         }
         _ => {}
     }
-    let r: Array1<u64> = match_dtype_orderable!(dt.as_str(), T => {
-        let va: PyReadonlyArray1<T> = arr_a.extract()?;
-        let vv: PyReadonlyArray1<T> = arr_v.extract()?;
-        let fa: Array1<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
-        let fv: Array1<T> = vv.as_ferray().map_err(ferr_to_pyerr)?;
-        ferray_stats::searchsorted(&fa, &fv, s).map_err(ferr_to_pyerr)?
-    });
-    u64_arr1_to_i64_pyarray(py, r)
+    // Generic numeric path: delegate to `numpy.searchsorted` so numpy owns the
+    // full contract — a SCALAR `v` returns a 0-d / scalar index (the prior
+    // `PyReadonlyArray1` extract rejected scalars with TypeError, #974), `v` is
+    // NOT lossily cast to `a`'s dtype (`np.searchsorted([1,2,3],[2.5,0.5])==[2,0]`,
+    // not `[1,0]`), and `sorter=` is honoured
+    // (`numpy/_core/fromnumeric.py:1422`).
+    let kwargs = pyo3::types::PyDict::new(py);
+    kwargs.set_item("side", side)?;
+    if let Some(sorter) = sorter {
+        kwargs.set_item("sorter", sorter)?;
+    }
+    py.import("numpy")?
+        .getattr("searchsorted")?
+        .call((&arr_a, v), Some(&kwargs))
 }
 
 // ---------------------------------------------------------------------------
