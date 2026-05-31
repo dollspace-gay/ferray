@@ -56,6 +56,21 @@ ferray-strings/
     regex_ops.rs              # match_, extract
 ```
 
+### Classification Predicates (Section 12, `is*` family)
+- REQ-14: Elementwise boolean classification matching `numpy.strings.is*`
+  (`isalpha`, `isdigit`, `isdecimal`, `isnumeric`, `isspace`, `isupper`,
+  `islower`, `istitle`, `isalnum`), which delegate per element to CPython
+  `str.is*()`. The category-/property-sensitive predicates are backed by
+  sorted codepoint-range tables derived LIVE from the oracle CPython 3.13 /
+  Unicode 15.1.0 (the version backing the installed numpy 2.4 build), NOT
+  Rust `std` (which tracks a newer Unicode revision).
+
+## REQ Status
+
+| REQ | Status | Evidence (impl `file:line` + production consumer `file:line`) |
+|-----|--------|--------------------------------------------------------------|
+| REQ-14 `isnumeric` Unicode-15.1.0 `Numeric_Type` table | SHIPPED | Table `NUMERIC_TYPE_RANGES` (219 ranges, oracle-derived) + `is_numeric_char` `ferray-strings/src/classify.rs:2299,2538`; production consumers `isnumeric` `ferray-strings/src/classify.rs:2671` and `isalnum` `ferray-strings/src/classify.rs:2652` (the latter drops the post-15.1.0 false positives). Closes #1044/#1045: replaced `char::is_numeric` (`Nd\|Nl\|No`, newer-than-15.1.0) which diverged on 184 codepoints (91 false negatives like `一` U+4E00 `Lo`; 93 false positives like U+10D40 assigned after 15.1.0). |
+
 ## Open Questions
 
 *None — all design decisions resolved.*

@@ -13,8 +13,12 @@
 // the installed numpy 2.4 build this crate is verified against), because
 // Rust `std` and third-party Unicode crates track a *newer* Unicode
 // revision and would classify ~9000 codepoints (assigned post-15.1.0)
-// differently from the numpy oracle. `isnumeric` uses `char::is_numeric`
-// (Nd|Nl|No), which coincides with `Numeric_Type` Decimal|Digit|Numeric.
+// differently from the numpy oracle. `isnumeric` is likewise backed by a
+// 15.1.0-locked table (`NUMERIC_TYPE_RANGES`): Rust `char::is_numeric`
+// tests the general categories `Nd|Nl|No`, which does NOT coincide with
+// the Unicode `Numeric_Type` property CPython `str.isnumeric()` uses — it
+// MISSES ideographic numerals like `一` (U+4E00, category `Lo`,
+// `Numeric_Type=Numeric`) and ADDS codepoints assigned after 15.1.0.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;
@@ -2273,6 +2277,247 @@ const WHITESPACE_RANGES: &[(char, char)] = &[
     ('\u{3000}', '\u{3000}'),
 ];
 
+/// Inclusive codepoint ranges of characters with Unicode `Numeric_Type`
+/// of Decimal, Digit, **or** Numeric — i.e. exactly the set for which
+/// CPython's `str.isnumeric()` returns `True` for a single character
+/// (`Py_UNICODE_ISNUMERIC`). This is the BROADEST of the numeric
+/// predicates: it is a superset of [`DIGIT_RANGES`] (which is itself a
+/// superset of [`DECIMAL_RANGES`]), additionally accepting fractions
+/// (`½`), letter-numerals such as roman `Ⅻ` (category `Nl`), and
+/// ideographic numerals such as `一` (U+4E00, category `Lo`).
+///
+/// Derived live from the oracle CPython 3.13 / Unicode 15.1.0 (the
+/// version backing the installed `numpy` 2.4 build that this crate is
+/// verified against):
+/// `[c for c in range(0x110000) if chr(c).isnumeric()]`, run-length
+/// compressed to 219 ranges. Rust's `char::is_numeric` tests the
+/// general categories `Nd|Nl|No` instead of the `Numeric_Type`
+/// property, so it MISSES ideographic numerals (category `Lo`, e.g.
+/// `一`) and INCLUDES codepoints assigned after Unicode 15.1.0; the
+/// table is therefore embedded directly rather than computed from
+/// `std` or a Unicode crate.
+const NUMERIC_TYPE_RANGES: &[(char, char)] = &[
+    ('\u{0030}', '\u{0039}'),
+    ('\u{00B2}', '\u{00B3}'),
+    ('\u{00B9}', '\u{00B9}'),
+    ('\u{00BC}', '\u{00BE}'),
+    ('\u{0660}', '\u{0669}'),
+    ('\u{06F0}', '\u{06F9}'),
+    ('\u{07C0}', '\u{07C9}'),
+    ('\u{0966}', '\u{096F}'),
+    ('\u{09E6}', '\u{09EF}'),
+    ('\u{09F4}', '\u{09F9}'),
+    ('\u{0A66}', '\u{0A6F}'),
+    ('\u{0AE6}', '\u{0AEF}'),
+    ('\u{0B66}', '\u{0B6F}'),
+    ('\u{0B72}', '\u{0B77}'),
+    ('\u{0BE6}', '\u{0BF2}'),
+    ('\u{0C66}', '\u{0C6F}'),
+    ('\u{0C78}', '\u{0C7E}'),
+    ('\u{0CE6}', '\u{0CEF}'),
+    ('\u{0D58}', '\u{0D5E}'),
+    ('\u{0D66}', '\u{0D78}'),
+    ('\u{0DE6}', '\u{0DEF}'),
+    ('\u{0E50}', '\u{0E59}'),
+    ('\u{0ED0}', '\u{0ED9}'),
+    ('\u{0F20}', '\u{0F33}'),
+    ('\u{1040}', '\u{1049}'),
+    ('\u{1090}', '\u{1099}'),
+    ('\u{1369}', '\u{137C}'),
+    ('\u{16EE}', '\u{16F0}'),
+    ('\u{17E0}', '\u{17E9}'),
+    ('\u{17F0}', '\u{17F9}'),
+    ('\u{1810}', '\u{1819}'),
+    ('\u{1946}', '\u{194F}'),
+    ('\u{19D0}', '\u{19DA}'),
+    ('\u{1A80}', '\u{1A89}'),
+    ('\u{1A90}', '\u{1A99}'),
+    ('\u{1B50}', '\u{1B59}'),
+    ('\u{1BB0}', '\u{1BB9}'),
+    ('\u{1C40}', '\u{1C49}'),
+    ('\u{1C50}', '\u{1C59}'),
+    ('\u{2070}', '\u{2070}'),
+    ('\u{2074}', '\u{2079}'),
+    ('\u{2080}', '\u{2089}'),
+    ('\u{2150}', '\u{2182}'),
+    ('\u{2185}', '\u{2189}'),
+    ('\u{2460}', '\u{249B}'),
+    ('\u{24EA}', '\u{24FF}'),
+    ('\u{2776}', '\u{2793}'),
+    ('\u{2CFD}', '\u{2CFD}'),
+    ('\u{3007}', '\u{3007}'),
+    ('\u{3021}', '\u{3029}'),
+    ('\u{3038}', '\u{303A}'),
+    ('\u{3192}', '\u{3195}'),
+    ('\u{3220}', '\u{3229}'),
+    ('\u{3248}', '\u{324F}'),
+    ('\u{3251}', '\u{325F}'),
+    ('\u{3280}', '\u{3289}'),
+    ('\u{32B1}', '\u{32BF}'),
+    ('\u{3405}', '\u{3405}'),
+    ('\u{3483}', '\u{3483}'),
+    ('\u{382A}', '\u{382A}'),
+    ('\u{3B4D}', '\u{3B4D}'),
+    ('\u{4E00}', '\u{4E00}'),
+    ('\u{4E03}', '\u{4E03}'),
+    ('\u{4E07}', '\u{4E07}'),
+    ('\u{4E09}', '\u{4E09}'),
+    ('\u{4E24}', '\u{4E24}'),
+    ('\u{4E5D}', '\u{4E5D}'),
+    ('\u{4E8C}', '\u{4E8C}'),
+    ('\u{4E94}', '\u{4E94}'),
+    ('\u{4E96}', '\u{4E96}'),
+    ('\u{4EAC}', '\u{4EAC}'),
+    ('\u{4EBF}', '\u{4EC0}'),
+    ('\u{4EDF}', '\u{4EDF}'),
+    ('\u{4EE8}', '\u{4EE8}'),
+    ('\u{4F0D}', '\u{4F0D}'),
+    ('\u{4F70}', '\u{4F70}'),
+    ('\u{4FE9}', '\u{4FE9}'),
+    ('\u{5006}', '\u{5006}'),
+    ('\u{5104}', '\u{5104}'),
+    ('\u{5146}', '\u{5146}'),
+    ('\u{5169}', '\u{5169}'),
+    ('\u{516B}', '\u{516B}'),
+    ('\u{516D}', '\u{516D}'),
+    ('\u{5341}', '\u{5341}'),
+    ('\u{5343}', '\u{5345}'),
+    ('\u{534C}', '\u{534C}'),
+    ('\u{53C1}', '\u{53C4}'),
+    ('\u{56DB}', '\u{56DB}'),
+    ('\u{58F1}', '\u{58F1}'),
+    ('\u{58F9}', '\u{58F9}'),
+    ('\u{5E7A}', '\u{5E7A}'),
+    ('\u{5EFE}', '\u{5EFF}'),
+    ('\u{5F0C}', '\u{5F0E}'),
+    ('\u{5F10}', '\u{5F10}'),
+    ('\u{62D0}', '\u{62D0}'),
+    ('\u{62FE}', '\u{62FE}'),
+    ('\u{634C}', '\u{634C}'),
+    ('\u{67D2}', '\u{67D2}'),
+    ('\u{6D1E}', '\u{6D1E}'),
+    ('\u{6F06}', '\u{6F06}'),
+    ('\u{7396}', '\u{7396}'),
+    ('\u{767E}', '\u{767E}'),
+    ('\u{7695}', '\u{7695}'),
+    ('\u{79ED}', '\u{79ED}'),
+    ('\u{8086}', '\u{8086}'),
+    ('\u{842C}', '\u{842C}'),
+    ('\u{8CAE}', '\u{8CAE}'),
+    ('\u{8CB3}', '\u{8CB3}'),
+    ('\u{8D30}', '\u{8D30}'),
+    ('\u{920E}', '\u{920E}'),
+    ('\u{94A9}', '\u{94A9}'),
+    ('\u{9621}', '\u{9621}'),
+    ('\u{9646}', '\u{9646}'),
+    ('\u{964C}', '\u{964C}'),
+    ('\u{9678}', '\u{9678}'),
+    ('\u{96F6}', '\u{96F6}'),
+    ('\u{A620}', '\u{A629}'),
+    ('\u{A6E6}', '\u{A6EF}'),
+    ('\u{A830}', '\u{A835}'),
+    ('\u{A8D0}', '\u{A8D9}'),
+    ('\u{A900}', '\u{A909}'),
+    ('\u{A9D0}', '\u{A9D9}'),
+    ('\u{A9F0}', '\u{A9F9}'),
+    ('\u{AA50}', '\u{AA59}'),
+    ('\u{ABF0}', '\u{ABF9}'),
+    ('\u{F96B}', '\u{F96B}'),
+    ('\u{F973}', '\u{F973}'),
+    ('\u{F978}', '\u{F978}'),
+    ('\u{F9B2}', '\u{F9B2}'),
+    ('\u{F9D1}', '\u{F9D1}'),
+    ('\u{F9D3}', '\u{F9D3}'),
+    ('\u{F9FD}', '\u{F9FD}'),
+    ('\u{FF10}', '\u{FF19}'),
+    ('\u{10107}', '\u{10133}'),
+    ('\u{10140}', '\u{10178}'),
+    ('\u{1018A}', '\u{1018B}'),
+    ('\u{102E1}', '\u{102FB}'),
+    ('\u{10320}', '\u{10323}'),
+    ('\u{10341}', '\u{10341}'),
+    ('\u{1034A}', '\u{1034A}'),
+    ('\u{103D1}', '\u{103D5}'),
+    ('\u{104A0}', '\u{104A9}'),
+    ('\u{10858}', '\u{1085F}'),
+    ('\u{10879}', '\u{1087F}'),
+    ('\u{108A7}', '\u{108AF}'),
+    ('\u{108FB}', '\u{108FF}'),
+    ('\u{10916}', '\u{1091B}'),
+    ('\u{109BC}', '\u{109BD}'),
+    ('\u{109C0}', '\u{109CF}'),
+    ('\u{109D2}', '\u{109FF}'),
+    ('\u{10A40}', '\u{10A48}'),
+    ('\u{10A7D}', '\u{10A7E}'),
+    ('\u{10A9D}', '\u{10A9F}'),
+    ('\u{10AEB}', '\u{10AEF}'),
+    ('\u{10B58}', '\u{10B5F}'),
+    ('\u{10B78}', '\u{10B7F}'),
+    ('\u{10BA9}', '\u{10BAF}'),
+    ('\u{10CFA}', '\u{10CFF}'),
+    ('\u{10D30}', '\u{10D39}'),
+    ('\u{10E60}', '\u{10E7E}'),
+    ('\u{10F1D}', '\u{10F26}'),
+    ('\u{10F51}', '\u{10F54}'),
+    ('\u{10FC5}', '\u{10FCB}'),
+    ('\u{11052}', '\u{1106F}'),
+    ('\u{110F0}', '\u{110F9}'),
+    ('\u{11136}', '\u{1113F}'),
+    ('\u{111D0}', '\u{111D9}'),
+    ('\u{111E1}', '\u{111F4}'),
+    ('\u{112F0}', '\u{112F9}'),
+    ('\u{11450}', '\u{11459}'),
+    ('\u{114D0}', '\u{114D9}'),
+    ('\u{11650}', '\u{11659}'),
+    ('\u{116C0}', '\u{116C9}'),
+    ('\u{11730}', '\u{1173B}'),
+    ('\u{118E0}', '\u{118F2}'),
+    ('\u{11950}', '\u{11959}'),
+    ('\u{11C50}', '\u{11C6C}'),
+    ('\u{11D50}', '\u{11D59}'),
+    ('\u{11DA0}', '\u{11DA9}'),
+    ('\u{11F50}', '\u{11F59}'),
+    ('\u{11FC0}', '\u{11FD4}'),
+    ('\u{12400}', '\u{1246E}'),
+    ('\u{16A60}', '\u{16A69}'),
+    ('\u{16AC0}', '\u{16AC9}'),
+    ('\u{16B50}', '\u{16B59}'),
+    ('\u{16B5B}', '\u{16B61}'),
+    ('\u{16E80}', '\u{16E96}'),
+    ('\u{1D2C0}', '\u{1D2D3}'),
+    ('\u{1D2E0}', '\u{1D2F3}'),
+    ('\u{1D360}', '\u{1D378}'),
+    ('\u{1D7CE}', '\u{1D7FF}'),
+    ('\u{1E140}', '\u{1E149}'),
+    ('\u{1E2F0}', '\u{1E2F9}'),
+    ('\u{1E4F0}', '\u{1E4F9}'),
+    ('\u{1E8C7}', '\u{1E8CF}'),
+    ('\u{1E950}', '\u{1E959}'),
+    ('\u{1EC71}', '\u{1ECAB}'),
+    ('\u{1ECAD}', '\u{1ECAF}'),
+    ('\u{1ECB1}', '\u{1ECB4}'),
+    ('\u{1ED01}', '\u{1ED2D}'),
+    ('\u{1ED2F}', '\u{1ED3D}'),
+    ('\u{1F100}', '\u{1F10C}'),
+    ('\u{1FBF0}', '\u{1FBF9}'),
+    ('\u{20001}', '\u{20001}'),
+    ('\u{20064}', '\u{20064}'),
+    ('\u{200E2}', '\u{200E2}'),
+    ('\u{20121}', '\u{20121}'),
+    ('\u{2092A}', '\u{2092A}'),
+    ('\u{20983}', '\u{20983}'),
+    ('\u{2098C}', '\u{2098C}'),
+    ('\u{2099C}', '\u{2099C}'),
+    ('\u{20AEA}', '\u{20AEA}'),
+    ('\u{20AFD}', '\u{20AFD}'),
+    ('\u{20B19}', '\u{20B19}'),
+    ('\u{22390}', '\u{22390}'),
+    ('\u{22998}', '\u{22998}'),
+    ('\u{23B1B}', '\u{23B1B}'),
+    ('\u{2626D}', '\u{2626D}'),
+    ('\u{2F890}', '\u{2F890}'),
+];
+
 /// `true` if `c` has Unicode `Numeric_Type` Decimal or Digit
 /// (`Py_UNICODE_ISDIGIT`).
 fn is_digit_char(c: char) -> bool {
@@ -2282,6 +2527,16 @@ fn is_digit_char(c: char) -> bool {
 /// `true` if `c` has Unicode `Numeric_Type` Decimal (`Py_UNICODE_ISDECIMAL`).
 fn is_decimal_char(c: char) -> bool {
     in_ranges(DECIMAL_RANGES, c)
+}
+
+/// `true` if `c` has Unicode `Numeric_Type` Decimal, Digit, or Numeric
+/// (`Py_UNICODE_ISNUMERIC`). Backed by the 15.1.0-locked
+/// [`NUMERIC_TYPE_RANGES`] table rather than Rust's `char::is_numeric`,
+/// which tracks the `Nd|Nl|No` general categories against a newer
+/// Unicode revision and so both misses ideographic numerals (`Lo`) and
+/// includes post-15.1.0 codepoints.
+fn is_numeric_char(c: char) -> bool {
+    in_ranges(NUMERIC_TYPE_RANGES, c)
 }
 
 /// `true` if `c` is in Unicode general category `L*` (`str.isalpha`).
@@ -2398,7 +2653,7 @@ pub fn isalnum<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D>>
     classify(a, |s| {
         !s.is_empty()
             && s.chars().all(|c| {
-                is_alpha_char(c) || is_decimal_char(c) || is_digit_char(c) || c.is_numeric()
+                is_alpha_char(c) || is_decimal_char(c) || is_digit_char(c) || is_numeric_char(c)
             })
     })
 }
@@ -2406,12 +2661,15 @@ pub fn isalnum<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D>>
 /// Return `true` where every character is numeric and the string is
 /// non-empty. Matches `numpy.strings.isnumeric`, which delegates per
 /// element to CPython's `str.isnumeric()` (Unicode `Numeric_Type` =
-/// Decimal, Digit, or Numeric). Rust's `char::is_numeric()` tests the
-/// Unicode `Nd`/`Nl`/`No` general categories, which coincides with that
-/// set: superscripts/fractions like `²` and `½` are numeric, while
-/// `.`, `+`, and `-` are not.
+/// Decimal, Digit, or Numeric): superscripts/fractions like `²` and `½`,
+/// roman numerals like `Ⅻ`, and ideographic numerals like `一` are
+/// numeric, while `.`, `+`, and `-` are not. Backed by the 15.1.0-locked
+/// [`NUMERIC_TYPE_RANGES`] table via [`is_numeric_char`], NOT Rust's
+/// `char::is_numeric` (which tests the `Nd|Nl|No` categories against a
+/// newer Unicode revision: it misses the `Lo` ideographic numerals and
+/// wrongly accepts codepoints assigned after Unicode 15.1.0).
 pub fn isnumeric<D: Dimension>(a: &StringArray<D>) -> FerrayResult<Array<bool, D>> {
-    classify(a, |s| !s.is_empty() && s.chars().all(char::is_numeric))
+    classify(a, |s| !s.is_empty() && s.chars().all(is_numeric_char))
 }
 
 /// Return `true` where every character is a Unicode decimal digit
@@ -2643,5 +2901,79 @@ mod tests {
             r.as_slice().unwrap(),
             &[true, true, true, false, true, false, false]
         );
+    }
+
+    // --- Divergence pins for crosslink #1044/#1045 (isnumeric/isalnum
+    // backed by a Unicode-15.1.0 `Numeric_Type` table instead of Rust's
+    // `char::is_numeric`). Expected values are the live results of CPython
+    // 3.13 / Unicode 15.1.0 `str.isnumeric()`/`str.isalnum()`. ---
+
+    // isnumeric: CJK ideographic numerals have `Numeric_Type=Numeric` but
+    // general category `Lo`, so Rust's `char::is_numeric` (`Nd|Nl|No`)
+    // MISSES them. The oracle CPython 15.1.0 `chr(0x4E00).isnumeric()` is
+    // True. '一' (U+4E00), '九' (U+4E5D), '〇' (U+3007, Nl) and roman 'Ⅻ'
+    // (U+216B, Nl) are numeric; the letter 'A' is not.
+    #[test]
+    fn test_isnumeric_cjk_ideographic_numerals_1044() {
+        let a = array(&["\u{4E00}", "\u{4E5D}", "\u{3007}", "\u{216B}", "A", ""]).unwrap();
+        let r = isnumeric(&a).unwrap();
+        assert_eq!(
+            r.as_slice().unwrap(),
+            &[true, true, true, true, false, false]
+        );
+    }
+
+    // isnumeric: U+10D40 (Garay digit) was assigned AFTER Unicode 15.1.0,
+    // so the oracle CPython 15.1.0 `chr(0x10D40).isnumeric()` is False,
+    // but Rust's newer `char::is_numeric` tables return True (the
+    // false-positive divergence). The 15.1.0-locked table must say False.
+    #[test]
+    fn test_isnumeric_post_15_1_codepoint_false_1044() {
+        let a = array(&["\u{10D40}"]).unwrap();
+        let r = isnumeric(&a).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[false]);
+    }
+
+    // isalnum inherits the isnumeric fix: U+10D40 is no longer wrongly
+    // numeric, so it is no longer wrongly alphanumeric. '一' (numeric) and
+    // 'a' (alpha) ARE alnum; "a一" mixing alpha+numeric is alnum, but any
+    // post-15.1.0 codepoint disqualifies the string.
+    #[test]
+    fn test_isalnum_drops_post_15_1_false_positive_1045() {
+        let a = array(&["\u{10D40}", "\u{4E00}", "a", "a\u{10D40}"]).unwrap();
+        let r = isalnum(&a).unwrap();
+        assert_eq!(r.as_slice().unwrap(), &[false, true, true, false]);
+    }
+
+    // The NUMERIC_TYPE_RANGES table must DIVERGE from Rust's
+    // `char::is_numeric` at both extremes of the divergence, proving it is
+    // a real 15.1.0-locked table and not a delegation to std: an `Lo`
+    // ideographic numeral std misses, and a post-15.1.0 codepoint std
+    // wrongly includes.
+    #[test]
+    fn test_numeric_table_diverges_from_char_is_numeric() {
+        // U+4E00 一: Numeric_Type=Numeric (Lo) -> table True, std False.
+        assert!(is_numeric_char('\u{4E00}'));
+        assert!(!'\u{4E00}'.is_numeric());
+        // U+10D40: assigned after 15.1.0 -> table False, std True.
+        assert!(!is_numeric_char('\u{10D40}'));
+        assert!('\u{10D40}'.is_numeric());
+    }
+
+    // isalnum == isalpha || isdecimal || isdigit || isnumeric, per CPython
+    // `str.isalnum`. Sample the composition across each contributing class:
+    // alpha 'a', ideographic-numeric '一', fraction '½' (No/Numeric),
+    // circled digit '②' (No/Digit), fullwidth decimal '０', and '.' (none).
+    #[test]
+    fn test_isalnum_composition_1045() {
+        let samples = ["a", "\u{4E00}", "\u{00BD}", "\u{2461}", "\u{FF10}", "."];
+        for s in samples {
+            let c = s.chars().next().unwrap();
+            let composed =
+                is_alpha_char(c) || is_decimal_char(c) || is_digit_char(c) || is_numeric_char(c);
+            let a = array(&[s]).unwrap();
+            let got = isalnum(&a).unwrap();
+            assert_eq!(got.as_slice().unwrap(), &[composed], "isalnum({s:?})");
+        }
     }
 }
