@@ -14,6 +14,39 @@
 //! module. They expand into a `match` over a dtype string, binding a
 //! local type alias `type T = …` in each arm so the body is written
 //! once and Rust monomorphises it per dtype.
+//!
+//! ## REQ status — shared marshalling / dispatch INFRA
+//!
+//! Despite the filename, this module registers no numpy callable of its
+//! own (zero `#[pyfunction]` items — the `convolve` / `correlate`
+//! bindings live in [`crate::ufunc`]). It is pure INFRA: the boundary
+//! helpers and dtype-dispatch macros consumed by every other binding
+//! module. INFRA is SHIPPED when its helpers are exercised by the green
+//! pytest suite (numpy 2.4.x oracle) through the modules that consume
+//! them.
+//!
+//! SHIPPED (INFRA):
+//!   - Exception mapping: [`ferr_to_pyerr`] / [`linalg_err_to_pyerr`] /
+//!     [`axis_error`] map `FerrayError` onto CPython exception types.
+//!   - Boundary coercion: [`as_ndarray`], [`dtype_name`], [`coerce_dtype`],
+//!     [`scalarize`], [`extract_shape`], [`extract_axis_tuple`],
+//!     [`normalize_axis`] / [`normalize_axis_tuple`],
+//!     [`binary_result_dtype`], [`unary_promote_dtypes`],
+//!     [`all_scalar_inputs`], [`pyany_to_dynarray`] /
+//!     [`dynarray_to_pyarray`].
+//!   - datetime64 view bridge: [`as_int64_view`],
+//!     [`int64_to_datetime64`], [`int64_to_timedelta64`],
+//!     [`datetime64_unit`] (consumed by [`crate::datetime`]).
+//!   - float16 delegation: [`f16_delegate`] / [`f16_delegate_list`] /
+//!     [`is_float16_dtype`].
+//!   - Dispatch macros: [`match_dtype_all`], [`match_dtype_float`],
+//!     [`match_dtype_numeric`], [`match_dtype_orderable`],
+//!     [`match_dtype_bitwise`], [`match_dtype_int_only`],
+//!     [`match_dtype_float_or_int`], `match_dtype_all_complex` — the
+//!     per-dtype monomorphisation backbone for every binding module.
+//!
+//! NOT-STARTED: none — every helper/macro here is consumed by a green
+//! binding module.
 
 use ferray_core::FerrayError;
 use pyo3::exceptions::{PyTypeError, PyValueError};

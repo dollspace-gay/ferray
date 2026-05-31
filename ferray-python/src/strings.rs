@@ -8,6 +8,29 @@
 //! surface against the same ferray-strings library kernels.
 //!
 //! See `.design/ferray-strings.md` for the upstream contract.
+//!
+//! ## REQ status — `numpy.strings` / `numpy.char` registration INFRA
+//!
+//! This module owns no `#[pyfunction]` body of its own — the operations
+//! live in [`crate::char`] (aliased `c`). Its REQ rows are INFRA: it
+//! re-registers that one shared `#[pyfunction]` set onto both the
+//! `ferray.strings` and `ferray.char` namespaces. INFRA is SHIPPED when
+//! the registration it performs is exercised by the green pytest suite
+//! (`tests/test_char.py`, numpy 2.4.x oracle).
+//!
+//! SHIPPED (INFRA):
+//!   - [`register_string_ops`] registers the 50-callable shared string
+//!     surface (`lower`, `upper`, `strip`, `replace`, `split`, `count`,
+//!     `equal`, `isalpha`, `encode`, … — see the `reg!{…}` list) onto a
+//!     target `PyModule`, mirroring `numpy.strings.__all__` /
+//!     `numpy.char`'s function surface (minus the `chararray` subclass
+//!     and the `array`/`asarray` constructors, which are creation entry
+//!     points rather than elementwise string ops).
+//!   - The crate root calls this once for `ferray.strings` and once for
+//!     `ferray.char` so both numpy namespaces resolve to the identical
+//!     `ferray-strings` kernels.
+//!
+//! NOT-STARTED: none — the registration is exercised on import and green.
 
 use pyo3::prelude::*;
 use pyo3::types::PyModule;

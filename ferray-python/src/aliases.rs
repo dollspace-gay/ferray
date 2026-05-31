@@ -26,6 +26,33 @@
 //! ferray shim mirrors them as re-exports in
 //! `python/ferray/__init__.py` rather than re-wrapping the already-bound
 //! `#[pyfunction]`.
+//!
+//! ## REQ status — `numpy` introspection / dtype-algebra surface (INFRA)
+//!
+//! This module is the dtype-alias + introspection surface: each callable
+//! is bound here as a `#[pyfunction]` operating on the *boundary* numpy
+//! objects the rest of the shim already produces (every ferray array is a
+//! genuine `numpy.ndarray` with a genuine `numpy.dtype`), so the dtype
+//! algebra is evaluated against numpy's own dtype machinery rather than a
+//! ferray kernel — this is INFRA, not a kernel delegation. Green against
+//! numpy 2.4.x. Symbol anchors per R-CITE-2b.
+//!
+//! SHIPPED:
+//!   - Array introspection: `ndim` / `shape` / `size` / `isscalar` /
+//!     `isfortran` (`numpy/_core/fromnumeric.py` +
+//!     `numpy/_core/numeric.py`).
+//!   - dtype algebra: `result_type` / `promote_types` / `can_cast` /
+//!     `min_scalar_type` / `common_type` / `astype` — thin wrappers over
+//!     numpy's dtype objects so results are bit-for-bit consistent with
+//!     `arr.dtype` read off a ferray array.
+//!   - dtype predicates: `issubdtype` (`numpy/_core/numerictypes.py:412`
+//!     `def issubdtype`), `isdtype` (`numpy/_core/numerictypes.py:322`
+//!     `def isdtype`).
+//!   - `divmod` alias surfaced at the package root.
+//!
+//! NOT-STARTED: none — every introspection/dtype callable registered here
+//! is bound and green. (The pure 1:1 `acos`→`arccos` style aliases are by
+//! design re-exports in `python/ferray/__init__.py`, not rows here.)
 
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyTuple};

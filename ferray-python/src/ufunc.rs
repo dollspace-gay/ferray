@@ -22,6 +22,51 @@
 //! Adding a new function is one binding plus one registration in
 //! `lib.rs`. Adding a new dtype is one new arm in the relevant
 //! `match_dtype_*` macro and zero changes here.
+//!
+//! ## REQ status — `numpy` ufunc surface registered by this shim
+//!
+//! This is a PyO3 *shim*: each row is a numpy callable bound here as a
+//! `#[pyfunction]` that delegates to a `ferray-ufunc` kernel. The whole
+//! surface is green against the numpy 2.4.x oracle (pytest
+//! `tests/test_ufunc.py`). SHIPPED rows quote the binding fn + the
+//! library fn it delegates to (symbol anchors, R-CITE-2b).
+//!
+//! SHIPPED:
+//!   - Binary arithmetic (broadcasting): `add` / `subtract` / `multiply`
+//!     / `divide` / `true_divide` delegate to
+//!     `ferray_ufunc::{add,subtract,multiply,divide}_broadcast` via the
+//!     `binary_numeric_body!` macro, with a `complex_binary_arith_dispatch!`
+//!     arm for complex dtypes. NEP-50 promotion + integer-wrap +
+//!     true-division semantics live in the kernel (see
+//!     `ferray-ufunc/src/ops/arithmetic.rs` REQ table).
+//!   - Binary numeric (split int/float): `floor_divide` / `remainder` /
+//!     `mod_` / `fmod` / `float_power` via `bind_binary_numeric_split!` /
+//!     `bind_binary_float_promote!`.
+//!   - Bitwise + shifts: `bitwise_and` / `bitwise_or` / `bitwise_xor` /
+//!     `bitwise_not` / `invert` / `left_shift` / `right_shift` /
+//!     `bitwise_count` via `bind_binary_int_only!`.
+//!   - Unary float transcendentals: `sin` / `cos` / `tan` / `exp` /
+//!     `log` / `cbrt` / `fabs` / `ceil` / `floor` / `trunc` / `fix` /
+//!     `degrees` / `radians` / `deg2rad` / `rad2deg` / `i0` / `spacing`
+//!     bound by `bind_unary_float!`, each with a complex-loop guard
+//!     (`bind_unary_float!(sin, ferray_ufunc::sin, complex =
+//!     ferray_ufunc::sin_complex)`) so a complex input either COMPUTES
+//!     complex or RAISES `TypeError`, matching numpy's loop registration.
+//!   - Unary numeric split: `rint` / `sinc` / `exp2` and the
+//!     `bind_unary_numeric_split!` family.
+//!   - Comparisons → bool: `bind_comparison!`; logical:
+//!     `logical_and` / `logical_or` / `logical_xor` / `logical_not`;
+//!     predicates → bool: `bind_predicate_float!`.
+//!   - Multi-output: `frexp` / `modf` / `divmod` (return tuples of arrays).
+//!   - Reductions/utilities re-homed here: `clip`, `around`, `nan_to_num`,
+//!     `interp`, `unwrap`, `gradient`, `ediff1d`, `trapezoid`, `ldexp`,
+//!     `allclose` / `isclose` / `array_equal` / `array_equiv`.
+//!   - Convolution: `convolve` / `correlate` (`pub fn convolve`,
+//!     `pub fn correlate`, with `complex_convolve_dispatch` /
+//!     `complex_correlate_dispatch` complex arms).
+//!
+//! NOT-STARTED: none — every callable registered in this module is bound
+//! and green.
 
 use ferray_core::array::aliases::ArrayD;
 use ferray_numpy_interop::{AsFerray, IntoNumPy};

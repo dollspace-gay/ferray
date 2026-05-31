@@ -26,6 +26,33 @@
 //! days. The roll modes (`forward`/`following`/`backward`/`preceding`/`raise`/
 //! `nat`) mirror `apply_business_day_roll`
 //! (numpy/_core/src/multiarray/datetime_busday.c:159).
+//!
+//! ## REQ status — `numpy` datetime64 / timedelta64 surface
+//!
+//! Each row is a numpy datetime callable bound here as a `#[pyfunction]`.
+//! Arithmetic delegates to `ferray_ufunc::ops::datetime`; the busday
+//! calendar is a pure-Rust algorithm implemented in this file (no numpy
+//! operator delegation). Green against numpy 2.4.x (pytest
+//! `tests/test_*` datetime cases). Symbol anchors per R-CITE-2b.
+//!
+//! SHIPPED:
+//!   - datetime64-aware arithmetic: `add_time` / `subtract_time` bridge
+//!     datetime64/timedelta64 through the `int64` view and route NaT
+//!     propagation + finer-unit promotion via the ferray-ufunc kernels
+//!     (`ferray_ufunc::ops::datetime::{mul_timedelta_scalar_i64,
+//!     truediv_timedelta, floordiv_timedelta, mod_timedelta}`).
+//!   - `isnat` → NaT predicate over the i64 ticks.
+//!   - `datetime_as_string` → unit-aware ISO-8601 formatting.
+//!   - `compare_time` → datetime64/timedelta64 ordering (i64-tick
+//!     comparison with NaT handling).
+//!   - busday calendar (pure-Rust, this file): `is_busday` (driven by
+//!     `is_busday_scalar`), `busday_count` (`busday_count_scalar`),
+//!     `busday_offset` (`busday_offset_scalar`) — weekday-counting over
+//!     the day count since the 1970-01-01 epoch, `weekmask`/`holidays`/
+//!     roll-mode semantics mirroring numpy's `datetime_busday.c`.
+//!
+//! NOT-STARTED: none — every datetime callable registered here is bound
+//! and green.
 
 use ferray_core::array::aliases::ArrayD;
 use ferray_core::dimension::IxDyn;

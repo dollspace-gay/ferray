@@ -13,6 +13,39 @@
 //! `count_nonzero`, `searchsorted`) are cast from ferray's internal
 //! `u64` to `int64` so they match NumPy's `intp` default on 64-bit
 //! platforms.
+//!
+//! ## REQ status — `numpy` statistics surface registered by this shim
+//!
+//! Each row is a numpy callable bound here as a `#[pyfunction]` that
+//! delegates to a `ferray-stats` (or `ferray-linalg`, aliased `fl`)
+//! kernel. Green against numpy 2.4.x (pytest `tests/test_stats.py`).
+//! SHIPPED rows quote the binding fn + the delegated library fn (symbol
+//! anchors, R-CITE-2b).
+//!
+//! SHIPPED:
+//!   - Order-statistic reductions: `sum` → `ferray_stats::sum`,
+//!     `prod` → `ferray_stats::prod`, `mean` → `ferray_stats::mean`,
+//!     `var` → `ferray_stats::var`, `std` → `ferray_stats::std_`,
+//!     `min` → `ferray_stats::min`, `max` → `ferray_stats::max`,
+//!     `ptp` → `ferray_stats::ptp`, `median` / `percentile` /
+//!     `quantile` / `average`.
+//!   - Cumulative: `cumsum` → `ferray_stats::cumsum`,
+//!     `cumprod` → `ferray_stats::cumprod`.
+//!   - Index reductions (u64 → int64 cast): `argmin` →
+//!     `ferray_stats::argmin`, `argmax` → `ferray_stats::argmax`,
+//!     `argsort`, `argpartition`, `count_nonzero`, `searchsorted`.
+//!   - NaN-aware: `nanargmax` / `nanargmin` / `nanmedian` /
+//!     `nanpercentile` / `nanquantile` / `nanstd` / `nanvar`.
+//!   - Predicate reductions: `all` / `any`.
+//!   - Sort/search: `sort` / `partition` / `lexsort` / `sort_complex` /
+//!     `digitize` / `where_fn` (numpy `where`).
+//!   - Set ops: `unique` / `unique_extended` / `intersect1d` / `in1d` /
+//!     `isin`.
+//!   - Histograms + correlation: `histogram` / `histogram2d` /
+//!     `histogramdd` / `histogram_bin_edges` / `bincount` / `corrcoef`
+//!     / `cov` / `diff` / `cross` (the last via `fl`/`ferray_linalg`).
+//!
+//! NOT-STARTED: none — every callable registered here is bound and green.
 
 use ferray_core::array::aliases::{Array1, ArrayD};
 use ferray_core::array::reductions::ReduceAcc;

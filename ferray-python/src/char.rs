@@ -18,6 +18,42 @@
 //! and `ferray.strings` (the NumPy 2.0 canonical `numpy.strings`
 //! namespace). The two surfaces share one set of `#[pyfunction]` items
 //! because `numpy.char.*` and `numpy.strings.*` are the same operations.
+//!
+//! ## REQ status — `numpy.char` / `numpy.strings` surface (the `#[pyfunction]` home)
+//!
+//! Each row is a numpy.char/numpy.strings callable defined here as a
+//! `#[pyfunction]` (`fs` aliases `ferray_strings`) and registered onto
+//! both namespaces by [`crate::strings::register_string_ops`]. Green
+//! against numpy 2.4.x (pytest `tests/test_char.py`). SHIPPED rows quote
+//! the binding fn + the delegated `fs::` kernel (symbol anchors,
+//! R-CITE-2b).
+//!
+//! SHIPPED:
+//!   - Case: `lower` → `fs::lower`, `upper`, `capitalize`, `title`,
+//!     `swapcase`.
+//!   - Strip/pad: `strip` → `fs::strip`, `lstrip` → `fs::lstrip`,
+//!     `rstrip` → `fs::rstrip`, `center` → `fs::center`,
+//!     `ljust` → `fs::ljust_with`, `rjust` → `fs::rjust_with`,
+//!     `zfill`, `expandtabs`.
+//!   - Search/count: `count` → `fs::count`, `find` → `fs::find`,
+//!     `rfind` → `fs::rfind`, `index`, `rindex`, `startswith` →
+//!     `fs::startswith`, `endswith` → `fs::endswith`,
+//!     `str_len` → `fs::str_len`.
+//!   - Edit: `replace` → `fs::replace`, `add` → `fs::add_same`,
+//!     `multiply` → `fs::multiply`, `r#mod` → `fs::mod_`,
+//!     `translate`, `slice` → `fs::slice`.
+//!   - Split/partition: `split` → `fs::split_ragged`,
+//!     `rsplit` → `fs::rsplit`, `splitlines` → `fs::splitlines`,
+//!     `partition`, `rpartition` → `fs::rpartition`, `join`.
+//!   - Predicates → bool: `isalpha` → `fs::isalpha`, `isdigit`,
+//!     `isspace`, `isalnum`, `isdecimal`, `isnumeric`, `islower`,
+//!     `isupper`, `istitle`.
+//!   - Comparison: `equal` → `fs::equal`, `not_equal`, `less`,
+//!     `less_equal`, `greater`, `greater_equal`, `compare_chararrays`.
+//!   - Encoding: `encode` → `fs::encode`, `decode` → `fs::decode`.
+//!
+//! NOT-STARTED: none — every callable registered for `numpy.char` /
+//! `numpy.strings` is bound here and green.
 
 use std::collections::HashMap;
 

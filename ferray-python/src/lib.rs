@@ -23,6 +23,34 @@
 //! All bindings live as free `#[pyfunction]` items inside those
 //! modules and get registered on the top-level extension module
 //! (`_ferray`) by [`_ferray`] at import time.
+//!
+//! ## REQ status — crate-root registration INFRA
+//!
+//! This file is the extension-module *root*; it owns no numpy callable
+//! of its own (one local `#[pyfunction]` plus the module-assembly logic).
+//! Its job is registration + submodule wiring, so its REQ rows describe
+//! INFRA roles rather than per-op kernels. INFRA is SHIPPED when the
+//! wiring it performs is exercised by the green pytest suite
+//! (`import ferray` + 5210 passing tests).
+//!
+//! SHIPPED (INFRA):
+//!   - Top-level callable registration: the [`_ferray`] `#[pymodule]`
+//!     `add_function(wrap_pyfunction!(<module>::<fn>, m)?)?`-wires every
+//!     free `#[pyfunction]` from the binding modules onto `_ferray` —
+//!     107 from [`crate::ufunc`], 59 from [`crate::stats`], 45 from
+//!     [`crate::manipulation`], etc.
+//!   - Submodule assembly: `register_char_module` / `register_strings_module`
+//!     / `register_linalg_module` / `register_fft_module` /
+//!     `register_random_module` / `register_ma_module` /
+//!     `register_polynomial_module` / `register_window_module` /
+//!     `register_stride_tricks_module` / `register_emath_module` /
+//!     `register_autodiff_module` / `register_dtype_module` build the
+//!     nested `ferray.<sub>` namespaces.
+//!   - Module declarations: the `mod aliases; mod char; … mod ufunc;`
+//!     block declares every binding module audited by this build.
+//!
+//! NOT-STARTED: none — the root wiring is exercised on import and by the
+//! full green pytest suite.
 
 mod aliases;
 mod autodiff;
