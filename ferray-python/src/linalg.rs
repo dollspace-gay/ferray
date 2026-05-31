@@ -292,7 +292,11 @@ pub fn matrix_norm<'py>(
         } else {
             let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar])
                 .map_err(ferr_to_pyerr)?;
-            arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+            // np.linalg.matrix_norm (no keepdims) returns a numpy SCALAR
+            // (np.float64), not a 0-d ndarray (numpy/linalg/_linalg.py:3439
+            // matrix_norm). Collapse the 0-d egress through `scalarize`; the
+            // keepdims branch returns a (1,1) ndarray and is left untouched.
+            crate::conv::scalarize(arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
         }
     }))
 }
@@ -339,7 +343,12 @@ pub fn vector_norm<'py>(
                 } else {
                     let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar])
                         .map_err(ferr_to_pyerr)?;
-                    arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+                    // np.linalg.vector_norm (axis=None, no keepdims) returns a
+                    // numpy SCALAR (np.float64), not a 0-d ndarray
+                    // (numpy/linalg/_linalg.py:3502 vector_norm). Collapse the
+                    // 0-d egress through `scalarize`; the keepdims and axis
+                    // branches return ndarrays and are left untouched.
+                    crate::conv::scalarize(arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
                 }
             }
             Some(ax) => {
@@ -1053,7 +1062,11 @@ pub fn dot<'py>(
         let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
         let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
         let r: ArrayD<T> = fl::dot(&fa, &fb).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        // np.dot of two 1-D vectors returns a numpy SCALAR (np.float64), not a
+        // 0-d ndarray (numpy/_core/multiarray.py:752 dot). The 2-D x 2-D matrix
+        // product stays an ndarray — `scalarize` is a no-op on ndim>=1, so the
+        // shared egress is safe (see test_dot_2d_stays_ndarray).
+        crate::conv::scalarize(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
     }))
 }
 
@@ -1083,7 +1096,10 @@ pub fn inner<'py>(
         let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
         let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
         let r: ArrayD<T> = fl::inner(&fa, &fb).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        // np.inner of two 1-D vectors returns a numpy SCALAR (np.float64), not
+        // a 0-d ndarray (numpy/_core/multiarray.py:313 inner). `scalarize` is a
+        // no-op on ndim>=1, so higher-rank inner results stay ndarrays.
+        crate::conv::scalarize(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
     }))
 }
 
@@ -1259,7 +1275,11 @@ pub fn matmul<'py>(
         } else {
             fl::matmul(&fa, &fb).map_err(|e| linalg_err_to_pyerr(py, e))?
         };
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        // matmul of two 1-D vectors collapses to a numpy SCALAR (np.float64),
+        // not a 0-d ndarray (numpy/linalg/_linalg.py:3318 matmul gufunc
+        // (n?,k),(k,m?)->(n?,m?)). The 2-D matmul result stays an ndarray —
+        // `scalarize` is a no-op on ndim>=1.
+        crate::conv::scalarize(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
     }))
 }
 
@@ -1305,7 +1325,10 @@ pub fn vdot<'py>(
         let scalar: T = fl::vdot(&fa, &fb).map_err(ferr_to_pyerr)?;
         let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar])
             .map_err(ferr_to_pyerr)?;
-        arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        // numpy.vdot returns a numpy SCALAR (np.float64), not a 0-d ndarray
+        // (numpy/_core/multiarray.py:847 vdot $OUT_SCALAR); collapse the 0-d
+        // egress through `scalarize` to match numpy's return type.
+        crate::conv::scalarize(arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
     }))
 }
 
@@ -1655,7 +1678,15 @@ where
         let p = cplx_mul(xa, *y);
         acc = num_complex::Complex::new(acc.re + p.re, acc.im + p.im);
     }
-    complex_scalar_to_pyarray(py, acc)
+    // numpy's vdot/dot/inner/matmul of two 1-D vectors returns a numpy SCALAR
+    // (np.complex128 / np.complex64), not a 0-d ndarray
+    // (numpy/_core/multiarray.py vdot:847 / inner:313 / dot:752,
+    // numpy/linalg/_linalg.py matmul:3318). `complex_scalar_to_pyarray` builds
+    // a 0-d ndarray, so collapse it via `scalarize` to match numpy's type.
+    // Every caller of this helper produces a genuine 0-d scalar (the 2-D
+    // complex matrix product routes through `complex_2d_ferray_to_pyarray`),
+    // and `scalarize` is a no-op on ndim>=1, so this is safe.
+    crate::conv::scalarize(complex_scalar_to_pyarray(py, acc)?)
 }
 
 /// `numpy.outer(a, b)` for complex inputs: the `a.size x b.size` matrix
