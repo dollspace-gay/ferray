@@ -1372,6 +1372,23 @@ impl PyMaskedArray {
         }
     }
 
+    /// Like [`from_inner`](Self::from_inner) but MATERIALIZED — for constructors
+    /// that have already set an EXPLICIT `fill_value` on the rust `RustMa`
+    /// (`masked_equal`/`masked_values`/`masked_object` assign the compared value;
+    /// `numpy/ma/core.py:2172` `output.fill_value = value`). Flipping `fill_set`
+    /// here is the pyclass analog of numpy's `_fill_value is not None` (#883), so
+    /// the `.fill_value` getter reports the stored value verbatim rather than
+    /// falling back to the per-dtype default (#1055).
+    fn from_inner_fill_set(inner: RustMa<f64, IxDyn>) -> Self {
+        Self {
+            storage: Storage::Owned {
+                data: DynMa::F64(inner),
+                fill_set: true,
+                buf: None,
+            },
+        }
+    }
+
     /// Reinterpret the array as a `RustMa<f64, IxDyn>` for the float-only
     /// ufunc/reduction surface, casting integer/bool data to f64 (matching
     /// numpy.ma's promote-to-float64 contract for transcendental/division ops).
@@ -1509,10 +1526,20 @@ impl PyMaskedArray {
         let np_ma = py.import("numpy")?.getattr("ma")?;
         let data = self.data(py)?;
         let mask = self.mask(py)?;
-        let fill = self.fill_value(py)?;
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("mask", mask)?;
-        kwargs.set_item("fill_value", fill)?;
+        // #1055: only pass an EXPLICIT `fill_value=` when this object's fill is
+        // MATERIALIZED (numpy `_fill_value is not None`). The uncast per-dtype
+        // default (e.g. `999999` for uint8/int8) is REJECTED by numpy's
+        // `_check_fill_value` (`numpy/ma/core.py:498` — `np.asarray(999999,
+        // dtype=uint8)` overflows) when supplied EXPLICITLY, even though numpy
+        // stores that same uncast value for a never-set array's `.fill_value`.
+        // Omitting it lets numpy materialize its own per-dtype default exactly as
+        // it would for `numpy.ma.array(data, mask=mask)`, so the rebuilt oracle's
+        // `.fill_value` still matches (and #884 repr stays byte-identical).
+        if self.is_fill_materialized() {
+            kwargs.set_item("fill_value", self.fill_value(py)?)?;
+        }
         np_ma.call_method("array", (data,), Some(&kwargs))
     }
 }
@@ -1677,21 +1704,19 @@ where
 /// `fill_value` IS the library `default_filler`), so it originates in the
 /// shared library constant rather than being literal-copied here (R-CHAR-3).
 fn default_fill_pyobject<'py>(py: Python<'py>, cur: &DynMa) -> PyResult<Bound<'py, PyAny>> {
-    match cur {
-        DynMa::Complex32(_) => complex_scalar_pyobject::<f32>(py, Complex::new(1e20_f32, 0.0_f32)),
-        DynMa::Complex64(_) => complex_scalar_pyobject::<f64>(py, Complex::new(1e20_f64, 0.0_f64)),
-        _ => match_ma_real!(cur, _m, T => {
-            // A freshly-constructed `MaskedArray` carries the per-dtype default
-            // `fill_value` (numpy `default_filler`); reading it back yields the
-            // default without exposing ferray-ma's `pub(crate)`
-            // `default_fill_value::<T>()` helper. The value still originates in
-            // the shared library constant (R-CHAR-3), not a literal here.
-            let data_fa = ArrayD::<T>::from_vec(IxDyn::new(&[1]), vec![<T as ferray_core::Element>::zero()])
-                .map_err(ferr_to_pyerr)?;
-            let probe = RustMa::from_data(data_fa).map_err(ferr_to_pyerr)?;
-            probe.fill_value().into_bound_py_any(py)
-        }, complex => { unreachable_complex_egress() }),
-    }
+    // #1055: numpy's per-dtype default is stored UNCAST — `999999` for int8 (not
+    // the int8-wrapped 63), `True` for bool, `1e20`/`1e20+0j` for float/complex
+    // (`numpy/ma/core.py:260` `default_fill_value`; `:163` `default_filler`
+    // table; the scalar branch of `_recursive_fill_value` `:247` does NOT
+    // down-cast). Delegate to `numpy.ma.default_fill_value(numpy.dtype(<name>))`
+    // so the exact per-dtype value originates in the upstream table (R-CHAR-3),
+    // not a ferray literal, and is reported uncast — matching numpy's
+    // `.fill_value` attribute for a never-set narrow-integer array.
+    let np = py.import("numpy")?;
+    let dtype = np.getattr("dtype")?.call1((cur.dtype_name(),))?;
+    np.getattr("ma")?
+        .getattr("default_fill_value")?
+        .call1((dtype,))
 }
 
 /// Defensive fallthrough for a `match_ma_real!` complex arm at a site whose two
@@ -2550,6 +2575,16 @@ impl PyMaskedArray {
             return base.borrow(py).fill_value(py);
         }
         let cur = self.snapshot(py)?;
+        // #1055: a never-set OWNED array reports the per-dtype default UNCAST —
+        // numpy stores `_fill_value` as the raw `default_filler` scalar (e.g.
+        // `999999` for int8, NOT the int8-wrapped 63), because the scalar branch
+        // of `_recursive_fill_value` (`numpy/ma/core.py:247`) does not down-cast.
+        // `filled()` still casts to the array dtype (unchanged). When the fill
+        // was EXPLICITLY set (`fill_set`, numpy `_fill_value is not None`), the
+        // stored (dtype-coerced) value crosses the boundary verbatim.
+        if !self.is_fill_materialized() {
+            return default_fill_pyobject(py, &cur);
+        }
         match &cur {
             DynMa::Complex32(m) => complex_scalar_pyobject::<f32>(py, m.fill_value()),
             DynMa::Complex64(m) => complex_scalar_pyobject::<f64>(py, m.fill_value()),
@@ -3048,9 +3083,18 @@ impl PyMaskedArray {
         // coercion path with that resolved object. For an OWNED array this is
         // its stored fill_value (identical to `filled_default()`), so the
         // owned path is unchanged.
+        // #1055: only pull the effective fill from the getter when the fill is
+        // MATERIALIZED (numpy `_fill_value is not None`). For a never-set array
+        // the getter now returns the UNCAST per-dtype default (e.g. `999999` for
+        // int8), which must NOT be re-coerced into the narrow dtype here — that
+        // would `OverflowError`. Leaving `fill_value` as `None` routes to
+        // `m.filled_default()`, whose rust-level default IS cast to the array
+        // dtype (int8 -> 63), matching numpy's `filled()` (which casts) while the
+        // `.fill_value` ATTRIBUTE stays uncast (#1055).
         let effective_fill: Option<Bound<'py, PyAny>> = match fill_value {
             Some(_) => None,
-            None => Some(self.fill_value(py)?),
+            None if self.is_fill_materialized() => Some(self.fill_value(py)?),
+            None => None,
         };
         let fill_value: Option<&Bound<'py, PyAny>> = fill_value.or(effective_fill.as_ref());
         // Complex `filled` substitutes the complex default fill (`1e20+0j`,
@@ -6441,7 +6485,7 @@ pub fn masked_equal<'py>(
     let data_fa = extract_data(py, x)?;
     let mut inner = fma::masked_equal(&data_fa, value).map_err(ferr_to_pyerr)?;
     inner.set_fill_value(value);
-    Ok(PyMaskedArray::from_inner(inner))
+    Ok(PyMaskedArray::from_inner_fill_set(inner))
 }
 
 bind_masked_compare!(masked_not_equal, fma::masked_not_equal);
@@ -7519,7 +7563,7 @@ pub fn masked_values<'py>(
     let data_fa = extract_data(py, x)?;
     let mut inner = fma::masked_values(&data_fa, value, rtol, atol).map_err(ferr_to_pyerr)?;
     inner.set_fill_value(value);
-    Ok(PyMaskedArray::from_inner(inner))
+    Ok(PyMaskedArray::from_inner_fill_set(inner))
 }
 
 /// `numpy.ma.masked_object(x, value)` — mask where `x` exactly equals
@@ -7534,7 +7578,7 @@ pub fn masked_object<'py>(
     let data_fa = extract_data(py, x)?;
     let mut inner = fma::masked_equal(&data_fa, value).map_err(ferr_to_pyerr)?;
     inner.set_fill_value(value);
-    Ok(PyMaskedArray::from_inner(inner))
+    Ok(PyMaskedArray::from_inner_fill_set(inner))
 }
 
 /// `numpy.ma.fix_invalid(a)` — mask NaN/inf positions; the masked data is
@@ -7682,11 +7726,22 @@ fn set_fill_value_owned(
     }
 }
 
-/// `numpy.ma.default_fill_value(obj)` — the default fill value used for
-/// masked positions of a float64 array (`1e20`).
+/// `numpy.ma.default_fill_value(obj)` — the default fill value, keyed off the
+/// object's dtype KIND (`numpy/ma/core.py:260`; `:163` `default_filler` table):
+/// float -> `1e20`, complex -> `1e20+0j`, int/uint -> `999999`, bool -> `True`,
+/// str -> `'N/A'`, datetime -> `NaT`. numpy owns the exact per-dtype table
+/// (including datetime/string/structured), so this delegates straight to
+/// `numpy.ma.default_fill_value(obj)` and returns its result verbatim (R-CHAR-3:
+/// the value originates in the upstream table, not a literal here).
 #[pyfunction]
-pub fn default_fill_value(_obj: &Bound<'_, PyAny>) -> f64 {
-    fma::default_fill_value_f64()
+pub fn default_fill_value<'py>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    py.import("numpy")?
+        .getattr("ma")?
+        .getattr("default_fill_value")?
+        .call1((obj,))
 }
 
 // ---------------------------------------------------------------------------
@@ -9526,20 +9581,38 @@ pub fn allclose<'py>(
     Ok(true)
 }
 
-/// `numpy.ma.maximum_fill_value(obj)` — the value used to fill masked slots so
-/// they never win a maximum reduction: `-inf` for float64
-/// (`numpy/ma/core.py` `maximum_fill_value`).
+/// `numpy.ma.maximum_fill_value(obj)` — the per-dtype MINIMUM representable
+/// value (the fill that loses every max comparison): `-inf` for float,
+/// `iinfo(dtype).min` for integer, `False` for bool
+/// (`numpy/ma/core.py:383` `maximum_fill_value` -> `:208` `max_filler` =
+/// `_minvals`). numpy owns the exact per-dtype table, so this delegates to
+/// `numpy.ma.maximum_fill_value(obj)` and returns its result verbatim.
 #[pyfunction]
-pub fn maximum_fill_value(_obj: &Bound<'_, PyAny>) -> f64 {
-    f64::NEG_INFINITY
+pub fn maximum_fill_value<'py>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    py.import("numpy")?
+        .getattr("ma")?
+        .getattr("maximum_fill_value")?
+        .call1((obj,))
 }
 
-/// `numpy.ma.minimum_fill_value(obj)` — the value used to fill masked slots so
-/// they never win a minimum reduction: `+inf` for float64
-/// (`numpy/ma/core.py` `minimum_fill_value`).
+/// `numpy.ma.minimum_fill_value(obj)` — the per-dtype MAXIMUM representable
+/// value (the fill that loses every min comparison): `+inf` for float,
+/// `iinfo(dtype).max` for integer, `True` for bool
+/// (`numpy/ma/core.py:331` `minimum_fill_value` -> `:212` `min_filler` =
+/// `_maxvals`). numpy owns the exact per-dtype table, so this delegates to
+/// `numpy.ma.minimum_fill_value(obj)` and returns its result verbatim.
 #[pyfunction]
-pub fn minimum_fill_value(_obj: &Bound<'_, PyAny>) -> f64 {
-    f64::INFINITY
+pub fn minimum_fill_value<'py>(
+    py: Python<'py>,
+    obj: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    py.import("numpy")?
+        .getattr("ma")?
+        .getattr("minimum_fill_value")?
+        .call1((obj,))
 }
 
 /// `numpy.ma.common_fill_value(a, b)` — the shared fill value of `a` and `b`
