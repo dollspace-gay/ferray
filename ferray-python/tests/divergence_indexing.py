@@ -241,3 +241,164 @@ def test_put_function_exists():
     assert hasattr(fr, "put"), "ferray.put is missing from the public surface"
     got = fr.put(base.astype(np.int64), [0, 2], [-44.0, -55.0])
     assert np.array_equal(got, expected), f"{got!r} != {expected!r}"
+
+
+# ===========================================================================
+# ACToR-CRITIC re-audit (2026-05) — NEW divergences found on the CURRENT
+# indexing.rs. The 14 tests above are now GREEN (those divergences were
+# fixed); the pins below are RED and pin REAL, currently-unfixed divergences.
+# numpy oracle: live 2.4.4. Expected values come from live numpy (R-CHAR-3).
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# put — int64 values are round-tripped through f64 (lossy above 2**53)
+# ---------------------------------------------------------------------------
+def test_put_int64_value_not_lossy():
+    """numpy/_core/fromnumeric.py:489 ``def put(a, ind, v, mode='raise')`` —
+    ``a.flat[ind] = v``. For an int64 array numpy stores the integer value
+    exactly. ferray's `put` binding types ``v: Vec<f64>`` (indexing.rs `put`)
+    and casts each value through f64; an int64 value above 2**53 loses its low
+    bits. Oracle: np.put(arange(5,int64),[0],[2**60+1])[0] == 2**60+1
+    (1152921504606846977); ferray yields 1152921504606846976.
+    """
+    big = 2**60 + 1
+    a = np.arange(5, dtype=np.int64)
+    expected = a.copy()
+    np.put(expected, [0], [big])  # live oracle: exact int64
+    got = fr.put(a.copy(), [0], [big])
+    assert int(got[0]) == int(expected[0]) == big, f"{int(got[0])} != {big}"
+
+
+# ---------------------------------------------------------------------------
+# putmask — int64 values are round-tripped through f64 (lossy above 2**53)
+# ---------------------------------------------------------------------------
+def test_putmask_int64_value_not_lossy():
+    """numpy putmask sets ``a.flat[n] = values[n % len(values)]`` exactly for
+    an int64 array. ferray's `putmask` binding types ``values: Vec<f64>``
+    (indexing.rs `putmask`) and casts through f64, losing low bits of large
+    int64 values. Oracle on arange(5,int64), mask a>1, value 2**60+1:
+    [0,1,1152921504606846977,...]; ferray yields ...976.
+    """
+    big = 2**60 + 1
+    a = np.arange(5, dtype=np.int64)
+    expected = a.copy()
+    np.putmask(expected, expected > 1, [big])  # live oracle
+    got = fr.putmask(a.copy(), a > 1, [big])
+    assert np.array_equal(got, expected), f"{got.tolist()} != {expected.tolist()}"
+
+
+# ---------------------------------------------------------------------------
+# place — int64 values are round-tripped through f64 (lossy above 2**53)
+# ---------------------------------------------------------------------------
+def test_place_int64_value_not_lossy():
+    """numpy place sets ``a[mask] = vals`` (cycled) exactly for an int64 array.
+    ferray's `place` binding types ``vals: Vec<f64>`` (indexing.rs `place`) and
+    casts through f64, losing low bits of large int64 values. Oracle on
+    arange(5,int64), mask a>1, value 2**60+1:
+    [0,1,1152921504606846977,1152921504606846977,1152921504606846977].
+    """
+    big = 2**60 + 1
+    a = np.arange(5, dtype=np.int64)
+    expected = a.copy()
+    np.place(expected, expected > 1, [big])  # live oracle
+    got = fr.place(a.copy(), a > 1, [big])
+    assert np.array_equal(got, expected), f"{got.tolist()} != {expected.tolist()}"
+
+
+# ---------------------------------------------------------------------------
+# select — the `default` value is round-tripped through f64 (lossy above 2**53)
+# ---------------------------------------------------------------------------
+def test_select_default_int64_not_lossy():
+    """numpy/_core/_function_base_impl.py select(condlist, choicelist,
+    default=0): when no condition matches, the default fills with the choice
+    dtype (here int64) exactly. ferray's `select` binding types
+    ``default: f64`` (indexing.rs `select` signature `default = 0.0`) and casts
+    through f64, losing the low bits of a large int64 default. Oracle: all-False
+    cond on int64 choices with default 2**60+1 -> [1152921504606846977, ...];
+    ferray yields ...976.
+    """
+    big = 2**60 + 1
+    cond = [np.array([False, False])]
+    ch = [np.array([1, 2], dtype=np.int64)]
+    expected = np.select(cond, ch, default=big)  # live oracle
+    got = fr.select(cond, ch, default=big)
+    assert np.array_equal(got, expected), f"{got.tolist()} != {expected.tolist()}"
+
+
+# ---------------------------------------------------------------------------
+# put — complex values are rejected (numpy supports complex arrays)
+# ---------------------------------------------------------------------------
+def test_put_complex_supported():
+    """numpy/_core/fromnumeric.py:489 ``put`` works on a complex128 array:
+    np.put([1+1j,2+2j,3+3j],[0],[9+9j]) -> [9+9j, 2+2j, 3+3j]. ferray's `put`
+    binding types ``v: Vec<f64>``, which rejects complex with
+    ``TypeError: must be real number, not complex`` — the imaginary part can
+    never be written (R-CODE-4).
+    """
+    a = np.array([1 + 1j, 2 + 2j, 3 + 3j])
+    expected = a.copy()
+    np.put(expected, [0], [9 + 9j])  # live oracle
+    got = fr.put(a.copy(), [0], [9 + 9j])
+    assert np.array_equal(got, expected), f"{got.tolist()} != {expected.tolist()}"
+
+
+# ---------------------------------------------------------------------------
+# choose — the `mode` kwarg ('wrap'/'clip') is part of the public signature
+# ---------------------------------------------------------------------------
+def test_choose_mode_wrap():
+    """numpy/_core/fromnumeric.py choose(a, choices, out=None, mode='raise');
+    mode {'raise','wrap','clip'} resolves out-of-bounds index entries.
+    np.choose([0,3,1,2], [[0,1,2,3],[10,11,12,13]], mode='wrap') -> [0,11,12,3]
+    (index 3 -> 3 % 2 = 1, index 2 -> 0). ferray's `choose` binding exposes no
+    `mode` kwarg -> TypeError, and out-of-range entries always raise.
+    """
+    idx = np.array([0, 3, 1, 2])
+    chs = [np.array([0, 1, 2, 3]), np.array([10, 11, 12, 13])]
+    expected = np.choose(idx, chs, mode="wrap")  # live oracle: [0,11,12,3]
+    got = fr.choose(idx, chs, mode="wrap")
+    assert np.array_equal(got, expected), f"{got.tolist()} != {expected.tolist()}"
+
+
+def test_choose_mode_clip():
+    """numpy choose mode='clip' clamps OOB index entries into range.
+    np.choose([0,3,1,2], [[0,1,2,3],[10,11,12,13]], mode='clip') -> [0,11,12,13]
+    (index 3 and 2 both clip to last choice 1). ferray's `choose` exposes no
+    `mode` kwarg -> TypeError.
+    """
+    idx = np.array([0, 3, 1, 2])
+    chs = [np.array([0, 1, 2, 3]), np.array([10, 11, 12, 13])]
+    expected = np.choose(idx, chs, mode="clip")  # live oracle: [0,11,12,13]
+    got = fr.choose(idx, chs, mode="clip")
+    assert np.array_equal(got, expected), f"{got.tolist()} != {expected.tolist()}"
+
+
+# ---------------------------------------------------------------------------
+# unravel_index — a scalar integer `indices` is accepted (returns scalar tuple)
+# ---------------------------------------------------------------------------
+def test_unravel_index_scalar():
+    """numpy/_core/multiarray ``unravel_index(indices, shape)`` accepts a
+    scalar int index and returns a tuple of scalar coordinates:
+    np.unravel_index(3, (2,2)) -> (1, 1). ferray's `unravel_index` binding types
+    ``indices: Vec<usize>`` (indexing.rs), so a scalar int raises
+    ``TypeError: 'int' object is not an instance of 'Sequence'``.
+    """
+    expected = np.unravel_index(3, (2, 2))  # live oracle: (1, 1)
+    got = fr.unravel_index(3, (2, 2))
+    assert tuple(int(np.asarray(x)) for x in got) == tuple(int(x) for x in expected)
+
+
+# ---------------------------------------------------------------------------
+# ravel_multi_index — the `order` kwarg ('C'/'F') is part of the public ABI
+# ---------------------------------------------------------------------------
+def test_ravel_multi_index_order_f():
+    """numpy ``ravel_multi_index(multi_index, dims, mode='raise', order='C')``.
+    With order='F' the flat index is computed in Fortran (column-major) order:
+    np.ravel_multi_index([[0,1],[1,1]], (2,2), order='F') -> [2, 3]
+    (vs C-order [1, 3]). ferray's `ravel_multi_index` binding exposes no `order`
+    kwarg -> TypeError, so column-major raveling is unreachable.
+    """
+    mi = [[0, 1], [1, 1]]
+    expected = np.ravel_multi_index(mi, (2, 2), order="F")  # live oracle: [2,3]
+    got = fr.ravel_multi_index(mi, (2, 2), order="F")
+    assert np.array_equal(got, expected), f"{got.tolist()} != {expected.tolist()}"
