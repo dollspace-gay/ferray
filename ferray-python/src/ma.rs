@@ -4447,6 +4447,78 @@ impl PyMaskedArray {
             .call_method("argsort", (), Some(&kwargs))
     }
 
+    /// `MaskedArray.anom(axis=None, dtype=None)` — anomalies (deviations from
+    /// the mask-aware mean): `self - self.mean(axis, dtype)`
+    /// (`numpy/ma/core.py:5432`). The module-level `numpy.ma.anom` works in
+    /// ferray; this binds the matching bound METHOD by delegating to the
+    /// numpy.ma snapshot, then rebuilding a ferray `MaskedArray` (mask
+    /// preserved).
+    #[pyo3(signature = (axis = None, dtype = None))]
+    fn anom<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        if let Some(dt) = dtype {
+            kwargs.set_item("dtype", dt)?;
+        }
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("anom", (), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.compress(condition, axis=None, out=None)` — return `self`
+    /// where `condition` is True, the mask compressed alongside the data
+    /// (`numpy/ma/core.py:3974`; the masked equivalent of `ndarray.compress`).
+    /// Delegates to the numpy.ma snapshot, then rebuilds a ferray
+    /// `MaskedArray`.
+    #[pyo3(signature = (condition, axis = None, out = None))]
+    fn compress<'py>(
+        &self,
+        py: Python<'py>,
+        condition: &Bound<'py, PyAny>,
+        axis: Option<&Bound<'py, PyAny>>,
+        out: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let _ = out;
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("compress", (condition,), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.dot(b, out=None, strict=False)` — masked dot product
+    /// (`numpy/ma/core.py:5163`). The other operand `b` is normalized to a
+    /// `numpy.ma` array via [`to_numpy_ma_any`]; the result is rebuilt as a
+    /// ferray `MaskedArray` (or passes back as a scalar for a 0-d result).
+    #[pyo3(signature = (b, out = None, strict = false))]
+    fn dot<'py>(
+        &self,
+        py: Python<'py>,
+        b: &Bound<'py, PyAny>,
+        out: Option<&Bound<'py, PyAny>>,
+        strict: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let _ = out;
+        let nb = to_numpy_ma_any(py, b)?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("strict", strict)?;
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("dot", (nb,), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
     // -----------------------------------------------------------------------
     // #895 — attribute surface (read off the numpy.ma snapshot).
     // -----------------------------------------------------------------------
