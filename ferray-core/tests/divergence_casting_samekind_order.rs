@@ -15,8 +15,8 @@
 //! kind-equality relation. From
 //! `numpy/_core/src/multiarray/convert_datatype.c`:
 //!   - `dtype_kind_to_ordering` (lines 653-690) assigns DISTINCT rungs:
-//!       bool 'b' -> 0, unsigned 'u' -> 1, signed 'i' -> 2,
-//!       float 'f' -> 4, complex 'c' -> 5.
+//!     bool 'b' -> 0, unsigned 'u' -> 1, signed 'i' -> 2,
+//!     float 'f' -> 4, complex 'c' -> 5.
 //!   - The numeric default cast-safety logic (lines 2344-2351) returns
 //!     `NPY_SAME_KIND_CASTING` when the cast is not safe but
 //!     `dtype_kind_to_ordering(from) <= dtype_kind_to_ordering(to)`.

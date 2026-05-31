@@ -86,22 +86,49 @@ fn is_safe_cast(from: DType, to: DType) -> bool {
 /// maps `'b'` to 0), so `bool -> <numeric>` is a safe cast and is therefore
 /// covered by the `is_safe_cast` subsumption below.
 fn is_same_kind(from: DType, to: DType) -> bool {
-    // safe ⊆ same_kind (lattice subsumption), then the kind-equality fallback.
-    is_safe_cast(from, to) || dtype_kind(from) == dtype_kind(to)
+    // safe ⊆ same_kind (lattice subsumption) for every dtype pair.
+    if is_safe_cast(from, to) {
+        return true;
+    }
+    // For the numeric kind ladder, numpy's same_kind rule is a KIND-ORDERING
+    // relation, not kind-equality: `dtype_kind_to_ordering` (convert_datatype.c
+    // :653-690) assigns DISTINCT rungs bool 'b' -> 0, unsigned 'u' -> 1,
+    // signed 'i' -> 2, float 'f' -> 4, complex 'c' -> 5, and the numeric
+    // cast-safety logic (:2344-2351, surfaced via `PyArray_CanCastTypeTo`
+    // :698) permits `same_kind` iff `ord(from) <= ord(to)`. So a widening that
+    // moves UP the ladder (int->float->complex, unsigned->signed) is
+    // same_kind even when it loses precision, while moving DOWN
+    // (signed->unsigned, float->int, complex->float) is not.
+    match (kind_order(from), kind_order(to)) {
+        (Some(f), Some(t)) => f <= t,
+        // Non-numeric kinds (datetime, timedelta, struct, string, void) are
+        // not part of the numeric ladder; for those, same_kind reduces to the
+        // safe-cast subsumption already checked above.
+        _ => false,
+    }
 }
 
-/// Return a "kind" category for a `DType`.
-fn dtype_kind(dt: DType) -> u8 {
+/// Return numpy's `dtype_kind_to_ordering` rung for a numeric `DType`, or
+/// `None` for non-numeric dtypes (datetime/timedelta/struct/string/void) that
+/// do not participate in the numeric same_kind ladder.
+///
+/// Rungs mirror `numpy/_core/src/multiarray/convert_datatype.c:653-690`:
+/// bool 'b' -> 0, unsigned 'u' -> 1, signed 'i' -> 2, float 'f' -> 4,
+/// complex 'c' -> 5 (the gap at 3 is numpy's date/timedelta kind, which we
+/// model separately as `None`).
+fn kind_order(dt: DType) -> Option<u8> {
     if dt == DType::Bool {
-        0 // bool is its own kind but also considered integer-compatible
+        Some(0)
     } else if dt.is_integer() {
-        1
+        // signed integers rank ABOVE unsigned (sign is "more general");
+        // unsigned 'u' -> 1, signed 'i' -> 2.
+        if dt.is_signed() { Some(2) } else { Some(1) }
     } else if dt.is_float() {
-        2
+        Some(4)
     } else if dt.is_complex() {
-        3
+        Some(5)
     } else {
-        255
+        None
     }
 }
 
