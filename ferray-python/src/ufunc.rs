@@ -1650,27 +1650,6 @@ fn finish_with_out<'py>(
     }
 }
 
-macro_rules! bind_binary_numeric_broadcast {
-    ($name:ident, $ferr_path:path) => {
-        #[pyfunction]
-        #[pyo3(signature = (x1, x2, out = None))]
-        pub fn $name<'py>(
-            py: Python<'py>,
-            x1: &Bound<'py, PyAny>,
-            x2: &Bound<'py, PyAny>,
-            out: Option<&Bound<'py, PyAny>>,
-        ) -> PyResult<Bound<'py, PyAny>> {
-            let scalar = all_scalar_inputs(py, &[x1, x2])?;
-            let result = if binary_is_complex(py, x1, x2)? {
-                complex_binary_arith_dispatch!(py, x1, x2, $ferr_path)
-            } else {
-                binary_numeric_body!(py, x1, x2, $ferr_path)
-            };
-            finish_with_out(out, result, scalar)
-        }
-    };
-}
-
 /// `numpy.add(x1, x2)` — element-wise sum. Datetime64 / timedelta64 operands
 /// route through the ferray-ufunc datetime kernels
 /// (`crate::datetime::add_time`): `datetime + timedelta -> datetime`,
@@ -1722,8 +1701,58 @@ pub fn subtract<'py>(
     finish_with_out(out, result, scalar)
 }
 
-bind_binary_numeric_broadcast!(multiply, ferray_ufunc::multiply_broadcast);
-bind_binary_numeric_broadcast!(divide, ferray_ufunc::divide_broadcast);
+/// `numpy.multiply(x1, x2)` — element-wise product. Datetime64 / timedelta64
+/// operands route through the ferray-ufunc timedelta kernels
+/// (`crate::datetime::multiply_time`): `timedelta * int/float -> timedelta`
+/// (and the reflected `int/float * timedelta`); `timedelta * timedelta` and
+/// `datetime * anything` RAISE numpy's exact `UFuncTypeError` (REQ-2, #942).
+/// Numeric operands take the NEP-50-promoted broadcast path.
+#[pyfunction]
+#[pyo3(signature = (x1, x2, out = None))]
+pub fn multiply<'py>(
+    py: Python<'py>,
+    x1: &Bound<'py, PyAny>,
+    x2: &Bound<'py, PyAny>,
+    out: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if crate::datetime::is_time_op(py, x1, x2)? {
+        let result = crate::datetime::multiply_time(py, x1, x2)?;
+        return finish_with_out(out, result, false);
+    }
+    let scalar = all_scalar_inputs(py, &[x1, x2])?;
+    let result = if binary_is_complex(py, x1, x2)? {
+        complex_binary_arith_dispatch!(py, x1, x2, ferray_ufunc::multiply_broadcast)
+    } else {
+        binary_numeric_body!(py, x1, x2, ferray_ufunc::multiply_broadcast)
+    };
+    finish_with_out(out, result, scalar)
+}
+
+/// `numpy.divide(x1, x2)` — element-wise true-division. Datetime64 /
+/// timedelta64 operands route through `crate::datetime::divide_time`:
+/// `timedelta / int/float -> timedelta` (trunc toward zero), `timedelta /
+/// timedelta -> float64` (ratio); `int / timedelta` and `datetime / x` RAISE
+/// numpy's exact `UFuncTypeError` (REQ-2, #942).
+#[pyfunction]
+#[pyo3(signature = (x1, x2, out = None))]
+pub fn divide<'py>(
+    py: Python<'py>,
+    x1: &Bound<'py, PyAny>,
+    x2: &Bound<'py, PyAny>,
+    out: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if crate::datetime::is_time_op(py, x1, x2)? {
+        let result = crate::datetime::divide_time(py, x1, x2)?;
+        return finish_with_out(out, result, false);
+    }
+    let scalar = all_scalar_inputs(py, &[x1, x2])?;
+    let result = if binary_is_complex(py, x1, x2)? {
+        complex_binary_arith_dispatch!(py, x1, x2, ferray_ufunc::divide_broadcast)
+    } else {
+        binary_numeric_body!(py, x1, x2, ferray_ufunc::divide_broadcast)
+    };
+    finish_with_out(out, result, scalar)
+}
 
 // ---------------------------------------------------------------------------
 // Binary float-promote (numpy registers ONLY float loops; int input
@@ -1918,24 +1947,82 @@ bind_binary_numeric_split!(
     ferray_ufunc::minimum_ord,
     complex_minmax = false
 );
-bind_binary_numeric_split!(
-    floor_divide,
-    ferray_ufunc::floor_divide,
-    ferray_ufunc::floor_divide_int,
-    reject_complex = "floor_divide"
-);
-bind_binary_numeric_split!(
-    remainder,
-    ferray_ufunc::remainder,
-    ferray_ufunc::remainder_int,
-    reject_complex = "remainder"
-);
-bind_binary_numeric_split!(
-    mod_,
-    ferray_ufunc::mod_,
-    ferray_ufunc::mod_int,
-    reject_complex = "remainder"
-);
+/// `numpy.floor_divide(x1, x2)` — element-wise floor division. Datetime64 /
+/// timedelta64 operands route through `crate::datetime::floordiv_time`:
+/// `timedelta // int/float -> timedelta` (numpy `#define`s its floor_divide to
+/// the divide loop -> trunc toward zero), `timedelta // timedelta -> int64`
+/// (true floor); `int // timedelta` and `datetime // x` RAISE numpy's exact
+/// `UFuncTypeError` (REQ-2, #942). A complex operand RAISES (no complex loop).
+#[pyfunction]
+pub fn floor_divide<'py>(
+    py: Python<'py>,
+    x1: &Bound<'py, PyAny>,
+    x2: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if crate::datetime::is_time_op(py, x1, x2)? {
+        return crate::datetime::floordiv_time(py, x1, x2);
+    }
+    if binary_is_complex(py, x1, x2)? {
+        return Err(reject_complex_binary("floor_divide"));
+    }
+    let scalar = all_scalar_inputs(py, &[x1, x2])?;
+    let out = binary_numeric_split_body!(
+        py,
+        x1,
+        x2,
+        ferray_ufunc::floor_divide,
+        ferray_ufunc::floor_divide_int
+    );
+    if scalar { scalarize(out) } else { Ok(out) }
+}
+
+/// `numpy.remainder(x1, x2)` — element-wise Python-style modulo. Datetime64 /
+/// timedelta64 operands route through `crate::datetime::mod_time`: only
+/// `timedelta % timedelta -> timedelta` (Python floor-mod, sign follows the
+/// divisor) is defined; `timedelta % int`, `datetime % x` RAISE numpy's exact
+/// `UFuncTypeError` (REQ-2, #942). A complex operand RAISES (no complex loop).
+#[pyfunction]
+pub fn remainder<'py>(
+    py: Python<'py>,
+    x1: &Bound<'py, PyAny>,
+    x2: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if crate::datetime::is_time_op(py, x1, x2)? {
+        return crate::datetime::mod_time(py, x1, x2);
+    }
+    if binary_is_complex(py, x1, x2)? {
+        return Err(reject_complex_binary("remainder"));
+    }
+    let scalar = all_scalar_inputs(py, &[x1, x2])?;
+    let out = binary_numeric_split_body!(
+        py,
+        x1,
+        x2,
+        ferray_ufunc::remainder,
+        ferray_ufunc::remainder_int
+    );
+    if scalar { scalarize(out) } else { Ok(out) }
+}
+
+/// `numpy.mod(x1, x2)` — alias of `remainder`. Same datetime/timedelta routing
+/// (`timedelta % timedelta -> timedelta`; `timedelta % int`/`datetime % x`
+/// RAISE) (REQ-2, #942). A complex operand RAISES (no complex loop).
+#[pyfunction]
+pub fn mod_<'py>(
+    py: Python<'py>,
+    x1: &Bound<'py, PyAny>,
+    x2: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if crate::datetime::is_time_op(py, x1, x2)? {
+        return crate::datetime::mod_time(py, x1, x2);
+    }
+    if binary_is_complex(py, x1, x2)? {
+        return Err(reject_complex_binary("remainder"));
+    }
+    let scalar = all_scalar_inputs(py, &[x1, x2])?;
+    let out = binary_numeric_split_body!(py, x1, x2, ferray_ufunc::mod_, ferray_ufunc::mod_int);
+    if scalar { scalarize(out) } else { Ok(out) }
+}
 
 /// `numpy.true_divide(x1, x2)` — alias of `divide` (always true-division,
 /// int -> float64). generate_umath.py:404 "'true_divide' : aliased to

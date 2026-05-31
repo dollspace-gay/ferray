@@ -378,6 +378,24 @@ upstream = [
 design = ".design/ferray-ufunc.md"
 parity_ops = ["public_reexport"]
 
+# ferray-ufunc datetime64 / timedelta64 element-wise arithmetic kernels
+# (NaT-propagating, finer-unit promoted): the ± algebra
+# (sub_datetime_promoted / add_datetime_timedelta_promoted /
+# add_timedelta_promoted) plus the timedelta numeric kernels
+# (mul_timedelta_scalar / div_timedelta_scalar / truediv_timedelta ->
+# f64 / floordiv_timedelta -> i64 / mod_timedelta), mirroring numpy's
+# TIMEDELTA_* loops (loops.c.src) + the multiply/divide/floor_divide/
+# remainder registrations (generate_umath.py). NaT = i64::MIN.
+[[route]]
+crate_pattern = "ferray-ufunc/src/ops/datetime.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/src/umath/loops.c.src",
+  "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+  "/home/doll/numpy-ref/numpy/_core/src/multiarray/datetime.c",
+]
+design = ".design/ferray-core-datetime.md"
+parity_ops = ["multiply", "divide", "true_divide", "floor_divide", "remainder"]
+
 [[route]]
 crate_pattern = "ferray-ufunc/src/ops/explog.rs"
 upstream = ["/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py"]

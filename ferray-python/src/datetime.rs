@@ -228,10 +228,13 @@ pub fn add_time<'py>(
                 ferray_ufunc::add_timedelta_promoted(&fa, ua, &fb, ub).map_err(ferr_to_pyerr)?;
             timedelta_result(py, &r, unit.descr_suffix())
         }
-        _ => Err(PyTypeError::new_err(
-            "unsupported operand dtypes for datetime add (expected datetime64 + \
-             timedelta64 or timedelta64 + timedelta64)",
-        )),
+        // datetime + datetime (and any other time-operand pair numpy does not
+        // define) -> numpy RAISES its exact `UFuncTypeError`
+        // ("ufunc 'add' cannot use operands with types ...", generate_umath.py
+        // 'add' registers only Mm/mm/mM, NOT MM). Delegate to numpy on the
+        // ORIGINAL operands so its precise exception family surfaces (R-DEV-2)
+        // instead of a ferray-side `TypeError`.
+        _ => time_numeric_raise(py, "add", a, b),
     }
 }
 
@@ -316,9 +319,319 @@ pub fn subtract_time<'py>(
                 ferray_ufunc::add_timedelta_promoted(&fa, ua, &fb, ub).map_err(ferr_to_pyerr)?;
             timedelta_result(py, &r, unit.descr_suffix())
         }
-        _ => Err(PyTypeError::new_err(
-            "unsupported operand dtypes for datetime subtract",
-        )),
+        // Any time/non-time pair numpy does not define for subtract (e.g.
+        // datetime - int, timedelta - datetime) -> numpy raises its exact
+        // `UFuncTypeError`; delegate so it surfaces (R-DEV-2).
+        _ => time_numeric_raise(py, "subtract", a, b),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// timedelta numeric arithmetic dispatch (REQ-2, #942)
+//
+// numpy registers (generate_umath.py:386-1046, verified live numpy 2.4.5):
+//   multiply:     td*int -> td, int*td -> td, td*float -> td, float*td -> td
+//                 (td*td and dt*anything RAISE UFuncTypeError).
+//   divide:       td/int -> td, td/float -> td, td/td -> float64
+//                 (int/td and dt/x RAISE).
+//   floor_divide: td//int -> td (= divide loop, trunc), td//float -> td (trunc),
+//                 td//td -> int64 (true FLOOR). (`TIMEDELTA_floor_divide` is a
+//                 `#define` to `TIMEDELTA_divide`, loops.c.src:428 — so the
+//                 SCALAR floor-divide cases truncate, only td//td floors.)
+//   remainder:    td%td -> td (Python floor-mod). (td%int and dt%x RAISE — only
+//                 the `mm` loop is registered.)
+// Every numpy-RAISE pair is surfaced by delegating to numpy on the ORIGINAL
+// operands, so numpy's exact `UFuncTypeError` text appears (R-DEV-2). The
+// computable pairs run the ferray-ufunc kernels over the int64-view transport.
+// ---------------------------------------------------------------------------
+
+/// A timedelta operand broadcast against a numeric scalar: its int64 ticks,
+/// arithmetic [`TimeUnit`], the numpy unit-suffix string, and the broadcast
+/// numeric multiplier/divisor.
+type TdScalarBroadcast = (ArrayD<i64>, TimeUnit, String, ScalarKind);
+
+/// Two timedelta operands broadcast to a common shape: `(a_ticks, a_unit,
+/// b_ticks, b_unit, a_unit_str)`.
+type TdPairBroadcast = (ArrayD<i64>, TimeUnit, ArrayD<i64>, TimeUnit, String);
+
+/// Numeric (non-time) operand kind extracted from a multiply/divide operand.
+enum ScalarKind {
+    /// Integer-dtype numeric operand, broadcast to the timedelta's shape.
+    Int(Vec<i64>),
+    /// Float-dtype numeric operand, broadcast to the timedelta's shape.
+    Float(Vec<f64>),
+}
+
+/// Raise numpy's EXACT `UFuncTypeError`/`TypeError` for a (op, dtype) pair
+/// numpy does not define, by delegating the op to numpy on the original
+/// operands (R-DEV-2). Used for `dt * x`, `dt / x`, `td * td`, `int / td`,
+/// `td % int`, etc. If numpy unexpectedly does NOT raise, its (computed)
+/// result is returned — but every call site is a pair verified live to raise.
+fn time_numeric_raise<'py>(
+    py: Python<'py>,
+    np_func: &str,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    np.call_method1(np_func, (a, b))
+}
+
+/// Broadcast a timedelta operand against a numeric (int/float) operand and
+/// return `(td_ticks, td_unit, td_unit_str, scalar)` where `scalar` carries the
+/// numeric operand broadcast to the same flat (row-major) order as `td_ticks`.
+/// The numeric operand's dtype-kind (`"i"`/`"u"` vs `"f"`) selects
+/// [`ScalarKind`]; a complex / object / time numeric operand returns `None`
+/// (the caller delegates to numpy to raise).
+fn broadcast_td_scalar(
+    py: Python<'_>,
+    td: &Bound<'_, PyAny>,
+    num: &Bound<'_, PyAny>,
+) -> PyResult<Option<TdScalarBroadcast>> {
+    let np = py.import("numpy")?;
+    let num_arr = np.call_method1("asarray", (num,))?;
+    let num_kind: String = num_arr.getattr("dtype")?.getattr("kind")?.extract()?;
+    let td_arr = np.call_method1("asarray", (td,))?;
+    // Broadcast the two to a common shape (numpy ufunc contract).
+    let pair = np.call_method1("broadcast_arrays", (&td_arr, &num_arr))?;
+    let pl: Vec<Bound<PyAny>> = pair.extract()?;
+    let (ticks, unit, unit_str) = extract_ticks(py, &pl[0])?;
+    let scalar = match num_kind.as_str() {
+        // integer / unsigned / bool numeric operands -> exact int64 path.
+        "i" | "u" | "b" => {
+            let as_i64 = pl[1].call_method1("astype", ("int64",))?;
+            let flat = as_i64.call_method1("ravel", ())?;
+            let v: Vec<i64> = flat.extract()?;
+            ScalarKind::Int(v)
+        }
+        "f" => {
+            let as_f64 = pl[1].call_method1("astype", ("float64",))?;
+            let flat = as_f64.call_method1("ravel", ())?;
+            let v: Vec<f64> = flat.extract()?;
+            ScalarKind::Float(v)
+        }
+        // complex / datetime / timedelta / object -> not a valid scalar
+        // multiplier; the caller delegates to numpy so it raises.
+        _ => return Ok(None),
+    };
+    Ok(Some((ticks, unit, unit_str, scalar)))
+}
+
+/// `td * scalar` / `scalar * td` element-wise, mirroring numpy's `mq`/`qm`/
+/// `md`/`dm` multiply loops via [`ferray_ufunc::ops::datetime::mul_timedelta_scalar_i64`]
+/// / `mul_timedelta_scalar_f64`. The timedelta keeps its own unit.
+fn mul_td_scalar<'py>(
+    py: Python<'py>,
+    ticks: &ArrayD<i64>,
+    unit_str: &str,
+    scalar: &ScalarKind,
+) -> PyResult<Bound<'py, PyAny>> {
+    let flat: Vec<i64> = ticks.iter().copied().collect();
+    let out: Vec<i64> = match scalar {
+        ScalarKind::Int(ks) => flat
+            .iter()
+            .zip(ks.iter())
+            .map(|(&t, &k)| if t == NAT { NAT } else { t.wrapping_mul(k) })
+            .collect(),
+        ScalarKind::Float(ks) => flat
+            .iter()
+            .zip(ks.iter())
+            .map(|(&t, &k)| {
+                if t == NAT {
+                    NAT
+                } else {
+                    let r = t as f64 * k;
+                    if r.is_finite() { r as i64 } else { NAT }
+                }
+            })
+            .collect(),
+    };
+    let arr = ArrayD::from_vec(IxDyn::new(ticks.shape()), out).map_err(ferr_to_pyerr)?;
+    int64_to_timedelta64(py, arr, unit_str)
+}
+
+/// `td / scalar` (and the scalar-cased `td // scalar`, which numpy routes
+/// through the SAME divide loop) — `mq`/`md` divide semantics: integer
+/// division / double-quotient truncation toward zero, zero divisor -> NaT.
+fn div_td_scalar<'py>(
+    py: Python<'py>,
+    ticks: &ArrayD<i64>,
+    unit_str: &str,
+    scalar: &ScalarKind,
+) -> PyResult<Bound<'py, PyAny>> {
+    let flat: Vec<i64> = ticks.iter().copied().collect();
+    let out: Vec<i64> = match scalar {
+        ScalarKind::Int(ks) => flat
+            .iter()
+            .zip(ks.iter())
+            .map(|(&t, &k)| {
+                if t == NAT || k == 0 {
+                    NAT
+                } else {
+                    t.wrapping_div(k)
+                }
+            })
+            .collect(),
+        ScalarKind::Float(ks) => flat
+            .iter()
+            .zip(ks.iter())
+            .map(|(&t, &k)| {
+                if t == NAT {
+                    NAT
+                } else {
+                    let r = t as f64 / k;
+                    if r.is_finite() { r as i64 } else { NAT }
+                }
+            })
+            .collect(),
+    };
+    let arr = ArrayD::from_vec(IxDyn::new(ticks.shape()), out).map_err(ferr_to_pyerr)?;
+    int64_to_timedelta64(py, arr, unit_str)
+}
+
+/// Broadcast two timedelta operands to a common shape and return their int64
+/// tick buffers + units (for the `td op td` kernels).
+fn broadcast_td_pair<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<TdPairBroadcast> {
+    let np = py.import("numpy")?;
+    let aa = np.call_method1("asarray", (a,))?;
+    let ba = np.call_method1("asarray", (b,))?;
+    let pair = np.call_method1("broadcast_arrays", (&aa, &ba))?;
+    let pl: Vec<Bound<PyAny>> = pair.extract()?;
+    let (ta, ua, ua_str) = extract_ticks(py, &pl[0])?;
+    let (tb, ub, _ub_str) = extract_ticks(py, &pl[1])?;
+    Ok((ta, ua, tb, ub, ua_str))
+}
+
+/// `numpy.multiply` over a timedelta operand (REQ-2). `td * int/float` and the
+/// reflected `int/float * td` -> timedelta. `td * td` and `datetime *
+/// anything` RAISE numpy's exact `UFuncTypeError`.
+pub fn multiply_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let aa = np.call_method1("asarray", (a,))?;
+    let ba = np.call_method1("asarray", (b,))?;
+    let ka = time_kind(&aa)?;
+    let kb = time_kind(&ba)?;
+    match (ka, kb) {
+        // timedelta * numeric-scalar  /  numeric-scalar * timedelta.
+        (Some(TimeKind::Timedelta), None) => {
+            match broadcast_td_scalar(py, &aa, &ba)? {
+                Some((ticks, _u, unit_str, scalar)) => {
+                    mul_td_scalar(py, &ticks, &unit_str, &scalar)
+                }
+                // non-numeric (complex/object) operand -> numpy raises.
+                None => time_numeric_raise(py, "multiply", a, b),
+            }
+        }
+        (None, Some(TimeKind::Timedelta)) => match broadcast_td_scalar(py, &ba, &aa)? {
+            Some((ticks, _u, unit_str, scalar)) => mul_td_scalar(py, &ticks, &unit_str, &scalar),
+            None => time_numeric_raise(py, "multiply", a, b),
+        },
+        // td*td, dt*anything, anything*dt -> numpy raises UFuncTypeError.
+        _ => time_numeric_raise(py, "multiply", a, b),
+    }
+}
+
+/// `numpy.divide` / `true_divide` over a timedelta operand (REQ-2). `td /
+/// int/float` -> timedelta (trunc toward zero); `td / td` -> float64 ratio.
+/// `int / td`, `datetime / x` RAISE numpy's exact `UFuncTypeError`.
+pub fn divide_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let aa = np.call_method1("asarray", (a,))?;
+    let ba = np.call_method1("asarray", (b,))?;
+    let ka = time_kind(&aa)?;
+    let kb = time_kind(&ba)?;
+    match (ka, kb) {
+        // td / td -> float64 ratio (finer common unit).
+        (Some(TimeKind::Timedelta), Some(TimeKind::Timedelta)) => {
+            let (ta, ua, tb, ub, _) = broadcast_td_pair(py, &aa, &ba)?;
+            let fa = ticks_to_timedelta(&ta)?;
+            let fb = ticks_to_timedelta(&tb)?;
+            let r = ferray_ufunc::ops::datetime::truediv_timedelta(&fa, ua, &fb, ub)
+                .map_err(ferr_to_pyerr)?;
+            use ferray_numpy_interop::IntoNumPy;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+        // td / numeric-scalar -> timedelta (the numeric operand is the divisor;
+        // the reflected numeric/td is undefined and raises).
+        (Some(TimeKind::Timedelta), None) => match broadcast_td_scalar(py, &aa, &ba)? {
+            Some((ticks, _u, unit_str, scalar)) => div_td_scalar(py, &ticks, &unit_str, &scalar),
+            None => time_numeric_raise(py, "divide", a, b),
+        },
+        // numeric / td, dt / x, td_complex etc. -> numpy raises.
+        _ => time_numeric_raise(py, "divide", a, b),
+    }
+}
+
+/// `numpy.floor_divide` over a timedelta operand (REQ-2). `td // int/float` ->
+/// timedelta (numpy `#define`s floor_divide to the divide loop for these, so it
+/// TRUNCATES toward zero, loops.c.src:428); `td // td` -> int64 (true FLOOR).
+/// `int // td`, `datetime // x` RAISE.
+pub fn floordiv_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let aa = np.call_method1("asarray", (a,))?;
+    let ba = np.call_method1("asarray", (b,))?;
+    let ka = time_kind(&aa)?;
+    let kb = time_kind(&ba)?;
+    match (ka, kb) {
+        // td // td -> int64 floor.
+        (Some(TimeKind::Timedelta), Some(TimeKind::Timedelta)) => {
+            let (ta, ua, tb, ub, _) = broadcast_td_pair(py, &aa, &ba)?;
+            let fa = ticks_to_timedelta(&ta)?;
+            let fb = ticks_to_timedelta(&tb)?;
+            let r = ferray_ufunc::ops::datetime::floordiv_timedelta(&fa, ua, &fb, ub)
+                .map_err(ferr_to_pyerr)?;
+            use ferray_numpy_interop::IntoNumPy;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+        // td // numeric-scalar -> timedelta (divide loop = trunc toward zero).
+        (Some(TimeKind::Timedelta), None) => match broadcast_td_scalar(py, &aa, &ba)? {
+            Some((ticks, _u, unit_str, scalar)) => div_td_scalar(py, &ticks, &unit_str, &scalar),
+            None => time_numeric_raise(py, "floor_divide", a, b),
+        },
+        _ => time_numeric_raise(py, "floor_divide", a, b),
+    }
+}
+
+/// `numpy.remainder` / `mod` over a timedelta operand (REQ-2). Only `td % td`
+/// is defined -> timedelta (Python floor-mod, sign follows divisor); `td %
+/// int`, `datetime % x` RAISE numpy's exact `UFuncTypeError`.
+pub fn mod_time<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let aa = np.call_method1("asarray", (a,))?;
+    let ba = np.call_method1("asarray", (b,))?;
+    let ka = time_kind(&aa)?;
+    let kb = time_kind(&ba)?;
+    match (ka, kb) {
+        (Some(TimeKind::Timedelta), Some(TimeKind::Timedelta)) => {
+            let (ta, ua, tb, ub, _) = broadcast_td_pair(py, &aa, &ba)?;
+            let fa = ticks_to_timedelta(&ta)?;
+            let fb = ticks_to_timedelta(&tb)?;
+            let (r, unit) = ferray_ufunc::ops::datetime::mod_timedelta(&fa, ua, &fb, ub)
+                .map_err(ferr_to_pyerr)?;
+            timedelta_result(py, &r, unit.descr_suffix())
+        }
+        // td % int, int % td, dt % x -> numpy raises (only the mm loop exists).
+        _ => time_numeric_raise(py, "remainder", a, b),
     }
 }
 

@@ -343,6 +343,323 @@ pub fn add_timedelta_promoted<D: Dimension>(
     Ok((arr, target))
 }
 
+// ===========================================================================
+// timedelta numeric arithmetic (REQ-2, #942)
+// ===========================================================================
+//
+// numpy registers these timedelta numeric loops (generate_umath.py:386-1046):
+//   multiply:     'mq'->'m', 'qm'->'m', 'md'->'m', 'dm'->'m'
+//   divide:       'mq'->'m', 'md'->'m', 'mm'->'d'
+//   floor_divide: 'mq'->'m', 'md'->'m', 'mm'->'q'
+//   remainder:    'mm'->'m'   (no 'mq'/'md' — td % int RAISES)
+// The scalar (int/float) kernels below cover the `mq`/`qm`/`md`/`dm` loops
+// (`mul_timedelta_scalar_*` / `div_timedelta_scalar_*`); the timedelta ÷
+// timedelta kernels cover `mm` (`truediv_timedelta` -> f64,
+// `floordiv_timedelta` -> i64, `mod_timedelta` -> timedelta).
+//
+// Semantics mirror the numpy C loops in
+// numpy/_core/src/umath/loops.c.src EXACTLY (verified live, numpy 2.4.5):
+//   * NaT (`i64::MIN`) propagates: any NaT operand -> NaT result (or `nan`
+//     for the float-ratio loop, or `0` for the floor-divide loop — which is
+//     how numpy's `TIMEDELTA_mm_q_floor_divide` handles NaT, loops.c.src:1110).
+//   * `td * float` / `td / float` cast the double result back to int64 via a
+//     C cast = TRUNCATION TOWARD ZERO (`TIMEDELTA_md_m_multiply`,
+//     loops.c.src:944 `(npy_timedelta)result`), NOT round-half-even; a
+//     non-finite double (inf/nan from `*0`-style overflow or `/0.0`) -> NaT.
+//   * `td / int` is integer division (`in1 / in2`, trunc toward zero); a zero
+//     divisor -> NaT (`TIMEDELTA_mq_m_divide`, loops.c.src:1014).
+//   * `td // td` is FLOOR division (round toward -inf); NaT either operand or a
+//     zero divisor -> `0` (`TIMEDELTA_mm_q_floor_divide`, loops.c.src:1104).
+//   * `td % td` is Python floor-modulo (the sign of the result follows the
+//     DIVISOR); NaT either operand or a zero divisor -> NaT
+//     (`TIMEDELTA_mm_m_remainder`, loops.c.src:1075 "handle mixed case the
+//     way Python does").
+// The `mm` ratio/floor/mod kernels promote both operands to the finer unit
+// first (`TimeUnit::finer` / `scale_to`), matching numpy's common-unit cast.
+
+/// Rescale a timedelta tick to a finer `target` unit, returning the rescaled
+/// `Vec<i64>` ticks (NaT preserved). Used by the `mm` kernels below.
+#[inline]
+fn rescale_td_ticks(arr: &[Timedelta64], factor: i64) -> Vec<i64> {
+    arr.iter()
+        .map(|v| {
+            if v.is_nat() {
+                NAT
+            } else {
+                v.0.wrapping_mul(factor)
+            }
+        })
+        .collect()
+}
+
+/// Promote two timedelta operands to their common finer unit, returning the
+/// rescaled int64 tick buffers `(a_ticks, b_ticks)` and the target unit.
+///
+/// Mirrors numpy's common-unit cast ahead of a `timedelta op timedelta` loop
+/// (`PyUFunc_DivisionTypeResolver` / `PyUFunc_RemainderTypeResolver` promote
+/// to the GCD unit; for the units ferray models that is `TimeUnit::finer`).
+///
+/// # Errors
+/// `FerrayError::ShapeMismatch` if the shapes differ;
+/// `FerrayError::InvalidValue` if a unit cannot be rescaled to the target.
+fn promote_td_pair<D: Dimension>(
+    a: &Array<Timedelta64, D>,
+    unit_a: TimeUnit,
+    b: &Array<Timedelta64, D>,
+    unit_b: TimeUnit,
+    name: &str,
+) -> FerrayResult<(Vec<i64>, Vec<i64>, TimeUnit)> {
+    check_same_shape(a, b, name)?;
+    let target = unit_a.finer(unit_b);
+    let scale_a = unit_a.scale_to(target).ok_or_else(|| {
+        FerrayError::invalid_value(format!("{name}: cannot rescale {unit_a:?} → {target:?}"))
+    })?;
+    let scale_b = unit_b.scale_to(target).ok_or_else(|| {
+        FerrayError::invalid_value(format!("{name}: cannot rescale {unit_b:?} → {target:?}"))
+    })?;
+    let a_data: Vec<Timedelta64> = a.iter().copied().collect();
+    let b_data: Vec<Timedelta64> = b.iter().copied().collect();
+    let a_ticks = if scale_a == 1 {
+        a_data.iter().map(|v| v.0).collect()
+    } else {
+        rescale_td_ticks(&a_data, scale_a)
+    };
+    let b_ticks = if scale_b == 1 {
+        b_data.iter().map(|v| v.0).collect()
+    } else {
+        rescale_td_ticks(&b_data, scale_b)
+    };
+    Ok((a_ticks, b_ticks, target))
+}
+
+/// Element-wise `timedelta * int → timedelta` (same unit; the integer is a
+/// pure scalar multiplier, no unit). NaT propagates.
+///
+/// Mirrors `TIMEDELTA_mq_m_multiply` / `TIMEDELTA_qm_m_multiply`
+/// (loops.c.src:902/918): `in1 * in2`, NaT -> NaT. The result keeps the
+/// timedelta's own unit.
+///
+/// # Errors
+/// Returns an error only if internal array construction fails.
+pub fn mul_timedelta_scalar_i64<D: Dimension>(
+    a: &Array<Timedelta64, D>,
+    k: i64,
+) -> FerrayResult<Array<Timedelta64, D>> {
+    let data: Vec<Timedelta64> = a
+        .iter()
+        .map(|v| {
+            if v.is_nat() {
+                Timedelta64(NAT)
+            } else {
+                Timedelta64(v.0.wrapping_mul(k))
+            }
+        })
+        .collect();
+    Array::from_vec(a.dim().clone(), data)
+}
+
+/// Element-wise `timedelta * float → timedelta` (same unit). The double
+/// product is cast back to int64 via TRUNCATION TOWARD ZERO; a non-finite
+/// product yields NaT. NaT propagates.
+///
+/// Mirrors `TIMEDELTA_md_m_multiply` / `TIMEDELTA_dm_m_multiply`
+/// (loops.c.src:933/954): `result = in1 * in2; isfinite ? (i64)result : NaT`.
+///
+/// # Errors
+/// Returns an error only if internal array construction fails.
+pub fn mul_timedelta_scalar_f64<D: Dimension>(
+    a: &Array<Timedelta64, D>,
+    k: f64,
+) -> FerrayResult<Array<Timedelta64, D>> {
+    let data: Vec<Timedelta64> = a
+        .iter()
+        .map(|v| {
+            if v.is_nat() {
+                Timedelta64(NAT)
+            } else {
+                let r = v.0 as f64 * k;
+                if r.is_finite() {
+                    Timedelta64(r as i64)
+                } else {
+                    Timedelta64(NAT)
+                }
+            }
+        })
+        .collect();
+    Array::from_vec(a.dim().clone(), data)
+}
+
+/// Element-wise `timedelta / int → timedelta` (same unit). Integer division,
+/// truncating toward zero; a zero divisor yields NaT. NaT propagates.
+///
+/// Mirrors `TIMEDELTA_mq_m_divide` (loops.c.src:976): `in1 / in2`, with
+/// `in1 == NaT || in2 == 0 -> NaT`.
+///
+/// # Errors
+/// Returns an error only if internal array construction fails.
+pub fn div_timedelta_scalar_i64<D: Dimension>(
+    a: &Array<Timedelta64, D>,
+    k: i64,
+) -> FerrayResult<Array<Timedelta64, D>> {
+    let data: Vec<Timedelta64> = a
+        .iter()
+        .map(|v| {
+            if v.is_nat() || k == 0 {
+                Timedelta64(NAT)
+            } else {
+                Timedelta64(v.0.wrapping_div(k))
+            }
+        })
+        .collect();
+    Array::from_vec(a.dim().clone(), data)
+}
+
+/// Element-wise `timedelta / float → timedelta` (same unit). The double
+/// quotient is cast back to int64 via TRUNCATION TOWARD ZERO; a non-finite
+/// quotient (e.g. divide-by-zero) yields NaT. NaT propagates.
+///
+/// Mirrors `TIMEDELTA_md_m_divide` (loops.c.src:1025): `result = in1 / in2;
+/// isfinite ? (i64)result : NaT`.
+///
+/// # Errors
+/// Returns an error only if internal array construction fails.
+pub fn div_timedelta_scalar_f64<D: Dimension>(
+    a: &Array<Timedelta64, D>,
+    k: f64,
+) -> FerrayResult<Array<Timedelta64, D>> {
+    let data: Vec<Timedelta64> = a
+        .iter()
+        .map(|v| {
+            if v.is_nat() {
+                Timedelta64(NAT)
+            } else {
+                let r = v.0 as f64 / k;
+                if r.is_finite() {
+                    Timedelta64(r as i64)
+                } else {
+                    Timedelta64(NAT)
+                }
+            }
+        })
+        .collect();
+    Array::from_vec(a.dim().clone(), data)
+}
+
+/// Element-wise `timedelta[ua] / timedelta[ub] → float64` (the ratio). Both
+/// operands are first promoted to the finer common unit; the ratio is then
+/// `a as f64 / b as f64`. NaT in either operand yields `nan`.
+///
+/// Mirrors `TIMEDELTA_mm_d_divide` (loops.c.src:1046): `NaT either -> nan`,
+/// else `(double)in1 / (double)in2` (a zero divisor therefore yields
+/// `±inf`/`nan`, exactly as the IEEE division does — verified live:
+/// `td/td0 -> inf`).
+///
+/// # Errors
+/// `FerrayError::ShapeMismatch` if the shapes differ; `InvalidValue` if a
+/// unit cannot be rescaled to the common finer unit.
+pub fn truediv_timedelta<D: Dimension>(
+    a: &Array<Timedelta64, D>,
+    unit_a: TimeUnit,
+    b: &Array<Timedelta64, D>,
+    unit_b: TimeUnit,
+) -> FerrayResult<Array<f64, D>> {
+    let (at, bt, _target) = promote_td_pair(a, unit_a, b, unit_b, "truediv_timedelta")?;
+    let data: Vec<f64> = at
+        .iter()
+        .zip(bt.iter())
+        .map(|(&x, &y)| {
+            if x == NAT || y == NAT {
+                f64::NAN
+            } else {
+                x as f64 / y as f64
+            }
+        })
+        .collect();
+    Array::from_vec(a.dim().clone(), data)
+}
+
+/// Element-wise `timedelta[ua] // timedelta[ub] → int64` (FLOOR division,
+/// round toward −∞). Both operands are promoted to the finer common unit.
+/// NaT in either operand, or a zero divisor, yields `0`.
+///
+/// Mirrors `TIMEDELTA_mm_q_floor_divide` (loops.c.src:1089): NaT either
+/// operand or a zero divisor -> `0`; otherwise the quotient is corrected
+/// downward for negative results so it floors (loops.c.src:1128).
+/// `i64::div_euclid` does NOT match (it rounds remainder toward +∞); the
+/// floor is computed directly.
+///
+/// # Errors
+/// `FerrayError::ShapeMismatch` if the shapes differ; `InvalidValue` if a
+/// unit cannot be rescaled to the common finer unit.
+pub fn floordiv_timedelta<D: Dimension>(
+    a: &Array<Timedelta64, D>,
+    unit_a: TimeUnit,
+    b: &Array<Timedelta64, D>,
+    unit_b: TimeUnit,
+) -> FerrayResult<Array<i64, D>> {
+    let (at, bt, _target) = promote_td_pair(a, unit_a, b, unit_b, "floordiv_timedelta")?;
+    let data: Vec<i64> = at
+        .iter()
+        .zip(bt.iter())
+        .map(|(&x, &y)| {
+            if x == NAT || y == NAT || y == 0 {
+                0
+            } else {
+                // Floor division (round toward -inf): trunc quotient, then
+                // step down when the signs differ and the division is inexact
+                // (mirrors numpy's loops.c.src:1128 correction).
+                let q = x.wrapping_div(y);
+                if (x % y != 0) && ((x < 0) != (y < 0)) {
+                    q - 1
+                } else {
+                    q
+                }
+            }
+        })
+        .collect();
+    Array::from_vec(a.dim().clone(), data)
+}
+
+/// Element-wise `timedelta[ua] % timedelta[ub] → timedelta[finer]` (Python
+/// floor-modulo: the sign of the result follows the DIVISOR). Both operands
+/// are promoted to the finer common unit; the result carries that unit.
+/// Returns `(result, target_unit)`. NaT in either operand, or a zero divisor,
+/// yields NaT.
+///
+/// Mirrors `TIMEDELTA_mm_m_remainder` (loops.c.src:1061): `rem = in1 % in2`,
+/// then if the operand signs differ and `rem != 0`, `rem + in2` — i.e. Python
+/// floor-modulo (`-7 % 2 == 1`, `7 % -2 == -1`, verified live).
+///
+/// # Errors
+/// `FerrayError::ShapeMismatch` if the shapes differ; `InvalidValue` if a
+/// unit cannot be rescaled to the common finer unit.
+pub fn mod_timedelta<D: Dimension>(
+    a: &Array<Timedelta64, D>,
+    unit_a: TimeUnit,
+    b: &Array<Timedelta64, D>,
+    unit_b: TimeUnit,
+) -> FerrayResult<(Array<Timedelta64, D>, TimeUnit)> {
+    let (at, bt, target) = promote_td_pair(a, unit_a, b, unit_b, "mod_timedelta")?;
+    let data: Vec<Timedelta64> = at
+        .iter()
+        .zip(bt.iter())
+        .map(|(&x, &y)| {
+            if x == NAT || y == NAT || y == 0 {
+                Timedelta64(NAT)
+            } else {
+                let rem = x.wrapping_rem(y);
+                if rem == 0 || ((x > 0) == (y > 0)) {
+                    Timedelta64(rem)
+                } else {
+                    Timedelta64(rem.wrapping_add(y))
+                }
+            }
+        })
+        .collect();
+    let arr = Array::from_vec(a.dim().clone(), data)?;
+    Ok((arr, target))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -642,5 +959,210 @@ mod tests {
         let bv: Vec<i64> = basic.iter().map(|x| x.0).collect();
         let pv: Vec<i64> = promoted.iter().map(|x| x.0).collect();
         assert_eq!(bv, pv);
+    }
+}
+
+#[cfg(test)]
+mod arith_tests {
+    // timedelta numeric arithmetic (REQ-2, #942). Expected values derived LIVE
+    // from numpy 2.4.5 (R-CHAR-3): np.timedelta64(6,'D')*3 -> 18; td*float /
+    // td/float TRUNCATE toward zero; td/td -> float; td//td -> int (floor);
+    // td%td -> td (Python floor-mod, sign follows divisor); NaT + zero divisor.
+    use super::*;
+    use ferray_core::dimension::Ix1;
+
+    fn td1(vals: &[i64]) -> Array<Timedelta64, Ix1> {
+        let data: Vec<Timedelta64> = vals.iter().map(|&v| Timedelta64(v)).collect();
+        Array::<Timedelta64, Ix1>::from_vec(Ix1::new([vals.len()]), data).unwrap()
+    }
+
+    fn first_td(a: Array<Timedelta64, Ix1>) -> i64 {
+        a.iter().next().unwrap().0
+    }
+
+    fn first_i64(a: Array<i64, Ix1>) -> i64 {
+        *a.iter().next().unwrap()
+    }
+
+    #[test]
+    fn mul_timedelta_scalar_i64_exact() {
+        // np.timedelta64(6,'D')*3 == timedelta64(18,'D'); NaT propagates.
+        let r = mul_timedelta_scalar_i64(&td1(&[6, 5, NAT]), 3).unwrap();
+        let v: Vec<i64> = r.iter().map(|x| x.0).collect();
+        assert_eq!(v, vec![18, 15, NAT]);
+    }
+
+    #[test]
+    fn mul_timedelta_scalar_f64_truncates_toward_zero() {
+        // numpy casts the double product to int64 (trunc toward zero), live:
+        //   td(5,'D')*1.5 -> 7 (7.5 trunc), td(5,'D')*2.5 -> 12 (12.5 trunc),
+        //   td(1,'D')*0.5 -> 0, td(1,'D')*-2.9 -> -2.
+        assert_eq!(
+            first_td(mul_timedelta_scalar_f64(&td1(&[5]), 1.5).unwrap()),
+            7
+        );
+        assert_eq!(
+            first_td(mul_timedelta_scalar_f64(&td1(&[5]), 2.5).unwrap()),
+            12
+        );
+        assert_eq!(
+            first_td(mul_timedelta_scalar_f64(&td1(&[1]), 0.5).unwrap()),
+            0
+        );
+        assert_eq!(
+            first_td(mul_timedelta_scalar_f64(&td1(&[1]), -2.9).unwrap()),
+            -2
+        );
+        assert_eq!(
+            first_td(mul_timedelta_scalar_f64(&td1(&[NAT]), 2.0).unwrap()),
+            NAT
+        );
+    }
+
+    #[test]
+    fn div_timedelta_scalar_i64_trunc_and_zero() {
+        // td(6,'D')/2 -> 3; td(-7,'D')/2 -> -3 (trunc toward zero, live);
+        // zero divisor -> NaT; NaT -> NaT.
+        assert_eq!(
+            first_td(div_timedelta_scalar_i64(&td1(&[6]), 2).unwrap()),
+            3
+        );
+        assert_eq!(
+            first_td(div_timedelta_scalar_i64(&td1(&[-7]), 2).unwrap()),
+            -3
+        );
+        assert_eq!(
+            first_td(div_timedelta_scalar_i64(&td1(&[6]), 0).unwrap()),
+            NAT
+        );
+        assert_eq!(
+            first_td(div_timedelta_scalar_i64(&td1(&[NAT]), 2).unwrap()),
+            NAT
+        );
+    }
+
+    #[test]
+    fn div_timedelta_scalar_f64_trunc_and_nonfinite() {
+        // td(5,'D')/2.0 -> 2 (2.5 trunc), td(5,'D')/2.5 -> 2; /0.0 -> NaT.
+        assert_eq!(
+            first_td(div_timedelta_scalar_f64(&td1(&[5]), 2.0).unwrap()),
+            2
+        );
+        assert_eq!(
+            first_td(div_timedelta_scalar_f64(&td1(&[5]), 2.5).unwrap()),
+            2
+        );
+        assert_eq!(
+            first_td(div_timedelta_scalar_f64(&td1(&[5]), 0.0).unwrap()),
+            NAT
+        );
+    }
+
+    #[test]
+    fn truediv_timedelta_ratio_and_nat() {
+        // td(6,'D')/td(2,'D') -> 3.0; NaT either -> nan; td/td0 -> inf (live).
+        let r = truediv_timedelta(&td1(&[6]), TimeUnit::D, &td1(&[2]), TimeUnit::D).unwrap();
+        assert_eq!(*r.iter().next().unwrap(), 3.0);
+        let rn = truediv_timedelta(&td1(&[NAT]), TimeUnit::D, &td1(&[2]), TimeUnit::D).unwrap();
+        assert!(rn.iter().next().unwrap().is_nan());
+        let rz = truediv_timedelta(&td1(&[5]), TimeUnit::D, &td1(&[0]), TimeUnit::D).unwrap();
+        assert!(rz.iter().next().unwrap().is_infinite());
+    }
+
+    #[test]
+    fn truediv_timedelta_cross_unit() {
+        // td(1,'D')/td(12,'h') -> 2.0 (promote D->h: 24h/12h). Live.
+        let r = truediv_timedelta(&td1(&[1]), TimeUnit::D, &td1(&[12]), TimeUnit::H).unwrap();
+        assert_eq!(*r.iter().next().unwrap(), 2.0);
+    }
+
+    #[test]
+    fn floordiv_timedelta_floor_and_zero() {
+        // td(7,'D')//td(2,'D') -> 3; td(-7,'D')//td(2,'D') -> -4 (floor, live);
+        // NaT either or zero divisor -> 0.
+        assert_eq!(
+            first_i64(
+                floordiv_timedelta(&td1(&[7]), TimeUnit::D, &td1(&[2]), TimeUnit::D).unwrap()
+            ),
+            3
+        );
+        assert_eq!(
+            first_i64(
+                floordiv_timedelta(&td1(&[-7]), TimeUnit::D, &td1(&[2]), TimeUnit::D).unwrap()
+            ),
+            -4
+        );
+        assert_eq!(
+            first_i64(
+                floordiv_timedelta(&td1(&[5]), TimeUnit::D, &td1(&[0]), TimeUnit::D).unwrap()
+            ),
+            0
+        );
+        assert_eq!(
+            first_i64(
+                floordiv_timedelta(&td1(&[NAT]), TimeUnit::D, &td1(&[2]), TimeUnit::D).unwrap()
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn floordiv_timedelta_cross_unit() {
+        // td(1,'D')//td(5,'h') -> 4 (24h // 5h). Live.
+        assert_eq!(
+            first_i64(
+                floordiv_timedelta(&td1(&[1]), TimeUnit::D, &td1(&[5]), TimeUnit::H).unwrap()
+            ),
+            4
+        );
+    }
+
+    #[test]
+    fn mod_timedelta_python_floor_mod() {
+        // td(7,'D')%td(4,'D') -> 3; Python floor-mod: -7%2 -> 1, 7%-2 -> -1
+        // (sign follows divisor, live); NaT either or zero divisor -> NaT.
+        let (r, u) = mod_timedelta(&td1(&[7]), TimeUnit::D, &td1(&[4]), TimeUnit::D).unwrap();
+        assert_eq!(u, TimeUnit::D);
+        assert_eq!(first_td(r), 3);
+        assert_eq!(
+            first_td(
+                mod_timedelta(&td1(&[-7]), TimeUnit::D, &td1(&[2]), TimeUnit::D)
+                    .unwrap()
+                    .0
+            ),
+            1
+        );
+        assert_eq!(
+            first_td(
+                mod_timedelta(&td1(&[7]), TimeUnit::D, &td1(&[-2]), TimeUnit::D)
+                    .unwrap()
+                    .0
+            ),
+            -1
+        );
+        assert_eq!(
+            first_td(
+                mod_timedelta(&td1(&[NAT]), TimeUnit::D, &td1(&[2]), TimeUnit::D)
+                    .unwrap()
+                    .0
+            ),
+            NAT
+        );
+        assert_eq!(
+            first_td(
+                mod_timedelta(&td1(&[5]), TimeUnit::D, &td1(&[0]), TimeUnit::D)
+                    .unwrap()
+                    .0
+            ),
+            NAT
+        );
+    }
+
+    #[test]
+    fn mod_timedelta_cross_unit() {
+        // td(1,'D')%td(5,'h') -> timedelta64(4,'h') (24h % 5h = 4h, finer unit).
+        let (r, u) = mod_timedelta(&td1(&[1]), TimeUnit::D, &td1(&[5]), TimeUnit::H).unwrap();
+        assert_eq!(u, TimeUnit::H);
+        assert_eq!(first_td(r), 4);
     }
 }
