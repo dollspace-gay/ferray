@@ -312,6 +312,196 @@ fn complex_rint_dispatch<'py>(
 }
 
 // ---------------------------------------------------------------------------
+// Complex arms for BINARY arithmetic + comparison (#924).
+//
+// numpy registers a complex loop for add/subtract/multiply/divide/power
+// (complex compute), equal/not_equal (bool), and less/greater/<=/>=
+// (LEXICOGRAPHIC `(real, then imag)`, does NOT raise — verified live numpy
+// 2.4.5: `np.less([1+2j,3+2j],[1+5j,3+1j]) == [True False]`). It registers NO
+// complex loop for floor_divide/remainder/mod/bitwise_*/left_shift/right_shift
+// (those RAISE `TypeError`). The top-level binding's `binary_numeric_body!` /
+// `comparison_body!` funnel through `match_dtype_numeric!` (real-only) and so
+// reject every complex input with `TypeError` even though the library ops
+// already accept complex (`add_broadcast`/… `T: WrappingArith`/`TrueDivide`,
+// `equal_broadcast` `T: PartialEq`; #869). These helpers give each binary op
+// the correct complex behavior BEFORE the real funnel: arithmetic computes via
+// the existing complex-capable broadcast ops, comparison computes lexicographic
+// (mirroring ma #874's `cmp_complex_arm!`), and the unsupported ops raise.
+//
+// Both operands are broadcast + coerced to the common complex dtype in numpy
+// (`result_type` + `broadcast_arrays`), so `complex+real` / `complex+scalar`
+// promotion (numpy `complex+float -> complex`) and reflected operands all reuse
+// numpy's own promotion table — and the two ferray arrays are the SAME shape,
+// so even the same-`D` `power_complex` op applies.
+// ---------------------------------------------------------------------------
+
+/// `true` if numpy's `result_type(a, b)` for the two inputs is a complex dtype
+/// — the signal that the binary op must take its complex arm rather than the
+/// real `match_dtype_numeric!` funnel. Reuses numpy's promotion table, so
+/// `complex+real`, `complex+python-scalar`, and reflected operands all classify
+/// correctly (numpy: `result_type([1+2j], 1) == complex128`).
+fn binary_is_complex(py: Python<'_>, a: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<bool> {
+    // Normalize both operands to ndarrays first: `result_type` on a raw Python
+    // list (`[2,4]`) misparses as a structured-dtype field spec, so the inputs
+    // must be `as_ndarray`'d exactly as the real `binary_numeric_body!` path
+    // does before sniffing the promoted dtype.
+    let arr_a = as_ndarray(py, a)?;
+    let arr_b = as_ndarray(py, b)?;
+    Ok(is_complex_dtype(
+        binary_result_dtype(py, &arr_a, &arr_b)?.as_str(),
+    ))
+}
+
+/// Broadcast both operands to a common shape and coerce both to the common
+/// complex dtype (`result_type`, then `broadcast_arrays`), returning the two
+/// numpy ndarrays plus the resolved complex dtype name. Centralizes the
+/// promotion + broadcast every complex binary arm shares.
+fn complex_binary_operands<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>, String)> {
+    let arr_a = as_ndarray(py, a)?;
+    let arr_b = as_ndarray(py, b)?;
+    let dt = binary_result_dtype(py, &arr_a, &arr_b)?;
+    let np = py.import("numpy")?;
+    let pair = np.call_method1("broadcast_arrays", (&arr_a, &arr_b))?;
+    let pair_list: Vec<Bound<PyAny>> = pair.extract()?;
+    let arr_a2 = coerce_dtype(py, &pair_list[0], dt.as_str())?;
+    let arr_b2 = coerce_dtype(py, &pair_list[1], dt.as_str())?;
+    Ok((arr_a2, arr_b2, dt))
+}
+
+/// Complex arm for `add`/`subtract`/`multiply`/`divide`/`power`: compute via the
+/// matching complex-capable `ferray_ufunc` op at the resolved complex width
+/// (c64→c64, c128→c128) and ship the complex result back. `$cfn` is generic over
+/// `Complex<T>`. numpy: `np.add([1+2j],[3+4j]) == [4+6j]`; division is true
+/// complex division; `power` is the principal complex power.
+macro_rules! complex_binary_arith_dispatch {
+    ($py:expr, $a:expr, $b:expr, $cfn:path) => {{
+        let (arr_a, arr_b, dt) = complex_binary_operands($py, $a, $b)?;
+        match dt.as_str() {
+            "complex128" | "c16" => {
+                let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr_a)?;
+                let fb: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr_b)?;
+                let r: ArrayD<Complex<f64>> = $cfn(&fa, &fb).map_err(ferr_to_pyerr)?;
+                complex_ferray_to_pyarray($py, r)?
+            }
+            "complex64" | "c8" => {
+                let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr_a)?;
+                let fb: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr_b)?;
+                let r: ArrayD<Complex<f32>> = $cfn(&fa, &fb).map_err(ferr_to_pyerr)?;
+                complex_ferray_to_pyarray($py, r)?
+            }
+            other => {
+                return Err(PyTypeError::new_err(format!(
+                    "complex_binary_arith_dispatch: expected a complex dtype, got {other:?}"
+                )));
+            }
+        }
+    }};
+}
+
+/// Lexicographic complex compare (`<`, `>`, `<=`, `>=`) over a same-shape pair —
+/// numpy compares `(real, then imag)` and does NOT raise (verified live, numpy
+/// 2.4.5). `Complex` is NOT `PartialOrd`, so the order is computed directly from
+/// the `re`/`im` parts, mirroring ma #874's `cmp_complex_arm!`. A NaN part makes
+/// every ordering compare `false` (numpy's `invalid value encountered` → False,
+/// matching f32/f64 NaN semantics). `op` is `"lt"|"le"|"gt"|"ge"`.
+fn lexicographic_cmp<T: PartialOrd + Copy>(a_re: T, a_im: T, b_re: T, b_im: T, op: &str) -> bool {
+    match op {
+        "lt" => a_re < b_re || (a_re == b_re && a_im < b_im),
+        "le" => a_re < b_re || (a_re == b_re && a_im <= b_im),
+        "gt" => a_re > b_re || (a_re == b_re && a_im > b_im),
+        "ge" => a_re > b_re || (a_re == b_re && a_im >= b_im),
+        _ => false,
+    }
+}
+
+/// Complex arm for the four ordering comparisons → bool array, lexicographic
+/// `(real, then imag)`. Both operands are already broadcast + coerced to the
+/// common complex dtype.
+fn complex_order_dispatch<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    op: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    let (arr_a, arr_b, dt) = complex_binary_operands(py, a, b)?;
+    match dt.as_str() {
+        "complex128" | "c16" => {
+            let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr_a)?;
+            let fb: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr_b)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<bool> = fa
+                .iter()
+                .zip(fb.iter())
+                .map(|(x, y)| lexicographic_cmp(x.re, x.im, y.re, y.im, op))
+                .collect();
+            let r = ArrayD::<bool>::from_vec(IxDyn::new(&shape), data).map_err(ferr_to_pyerr)?;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+        "complex64" | "c8" => {
+            let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr_a)?;
+            let fb: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr_b)?;
+            let shape = fa.shape().to_vec();
+            let data: Vec<bool> = fa
+                .iter()
+                .zip(fb.iter())
+                .map(|(x, y)| lexicographic_cmp(x.re, x.im, y.re, y.im, op))
+                .collect();
+            let r = ArrayD::<bool>::from_vec(IxDyn::new(&shape), data).map_err(ferr_to_pyerr)?;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+        other => Err(PyTypeError::new_err(format!(
+            "complex_order_dispatch: expected a complex dtype, got {other:?}"
+        ))),
+    }
+}
+
+/// Complex arm for `equal`/`not_equal` → bool array, computed via the
+/// `PartialEq`-bounded `equal_broadcast`/`not_equal_broadcast` (Complex
+/// satisfies `PartialEq`). numpy: `np.equal([1+2j],[1+2j]) == [True]`.
+macro_rules! complex_eq_dispatch {
+    ($py:expr, $a:expr, $b:expr, $cfn:path) => {{
+        let (arr_a, arr_b, dt) = complex_binary_operands($py, $a, $b)?;
+        match dt.as_str() {
+            "complex128" | "c16" => {
+                let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr_a)?;
+                let fb: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr_b)?;
+                let r: ArrayD<bool> = $cfn(&fa, &fb).map_err(ferr_to_pyerr)?;
+                r.into_pyarray($py).map_err(ferr_to_pyerr)?.into_any()
+            }
+            "complex64" | "c8" => {
+                let fa: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr_a)?;
+                let fb: ArrayD<Complex<f32>> = complex_pyarray_to_ferray::<f32>(&arr_b)?;
+                let r: ArrayD<bool> = $cfn(&fa, &fb).map_err(ferr_to_pyerr)?;
+                r.into_pyarray($py).map_err(ferr_to_pyerr)?.into_any()
+            }
+            other => {
+                return Err(PyTypeError::new_err(format!(
+                    "complex_eq_dispatch: expected a complex dtype, got {other:?}"
+                )));
+            }
+        }
+    }};
+}
+
+/// Raise numpy's exact `TypeError` for a complex input to a BINARY ufunc with
+/// NO complex loop (`floor_divide`, `remainder`, `mod`, `bitwise_and`/`or`/
+/// `xor`, `left_shift`, `right_shift`). numpy: `np.floor_divide(z, z)` →
+/// `TypeError: ufunc 'floor_divide' not supported for the input types`. Mirrors
+/// the unary `reject_complex_unary` (R-DEV-2).
+fn reject_complex_binary(func: &str) -> PyErr {
+    PyTypeError::new_err(format!(
+        "ufunc '{func}' not supported for the input types, and the inputs \
+         could not be safely coerced to any supported types according to the \
+         casting rule ''safe''"
+    ))
+}
+
+// ---------------------------------------------------------------------------
 // Helper: per-dispatch-shape inline macros that capture the full
 // extract → ferray-call → return-ndarray pipeline. Defined locally so
 // each binding is one expression.
@@ -1027,7 +1217,11 @@ macro_rules! bind_binary_numeric_broadcast {
             out: Option<&Bound<'py, PyAny>>,
         ) -> PyResult<Bound<'py, PyAny>> {
             let scalar = all_scalar_inputs(py, &[x1, x2])?;
-            let result = binary_numeric_body!(py, x1, x2, $ferr_path);
+            let result = if binary_is_complex(py, x1, x2)? {
+                complex_binary_arith_dispatch!(py, x1, x2, $ferr_path)
+            } else {
+                binary_numeric_body!(py, x1, x2, $ferr_path)
+            };
             finish_with_out(out, result, scalar)
         }
     };
@@ -1051,7 +1245,11 @@ pub fn add<'py>(
         return finish_with_out(out, result, false);
     }
     let scalar = all_scalar_inputs(py, &[x1, x2])?;
-    let result = binary_numeric_body!(py, x1, x2, ferray_ufunc::add_broadcast);
+    let result = if binary_is_complex(py, x1, x2)? {
+        complex_binary_arith_dispatch!(py, x1, x2, ferray_ufunc::add_broadcast)
+    } else {
+        binary_numeric_body!(py, x1, x2, ferray_ufunc::add_broadcast)
+    };
     finish_with_out(out, result, scalar)
 }
 
@@ -1072,7 +1270,11 @@ pub fn subtract<'py>(
         return finish_with_out(out, result, false);
     }
     let scalar = all_scalar_inputs(py, &[x1, x2])?;
-    let result = binary_numeric_body!(py, x1, x2, ferray_ufunc::subtract_broadcast);
+    let result = if binary_is_complex(py, x1, x2)? {
+        complex_binary_arith_dispatch!(py, x1, x2, ferray_ufunc::subtract_broadcast)
+    } else {
+        binary_numeric_body!(py, x1, x2, ferray_ufunc::subtract_broadcast)
+    };
     finish_with_out(out, result, scalar)
 }
 
@@ -1115,6 +1317,10 @@ bind_binary_float_promote!(heaviside, ferray_ufunc::heaviside);
 // ---------------------------------------------------------------------------
 
 macro_rules! bind_binary_numeric_split {
+    // Plain form: complex input falls through to the real funnel
+    // (`match_dtype_float_or_int!` rejects it with `TypeError`). Used by
+    // `maximum`/`minimum`, whose complex-ordering loop numpy does register but
+    // which is out of this dispatch's scope (#924 owns add/.../compare).
     ($name:ident, $float_fn:path, $int_fn:path) => {
         #[pyfunction]
         pub fn $name<'py>(
@@ -1127,22 +1333,72 @@ macro_rules! bind_binary_numeric_split {
             if scalar { scalarize(out) } else { Ok(out) }
         }
     };
+    // Complex-loop form (`power`): a complex input computes via `$cfn`
+    // (`ferray_ufunc::power_complex`) before the real float/int split. numpy
+    // registers a complex `power` loop (`np.power([1+2j],[2+0j]) == [-3+4j]`).
+    ($name:ident, $float_fn:path, $int_fn:path, complex = $cfn:path) => {
+        #[pyfunction]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            x1: &Bound<'py, PyAny>,
+            x2: &Bound<'py, PyAny>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            let out = if binary_is_complex(py, x1, x2)? {
+                complex_binary_arith_dispatch!(py, x1, x2, $cfn)
+            } else {
+                binary_numeric_split_body!(py, x1, x2, $float_fn, $int_fn)
+            };
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
+    // No-complex-loop form (`floor_divide`/`remainder`/`mod`): a complex input
+    // RAISES `TypeError` (numpy registers NO complex loop for these). The guard
+    // runs before the real split so the error matches numpy's
+    // `ufunc 'floor_divide' not supported for the input types`.
+    ($name:ident, $float_fn:path, $int_fn:path, reject_complex = $func:expr) => {
+        #[pyfunction]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            x1: &Bound<'py, PyAny>,
+            x2: &Bound<'py, PyAny>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            if binary_is_complex(py, x1, x2)? {
+                return Err(reject_complex_binary($func));
+            }
+            let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            let out = binary_numeric_split_body!(py, x1, x2, $float_fn, $int_fn);
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
 }
 
-bind_binary_numeric_split!(power, ferray_ufunc::power, ferray_ufunc::power_int);
+bind_binary_numeric_split!(
+    power,
+    ferray_ufunc::power,
+    ferray_ufunc::power_int,
+    complex = ferray_ufunc::ops::arithmetic::power_complex
+);
 bind_binary_numeric_split!(maximum, ferray_ufunc::maximum, ferray_ufunc::maximum_ord);
 bind_binary_numeric_split!(minimum, ferray_ufunc::minimum, ferray_ufunc::minimum_ord);
 bind_binary_numeric_split!(
     floor_divide,
     ferray_ufunc::floor_divide,
-    ferray_ufunc::floor_divide_int
+    ferray_ufunc::floor_divide_int,
+    reject_complex = "floor_divide"
 );
 bind_binary_numeric_split!(
     remainder,
     ferray_ufunc::remainder,
-    ferray_ufunc::remainder_int
+    ferray_ufunc::remainder_int,
+    reject_complex = "remainder"
 );
-bind_binary_numeric_split!(mod_, ferray_ufunc::mod_, ferray_ufunc::mod_int);
+bind_binary_numeric_split!(
+    mod_,
+    ferray_ufunc::mod_,
+    ferray_ufunc::mod_int,
+    reject_complex = "remainder"
+);
 
 /// `numpy.true_divide(x1, x2)` — alias of `divide` (always true-division,
 /// int -> float64). generate_umath.py:404 "'true_divide' : aliased to
@@ -1177,7 +1433,10 @@ pub fn float_power<'py>(
 // ---------------------------------------------------------------------------
 
 macro_rules! bind_comparison {
-    ($name:ident, $ferr_path:path) => {
+    // Equality form (`equal`/`not_equal`): a complex input computes via the
+    // `PartialEq`-bounded `$cfn` (`equal_broadcast`/`not_equal_broadcast`,
+    // Complex OK). numpy: `np.equal([1+2j],[1+2j]) == [True]`.
+    ($name:ident, $ferr_path:path, eq_complex = $cfn:path) => {
         #[pyfunction]
         pub fn $name<'py>(
             py: Python<'py>,
@@ -1185,18 +1444,63 @@ macro_rules! bind_comparison {
             x2: &Bound<'py, PyAny>,
         ) -> PyResult<Bound<'py, PyAny>> {
             let scalar = all_scalar_inputs(py, &[x1, x2])?;
-            let out = comparison_body!(py, x1, x2, $ferr_path);
+            let out = if binary_is_complex(py, x1, x2)? {
+                complex_eq_dispatch!(py, x1, x2, $cfn)
+            } else {
+                comparison_body!(py, x1, x2, $ferr_path)
+            };
+            if scalar { scalarize(out) } else { Ok(out) }
+        }
+    };
+    // Ordering form (`less`/`greater`/`less_equal`/`greater_equal`): a complex
+    // input computes LEXICOGRAPHICALLY `(real, then imag)` — numpy does NOT
+    // raise (`np.less([1+2j,3+2j],[1+5j,3+1j]) == [True False]`, live). `$op` is
+    // the lexicographic op tag `"lt"|"le"|"gt"|"ge"` (Complex is not
+    // `PartialOrd`, so the real `less_broadcast` cannot take it).
+    ($name:ident, $ferr_path:path, order_complex = $op:expr) => {
+        #[pyfunction]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            x1: &Bound<'py, PyAny>,
+            x2: &Bound<'py, PyAny>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let scalar = all_scalar_inputs(py, &[x1, x2])?;
+            let out = if binary_is_complex(py, x1, x2)? {
+                complex_order_dispatch(py, x1, x2, $op)?
+            } else {
+                comparison_body!(py, x1, x2, $ferr_path)
+            };
             if scalar { scalarize(out) } else { Ok(out) }
         }
     };
 }
 
-bind_comparison!(equal, ferray_ufunc::equal_broadcast);
-bind_comparison!(not_equal, ferray_ufunc::not_equal_broadcast);
-bind_comparison!(less, ferray_ufunc::less_broadcast);
-bind_comparison!(less_equal, ferray_ufunc::less_equal_broadcast);
-bind_comparison!(greater, ferray_ufunc::greater_broadcast);
-bind_comparison!(greater_equal, ferray_ufunc::greater_equal_broadcast);
+bind_comparison!(
+    equal,
+    ferray_ufunc::equal_broadcast,
+    eq_complex = ferray_ufunc::equal_broadcast
+);
+bind_comparison!(
+    not_equal,
+    ferray_ufunc::not_equal_broadcast,
+    eq_complex = ferray_ufunc::not_equal_broadcast
+);
+bind_comparison!(less, ferray_ufunc::less_broadcast, order_complex = "lt");
+bind_comparison!(
+    less_equal,
+    ferray_ufunc::less_equal_broadcast,
+    order_complex = "le"
+);
+bind_comparison!(
+    greater,
+    ferray_ufunc::greater_broadcast,
+    order_complex = "gt"
+);
+bind_comparison!(
+    greater_equal,
+    ferray_ufunc::greater_equal_broadcast,
+    order_complex = "ge"
+);
 
 // ---------------------------------------------------------------------------
 // Logical (any Logical-implementing dtype → bool)
@@ -1389,6 +1693,9 @@ pub fn bitwise_and<'py>(
     x1: &Bound<'py, PyAny>,
     x2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if binary_is_complex(py, x1, x2)? {
+        return Err(reject_complex_binary("bitwise_and"));
+    }
     Ok(bitwise_binary_body!(py, x1, x2, ferray_ufunc::bitwise_and))
 }
 
@@ -1398,6 +1705,9 @@ pub fn bitwise_or<'py>(
     x1: &Bound<'py, PyAny>,
     x2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if binary_is_complex(py, x1, x2)? {
+        return Err(reject_complex_binary("bitwise_or"));
+    }
     Ok(bitwise_binary_body!(py, x1, x2, ferray_ufunc::bitwise_or))
 }
 
@@ -1407,6 +1717,9 @@ pub fn bitwise_xor<'py>(
     x1: &Bound<'py, PyAny>,
     x2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if binary_is_complex(py, x1, x2)? {
+        return Err(reject_complex_binary("bitwise_xor"));
+    }
     Ok(bitwise_binary_body!(py, x1, x2, ferray_ufunc::bitwise_xor))
 }
 
@@ -1435,6 +1748,9 @@ pub fn left_shift<'py>(
     x1: &Bound<'py, PyAny>,
     x2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if binary_is_complex(py, x1, x2)? {
+        return Err(reject_complex_binary("left_shift"));
+    }
     let arr_a = as_ndarray(py, x1)?;
     let dt = dtype_name(&arr_a)?;
     let np = py.import("numpy")?;
@@ -1458,6 +1774,9 @@ pub fn right_shift<'py>(
     x1: &Bound<'py, PyAny>,
     x2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    if binary_is_complex(py, x1, x2)? {
+        return Err(reject_complex_binary("right_shift"));
+    }
     let arr_a = as_ndarray(py, x1)?;
     let dt = dtype_name(&arr_a)?;
     let np = py.import("numpy")?;
