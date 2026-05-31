@@ -772,10 +772,33 @@ macro_rules! bind_dist_1param {
             )
         }
     };
+    // Arm for distributions where numpy gives the parameter a default
+    // (e.g. `exponential(scale=1.0, size=None)`,
+    // `rayleigh(scale=1.0, size=None)`), so the function is callable with
+    // no positional argument.
+    ($name:ident, $param:ident, $method:ident, $default:expr) => {
+        #[pyfunction]
+        #[pyo3(signature = ($param = $default, size = None))]
+        pub fn $name<'py>(
+            py: Python<'py>,
+            $param: f64,
+            size: Option<&Bound<'py, PyAny>>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let (shape, scalar) = dist_shape(size)?;
+            let arr: ArrayD<f64> =
+                with_rng(|rng| rng.$method($param, shape.as_slice())).map_err(ferr_to_pyerr)?;
+            finish_dist(
+                arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+                scalar,
+            )
+        }
+    };
 }
 
-bind_dist_1param!(exponential, scale, exponential);
-bind_dist_1param!(rayleigh, scale, rayleigh);
+// numpy defaults `scale=1.0` for both, so these are callable with no args.
+bind_dist_1param!(exponential, scale, exponential, 1.0);
+bind_dist_1param!(rayleigh, scale, rayleigh, 1.0);
+// numpy requires the shape parameter for these (no default).
 bind_dist_1param!(weibull, a, weibull);
 bind_dist_1param!(pareto, a, pareto);
 bind_dist_1param!(chisquare, df, chisquare);
