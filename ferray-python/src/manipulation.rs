@@ -779,17 +779,45 @@ pub fn rot90<'py>(
     }))
 }
 
-/// `numpy.roll(a, shift, axis=None)` — `axis` may be negative
-/// (numpy/_core/numeric.py:1226).
+/// `numpy.roll(a, shift, axis=None)` — `shift` and `axis` may each be an int
+/// or a tuple; when both are tuples they zip (roll `shift[i]` along `axis[i]`),
+/// an int `shift` with a tuple `axis` applies the same shift to each axis, and
+/// `axis=None` rolls the flattened array (numpy/_core/numeric.py:1226,
+/// `np.roll(x2, (1, 1), axis=(1, 0))` → multi-axis roll).
+///
+/// `shift`/`axis` arrive as `PyAny`: the scalar shift + (None | int axis) case
+/// takes the in-crate `fm::roll` fast path; any tuple shift OR tuple axis is
+/// delegated to `numpy.roll`, which owns the shift/axis zip + broadcast
+/// semantics. The real array is forwarded unchanged (no lossy round-trip,
+/// R-CODE-4).
 #[pyfunction]
 #[pyo3(signature = (a, shift, axis = None))]
 pub fn roll<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    shift: isize,
-    axis: Option<isize>,
+    shift: &Bound<'py, PyAny>,
+    axis: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // Multi-axis roll (tuple shift and/or tuple axis): numpy owns the
+    // shift/axis zip + broadcast semantics. Delegate the whole op (works for
+    // every dtype, including the datetime/string/f16/complex arms below).
+    let shift_is_scalar = shift.extract::<isize>().is_ok();
+    let axis_is_scalar = match axis {
+        None => true,
+        Some(ax) => ax.extract::<isize>().is_ok(),
+    };
+    if !shift_is_scalar || !axis_is_scalar {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        match axis {
+            Some(ax) => kwargs.set_item("axis", ax)?,
+            None => kwargs.set_item("axis", py.None())?,
+        }
+        return np.getattr("roll")?.call((&arr, shift), Some(&kwargs));
+    }
+    // Scalar shift (+ None | int axis) fast path.
+    let shift: isize = shift.extract()?;
     if crate::datetime::is_time_array(&arr)? {
         let kwargs = pyo3::types::PyDict::new(py);
         if let Some(ax) = axis {
@@ -814,7 +842,7 @@ pub fn roll<'py>(
     let dt = dtype_name(&arr)?;
     let ndim = obj_ndim(&arr)?;
     let norm_axis: Option<usize> = match axis {
-        Some(ax) => Some(normalize_axis(py, ax, ndim)?),
+        Some(ax) => Some(normalize_axis(py, ax.extract::<isize>()?, ndim)?),
         None => None,
     };
     Ok(match_dtype_all_complex!(dt.as_str(), T => {

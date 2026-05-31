@@ -3228,11 +3228,57 @@ pub fn searchsorted<'py>(
 // Unique / count_nonzero
 // ---------------------------------------------------------------------------
 
-/// `numpy.unique(a)` — sorted unique values.
+/// `numpy.unique(ar, return_index=False, return_inverse=False,
+/// return_counts=False, axis=None, *, equal_nan=True)` — sorted unique values.
+///
+/// numpy returns a tuple `(values, [indices], [inverse], [counts])` (in that
+/// order) when any `return_*` flag is True (numpy/lib/_arraysetops_impl.py:146,
+/// `_unpack_tuple`). The plain `unique(ar)` fast path keeps the in-crate
+/// `ferray_stats::unique_values` path (plus the datetime/string/f16/complex
+/// arms). The `return_*` flags route through the `ferray_stats::unique`
+/// 4-tuple. `axis=` (row-unique) and `equal_nan=False` are not modelled by the
+/// core, so the whole op is delegated to `numpy.unique`, which owns the
+/// row-unique reshape + tuple structure/order (numpy/lib/_arraysetops_impl.py:
+/// 293 `moveaxis`/reshape path). The real array is forwarded unchanged
+/// (R-CODE-4).
 #[pyfunction]
-pub fn unique<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+#[pyo3(signature = (a, return_index = false, return_inverse = false, return_counts = false, axis = None, *, equal_nan = true))]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "mirrors numpy.unique's kwarg surface"
+)]
+pub fn unique<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    return_index: bool,
+    return_inverse: bool,
+    return_counts: bool,
+    axis: Option<&Bound<'py, PyAny>>,
+    equal_nan: bool,
+) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // axis= (row-unique) or equal_nan=False are not modelled by the in-crate
+    // unique; numpy owns the row-unique reshape + tuple structure. Delegate the
+    // whole op so numpy's exact result (values + optional index/inverse/counts
+    // in order) surfaces for every dtype.
+    if axis.is_some() || !equal_nan {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("return_index", return_index)?;
+        kwargs.set_item("return_inverse", return_inverse)?;
+        kwargs.set_item("return_counts", return_counts)?;
+        match axis {
+            Some(ax) => kwargs.set_item("axis", ax)?,
+            None => kwargs.set_item("axis", py.None())?,
+        }
+        kwargs.set_item("equal_nan", equal_nan)?;
+        return np.getattr("unique")?.call((&arr,), Some(&kwargs));
+    }
+    // Any return_* flag → route through the 4-tuple path (numpy tuple order).
+    if return_index || return_inverse || return_counts {
+        return unique_extended(py, a, return_index, return_inverse, return_counts);
+    }
     // datetime64/timedelta64 unique: sorted-unique ticks, NaT last (one kept)
     // (REQ-3, #943).
     if crate::datetime::is_time_array(&arr)? {
