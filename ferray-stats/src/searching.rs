@@ -58,7 +58,13 @@ where
         .enumerate()
         .map(|(i, v)| (v, i))
         .collect();
-    pairs.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    // NaN-aware total order (#977, same comparator as the #918 sort fix):
+    // every NaN sorts LAST, so after sorting all NaN are adjacent at the tail
+    // and the dedup below collapses them to a single value (numpy's default
+    // `equal_nan=True`, numpy/lib/_arraysetops_impl.py:389-399). A plain
+    // `partial_cmp(...).unwrap_or(Equal)` would instead treat NaN as equal to
+    // everything, leaving the result unsorted with NaN un-deduplicated.
+    pairs.sort_by(|a, b| crate::parallel::nan_last_cmp(&a.0, &b.0));
 
     // Deduplicate. The inverse is built in lockstep: for each original
     // position `orig_idx`, `inverse[orig_idx]` is the u64 index into
@@ -85,7 +91,11 @@ where
         let mut unique_pos: u64 = 0;
 
         for i in 1..pairs.len() {
-            if pairs[i].0.partial_cmp(&pairs[i - 1].0) == Some(std::cmp::Ordering::Equal) {
+            // Adjacent NaN compare Equal under `nan_last_cmp`, so they collapse
+            // into one unique value (#977, `equal_nan=True`).
+            if crate::parallel::nan_last_cmp(&pairs[i].0, &pairs[i - 1].0)
+                == std::cmp::Ordering::Equal
+            {
                 count += 1;
                 // Keep the first occurrence index (smallest original index).
                 let last = unique_indices.len() - 1;

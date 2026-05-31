@@ -477,6 +477,15 @@ upstream = [
 design = ".design/ferray-stats.md"
 parity_ops = ["sort", "argsort", "searchsorted", "partition", "argpartition", "lexsort", "sort_complex"]
 
+[[route]]
+crate_pattern = "ferray-stats/src/searching.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/lib/_arraysetops_impl.py",
+  "/home/doll/numpy-ref/numpy/_core/fromnumeric.py",
+]
+design = ".design/ferray-stats.md"
+parity_ops = ["unique", "unique_values", "unique_counts", "unique_inverse", "unique_all", "unique_axis", "nonzero", "where_", "count_nonzero"]
+
 # ─────────────────────────────────────────────────────────────────────────
 # ferray-linalg — linear algebra (faer-backed; depends on ferray-core)
 # ─────────────────────────────────────────────────────────────────────────
