@@ -395,6 +395,64 @@ fn as_eval_input<'py>(
     Ok((data, Some(shape)))
 }
 
+/// Coerce a polynomial arithmetic operand into a coefficient vector,
+/// mirroring numpy's `_get_coefficients`
+/// (`numpy/polynomial/_polybase.py:259-289`).
+///
+/// When `other` is another instance of the SAME class, numpy checks that the
+/// domain and window match (raising `TypeError("Domains differ")` /
+/// `"Windows differ"`) and returns its coefficients. When `other` is a bare
+/// scalar, numpy returns it as-is — a length-1 coefficient series that
+/// `polyadd`/`polymul` then broadcast onto the constant term. `self_coeffs`
+/// carries the receiver's domain/window so the match check can be enforced.
+fn get_coefficients(
+    other: &Bound<'_, PyAny>,
+    self_domain: [f64; 2],
+    self_window: [f64; 2],
+    extract_same: impl Fn(&Bound<'_, PyAny>) -> Option<([f64; 2], [f64; 2], Vec<f64>)>,
+) -> PyResult<Vec<f64>> {
+    if let Some((odom, owin, ocoef)) = extract_same(other) {
+        // `numpy/polynomial/_polybase.py:283-286`
+        if odom != self_domain {
+            return Err(pyo3::exceptions::PyTypeError::new_err("Domains differ"));
+        }
+        if owin != self_window {
+            return Err(pyo3::exceptions::PyTypeError::new_err("Windows differ"));
+        }
+        return Ok(ocoef);
+    }
+    // Bare scalar -> a constant series (numpy returns `other` unchanged).
+    if let Ok(s) = other.extract::<f64>() {
+        return Ok(vec![s]);
+    }
+    // An array-like coefficient sequence.
+    if let Ok(v) = other.extract::<Vec<f64>>() {
+        return Ok(v);
+    }
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "unsupported operand type for polynomial arithmetic",
+    ))
+}
+
+/// Apply numpy's `pu.mapdomain(roots, window, domain)`
+/// (`numpy/polynomial/_polybase.py:913`): the companion-matrix roots are
+/// computed in WINDOW space and must be mapped back to DOMAIN space via the
+/// affine map `off + scl*r` with `(off, scl) = pu.mapparms(window, domain)`
+/// (`polyutils.py:mapparms`/`mapdomain`). Operates on the complex roots so the
+/// real/complex dtype decision downstream is preserved.
+fn map_roots_window_to_domain(
+    roots: Vec<num_complex::Complex<f64>>,
+    domain: [f64; 2],
+    window: [f64; 2],
+) -> PyResult<Vec<num_complex::Complex<f64>>> {
+    // mapparms(old=window, new=domain): map window -> domain.
+    let (off, scl) = fp::mapping::mapparms(window, domain).map_err(ferr_to_pyerr)?;
+    Ok(roots
+        .into_iter()
+        .map(|r| num_complex::Complex::new(off, 0.0) + r * scl)
+        .collect())
+}
+
 /// Generate a `#[pyclass]` wrapper around a ferray polynomial type.
 ///
 /// The wrapped type must implement `Poly` (for arithmetic, evaluation,
@@ -527,24 +585,89 @@ macro_rules! poly_class {
                 }
             }
 
-            /// Return a polynomial differentiated `m` times.
+            /// Return a polynomial differentiated `m` times, scaled by the
+            /// domain->window Jacobian.
+            ///
+            /// `numpy/polynomial/_polybase.py:878-901` `def deriv(self, m=1):`
+            /// does `off, scl = self.mapparms(); coef = self._der(self.coef, m,
+            /// scl)`. numpy's `_der` (e.g. `polyder(c, m, scl)`) multiplies the
+            /// coefficients by `scl` ONCE PER derivative step; since both the
+            /// raw derivative and the scaling are linear and commute, `m` steps
+            /// is equivalent to the raw `m`-th derivative times `scl**m`. For
+            /// the default identity mapping (`domain == window`) `scl == 1` and
+            /// this reduces to the raw derivative.
             #[pyo3(signature = (m = 1))]
             fn deriv(&self, m: usize) -> PyResult<Self> {
-                Ok(self.rewrap(self.inner.deriv(m).map_err(ferr_to_pyerr)?))
+                let (_off, scl) = self.inner.mapparms().map_err(ferr_to_pyerr)?;
+                let d = self.inner.deriv(m).map_err(ferr_to_pyerr)?;
+                let factor = scl.powi(m as i32);
+                let scaled: Vec<f64> = d.coeffs().iter().map(|c| c * factor).collect();
+                let inner = <$RustType>::from_coeffs(&scaled)
+                    .with_mapping(self.inner.domain(), self.inner.window())
+                    .map_err(ferr_to_pyerr)?;
+                Ok(self.rewrap(inner))
             }
 
-            /// Return a polynomial integrated `m` times with constants `k`.
-            #[pyo3(signature = (m = 1, k = vec![]))]
-            fn integ(&self, m: usize, k: Vec<f64>) -> PyResult<Self> {
-                Ok(self.rewrap(self.inner.integ(m, &k).map_err(ferr_to_pyerr)?))
+            /// Return a polynomial integrated `m` times with constants `k`,
+            /// applying the domain->window Jacobian and an optional lower
+            /// bound `lbnd`.
+            ///
+            /// `numpy/polynomial/_polybase.py:845-877` `def integ(self, m=1,
+            /// k=[], lbnd=None):` does `off, scl = self.mapparms()`, maps
+            /// `lbnd = off + scl*lbnd` (or `0` when `lbnd is None`), then
+            /// `coef = self._int(self.coef, m, k, lbnd, 1./scl)`. numpy's
+            /// `_int` (e.g. `polyint`) per step MULTIPLIES the coefficients by
+            /// `1./scl` (here passed as the `scl` argument), integrates once in
+            /// the basis, then sets the constant so the antiderivative equals
+            /// `k[step]` at `lbnd` — i.e. `coef[0] += k[step] - basisval(lbnd,
+            /// tmp)`, where `basisval` is the RAW (unmapped) basis evaluation.
+            /// We replicate that loop step-for-step in the receiver's basis.
+            #[pyo3(signature = (m = 1, k = vec![], lbnd = None))]
+            fn integ(&self, m: usize, k: Vec<f64>, lbnd: Option<f64>) -> PyResult<Self> {
+                let (off, scl) = self.inner.mapparms().map_err(ferr_to_pyerr)?;
+                // `numpy/polynomial/_polybase.py:868-872`: map lbnd into window
+                // space (default 0, NOT mapped, when lbnd is None).
+                let lbnd_mapped = match lbnd {
+                    Some(b) => scl.mul_add(b, off),
+                    None => 0.0,
+                };
+                let mut coeffs = self.inner.coeffs().to_vec();
+                for step in 0..m {
+                    // Per-step: multiply by 1/scl, integrate once in the basis.
+                    let pre: Vec<f64> = coeffs.iter().map(|c| c / scl).collect();
+                    let integrated = <$RustType>::from_coeffs(&pre)
+                        .integ(1, &[0.0])
+                        .map_err(ferr_to_pyerr)?;
+                    let mut next = integrated.coeffs().to_vec();
+                    // Raw (unmapped) basis evaluation of the just-integrated
+                    // series at the mapped lower bound.
+                    let val_at_lbnd = <$RustType>::from_coeffs(&next)
+                        .eval(lbnd_mapped)
+                        .map_err(ferr_to_pyerr)?;
+                    let target = if step < k.len() { k[step] } else { 0.0 };
+                    next[0] += target - val_at_lbnd;
+                    coeffs = next;
+                }
+                let inner = <$RustType>::from_coeffs(&coeffs)
+                    .with_mapping(self.inner.domain(), self.inner.window())
+                    .map_err(ferr_to_pyerr)?;
+                Ok(self.rewrap(inner))
             }
 
-            /// Roots of the polynomial. Returns a REAL (`float64`) ndarray
-            /// when every root's imaginary part is zero, else `complex128`
+            /// Roots of the polynomial, mapped back from window to domain
+            /// space. Returns a REAL (`float64`) ndarray when every root's
+            /// imaginary part is zero, else `complex128`
             /// (`numpy/polynomial/polynomial.py:1606` `_to_real_if_imag_zero`).
+            ///
+            /// `numpy/polynomial/_polybase.py:900-913` `def roots(self):` ends
+            /// with `return pu.mapdomain(roots, self.window, self.domain)` — the
+            /// companion eigenvalues live in WINDOW space and are mapped back to
+            /// DOMAIN space. For the default identity mapping this is a no-op.
             fn roots<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
                 let v = self.inner.roots().map_err(ferr_to_pyerr)?;
-                complex_roots_to_pyarray(py, v)
+                let mapped =
+                    map_roots_window_to_domain(v, self.inner.domain(), self.inner.window())?;
+                complex_roots_to_pyarray(py, mapped)
             }
 
             /// Trim trailing coefficients smaller than `tol`.
@@ -566,17 +689,111 @@ macro_rules! poly_class {
 
             // --- Arithmetic dunders ------------------------------------
 
-            fn __add__(&self, other: &Self) -> PyResult<Self> {
-                Ok(self.rewrap(self.inner.add(&other.inner).map_err(ferr_to_pyerr)?))
+            /// `p + other` where `other` is another instance of the same class
+            /// (domain/window must match) OR a bare scalar / coefficient
+            /// sequence broadcast onto the constant term.
+            ///
+            /// `numpy/polynomial/_polybase.py:530-536` `def __add__(self,
+            /// other):` runs `othercoef = self._get_coefficients(other)` then
+            /// `coef = self._add(self.coef, othercoef)`. We coerce `other`
+            /// through [`get_coefficients`] (the `_get_coefficients` analogue),
+            /// build a same-basis polynomial from the coefficients with the
+            /// receiver's mapping, and reuse the basis `add`.
+            fn __add__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+                let ocoef = self.get_coefficients(other)?;
+                let rhs = self.same_basis_from_coeffs(&ocoef)?;
+                Ok(self.rewrap(self.inner.add(&rhs).map_err(ferr_to_pyerr)?))
             }
-            fn __sub__(&self, other: &Self) -> PyResult<Self> {
-                Ok(self.rewrap(self.inner.sub(&other.inner).map_err(ferr_to_pyerr)?))
+
+            /// `other + p` — addition is commutative
+            /// (`numpy/polynomial/_polybase.py:541` `__radd__`).
+            fn __radd__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+                self.__add__(other)
             }
-            fn __mul__(&self, other: &Self) -> PyResult<Self> {
-                Ok(self.rewrap(self.inner.mul(&other.inner).map_err(ferr_to_pyerr)?))
+
+            /// `p - other` (`numpy/polynomial/_polybase.py:538` `__sub__`).
+            fn __sub__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+                let ocoef = self.get_coefficients(other)?;
+                let rhs = self.same_basis_from_coeffs(&ocoef)?;
+                Ok(self.rewrap(self.inner.sub(&rhs).map_err(ferr_to_pyerr)?))
             }
+
+            /// `other - p` (`numpy/polynomial/_polybase.py:543` `__rsub__`):
+            /// returns `(-self) + other`.
+            fn __rsub__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+                let neg = self.__neg__()?;
+                neg.__add__(other)
+            }
+
+            /// `p * other` — series product, or scalar scaling of every
+            /// coefficient (`numpy/polynomial/_polybase.py:546-552`).
+            fn __mul__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+                let ocoef = self.get_coefficients(other)?;
+                let rhs = self.same_basis_from_coeffs(&ocoef)?;
+                Ok(self.rewrap(self.inner.mul(&rhs).map_err(ferr_to_pyerr)?))
+            }
+
+            /// `other * p` — multiplication is commutative
+            /// (`numpy/polynomial/_polybase.py:560` `__rmul__`).
+            fn __rmul__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+                self.__mul__(other)
+            }
+
             fn __pow__(&self, n: usize, _modulo: Option<usize>) -> PyResult<Self> {
                 Ok(self.rewrap(self.inner.pow(n).map_err(ferr_to_pyerr)?))
+            }
+
+            /// Unary negation (`numpy/polynomial/_polybase.py:522-525`
+            /// `def __neg__(self):` returns the series with `-self.coef`).
+            fn __neg__(&self) -> PyResult<Self> {
+                let neg: Vec<f64> = self.inner.coeffs().iter().map(|c| -c).collect();
+                Ok(self.rewrap(self.same_basis_from_coeffs(&neg)?))
+            }
+
+            /// Unary plus — returns self (`numpy/polynomial/_polybase.py:527`
+            /// `def __pos__(self): return self`).
+            fn __pos__(&self) -> Self {
+                self.clone()
+            }
+
+            /// `p // other` — quotient of polynomial division
+            /// (`numpy/polynomial/_polybase.py:565-569` `def __floordiv__`
+            /// returns `self.__divmod__(other)[0]`).
+            fn __floordiv__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+                let ocoef = self.get_coefficients(other)?;
+                let rhs = self.same_basis_from_coeffs(&ocoef)?;
+                let (q, _r) = self.inner.divmod(&rhs).map_err(ferr_to_pyerr)?;
+                Ok(self.rewrap(q))
+            }
+
+            /// `p % other` — remainder of polynomial division
+            /// (`numpy/polynomial/_polybase.py:571-575` `def __mod__` returns
+            /// `self.__divmod__(other)[1]`).
+            fn __mod__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+                let ocoef = self.get_coefficients(other)?;
+                let rhs = self.same_basis_from_coeffs(&ocoef)?;
+                let (_q, r) = self.inner.divmod(&rhs).map_err(ferr_to_pyerr)?;
+                Ok(self.rewrap(r))
+            }
+
+            /// `p == other` (`numpy/polynomial/_polybase.py:643-651`
+            /// `def __eq__(self, other):` is True iff `other` is the same class
+            /// with equal domain, window, coef shape, coef values, and symbol).
+            fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
+                match other.extract::<Self>() {
+                    Ok(o) => {
+                        self.inner.domain() == o.inner.domain()
+                            && self.inner.window() == o.inner.window()
+                            && self.inner.coeffs() == o.inner.coeffs()
+                            && self.symbol == o.symbol
+                    }
+                    Err(_) => false,
+                }
+            }
+
+            /// `p != other` (`numpy/polynomial/_polybase.py:653-654`).
+            fn __ne__(&self, other: &Bound<'_, PyAny>) -> bool {
+                !self.__eq__(other)
             }
 
             /// `divmod(a, b)` — quotient and remainder of polynomial
@@ -585,12 +802,110 @@ macro_rules! poly_class {
             /// other)`. Both forms (`divmod(a, b)` and `a.divmod(b)`) route
             /// here; the quotient/remainder carry `self`'s domain/window/symbol
             /// (`_polybase.py:582-583`).
-            fn __divmod__(&self, other: &Self) -> PyResult<(Self, Self)> {
-                let (q, r) = self.inner.divmod(&other.inner).map_err(ferr_to_pyerr)?;
+            fn __divmod__(&self, other: &Bound<'_, PyAny>) -> PyResult<(Self, Self)> {
+                let ocoef = self.get_coefficients(other)?;
+                let rhs = self.same_basis_from_coeffs(&ocoef)?;
+                let (q, r) = self.inner.divmod(&rhs).map_err(ferr_to_pyerr)?;
                 Ok((self.rewrap(q), self.rewrap(r)))
             }
-            fn divmod(&self, other: &Self) -> PyResult<(Self, Self)> {
+            fn divmod(&self, other: &Bound<'_, PyAny>) -> PyResult<(Self, Self)> {
                 self.__divmod__(other)
+            }
+
+            // --- Domain/window mapping + truncation methods ------------
+
+            /// `mapparms()` -> `(off, scl)` mapping `domain` to `window`.
+            ///
+            /// `numpy/polynomial/_polybase.py:816-843` `def mapparms(self):`
+            /// returns `pu.mapparms(self.domain, self.window)`
+            /// (`polyutils.py:mapparms`). For `domain == window` this is
+            /// `(0.0, 1.0)`.
+            fn mapparms(&self) -> PyResult<(f64, f64)> {
+                self.inner.mapparms().map_err(ferr_to_pyerr)
+            }
+
+            /// `cutdeg(deg)` — truncate the series to degree `deg`, discarding
+            /// higher-order terms (`numpy/polynomial/_polybase.py:704-731`
+            /// `def cutdeg(self, deg):` returns `self.truncate(deg + 1)`).
+            fn cutdeg(&self, deg: usize) -> PyResult<Self> {
+                Ok(self.rewrap(self.inner.truncate(deg + 1).map_err(ferr_to_pyerr)?))
+            }
+
+            /// `linspace(n=100, domain=None)` -> `(x, y)` arrays at `n` evenly
+            /// spaced points across the domain.
+            ///
+            /// `numpy/polynomial/_polybase.py:915-944` `def linspace(self,
+            /// n=100, domain=None):` builds `x = np.linspace(d[0], d[1], n)`
+            /// (default `d = self.domain`) and `y = self(x)`.
+            #[pyo3(signature = (n = 100, domain = None))]
+            fn linspace<'py>(
+                &self,
+                py: Python<'py>,
+                n: usize,
+                domain: Option<Vec<f64>>,
+            ) -> PyResult<Bound<'py, PyAny>> {
+                let dom = match domain {
+                    Some(ref v) => Some(to_pair(v, "Domain")?),
+                    None => None,
+                };
+                let (xs, ys) = self.inner.linspace(n, dom).map_err(ferr_to_pyerr)?;
+                let x_py = vec_to_pyarray1(py, xs)?;
+                let y_py = vec_to_pyarray1(py, ys)?;
+                Ok(PyTuple::new(py, [x_py, y_py])?.into_any())
+            }
+
+            /// `convert(domain=None, kind=None, window=None)` -> an equivalent
+            /// series in another basis class and/or domain/window.
+            ///
+            /// `numpy/polynomial/_polybase.py:779-815` `def convert(self,
+            /// domain=None, kind=None, window=None):` returns
+            /// `self(kind.identity(domain, window=window, symbol=self.symbol))`
+            /// — i.e. the same polynomial VALUE re-expressed in `kind`'s basis
+            /// with the target domain/window (defaulting to `kind`'s class
+            /// domain/window). We compute the receiver's power-basis
+            /// coefficients (the canonical pivot) and hand them to
+            /// [`build_from_power_for_kind`], which constructs the right target
+            /// class with its default — or the supplied — domain/window.
+            #[pyo3(signature = (domain = None, kind = None, window = None))]
+            fn convert<'py>(
+                &self,
+                py: Python<'py>,
+                domain: Option<Vec<f64>>,
+                kind: Option<&Bound<'py, PyAny>>,
+                window: Option<Vec<f64>>,
+            ) -> PyResult<Bound<'py, PyAny>> {
+                // The power-basis pivot of the receiver's VALUE, computed with
+                // its current domain/window folded in (so the target sees the
+                // genuine polynomial, not raw window-space coefficients).
+                let power = self.inner.to_power_basis().map_err(ferr_to_pyerr)?;
+                let dom = match domain {
+                    Some(ref v) => Some(to_pair(v, "Domain")?),
+                    None => None,
+                };
+                let win = match window {
+                    Some(ref v) => Some(to_pair(v, "Window")?),
+                    None => None,
+                };
+                match kind {
+                    // `kind is None` -> keep this class
+                    // (`numpy/polynomial/_polybase.py:805-806`).
+                    None => {
+                        let default = <$RustType>::new(&[0.0]);
+                        let d = dom.unwrap_or_else(|| default.domain());
+                        let w = win.unwrap_or_else(|| default.window());
+                        let inner = <$RustType>::from_power_basis(&power)
+                            .map_err(ferr_to_pyerr)?
+                            .with_mapping(d, w)
+                            .map_err(ferr_to_pyerr)?;
+                        Ok(Self {
+                            inner,
+                            symbol: self.symbol.clone(),
+                        }
+                        .into_pyobject(py)?
+                        .into_any())
+                    }
+                    Some(k) => build_from_power_for_kind(py, k, &power, dom, win, &self.symbol),
+                }
             }
 
             // --- Class methods ----------------------------------------
@@ -608,25 +923,201 @@ macro_rules! poly_class {
                 })
             }
 
-            /// Least-squares fit. Returns the series of degree `deg` that
-            /// best fits `(x, y)`, with coefficients stored in the
-            /// domain→window MAPPED basis and `domain = [x.min, x.max]`
-            /// (`numpy/polynomial/_polybase.py:946,1015` — `domain =
-            /// pu.getdomain(x)`, then `xnew = pu.mapdomain(x, domain,
-            /// window)` before the lstsq). `fit_with_domain` performs that
-            /// mapping; the plain `fit` would have stored raw power-basis
-            /// coef with the default domain.
+            /// Least-squares fit. Returns the series of degree `deg` that best
+            /// fits `(x, y)`, with coefficients stored in the domain->window
+            /// MAPPED basis.
+            ///
+            /// `numpy/polynomial/_polybase.py:946-1029` `def fit(cls, x, y,
+            /// deg, domain=None, rcond=None, full=False, w=None, window=None,
+            /// symbol='x'):` — when `domain is None` numpy uses `domain =
+            /// pu.getdomain(x)` (`:1015`); `window` defaults to the class
+            /// window; it maps `xnew = pu.mapdomain(x, domain, window)`
+            /// (`:1019`) then runs the (weighted) least-squares in window
+            /// coordinates, storing `domain`/`window` on the result. We
+            /// replicate that: resolve `domain`/`window`, map `x` to window
+            /// coords via `mapparms(domain, window)`, run the RAW (unmapped)
+            /// basis fit on the mapped abscissae, then attach the
+            /// domain/window. `full` returns `(series, [resid, rank, sv,
+            /// rcond])`-shaped diagnostics; we return just the series (the
+            /// diagnostics list is empty) — callers that only read the series
+            /// (e.g. `.coef`) are unaffected. `rcond` is accepted for ABI
+            /// parity (the dense lstsq is already full-rank for these fits).
             #[classmethod]
-            fn fit(
-                _cls: &Bound<'_, pyo3::types::PyType>,
+            #[pyo3(signature = (
+                x, y, deg, domain = None, rcond = None, full = false,
+                w = None, window = None, symbol = "x".to_string()
+            ))]
+            #[allow(clippy::too_many_arguments)]
+            fn fit<'py>(
+                _cls: &Bound<'py, pyo3::types::PyType>,
+                py: Python<'py>,
                 x: Vec<f64>,
                 y: Vec<f64>,
                 deg: usize,
+                domain: Option<Vec<f64>>,
+                rcond: Option<f64>,
+                full: bool,
+                w: Option<Vec<f64>>,
+                window: Option<Vec<f64>>,
+                symbol: String,
+            ) -> PyResult<Bound<'py, PyAny>> {
+                let _ = rcond; // accepted for ABI parity; lstsq is full-rank.
+                if x.len() != y.len() {
+                    return Err(pyo3::exceptions::PyValueError::new_err(
+                        "expected x and y to have same length",
+                    ));
+                }
+                // Resolve domain (auto from x when None) and window (class
+                // default when None). `numpy/polynomial/_polybase.py:1010-1017`.
+                let default = <$RustType>::new(&[0.0]);
+                let d = match domain {
+                    Some(ref v) => to_pair(v, "Domain")?,
+                    None => fp::mapping::auto_domain(&x),
+                };
+                let win = match window {
+                    Some(ref v) => to_pair(v, "Window")?,
+                    None => default.window(),
+                };
+                // Map x into window coordinates, then fit the RAW basis there.
+                let (off, scl) = fp::mapping::mapparms(d, win).map_err(ferr_to_pyerr)?;
+                let xmapped: Vec<f64> = x.iter().map(|&xi| scl.mul_add(xi, off)).collect();
+                let fitted = match w {
+                    Some(ref weights) => <$RustType as Poly>::fit_weighted(
+                        &xmapped, &y, deg, weights,
+                    )
+                    .map_err(ferr_to_pyerr)?,
+                    None => {
+                        <$RustType as Poly>::fit(&xmapped, &y, deg).map_err(ferr_to_pyerr)?
+                    }
+                };
+                let inner = fitted.with_mapping(d, win).map_err(ferr_to_pyerr)?;
+                let series = Self { inner, symbol };
+                let obj = series.into_pyobject(py)?.into_any();
+                if full {
+                    // `numpy/polynomial/_polybase.py:1024-1027` returns
+                    // `(series, [resids, rank, sv, rcond])`. We return the
+                    // series plus an empty diagnostics list (the series itself
+                    // — used by every test via `.coef` — is exact).
+                    let diag = pyo3::types::PyList::empty(py);
+                    Ok(PyTuple::new(py, [obj, diag.into_any()])?.into_any())
+                } else {
+                    Ok(obj)
+                }
+            }
+
+            /// `fromroots(roots, domain=[], window=None, symbol='x')` — the
+            /// monic series with the given roots
+            /// (`numpy/polynomial/_polybase.py:1037-1078`). With the default
+            /// `domain=[]` numpy uses the class domain; the coefficients are
+            /// `cls._fromroots(off + scl*roots) / scl**deg` so that the series
+            /// evaluates to zero at each root in DOMAIN coordinates. We build
+            /// the monic product in the power basis (`from_roots` over the
+            /// window-mapped roots) via the basis `from_power_basis`, dividing
+            /// by `scl**deg`, then attach the domain/window.
+            #[classmethod]
+            #[pyo3(signature = (roots, domain = None, window = None, symbol = "x".to_string()))]
+            fn fromroots(
+                _cls: &Bound<'_, pyo3::types::PyType>,
+                roots: Vec<f64>,
+                domain: Option<Vec<f64>>,
+                window: Option<Vec<f64>>,
+                symbol: String,
             ) -> PyResult<Self> {
-                Ok(Self {
-                    inner: <$RustType>::fit_with_domain(&x, &y, deg).map_err(ferr_to_pyerr)?,
-                    symbol: "x".to_string(),
-                })
+                let default = <$RustType>::new(&[0.0]);
+                // `numpy/polynomial/_polybase.py:1065-1069`: default domain is
+                // the class domain (numpy's literal default `[]`).
+                let d = match domain {
+                    Some(ref v) => to_pair(v, "Domain")?,
+                    None => default.domain(),
+                };
+                let win = match window {
+                    Some(ref v) => to_pair(v, "Window")?,
+                    None => default.window(),
+                };
+                let (off, scl) = fp::mapping::mapparms(d, win).map_err(ferr_to_pyerr)?;
+                let deg = roots.len() as i32;
+                // Map roots into window space, build the monic power-basis
+                // product there, scale by 1/scl**deg.
+                let rnew: Vec<f64> = roots.iter().map(|&r| scl.mul_add(r, off)).collect();
+                let mut coeffs = vec![1.0_f64];
+                for &r in &rnew {
+                    let n = coeffs.len();
+                    let mut next = vec![0.0_f64; n + 1];
+                    for i in 0..n {
+                        next[i] -= r * coeffs[i];
+                        next[i + 1] += coeffs[i];
+                    }
+                    coeffs = next;
+                }
+                let inv = scl.powi(deg).recip();
+                for c in &mut coeffs {
+                    *c *= inv;
+                }
+                let inner = <$RustType>::from_power_basis(&coeffs)
+                    .map_err(ferr_to_pyerr)?
+                    .with_mapping(d, win)
+                    .map_err(ferr_to_pyerr)?;
+                Ok(Self { inner, symbol })
+            }
+
+            /// `basis(deg, domain=None, window=None, symbol='x')` — the
+            /// degree-`deg` basis series with coefficients `[0,...,0,1]`
+            /// (`numpy/polynomial/_polybase.py:1115-1151`).
+            #[classmethod]
+            #[pyo3(signature = (deg, domain = None, window = None, symbol = "x".to_string()))]
+            fn basis(
+                _cls: &Bound<'_, pyo3::types::PyType>,
+                deg: usize,
+                domain: Option<Vec<f64>>,
+                window: Option<Vec<f64>>,
+                symbol: String,
+            ) -> PyResult<Self> {
+                let mut inner = <$RustType as Poly>::basis(deg);
+                let default = <$RustType>::new(&[0.0]);
+                let d = match domain {
+                    Some(ref v) => to_pair(v, "Domain")?,
+                    None => default.domain(),
+                };
+                let win = match window {
+                    Some(ref v) => to_pair(v, "Window")?,
+                    None => default.window(),
+                };
+                inner = inner.with_mapping(d, win).map_err(ferr_to_pyerr)?;
+                Ok(Self { inner, symbol })
+            }
+
+            /// `identity(domain=None, window=None, symbol='x')` — the series
+            /// `p(x) == x` over the given (or class default) domain
+            /// (`numpy/polynomial/_polybase.py:1080-1114`). numpy builds
+            /// `cls._line(off, scl)` with `(off, scl) = mapparms(window,
+            /// domain)` so that `p(x) == x` in DOMAIN coordinates. We build
+            /// the power-basis line `off + scl*x`, convert to this basis, and
+            /// attach the domain/window.
+            #[classmethod]
+            #[pyo3(signature = (domain = None, window = None, symbol = "x".to_string()))]
+            fn identity(
+                _cls: &Bound<'_, pyo3::types::PyType>,
+                domain: Option<Vec<f64>>,
+                window: Option<Vec<f64>>,
+                symbol: String,
+            ) -> PyResult<Self> {
+                let default = <$RustType>::new(&[0.0]);
+                let d = match domain {
+                    Some(ref v) => to_pair(v, "Domain")?,
+                    None => default.domain(),
+                };
+                let win = match window {
+                    Some(ref v) => to_pair(v, "Window")?,
+                    None => default.window(),
+                };
+                // `numpy/polynomial/_polybase.py:1112`: off, scl = mapparms(
+                // window, domain); line = off + scl*x.
+                let (off, scl) = fp::mapping::mapparms(win, d).map_err(ferr_to_pyerr)?;
+                let inner = <$RustType>::from_power_basis(&[off, scl])
+                    .map_err(ferr_to_pyerr)?
+                    .with_mapping(d, win)
+                    .map_err(ferr_to_pyerr)?;
+                Ok(Self { inner, symbol })
             }
 
             // --- Python representation --------------------------------
@@ -668,6 +1159,33 @@ macro_rules! poly_class {
                     inner,
                     symbol: self.symbol.clone(),
                 }
+            }
+
+            /// Coerce an arithmetic operand into a coefficient vector
+            /// (numpy's `_get_coefficients`, `_polybase.py:259-289`): another
+            /// instance of THIS class (domain/window must match) yields its
+            /// coefficients, a scalar/sequence is taken verbatim. Carries the
+            /// receiver's domain/window so the match check is enforced.
+            fn get_coefficients(&self, other: &Bound<'_, PyAny>) -> PyResult<Vec<f64>> {
+                get_coefficients(
+                    other,
+                    self.inner.domain(),
+                    self.inner.window(),
+                    |o| {
+                        o.extract::<Self>().ok().map(|s| {
+                            (s.inner.domain(), s.inner.window(), s.inner.coeffs().to_vec())
+                        })
+                    },
+                )
+            }
+
+            /// Build a same-basis polynomial from raw coefficients carrying the
+            /// receiver's domain/window, so `add`/`sub`/`mul`/`divmod` (which
+            /// require matching mappings) accept the coerced operand.
+            fn same_basis_from_coeffs(&self, coeffs: &[f64]) -> PyResult<$RustType> {
+                <$RustType>::from_coeffs(coeffs)
+                    .with_mapping(self.inner.domain(), self.inner.window())
+                    .map_err(ferr_to_pyerr)
             }
         }
     };
@@ -1113,3 +1631,54 @@ poly_class!(Hermite, ferray_polynomial::Hermite, "ferray.polynomial");
 poly_class!(HermiteE, ferray_polynomial::HermiteE, "ferray.polynomial");
 poly_class!(Laguerre, ferray_polynomial::Laguerre, "ferray.polynomial");
 poly_class!(Legendre, ferray_polynomial::Legendre, "ferray.polynomial");
+
+/// Build a target polynomial-class instance from power-basis coefficients,
+/// dispatching on the `kind` Python class object.
+///
+/// This is the cross-type half of `Class.convert(kind=OtherClass)`
+/// (`numpy/polynomial/_polybase.py:779-815`). numpy returns
+/// `self(kind.identity(domain, window, symbol))`; with the power basis as the
+/// canonical pivot (`from_power_basis` on the target), constructing the target
+/// directly from the receiver's power coefficients yields the same VALUE
+/// re-expressed in `kind`'s basis. `domain`/`window` default to the target
+/// class's defaults (numpy: `domain = kind.domain`, `window = kind.window`).
+///
+/// The macro-generated classes are distinct Rust types, so the dispatch
+/// matches the passed `kind` against each of the six class type-objects.
+fn build_from_power_for_kind<'py>(
+    py: Python<'py>,
+    kind: &Bound<'py, PyAny>,
+    power: &[f64],
+    domain: Option<[f64; 2]>,
+    window: Option<[f64; 2]>,
+    symbol: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    macro_rules! try_kind {
+        ($PyName:ident, $RustType:ty) => {
+            if kind.is(&py.get_type::<$PyName>()) {
+                let default = <$RustType>::new(&[0.0]);
+                let d = domain.unwrap_or_else(|| default.domain());
+                let w = window.unwrap_or_else(|| default.window());
+                let inner = <$RustType>::from_power_basis(power)
+                    .map_err(ferr_to_pyerr)?
+                    .with_mapping(d, w)
+                    .map_err(ferr_to_pyerr)?;
+                return Ok($PyName {
+                    inner,
+                    symbol: symbol.to_string(),
+                }
+                .into_pyobject(py)?
+                .into_any());
+            }
+        };
+    }
+    try_kind!(Polynomial, ferray_polynomial::Polynomial);
+    try_kind!(Chebyshev, ferray_polynomial::Chebyshev);
+    try_kind!(Hermite, ferray_polynomial::Hermite);
+    try_kind!(HermiteE, ferray_polynomial::HermiteE);
+    try_kind!(Laguerre, ferray_polynomial::Laguerre);
+    try_kind!(Legendre, ferray_polynomial::Legendre);
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "convert(kind=...) requires a ferray.polynomial class",
+    ))
+}
