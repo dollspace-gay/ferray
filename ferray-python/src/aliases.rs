@@ -248,12 +248,31 @@ pub fn common_type<'py>(
 /// carry numpy-correct integer + float kernels — into the 2-tuple. This
 /// keeps the integer-dtype contract (`np.divmod(7, 3) == (2, 1)`) that a
 /// float-only path cannot express.
+///
+/// numpy's `divmod` ufunc registers integer and float loops only — no
+/// bool loop (numpy/_core/code_generators/generate_umath.py:1048
+/// `'divmod': Ufunc(2, 2, None, …, TD(ints, …), TD(flts), …)`). A bool
+/// operand therefore promotes `bool -> int8` under ufunc type resolution,
+/// so `np.divmod(True, True) == (np.int8(1), np.int8(0))`. ferray's
+/// `floor_divide`/`mod` dispatch (`match_dtype_numeric!`, conv.rs:967)
+/// has no bool arm, so the promotion is applied here: if either operand
+/// is bool dtype, both are coerced to `int8` before the integer divmod
+/// runs, yielding an int8 tuple that matches numpy.
 #[pyfunction]
 pub fn divmod<'py>(
     py: Python<'py>,
     x1: &Bound<'py, PyAny>,
     x2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyTuple>> {
+    let x1_bool = crate::conv::dtype_name(&as_ndarray(py, x1)?)? == "bool";
+    let x2_bool = crate::conv::dtype_name(&as_ndarray(py, x2)?)? == "bool";
+    if x1_bool || x2_bool {
+        let a = crate::conv::coerce_dtype(py, x1, "int8")?;
+        let b = crate::conv::coerce_dtype(py, x2, "int8")?;
+        let q = crate::ufunc::floor_divide(py, &a, &b)?;
+        let r = crate::ufunc::mod_(py, &a, &b)?;
+        return PyTuple::new(py, [q, r]);
+    }
     let q = crate::ufunc::floor_divide(py, x1, x2)?;
     let r = crate::ufunc::mod_(py, x1, x2)?;
     PyTuple::new(py, [q, r])
