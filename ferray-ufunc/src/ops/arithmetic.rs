@@ -483,9 +483,17 @@ where
 {
     let z = <T as Element>::zero();
     let one = <T as Element>::one();
+    let min = <T as num_traits::Bounded>::min_value();
     binary_elementwise_op(a, b, move |x, y| {
         if y == z {
             return z;
+        }
+        // INT_MIN / -1 overflows two's-complement: NumPy wraps to INT_MIN
+        // (C signed-division wraparound, never a panic). `min < z` excludes
+        // unsigned types; `y < z && y + one == z` identifies the divisor -1
+        // (the `+ one` cannot overflow, y being -1).
+        if min < z && x == min && y < z && y + one == z {
+            return min;
         }
         // Truncating quotient, then adjust toward -inf when the signs of
         // the operands differ and the division is inexact (Python `//`).
@@ -693,8 +701,16 @@ where
     D: Dimension,
 {
     let z = <T as Element>::zero();
+    let one = <T as Element>::one();
+    let min = <T as num_traits::Bounded>::min_value();
     binary_elementwise_op(a, b, move |x, y| {
         if y == z {
+            return z;
+        }
+        // INT_MIN % -1 overflows two's-complement: NumPy wraps to 0 (C
+        // signed-remainder wraparound, never a panic). Mirrors the
+        // floor_divide_int overflow guard.
+        if min < z && x == min && y < z && y + one == z {
             return z;
         }
         let r = x % y;
@@ -2114,6 +2130,12 @@ mod tests {
         Array::from_vec(Ix1::new([n]), data).unwrap()
     }
 
+    /// Build a 1-D integer test array of any element width (i8/i16/i32/i64).
+    fn ints<T: Element + Copy>(data: Vec<T>) -> Array<T, Ix1> {
+        let n = data.len();
+        Array::from_vec(Ix1::new([n]), data).expect("test array shape is valid")
+    }
+
     fn arr1_f32(data: Vec<f32>) -> Array<f32, Ix1> {
         let n = data.len();
         Array::from_vec(Ix1::new([n]), data).unwrap()
@@ -2283,6 +2305,43 @@ mod tests {
         let b = arr1(vec![2.0, 2.0]);
         let r = floor_divide(&a, &b).unwrap();
         assert_eq!(r.as_slice().unwrap(), &[3.0, -4.0]);
+    }
+
+    #[test]
+    fn test_floor_divide_int_min_over_neg1_wraps() {
+        // INT_MIN // -1 overflows; NumPy wraps to INT_MIN (no panic).
+        // Pins divergence #1031. Live oracle: np.divmod(INT_MIN, -1)[0] == INT_MIN.
+        let q8 = floor_divide_int(&ints(vec![i8::MIN]), &ints(vec![-1i8]))
+            .ok()
+            .and_then(|v| v.as_slice().map(<[_]>::to_vec));
+        assert_eq!(q8, Some(vec![i8::MIN]));
+        let q64 = floor_divide_int(&ints(vec![i64::MIN]), &ints(vec![-1i64]))
+            .ok()
+            .and_then(|v| v.as_slice().map(<[_]>::to_vec));
+        assert_eq!(q64, Some(vec![i64::MIN]));
+        // Normal floor-division (toward -inf) must not regress.
+        let r = floor_divide_int(&ints(vec![-7i32, 7, -7]), &ints(vec![2i32, -2, -2]))
+            .ok()
+            .and_then(|v| v.as_slice().map(<[_]>::to_vec));
+        assert_eq!(r, Some(vec![-4, -4, 3]));
+    }
+
+    #[test]
+    fn test_remainder_int_min_over_neg1_wraps() {
+        // INT_MIN % -1 overflows; NumPy wraps to 0 (no panic). Pins #1031.
+        let r8 = remainder_int(&ints(vec![i8::MIN]), &ints(vec![-1i8]))
+            .ok()
+            .and_then(|v| v.as_slice().map(<[_]>::to_vec));
+        assert_eq!(r8, Some(vec![0i8]));
+        let r64 = remainder_int(&ints(vec![i64::MIN]), &ints(vec![-1i64]))
+            .ok()
+            .and_then(|v| v.as_slice().map(<[_]>::to_vec));
+        assert_eq!(r64, Some(vec![0i64]));
+        // Normal modulo (sign of divisor) must not regress.
+        let r = remainder_int(&ints(vec![-7i32, 7]), &ints(vec![2i32, -2]))
+            .ok()
+            .and_then(|v| v.as_slice().map(<[_]>::to_vec));
+        assert_eq!(r, Some(vec![1, -1]));
     }
 
     #[test]
