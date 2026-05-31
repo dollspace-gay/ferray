@@ -428,3 +428,121 @@ def test_delete_float_obj_is_indexerror():
     # ferray currently raises TypeError here, so pytest.raises(IndexError) fails.
     with pytest.raises(IndexError):
         fr.delete(a, obj, 0)
+
+
+# ---------------------------------------------------------------------------
+# vstack / hstack / dstack / column_stack / r_ / c_ dtype-promotion truncation
+# (LIBRARY/binding-layer: these ops use `dtype_name(&first)` — the FIRST array's
+# dtype — instead of `common_dtype` / `result_type` across the whole list, so
+# wider later inputs are silently truncated. This is the exact bug warned about
+# in collect_typed's doc, but concatenate/stack were fixed while these six were
+# not. numpy/_core/shape_base.py vstack/hstack/dstack and numpy/lib/_index_tricks
+# r_/c_ all promote via result_type. R-CODE-4 silent-lossy.)
+# ---------------------------------------------------------------------------
+
+
+def test_vstack_promotes_to_common_dtype():
+    """np.vstack promotes int8+int64 -> int64; ferray keeps int8 and wraps 300
+    to a garbage int8. Oracle computed live."""
+    a = np.array([1, 2, 3], dtype=np.int8)
+    b = np.array([300, 400, 500], dtype=np.int64)
+    exp = np.vstack([a, b])
+    got = fr.vstack([a, b])
+    assert got.dtype == exp.dtype
+    np.testing.assert_array_equal(np.asarray(got), exp)
+
+
+def test_vstack_promotes_bool_plus_int():
+    """np.vstack(bool, int) -> int64; ferray keeps bool, losing the int values."""
+    a = np.array([True, False])
+    b = np.array([5, 6])
+    exp = np.vstack([a, b])
+    got = fr.vstack([a, b])
+    assert got.dtype == exp.dtype
+    np.testing.assert_array_equal(np.asarray(got), exp)
+
+
+def test_hstack_promotes_int_plus_float():
+    """np.hstack(int8, float64) -> float64; ferray keeps int8, truncating 1.5/2.5."""
+    a = np.array([1, 2], dtype=np.int8)
+    b = np.array([1.5, 2.5])
+    exp = np.hstack([a, b])
+    got = fr.hstack([a, b])
+    assert got.dtype == exp.dtype
+    np.testing.assert_array_equal(np.asarray(got), exp)
+
+
+def test_dstack_promotes_to_common_dtype():
+    """np.dstack(int8, int64) -> int64; ferray keeps int8 and wraps wide values."""
+    a = np.array([1, 2, 3], dtype=np.int8)
+    b = np.array([300, 400, 500], dtype=np.int64)
+    exp = np.dstack([a, b])
+    got = fr.dstack([a, b])
+    assert got.dtype == exp.dtype
+    np.testing.assert_array_equal(np.asarray(got), exp)
+
+
+def test_column_stack_promotes_to_common_dtype():
+    """np.column_stack(float32, float64) -> float64; ferray keeps float32."""
+    a = np.array([[1], [2]], dtype=np.float32)
+    b = np.array([[1.5], [2.5]], dtype=np.float64)
+    exp = np.column_stack([a, b])
+    got = fr.column_stack([a, b])
+    assert got.dtype == exp.dtype
+    np.testing.assert_array_equal(np.asarray(got), exp)
+
+
+def test_r_promotes_to_common_dtype():
+    """np.r_[int8, int64] -> int64; ferray keeps int8 (match_dtype_all on first)."""
+    a = np.array([1, 2, 3], dtype=np.int8)
+    b = np.array([300, 400, 500], dtype=np.int64)
+    exp = np.r_[a, b]
+    got = fr.r_(a, b)
+    assert got.dtype == exp.dtype
+    np.testing.assert_array_equal(np.asarray(got), exp)
+
+
+def test_r_promotes_int_plus_complex():
+    """np.r_[int64, complex128] -> complex128; ferray keeps int64 and DISCARDS
+    the imaginary part (r_/c_ ride match_dtype_all, real-only). Lossy."""
+    a = np.array([1, 2])
+    b = np.array([1 + 2j])
+    exp = np.r_[a, b]
+    got = fr.r_(a, b)
+    assert got.dtype == exp.dtype
+    np.testing.assert_array_equal(np.asarray(got), exp)
+
+
+def test_c_promotes_to_common_dtype():
+    """np.c_[int8, int64] -> int64; ferray keeps int8, wrapping wide values."""
+    a = np.array([1, 2, 3], dtype=np.int8)
+    b = np.array([300, 400, 500], dtype=np.int64)
+    exp = np.c_[a, b]
+    got = fr.c_(a, b)
+    assert got.dtype == exp.dtype
+    np.testing.assert_array_equal(np.asarray(got), exp)
+
+
+# ---------------------------------------------------------------------------
+# rollaxis negative axis / start (binding signature is `axis: usize, start: usize`,
+# so a negative int raises OverflowError instead of being normalized; numpy's
+# rollaxis(a, axis, start) accepts negatives — numpy/_core/numeric.py rollaxis).
+# ---------------------------------------------------------------------------
+
+
+def test_rollaxis_negative_axis():
+    """np.rollaxis(a, -1, 0) moves the last axis to front; ferray's usize binding
+    raises OverflowError on the negative axis."""
+    a = np.ones((3, 4, 5, 6))
+    exp = np.rollaxis(a, -1, 0)
+    got = fr.rollaxis(a, -1, 0)
+    assert got.shape == exp.shape
+
+
+def test_rollaxis_negative_start():
+    """np.rollaxis(a, 0, -1) accepts a negative start; ferray's usize binding
+    raises OverflowError."""
+    a = np.ones((3, 4, 5, 6))
+    exp = np.rollaxis(a, 0, -1)
+    got = fr.rollaxis(a, 0, -1)
+    assert got.shape == exp.shape
