@@ -439,6 +439,408 @@ fn complex_weighted_average<'py>(
 }
 
 // ---------------------------------------------------------------------------
+// Complex ORDERING ops (#932): sort / argsort / unique / min / max / ptp /
+// argmin / argmax over complex input.
+//
+// The prior binding dispatched every ordering op through
+// `match_dtype_orderable!`, which has NO complex arm — a complex input raised
+// `TypeError: unsupported dtype for ordering op`. numpy orders complex
+// LEXICOGRAPHICALLY: compare the real part first, then the imaginary part
+// (numpy's `npy_sort.c.src` complex comparators; verified live numpy 2.4.5:
+// `np.sort([3+1j,1+2j,1+1j]) == [1+1j,1+2j,3+1j]`).
+//
+// A complex value is "NaN" if EITHER component is NaN (numpy's `np.isnan`
+// complex contract). Two distinct NaN dispositions, both verified live:
+//   * sort / argsort / unique — NaN-complex sorts LAST
+//     (`np.sort([1+1j,nan+0j,2+0j]) == [1+1j,2+0j,nan+0j]`), mirroring the #918
+//     real nan-last comparator.
+//   * min / max / argmin / argmax / ptp — NaN PROPAGATES: the FIRST NaN-complex
+//     element/index wins (`np.min([3+1j,nan+0j,1+1j]) == nan+0j`,
+//     `np.argmin(...) == 1`), matching numpy's reduction-nan semantics.
+//
+// All width-preserving (c64->c64, c128->c128; argsort/argmin return int64
+// indices, verified live). This is binding-side only — `Complex` is not
+// `PartialOrd`, so the library `match_dtype_orderable!`/`nan_last_cmp` path
+// cannot carry it; the lexicographic comparator lives here over the flattened
+// (or per-axis-lane) complex data, reusing the #924/#874 lexicographic pattern.
+// ---------------------------------------------------------------------------
+
+/// `true` if either component of `z` is NaN — numpy's complex `isnan` contract
+/// (`np.isnan(complex(1, nan)) == True`), reused by every complex ordering op.
+fn cplx_is_nan<T: PartialOrd + Copy>(z: &Complex<T>) -> bool {
+    z.re.partial_cmp(&z.re).is_none() || z.im.partial_cmp(&z.im).is_none()
+}
+
+/// Total order for a SORT/ARGSORT/UNIQUE over complex: lexicographic
+/// `(real, then imag)` with NaN-complex (either part NaN) sorted LAST. Mirrors
+/// the #918 real `nan_last_cmp` extended to two components. `Complex` is not
+/// `PartialOrd`, so the order is computed directly from the parts. Ties (equal
+/// real, equal imag — and two NaN-complex) compare `Equal`, giving a stable
+/// dedup for `unique`.
+fn cplx_sort_cmp<T: PartialOrd + Copy>(a: &Complex<T>, b: &Complex<T>) -> core::cmp::Ordering {
+    use core::cmp::Ordering;
+    let an = cplx_is_nan(a);
+    let bn = cplx_is_nan(b);
+    match (an, bn) {
+        (true, true) => Ordering::Equal,
+        (true, false) => Ordering::Greater, // NaN sorts last
+        (false, true) => Ordering::Less,
+        (false, false) => match a.re.partial_cmp(&b.re) {
+            Some(Ordering::Equal) | None => a.im.partial_cmp(&b.im).unwrap_or(Ordering::Equal),
+            Some(o) => o,
+        },
+    }
+}
+
+/// `true` when `a` is the lexicographic MIN/MAX winner over `b` for a
+/// min/max/argmin/argmax/ptp reduction — NaN PROPAGATES (a NaN-complex beats
+/// any finite value, and the FIRST NaN wins on ties). `want_max` flips the
+/// finite comparison. Used with a fold that keeps the first index on a tie, so
+/// numpy's first-occurrence semantics hold (verified live: the first NaN-complex
+/// index is returned).
+fn cplx_reduce_wins<T: PartialOrd + Copy>(a: &Complex<T>, b: &Complex<T>, want_max: bool) -> bool {
+    let an = cplx_is_nan(a);
+    let bn = cplx_is_nan(b);
+    if an || bn {
+        // NaN propagates: `a` wins ONLY when `a` is NaN and the incumbent `b` is
+        // not — so the FIRST NaN-complex becomes the extremum and no later NaN
+        // displaces it (numpy first-occurrence: `np.argmin([3+1j,nan,1+1j,nan])
+        // == 1`, live).
+        return an && !bn;
+    }
+    if want_max {
+        a.re > b.re || (a.re == b.re && a.im > b.im)
+    } else {
+        a.re < b.re || (a.re == b.re && a.im < b.im)
+    }
+}
+
+/// Index of the lexicographic min/max element of a complex slice, NaN
+/// propagating (first NaN-complex wins). The slice is non-empty.
+fn cplx_arg_extremum<T: PartialOrd + Copy>(vals: &[Complex<T>], want_max: bool) -> usize {
+    let mut best = 0usize;
+    for (i, z) in vals.iter().enumerate().skip(1) {
+        if cplx_reduce_wins(z, &vals[best], want_max) {
+            best = i;
+        }
+    }
+    best
+}
+
+/// Walk every output coordinate of an axis reduction over a row-major flat
+/// complex buffer, calling `f` with each lane's elements and pushing its
+/// result. Shared by the complex min/max/ptp/argmin/argmax/sort/unique axis
+/// arms. Returns `(out_shape, results)`.
+fn cplx_axis_lanes<T, R>(
+    fa: &ArrayD<Complex<T>>,
+    ax: usize,
+    mut f: impl FnMut(&[Complex<T>]) -> R,
+) -> PyResult<(Vec<usize>, Vec<R>)>
+where
+    T: Copy,
+    Complex<T>: ferray_core::Element,
+{
+    let shape: Vec<usize> = fa.shape().to_vec();
+    let ndim = shape.len();
+    if ax >= ndim {
+        return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+            "complex ordering op: axis out of bounds",
+        )));
+    }
+    let out_shape: Vec<usize> = shape
+        .iter()
+        .enumerate()
+        .filter_map(|(d, &s)| if d == ax { None } else { Some(s) })
+        .collect();
+    let axis_len = shape[ax];
+    let flat: Vec<Complex<T>> = fa.iter().copied().collect();
+    let mut strides = vec![1usize; ndim];
+    for d in (0..ndim.saturating_sub(1)).rev() {
+        strides[d] = strides[d + 1] * shape[d + 1];
+    }
+    let out_dims: Vec<usize> = (0..ndim).filter(|&d| d != ax).collect();
+    let out_extents: Vec<usize> = out_dims.iter().map(|&d| shape[d]).collect();
+    let out_n: usize = out_extents.iter().product::<usize>().max(1);
+    let mut results: Vec<R> = Vec::with_capacity(out_n);
+    for lin in 0..out_n {
+        let mut rem = lin;
+        let mut base = 0usize;
+        for (i, &d) in out_dims.iter().enumerate() {
+            let ext = out_extents[i];
+            let c = rem % ext;
+            rem /= ext;
+            base += c * strides[d];
+        }
+        let lane: Vec<Complex<T>> = (0..axis_len)
+            .map(|k| flat[base + k * strides[ax]])
+            .collect();
+        results.push(f(&lane));
+    }
+    Ok((out_shape, results))
+}
+
+/// Complex `sort`: lexicographic with NaN-complex last. `axis=None` flattens to
+/// a 1-D result (matching the real `ferray_stats::sort` axis=None contract);
+/// an integer axis sorts each lane in place, keeping the input shape.
+fn complex_sort_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    match axis {
+        None => {
+            let mut data: Vec<Complex<T>> = fa.iter().copied().collect();
+            let n = data.len();
+            data.sort_by(cplx_sort_cmp);
+            let r =
+                ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[n]), data).map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+        Some(ax) => {
+            let shape: Vec<usize> = fa.shape().to_vec();
+            let ndim = shape.len();
+            if ax >= ndim {
+                return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+                    "complex sort: axis out of bounds",
+                )));
+            }
+            let axis_len = shape[ax];
+            let mut flat: Vec<Complex<T>> = fa.iter().copied().collect();
+            let mut strides = vec![1usize; ndim];
+            for d in (0..ndim.saturating_sub(1)).rev() {
+                strides[d] = strides[d + 1] * shape[d + 1];
+            }
+            let out_dims: Vec<usize> = (0..ndim).filter(|&d| d != ax).collect();
+            let out_extents: Vec<usize> = out_dims.iter().map(|&d| shape[d]).collect();
+            let out_n: usize = out_extents.iter().product::<usize>().max(1);
+            for lin in 0..out_n {
+                let mut rem = lin;
+                let mut base = 0usize;
+                for (i, &d) in out_dims.iter().enumerate() {
+                    let ext = out_extents[i];
+                    let c = rem % ext;
+                    rem /= ext;
+                    base += c * strides[d];
+                }
+                let mut lane: Vec<Complex<T>> = (0..axis_len)
+                    .map(|k| flat[base + k * strides[ax]])
+                    .collect();
+                lane.sort_by(cplx_sort_cmp);
+                for (k, v) in lane.into_iter().enumerate() {
+                    flat[base + k * strides[ax]] = v;
+                }
+            }
+            let r =
+                ArrayD::<Complex<T>>::from_vec(IxDyn::new(&shape), flat).map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, r)
+        }
+    }
+}
+
+/// Complex `argsort`: lexicographic-with-nan-last indices (int64). `axis=None`
+/// flattens; an integer axis argsorts each lane (axis-local indices), keeping
+/// the input shape. A stable sort gives numpy's first-occurrence tie order.
+fn complex_argsort_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    match axis {
+        None => {
+            let data: Vec<Complex<T>> = fa.iter().copied().collect();
+            let n = data.len();
+            let mut idx: Vec<u64> = (0..n as u64).collect();
+            idx.sort_by(|&i, &j| cplx_sort_cmp(&data[i as usize], &data[j as usize]));
+            let r = ArrayD::<u64>::from_vec(IxDyn::new(&[n]), idx).map_err(ferr_to_pyerr)?;
+            u64_arrd_to_i64_pyarray(py, r)
+        }
+        Some(ax) => {
+            let shape: Vec<usize> = fa.shape().to_vec();
+            let (_out, lanes) = cplx_axis_lanes(&fa, ax, |lane| {
+                let mut idx: Vec<u64> = (0..lane.len() as u64).collect();
+                idx.sort_by(|&i, &j| cplx_sort_cmp(&lane[i as usize], &lane[j as usize]));
+                idx
+            })?;
+            // Scatter the per-lane axis-local indices back into the input shape.
+            let ndim = shape.len();
+            let mut out_flat = vec![0u64; fa.size()];
+            let mut strides = vec![1usize; ndim];
+            for d in (0..ndim.saturating_sub(1)).rev() {
+                strides[d] = strides[d + 1] * shape[d + 1];
+            }
+            let out_dims: Vec<usize> = (0..ndim).filter(|&d| d != ax).collect();
+            let out_extents: Vec<usize> = out_dims.iter().map(|&d| shape[d]).collect();
+            for (lin, lane_idx) in lanes.iter().enumerate() {
+                let mut rem = lin;
+                let mut base = 0usize;
+                for (i, &d) in out_dims.iter().enumerate() {
+                    let ext = out_extents[i];
+                    let c = rem % ext;
+                    rem /= ext;
+                    base += c * strides[d];
+                }
+                for (k, &v) in lane_idx.iter().enumerate() {
+                    out_flat[base + k * strides[ax]] = v;
+                }
+            }
+            let r = ArrayD::<u64>::from_vec(IxDyn::new(&shape), out_flat).map_err(ferr_to_pyerr)?;
+            u64_arrd_to_i64_pyarray(py, r)
+        }
+    }
+}
+
+/// Complex `unique`: lexicographic sort + dedup (NaN-complex last; numpy keeps
+/// at most one NaN-complex — verified live `np.unique([nan+0j,nan+0j])` is a
+/// single `nan+0j`). 1-D result, width preserved (numpy `unique` always
+/// flattens).
+fn complex_unique_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    let mut data: Vec<Complex<T>> = fa.iter().copied().collect();
+    data.sort_by(cplx_sort_cmp);
+    // Dedup adjacent equals (including two NaN-complex, which compare Equal).
+    let mut out: Vec<Complex<T>> = Vec::with_capacity(data.len());
+    for z in data {
+        match out.last() {
+            Some(prev) if cplx_sort_cmp(prev, &z) == core::cmp::Ordering::Equal => {}
+            _ => out.push(z),
+        }
+    }
+    let n = out.len();
+    let r = ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[n]), out).map_err(ferr_to_pyerr)?;
+    complex_ferray_to_pyarray(py, r)
+}
+
+/// Complex lexicographic `min`/`max` element (NaN propagating, first wins).
+/// `axis=None` → 0-D complex; an integer axis collapses that axis.
+fn complex_minmax_reduce<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+    want_max: bool,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    let pick = |lane: &[Complex<T>]| -> Complex<T> {
+        let i = cplx_arg_extremum(lane, want_max);
+        lane[i]
+    };
+    match axis {
+        None => {
+            let vals: Vec<Complex<T>> = fa.iter().copied().collect();
+            if vals.is_empty() {
+                return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+                    "zero-size array to reduction operation",
+                )));
+            }
+            let r = pick(&vals);
+            let rd =
+                ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[]), vec![r]).map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, rd)
+        }
+        Some(ax) => {
+            let (out_shape, vals) = cplx_axis_lanes(&fa, ax, |lane| pick(lane))?;
+            let rd = ArrayD::<Complex<T>>::from_vec(IxDyn::new(&out_shape), vals)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, rd)
+        }
+    }
+}
+
+/// Complex lexicographic `argmin`/`argmax` (int64 index, NaN propagating, first
+/// wins). `axis=None` → 0-D index; an integer axis collapses that axis.
+fn complex_argextremum_reduce<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+    want_max: bool,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    match axis {
+        None => {
+            let vals: Vec<Complex<T>> = fa.iter().copied().collect();
+            if vals.is_empty() {
+                return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+                    "attempt to get argmin/argmax of an empty sequence",
+                )));
+            }
+            let i = cplx_arg_extremum(&vals, want_max) as u64;
+            let rd = ArrayD::<u64>::from_vec(IxDyn::new(&[]), vec![i]).map_err(ferr_to_pyerr)?;
+            u64_arrd_to_i64_pyarray(py, rd)
+        }
+        Some(ax) => {
+            let (out_shape, vals) =
+                cplx_axis_lanes(&fa, ax, |lane| cplx_arg_extremum(lane, want_max) as u64)?;
+            let rd =
+                ArrayD::<u64>::from_vec(IxDyn::new(&out_shape), vals).map_err(ferr_to_pyerr)?;
+            u64_arrd_to_i64_pyarray(py, rd)
+        }
+    }
+}
+
+/// Complex `ptp` = lexicographic `max - min` (complex difference, NaN
+/// propagating). `axis=None` → 0-D complex; an integer axis collapses that axis.
+fn complex_ptp_reduce<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element + core::ops::Sub<Output = Complex<T>>,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    let ptp_of = |lane: &[Complex<T>]| -> Complex<T> {
+        let lo = lane[cplx_arg_extremum(lane, false)];
+        let hi = lane[cplx_arg_extremum(lane, true)];
+        hi - lo
+    };
+    match axis {
+        None => {
+            let vals: Vec<Complex<T>> = fa.iter().copied().collect();
+            if vals.is_empty() {
+                return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+                    "zero-size array to reduction operation",
+                )));
+            }
+            let r = ptp_of(&vals);
+            let rd =
+                ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[]), vec![r]).map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, rd)
+        }
+        Some(ax) => {
+            let (out_shape, vals) = cplx_axis_lanes(&fa, ax, |lane| ptp_of(lane))?;
+            let rd = ArrayD::<Complex<T>>::from_vec(IxDyn::new(&out_shape), vals)
+                .map_err(ferr_to_pyerr)?;
+            complex_ferray_to_pyarray(py, rd)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Boolean reductions: all / any
 // ---------------------------------------------------------------------------
 
@@ -660,6 +1062,14 @@ pub fn min<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex min: lexicographic extremum (NaN propagates, first wins), width
+    // preserved — numpy: `np.min([1+2j,3+1j]) == (1+2j)` (live). The real-only
+    // `match_dtype_orderable!` below has no complex arm (would raise TypeError).
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_minmax_reduce::<f64>(py, &arr, axis, false),
+        "complex64" | "c8" => return complex_minmax_reduce::<f32>(py, &arr, axis, false),
+        _ => {}
+    }
     Ok(match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -678,6 +1088,13 @@ pub fn max<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex max: lexicographic extremum (NaN propagates, first wins), width
+    // preserved — numpy: `np.max([1+2j,3+1j]) == (3+1j)` (live).
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_minmax_reduce::<f64>(py, &arr, axis, true),
+        "complex64" | "c8" => return complex_minmax_reduce::<f32>(py, &arr, axis, true),
+        _ => {}
+    }
     Ok(match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -696,6 +1113,14 @@ pub fn ptp<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex ptp: lexicographic max - lexicographic min (complex difference,
+    // NaN propagates), width preserved — numpy: `np.ptp([1+2j,-3+4j,0+0j,2-1j])
+    // == (5-5j)` (live).
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_ptp_reduce::<f64>(py, &arr, axis),
+        "complex64" | "c8" => return complex_ptp_reduce::<f32>(py, &arr, axis),
+        _ => {}
+    }
     Ok(match_dtype_numeric!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -849,6 +1274,13 @@ pub fn argmin<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex argmin: lexicographic min index (NaN propagates, first wins) —
+    // numpy: `np.argmin([1+2j,-3+4j,0+0j,2-1j]) == 2` (live).
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_argextremum_reduce::<f64>(py, &arr, axis, false),
+        "complex64" | "c8" => return complex_argextremum_reduce::<f32>(py, &arr, axis, false),
+        _ => {}
+    }
     let r: ArrayD<u64> = match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -867,6 +1299,14 @@ pub fn argmax<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex argmax: lexicographic max index (NaN propagates, first wins) —
+    // numpy: `np.argmax([1+2j,-3+4j,0+0j,2-1j]) == 1`? (live). lexicographic
+    // max of that set is `2-1j` at index 3.
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_argextremum_reduce::<f64>(py, &arr, axis, true),
+        "complex64" | "c8" => return complex_argextremum_reduce::<f32>(py, &arr, axis, true),
+        _ => {}
+    }
     let r: ArrayD<u64> = match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -1348,6 +1788,14 @@ pub fn sort<'py>(
     use ferray_stats::SortKind;
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex sort: lexicographic (real, then imag) with NaN-complex last,
+    // width preserved — numpy: `np.sort([3+1j,1+2j,1+1j]) == [1+1j,1+2j,3+1j]`
+    // (live). The real-only `match_dtype_orderable!` has no complex arm.
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_sort_dispatch::<f64>(py, &arr, axis),
+        "complex64" | "c8" => return complex_sort_dispatch::<f32>(py, &arr, axis),
+        _ => {}
+    }
     Ok(match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -1367,6 +1815,13 @@ pub fn argsort<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex argsort: lexicographic-with-nan-last indices (int64) — numpy:
+    // `np.argsort([1+2j,-3+4j,0+0j,2-1j]) == [1,2,0,3]` (live).
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_argsort_dispatch::<f64>(py, &arr, axis),
+        "complex64" | "c8" => return complex_argsort_dispatch::<f32>(py, &arr, axis),
+        _ => {}
+    }
     let r: ArrayD<u64> = match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -1416,6 +1871,14 @@ pub fn searchsorted<'py>(
 pub fn unique<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex unique: lexicographic sort + dedup (NaN-complex last, one kept),
+    // width preserved — numpy: `np.unique([1+2j,-3+4j,1+2j,2-1j]) ==
+    // [-3+4j,1+2j,2-1j]` (live).
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_unique_dispatch::<f64>(py, &arr),
+        "complex64" | "c8" => return complex_unique_dispatch::<f32>(py, &arr),
+        _ => {}
+    }
     Ok(match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
