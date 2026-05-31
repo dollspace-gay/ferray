@@ -6866,22 +6866,60 @@ pub fn ptp<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny
     Ok(v.into_pyobject(py)?.into_any())
 }
 
-/// `numpy.ma.argmin(a)` — index of the minimum unmasked element (flat).
-/// Returns a numpy `int64` 0-d scalar (`.dtype`/`.shape == ()`), matching
-/// `numpy/ma/core.py` `argmin` (which yields a `numpy.int64`), NOT a bare
-/// Python `int` (#902 module-wrapper ABI parity with the method form).
+/// `numpy.ma.argmin(a, axis=None, fill_value=None, *, keepdims=...)` — index of
+/// the minimum unmasked element (masked elements fill as the dtype maximum).
+/// Delegates to `numpy/ma/core.py` `argmin` via [`PyMaskedArray::as_numpy_ma`],
+/// the SAME path the [`PyMaskedArray::argmin`] method form uses (#903). This
+/// yields a numpy `int64` 0-d scalar (`.dtype`/`.shape == ()`, #902 ABI parity)
+/// for the flat case and an integer `ndarray` with `axis`; an ALL-MASKED input
+/// returns `numpy.int64(0)` (numpy does NOT raise), unlike the former native
+/// `to_f64_ma().argmin()` path which raised on all-masked.
 #[pyfunction]
-pub fn argmin<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    let v = a.to_f64_ma()?.argmin().map_err(ferr_to_pyerr)?;
-    scalar_pyobject(py, v as i64)
+#[pyo3(signature = (a, axis = None, fill_value = None, *, keepdims = None))]
+pub fn argmin<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    fill_value: Option<&Bound<'py, PyAny>>,
+    keepdims: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let kwargs = pyo3::types::PyDict::new(py);
+    if let Some(ax) = axis {
+        kwargs.set_item("axis", ax)?;
+    }
+    if let Some(fv) = fill_value {
+        kwargs.set_item("fill_value", fv)?;
+    }
+    if let Some(kd) = keepdims {
+        kwargs.set_item("keepdims", kd)?;
+    }
+    a.as_numpy_ma(py)?.call_method("argmin", (), Some(&kwargs))
 }
 
-/// `numpy.ma.argmax(a)` — index of the maximum unmasked element (flat).
-/// Returns a numpy `int64` 0-d scalar (same ABI as [`argmin`], #902).
+/// `numpy.ma.argmax(a, axis=None, fill_value=None, *, keepdims=...)` — index of
+/// the maximum unmasked element (masked elements fill as the dtype minimum).
+/// Delegates to numpy.ma the same way [`argmin`] does (#903); all-masked input
+/// returns `numpy.int64(0)`. Same ABI as [`argmin`] (#902 numpy-scalar return).
 #[pyfunction]
-pub fn argmax<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    let v = a.to_f64_ma()?.argmax().map_err(ferr_to_pyerr)?;
-    scalar_pyobject(py, v as i64)
+#[pyo3(signature = (a, axis = None, fill_value = None, *, keepdims = None))]
+pub fn argmax<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    fill_value: Option<&Bound<'py, PyAny>>,
+    keepdims: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let kwargs = pyo3::types::PyDict::new(py);
+    if let Some(ax) = axis {
+        kwargs.set_item("axis", ax)?;
+    }
+    if let Some(fv) = fill_value {
+        kwargs.set_item("fill_value", fv)?;
+    }
+    if let Some(kd) = keepdims {
+        kwargs.set_item("keepdims", kd)?;
+    }
+    a.as_numpy_ma(py)?.call_method("argmax", (), Some(&kwargs))
 }
 
 /// `numpy.ma.count(a)` — number of unmasked elements.
