@@ -207,3 +207,51 @@ def test_sum_axis_out_of_bounds_raises_axiserror():
         np.sum(src, axis=5)
     with pytest.raises(np.exceptions.AxisError):
         fr.sum(fr.array([1, 2, 3]), axis=5)
+
+
+# ---------------------------------------------------------------------------
+# Divergence: ferray-python `isin` is missing the `invert=` / `kind=` kwargs.
+#
+# numpy: `isin(element, test_elements, assume_unique=False, invert=False, *,
+# kind=None)`  (numpy/lib/_arraysetops_impl.py:959). With `invert=True` numpy
+# returns the LOGICAL NEGATION of the membership mask, still shape-preserving
+# (numpy/lib/_arraysetops_impl.py:1076 `in1d(..., invert=invert,
+# kind=kind).reshape(element.shape)`).
+#
+# ferray `pub fn isin` signature is `(element, test_elements,
+# assume_unique=False)` (ferray-python/src/stats.rs:3654-3661) — neither
+# `invert=` nor `kind=` exists, so the call raises
+# `TypeError: isin() got an unexpected keyword argument 'invert'` where numpy
+# computes the inverted bool array. Oracle live (numpy 2.4.4):
+#   np.isin([1,2,3,4],[2,4],invert=True) == [True,False,True,False]
+#   np.isin([[1,2],[3,4]],[2,4],invert=True) == [[True,False],[True,False]]
+# Tracking: #<crosslink>
+# ---------------------------------------------------------------------------
+def test_divergence_isin_invert_1d():
+    element = np.array([1, 2, 3, 4])
+    test = np.array([2, 4])
+    expected = np.isin(element, test, invert=True)  # live oracle (R-CHAR-3)
+    got = fr.isin(element, test, invert=True)
+    assert isinstance(got, np.ndarray)
+    assert got.dtype == np.bool_
+    np.testing.assert_array_equal(got, expected)
+
+
+def test_divergence_isin_invert_2d_shape():
+    element = np.array([[1, 2], [3, 4]])
+    test = np.array([2, 4])
+    expected = np.isin(element, test, invert=True)  # live oracle (R-CHAR-3)
+    got = fr.isin(element, test, invert=True)
+    assert got.shape == expected.shape == (2, 2)
+    np.testing.assert_array_equal(got, expected)
+
+
+def test_divergence_isin_kind_kwarg():
+    # numpy accepts `kind=` ('sort'/'table'/None); ferray rejects it. The
+    # oracle result is identical to the default-kind membership; ferray raises
+    # TypeError on the kwarg, which is the divergence being pinned.
+    element = np.array([1, 2, 3, 4])
+    test = np.array([2, 4])
+    expected = np.isin(element, test, kind="sort")  # live oracle (R-CHAR-3)
+    got = fr.isin(element, test, kind="sort")
+    np.testing.assert_array_equal(got, expected)
