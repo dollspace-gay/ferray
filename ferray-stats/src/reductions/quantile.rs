@@ -46,9 +46,11 @@ pub enum QuantileMethod {
     /// average of the two bracketing sorted elements. `NumPy`'s
     /// `'averaged_inverted_cdf'`.
     AveragedInvertedCdf,
-    /// Discrete method, Hyndman definition 3. `sorted[k]` where
-    /// `k = round_half_to_even(n*q - 0.5)`. `NumPy`'s
-    /// `'closest_observation'`.
+    /// Discrete method, Hyndman definition 3. Virtual index
+    /// `idx = n*q - 1.5`; result index is `floor(idx) + 1`, except
+    /// `floor(idx)` when `idx` is integral and `floor(idx)` is odd (the
+    /// even-order-statistic correction), then clipped to `[0, n-1]`.
+    /// `NumPy`'s `'closest_observation'`.
     ClosestObservation,
     /// Continuous method, Hyndman definition 4. `alpha = 0`, `beta = 1`.
     /// `NumPy`'s `'interpolated_inverted_cdf'`.
@@ -94,27 +96,6 @@ fn continuous_vidx<T: Float>(n: usize, q: T, alpha: T, beta: T) -> (usize, T) {
     let lo_i = lo.to_usize().unwrap_or(0).min(n - 1);
     let gamma = vidx_clamped - lo;
     (lo_i, gamma)
-}
-
-/// Round-half-to-even (banker's rounding) for a float.
-#[inline]
-fn round_half_to_even<T: Float>(x: T) -> T {
-    let floor = x.floor();
-    let frac = x - floor;
-    let half = T::from(0.5).unwrap();
-    if frac < half {
-        floor
-    } else if frac > half {
-        floor + T::one()
-    } else {
-        // Exactly 0.5 — pick the even neighbor.
-        let floor_i = floor.to_i64().unwrap_or(0);
-        if floor_i.rem_euclid(2) == 0 {
-            floor
-        } else {
-            floor + T::one()
-        }
-    }
 }
 
 /// Compute `(lo_i, gamma)` for a given quantile method, where the
@@ -248,14 +229,37 @@ fn method_index_and_gamma<T: Float>(n: usize, q: T, method: QuantileMethod) -> (
             }
         }
         QuantileMethod::ClosestObservation => {
-            // k = round_half_to_even(n * q - 0.5), clamped to [0, n-1].
-            let nq = nf * q;
-            let adj = nq - half;
-            let rounded = round_half_to_even(adj);
-            let k = if rounded < zero {
+            // NumPy `_closest_observation` delegates to
+            // `_discrete_interpolation_to_boundaries` with virtual index
+            // `(n*q) - 1 - 0.5 = n*q - 1.5`
+            // (numpy/lib/_function_base_impl.py:4611-4630):
+            //   previous = floor(index); next = previous + 1;
+            //   gamma = index - previous;
+            //   res = next, except `previous` where
+            //         `(gamma == 0) & (floor(index) % 2 == 1)`
+            //         (the even-order-statistic correction);
+            //   then `res[res < 0] = 0`.
+            let one_and_half = one + half;
+            let idx = nf * q - one_and_half;
+            let previous = idx.floor();
+            let gamma = idx - previous;
+            // `previous` as a signed integer: it can be negative for small
+            // `q` (e.g. n=4, q=0.3 -> idx = -0.3 -> previous = -1).
+            let previous_i = previous.to_i64().unwrap_or(0);
+            // Even-order-statistic correction: keep `previous` only when the
+            // virtual index sits exactly on an integer (`gamma == 0`) and
+            // `floor(index)` is odd; otherwise advance to `next`.
+            let chosen = if gamma == zero && previous_i.rem_euclid(2) == 1 {
+                previous_i
+            } else {
+                previous_i + 1
+            };
+            // Clip into the addressable range: numpy clips `< 0` to 0, and the
+            // top is bounded by `n - 1` for the q-near-1 boundary.
+            let k = if chosen < 0 {
                 0
             } else {
-                rounded.to_usize().unwrap_or(0).min(n - 1)
+                usize::try_from(chosen).unwrap_or(0).min(n - 1)
             };
             (k, zero)
         }
@@ -847,23 +851,23 @@ mod tests {
 
     #[test]
     fn test_quantile_closest_observation_half_to_even() {
-        // n=4, q=0.5:
-        //   nq=2, adj=1.5, round_half_to_even(1.5) = 2 (2 is even) → k=2
-        //   → sorted[2] = 3
+        // NumPy virtual index = n*q - 1.5.
+        // n=4, q=0.5: idx = 2 - 1.5 = 0.5, gamma=0.5 != 0 → next =
+        //   floor(0.5)+1 = 1 → sorted[1] = 2 (numpy 2.4.x oracle).
         let a = arr_1_4();
         let q = quantile_with_method(&a, 0.5, None, QuantileMethod::ClosestObservation).unwrap();
-        assert!((q.iter().next().copied().unwrap() - 3.0).abs() < 1e-12);
+        assert!((q.iter().next().copied().unwrap() - 2.0).abs() < 1e-12);
 
-        // n=4, q=0.125:
-        //   nq=0.5, adj=0, round_half_to_even(0) = 0 → k=0 → sorted[0] = 1
+        // n=4, q=0.125: idx = 0.5 - 1.5 = -1.0, gamma=0, floor=-1 (odd) →
+        //   keep previous = -1 → clipped to 0 → sorted[0] = 1.
         let q2 = quantile_with_method(&a, 0.125, None, QuantileMethod::ClosestObservation).unwrap();
         assert!((q2.iter().next().copied().unwrap() - 1.0).abs() < 1e-12);
     }
 
     #[test]
     fn test_quantile_closest_observation_nq_0_875_rounds_up() {
-        // n=4, q=0.875:
-        //   nq=3.5, adj=3, round_half_to_even(3) = 3 → k=3 → sorted[3] = 4
+        // n=4, q=0.875: idx = 3.5 - 1.5 = 2.0, gamma=0, floor=2 (even) →
+        //   not corrected → next = 3 → sorted[3] = 4 (numpy 2.4.x oracle).
         let a = arr_1_4();
         let q = quantile_with_method(&a, 0.875, None, QuantileMethod::ClosestObservation).unwrap();
         assert!((q.iter().next().copied().unwrap() - 4.0).abs() < 1e-12);
