@@ -357,6 +357,11 @@ pub fn unravel_index<'py>(
 pub fn flatnonzero<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // string `<U`/`<S` (REQ-2, #960): int index output (`''` is falsy); delegate
+    // to numpy directly (no transport — strings never enter the Rust library).
+    if crate::manipulation::is_string_array(&arr)? {
+        return crate::manipulation::string_delegate(py, "flatnonzero", (&arr,), None);
+    }
     // float16 (REQ-5, #955): int index output; delegate to numpy as
     // `match_dtype_all!` has no float16 arm.
     if crate::conv::is_float16_dtype(dt.as_str()) {
@@ -390,6 +395,12 @@ pub fn nonzero<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'p
     // `match_dtype_all_complex!`, which would otherwise raise `TypeError`.
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::nonzero_time(py, &arr);
+    }
+    // string `<U`/`<S` (REQ-2, #960): tuple of int index arrays of non-empty
+    // strings (`''` is falsy); delegate to numpy directly. numpy returns a tuple,
+    // which rides the boundary unchanged.
+    if crate::manipulation::is_string_array(&arr)? {
+        return crate::manipulation::string_delegate(py, "nonzero", (&arr,), None);
     }
     // float16 (REQ-5, #955): tuple of int index arrays; delegate to numpy.
     if crate::conv::is_float16_dtype(dt.as_str()) {
@@ -438,6 +449,17 @@ pub fn take<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     use ferray_core::dimension::Axis;
     let mut arr = as_ndarray(py, a)?;
+    // string `<U`/`<S` (REQ-2, #960): `take` is a pure gather preserving the
+    // string dtype (`np.take(<U,...).dtype == <U`, live); delegate to numpy
+    // directly (no transport — strings never enter the Rust library).
+    if crate::manipulation::is_string_array(&arr)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        kwargs.set_item("mode", mode)?;
+        return crate::manipulation::string_delegate(py, "take", (&arr, indices), Some(&kwargs));
+    }
     // float16 (REQ-5, #955): `take` is a pure gather preserving the dtype
     // (`np.take(f16,...).dtype == float16`, live); delegate to numpy as
     // `match_dtype_all_complex!` has no float16 arm.
@@ -547,6 +569,16 @@ pub fn take_along_axis<'py>(
     let axis_len = a_shape[ax] as isize;
 
     let dt = dtype_name(&arr)?;
+    // string `<U`/`<S` (REQ-2, #960): pure gather preserving the string dtype;
+    // delegate to numpy directly.
+    if crate::manipulation::is_string_array(&arr)? {
+        return crate::manipulation::string_delegate(
+            py,
+            "take_along_axis",
+            (&arr, &idx_arr, axis),
+            None,
+        );
+    }
     // float16 (REQ-5, #955): pure gather preserving the dtype; delegate to numpy.
     if crate::conv::is_float16_dtype(dt.as_str()) {
         return crate::conv::f16_delegate(py, "take_along_axis", (&arr, &idx_arr, axis), None);
@@ -661,6 +693,12 @@ pub fn compress<'py>(
         }
     };
     let dt = dtype_name(&arr)?;
+    // string `<U`/`<S` (REQ-2, #960): compress preserves the string dtype;
+    // delegate to numpy directly. (`arr` may have been raveled above; pass it so
+    // numpy compresses the same flattened/axis form.)
+    if crate::manipulation::is_string_array(&arr)? {
+        return crate::manipulation::string_delegate(py, "compress", (condition, &arr), None);
+    }
     // float16 (REQ-5, #955): compress preserves the dtype; delegate to numpy.
     // (`arr` may have been raveled above; pass it directly so numpy compresses
     // the same flattened/axis form.)
@@ -897,6 +935,11 @@ pub fn extract<'py>(
     let cond_fa: ArrayD<bool> = cond_view.as_ferray().map_err(ferr_to_pyerr)?;
     let arr_a = as_ndarray(py, arr)?;
     let dt = dtype_name(&arr_a)?;
+    // string `<U`/`<S` (REQ-2, #960): extract returns a 1-D string array of the
+    // selected elements, dtype preserved; delegate to numpy directly.
+    if crate::manipulation::is_string_array(&arr_a)? {
+        return crate::manipulation::string_delegate(py, "extract", (condition, arr), None);
+    }
     // float16 (REQ-5, #955): extract preserves the dtype; delegate to numpy.
     if crate::conv::is_float16_dtype(dt.as_str()) {
         return crate::conv::f16_delegate(py, "extract", (condition, arr), None);
@@ -915,6 +958,11 @@ pub fn extract<'py>(
 pub fn argwhere<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // string `<U`/`<S` (REQ-2, #960): int64 multi-index output of non-empty
+    // strings; delegate to numpy directly.
+    if crate::manipulation::is_string_array(&arr)? {
+        return crate::manipulation::string_delegate(py, "argwhere", (&arr,), None);
+    }
     // float16 (REQ-5, #955): int64 multi-index output; delegate to numpy.
     if crate::conv::is_float16_dtype(dt.as_str()) {
         return crate::conv::f16_delegate(py, "argwhere", (&arr,), None);
