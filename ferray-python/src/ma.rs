@@ -5918,6 +5918,25 @@ fn coerce_to_ma<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<RustM
     coerce_to_ma_impl(py, obj, false)
 }
 
+/// Egress any Python operand to an equivalent `numpy.ma.MaskedArray` of its
+/// NATIVE dtype (#894).
+///
+/// A `ferray.ma.MaskedArray` is rebuilt via [`PyMaskedArray::as_numpy_ma`]
+/// (native data + mask + fill, no f64 collapse); any other array-like
+/// (list/ndarray/numpy.ma/scalar) is routed through `numpy.ma.array(...)`
+/// without a dtype argument, so numpy keeps the input dtype. This is the
+/// dtype-preserving counterpart of the f64-funnel [`coerce_to_ma`], used by the
+/// module fns whose numpy.ma contract preserves the integer dtype
+/// (`sort`/`clip`/`dot`/`where`); the same numpy.ma → [`from_numpy_ma`]
+/// round-trip the #892 METHODS use.
+fn to_numpy_ma_any<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    if let Ok(m) = obj.extract::<PyMaskedArray>() {
+        return m.as_numpy_ma(py);
+    }
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    np_ma.call_method1("array", (obj,))
+}
+
 /// Coerce a Python operand to a dtype-preserving [`DynMa`] (native dtype +
 /// mask), the integer/bool-faithful analog of [`coerce_to_ma`]. A
 /// `ferray.ma.MaskedArray` keeps its variant verbatim; any other array-like is
@@ -6667,16 +6686,24 @@ pub fn repeat<'py>(
 
 /// `numpy.ma.clip(a, a_min, a_max)` — clip unmasked data into
 /// `[a_min, a_max]`, mask propagated.
+///
+/// #894: delegates to numpy.ma so the result dtype follows numpy's
+/// `result_type(a, a_min, a_max)` — integer `a` with integer bounds stays
+/// integer; float bounds promote to float64 (the f64-funnel `coerce_to_ma`
+/// path unconditionally upcast to float64). The bounds are forwarded as their
+/// native Python objects (NOT pre-coerced to `f64`) so an integer bound keeps
+/// the integer result.
 #[pyfunction]
 pub fn clip<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    a_min: f64,
-    a_max: f64,
+    a_min: &Bound<'py, PyAny>,
+    a_max: &Bound<'py, PyAny>,
 ) -> PyResult<PyMaskedArray> {
-    let m = coerce_to_ma(py, a)?;
-    let out = m.clip(a_min, a_max).map_err(ferr_to_pyerr)?;
-    Ok(PyMaskedArray::from_inner(out))
+    let src = to_numpy_ma_any(py, a)?;
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let r = np_ma.call_method1("clip", (src, a_min, a_max))?;
+    from_numpy_ma(py, &r)
 }
 
 // ---------------------------------------------------------------------------
@@ -7040,21 +7067,18 @@ pub fn sort<'py>(
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
 ) -> PyResult<PyMaskedArray> {
-    let m = coerce_to_ma(py, a)?;
+    // #894: delegate to numpy.ma so the result keeps the input's native dtype
+    // (the f64-funnel `coerce_to_ma` path upcast integer input to float64). The
+    // same numpy.ma → `from_numpy_ma` round-trip the #892 sort METHOD uses.
+    let src = to_numpy_ma_any(py, a)?;
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let kwargs = pyo3::types::PyDict::new(py);
     match axis {
-        None => {
-            // Flatten and sort (masked values last).
-            let m1 = ma_as_ix1(&m)?;
-            let out = m1.sort().map_err(ferr_to_pyerr)?;
-            Ok(PyMaskedArray::from_inner(ix1_ma_to_dyn(out)?))
-        }
-        Some(ax) => {
-            let ndim = m.ndim();
-            let axis_u = crate::conv::normalize_axis(py, ax, ndim)?;
-            let out = m.sort_axis(axis_u).map_err(ferr_to_pyerr)?;
-            Ok(PyMaskedArray::from_inner(out))
-        }
+        None => kwargs.set_item("axis", py.None())?,
+        Some(ax) => kwargs.set_item("axis", ax)?,
     }
+    let r = np_ma.call_method("sort", (src,), Some(&kwargs))?;
+    from_numpy_ma(py, &r)
 }
 
 /// `numpy.ma.argsort(a, axis=None)` — indices that would sort a masked array,
@@ -7151,26 +7175,28 @@ pub fn dot<'py>(
     a: &Bound<'py, PyAny>,
     b: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let ma = coerce_to_ma(py, a)?;
-    let mb = coerce_to_ma(py, b)?;
-    match (ma.ndim(), mb.ndim()) {
-        (d, e) if d <= 1 && e <= 1 => {
-            let m1a = ma_as_ix1(&ma)?;
-            let m1b = ma_as_ix1(&mb)?;
-            let s = m1a.ma_dot_flat(&m1b).map_err(ferr_to_pyerr)?;
-            Ok(s.into_pyobject(py)?.into_any())
-        }
-        (2, 2) => {
-            let m2a = ma_as_ix2(&ma)?;
-            let m2b = ma_as_ix2(&mb)?;
-            let out = m2a.ma_dot_2d(&m2b).map_err(ferr_to_pyerr)?;
-            let py_ma = ix2_to_py(out)?;
-            Ok(Py::new(py, py_ma)?.into_bound(py).into_any())
-        }
-        (d, e) => Err(PyValueError::new_err(format!(
-            "ma.dot supports 1-D inner products and 2-D matrix products; mixed \
-             {d}-D × {e}-D operands are a ferray-ma library gap (#835)"
-        ))),
+    // #894: delegate to numpy.ma so the product keeps the operands' native
+    // dtype (int × int → int per numpy's `result_type`; the f64-funnel
+    // `coerce_to_ma` path upcast integer operands to float64). numpy.ma.dot
+    // returns a scalar for the 1-D × 1-D inner product and a MaskedArray
+    // otherwise; `from_numpy_ma` rebuilds the array case, the scalar passes
+    // straight through.
+    let na = to_numpy_ma_any(py, a)?;
+    let nb = to_numpy_ma_any(py, b)?;
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let r = np_ma.call_method1("dot", (na, nb))?;
+    let ma_cls = np_ma.getattr("MaskedArray")?;
+    if r.is_instance(&ma_cls)? && r.getattr("ndim")?.extract::<usize>()? >= 1 {
+        from_numpy_ma(py, &r)?.into_bound_py_any(py)
+    } else if r.is_instance(&ma_cls)? {
+        // 1-D × 1-D inner product: numpy.ma.dot yields a 0-D MaskedArray. The
+        // established ferray contract returns a Python scalar (existing
+        // `test_dot_1d_still_scalar` asserts `isinstance(got, float)`); `.item()`
+        // yields a native Python `float`/`int`, matching numpy's own scalar
+        // egress and keeping the value's dtype kind.
+        r.call_method0("item")
+    } else {
+        Ok(r)
     }
 }
 
@@ -7211,32 +7237,6 @@ pub fn unique<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<PyMaskedA
 // from `numpy.ma.*` directly (R-CHAR-3).
 // ===========================================================================
 
-/// Coerce a Python object into a 1-/N-D bool `MaskedArray<bool, IxDyn>`.
-///
-/// A `ferray.ma.MaskedArray` is reinterpreted by thresholding its float data
-/// at `!= 0.0` (numpy treats any non-zero as `True`), preserving its mask; any
-/// other array-like is routed through `numpy.asarray(..., bool)` with a
-/// `nomask` mask.
-fn coerce_to_bool_ma<'py>(
-    py: Python<'py>,
-    obj: &Bound<'py, PyAny>,
-) -> PyResult<RustMa<bool, IxDyn>> {
-    if let Ok(m) = obj.extract::<PyMaskedArray>() {
-        let (data, mask, shape) = ma_parts(&m.to_f64_ma()?)?;
-        let bdata: Vec<bool> = data.iter().map(|&v| v != 0.0).collect();
-        let data_arr =
-            ArrayD::<bool>::from_vec(IxDyn::new(&shape), bdata).map_err(ferr_to_pyerr)?;
-        let mask_arr = ArrayD::<bool>::from_vec(IxDyn::new(&shape), mask).map_err(ferr_to_pyerr)?;
-        return RustMa::new(data_arr, mask_arr).map_err(ferr_to_pyerr);
-    }
-    let data = extract_bool_array(py, obj)?;
-    let n = data.size();
-    let shape = data.shape().to_vec();
-    let mask =
-        ArrayD::<bool>::from_vec(IxDyn::new(&shape), vec![false; n]).map_err(ferr_to_pyerr)?;
-    RustMa::new(data, mask).map_err(ferr_to_pyerr)
-}
-
 /// `numpy.ma.where(condition, x, y)` — masked elementwise select
 /// (`numpy/ma/core.py:7915`). Result masked where the chosen source is masked
 /// OR the condition is masked; a masked condition picks the `y` branch.
@@ -7250,11 +7250,23 @@ pub fn where_<'py>(
     x: &Bound<'py, PyAny>,
     y: &Bound<'py, PyAny>,
 ) -> PyResult<PyMaskedArray> {
-    let cond = coerce_to_bool_ma(py, condition)?;
-    let mx = coerce_to_ma(py, x)?;
-    let my = coerce_to_ma(py, y)?;
-    let out = fma::ma_where(&cond, &mx, &my).map_err(ferr_to_pyerr)?;
-    Ok(PyMaskedArray::from_inner(out))
+    // #894: delegate to numpy.ma so the result follows numpy's
+    // `result_type(x, y)` — int branches stay int, a mixed int/float pair
+    // promotes to float64 (the f64-funnel `coerce_to_ma`/`from_inner` path
+    // unconditionally produced float64). The condition is forwarded as-is
+    // (numpy.ma.where accepts an ndarray/array-like/masked condition); a masked
+    // source or condition still propagates the mask through numpy.ma's own
+    // contract, then `from_numpy_ma` rebuilds preserving dtype + mask.
+    // The condition is egressed the same way (a `fr.ma.MaskedArray` keeps its
+    // mask + float-truthiness; numpy.ma.where treats a masked condition
+    // position as masked, selecting `y`). Verified live: a float masked
+    // condition behaves identically to the equivalent bool masked condition.
+    let ncond = to_numpy_ma_any(py, condition)?;
+    let nx = to_numpy_ma_any(py, x)?;
+    let ny = to_numpy_ma_any(py, y)?;
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let r = np_ma.call_method1("where", (ncond, nx, ny))?;
+    from_numpy_ma(py, &r)
 }
 
 /// `numpy.ma.choose(indices, choices)` — masked choose
