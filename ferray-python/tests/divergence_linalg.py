@@ -323,3 +323,218 @@ def test_trace_float_return_type_matches_int_path():
         "ferray.linalg.trace is inconsistent: int path scalar="
         f"{int_scalar}, float path scalar={float_scalar}; numpy: both True"
     )
+
+
+# ---------------------------------------------------------------------------
+# SCALAR-RETURN contract ($OUT_SCALAR): linalg functions whose FULL result is
+# a single scalar must return a numpy SCALAR (np.float64 / np.complex128 /
+# np.int64), NOT a 0-D ndarray. numpy's _linalg.py wrappers collapse the 0-D
+# egress to a numpy scalar (matrix_rank/trace already fixed in ferray; det /
+# norm (whole-array, no axis) / cond / slogdet still return a 0-D ndarray).
+#
+# Oracle (live): every expected TYPE/VALUE is produced by a `np.linalg.*` call
+# in-test, never literal-copied from ferray (R-CHAR-3).
+# Upstream: numpy/linalg/_linalg.py det:2120, slogdet:2244, norm:2599,
+# cond:1846, matrix_rank:2059.
+# ---------------------------------------------------------------------------
+
+
+def test_det_float_returns_numpy_scalar_not_0d_ndarray():
+    """np.linalg.det(2-D float) -> np.float64 scalar; ferray returns a 0-D
+    ndarray (linalg.rs det: `arr0.into_pyarray` with no scalarize).
+    Upstream: numpy/linalg/_linalg.py:2120 det."""
+    m = np.array([[1.0, 2.0], [3.0, 4.0]])
+    oracle = np.linalg.det(m)  # live -> np.float64(-2.0000000000000004)
+    assert not isinstance(oracle, np.ndarray)  # numpy: scalar
+    result = fr.linalg.det(m)
+    assert np.isclose(result, oracle)
+    assert not isinstance(result, np.ndarray), (
+        f"fr.linalg.det(float) returned {type(result).__name__}; "
+        "numpy returns an np.float64 scalar (not a 0-D ndarray)"
+    )
+    assert type(result) == type(oracle)
+
+
+def test_det_complex_returns_numpy_scalar_not_0d_ndarray():
+    """np.linalg.det(2-D complex) -> np.complex128 scalar; ferray returns a
+    0-D ndarray. Upstream: numpy/linalg/_linalg.py:2120 det."""
+    m = np.array([[1 + 1j, 2 + 0j], [1j, 1 + 0j]])
+    oracle = np.linalg.det(m)  # live -> np.complex128(1-1j)
+    assert not isinstance(oracle, np.ndarray)
+    result = fr.linalg.det(m)
+    assert np.isclose(result, oracle)
+    assert not isinstance(result, np.ndarray), (
+        f"fr.linalg.det(complex) returned {type(result).__name__}; "
+        "numpy returns an np.complex128 scalar"
+    )
+    assert type(result) == type(oracle)
+
+
+def test_norm_vector_returns_numpy_scalar_not_0d_ndarray():
+    """np.linalg.norm(1-D, ord=None) -> np.float64 scalar; ferray returns a
+    0-D ndarray. Upstream: numpy/linalg/_linalg.py:2599 norm."""
+    v = np.array([3.0, 4.0])
+    oracle = np.linalg.norm(v)  # live -> np.float64(5.0)
+    assert not isinstance(oracle, np.ndarray)
+    result = fr.linalg.norm(v)
+    assert np.isclose(result, oracle)
+    assert not isinstance(result, np.ndarray), (
+        f"fr.linalg.norm(vector) returned {type(result).__name__}; "
+        "numpy returns an np.float64 scalar"
+    )
+    assert type(result) == type(oracle)
+
+
+def test_norm_matrix_frobenius_returns_numpy_scalar_not_0d_ndarray():
+    """np.linalg.norm(2-D, ord=None) Frobenius -> np.float64 scalar; ferray
+    returns a 0-D ndarray. Upstream: numpy/linalg/_linalg.py:2599 norm."""
+    m = np.array([[1.0, 2.0], [3.0, 4.0]])
+    oracle = np.linalg.norm(m)  # live -> np.float64(5.477225575051661)
+    assert not isinstance(oracle, np.ndarray)
+    result = fr.linalg.norm(m)
+    assert np.isclose(result, oracle)
+    assert not isinstance(result, np.ndarray), (
+        f"fr.linalg.norm(matrix-fro) returned {type(result).__name__}; "
+        "numpy returns an np.float64 scalar"
+    )
+    assert type(result) == type(oracle)
+
+
+def test_norm_matrix_nuc_returns_numpy_scalar_not_0d_ndarray():
+    """np.linalg.norm(2-D, 'nuc') -> np.float64 scalar; ferray returns a 0-D
+    ndarray. Upstream: numpy/linalg/_linalg.py:2599 norm."""
+    m = np.array([[1.0, 2.0], [3.0, 4.0]])
+    oracle = np.linalg.norm(m, "nuc")  # live -> np.float64(5.8309518948453)
+    assert not isinstance(oracle, np.ndarray)
+    result = fr.linalg.norm(m, "nuc")
+    assert np.isclose(result, oracle)
+    assert not isinstance(result, np.ndarray), (
+        f"fr.linalg.norm(matrix-nuc) returned {type(result).__name__}; "
+        "numpy returns an np.float64 scalar"
+    )
+    assert type(result) == type(oracle)
+
+
+def test_norm_matrix_ord1_returns_numpy_scalar_not_0d_ndarray():
+    """np.linalg.norm(2-D, 1) max-col-abs-sum -> np.float64 scalar; ferray
+    returns a 0-D ndarray. Upstream: numpy/linalg/_linalg.py:2599 norm."""
+    m = np.array([[1.0, 2.0], [3.0, 4.0]])
+    oracle = np.linalg.norm(m, 1)  # live -> np.float64(6.0)
+    assert not isinstance(oracle, np.ndarray)
+    result = fr.linalg.norm(m, 1)
+    assert np.isclose(result, oracle)
+    assert not isinstance(result, np.ndarray), (
+        f"fr.linalg.norm(matrix-ord1) returned {type(result).__name__}; "
+        "numpy returns an np.float64 scalar"
+    )
+    assert type(result) == type(oracle)
+
+
+def test_norm_matrix_ord_inf_returns_numpy_scalar_not_0d_ndarray():
+    """np.linalg.norm(2-D, inf) max-row-abs-sum -> np.float64 scalar; ferray
+    returns a 0-D ndarray. Upstream: numpy/linalg/_linalg.py:2599 norm."""
+    m = np.array([[1.0, 2.0], [3.0, 4.0]])
+    oracle = np.linalg.norm(m, np.inf)  # live -> np.float64(7.0)
+    assert not isinstance(oracle, np.ndarray)
+    result = fr.linalg.norm(m, np.inf)
+    assert np.isclose(result, oracle)
+    assert not isinstance(result, np.ndarray), (
+        f"fr.linalg.norm(matrix-inf) returned {type(result).__name__}; "
+        "numpy returns an np.float64 scalar"
+    )
+    assert type(result) == type(oracle)
+
+
+def test_norm_with_axis_correctly_stays_ndarray():
+    """CONTROL (no divergence expected): an `axis=` norm that leaves dims
+    returns an ndarray in BOTH numpy and ferray — the scalarize fix must be a
+    no-op here. Upstream: numpy/linalg/_linalg.py:2599 norm (axis branch)."""
+    a = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    oracle = np.linalg.norm(a, axis=0)  # live -> 1-D ndarray, NOT a scalar
+    assert isinstance(oracle, np.ndarray)
+    result = fr.linalg.norm(a, axis=0)
+    assert isinstance(result, np.ndarray), (
+        "axis-norm must stay an ndarray; scalarize must not collapse it"
+    )
+    assert np.allclose(result, oracle)
+
+
+def test_cond_returns_numpy_scalar_not_0d_ndarray():
+    """np.linalg.cond(2-D) -> np.float64 scalar; ferray returns a 0-D ndarray
+    (linalg.rs cond: `arr0.into_pyarray` with no scalarize).
+    Upstream: numpy/linalg/_linalg.py:1846 cond."""
+    m = np.array([[1.0, 2.0], [3.0, 4.0]])
+    oracle = np.linalg.cond(m)  # live -> np.float64(14.933034373659268)
+    assert not isinstance(oracle, np.ndarray)
+    result = fr.linalg.cond(m)
+    assert np.isclose(result, oracle)
+    assert not isinstance(result, np.ndarray), (
+        f"fr.linalg.cond returned {type(result).__name__}; "
+        "numpy returns an np.float64 scalar"
+    )
+    assert type(result) == type(oracle)
+
+
+def test_slogdet_float_sign_element_is_numpy_scalar():
+    """np.linalg.slogdet(2-D float).sign -> np.float64 scalar; ferray's tuple
+    element is a 0-D ndarray. Upstream: numpy/linalg/_linalg.py:2244 slogdet."""
+    m = np.array([[1.0, 2.0], [3.0, 4.0]])
+    oracle = np.linalg.slogdet(m)  # live: sign=-1.0, logabsdet=0.6931...
+    osign = oracle.sign
+    assert not isinstance(osign, np.ndarray)
+    fsign = fr.linalg.slogdet(m)[0]
+    assert np.isclose(fsign, osign)
+    assert not isinstance(fsign, np.ndarray), (
+        f"fr.linalg.slogdet(float)[0] (sign) is {type(fsign).__name__}; "
+        "numpy's sign is an np.float64 scalar"
+    )
+    assert type(fsign) == type(osign)
+
+
+def test_slogdet_float_logabsdet_element_is_numpy_scalar():
+    """np.linalg.slogdet(2-D float).logabsdet -> np.float64 scalar; ferray's
+    tuple element is a 0-D ndarray. Upstream: numpy/linalg/_linalg.py:2244."""
+    m = np.array([[1.0, 2.0], [3.0, 4.0]])
+    oracle = np.linalg.slogdet(m)
+    olog = oracle.logabsdet  # live -> np.float64(0.6931471805599455)
+    assert not isinstance(olog, np.ndarray)
+    flog = fr.linalg.slogdet(m)[1]
+    assert np.isclose(flog, olog)
+    assert not isinstance(flog, np.ndarray), (
+        f"fr.linalg.slogdet(float)[1] (logabsdet) is {type(flog).__name__}; "
+        "numpy's logabsdet is an np.float64 scalar"
+    )
+    assert type(flog) == type(olog)
+
+
+def test_slogdet_complex_sign_element_is_numpy_scalar():
+    """np.linalg.slogdet(2-D complex).sign -> np.complex128 scalar; ferray's
+    tuple element is a 0-D ndarray. Upstream: numpy/linalg/_linalg.py:2244."""
+    m = np.array([[1 + 1j, 2 + 0j], [1j, 1 + 0j]])
+    oracle = np.linalg.slogdet(m)
+    osign = oracle.sign  # live -> np.complex128 unit-modulus
+    assert not isinstance(osign, np.ndarray)
+    fsign = fr.linalg.slogdet(m)[0]
+    assert np.isclose(fsign, osign)
+    assert not isinstance(fsign, np.ndarray), (
+        f"fr.linalg.slogdet(complex)[0] (sign) is {type(fsign).__name__}; "
+        "numpy's sign is an np.complex128 scalar"
+    )
+    assert type(fsign) == type(osign)
+
+
+def test_slogdet_complex_logabsdet_element_is_numpy_scalar():
+    """np.linalg.slogdet(2-D complex).logabsdet -> np.float64 scalar (REAL,
+    even for complex input); ferray's tuple element is a 0-D ndarray.
+    Upstream: numpy/linalg/_linalg.py:2244 slogdet."""
+    m = np.array([[1 + 1j, 2 + 0j], [1j, 1 + 0j]])
+    oracle = np.linalg.slogdet(m)
+    olog = oracle.logabsdet  # live -> np.float64(0.3465735902799727)
+    assert not isinstance(olog, np.ndarray)
+    flog = fr.linalg.slogdet(m)[1]
+    assert np.isclose(flog, olog)
+    assert not isinstance(flog, np.ndarray), (
+        f"fr.linalg.slogdet(complex)[1] (logabsdet) is {type(flog).__name__}; "
+        "numpy's logabsdet is an np.float64 scalar"
+    )
+    assert type(flog) == type(olog)
