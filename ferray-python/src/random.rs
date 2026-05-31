@@ -24,7 +24,7 @@ use numpy::{PyReadonlyArray1, PyReadwriteArray1};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use crate::conv::{as_ndarray, dtype_name, ferr_to_pyerr, scalarize};
+use crate::conv::{as_ndarray, dtype_name, ferr_to_pyerr, normalize_dtype, scalarize};
 use crate::match_dtype_all;
 
 /// The thread-local global random state backing the module-level functions.
@@ -441,7 +441,7 @@ pub fn random_integers<'py>(
         Some(h) => (low, h.saturating_add(1)),
         None => (1, low.saturating_add(1)),
     };
-    integers(py, lo, Some(hi_exclusive), size)
+    integers(py, lo, Some(hi_exclusive), size, None, false)
 }
 
 /// `numpy.random.bytes(length)` — return `length` random bytes as a
@@ -550,49 +550,110 @@ pub fn uniform<'py>(
 // Discrete (integers)
 // ---------------------------------------------------------------------------
 
-/// `numpy.random.integers(low, high=None, size=None)` — uniformly
-/// random integers in `[low, high)`.
+/// Resolve the half-open upper bound for an integers draw, applying numpy's
+/// `endpoint=` rule: `Generator.integers(low, high, …, endpoint=False)`
+/// samples `[low, high)`, while `endpoint=True` samples the inclusive
+/// `[low, high]` — i.e. draws from `[low, high + 1)`
+/// (`numpy/random/_generator.pyi` `integers` signature). The bound is widened
+/// by one (saturating) when `endpoint` is set so the existing half-open
+/// library kernel produces the inclusive range.
+fn resolve_int_bounds(low: i64, high: Option<i64>, endpoint: bool) -> (i64, i64) {
+    let (lo, hi) = match high {
+        Some(h) => (low, h),
+        None => (0, low),
+    };
+    if endpoint {
+        (lo, hi.saturating_add(1))
+    } else {
+        (lo, hi)
+    }
+}
+
+/// Cast an integers result to the numpy `dtype=` the caller requested.
+///
+/// numpy's `Generator.integers`/`RandomState.randint` default to `int64`
+/// (`numpy/random/_generator.pyi`, `numpy/random/mtrand.pyi`) but accept any
+/// integer/bool dtype (`int8`/`int16`/`int32`/`int64`/`uint8`/…/`bool`).
+/// ferray always draws the stream as `int64` (preserving reproducibility for
+/// a given seed + params) and casts the drawn values to the requested dtype
+/// via numpy's `astype` — the output `.dtype` then matches numpy. `None`
+/// leaves the default `int64` array untouched.
+fn cast_int_dtype<'py>(
+    arr: Bound<'py, PyAny>,
+    dtype: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    match dtype {
+        None => Ok(arr),
+        Some(d) if d.is_none() => Ok(arr),
+        Some(d) => {
+            let py = arr.py();
+            let name = normalize_dtype(py, d)?;
+            let np = py.import("numpy")?;
+            let target = np.getattr("dtype")?.call1((name.as_str(),))?;
+            // ndarrays and numpy scalars carry `astype`; a plain Python `int`
+            // (the module-level `size=None` path) does not, so coerce it to a
+            // 0-d numpy scalar of the requested dtype via `dtype.type(value)`.
+            if arr.hasattr("astype")? {
+                arr.call_method1("astype", (target,))
+            } else {
+                target.getattr("type")?.call1((arr,))
+            }
+        }
+    }
+}
+
+/// `numpy.random.integers(low, high=None, size=None, dtype=int64, endpoint=False)`
+/// — uniformly random integers in `[low, high)` (or `[low, high]` when
+/// `endpoint=True`).
 ///
 /// NumPy's legacy `randint` is exposed by the same name (modern
 /// `Generator.integers` is the canonical name; we follow the modern
-/// spelling).
+/// spelling). `dtype=` selects the output integer dtype (default `int64`);
+/// `endpoint=` makes the high bound inclusive
+/// (`numpy/random/_generator.pyi` `integers`).
 #[pyfunction]
-#[pyo3(signature = (low, high = None, size = None))]
+#[pyo3(signature = (low, high = None, size = None, dtype = None, endpoint = false))]
 pub fn integers<'py>(
     py: Python<'py>,
     low: i64,
     high: Option<i64>,
     size: Option<&Bound<'py, PyAny>>,
+    dtype: Option<&Bound<'py, PyAny>>,
+    endpoint: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let (lo, hi) = match high {
-        Some(h) => (low, h),
-        None => (0, low),
-    };
+    let (lo, hi) = resolve_int_bounds(low, high, endpoint);
     if size.is_none() {
         let v: i64 = with_rng(|rng| {
             rng.integers(lo, hi, 1usize)
                 .map(|a| a.iter().next().copied().unwrap_or(0))
         })
         .map_err(ferr_to_pyerr)?;
-        return Ok(v.into_pyobject(py)?.into_any());
+        let scalar = v.into_pyobject(py)?.into_any();
+        return cast_int_dtype(scalar, dtype);
     }
     let shape = shape_from_pyany(size)?;
     let arr: ArrayD<i64> =
         with_rng(|rng| rng.integers(lo, hi, shape.as_slice())).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+    cast_int_dtype(
+        arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+        dtype,
+    )
 }
 
-/// `numpy.random.randint(low, high=None, size=None)` — legacy alias for
-/// `integers`.
+/// `numpy.random.randint(low, high=None, size=None, dtype=int)` — legacy
+/// alias for `integers`. Accepts `dtype=` like
+/// `numpy/random/mtrand.pyi` `randint`; the legacy `randint` has no
+/// `endpoint=` kwarg, so it always draws the half-open `[low, high)`.
 #[pyfunction]
-#[pyo3(signature = (low, high = None, size = None))]
+#[pyo3(signature = (low, high = None, size = None, dtype = None))]
 pub fn randint<'py>(
     py: Python<'py>,
     low: i64,
     high: Option<i64>,
     size: Option<&Bound<'py, PyAny>>,
+    dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    integers(py, low, high, size)
+    integers(py, low, high, size, dtype, false)
 }
 
 // ---------------------------------------------------------------------------
@@ -1556,28 +1617,32 @@ impl PyGenerator {
         )
     }
 
-    /// `Generator.integers(low, high=None, size=None)`.
-    #[pyo3(signature = (low, high = None, size = None))]
+    /// `Generator.integers(low, high=None, size=None, dtype=int64, endpoint=False)`.
+    ///
+    /// `dtype=` selects the output integer dtype (default `int64`);
+    /// `endpoint=True` makes the high bound inclusive
+    /// (`numpy/random/_generator.pyi` `integers`).
+    #[pyo3(signature = (low, high = None, size = None, dtype = None, endpoint = false))]
     fn integers<'py>(
         &mut self,
         py: Python<'py>,
         low: i64,
         high: Option<i64>,
         size: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
+        endpoint: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let (lo, hi) = match high {
-            Some(h) => (low, h),
-            None => (0, low),
-        };
+        let (lo, hi) = resolve_int_bounds(low, high, endpoint);
         let (shape, scalar) = dist_shape(size)?;
         let arr: ArrayD<i64> = self
             .inner
             .integers(lo, hi, shape.as_slice())
             .map_err(ferr_to_pyerr)?;
-        finish_dist(
+        let out = finish_dist(
             arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
             scalar,
-        )
+        )?;
+        cast_int_dtype(out, dtype)
     }
 
     /// `Generator.exponential(scale=1.0, size=None)`.
@@ -2645,15 +2710,18 @@ impl PyRandomState {
         Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
     }
 
-    /// `RandomState.randint(low, high=None, size=None)` — half-open
-    /// `[low, high)`; scalar for `size=None`.
-    #[pyo3(signature = (low, high = None, size = None))]
+    /// `RandomState.randint(low, high=None, size=None, dtype=int)` — half-open
+    /// `[low, high)`; scalar for `size=None`. `dtype=` selects the output
+    /// integer dtype (default `int`/`int64`); the legacy `randint` has no
+    /// `endpoint=` kwarg (`numpy/random/mtrand.pyi` `randint`).
+    #[pyo3(signature = (low, high = None, size = None, dtype = None))]
     fn randint<'py>(
         &mut self,
         py: Python<'py>,
         low: i64,
         high: Option<i64>,
         size: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let (lo, hi) = match high {
             Some(h) => (low, h),
@@ -2668,14 +2736,17 @@ impl PyRandomState {
                 .next()
                 .copied()
                 .unwrap_or(0);
-            return Ok(v.into_pyobject(py)?.into_any());
+            return cast_int_dtype(v.into_pyobject(py)?.into_any(), dtype);
         }
         let s = shape_from_pyany(size)?;
         let arr: ArrayD<i64> = self
             .inner
             .integers(lo, hi, s.as_slice())
             .map_err(ferr_to_pyerr)?;
-        Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        cast_int_dtype(
+            arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any(),
+            dtype,
+        )
     }
 
     /// `RandomState.tomaxint`-free alias: `random_integers(low, high=None,
@@ -2692,7 +2763,7 @@ impl PyRandomState {
             Some(h) => (low, h.saturating_add(1)),
             None => (1, low.saturating_add(1)),
         };
-        self.randint(py, lo, Some(hi_excl), size)
+        self.randint(py, lo, Some(hi_excl), size, None)
     }
 
     /// `RandomState.exponential(scale=1.0, size=None)`.
