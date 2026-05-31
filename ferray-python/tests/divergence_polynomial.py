@@ -176,3 +176,92 @@ def test_builtin_divmod_supported():
     nq, nr = divmod(na, nb)
     q, r = divmod(a, b)  # ferray: TypeError (no __divmod__)
     np.testing.assert_allclose(np.asarray(q.coef), np.asarray(nq.coef))
+
+
+# ===========================================================================
+# poly1d family — narrow-float dtype preservation (ACToR adversarial sweep,
+# 2026-05-31). The verified behaviors (all-integer / int+float / complex)
+# match the oracle exactly — see report "NO DIVERGENCE" verdicts. The seam
+# in ferray-python/src/polynomial.rs delegates to numpy ONLY for complex and
+# integer-kind dtypes; it MISSES narrow-float (float32/float16) inputs, which
+# numpy preserves but ferray upcasts to float64.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# 9. polyadd(float32, float32) — numpy keeps float32; ferray upcasts to float64.
+# ---------------------------------------------------------------------------
+def test_polyadd_float32_preserves_dtype():
+    """numpy/lib/_polynomial_impl.py:850-857 — polyadd does `a1 + a2` over
+    `atleast_1d(a1)`/`atleast_1d(a2)`; float32 + float32 -> float32 by numpy
+    promotion. ferray's poly_binop (polynomial.rs:875) coerces both operands
+    to Vec<f64>, so the result is float64. Values agree; dtype diverges.
+    Expected dtype from the LIVE oracle.
+    """
+    a = np.array([1.0, 2.0], dtype=np.float32)
+    b = np.array([3.0, 4.0], dtype=np.float32)
+    np_dtype = np.polyadd(a, b).dtype          # oracle: float32
+    fr_dtype = np.asarray(fr.polyadd(a, b)).dtype
+    assert fr_dtype == np_dtype
+
+
+# ---------------------------------------------------------------------------
+# 10. polysub(float32, float32) — same float32-preservation divergence.
+# ---------------------------------------------------------------------------
+def test_polysub_float32_preserves_dtype():
+    """numpy/lib/_polynomial_impl.py:906-918 — polysub mirrors polyadd's
+    `a1 - a2` over `atleast_1d`, preserving float32. ferray upcasts to
+    float64 via the Vec<f64> seam (polynomial.rs:875,951).
+    """
+    a = np.array([5.0, 7.0], dtype=np.float32)
+    b = np.array([1.0, 2.0], dtype=np.float32)
+    np_dtype = np.polysub(a, b).dtype          # oracle: float32
+    fr_dtype = np.asarray(fr.polysub(a, b)).dtype
+    assert fr_dtype == np_dtype
+
+
+# ---------------------------------------------------------------------------
+# 11. polymul(float32, float32) — convolution preserves float32 in numpy.
+# ---------------------------------------------------------------------------
+def test_polymul_float32_preserves_dtype():
+    """numpy/lib/_polynomial_impl.py:979-982 — polymul = `NX.convolve(a1, a2)`
+    over `atleast_1d`; float32 convolution stays float32. ferray's poly_binop
+    (polynomial.rs:875,965) upcasts to float64.
+    """
+    a = np.array([1.0, 2.0], dtype=np.float32)
+    b = np.array([3.0, 4.0], dtype=np.float32)
+    np_dtype = np.polymul(a, b).dtype          # oracle: float32
+    fr_dtype = np.asarray(fr.polymul(a, b)).dtype
+    assert fr_dtype == np_dtype
+
+
+# ---------------------------------------------------------------------------
+# 12. polyval(float32 p, float32 x) — Horner over asarray(p) keeps float32.
+# ---------------------------------------------------------------------------
+def test_polyval_float32_preserves_dtype():
+    """numpy/lib/_polynomial_impl.py:782-790 — polyval evaluates Horner
+    `y = y*x + pv` over `NX.asarray(p)` and `NX.asanyarray(x)`; float32 p and
+    float32 x keep a float32 result. ferray's polyval (polynomial.rs:753,755)
+    coerces p to Vec<f64> and x through as_eval_input's `asarray(_, float64)`
+    cast, yielding float64. The seam delegates only for complex / integer-kind
+    inputs (polynomial.rs:740-752), not narrow floats.
+    """
+    p = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+    x = np.float32(2.0)
+    np_dtype = np.asarray(np.polyval(p, x)).dtype   # oracle: float32
+    fr_dtype = np.asarray(fr.polyval(p, x)).dtype
+    assert fr_dtype == np_dtype
+
+
+# ---------------------------------------------------------------------------
+# 13. polyadd(float16, float16) — float16 preserved by numpy promotion.
+# ---------------------------------------------------------------------------
+def test_polyadd_float16_preserves_dtype():
+    """numpy/lib/_polynomial_impl.py:850-857 — float16 + float16 -> float16.
+    Generalises the narrow-float divergence below float32 (the seam upcasts
+    ALL non-int/non-complex dtypes to float64).
+    """
+    a = np.array([1.0, 2.0], dtype=np.float16)
+    b = np.array([3.0, 4.0], dtype=np.float16)
+    np_dtype = np.polyadd(a, b).dtype          # oracle: float16
+    fr_dtype = np.asarray(fr.polyadd(a, b)).dtype
+    assert fr_dtype == np_dtype
