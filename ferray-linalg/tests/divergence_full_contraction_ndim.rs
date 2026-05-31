@@ -37,12 +37,20 @@ fn divergence_tensordot_full_contraction_is_0d() {
 
     // numpy oracle: scalar result, shape () / ndim 0.
     assert_eq!(c.ndim(), 0, "full tensordot must be 0-D (numpy shape ())");
-    assert_eq!(c.shape(), &[] as &[usize], "full tensordot shape must be ()");
+    assert_eq!(
+        c.shape(),
+        &[] as &[usize],
+        "full tensordot shape must be ()"
+    );
 
     // numpy oracle value: 1*1 + 2*2 + 3*3 + 4*4 = 30.0
     let v: Vec<f64> = c.iter().copied().collect();
     assert_eq!(v.len(), 1, "exactly one scalar element");
-    assert!((v[0] - 30.0).abs() < 1e-10, "value must be 30.0, got {}", v[0]);
+    assert!(
+        (v[0] - 30.0).abs() < 1e-10,
+        "value must be 30.0, got {}",
+        v[0]
+    );
 }
 
 /// Guard (must stay GREEN through any fix): a NON-full tensordot of two 2-D
@@ -80,5 +88,9 @@ fn divergence_vecdot_1d_is_0d() {
     // numpy oracle value: 1*4 + 2*5 + 3*6 = 32.0
     let v: Vec<f64> = c.iter().copied().collect();
     assert_eq!(v.len(), 1, "exactly one scalar element");
-    assert!((v[0] - 32.0).abs() < 1e-10, "value must be 32.0, got {}", v[0]);
+    assert!(
+        (v[0] - 32.0).abs() < 1e-10,
+        "value must be 32.0, got {}",
+        v[0]
+    );
 }
