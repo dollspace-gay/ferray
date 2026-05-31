@@ -1951,7 +1951,7 @@ pub fn meshgrid<'py>(
                 .map(|p| p.into_any())
         })
         .collect::<PyResult<_>>()?;
-    Ok(pyo3::types::PyList::new(py, py_arrays)?.into_any())
+    Ok(pyo3::types::PyTuple::new(py, py_arrays)?.into_any())
 }
 
 /// `true` if every `meshgrid` input is a plain `float64` array/sequence, so the
