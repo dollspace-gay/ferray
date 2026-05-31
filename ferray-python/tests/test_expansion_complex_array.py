@@ -196,20 +196,29 @@ def test_transcendental_real_axis_branch_matches_numpy(name):
 
 
 @pytest.mark.parametrize("name", ["arcsin", "arccos", "arctanh"])
-def test_arc_branch_cut_real_axis_known_divergence(name):
-    """KNOWN library divergence (spillover, NOT this build): num_complex's
-    `asin`/`acos`/`atanh` pick the opposite branch-cut sign to numpy at a real
-    argument with `|re| > 1` and a +0 imaginary part (numpy follows C99's
-    signed-zero branch-cut rule). Interior points already match (see
-    `test_transcendental_complex128_matches_numpy`). This test documents the
-    residual divergence so it is tracked, not hidden; the fix belongs in
-    `ferray-ufunc/src/ops/complex.rs` (outside this binding's manifest)."""
-    z = np.array([2 + 0j], dtype="complex128")
+@pytest.mark.parametrize("re", [2.0, -2.0])
+@pytest.mark.parametrize("im_sign", [0.0, -0.0])
+def test_arc_branch_cut_real_axis_matches_numpy_signed_zero(name, re, im_sign):
+    """C99 signed-zero branch cut (fixed in ferray-ufunc/src/ops/complex.rs,
+    closes #926). At a real argument with `|re| > 1` and a `±0` imaginary part,
+    numpy follows C99: the result's imaginary sign is fixed by the sign of the
+    input's imaginary signed-zero (arcsin/arctanh) or its negation (arccos).
+    num_complex ignored the input zero sign — ferray now corrects it. Both the
+    magnitude AND the sign must match numpy (regression coverage, not just a
+    documented divergence). Expected from a LIVE numpy call (R-CHAR-3)."""
+    z = np.array([complex(re, im_sign)], dtype="complex128")
     got = np.asarray(getattr(fr, name)(fr.array(z)))[0]
     expected = getattr(np, name)(z)[0]
-    # The magnitude matches; only the imaginary SIGN flips at the cut.
-    assert np.isclose(got.real, expected.real)
-    assert np.isclose(abs(got.imag), abs(expected.imag))
+    assert np.isclose(got.real, expected.real), (name, re, im_sign, got, expected)
+    assert np.isclose(got.imag, expected.imag), (name, re, im_sign, got, expected)
+    # exact signed-zero / sign agreement at the cut
+    assert np.signbit(got.imag) == np.signbit(expected.imag), (
+        name,
+        re,
+        im_sign,
+        got,
+        expected,
+    )
 
 
 def test_sqrt_negative_real_complex_takes_complex_branch():

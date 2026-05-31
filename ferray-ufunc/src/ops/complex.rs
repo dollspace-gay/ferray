@@ -205,6 +205,71 @@ macro_rules! complex_unary {
     };
 }
 
+// ---------------------------------------------------------------------------
+// C99 signed-zero branch-cut correction for the inverse trig / hyperbolic
+// functions (arcsin/arccos/arctanh and arcsinh/arctan/arccosh).
+//
+// num_complex's `asin`/`acos`/`atanh`/`asinh`/`atan`/`acosh` choose the
+// branch-cut side from the sign of a *non-zero* component (e.g. `sign(re)`)
+// and IGNORE the sign of a signed ZERO on the cut. numpy follows C99: on the
+// real-axis cut (`im == ±0`, for asin/acos/atanh/acosh) the result's imaginary
+// sign is fixed by the sign of the input's imaginary signed-zero; on the
+// imaginary-axis cut (`re == ±0`, for asinh/atan) the result's real sign is
+// fixed by the input's real signed-zero. Upstream defines casin/catan via
+// casinh/catanh with conjugation (npy_math_complex.c.src:1352/1362) and selects
+// the cut side with `npy_signbit` (`:1453`) — exactly the identity used here:
+// `f(conj(z)) == conj(f(z))` yields the two branches, and we pick the one whose
+// relevant component sign matches the input's signed-zero (with `follow=false`
+// for arccos, whose imaginary sign is the negation — `arccos = π/2 − arcsin`).
+//
+// Interior points (`im != 0` / `re != 0`) bypass these helpers entirely and
+// stay byte-for-byte what num_complex returns (already matching numpy).
+
+/// On the real-axis cut (`z.im == 0`) pick the C99 branch whose imaginary sign
+/// matches the input's imaginary signed-zero (`follow`), else its negation.
+/// Off the cut, return `f(z)` unchanged.
+fn fix_real_axis_cut<T>(
+    z: Complex<T>,
+    follow: bool,
+    f: impl Fn(Complex<T>) -> Complex<T>,
+) -> Complex<T>
+where
+    T: Element + Float,
+{
+    let zero = <T as num_traits::Zero>::zero();
+    if z.im == zero {
+        let base = f(z);
+        let want_neg = z.im.is_sign_negative() == follow;
+        if base.im.is_sign_negative() == want_neg {
+            base
+        } else {
+            f(z.conj()).conj()
+        }
+    } else {
+        f(z)
+    }
+}
+
+/// On the imaginary-axis cut (`z.re == 0`) pick the C99 branch whose real sign
+/// matches the input's real signed-zero. Off the cut, return `f(z)` unchanged.
+fn fix_imag_axis_cut<T>(z: Complex<T>, f: impl Fn(Complex<T>) -> Complex<T>) -> Complex<T>
+where
+    T: Element + Float,
+{
+    let zero = <T as num_traits::Zero>::zero();
+    if z.re == zero {
+        let base = f(z);
+        let want_neg = z.re.is_sign_negative();
+        if base.re.is_sign_negative() == want_neg {
+            base
+        } else {
+            f(z.conj()).conj()
+        }
+    } else {
+        f(z)
+    }
+}
+
 complex_unary!(
     sin_complex,
     sin,
@@ -215,12 +280,97 @@ complex_unary!(tan_complex, tan, "Element-wise complex tan.");
 complex_unary!(sinh_complex, sinh, "Element-wise complex sinh.");
 complex_unary!(cosh_complex, cosh, "Element-wise complex cosh.");
 complex_unary!(tanh_complex, tanh, "Element-wise complex tanh.");
-complex_unary!(asin_complex, asin, "Element-wise complex arcsin.");
-complex_unary!(acos_complex, acos, "Element-wise complex arccos.");
-complex_unary!(atan_complex, atan, "Element-wise complex arctan.");
-complex_unary!(asinh_complex, asinh, "Element-wise complex arcsinh.");
-complex_unary!(acosh_complex, acosh, "Element-wise complex arccosh.");
-complex_unary!(atanh_complex, atanh, "Element-wise complex arctanh.");
+
+/// Element-wise complex arcsin. On the real-axis branch cut (`im == ±0`,
+/// `|re| > 1`) the imaginary sign follows the input's signed-zero per C99.
+pub fn asin_complex<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<Complex<T>, D>>
+where
+    T: Element + Float,
+    Complex<T>: Element,
+    D: Dimension,
+{
+    let data: Vec<Complex<T>> = input
+        .iter()
+        .map(|z| fix_real_axis_cut(*z, true, |w| w.asin()))
+        .collect();
+    Array::from_vec(input.dim().clone(), data)
+}
+
+/// Element-wise complex arccos. On the real-axis branch cut (`im == ±0`,
+/// `|re| > 1`) the imaginary sign is the negation of the input's signed-zero
+/// per C99 (`arccos = π/2 − arcsin`).
+pub fn acos_complex<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<Complex<T>, D>>
+where
+    T: Element + Float,
+    Complex<T>: Element,
+    D: Dimension,
+{
+    let data: Vec<Complex<T>> = input
+        .iter()
+        .map(|z| fix_real_axis_cut(*z, false, |w| w.acos()))
+        .collect();
+    Array::from_vec(input.dim().clone(), data)
+}
+
+/// Element-wise complex arctan. On the imaginary-axis branch cut (`re == ±0`,
+/// `|im| > 1`) the real sign follows the input's real signed-zero per C99.
+pub fn atan_complex<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<Complex<T>, D>>
+where
+    T: Element + Float,
+    Complex<T>: Element,
+    D: Dimension,
+{
+    let data: Vec<Complex<T>> = input
+        .iter()
+        .map(|z| fix_imag_axis_cut(*z, |w| w.atan()))
+        .collect();
+    Array::from_vec(input.dim().clone(), data)
+}
+
+/// Element-wise complex arcsinh. On the imaginary-axis branch cut (`re == ±0`,
+/// `|im| > 1`) the real sign follows the input's real signed-zero per C99.
+pub fn asinh_complex<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<Complex<T>, D>>
+where
+    T: Element + Float,
+    Complex<T>: Element,
+    D: Dimension,
+{
+    let data: Vec<Complex<T>> = input
+        .iter()
+        .map(|z| fix_imag_axis_cut(*z, |w| w.asinh()))
+        .collect();
+    Array::from_vec(input.dim().clone(), data)
+}
+
+/// Element-wise complex arccosh. On the real-axis branch cut (`im == ±0`,
+/// `re < 1`) the imaginary sign follows the input's signed-zero per C99.
+pub fn acosh_complex<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<Complex<T>, D>>
+where
+    T: Element + Float,
+    Complex<T>: Element,
+    D: Dimension,
+{
+    let data: Vec<Complex<T>> = input
+        .iter()
+        .map(|z| fix_real_axis_cut(*z, true, |w| w.acosh()))
+        .collect();
+    Array::from_vec(input.dim().clone(), data)
+}
+
+/// Element-wise complex arctanh. On the real-axis branch cut (`im == ±0`,
+/// `|re| > 1`) the imaginary sign follows the input's signed-zero per C99.
+pub fn atanh_complex<T, D>(input: &Array<Complex<T>, D>) -> FerrayResult<Array<Complex<T>, D>>
+where
+    T: Element + Float,
+    Complex<T>: Element,
+    D: Dimension,
+{
+    let data: Vec<Complex<T>> = input
+        .iter()
+        .map(|z| fix_real_axis_cut(*z, true, |w| w.atanh()))
+        .collect();
+    Array::from_vec(input.dim().clone(), data)
+}
 complex_unary!(
     exp_complex,
     exp,
@@ -615,6 +765,185 @@ mod tests {
         let r = atanh_complex(&t).unwrap();
         let v = r.iter().next().copied().unwrap();
         assert!(approx_eq_c(v, z, 1e-12));
+    }
+
+    // C99 signed-zero branch-cut sign tests. Expected values derived LIVE from
+    // numpy 2.4.5 (R-CHAR-3), e.g.:
+    //   np.arcsin(2+0j)  = (1.5707963267948966 + 1.3169578969248166j)
+    //   np.arcsin(2-0j)  = (1.5707963267948966 - 1.3169578969248166j)
+    //   np.arccos(2+0j)  = (0 - 1.3169578969248166j)
+    //   np.arctanh(2+0j) = (0.5493061443340549 + 1.5707963267948966j)
+    //   np.arcsinh(-0+2j)= (-1.3169578969248166 + 1.5707963267948966j)
+    //   np.arctan(-0+2j) = (-1.5707963267948966 + 0.5493061443340549j)
+    //   np.arccosh(-2-0j)= (1.3169578969248166 - 3.141592653589793j)
+    const MAG_S: f64 = 1.3169578969248166; // arcsin/arccos/arctanh magnitude at |2|
+    const HALF_PI: f64 = std::f64::consts::FRAC_PI_2;
+    const PI: f64 = std::f64::consts::PI;
+
+    type ComplexUnaryFn = fn(&Array<Complex64, Ix1>) -> FerrayResult<Array<Complex64, Ix1>>;
+
+    fn call1(z: Complex64, f: ComplexUnaryFn) -> Complex64 {
+        match f(&arr1_c64(vec![z]))
+            .ok()
+            .and_then(|a| a.iter().next().copied())
+        {
+            Some(v) => v,
+            None => Complex64::new(f64::NAN, f64::NAN),
+        }
+    }
+
+    #[test]
+    fn test_arcsin_branch_cut_signed_zero() {
+        // im follows input zero sign; re follows sign(re).
+        assert!(approx_eq_c(
+            call1(Complex64::new(2.0, 0.0), asin_complex),
+            Complex64::new(HALF_PI, MAG_S),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(2.0, -0.0), asin_complex),
+            Complex64::new(HALF_PI, -MAG_S),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(-2.0, 0.0), asin_complex),
+            Complex64::new(-HALF_PI, MAG_S),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(-2.0, -0.0), asin_complex),
+            Complex64::new(-HALF_PI, -MAG_S),
+            1e-12
+        ));
+    }
+
+    #[test]
+    fn test_arccos_branch_cut_signed_zero() {
+        // im is the NEGATION of input zero sign.
+        assert!(approx_eq_c(
+            call1(Complex64::new(2.0, 0.0), acos_complex),
+            Complex64::new(0.0, -MAG_S),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(2.0, -0.0), acos_complex),
+            Complex64::new(0.0, MAG_S),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(-2.0, 0.0), acos_complex),
+            Complex64::new(PI, -MAG_S),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(-2.0, -0.0), acos_complex),
+            Complex64::new(PI, MAG_S),
+            1e-12
+        ));
+    }
+
+    #[test]
+    fn test_arctanh_branch_cut_signed_zero() {
+        let re_m = 0.5493061443340549;
+        assert!(approx_eq_c(
+            call1(Complex64::new(2.0, 0.0), atanh_complex),
+            Complex64::new(re_m, HALF_PI),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(2.0, -0.0), atanh_complex),
+            Complex64::new(re_m, -HALF_PI),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(-2.0, 0.0), atanh_complex),
+            Complex64::new(-re_m, HALF_PI),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(-2.0, -0.0), atanh_complex),
+            Complex64::new(-re_m, -HALF_PI),
+            1e-12
+        ));
+    }
+
+    #[test]
+    fn test_arcsinh_branch_cut_signed_zero() {
+        // imaginary-axis cut: re follows input REAL zero sign.
+        assert!(approx_eq_c(
+            call1(Complex64::new(0.0, 2.0), asinh_complex),
+            Complex64::new(MAG_S, HALF_PI),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(-0.0, 2.0), asinh_complex),
+            Complex64::new(-MAG_S, HALF_PI),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(0.0, -2.0), asinh_complex),
+            Complex64::new(MAG_S, -HALF_PI),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(-0.0, -2.0), asinh_complex),
+            Complex64::new(-MAG_S, -HALF_PI),
+            1e-12
+        ));
+    }
+
+    #[test]
+    fn test_arctan_branch_cut_signed_zero() {
+        let im_m = 0.5493061443340549;
+        assert!(approx_eq_c(
+            call1(Complex64::new(0.0, 2.0), atan_complex),
+            Complex64::new(HALF_PI, im_m),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(-0.0, 2.0), atan_complex),
+            Complex64::new(-HALF_PI, im_m),
+            1e-12
+        ));
+    }
+
+    #[test]
+    fn test_arccosh_branch_cut_signed_zero() {
+        // re<1 real-axis cut: im follows input imaginary zero sign.
+        assert!(approx_eq_c(
+            call1(Complex64::new(-2.0, 0.0), acosh_complex),
+            Complex64::new(MAG_S, PI),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(-2.0, -0.0), acosh_complex),
+            Complex64::new(MAG_S, -PI),
+            1e-12
+        ));
+        // arccosh(0.5+0j) = (0 + 1.0471975511965976j) ; (0.5-0j) -> conjugate.
+        let m = 1.0471975511965976;
+        assert!(approx_eq_c(
+            call1(Complex64::new(0.5, 0.0), acosh_complex),
+            Complex64::new(0.0, m),
+            1e-12
+        ));
+        assert!(approx_eq_c(
+            call1(Complex64::new(0.5, -0.0), acosh_complex),
+            Complex64::new(0.0, -m),
+            1e-12
+        ));
+    }
+
+    #[test]
+    fn test_arc_interior_points_unchanged() {
+        // Interior points (im != 0 / re != 0) must equal bare num_complex.
+        let z = Complex64::new(1.0, 1.0);
+        assert_eq!(call1(z, asin_complex), z.asin());
+        assert_eq!(call1(z, acos_complex), z.acos());
+        assert_eq!(call1(z, atanh_complex), z.atanh());
+        assert_eq!(call1(z, asinh_complex), z.asinh());
+        assert_eq!(call1(z, atan_complex), z.atan());
+        assert_eq!(call1(z, acosh_complex), z.acosh());
     }
 
     #[test]

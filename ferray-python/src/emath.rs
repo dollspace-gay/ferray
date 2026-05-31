@@ -138,22 +138,17 @@ fn dispatch_lt_zero<'py>(
 /// `arcsin`/`arctanh`): identical to [`dispatch_lt_zero`] but keyed on the
 /// `abs(x) > 1` predicate.
 ///
-/// BRANCH-CUT CORRECTION. numpy's `_fix_real_abs_gt_1` casts a real
-/// out-of-domain `x` to `x + 0.0j` and applies the complex ufunc, whose
-/// branch cut places the result on the `+0.0`-imaginary side (e.g.
+/// BRANCH-CUT. numpy's `_fix_real_abs_gt_1` (`_scimath_impl.py:153`) casts a
+/// real out-of-domain `x` to `x + 0.0j` via `_tocomplex` and applies the plain
+/// complex ufunc — NO sign correction (`:175-177`: `x = _tocomplex(x)`). The
+/// `+0.0`-imaginary cast selects numpy's principal branch (e.g.
 /// `np.emath.arccos(2) == np.arccos(2 + 0j) == -1.3169j`). ferray-ufunc's
-/// complex inverse-trig kernels delegate to `num_complex`'s `acos`/`asin`/
-/// `atanh`, which on the EXACT real axis (`imag == +0.0`) pick a branch that
-/// matches numpy for `x < -1` but is the CONJUGATE of numpy for `x > 1`
-/// (verified live across arccos/arcsin/arctanh: `nc(x) == np(x+0j)` for
-/// `x < 0`, `nc(x) == conj(np(x+0j))` for `x > 0`). The discriminant is the
-/// sign of the input's real part. On the REAL-cast path we therefore
-/// conjugate ONLY the elements whose input `real(x) > 0`. In-domain elements
-/// (`|x| <= 1`) yield a real result, so conjugating them is a no-op — the
-/// `real(x) > 0` selector is safe to apply element-wise across the whole
-/// array. For a GENUINELY complex input (non-zero imaginary part)
-/// `num_complex` already matches numpy exactly (verified for `2+1j`,
-/// `-2+0.3j`, …), so that path is NOT corrected.
+/// complex inverse-trig kernels (`acos_complex`/`asin_complex`/`atanh_complex`)
+/// now honor the C99 signed-zero branch-cut rule directly (see
+/// `ferray-ufunc/src/ops/complex.rs`, #926), so feeding the same `x + 0.0j`
+/// reproduces numpy's `x + 0j` branch element-wise — no shim-side conjugation
+/// is needed. Genuinely complex inputs (non-zero imaginary part) already match
+/// numpy, so that path is likewise passed straight through.
 fn dispatch_abs_gt_1<'py>(
     py: Python<'py>,
     x: &Bound<'py, PyAny>,
@@ -174,17 +169,7 @@ fn dispatch_abs_gt_1<'py>(
         };
         let fa: ArrayD<Complex<f64>> = complex_pyarray_to_ferray::<f64>(&arr_c)?;
         let r = complex_kernel(&fa).map_err(ferr_to_pyerr)?;
-        let mut out = complex_ferray_to_pyarray::<f64>(py, r)?;
-        if !input_complex {
-            // Real-cast path: select numpy's `x + 0.0j` branch element-wise —
-            // conjugate where the input real part is positive (`x > 1`),
-            // keep where it is non-positive (`x < -1`). `np.where` on the
-            // boolean mask `real(x) > 0`.
-            let np = py.import("numpy")?;
-            let mask = np.call_method1("greater", (&arr, 0))?;
-            let conj = np.call_method1("conj", (&out,))?;
-            out = np.call_method1("where", (mask, conj, &out))?;
-        }
+        let out = complex_ferray_to_pyarray::<f64>(py, r)?;
         return scalarize_if_scalar_input(py, x, out);
     }
     real_fn(py, x)

@@ -402,6 +402,15 @@ upstream = ["/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py"
 design = ".design/ferray-ufunc.md"
 parity_ops = ["unary_dispatch"]
 
+[[route]]
+crate_pattern = "ferray-ufunc/src/ops/complex.rs"
+upstream = [
+  "/home/doll/numpy-ref/numpy/_core/code_generators/generate_umath.py",
+  "/home/doll/numpy-ref/numpy/_core/src/npymath/npy_math_complex.c.src",
+]
+design = ".design/ferray-ufunc.md"
+parity_ops = ["real", "imag", "conj", "conjugate", "angle", "absolute", "arcsin", "arccos", "arctan", "arcsinh", "arccosh", "arctanh", "sin", "cos", "tan", "sinh", "cosh", "tanh", "exp", "log", "log2", "log10", "sqrt", "expm1", "log1p", "power"]
+
 # ─────────────────────────────────────────────────────────────────────────
 # ferray-stats — statistical reductions (depends on ferray-core, ferray-ufunc)
 # ─────────────────────────────────────────────────────────────────────────
