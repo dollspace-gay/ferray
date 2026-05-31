@@ -170,12 +170,15 @@ pub fn hanning(m: usize) -> FerrayResult<Array<f64, Ix1>> {
 /// - `m == 1`: returns `[1.0]`.
 ///
 /// # Errors
-/// Returns `FerrayError::InvalidValue` if `beta` is NaN or if `beta`
-/// exceeds the range where `I_0(beta)` can be computed in f64. The
-/// asymptotic branch uses `exp(beta) / sqrt(beta)` internally, so
-/// `|beta| > ~709` overflows to infinity and the normalized kaiser
-/// window would reduce to `Inf / Inf = NaN` for every sample
-/// (#294).
+/// Returns `FerrayError::InvalidValue` only if `beta` is NaN. For any
+/// finite `beta` the window is computed directly as
+/// `I_0(beta * sqrt(...)) / I_0(beta)`, matching `numpy.kaiser`
+/// (`_function_base_impl.py:3735`), which never rejects a finite `beta`.
+/// `I_0(beta)` stays finite up to the f64 `exp` overflow point
+/// `ln(f64::MAX) ≈ 709.78`, so e.g. `beta = 709` yields a finite window;
+/// for `beta >= 710` both numerator and denominator overflow and NumPy
+/// returns its `Inf/Inf = NaN` degenerate window, which this function
+/// reproduces exactly (#294, #1087).
 pub fn kaiser(m: usize, beta: f64) -> FerrayResult<Array<f64, Ix1>> {
     if beta.is_nan() {
         return Err(FerrayError::invalid_value("kaiser: beta must not be NaN"));
@@ -183,17 +186,10 @@ pub fn kaiser(m: usize, beta: f64) -> FerrayResult<Array<f64, Ix1>> {
     // I_0 is an even function, so kaiser(m, -beta) == kaiser(m, beta).
     // Accept negative beta for NumPy compatibility.
     let beta = beta.abs();
-    // Reject beta values where `exp(beta)` overflows f64 (ln(f64::MAX)
-    // ≈ 709.78). We use a slightly conservative threshold so the
-    // clipped output stays finite even after the asymptotic-series
-    // polynomial corrections.
-    const BETA_OVERFLOW_THRESHOLD: f64 = 708.0;
-    if beta > BETA_OVERFLOW_THRESHOLD {
-        return Err(FerrayError::invalid_value(format!(
-            "kaiser: |beta| = {beta} exceeds the safe range ({BETA_OVERFLOW_THRESHOLD}) \
-             for f64 I_0; the window would be NaN everywhere"
-        )));
-    }
+    // No threshold rejection: numpy.kaiser never raises on a finite beta.
+    // I_0(beta) is finite up to ln(f64::MAX) ≈ 709.78; beyond that it
+    // overflows to +inf and the I_0/I_0 ratio yields numpy's exact
+    // NaN/0.0 degenerate window (verified beta>=710 against the oracle).
     let i0_beta = bessel_i0_scalar::<f64>(beta);
     let alpha = (m.saturating_sub(1)) as f64 / 2.0;
     gen_window(m, |n| {
@@ -1541,13 +1537,35 @@ mod tests {
     }
 
     #[test]
-    fn kaiser_large_beta_errors() {
-        // Issue #294: beta above the f64 safe range should error,
-        // not silently produce NaN.
-        assert!(kaiser(8, 800.0).is_err());
-        assert!(kaiser(8, 1000.0).is_err());
-        // 700 is still safe.
-        assert!(kaiser(8, 700.0).is_ok());
+    fn kaiser_large_beta_matches_numpy_degenerate() -> FerrayResult<()> {
+        // Issue #1087 (supersedes the #294 hard-reject): numpy.kaiser never
+        // raises on a finite beta (_function_base_impl.py:3735). For beta past
+        // the i0 overflow point (~709.78) it returns its own Inf/Inf=NaN
+        // degenerate window; ferray must MATCH it, not error.
+        // Oracle (numpy 2.4.4): np.kaiser(8, 800.0) == np.kaiser(8, 1000.0) ==
+        // [0.0, 0.0, nan, nan, nan, nan, 0.0, 0.0].
+        let not_contig = || FerrayError::invalid_value("kaiser window must be contiguous");
+        for beta in [800.0, 1000.0] {
+            let w = kaiser(8, beta)?;
+            let s = w.as_slice().ok_or_else(not_contig)?;
+            assert_eq!(s.len(), 8);
+            let expected_nan = [false, false, true, true, true, true, false, false];
+            for (i, (&v, &nan)) in s.iter().zip(expected_nan.iter()).enumerate() {
+                if nan {
+                    assert!(
+                        v.is_nan(),
+                        "kaiser(8, {beta})[{i}] should be NaN, got {v:e}"
+                    );
+                } else {
+                    assert_eq!(v, 0.0, "kaiser(8, {beta})[{i}] should be 0.0, got {v:e}");
+                }
+            }
+        }
+        // 700 is still finite (i0(700) finite).
+        let w700 = kaiser(8, 700.0)?;
+        let s700 = w700.as_slice().ok_or_else(not_contig)?;
+        assert!(s700.iter().all(|v| v.is_finite()));
+        Ok(())
     }
 
     // =======================================================================
