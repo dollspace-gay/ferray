@@ -20,6 +20,22 @@
 //      result so that downstream consumers see the correct invalidity.
 //
 // See: https://github.com/dollspace-gay/ferray/issues/505
+//
+// ## REQ status
+//
+// REQ-16 SHIPPED — audited, green. This module provides the
+// `MaskedArray <-> Array` conversion layer and the mask-aware adapters that
+// back `numpy.ma.getdata`/`getmask`/`getmaskarray`.
+//
+// | REQ | Status | Evidence |
+// |-----|--------|----------|
+// | REQ-16 (`getmask`/`getdata`) | SHIPPED | The `AsRef<Array<T, D>>` impl + `From<MaskedArray<T, D>> for Array<T, D>` + `into_data` (this file) extract the underlying data; `getdata`/`getmask` live in `mask_ops.rs` and `getmaskarray` in `extras.rs`, but the data-view machinery they read is defined here. Non-test production consumers: `fma::getdata` is called throughout `ferray-python/src/ma.rs` (data egress for repr/median/cov/etc.), and `fma::getmaskarray` is the mask-extraction primitive for the binary/comparison shims there. |
+//
+// Also SHIPPED here: the `MaskAware<T, D>` trait (uniform mask access over
+// `Array` and `MaskedArray`) and the `apply_unary`/`apply_binary`/
+// `apply_unary_to`/`ma_apply_unary` adapters — `ma_apply_unary` (re-exported
+// from `ferray-ma/src/lib.rs`) is the mask-propagating bridge consumed by the
+// `numpy.ma` unary shims; the default fill from REQ-5 fills masked slots here.
 
 use ferray_core::Array;
 use ferray_core::dimension::Dimension;

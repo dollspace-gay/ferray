@@ -7,6 +7,19 @@
 // where each output position holds the reduction of one lane along the
 // chosen axis. Lanes that contain only masked elements are themselves
 // masked in the output (and hold the source array's `fill_value`).
+//
+// ## REQ status
+//
+// REQ-4 SHIPPED — audited, green. All reductions skip masked elements; the
+// all-masked case surfaces as `NaN` (ferray's analog of numpy's `masked`
+// singleton, `numpy/ma/core.py:5249` `elif newmask: result = masked`).
+//
+// | REQ | Status | Evidence |
+// |-----|--------|----------|
+// | REQ-4 (mask-skipping reductions) | SHIPPED | Whole-array `count`/`sum`/`mean`/`min`/`max`/`var`(`_ddof`)/`std`(`_ddof`) and the per-axis `count_axis`/`sum_axis`/`mean_axis`/`min_axis`/`max_axis`/`var_axis`(`_ddof`)/`std_axis`(`_ddof`) (this file) all divide by the unmasked count and mask all-masked lanes. Non-test production consumers: the `PyMaskedArray` reduction methods `sum`/`mean`/`var`/`std`/`count`/`min`/`max` and the `sum_axis`/`mean_axis` axis methods in `ferray-python/src/ma.rs`. All-masked `sum` returning `NaN` (not `0.0`) is additionally pinned by the divergence test `divergence_all_masked_sum_is_masked_not_zero`. |
+//
+// `argmin`/`argmax`/`prod`/`median`/`ptp` live in `extras.rs` (their REQ rows
+// are documented there); this file owns the original REQ-4 reduction family.
 
 use ferray_core::Array;
 use ferray_core::dimension::{Dimension, IxDyn};

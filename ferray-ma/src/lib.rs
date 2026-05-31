@@ -14,6 +14,26 @@
 // - `sorting`: Masked sort, argsort
 // - `mask_ops`: harden_mask, soften_mask, getmask, getdata, is_masked, count_masked
 // - `filled`: filled, compressed
+//
+// ## REQ status
+//
+// This file is INFRASTRUCTURE: the crate-root re-export and
+// `numpy.ma`-surface registration layer. It owns no `REQ-N` of its own —
+// each `REQ-N` is shipped by the module it re-exports below, and the
+// per-module `## REQ status` tables carry the quoted-code evidence. This
+// table records the crate-level surface status.
+//
+// | Surface | Status | Evidence |
+// |---------|--------|----------|
+// | Crate-root re-export | SHIPPED | `pub use masked_array::MaskedArray` plus the `pub use` blocks for `constructors`, `arithmetic`, `mask_ops` (`count_masked`/`getdata`/`getmask`/`is_masked`), `put::PutMode`, `interop::{MaskAware, ma_apply_unary}`, `ufunc_support::{masked_binary, masked_unary, …}`, `algorithms::{ma_where, ma_choose, …}`, and the `extras::{…}` block (this file). |
+// | `numpy.ma` callable surface | SHIPPED | The re-exported library functions back the `ferray.ma` Python module: every name is wired through a `#[pyfunction]`/`PyMaskedArray` shim in `ferray-python/src/ma.rs` and registered by `register_ma_module` in `ferray-python/src/lib.rs`. Per `.design/ferray-ma.md`, the surface covers 219/220 `numpy.ma` callables (the sole exclusion is `np.ma.test`, numpy's own pytest entry point). |
+// | Feature-gated `io` | SHIPPED (optional) | `#[cfg(feature = "io")] pub mod io` re-exports `save_masked`/`load_masked`; library-only (no binding consumer) — see `io.rs` REQ status. |
+//
+// REQ-1..REQ-39 are classified SHIPPED/NOT-STARTED in their owning modules:
+// REQ-1/2/3/5 → `masked_array.rs`; REQ-4 → `reductions.rs`; REQ-12 →
+// `ufunc_support.rs`; REQ-16 → `interop.rs`; REQ-36/37 → `put.rs`; the
+// extras family (REQ-18..REQ-33, REQ-38/39) → `extras.rs`/`algorithms.rs`.
+// No REQ owned by these routed modules is NOT-STARTED.
 
 // Masked reductions divide running sums by valid-element counts and
 // truncate `f64` results to integer index types in argmin/argmax. Float

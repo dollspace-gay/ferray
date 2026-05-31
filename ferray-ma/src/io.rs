@@ -14,6 +14,22 @@
 // flags are NOT persisted (pickle round-trips those, but our binary
 // format deliberately doesn't) — callers who need to preserve them
 // should call `with_fill_value` / `harden_mask` after loading.
+//
+// ## REQ status
+//
+// This module has NO `REQ-N` marker in `.design/ferray-ma.md`; it is tracked
+// by issue #509 as an optional, feature-gated I/O convenience rather than a
+// numpy.ma surface requirement (numpy's own `np.ma.dump`/`load` are
+// pickle-based and intentionally not mirrored here).
+//
+// | Item | Status | Evidence |
+// |------|--------|----------|
+// | `save_masked` / `load_masked` (#509) | SHIPPED (library, feature-gated) | `save_masked` / `load_masked` (this file) wrap `ferray_io::npy::{save, load}` to persist the data+mask `.npy` pair. Re-exported as `#[cfg(feature = "io")] pub mod io` from `ferray-ma/src/lib.rs`. Covered by this module's own `#[cfg(test)]` round-trip tests (`save_load_roundtrip*`). |
+//
+// HONEST NOTE: unlike the numpy.ma surface modules, `save_masked`/`load_masked`
+// have NO `ferray-python` binding consumer — the binary `.npy`-pair format is
+// a Rust-library affordance only, reachable solely behind the `io` cargo
+// feature. The `fill_value`/`hard_mask` flags are deliberately not persisted.
 
 use std::path::Path;
 

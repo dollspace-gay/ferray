@@ -3,6 +3,19 @@
 // Wrapper functions that accept MaskedArray and call underlying ferray-ufunc
 // operations on the data, then propagate masks. Masked elements are skipped;
 // their output positions retain the masked array's `fill_value`.
+//
+// ## REQ status
+//
+// REQ-12 SHIPPED — audited, green. Every ferray-ufunc elementwise op accepts
+// `MaskedArray` inputs and produces `MaskedArray` outputs with masks
+// propagated; masked positions retain the array's `fill_value`.
+//
+// | REQ | Status | Evidence |
+// |-----|--------|----------|
+// | REQ-12 (masked ufunc application) | SHIPPED | The generic `masked_unary` / `masked_binary` adapters (this file) re-apply the input mask after computing on the data; the unary trig/exp/log family (`sin`/`cos`/`exp`/`log`/`sqrt`/`absolute`/…) and binary `add`/`subtract`/`multiply`/`divide`/`power` (this file) build on them. Domain masking (`log_domain`/`log2_domain`/`log10_domain`/`sqrt_domain`/`arcsin_domain`/`arccos_domain`/`arccosh_domain`/`arctanh_domain`/`divide_domain`) OR-combines a freshly-computed domain mask, mirroring numpy's `_DomainedBinaryOperation`/`_MaskedUnaryOperation`. Non-test production consumers: the `#[pyfunction]` ufunc shims in `ferray-python/src/ma.rs` call `fma::masked_unary`, `fma::masked_binary`, `fma::log_domain`, and `fma::divide_domain` (registered via `register_ma_module` in `ferray-python/src/lib.rs`). |
+//
+// `masked_unary`/`masked_binary` are re-exported from `ferray-ma/src/lib.rs`,
+// as are the named `log`/`sqrt`/`divide`/… wrappers and `*_domain` variants.
 
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;

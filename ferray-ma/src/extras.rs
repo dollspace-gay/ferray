@@ -17,16 +17,60 @@
 //     ma_greater, ma_less_equal, ma_greater_equal, ma_logical_and,
 //     ma_logical_or, ma_logical_not, ma_logical_xor
 //   - class helpers: is_masked_array (alias isMA), getmaskarray, ids
+//   - set ops: ma_unique_masked, ma_intersect1d, ma_union1d, ma_setdiff1d,
+//     ma_setxor1d
+//   - row/col suppression: ma_compress_rowcols/_rows/_cols, ma_mask_rowcols
+//   - masked covariance/correlation: ma_cov, ma_corrcoef (y=None case)
+//   - contiguity/run helpers: clump_masked, clump_unmasked,
+//     flatnotmasked_edges/_contiguous, notmasked_edges(_axis2),
+//     notmasked_contiguous_axis
+//   - 2-D masked matmul: ma_dot_2d; multi-axis argsort: argsort_axis
+//   - axis median + returned-weights average: ma_median_axis,
+//     average_returned
 //
-// Items intentionally NOT covered (deferred):
+// Items intentionally NOT covered (deferred — no REQ-N, genuine gaps):
 //   - mvoid (record-void): requires structured-record dtype work in core
 //   - mr_ / masked_singleton / masked_print_option: Python-class display
 //     state with no Rust analog
-//   - clump_masked / clump_unmasked / *notmasked_contiguous: rarely used,
-//     deferred until requested
-//   - polyfit / convolve / correlate / corrcoef / cov: would pull in
-//     ferray-polynomial / ferray-stats; users can call those directly
-//     on the unmasked subset via .compressed()
+//   - polyfit / convolve / correlate: would pull in ferray-polynomial /
+//     ferray-stats; users can call those directly on the unmasked subset
+//     via .compressed()
+//   - ma_cov/ma_corrcoef two-variable-set `y` argument: the binding raises a
+//     clear `ValueError` (REQ-29 covers only the `y=None` case)
+//
+// ## REQ status
+//
+// All extras REQs SHIPPED — audited, green. Each row's non-test production
+// consumer is the matching `#[pyfunction]`/method in `ferray-python/src/ma.rs`,
+// registered by `register_ma_module` in `ferray-python/src/lib.rs`. (REQ-18..22
+// — `ma_where`/`ma_choose`/`ma_diff`/`ma_ediff1d`/`ma_nonzero` — live in
+// `algorithms.rs`, not this file; their evidence is in `.design/ferray-ma.md`.)
+//
+// | REQ | Status | Evidence (impl in this file unless noted) |
+// |-----|--------|------|
+// | REQ-23 (`ma_vander`) | SHIPPED | `ma_vander`; consumer `ferray-python/src/ma.rs::vander`. |
+// | REQ-24 (`ma_isin`/`ma_in1d`) | SHIPPED | `ma_isin`/`ma_in1d`; consumers `ferray-python/src/ma.rs::isin`/`in1d`. |
+// | REQ-25 (set ops) | SHIPPED | `ma_intersect1d`/`ma_union1d`/`ma_setdiff1d`/`ma_setxor1d` (built on `ma_unique_masked`); consumers `ferray-python/src/ma.rs::intersect1d`/`union1d`/`setdiff1d`/`setxor1d` (`numpy/ma/extras.py:1317`/`:1463`/`:1485`/`:1350`). |
+// | REQ-26 (`unique` masked slot) | SHIPPED | `ma_unique_masked`; consumed by the REQ-25 set ops (`numpy/ma/extras.py:1267`). |
+// | REQ-27 (`compress_rowcols`) | SHIPPED | `ma_compress_rowcols`/`ma_compress_rows`/`ma_compress_cols`; consumers `ferray-python/src/ma.rs::compress_rowcols`/`compress_rows`/`compress_cols` (`numpy/ma/extras.py:920`/`:953`/`:991`). |
+// | REQ-28 (`mask_rowcols`) | SHIPPED | `ma_mask_rowcols`; consumer `ferray-python/src/ma.rs::mask_rowcols` (`numpy/ma/extras.py:830`). |
+// | REQ-29 (`cov`/`corrcoef`, y=None) | SHIPPED | `ma_cov`/`ma_corrcoef`; consumers `ferray-python/src/ma.rs::cov`/`corrcoef` (`numpy/ma/extras.py:1580`/`:1675`). The two-variable-set `y` arg remains a documented gap. |
+// | REQ-30 (`clump_masked`/`clump_unmasked`) | SHIPPED | `clump_masked`/`clump_unmasked` (on `ezclump_true`); consumers `ferray-python/src/ma.rs::clump_masked`/`clump_unmasked` (`numpy/ma/extras.py:2189`/`:2235`). |
+// | REQ-31 (`flatnotmasked_*`) | SHIPPED | `flatnotmasked_edges`/`flatnotmasked_contiguous`; consumers `ferray-python/src/ma.rs::flatnotmasked_edges`/`flatnotmasked_contiguous` (`numpy/ma/extras.py:1818`/`:1762`). |
+// | REQ-32 (`notmasked_*`) | SHIPPED | `notmasked_edges`/`notmasked_edges_axis2`/`notmasked_contiguous_axis`; consumers `ferray-python/src/ma.rs::notmasked_edges`/`notmasked_contiguous` (`numpy/ma/extras.py:1977`/`:1925`). |
+// | REQ-33 (2-D `ma.dot`) | SHIPPED | `MaskedArray<T, Ix2>::ma_dot_2d` (and the flat `ma_dot_flat`); consumer `ferray-python/src/ma.rs::dot` (`numpy/ma/core.py:8214`). |
+// | REQ-14 (argsort axis) | SHIPPED | `argsort_axis` (endwith=True lane fill); consumer `ferray-python/src/ma.rs::argsort` (explicit-axis branch). |
+// | REQ-38 (`median(axis=)`) | SHIPPED | `ma_median_axis`; consumer the explicit-axis branch of `ferray-python/src/ma.rs::median` (`numpy/ma/extras.py:678`). |
+// | REQ-39 (`average(returned=)`) | SHIPPED | `MaskedArray::average_returned` (the plain `average` delegates to it); consumer the `returned` branch of `ferray-python/src/ma.rs::average` (`numpy/ma/extras.py:510`/`:670`). |
+//
+// Also SHIPPED here (REQ-4 extension, full-array reductions beyond
+// `reductions.rs`): `prod`, `cumsum_flat`, `cumprod_flat`, `argmin`, `argmax`,
+// `ptp`, `median`, `average`, `anom` — consumed by the matching `PyMaskedArray`
+// methods in `ferray-python/src/ma.rs`. The fill-value protocol
+// (`default_fill_value_f64`/`_f32`, `maximum_fill_value`, `minimum_fill_value`,
+// `common_fill_value`) and the comparison/logical ufuncs (`ma_logical_and`/
+// `_or`/`_xor`/`_not`) are likewise re-exported via `ferray-ma/src/lib.rs` and
+// consumed by the `ferray.ma` module shims.
 
 use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::dtype::Element;

@@ -9,6 +9,19 @@
 // (`data_mut`, `set_mask_flat`, `set_mask`, `ensure_materialized_mut`) — no
 // new struct field is required because the hard-mask flag and its assignment
 // effect already exist.
+//
+// ## REQ status
+//
+// Both SHIPPED — audited, green. The library setters are exposed through
+// `ferray-python` and registered on the `ferray.ma` module.
+//
+// | REQ | Status | Evidence |
+// |-----|--------|----------|
+// | REQ-36 (put) | SHIPPED | `MaskedArray::put` (this file) composes `data_mut` + `set_mask_flat` honouring the hard-mask drop (`numpy/ma/core.py:4899`), values-repeat, masked-`values` propagation, and `PutMode` raise/wrap/clip (`numpy/ma/core.py:4837`). Non-test production consumer: `PyMaskedArray::put` + module-level `put` `#[pyfunction]` in `ferray-python/src/ma.rs`, registered via `register_ma_module` in `ferray-python/src/lib.rs`. |
+// | REQ-37 (putmask) | SHIPPED | `MaskedArray::putmask` (this file) mirrors `numpy/ma/core.py:7537` — data `copyto(where=mask)` always (even hard-masked positions), mask branch on `hard_mask` (`:7581`), scalar/same-length `values` broadcast. Non-test production consumer: `PyMaskedArray::putmask` + module-level `putmask` `#[pyfunction]` in `ferray-python/src/ma.rs`, registered via `register_ma_module` in `ferray-python/src/lib.rs`. |
+//
+// `PutMode` (this file) is the raise/wrap/clip enum mirroring numpy's `mode`
+// keyword (`numpy/ma/core.py:4852`); re-exported from `ferray-ma/src/lib.rs`.
 
 use ferray_core::dimension::Dimension;
 use ferray_core::dtype::Element;

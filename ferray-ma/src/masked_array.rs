@@ -1,4 +1,22 @@
 // ferray-ma: MaskedArray<T, D> type (REQ-1, REQ-2, REQ-3)
+//
+// ## REQ status
+//
+// All SHIPPED — this is the audited, green core type. Consumers are the
+// `ferray-python` `PyMaskedArray` shims in `ferray-python/src/ma.rs` (built on
+// the `match_ma!` dispatch) plus the in-crate re-export `MaskedArray` from
+// `ferray-ma/src/lib.rs`.
+//
+// | REQ | Status | Evidence |
+// |-----|--------|----------|
+// | REQ-1 (data+mask pairing) | SHIPPED | `struct MaskedArray<T, D>` holds the `data: Array<T, D>` + `mask: Array<bool, D>` pair (this file), plus `fill_value`/`hard_mask` state. Consumer: every `PyMaskedArray` variant in `ferray-python/src/ma.rs` wraps a `MaskedArray`. |
+// | REQ-2 (`new(data, mask)`) | SHIPPED | `MaskedArray::new` (shape-checked) + `MaskedArray::from_data` (this file). Consumer: the `PyMaskedArray` constructor path in `ferray-python/src/ma.rs`. |
+// | REQ-3 (`data()`/`mask()`) | SHIPPED | `MaskedArray::mask` / `mask_opt` / `data_mut` accessors (this file); data read via the `AsRef<Array<T, D>>` interop in `interop.rs`. Consumer: the `.data`/`.mask` getters of `PyMaskedArray` in `ferray-python/src/ma.rs`. |
+// | REQ-5 (per-dtype default fill) | SHIPPED | `default_fill_value` (this file) mirrors numpy's `default_filler` (`numpy/ma/core.py:163`), wired into `MaskedArray::new`/`from_data`. Non-test production consumers: `filled_default` (`filled.rs`), masked-slot filling in `masked_unary`/`masked_binary` (`ufunc_support.rs`), `ma_apply_unary` (`interop.rs`). |
+//
+// Note: REQ-5's float/int/bool/complex default-fill matrix is anchored here
+// (`default_fill_value`); the broader `filled`/`compressed` contract (REQ-6)
+// lives in `filled.rs`.
 
 use std::any::Any;
 use std::sync::{Arc, OnceLock};
