@@ -250,3 +250,30 @@ def test_busday_offset_holidays():
     got = fr.busday_offset("2020-01-01", 1, holidays=["2020-01-02"])
     exp = np.busday_offset("2020-01-01", 1, holidays=["2020-01-02"])
     assert got == exp
+
+
+# ---------------------------------------------------------------------------
+# datetime_as_string scalar shape + width (#982)
+# ---------------------------------------------------------------------------
+# A 0-d datetime64 scalar renders to a 0-d <U10 string; the prior binding's
+# int64-tick reconstruction promoted it to a 1-element 1-D <U28 array.
+
+
+def test_datetime_as_string_scalar_is_0d_u10():
+    r = fr.datetime_as_string(np.datetime64("2024-01-01"))
+    n = np.datetime_as_string(np.datetime64("2024-01-01"))
+    assert np.asarray(r).shape == n.shape == ()
+    assert np.asarray(r).dtype == n.dtype
+    assert str(np.asarray(r)) == str(n)
+
+
+def test_datetime_as_string_array_matches():
+    a = np.array(["2024-01-01", "2024-06-15"], "datetime64[D]")
+    np.testing.assert_array_equal(fr.datetime_as_string(a), np.datetime_as_string(a))
+
+
+def test_datetime_as_string_unit_kwarg():
+    r = fr.datetime_as_string(np.datetime64("2024-01-01T12"), unit="h")
+    n = np.datetime_as_string(np.datetime64("2024-01-01T12"), unit="h")
+    assert np.asarray(r).dtype == n.dtype
+    assert str(np.asarray(r)) == str(n)

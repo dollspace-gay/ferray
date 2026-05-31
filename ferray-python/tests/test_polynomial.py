@@ -198,3 +198,61 @@ def test_poly2lag_round_trips():
     lag = ferray.polynomial.poly2lag(src)
     back = ferray.polynomial.lag2poly(lag.tolist())
     np.testing.assert_allclose(back, src, atol=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# poly1d family integer dtype preservation (#982)
+# ---------------------------------------------------------------------------
+# numpy.polyval/polyder/polyadd/polysub/polymul preserve an INTEGER result for
+# all-integer inputs (Horner / zero-pad-add / convolve over the integer dtype).
+# The prior bindings coerced coefficients to Vec<f64>, upcasting to float64.
+
+
+def test_polyval_int_preserves_dtype():
+    r = ferray.polyval([1, 2, 3], 2)
+    n = np.polyval([1, 2, 3], 2)
+    assert np.asarray(r).dtype == np.asarray(n).dtype == np.int64
+    assert int(r) == int(n)
+
+
+def test_polyval_int_coeff_float_x_promotes():
+    r = ferray.polyval([1, 2, 3], 2.0)
+    assert np.asarray(r).dtype == np.float64
+
+
+def test_polyder_int_preserves_dtype():
+    r = ferray.polyder([1, 2, 3])
+    n = np.polyder([1, 2, 3])
+    assert np.asarray(r).dtype == n.dtype == np.int64
+    np.testing.assert_array_equal(r, n)
+
+
+def test_polyadd_int_preserves_dtype():
+    r = ferray.polyadd([1, 2], [1, 1, 1])
+    n = np.polyadd([1, 2], [1, 1, 1])
+    assert np.asarray(r).dtype == n.dtype == np.int64
+    np.testing.assert_array_equal(r, n)
+
+
+def test_polysub_int_preserves_dtype():
+    r = ferray.polysub([3, 2, 1], [1, 1])
+    n = np.polysub([3, 2, 1], [1, 1])
+    assert np.asarray(r).dtype == n.dtype == np.int64
+    np.testing.assert_array_equal(r, n)
+
+
+def test_polymul_int_preserves_dtype():
+    r = ferray.polymul([1, 1], [1, 1])
+    n = np.polymul([1, 1], [1, 1])
+    assert np.asarray(r).dtype == n.dtype == np.int64
+    np.testing.assert_array_equal(r, n)
+
+
+def test_polyadd_mixed_int_float_promotes():
+    r = ferray.polyadd([1, 2], [1.0, 1, 1])
+    assert np.asarray(r).dtype == np.float64
+
+
+def test_polyadd_complex_still_complex():
+    r = ferray.polyadd([1 + 1j, 2], [1, 1])
+    assert np.asarray(r).dtype == np.complex128

@@ -2138,12 +2138,14 @@ pub fn nonzero_time<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bou
 /// (numpy/_core/src/multiarray/datetime_strings.c `datetime_as_string`).
 ///
 /// numpy's full formatter (timezone conversion, casting `unit`, `'%'`-style)
-/// is intricate; this binding produces the ISO strings for the common path
-/// (the input's own unit, `timezone='naive'`) by delegating the final
-/// rendering to numpy on a *ferray-reconstructed* datetime64 array. The input
-/// is first marshalled int64 ticks -> ferray DateTime64 (validating the unit
-/// via [`TimeUnit::from_descr_suffix`]) and rebuilt, so an unsupported unit is
-/// rejected here rather than silently mis-rendered.
+/// is intricate and shape/unit-sensitive: a 0-d scalar input renders to a 0-d
+/// `<U10` string (`array('2024-01-01', dtype='<U10')`), and the output string
+/// width follows the array's own unit. This binding validates that the input is
+/// datetime64, then delegates the rendering to `numpy.datetime_as_string` on the
+/// ORIGINAL array, so shape (0-d stays 0-d), unit, and string width match numpy
+/// exactly. (A prior version reconstructed the array through an int64-tick
+/// round-trip, which promoted a 0-d scalar to a 1-element 1-D array and widened
+/// the unit, yielding `<U28` instead of `<U10`.)
 #[pyfunction]
 #[pyo3(signature = (arr, unit = None, timezone = "naive"))]
 pub fn datetime_as_string<'py>(
@@ -2159,17 +2161,12 @@ pub fn datetime_as_string<'py>(
             "datetime_as_string requires a datetime64 array",
         ));
     }
-    // Validate the input unit through ferray's TimeUnit, marshalling the ticks
-    // (this is the ferray-side round-trip that gates the supported unit set).
-    let (ticks, _u, unit_str) = extract_ticks(py, &a)?;
-    let rebuilt = int64_to_datetime64(py, ticks, &unit_str)?;
-    // Render with numpy's formatter on the ferray-reconstructed array.
     let kwargs = pyo3::types::PyDict::new(py);
     if let Some(u) = unit {
         kwargs.set_item("unit", u)?;
     }
     kwargs.set_item("timezone", timezone)?;
-    np.call_method("datetime_as_string", (rebuilt,), Some(&kwargs))
+    np.call_method("datetime_as_string", (a,), Some(&kwargs))
 }
 
 // ---------------------------------------------------------------------------

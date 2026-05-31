@@ -743,6 +743,13 @@ pub fn polyval<'py>(
         let np = py.import("numpy")?;
         return np.call_method1("polyval", (p, x));
     }
+    // All-integer inputs keep an integer result (numpy evaluates Horner over the
+    // integer dtype: `np.polyval([1,2,3], 2) -> int64`). The f64 path below would
+    // upcast; delegate the all-integer case to numpy for exact dtype parity.
+    if operand_is_integer(py, p)? && operand_is_integer(py, x)? {
+        let np = py.import("numpy")?;
+        return np.call_method1("polyval", (p, x));
+    }
     let p: Vec<f64> = p.extract()?;
     let poly = fp::Polynomial::new(&flip(p));
     let (data, shape) = as_eval_input(py, x)?;
@@ -882,22 +889,34 @@ fn poly_binop<'py>(
     vec_to_pyarray1(py, flip(out.coeffs().to_vec()))
 }
 
-/// Complex delegation for `polyadd` / `polysub` / `polymul`. When EITHER operand is a
-/// complex array the highest-first result is genuinely complex
-/// (`numpy/lib/_polynomial_impl.py` zero-pads and adds / convolves over
-/// `NX.asarray`), but the real `poly_binop` path coerces both operands to
-/// `Vec<f64>`, silently discarding every imaginary part (R-CODE-4). Returns
-/// `Some(numpy_result)` for the complex case (delegating to `numpy.<op>` on the
-/// ORIGINAL operands), or `None` to let the unchanged real path run.
-fn poly_binop_complex<'py>(
+/// `true` if a polynomial operand has an integer / unsigned / bool dtype
+/// (`dtype.kind ∈ {i, u, b}`), for which numpy.poly* preserves the integer
+/// result. The real `poly_binop`/Horner path coerces to `Vec<f64>` and would
+/// upcast that to `float64`; delegating the all-integer case to numpy keeps the
+/// exact integer (and integer-width promotion) result. Mirrors the complex seam.
+fn operand_is_integer(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let np = py.import("numpy")?;
+    let a = np.call_method1("asarray", (obj,))?;
+    let kind: String = a.getattr("dtype")?.getattr("kind")?.extract()?;
+    Ok(matches!(kind.as_str(), "i" | "u" | "b"))
+}
+
+/// numpy-delegation for `polyadd` / `polysub` / `polymul`. The real `poly_binop`
+/// path coerces both operands to `Vec<f64>`, which (a) discards every imaginary
+/// part of a complex operand (R-CODE-4) and (b) upcasts an all-integer result to
+/// `float64` where numpy keeps it integer. Returns `Some(numpy_result)` when
+/// EITHER operand is complex OR BOTH are integer-kind (delegating to `numpy.<op>`
+/// on the ORIGINAL operands), or `None` to let the unchanged real f64 path run.
+fn poly_binop_delegate<'py>(
     py: Python<'py>,
     op: &str,
     a1: &Bound<'py, PyAny>,
     a2: &Bound<'py, PyAny>,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
-    if is_complex_dtype(operand_dtype(py, a1)?.as_str())
-        || is_complex_dtype(operand_dtype(py, a2)?.as_str())
-    {
+    let complex = is_complex_dtype(operand_dtype(py, a1)?.as_str())
+        || is_complex_dtype(operand_dtype(py, a2)?.as_str());
+    let both_int = operand_is_integer(py, a1)? && operand_is_integer(py, a2)?;
+    if complex || both_int {
         let np = py.import("numpy")?;
         return Ok(Some(np.call_method1(op, (a1, a2))?));
     }
@@ -912,7 +931,7 @@ pub fn polyadd<'py>(
     a1: &Bound<'py, PyAny>,
     a2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    if let Some(r) = poly_binop_complex(py, "polyadd", a1, a2)? {
+    if let Some(r) = poly_binop_delegate(py, "polyadd", a1, a2)? {
         return Ok(r);
     }
     poly_binop(py, a1.extract()?, a2.extract()?, |x, y| x.add(y))
@@ -926,7 +945,7 @@ pub fn polysub<'py>(
     a1: &Bound<'py, PyAny>,
     a2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    if let Some(r) = poly_binop_complex(py, "polysub", a1, a2)? {
+    if let Some(r) = poly_binop_delegate(py, "polysub", a1, a2)? {
         return Ok(r);
     }
     poly_binop(py, a1.extract()?, a2.extract()?, |x, y| x.sub(y))
@@ -940,7 +959,7 @@ pub fn polymul<'py>(
     a1: &Bound<'py, PyAny>,
     a2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    if let Some(r) = poly_binop_complex(py, "polymul", a1, a2)? {
+    if let Some(r) = poly_binop_delegate(py, "polymul", a1, a2)? {
         return Ok(r);
     }
     poly_binop(py, a1.extract()?, a2.extract()?, |x, y| x.mul(y))
@@ -960,6 +979,12 @@ pub fn polyder<'py>(
     // `NX.asarray(p)`). The real path coerces `p` to `Vec<f64>`, dropping the
     // imaginary part (R-CODE-4). Delegate the complex case to numpy.polyder.
     if is_complex_dtype(operand_dtype(py, p)?.as_str()) {
+        let np = py.import("numpy")?;
+        return np.call_method1("polyder", (p, m));
+    }
+    // Integer coefficients keep an integer derivative (numpy: `np.polyder([1,2,3])
+    // -> int64`). The f64 path below would upcast; delegate the integer case.
+    if operand_is_integer(py, p)? {
         let np = py.import("numpy")?;
         return np.call_method1("polyder", (p, m));
     }
