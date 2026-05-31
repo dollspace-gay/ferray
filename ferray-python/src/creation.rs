@@ -1024,7 +1024,12 @@ pub fn linspace<'py>(
     };
 
     if retstep {
-        let tuple = pyo3::types::PyTuple::new(py, [samples, step.into_pyobject(py)?.into_any()])?;
+        // numpy returns the step as a numpy `float64` SCALAR (regardless of the
+        // array dtype — float32/int linspace still yield a float64 step), not a
+        // Python float. Wrap it so `type(step)` matches numpy.
+        let np = py.import("numpy")?;
+        let step_scalar = np.call_method1("float64", (step,))?;
+        let tuple = pyo3::types::PyTuple::new(py, [samples, step_scalar])?;
         Ok(tuple.into_any())
     } else {
         Ok(samples)

@@ -2890,6 +2890,15 @@ pub fn cumsum<'py>(
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // numpy.cumsum with axis=None FLATTENS to 1-D first, then cumulates; the
+    // native kernel cumulates along the last axis without flattening. Ravel up
+    // front so every dtype path operates on the flattened data (a 2-D input then
+    // yields a 1-D result as numpy does).
+    let arr = if axis.is_none() {
+        arr.call_method0("ravel")?
+    } else {
+        arr
+    };
     if let Some(dt) = dtype {
         let np = py.import("numpy")?;
         let kwargs = pyo3::types::PyDict::new(py);
@@ -2940,6 +2949,13 @@ pub fn cumprod<'py>(
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // numpy.cumprod with axis=None FLATTENS to 1-D first (see cumsum); ravel up
+    // front so every dtype path cumulates over the flattened data.
+    let arr = if axis.is_none() {
+        arr.call_method0("ravel")?
+    } else {
+        arr
+    };
     if let Some(dt) = dtype {
         let np = py.import("numpy")?;
         let kwargs = pyo3::types::PyDict::new(py);
@@ -4593,7 +4609,28 @@ macro_rules! bind_nan_cumulative {
             axis: Option<usize>,
         ) -> PyResult<Bound<'py, PyAny>> {
             let arr = as_ndarray(py, a)?;
+            // numpy.nancumsum/nancumprod with axis=None FLATTEN to 1-D first (see
+            // cumsum); ravel up front so every dtype path cumulates flattened.
+            let arr = if axis.is_none() {
+                arr.call_method0("ravel")?
+            } else {
+                arr
+            };
             let dt = dtype_name(&arr)?;
+            // Integer/bool input has no NaN, so nancumsum/nancumprod reduce to
+            // cumsum/cumprod and numpy KEEPS the integer dtype (promoting narrow
+            // ints to the platform int). The float64 coercion below would upcast,
+            // so delegate the integer case to numpy (which owns that contract).
+            let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+            if matches!(kind.as_str(), "i" | "u" | "b") {
+                let np = py.import("numpy")?;
+                let kwargs = pyo3::types::PyDict::new(py);
+                match axis {
+                    Some(ax) => kwargs.set_item("axis", ax)?,
+                    None => kwargs.set_item("axis", py.None())?,
+                }
+                return np.call_method(stringify!($name), (&arr,), Some(&kwargs));
+            }
             // Complex arm: NaN-complex -> fold identity, then complex cumulative
             // fold, keeping the input width BEFORE the f64 coercion can drop the
             // imaginary part (R-CODE-4).

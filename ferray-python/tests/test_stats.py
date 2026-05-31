@@ -414,3 +414,53 @@ def test_quantile_interpolation_removed_like_numpy():
     # numpy 2.0 removed interpolation=; ferray rejects it identically.
     with pytest.raises(TypeError):
         ferray.percentile([1.0, 2, 3, 4], 50, interpolation="lower")
+
+
+# ---------------------------------------------------------------------------
+# cumulative reductions axis=None flatten + nancum int dtype (#986)
+# ---------------------------------------------------------------------------
+# numpy.cumsum/cumprod/nancumsum/nancumprod with axis=None FLATTEN to 1-D first.
+# The prior bindings cumulated along the last axis keeping the 2-D shape.
+# nancumsum/nancumprod of integer input keeps int64 (no NaN possible) — prior
+# code upcast to float64.
+
+
+@pytest.mark.parametrize("fn", ["cumsum", "cumprod", "nancumsum", "nancumprod"])
+def test_cumulative_axis_none_flattens(fn):
+    a = [[1, 2], [3, 4]]
+    fr_fn = getattr(ferray, fn)
+    np_fn = getattr(np, fn)
+    r, n = np.asarray(fr_fn(a)), np.asarray(np_fn(a))
+    assert r.shape == n.shape == (4,)
+    np.testing.assert_array_equal(r, n)
+
+
+def test_cumsum_axis_none_3d():
+    a = np.arange(8).reshape(2, 2, 2)
+    np.testing.assert_array_equal(ferray.cumsum(a), np.cumsum(a))
+
+
+def test_cumsum_axis_preserved_when_given():
+    a = [[1, 2], [3, 4]]
+    np.testing.assert_array_equal(ferray.cumsum(a, axis=0), np.cumsum(a, axis=0))
+    np.testing.assert_array_equal(ferray.cumsum(a, axis=1), np.cumsum(a, axis=1))
+
+
+@pytest.mark.parametrize("fn", ["nancumsum", "nancumprod"])
+def test_nancumulative_int_keeps_int64(fn):
+    fr_fn = getattr(ferray, fn)
+    np_fn = getattr(np, fn)
+    r, n = np.asarray(fr_fn([[1, 2], [3, 4]])), np_fn([[1, 2], [3, 4]])
+    assert r.dtype == n.dtype == np.int64
+
+
+def test_nancumsum_float_nan_handling():
+    np.testing.assert_array_equal(
+        ferray.nancumsum([1.0, np.nan, 3]), np.nancumsum([1.0, np.nan, 3])
+    )
+
+
+def test_linspace_retstep_is_numpy_float64():
+    step = ferray.linspace(0, 1, 5, retstep=True)[1]
+    assert isinstance(step, np.float64)
+    assert step == np.linspace(0, 1, 5, retstep=True)[1]
