@@ -2450,11 +2450,18 @@ impl PyMaskedArray {
         self.shape_vec().iter().product()
     }
 
-    /// The array's native numpy dtype name (`"int64"`, `"float64"`, `"bool"`,
-    /// …) — NOT the literal `"float64"` of the old f64 pin (#853, R-CODE-4).
+    /// The array's native numpy `dtype` OBJECT — `numpy.ma.array(...).dtype`
+    /// returns a `numpy.dtype`, not the dtype *name* string (#900, R-CHAR-3,
+    /// R-DEV-3 output-object contract). Built as `numpy.dtype(<name>)` from the
+    /// cheap native-dtype name (covers the 11 real + complex64/complex128), so
+    /// `a.dtype == np.float64`, `a.dtype == np.dtype('int32')`,
+    /// `a.dtype == 'float64'`, `a.dtype.kind`/`.itemsize`/`.name`/`.char`, and
+    /// `str(a.dtype)`/`repr(a.dtype)` all match numpy.ma. The native dtype
+    /// (NOT the old f64 #853 pin) crosses the boundary (R-CODE-4).
     #[getter]
-    fn dtype(&self) -> PyResult<&'static str> {
-        Ok(self.dtype_name_cheap())
+    fn dtype<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let np = py.import("numpy")?;
+        np.getattr("dtype")?.call1((self.dtype_name_cheap(),))
     }
 
     /// Number of unmasked elements, optionally along an axis (#888).
