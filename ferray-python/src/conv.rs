@@ -358,6 +358,48 @@ pub fn coerce_window_m(obj: &Bound<'_, PyAny>) -> PyResult<isize> {
     ))
 }
 
+/// Detect a *genuinely fractional* window-length `M` so the window
+/// bindings can delegate it to numpy's float64 formula.
+///
+/// numpy keeps `M` as `float64` through the whole window formula — for
+/// `hanning`, `values = np.array([0.0, M]); M = values[1]; n = arange(1 - M,
+/// M, 2); return 0.5 + 0.5 * cos(pi * n / (M - 1))`
+/// (numpy/lib/_function_base_impl.py:3334-3342; the other four canonical
+/// windows share the identical `values = np.array([0.0, M])` /
+/// `arange(1 - M, M, 2)` structure). So `np.hanning(2.7)` has length
+/// `len(arange(1 - 2.7, 2.7, 2)) == 3`, not the 2 a truncated `int(M)`
+/// would give. The ferray-window kernels take a `usize` sample count
+/// (ferray-window/src/windows/mod.rs), so they cannot reproduce the
+/// fractional-`M` formula; the binding must delegate that case to numpy.
+///
+/// Returns `Some(f)` only when `obj` is a finite float whose value is not
+/// integral (`f.fract() != 0.0`) — i.e. the genuinely-fractional case that
+/// must route to numpy. A Python int, an integral float (`5.0`), or a
+/// non-numeric object returns `None`, leaving the unchanged native
+/// integer-count path (via [`coerce_window_m`]) to handle them. A
+/// non-finite float is reported here with the same message
+/// [`coerce_window_m`] uses, so the boundary stays consistent.
+pub fn window_m_fractional(obj: &Bound<'_, PyAny>) -> PyResult<Option<f64>> {
+    // A Python int (even a huge one) is never fractional; let the native
+    // path own it. Checking `isize` first also keeps a bool/int from being
+    // read as a float.
+    if obj.extract::<isize>().is_ok() {
+        return Ok(None);
+    }
+    if let Ok(f) = obj.extract::<f64>() {
+        if !f.is_finite() {
+            return Err(PyValueError::new_err(
+                "M must be a finite number (got a non-finite float)",
+            ));
+        }
+        if f.fract() != 0.0 {
+            return Ok(Some(f));
+        }
+    }
+    // Integral float, or non-numeric: defer to coerce_window_m.
+    Ok(None)
+}
+
 /// Clear the `WRITEABLE` flag on a numpy `ndarray`, making it read-only,
 /// then return it.
 ///

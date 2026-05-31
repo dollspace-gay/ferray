@@ -19,7 +19,22 @@ use ferray_window as fw;
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use crate::conv::{coerce_window_m, ferr_to_pyerr};
+use crate::conv::{coerce_window_m, ferr_to_pyerr, window_m_fractional};
+
+/// Delegate a genuinely-fractional `M` window call to numpy, which owns the
+/// float64 window formula (`values = np.array([0.0, M]); n = arange(1 - M,
+/// M, 2); ...`, numpy/lib/_function_base_impl.py:3334-3342 for hanning; the
+/// other canonical windows share the structure). The ferray-window kernels
+/// take a `usize` sample count and so cannot reproduce the fractional-`M`
+/// length/values; `func` is the numpy attribute name (`"hanning"`, …) and
+/// `args` the call tuple (`(M,)` or `(M, beta)`).
+fn numpy_window<'py>(
+    py: Python<'py>,
+    func: &str,
+    args: impl pyo3::call::PyCallArgs<'py>,
+) -> PyResult<Bound<'py, PyAny>> {
+    py.import("numpy")?.getattr(func)?.call1(args)
+}
 
 /// Build numpy's `array([], dtype=float64)` — the result every window returns
 /// for `M < 1` (numpy/lib/_function_base_impl.py:3349-3350 `hanning`, and the
@@ -35,6 +50,35 @@ fn empty_window<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
 // ---------------------------------------------------------------------------
 
 macro_rules! bind_window_n {
+    // `$np_name` (optional) is the numpy top-level function this window
+    // mirrors; when present, a genuinely-fractional `M` is delegated to numpy
+    // (which keeps `M` as float64 through the formula — see `window_m_fractional`).
+    // SciPy-only windows (no numpy top-level entry) omit it and keep the native
+    // integer-count path unchanged.
+    ($name:ident, $ferr_path:path, $np_name:literal) => {
+        #[pyfunction]
+        #[pyo3(signature = (M))]
+        #[allow(
+            non_snake_case,
+            reason = "numpy names this parameter `M` (def hanning(M))"
+        )]
+        pub fn $name<'py>(py: Python<'py>, M: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+            // A genuinely-fractional M is not representable in ferray-window's
+            // usize sample count; numpy owns the float64 formula. Integral /
+            // int / negative / M==1 inputs stay on the native path below.
+            if window_m_fractional(M)?.is_some() {
+                return numpy_window(py, $np_name, (M,));
+            }
+            // numpy casts M to float64 and guards `if M < 1: return array([])`.
+            let m = coerce_window_m(M)?;
+            if m < 1 {
+                return empty_window(py);
+            }
+            let r: Array1<f64> = $ferr_path(m as usize).map_err(ferr_to_pyerr)?;
+            Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+        }
+    };
+    // SciPy-only window: no numpy fractional-M delegation.
     ($name:ident, $ferr_path:path) => {
         #[pyfunction]
         #[pyo3(signature = (M))]
@@ -43,7 +87,6 @@ macro_rules! bind_window_n {
             reason = "numpy names this parameter `M` (def hanning(M))"
         )]
         pub fn $name<'py>(py: Python<'py>, M: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-            // numpy casts M to float64 and guards `if M < 1: return array([])`.
             let m = coerce_window_m(M)?;
             if m < 1 {
                 return empty_window(py);
@@ -54,10 +97,10 @@ macro_rules! bind_window_n {
     };
 }
 
-bind_window_n!(hanning, fw::hanning);
-bind_window_n!(hamming, fw::hamming);
-bind_window_n!(blackman, fw::blackman);
-bind_window_n!(bartlett, fw::bartlett);
+bind_window_n!(hanning, fw::hanning, "hanning");
+bind_window_n!(hamming, fw::hamming, "hamming");
+bind_window_n!(blackman, fw::blackman, "blackman");
+bind_window_n!(bartlett, fw::bartlett, "bartlett");
 bind_window_n!(cosine, fw::cosine);
 bind_window_n!(nuttall, fw::nuttall);
 bind_window_n!(parzen, fw::parzen);
@@ -84,6 +127,13 @@ pub fn kaiser<'py>(
     M: &Bound<'py, PyAny>,
     beta: f64,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Fractional M -> numpy's float64 kaiser formula (n = arange(0, M);
+    // i0(beta*sqrt(1-((n-alpha)/alpha)**2))/i0(beta),
+    // numpy/lib/_function_base_impl.py kaiser :3596); ferray-window's usize
+    // kernel can't reproduce a fractional sample count.
+    if window_m_fractional(M)?.is_some() {
+        return numpy_window(py, "kaiser", (M, beta));
+    }
     let m = coerce_window_m(M)?;
     if m < 1 {
         return empty_window(py);
