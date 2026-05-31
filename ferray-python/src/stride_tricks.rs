@@ -37,12 +37,22 @@
 //!   stride/view op (`fst::broadcast_to` over `Complex<T>`), routed through the
 //!   `match_dtype_all_complex!` + `DynMarshal` seam (#933) so the read-only
 //!   complex view keeps its imaginary part. numpy: `np.broadcast_to(complex,
-//!   (2,3))` (live). Pinned green:
+//!   (2,3))` (live). Non-real dtypes (#962): datetime64/timedelta64, `<U`/`<S`
+//!   string, float16, object/structured broadcast purely by shape — detected by
+//!   `is_non_real_dtype` and delegated to `numpy.broadcast_to` (which preserves
+//!   the dtype exactly and returns a read-only view) ahead of the real+complex
+//!   dispatch. Pinned green:
 //!   `tests/test_divergence_complex_converge_audit.py::test_D_broadcast_to`;
-//!   `tests/test_expansion_complex_dclass.py::test_broadcast_to_complex`.
+//!   `tests/test_expansion_complex_dclass.py::test_broadcast_to_complex`;
+//!   `tests/test_expansion_broadcast_dtypes.py`.
 //! - REQ-3 `broadcast_arrays` — SHIPPED. `fn broadcast_arrays` returns a tuple,
 //!   per-array dtype preserved. Consumer: top-level `ferray.broadcast_arrays`
-//!   and `ferray.lib.stride_tricks.broadcast_arrays` in `lib.rs`.
+//!   and `ferray.lib.stride_tricks.broadcast_arrays` in `lib.rs`. Non-real /
+//!   complex inputs (#962): the per-array dispatch is `match_dtype_all!`
+//!   (real-only), so if ANY input is datetime/timedelta/string/float16/complex/
+//!   object the whole call delegates to `numpy.broadcast_arrays` (each input's
+//!   dtype preserved). Pinned green:
+//!   `tests/test_expansion_broadcast_dtypes.py`.
 //! - REQ-4 `broadcast_shapes` — SHIPPED. `fn broadcast_shapes`. Consumer:
 //!   top-level `ferray.broadcast_shapes` in `lib.rs`.
 //! - REQ-5 `as_strided` (binding) — SHIPPED. `fn as_strided` delegates to numpy.
@@ -63,6 +73,34 @@ use crate::conv::{
     set_readonly,
 };
 use crate::{match_dtype_all, match_dtype_all_complex};
+
+/// `true` if `arr`'s dtype falls OUTSIDE the real+complex `Element` set the
+/// `match_dtype_all_complex!` dispatch handles (bool, int8/16/32/64,
+/// uint8/16/32/64, float32/64, complex64/128), i.e. datetime64/timedelta64
+/// (`is_time_array`), fixed-width string `<U`/`<S` (`is_string_array`), float16
+/// (`is_float16_dtype`), or object/void-structured (`kind` `'O'`/`'V'`).
+///
+/// `broadcast_to`/`broadcast_arrays` are pure shape/view ops — numpy preserves
+/// the dtype EXACTLY for every one of these (`np.broadcast_to(M8[D],(2,1)).dtype
+/// == datetime64[D]`, `<U3`, `float16`, `object`, … all verified live). The
+/// real-only dispatch raised `TypeError: unsupported dtype` for them, so detect
+/// here and delegate to numpy ahead of the macro — the SAME detect-and-delegate
+/// seam the manipulation ops use (`reshape`/`ravel`/…, #948/#955/#960).
+fn is_non_real_dtype(arr: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if crate::datetime::is_time_array(arr)? {
+        return Ok(true);
+    }
+    if crate::manipulation::is_string_array(arr)? {
+        return Ok(true);
+    }
+    if crate::conv::is_float16_dtype(dtype_name(arr)?.as_str()) {
+        return Ok(true);
+    }
+    // object (`'O'`) and void/structured (`'V'`) never enter the Rust library;
+    // numpy owns their dtype-preserving broadcast.
+    let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+    Ok(kind == "O" || kind == "V")
+}
 
 /// Materialise an `ArrayView<T, IxDyn>` into an owned `ArrayD<T>` so
 /// the buffer can cross the FFI boundary safely. Strided-view callers
@@ -120,7 +158,8 @@ pub fn broadcast_arrays<'py>(
     args: &Bound<'py, PyTuple>,
     subok: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let _ = subok; // accepted for numpy parity; ferray has no subclasses.
+    // `subok` is forwarded to numpy only on the non-real delegate path below
+    // (ferray has no ndarray subclasses, so the real path treats it as a no-op).
     if args.is_empty() {
         // numpy `:656 return tuple(result)` with empty `result` -> ().
         return Ok(PyTuple::empty(py).into_any());
@@ -130,11 +169,34 @@ pub fn broadcast_arrays<'py>(
     // shape from the SHAPES alone (dtype-independent).
     let mut arrs: Vec<Bound<'py, PyAny>> = Vec::with_capacity(args.len());
     let mut shapes: Vec<Vec<usize>> = Vec::with_capacity(args.len());
+    let mut any_non_real = false;
     for item in args.iter() {
         let arr = as_ndarray(py, &item)?;
+        // broadcast_arrays' per-array dispatch is `match_dtype_all!` (real-only,
+        // NO complex arm), so complex inputs also miss it — include `kind=='c'`
+        // alongside the `is_non_real_dtype` set (datetime/string/f16/object/void).
+        let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+        any_non_real |= kind == "c" || is_non_real_dtype(&arr)?;
         let shp: Vec<usize> = arr.getattr("shape")?.extract()?;
         arrs.push(arr);
         shapes.push(shp);
+    }
+
+    // If ANY input carries a non-real dtype (datetime64/timedelta64, `<U`/`<S`
+    // string, float16, complex64/128, object/structured), the real-only per-array
+    // dispatch below raises `TypeError: unsupported dtype`. broadcast_arrays preserves
+    // each input's OWN dtype (numpy `_stride_tricks_impl.py:649-656`), so delegate
+    // the whole call to numpy on the materialised ndarrays; numpy returns a tuple
+    // of read-only views, each keeping its dtype — the contract this binding
+    // mirrors. (numpy's `broadcast_arrays` returns a tuple of views, so a single
+    // non-real input still routes every input through numpy faithfully.)
+    if any_non_real {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("subok", subok)?;
+        let result = np.call_method("broadcast_arrays", PyTuple::new(py, &arrs)?, Some(&kwargs))?;
+        let parts: Vec<Bound<'py, PyAny>> = result.try_iter()?.collect::<PyResult<Vec<_>>>()?;
+        return Ok(PyTuple::new(py, parts)?.into_any());
     }
     let refs: Vec<&[usize]> = shapes.iter().map(|v| v.as_slice()).collect();
     let target = fst::broadcast_shapes(&refs).map_err(ferr_to_pyerr)?;
@@ -173,6 +235,17 @@ pub fn broadcast_to<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let _ = subok; // accepted for numpy parity; ferray has no subclasses.
     let arr = as_ndarray(py, array)?;
+    // Non-real dtypes (datetime64/timedelta64, `<U`/`<S` string, float16,
+    // object/structured) broadcast purely by shape: numpy preserves the dtype
+    // exactly (`np.broadcast_to(M8[D],(2,1)).dtype == datetime64[D]`, live), but
+    // the real+complex `match_dtype_all_complex!` dispatch below raises
+    // `TypeError: unsupported dtype`. Delegate the whole op to numpy (which owns
+    // the dtype-preserving broadcast) ahead of the macro — numpy already returns
+    // a read-only view, matching the contract `set_readonly` enforces.
+    if is_non_real_dtype(&arr)? {
+        let np = py.import("numpy")?;
+        return np.call_method1("broadcast_to", (&arr, shape));
+    }
     let dt = dtype_name(&arr)?;
     let target: Vec<usize> = if let Ok(n) = shape.extract::<usize>() {
         vec![n]
