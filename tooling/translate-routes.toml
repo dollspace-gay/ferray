@@ -547,6 +547,24 @@ upstream = ["/home/doll/numpy-ref/numpy/_core/strings.py"]
 design = ".design/ferray-strings.md"
 parity_ops = ["isalpha", "isdigit", "isspace", "isupper", "islower", "isalnum", "isnumeric", "isdecimal", "istitle"]
 
+[[route]]
+crate_pattern = "ferray-strings/src/case.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/strings.py"]
+design = ".design/ferray-strings.md"
+parity_ops = ["upper", "lower", "capitalize", "title"]
+
+[[route]]
+crate_pattern = "ferray-strings/src/strip.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/strings.py"]
+design = ".design/ferray-strings.md"
+parity_ops = ["strip", "lstrip", "rstrip"]
+
+[[route]]
+crate_pattern = "ferray-strings/src/split_join.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/strings.py"]
+design = ".design/ferray-strings.md"
+parity_ops = ["split", "rsplit", "splitlines", "join"]
+
 # ─────────────────────────────────────────────────────────────────────────
 # ferray-ma — numpy.ma (masked arrays): per-dtype default fill_value
 # (default_filler, core.py:166) and all-masked reduction semantics

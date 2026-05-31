@@ -83,8 +83,8 @@ pub fn rsplit<D: Dimension>(
     StringArray2::from_vec(Ix2::new([n_inputs, max_parts]), flat)
 }
 
-/// Split each element on universal newlines (`\n`, `\r\n`, `\r`)
-/// (#515). Equivalent to `numpy.strings.splitlines`.
+/// Split each element on universal newlines (#515). Equivalent to
+/// `numpy.strings.splitlines`.
 ///
 /// Returns a 2-D `StringArray` shaped `(n_inputs, max_lines)` with
 /// trailing empty padding when the per-element line count differs.
@@ -109,39 +109,55 @@ pub fn splitlines<D: Dimension>(a: &StringArray<D>, keepends: bool) -> FerrayRes
     StringArray2::from_vec(Ix2::new([n_inputs, max_lines]), flat)
 }
 
-/// Universal-newline split: `\r\n` is a single split, then any
-/// remaining `\n` or `\r` independently. The result mirrors
-/// Python's `str.splitlines`.
+/// Whether `c` is a line boundary for `splitlines`, matching Python
+/// `str.splitlines` / `numpy.char.splitlines`.
+///
+/// Python breaks on the full universal-newline set, derived live
+/// (`("a" + sep + "b").splitlines()` has length > 1): `\n`, `\v` (U+000B),
+/// `\f` (U+000C), `\r`, U+001C/001D/001E (FS/GS/RS), U+0085 (NEL),
+/// U+2028 (LS), U+2029 (PS) — exactly ten boundaries (note: NOT U+001F, and
+/// `\r\n` is a single boundary, handled by the caller). Upstream:
+/// numpy/_core/strings.py:1528 splitlines -> `str.splitlines`.
+fn is_line_boundary(c: char) -> bool {
+    matches!(
+        c,
+        '\n' | '\u{0B}'
+            | '\u{0C}'
+            | '\r'
+            | '\u{1C}'
+            | '\u{1D}'
+            | '\u{1E}'
+            | '\u{85}'
+            | '\u{2028}'
+            | '\u{2029}'
+    )
+}
+
+/// Universal-newline split: a `\r\n` pair is a single boundary; every other
+/// boundary character in [`is_line_boundary`] terminates a line on its own.
+/// The result mirrors Python's `str.splitlines`.
 fn split_universal_newlines(s: &str, keepends: bool) -> Vec<String> {
     let mut out = Vec::new();
-    let bytes = s.as_bytes();
-    let mut start = 0;
-    let mut i = 0;
-    while i < bytes.len() {
-        let b = bytes[i];
-        if b == b'\n' || b == b'\r' {
-            // Identify the EOL run length.
-            let eol_len = if b == b'\r' && i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
-                2
-            } else {
-                1
-            };
-            let line_end = if keepends { i + eol_len } else { i };
-            let line = std::str::from_utf8(&bytes[start..line_end])
-                .expect("input was &str so all slices are valid UTF-8")
-                .to_string();
-            out.push(line);
-            i += eol_len;
-            start = i;
-        } else {
-            i += 1;
+    let mut line_start = 0usize;
+    let mut chars = s.char_indices().peekable();
+    while let Some((idx, c)) = chars.next() {
+        if !is_line_boundary(c) {
+            continue;
         }
+        // `\r\n` collapses into one boundary; consume the trailing `\n`.
+        let mut eol_end = idx + c.len_utf8();
+        if c == '\r' {
+            if let Some(&(_, '\n')) = chars.peek() {
+                chars.next();
+                eol_end += '\n'.len_utf8();
+            }
+        }
+        let line_end = if keepends { eol_end } else { idx };
+        out.push(s[line_start..line_end].to_string());
+        line_start = eol_end;
     }
-    if start < bytes.len() {
-        let trailing = std::str::from_utf8(&bytes[start..])
-            .expect("input was &str so all slices are valid UTF-8")
-            .to_string();
-        out.push(trailing);
+    if line_start < s.len() {
+        out.push(s[line_start..].to_string());
     }
     out
 }
@@ -252,6 +268,74 @@ mod tests {
         let r = splitlines(&a, false).unwrap();
         let s = r.as_slice();
         assert_eq!(s, &["a", "b"]);
+    }
+
+    // ---- Universal-newline boundary divergence regression (#917) -------
+    // Python `str.splitlines` / `numpy.char.splitlines` break on the full
+    // set; ferray previously only broke on \n/\r/\r\n. Expected values mirror
+    // e.g. `"a\x0bb\x0cc".splitlines() == ["a", "b", "c"]` (R-CHAR-3). These
+    // exercise the boundary logic directly via `split_universal_newlines`.
+
+    #[test]
+    fn splitlines_breaks_on_vtab_and_formfeed() {
+        // "a\x0bb\x0cc".splitlines() == ["a", "b", "c"]
+        assert_eq!(
+            split_universal_newlines("a\u{0B}b\u{0C}c", false),
+            vec!["a".to_string(), "b".to_string(), "c".to_string()]
+        );
+    }
+
+    #[test]
+    fn splitlines_breaks_on_c0_separators() {
+        // "a\x1cb\x1dc\x1ed".splitlines() == ["a", "b", "c", "d"]
+        // (FS/GS/RS are boundaries; US \x1f is NOT, per Python.)
+        assert_eq!(
+            split_universal_newlines("a\u{1C}b\u{1D}c\u{1E}d", false),
+            vec![
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string(),
+                "d".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn splitlines_unit_separator_is_not_a_boundary() {
+        // "a\x1fb".splitlines() == ["a\x1fb"] — U+001F is NOT a boundary.
+        assert_eq!(
+            split_universal_newlines("a\u{1F}b", false),
+            vec!["a\u{1F}b".to_string()]
+        );
+    }
+
+    #[test]
+    fn splitlines_breaks_on_nel_and_unicode_separators() {
+        // "a\x85b c d".splitlines() == ["a", "b", "c", "d"]
+        // (NEL U+0085, LINE SEP U+2028, PARA SEP U+2029.)
+        assert_eq!(
+            split_universal_newlines("a\u{85}b\u{2028}c\u{2029}d", false),
+            vec![
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string(),
+                "d".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn splitlines_keepends_retains_unicode_terminators() {
+        // keepends keeps each (multi-byte) terminator on its line, matching
+        // `"a\x85b c".splitlines(True) == ["a\x85", "b ", "c"]`.
+        assert_eq!(
+            split_universal_newlines("a\u{85}b\u{2028}c", true),
+            vec![
+                "a\u{85}".to_string(),
+                "b\u{2028}".to_string(),
+                "c".to_string()
+            ]
+        );
     }
 
     #[test]
