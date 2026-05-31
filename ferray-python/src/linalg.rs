@@ -36,6 +36,7 @@
 //! | RC3/RC7 (LinAlgError exception type) | SHIPPED | Impl: `linalg_err_to_pyerr` in `conv.rs`. Consumer: `det`/`inv`/`solve`/`cholesky`/`qr`/`svd`/`eigvals` `.map_err(\|e\| linalg_err_to_pyerr(py, e))` in `linalg.rs`; `LinAlgError` registered in `lib.rs` `register_linalg_module`. |
 //! | RC2/RC4 (int→float64 `_commonType`) | SHIPPED | Impl: `promote_linalg_input` in `conv.rs`. Consumer: `det`/`inv`/`norm`/`solve`/`qr`/`svd`/`cholesky` in `linalg.rs`. |
 //! | RC8 (top-level products) | SHIPPED | Impl: `dot`/`vdot`/`matmul`/`inner`/`outer` `#[pyfunction]`s in `linalg.rs`. Consumer: registered on the root module in `lib.rs` `_ferray` + re-exported in `python/ferray/__init__.py`. |
+//! | RC9 (#931 complex products / norm / decomp dispatch) | SHIPPED | The numpy-named entrypoints `dot`/`vdot`/`inner`/`outer`/`matmul`/`norm`/`det`/`inv`/`solve` now dispatch complex input instead of raising `TypeError` via `match_dtype_float!`. Impl: `is_complex_linalg_dtype` arm in each fn — `dot`/`inner` compose `sum(a*b)` (`complex_sum_product`, no conjugation) / route 2-D x 2-D to `fl::matmul_complex`; `vdot` conjugates the first arg (`complex_sum_product(..,true)`); `outer` builds `a[i]*b[j]` (`complex_outer`); `matmul` collapses 1-D x 1-D to `complex_sum_product` else `fl::matmul_complex`; `norm` reduces `abs(x)` through real `fl::norm` (`complex_norm_dispatch`, real-width result); `det`/`inv`/`solve` route to `det_complex`/`inv_complex`/`solve_complex` (faer complex LU). Consumer: the same `#[pyfunction]`s registered top-level + under `linalg` in `lib.rs` `_ferray`/`register_linalg_module`. Verified by `tests/test_expansion_complex_linalg.py` + the #931 pins in `tests/test_divergence_complex_sweep_audit.py` (dot/vdot/matmul/norm/solve/inv) against live numpy 2.4.5. |
 //! | qr(mode='r') / svd(compute_uv=False) | SHIPPED | Impl: `r_only` branch of `qr` (routes to `fl::qr` Reduced, returns bare R) + `compute_uv` branch of `svd` (routes to `fl::svdvals`) in `linalg.rs`. Consumer: registered in `lib.rs`. |
 //! | matmul 1d×1d → scalar | SHIPPED | Impl: `one_d` branch of `matmul` routes to `fl::dot` (0-d result) in `linalg.rs`. Consumer: registered top-level + under `linalg` in `lib.rs`. |
 //! | norm ord=-1/-2 on 2-D matrix | SHIPPED | Impl: `parse_norm_order` maps `-1.0`→`NormOrder::NegL1`, `-2.0`→`NormOrder::NegL2` in `linalg.rs`. Consumer: `norm`/`norm_axis`/`cond` call `parse_norm_order`. |
@@ -157,6 +158,18 @@ pub fn norm<'py>(
             }
         }
     };
+    // Complex norm: numpy expresses every `ord` over `abs(x)` (the real
+    // magnitude `|z|`), so reduce the magnitude array through the real `fl::norm`
+    // and return the REAL component width (c64->float32, c128->float64 — live
+    // numpy 2.4.5). The 2-/nuclear matrix singular-value norms are rejected (need
+    // a complex SVD). (#931)
+    if is_complex_linalg_dtype(dt.as_str()) {
+        let ndim: usize = arr.getattr("ndim")?.extract()?;
+        return match dt.as_str() {
+            "complex64" | "c8" => complex_norm_dispatch::<f32>(py, &arr, ord_value, ndim),
+            _ => complex_norm_dispatch::<f64>(py, &arr, ord_value, ndim),
+        };
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -389,6 +402,12 @@ fn move_last_to_axis<'py>(
 pub fn det<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = promote_linalg_input(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex determinant via the library complex LU (`fl::det_complex`,
+    // faer-backed). `np.linalg.det([[1+1j,2],[1j,1]]) == (1-1j)`, live numpy
+    // 2.4.5. Width-preserving (c64->c64, c128->c128). (#931)
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return det_complex(py, &arr);
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -614,6 +633,14 @@ pub fn solve<'py>(
     // the LAPACK solve; align both operands to A's promoted dtype.
     let arr_a = promote_linalg_input(py, a)?;
     let dt = dtype_name(&arr_a)?;
+    // Complex solve via the library complex LU (`fl::solve_complex` /
+    // `solve_complex_vec`, faer-backed). numpy promotes both operands to the
+    // common complex type; if EITHER A or B is complex, take the complex path.
+    let b_arr = as_ndarray(py, b)?;
+    let b_dt = dtype_name(&b_arr)?;
+    if is_complex_linalg_dtype(dt.as_str()) || is_complex_linalg_dtype(b_dt.as_str()) {
+        return solve_complex(py, &arr_a, b);
+    }
     let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
     Ok(match_dtype_float!(dt.as_str(), T => {
         let va: PyReadonlyArray2<T> = arr_a.extract()?;
@@ -630,6 +657,11 @@ pub fn solve<'py>(
 pub fn inv<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = promote_linalg_input(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex inverse via the library complex LU (`fl::inv_complex`, faer-backed),
+    // width-preserving. `np.linalg.inv` of a complex matrix is complex. (#931)
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return inv_complex(py, &arr);
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -701,10 +733,132 @@ macro_rules! bind_dyn_product {
     };
 }
 
-bind_dyn_product!(dot, fl::dot);
-bind_dyn_product!(inner, fl::inner);
-bind_dyn_product!(outer, fl::outer);
 bind_dyn_product!(kron, fl::kron);
+
+/// `numpy.dot(a, b)`. For complex input numpy computes `sum(a*b)` for 1-D x 1-D
+/// (NO conjugation, `np.dot([1+2j,3+4j],[5+6j,7+8j]) == (-18+68j)`, live numpy
+/// 2.4.5) and a complex matrix product for 2-D x 2-D; the real path keeps
+/// routing to `fl::dot`. (#931)
+#[pyfunction]
+pub fn dot<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr_a = as_ndarray(py, a)?;
+    let dt = dtype_name(&arr_a)?;
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return complex_dot_dispatch(py, &arr_a, b, dt.as_str());
+    }
+    let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
+    Ok(match_dtype_float!(dt.as_str(), T => {
+        let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
+        let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
+        let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
+        let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+        let r: ArrayD<T> = fl::dot(&fa, &fb).map_err(ferr_to_pyerr)?;
+        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    }))
+}
+
+/// `numpy.inner(a, b)`. For complex 1-D inputs `np.inner == np.dot`
+/// (`sum(a*b)`, no conjugation); the real path routes to `fl::inner`. (#931)
+#[pyfunction]
+pub fn inner<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr_a = as_ndarray(py, a)?;
+    let dt = dtype_name(&arr_a)?;
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return complex_dot_dispatch(py, &arr_a, b, dt.as_str());
+    }
+    let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
+    Ok(match_dtype_float!(dt.as_str(), T => {
+        let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
+        let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
+        let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
+        let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+        let r: ArrayD<T> = fl::inner(&fa, &fb).map_err(ferr_to_pyerr)?;
+        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    }))
+}
+
+/// `numpy.outer(a, b)`. For complex inputs the `a.size x b.size` matrix
+/// `a[i]*b[j]` (no conjugation, both operands flattened); the real path routes
+/// to `fl::outer`. (#931)
+#[pyfunction]
+pub fn outer<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr_a = as_ndarray(py, a)?;
+    let dt = dtype_name(&arr_a)?;
+    if is_complex_linalg_dtype(dt.as_str()) {
+        let cdt = if dt == "complex64" {
+            "complex64"
+        } else {
+            "complex128"
+        };
+        let arr_a = coerce_complex_dtype(py, &arr_a, cdt)?;
+        let arr_b = coerce_complex_dtype(py, b, cdt)?;
+        return if cdt == "complex64" {
+            complex_outer::<f32>(py, &arr_a, &arr_b)
+        } else {
+            complex_outer::<f64>(py, &arr_a, &arr_b)
+        };
+    }
+    let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
+    Ok(match_dtype_float!(dt.as_str(), T => {
+        let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
+        let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
+        let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
+        let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+        let r: ArrayD<T> = fl::outer(&fa, &fb).map_err(ferr_to_pyerr)?;
+        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    }))
+}
+
+/// Complex `dot`/`inner`: 1-D x 1-D → `sum(a*b)` (0-D complex scalar); 2-D x 2-D
+/// → complex matrix product via `fl::matmul_complex`. Higher ranks fall back to
+/// the flattened sum-product (numpy's 1-D contract), which covers the pinned
+/// vector cases; richer N-D complex contractions remain a follow-up.
+fn complex_dot_dispatch<'py>(
+    py: Python<'py>,
+    arr_a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    dt: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let cdt = if dt == "complex64" {
+        "complex64"
+    } else {
+        "complex128"
+    };
+    let arr_a = coerce_complex_dtype(py, arr_a, cdt)?;
+    let arr_b = coerce_complex_dtype(py, b, cdt)?;
+    let a_ndim: usize = arr_a.getattr("ndim")?.extract()?;
+    let b_ndim: usize = arr_b.getattr("ndim")?.extract()?;
+    if a_ndim == 2 && b_ndim == 2 {
+        return if cdt == "complex64" {
+            let fa = complex_pyarray_to_ferray_2d::<f32>(&arr_a)?;
+            let fb = complex_pyarray_to_ferray_2d::<f32>(&arr_b)?;
+            let r = fl::matmul_complex(&fa, &fb).map_err(ferr_to_pyerr)?;
+            complex_2d_ferray_to_pyarray(py, r)
+        } else {
+            let fa = complex_pyarray_to_ferray_2d::<f64>(&arr_a)?;
+            let fb = complex_pyarray_to_ferray_2d::<f64>(&arr_b)?;
+            let r = fl::matmul_complex(&fa, &fb).map_err(ferr_to_pyerr)?;
+            complex_2d_ferray_to_pyarray(py, r)
+        };
+    }
+    if cdt == "complex64" {
+        complex_sum_product::<f32>(py, &arr_a, &arr_b, false)
+    } else {
+        complex_sum_product::<f64>(py, &arr_a, &arr_b, false)
+    }
+}
 
 /// `numpy.matmul(a, b)` / the `@` operator.
 ///
@@ -724,6 +878,37 @@ pub fn matmul<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr_a = as_ndarray(py, a)?;
     let dt = dtype_name(&arr_a)?;
+    // Complex `@` / matmul: 1-D x 1-D collapses to the 0-D complex inner product
+    // (`sum(a*b)`); 2-D x 2-D routes to the library `matmul_complex` (#931).
+    if is_complex_linalg_dtype(dt.as_str()) {
+        let cdt = if dt == "complex64" {
+            "complex64"
+        } else {
+            "complex128"
+        };
+        let arr_a = coerce_complex_dtype(py, &arr_a, cdt)?;
+        let arr_b = coerce_complex_dtype(py, b, cdt)?;
+        let a_ndim: usize = arr_a.getattr("ndim")?.extract()?;
+        let b_ndim: usize = arr_b.getattr("ndim")?.extract()?;
+        if a_ndim == 1 && b_ndim == 1 {
+            return if cdt == "complex64" {
+                complex_sum_product::<f32>(py, &arr_a, &arr_b, false)
+            } else {
+                complex_sum_product::<f64>(py, &arr_a, &arr_b, false)
+            };
+        }
+        return if cdt == "complex64" {
+            let fa = complex_pyarray_to_ferray_2d::<f32>(&arr_a)?;
+            let fb = complex_pyarray_to_ferray_2d::<f32>(&arr_b)?;
+            let r = fl::matmul_complex(&fa, &fb).map_err(ferr_to_pyerr)?;
+            complex_2d_ferray_to_pyarray(py, r)
+        } else {
+            let fa = complex_pyarray_to_ferray_2d::<f64>(&arr_a)?;
+            let fb = complex_pyarray_to_ferray_2d::<f64>(&arr_b)?;
+            let r = fl::matmul_complex(&fa, &fb).map_err(ferr_to_pyerr)?;
+            complex_2d_ferray_to_pyarray(py, r)
+        };
+    }
     let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
     let a_ndim: usize = arr_a.getattr("ndim")?.extract()?;
     let b_ndim: usize = arr_b.getattr("ndim")?.extract()?;
@@ -751,6 +936,23 @@ pub fn vdot<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr_a = as_ndarray(py, a)?;
     let dt = dtype_name(&arr_a)?;
+    // Complex `vdot` CONJUGATES the FIRST argument: `sum(conj(a) * b)`
+    // (numpy `_core/multiarray` vdot; `np.vdot([1+2j,3+4j],[5+6j,7+8j]) ==
+    // (70-8j)`, live numpy 2.4.5). Both operands are flattened. (#931)
+    if is_complex_linalg_dtype(dt.as_str()) {
+        let cdt = if dt == "complex64" {
+            "complex64"
+        } else {
+            "complex128"
+        };
+        let arr_a = coerce_complex_dtype(py, &arr_a, cdt)?;
+        let arr_b = coerce_complex_dtype(py, b, cdt)?;
+        return if cdt == "complex64" {
+            complex_sum_product::<f32>(py, &arr_a, &arr_b, true)
+        } else {
+            complex_sum_product::<f64>(py, &arr_a, &arr_b, true)
+        };
+    }
     let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
     Ok(match_dtype_float!(dt.as_str(), T => {
         let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
@@ -1026,6 +1228,212 @@ where
 {
     let data: Vec<num_complex::Complex<T>> = arr.iter().cloned().collect();
     Ok(numpy::PyArray1::<num_complex::Complex<T>>::from_vec(py, data).into_any())
+}
+
+// ---------------------------------------------------------------------------
+// #931: complex dispatch for the numpy-named products / norm / decompositions
+// (dot / vdot / inner / outer / matmul / linalg.norm / det / inv / solve).
+//
+// The real entrypoints route through `match_dtype_float!`, which has NO complex
+// arm — a complex input raised `TypeError: unsupported dtype for floating-point
+// op: complex128`, while numpy COMPUTES. The complex MATRIX primitives already
+// live in `ferray-linalg` (`matmul_complex` / `inv_complex` / `det_complex` /
+// `solve_complex` / `solve_complex_vec`); the arithmetic products (dot / vdot /
+// inner / outer) and `norm` are COMPOSED here from complex multiply/add over the
+// flattened buffers (there is no `LinalgFloat`-generic complex `dot` in the
+// library — `LinalgFloat` is sealed to f32/f64). Each helper keeps the input
+// complex width (c64->c64, c128->c128; `norm` returns the REAL component width,
+// c64->float32 / c128->float64), matching numpy's live 2.4.5 dtype contract.
+// ---------------------------------------------------------------------------
+
+/// `true` for the two complex dtype names ferray marshals.
+fn is_complex_linalg_dtype(dt: &str) -> bool {
+    matches!(dt, "complex128" | "c16" | "complex64" | "c8")
+}
+
+/// Flatten a complex numpy array (any rank) to a row-major `Vec<Complex<T>>`.
+fn complex_flat<'py, T>(arr: &Bound<'py, PyAny>) -> PyResult<Vec<num_complex::Complex<T>>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let view: numpy::PyReadonlyArrayDyn<num_complex::Complex<T>> = arr.extract()?;
+    Ok(view.as_array().iter().cloned().collect())
+}
+
+/// 0-D complex scalar result (`np.dot` / `np.vdot` / `np.inner` of two 1-D
+/// vectors returns a 0-D complex array). Width-preserving.
+fn complex_scalar_to_pyarray<'py, T>(
+    py: Python<'py>,
+    z: num_complex::Complex<T>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: numpy::Element,
+    num_complex::Complex<T>: numpy::Element,
+{
+    let flat = numpy::PyArray1::<num_complex::Complex<T>>::from_vec(py, vec![z]);
+    let r = flat
+        .reshape::<[usize; 0]>([])
+        .map_err(|e| PyValueError::new_err(format!("complex scalar reshape: {e}")))?;
+    Ok(r.into_any())
+}
+
+/// `numpy.dot` / `numpy.inner` for two complex 1-D vectors: `sum(a*b)` with NO
+/// conjugation (`np.dot([1+2j,3+4j],[5+6j,7+8j]) == (-18+68j)`, live numpy
+/// 2.4.5). Width-preserving. Mismatched lengths raise the numpy ValueError.
+fn complex_sum_product<'py, T>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    conjugate_a: bool,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + ReductionRealNorm,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: Vec<num_complex::Complex<T>> = complex_flat::<T>(a)?;
+    let fb: Vec<num_complex::Complex<T>> = complex_flat::<T>(b)?;
+    if fa.len() != fb.len() {
+        return Err(PyValueError::new_err(format!(
+            "shapes ({},) and ({},) not aligned",
+            fa.len(),
+            fb.len()
+        )));
+    }
+    let mut acc = num_complex::Complex::<T>::new(T::ZERO, T::ZERO);
+    for (x, y) in fa.iter().zip(fb.iter()) {
+        // `vdot` conjugates the FIRST argument (numpy/_core/multiarray vdot:
+        // `sum(conj(a) * b)`); `dot`/`inner` do not.
+        let xa = if conjugate_a {
+            num_complex::Complex::new(x.re, -x.im)
+        } else {
+            *x
+        };
+        let p = cplx_mul(xa, *y);
+        acc = num_complex::Complex::new(acc.re + p.re, acc.im + p.im);
+    }
+    complex_scalar_to_pyarray(py, acc)
+}
+
+/// `numpy.outer(a, b)` for complex inputs: the `a.size x b.size` matrix
+/// `a[i]*b[j]` (NO conjugation, `np.outer` flattens both operands). Width-
+/// preserving.
+fn complex_outer<'py, T>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + ReductionRealNorm,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: Vec<num_complex::Complex<T>> = complex_flat::<T>(a)?;
+    let fb: Vec<num_complex::Complex<T>> = complex_flat::<T>(b)?;
+    let (m, n) = (fa.len(), fb.len());
+    let mut data: Vec<num_complex::Complex<T>> = Vec::with_capacity(m * n);
+    for x in &fa {
+        for y in &fb {
+            data.push(cplx_mul(*x, *y));
+        }
+    }
+    let arr = ferray_core::Array::<num_complex::Complex<T>, ferray_core::dimension::Ix2>::from_vec(
+        ferray_core::dimension::Ix2::new([m, n]),
+        data,
+    )
+    .map_err(ferr_to_pyerr)?;
+    complex_2d_ferray_to_pyarray(py, arr)
+}
+
+/// `numpy.linalg.norm(complex, ord)` — the magnitude reduction. For every
+/// `ord` numpy expresses the complex norm over `abs(x)` (the real magnitude
+/// `|z| = hypot(re,im)`), EXCEPT the 2-/Frobenius cases which numpy computes as
+/// `sqrt(sum (conj(x)*x).real) == sqrt(sum |x|^2)` (numpy/linalg/_linalg.py:2803
+/// `s = (x.conj() * x).real; sqrt(add.reduce(s))` and :2842 for the matrix
+/// Frobenius). The real L2 norm of the magnitude array equals exactly that, and
+/// the real L1/Inf/-Inf/P norms of the magnitude array equal numpy's complex
+/// `add.reduce(abs(x))` / `abs(x).max()` rows (:2800/:2828/:2832). So: build the
+/// REAL magnitude array, then route through the existing real `fl::norm`. The
+/// result is the REAL component width (numpy returns float32 for c64, float64
+/// for c128 — verified live). `ord` strings other than 'fro' and the matrix
+/// singular-value norms ('nuc', 2, -2) need a complex SVD and are NOT composable
+/// from `abs(x)`; they return the numpy ValueError / a not-yet-supported error.
+fn complex_norm_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    ord_value: fl::NormOrder,
+    ndim: usize,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element
+        + Copy
+        + numpy::Element
+        + Default
+        + ReductionRealNorm
+        + ferray_linalg::LinalgFloat,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+    ArrayD<T>: IntoNumPy<T, IxDyn>,
+{
+    use fl::NormOrder;
+    // The singular-value matrix norms need a complex SVD (not composable from
+    // `abs(x)`); reject with the numpy-equivalent message rather than a wrong
+    // magnitude-norm answer (no silent divergence).
+    if ndim == 2 && matches!(ord_value, NormOrder::Nuc | NormOrder::NegL2 | NormOrder::L2) {
+        return Err(PyValueError::new_err(
+            "linalg.norm: complex matrix 2-norm / nuclear norm (singular-value \
+             based) is not yet supported; use a vector ord or 'fro'",
+        ));
+    }
+    let fa: Vec<num_complex::Complex<T>> = complex_flat::<T>(arr)?;
+    let shape: Vec<usize> = {
+        let view: numpy::PyReadonlyArrayDyn<num_complex::Complex<T>> = arr.extract()?;
+        view.as_array().shape().to_vec()
+    };
+    // `|z| = hypot(re, im)` per element — numpy's `abs(x)` over a complex array.
+    let mags: Vec<T> = fa
+        .iter()
+        .map(|z| ReductionRealNorm::hypot(z.re, z.im))
+        .collect();
+    let mag_arr = ArrayD::<T>::from_vec(IxDyn::new(&shape), mags).map_err(ferr_to_pyerr)?;
+    let scalar: T = fl::norm(&mag_arr, ord_value).map_err(|e| linalg_err_to_pyerr(py, e))?;
+    let arr0 = ArrayD::<T>::from_vec(IxDyn::new(&[]), vec![scalar]).map_err(ferr_to_pyerr)?;
+    Ok(arr0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// The real-component scalar ops the complex products / norm need, sealed to the
+/// two real widths ferray marshals. `num-traits` is not a direct dependency of
+/// `ferray-python`, so this provides `hypot` plus the four real ops used to
+/// compose complex multiply/add/conj WITHOUT pulling a new crate, and avoids any
+/// `num_traits::Num`/`Neg` bound on the generic helpers.
+trait ReductionRealNorm:
+    Copy
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Neg<Output = Self>
+{
+    const ZERO: Self;
+    fn hypot(re: Self, im: Self) -> Self;
+}
+impl ReductionRealNorm for f32 {
+    const ZERO: Self = 0.0;
+    fn hypot(re: Self, im: Self) -> Self {
+        f32::hypot(re, im)
+    }
+}
+impl ReductionRealNorm for f64 {
+    const ZERO: Self = 0.0;
+    fn hypot(re: Self, im: Self) -> Self {
+        f64::hypot(re, im)
+    }
+}
+
+/// `(a.re, a.im) * (b.re, b.im)` as a raw complex multiply over the real
+/// components — avoids a `num_traits::Num` bound on `Complex<T>`.
+fn cplx_mul<T: ReductionRealNorm>(
+    a: num_complex::Complex<T>,
+    b: num_complex::Complex<T>,
+) -> num_complex::Complex<T> {
+    num_complex::Complex::new(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re)
 }
 
 fn coerce_complex_dtype<'py>(
