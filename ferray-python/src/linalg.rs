@@ -37,6 +37,7 @@
 //! | RC2/RC4 (int→float64 `_commonType`) | SHIPPED | Impl: `promote_linalg_input` in `conv.rs`. Consumer: `det`/`inv`/`norm`/`solve`/`qr`/`svd`/`cholesky` in `linalg.rs`. |
 //! | RC8 (top-level products) | SHIPPED | Impl: `dot`/`vdot`/`matmul`/`inner`/`outer` `#[pyfunction]`s in `linalg.rs`. Consumer: registered on the root module in `lib.rs` `_ferray` + re-exported in `python/ferray/__init__.py`. |
 //! | RC9 (#931 complex products / norm / decomp dispatch) | SHIPPED | The numpy-named entrypoints `dot`/`vdot`/`inner`/`outer`/`matmul`/`norm`/`det`/`inv`/`solve` now dispatch complex input instead of raising `TypeError` via `match_dtype_float!`. Impl: `is_complex_linalg_dtype` arm in each fn — `dot`/`inner` compose `sum(a*b)` (`complex_sum_product`, no conjugation) / route 2-D x 2-D to `fl::matmul_complex`; `vdot` conjugates the first arg (`complex_sum_product(..,true)`); `outer` builds `a[i]*b[j]` (`complex_outer`); `matmul` collapses 1-D x 1-D to `complex_sum_product` else `fl::matmul_complex`; `norm` reduces `abs(x)` through real `fl::norm` (`complex_norm_dispatch`, real-width result); `det`/`inv`/`solve` route to `det_complex`/`inv_complex`/`solve_complex` (faer complex LU). Consumer: the same `#[pyfunction]`s registered top-level + under `linalg` in `lib.rs` `_ferray`/`register_linalg_module`. Verified by `tests/test_expansion_complex_linalg.py` + the #931 pins in `tests/test_divergence_complex_sweep_audit.py` (dot/vdot/matmul/norm/solve/inv) against live numpy 2.4.5. |
+//! | RC10 (#938 complex trace / kron / tensordot compute) | SHIPPED | These products composed only over `match_dtype_float!`, so complex raised `TypeError`. Impl: `is_complex_linalg_dtype` gate in `trace`/`kron`/`tensordot` → `complex_trace_dispatch` (complex diagonal sum), `complex_kron_dispatch` (2-D block product `a[i,j]*b`), `complex_tensordot_dispatch` (scalar-axes contraction `sum a*b`), all composed from `cplx_mul` over flattened complex buffers. Consumer: the same `trace`/`kron`/`tensordot` `#[pyfunction]`s registered top-level in `lib.rs` `_ferray` (and `trace`/`kron` under `register_linalg_module`). Verified by `tests/test_expansion_complex_dclass.py` + the #938 D-class pins in `tests/test_divergence_complex_converge_audit.py` against live numpy 2.4.5. |
 //! | qr(mode='r') / svd(compute_uv=False) | SHIPPED | Impl: `r_only` branch of `qr` (routes to `fl::qr` Reduced, returns bare R) + `compute_uv` branch of `svd` (routes to `fl::svdvals`) in `linalg.rs`. Consumer: registered in `lib.rs`. |
 //! | matmul 1d×1d → scalar | SHIPPED | Impl: `one_d` branch of `matmul` routes to `fl::dot` (0-d result) in `linalg.rs`. Consumer: registered top-level + under `linalg` in `lib.rs`. |
 //! | norm ord=-1/-2 on 2-D matrix | SHIPPED | Impl: `parse_norm_order` maps `-1.0`→`NormOrder::NegL1`, `-2.0`→`NormOrder::NegL2` in `linalg.rs`. Consumer: `norm`/`norm_axis`/`cond` call `parse_norm_order`. |
@@ -459,6 +460,15 @@ pub fn matrix_rank<'py>(
 pub fn trace<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex trace = complex sum of the main diagonal (numpy computes
+    // `(5+3j)` for the 2x2 fixture, verified live). `fl::trace` is sealed to
+    // `LinalgFloat` (f32/f64), so compose the diagonal sum from complex add.
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return match dt.as_str() {
+            "complex64" | "c8" => complex_trace_dispatch::<f32>(py, &arr),
+            _ => complex_trace_dispatch::<f64>(py, &arr),
+        };
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let view: PyReadonlyArray2<T> = arr.extract()?;
         let fa: Array2<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -730,30 +740,33 @@ pub fn matrix_power<'py>(
 // Products
 // ---------------------------------------------------------------------------
 
-macro_rules! bind_dyn_product {
-    ($name:ident, $ferr_path:path) => {
-        #[pyfunction]
-        pub fn $name<'py>(
-            py: Python<'py>,
-            a: &Bound<'py, PyAny>,
-            b: &Bound<'py, PyAny>,
-        ) -> PyResult<Bound<'py, PyAny>> {
-            let arr_a = as_ndarray(py, a)?;
-            let dt = dtype_name(&arr_a)?;
-            let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
-            Ok(match_dtype_float!(dt.as_str(), T => {
-                let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
-                let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
-                let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
-                let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
-                let r: ArrayD<T> = $ferr_path(&fa, &fb).map_err(ferr_to_pyerr)?;
-                r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-            }))
-        }
-    };
+/// `numpy.kron(a, b)`. The real path routes to `fl::kron`; complex input
+/// composes the Kronecker product `a[i]*b[j]` from complex multiply (`fl::kron`
+/// is sealed to `LinalgFloat`), matching numpy's complex kron (verified live).
+#[pyfunction]
+pub fn kron<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let arr_a = as_ndarray(py, a)?;
+    let dt = dtype_name(&arr_a)?;
+    let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return match dt.as_str() {
+            "complex64" | "c8" => complex_kron_dispatch::<f32>(py, &arr_a, &arr_b),
+            _ => complex_kron_dispatch::<f64>(py, &arr_a, &arr_b),
+        };
+    }
+    Ok(match_dtype_float!(dt.as_str(), T => {
+        let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
+        let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
+        let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
+        let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+        let r: ArrayD<T> = fl::kron(&fa, &fb).map_err(ferr_to_pyerr)?;
+        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+    }))
 }
-
-bind_dyn_product!(kron, fl::kron);
 
 /// `numpy.dot(a, b)`. For complex input numpy computes `sum(a*b)` for 1-D x 1-D
 /// (NO conjugation, `np.dot([1+2j,3+4j],[5+6j,7+8j]) == (-18+68j)`, live numpy
@@ -1364,6 +1377,146 @@ where
     complex_2d_ferray_to_pyarray(py, arr)
 }
 
+/// Row-major shape of a complex numpy array.
+fn complex_shape<'py, T>(arr: &Bound<'py, PyAny>) -> PyResult<Vec<usize>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let view: numpy::PyReadonlyArrayDyn<num_complex::Complex<T>> = arr.extract()?;
+    Ok(view.as_array().shape().to_vec())
+}
+
+/// Complex `trace`: complex sum of the main diagonal of a 2-D array. Mirrors
+/// numpy `np.trace` which sums `a[i, i]` (verified live `np.trace(M) == (5+3j)`).
+fn complex_trace_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + ReductionRealNorm,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let shape = complex_shape::<T>(arr)?;
+    if shape.len() != 2 {
+        return Err(PyValueError::new_err(
+            "trace: complex input must be 2-D (offset/3-D trace not yet supported)",
+        ));
+    }
+    let (rows, cols) = (shape[0], shape[1]);
+    let flat: Vec<num_complex::Complex<T>> = complex_flat::<T>(arr)?;
+    let mut acc = num_complex::Complex::<T>::new(T::ZERO, T::ZERO);
+    for i in 0..rows.min(cols) {
+        let z = flat[i * cols + i];
+        acc = num_complex::Complex::new(acc.re + z.re, acc.im + z.im);
+    }
+    complex_scalar_to_pyarray(py, acc)
+}
+
+/// Complex `kron` for 2-D operands: the `(m*p, n*q)` block matrix
+/// `result[i*p+k, j*q+l] = a[i,j] * b[k,l]`, composed from complex multiply.
+/// Matches numpy `np.kron` of two complex matrices (verified live).
+fn complex_kron_dispatch<'py, T>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + ReductionRealNorm,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let sa = complex_shape::<T>(a)?;
+    let sb = complex_shape::<T>(b)?;
+    if sa.len() != 2 || sb.len() != 2 {
+        return Err(PyValueError::new_err(
+            "kron: complex input must be 2-D (higher-rank kron not yet supported)",
+        ));
+    }
+    let (m, n) = (sa[0], sa[1]);
+    let (p, q) = (sb[0], sb[1]);
+    let fa: Vec<num_complex::Complex<T>> = complex_flat::<T>(a)?;
+    let fb: Vec<num_complex::Complex<T>> = complex_flat::<T>(b)?;
+    let (rows, cols) = (m * p, n * q);
+    let mut data: Vec<num_complex::Complex<T>> =
+        vec![num_complex::Complex::<T>::new(T::ZERO, T::ZERO); rows * cols];
+    for i in 0..m {
+        for j in 0..n {
+            let aij = fa[i * n + j];
+            for k in 0..p {
+                for l in 0..q {
+                    let r = i * p + k;
+                    let c = j * q + l;
+                    data[r * cols + c] = cplx_mul(aij, fb[k * q + l]);
+                }
+            }
+        }
+    }
+    let arr = ferray_core::Array::<num_complex::Complex<T>, ferray_core::dimension::Ix2>::from_vec(
+        ferray_core::dimension::Ix2::new([rows, cols]),
+        data,
+    )
+    .map_err(ferr_to_pyerr)?;
+    complex_2d_ferray_to_pyarray(py, arr)
+}
+
+/// Complex `tensordot(a, b, axes=N)`: contract the LAST `n` axes of `a` with the
+/// FIRST `n` axes of `b` (numpy `tensordot` scalar-axes form), summing complex
+/// products. The result shape is `a.shape[:-n] + b.shape[n:]`. numpy
+/// `np.tensordot(M, M)` of the 2x2 fixture is the scalar `(24+14j)` (live).
+fn complex_tensordot_dispatch<'py, T>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    axes: usize,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + ReductionRealNorm,
+    num_complex::Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let sa = complex_shape::<T>(a)?;
+    let sb = complex_shape::<T>(b)?;
+    if axes > sa.len() || axes > sb.len() {
+        return Err(PyValueError::new_err(
+            "tensordot: axes exceeds operand dimensionality",
+        ));
+    }
+    // Contracted axes: last `axes` of a, first `axes` of b — shapes must match.
+    let a_con = &sa[sa.len() - axes..];
+    let b_con = &sb[..axes];
+    if a_con != b_con {
+        return Err(PyValueError::new_err(
+            "tensordot: shape mismatch on contracted axes",
+        ));
+    }
+    let free_a = &sa[..sa.len() - axes];
+    let free_b = &sb[axes..];
+    let k: usize = a_con.iter().product::<usize>().max(1);
+    let outer_a: usize = free_a.iter().product::<usize>().max(1);
+    let outer_b: usize = free_b.iter().product::<usize>().max(1);
+    let fa: Vec<num_complex::Complex<T>> = complex_flat::<T>(a)?;
+    let fb: Vec<num_complex::Complex<T>> = complex_flat::<T>(b)?;
+    // `a` is row-major (outer_a, k); `b` is row-major (k, outer_b).
+    let mut data: Vec<num_complex::Complex<T>> = Vec::with_capacity(outer_a * outer_b);
+    for ia in 0..outer_a {
+        for ib in 0..outer_b {
+            let mut acc = num_complex::Complex::<T>::new(T::ZERO, T::ZERO);
+            for kk in 0..k {
+                let x = fa[ia * k + kk];
+                let y = fb[kk * outer_b + ib];
+                let p = cplx_mul(x, y);
+                acc = num_complex::Complex::new(acc.re + p.re, acc.im + p.im);
+            }
+            data.push(acc);
+        }
+    }
+    let mut out_shape: Vec<usize> = Vec::with_capacity(free_a.len() + free_b.len());
+    out_shape.extend_from_slice(free_a);
+    out_shape.extend_from_slice(free_b);
+    let arr = ArrayD::<num_complex::Complex<T>>::from_vec(IxDyn::new(&out_shape), data)
+        .map_err(ferr_to_pyerr)?;
+    crate::fft::complex_ferray_to_pyarray(py, arr)
+}
+
 /// `numpy.linalg.norm(complex, ord)` — the magnitude reduction. For every
 /// `ord` numpy expresses the complex norm over `abs(x)` (the real magnitude
 /// `|z| = hypot(re,im)`), EXCEPT the 2-/Frobenius cases which numpy computes as
@@ -1949,6 +2102,16 @@ pub fn tensordot<'py>(
     } else {
         axes as usize
     };
+    // Complex tensordot composes the contraction `sum over last `axes` dims of
+    // a * last `axes` dims of b` from complex multiply/add (`fl::tensordot` is
+    // sealed to `LinalgFloat`). numpy `np.tensordot(M, M)` of the 2x2 complex
+    // fixture is the scalar `(24+14j)` (verified live).
+    if is_complex_linalg_dtype(dt.as_str()) {
+        return match dt.as_str() {
+            "complex64" | "c8" => complex_tensordot_dispatch::<f32>(py, &arr_a, &arr_b, axes_u),
+            _ => complex_tensordot_dispatch::<f64>(py, &arr_a, &arr_b, axes_u),
+        };
+    }
     Ok(match_dtype_float!(dt.as_str(), T => {
         let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
         let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;

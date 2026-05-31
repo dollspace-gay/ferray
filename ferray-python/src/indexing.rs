@@ -30,6 +30,15 @@
 //!   (numpy/_core/numeric.py:1726); `nonzero` 0-d ⇒ ValueError (:1994);
 //!   `putmask` global-flat value cycling; top-level `put`
 //!   (fromnumeric.py:489).
+//! - REQ-15a-CPLX SHIPPED (#938) — `take` and `nonzero` now accept complex
+//!   input via the `match_dtype_all_complex!` + `DynMarshal` seam (#933):
+//!   `take` is a pure gather (`fi::take` over `Complex<T>`, dtype preserved),
+//!   `nonzero` treats `z != 0` as `re != 0 || im != 0` (`fi::nonzero` uses
+//!   `*v != T::zero()`, which compares both parts for `Complex<T>`). Consumer:
+//!   the `take`/`nonzero` `#[pyfunction]`s registered on `_ferray`. numpy:
+//!   `np.take([3+4j,...],[0,2])`, `np.nonzero([0j,1+1j,2+0j])` (live 2.4.5).
+//!   Pinned green: `tests/test_divergence_complex_converge_audit.py::test_D_take`
+//!   / `::test_D_nonzero`; `tests/test_expansion_complex_dclass.py` (take/nonzero).
 
 use ferray_core::FerrayError;
 use ferray_core::array::aliases::{Array1, Array2, ArrayD};
@@ -40,8 +49,8 @@ use numpy::PyReadonlyArrayDyn;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyTuple};
 
-use crate::conv::{as_ndarray, dtype_name, ferr_to_pyerr, normalize_axis};
-use crate::match_dtype_all;
+use crate::conv::{DynMarshal, as_ndarray, dtype_name, ferr_to_pyerr, normalize_axis};
+use crate::{match_dtype_all, match_dtype_all_complex};
 
 // ---------------------------------------------------------------------------
 // Error mapping
@@ -371,9 +380,14 @@ pub fn nonzero<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'p
         ));
     }
     let dt = dtype_name(&arr)?;
-    let groups = match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    // Complex `nonzero`: numpy treats `z != 0` as `re != 0 || im != 0`
+    // (numpy/_core/fromnumeric.py:1994 dispatches to the elementwise truth of
+    // the complex value). ferray-core `nonzero` uses `*val != T::zero()`, which
+    // for `Complex<T>` compares both parts — matching numpy. Route complex
+    // through the DynMarshal seam (#933) so the imaginary part is preserved on
+    // extract.
+    let groups = match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         fi::nonzero(&fa)
     });
     let arrays: Vec<Bound<'py, PyAny>> = groups
@@ -434,11 +448,14 @@ pub fn take<'py>(
     let post: Vec<usize> = src_shape[ax + 1..].to_vec();
 
     let dt = dtype_name(&arr)?;
-    let result = match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    // `take` is a pure gather (no arithmetic) — generic over `T: Element` in
+    // ferray-core, so it works unchanged for `Complex<T>`. Route through the
+    // DynMarshal seam (#933) so complex input preserves its imaginary part
+    // (numpy `np.take` keeps complex dtype, verified live).
+    let result = match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fi::take(&fa, &resolved, Axis(ax)).map_err(gather_err_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     });
     reshape_take_result(result, &pre, &index_shape, &post)
 }

@@ -13,19 +13,25 @@
 //! dtype + values through every one of these ops, so ferray does too
 //! (#933).
 //!
-//! A handful of ops that genuinely cannot accept complex stay on the
-//! real-only [`match_dtype_all!`]: `pad` (its `constant_values` is an
-//! `f64` that cannot encode a complex fill), and the 1-D-only `r_` / `c_`
-//! / `trim_zeros` helpers (which marshal through the `Array1` `NpElement`
-//! path). Supporting a new *real* dtype is still one new arm in the macro
-//! and zero changes here.
+//! `pad` (#938) now also dispatches through [`match_dtype_all_complex!`]: its
+//! `constant_values` `f64` maps to `(v + 0j)` for a complex array (matching
+//! numpy's promotion of a real `constant_values` against complex data), so the
+//! default `constant_values=0` fill becomes `0+0j` and the data move preserves
+//! the imaginary part (`np.pad(complex, (1,1))`, live). Consumer: top-level
+//! `ferray.pad` in `lib.rs` `_ferray`. Pinned green:
+//! `tests/test_divergence_complex_converge_audit.py::test_D_pad`;
+//! `tests/test_expansion_complex_dclass.py` (pad cases).
+//!
+//! The 1-D-only `r_` / `c_` / `trim_zeros` helpers stay on the real-only
+//! [`match_dtype_all!`] (they marshal through the `Array1` `NpElement` path).
+//! Supporting a new *real* dtype is still one new arm in the macro and zero
+//! changes here.
 
 use ferray_core::array::aliases::ArrayD;
 use ferray_core::dimension::IxDyn;
 use ferray_core::manipulation as fm;
 use ferray_core::manipulation::extended as fme;
 use ferray_numpy_interop::{AsFerray, IntoNumPy};
-use numpy::PyReadonlyArrayDyn;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyList};
@@ -770,9 +776,13 @@ pub fn pad<'py>(
         pad_width.extract::<Vec<(usize, usize)>>()?
     };
 
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    // `pad` is a pure data-move op (generic over `T: Element` in ferray-core),
+    // so it works unchanged for `Complex<T>`. numpy keeps complex dtype and the
+    // `constant_values=0` fill becomes `0+0j` (`np.pad(complex, (1,1))`, verified
+    // live). Route through the DynMarshal seam (#933) so the imaginary part
+    // survives extract/emit; the constant cast gained a complex arm below.
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let pad_mode: PadMode<T> = match mode {
             "constant" => {
                 // Coerce f64 → T via the FromF64Lossy trait used in `full`,
@@ -792,7 +802,7 @@ pub fn pad<'py>(
             }
         };
         let r: ArrayD<T> = fme::pad(&fa, &widths, &pad_mode).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -811,6 +821,18 @@ impl_pad_cast!(f64, f32, i64, i32, i16, i8, u64, u32, u16, u8);
 impl PadConstantCast for bool {
     fn from_f64(v: f64) -> Self {
         v != 0.0
+    }
+}
+// Complex constant fill: the real `constant_values` maps to `(v + 0j)`, matching
+// numpy's promotion of a real `constant_values` against a complex array.
+impl PadConstantCast for num_complex::Complex<f32> {
+    fn from_f64(v: f64) -> Self {
+        num_complex::Complex::new(v as f32, 0.0)
+    }
+}
+impl PadConstantCast for num_complex::Complex<f64> {
+    fn from_f64(v: f64) -> Self {
+        num_complex::Complex::new(v, 0.0)
     }
 }
 fn ferray_python_constant_cast<T: PadConstantCast>(v: f64) -> T {

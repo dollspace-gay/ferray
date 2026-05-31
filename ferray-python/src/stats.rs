@@ -463,6 +463,19 @@ fn complex_weighted_average<'py>(
 // `PartialOrd`, so the library `match_dtype_orderable!`/`nan_last_cmp` path
 // cannot carry it; the lexicographic comparator lives here over the flattened
 // (or per-axis-lane) complex data, reusing the #924/#874 lexicographic pattern.
+//
+// #938 (D-class) extends the same `cplx_sort_cmp` order to the SORTED/SET ops
+// (`searchsorted` / `partition` / `intersect1d` / `union1d` / `setdiff1d` /
+// `setxor1d` / `isin`) — each routed via a `is_complex` gate to a
+// `complex_*_dispatch` helper below (`ferray_stats` set/sort fns need
+// `T: PartialOrd`, absent for `Complex`). `count_nonzero` additionally moved to
+// the `match_dtype_all_complex!` + `DynMarshal` seam (#933) since it needs only
+// `PartialEq` (`z != 0` = `re != 0 || im != 0`). Consumers: the matching
+// top-level `#[pyfunction]`s in `lib.rs` `_ferray`. numpy live 2.4.5:
+// `np.searchsorted([1,2,3],1+1j)==1`, `np.intersect1d([3+4j,1-2j],[1-2j])==[1-2j]`,
+// `np.count_nonzero([3+4j,1-2j])==2`. Pinned green:
+// `tests/test_divergence_complex_converge_audit.py` (searchsorted/partition/
+// intersect1d/union1d/setdiff1d/isin/count_nonzero) + `test_expansion_complex_dclass.py`.
 // ---------------------------------------------------------------------------
 
 /// `true` if either component of `z` is NaN — numpy's complex `isnan` contract
@@ -725,6 +738,182 @@ where
     let n = out.len();
     let r = ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[n]), out).map_err(ferr_to_pyerr)?;
     complex_ferray_to_pyarray(py, r)
+}
+
+/// Extract a complex numpy array as a flat row-major `Vec<Complex<T>>`.
+fn complex_flat_1d<'py, T>(arr: &Bound<'py, PyAny>) -> PyResult<Vec<Complex<T>>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    Ok(fa.iter().copied().collect())
+}
+
+/// Emit a flat `Vec<Complex<T>>` as a 1-D complex numpy array.
+fn complex_vec_to_pyarray_1d<'py, T>(
+    py: Python<'py>,
+    data: Vec<Complex<T>>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let n = data.len();
+    let r = ArrayD::<Complex<T>>::from_vec(IxDyn::new(&[n]), data).map_err(ferr_to_pyerr)?;
+    complex_ferray_to_pyarray(py, r)
+}
+
+/// Lexicographic sort + adjacent dedup of a complex vector (#932 order). Mirrors
+/// numpy's `np.unique` used inside the set ops.
+fn cplx_sorted_unique<T>(mut data: Vec<Complex<T>>) -> Vec<Complex<T>>
+where
+    T: PartialOrd + Copy,
+{
+    data.sort_by(cplx_sort_cmp);
+    let mut out: Vec<Complex<T>> = Vec::with_capacity(data.len());
+    for z in data {
+        match out.last() {
+            Some(prev) if cplx_sort_cmp(prev, &z) == core::cmp::Ordering::Equal => {}
+            _ => out.push(z),
+        }
+    }
+    out
+}
+
+/// Complex 1-D set operations (union/intersect/diff/xor) via the #932
+/// lexicographic order. Each returns a SORTED UNIQUE complex array, matching
+/// numpy's `union1d`/`intersect1d`/`setdiff1d`/`setxor1d` over complex (live).
+fn complex_set_op_dispatch<'py, T>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    op: CplxSetOp,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let ua = cplx_sorted_unique(complex_flat_1d::<T>(a)?);
+    let ub = cplx_sorted_unique(complex_flat_1d::<T>(b)?);
+    let eq = |x: &Complex<T>, y: &Complex<T>| cplx_sort_cmp(x, y) == core::cmp::Ordering::Equal;
+    let in_b = |z: &Complex<T>| ub.iter().any(|y| eq(z, y));
+    let in_a = |z: &Complex<T>| ua.iter().any(|x| eq(z, x));
+    let out: Vec<Complex<T>> = match op {
+        CplxSetOp::Union => {
+            let mut all = ua;
+            all.extend(ub);
+            cplx_sorted_unique(all)
+        }
+        CplxSetOp::Intersect => ua.into_iter().filter(|z| in_b(z)).collect(),
+        CplxSetOp::Diff => ua.into_iter().filter(|z| !in_b(z)).collect(),
+        CplxSetOp::Xor => {
+            let mut r: Vec<Complex<T>> = ua.iter().copied().filter(|z| !in_b(z)).collect();
+            r.extend(ub.iter().copied().filter(|z| !in_a(z)));
+            cplx_sorted_unique(r)
+        }
+    };
+    complex_vec_to_pyarray_1d(py, out)
+}
+
+/// Complex `isin`: per-element membership of `element` in `test_elements` by
+/// exact complex equality. Matches numpy `np.isin` over complex (live).
+fn complex_isin_dispatch<'py, T>(
+    py: Python<'py>,
+    element: &Bound<'py, PyAny>,
+    test_elements: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let fa: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(element)?;
+    let shape: Vec<usize> = fa.shape().to_vec();
+    let tb: Vec<Complex<T>> = complex_flat_1d::<T>(test_elements)?;
+    let eq = |x: &Complex<T>, y: &Complex<T>| cplx_sort_cmp(x, y) == core::cmp::Ordering::Equal;
+    let mask: Vec<bool> = fa.iter().map(|z| tb.iter().any(|y| eq(z, y))).collect();
+    let r = ArrayD::<bool>::from_vec(IxDyn::new(&shape), mask).map_err(ferr_to_pyerr)?;
+    Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
+}
+
+/// Complex `partition`: a full lexicographic sort satisfies numpy's partition
+/// postcondition (kth element in final position, smaller-before/larger-after).
+/// Matches `np.partition` over complex (live).
+fn complex_partition_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    kth: usize,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    let mut data: Vec<Complex<T>> = complex_flat_1d::<T>(arr)?;
+    let n = data.len();
+    if kth >= n {
+        return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+            format!("kth(={kth}) out of bounds ({n})"),
+        )));
+    }
+    data.sort_by(cplx_sort_cmp);
+    complex_vec_to_pyarray_1d(py, data)
+}
+
+/// Complex `searchsorted`: lexicographic insertion points of `v` into the
+/// (assumed sorted) complex array `a`. `side='left'`/`'right'` matches numpy's
+/// bisect-left / bisect-right over the #932 lexicographic order (live).
+fn complex_searchsorted_dispatch<'py, T>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    v: &Bound<'py, PyAny>,
+    side: &str,
+    v_scalar: bool,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
+    Complex<T>: ferray_core::Element + numpy::Element,
+{
+    use core::cmp::Ordering;
+    let right = match side {
+        "left" => false,
+        "right" => true,
+        other => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "side must be 'left' or 'right', got {other:?}"
+            )));
+        }
+    };
+    let base: Vec<Complex<T>> = complex_flat_1d::<T>(a)?;
+    let needles: Vec<Complex<T>> = complex_flat_1d::<T>(v)?;
+    let mut out: Vec<u64> = Vec::with_capacity(needles.len());
+    for z in &needles {
+        // bisect-left (side='left'): first index i with a[i] >= z.
+        // bisect-right (side='right'): first index i with a[i] > z.
+        let mut lo = 0usize;
+        let mut hi = base.len();
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2;
+            let c = cplx_sort_cmp(&base[mid], z);
+            let go_right = if right {
+                c != Ordering::Greater // a[mid] <= z
+            } else {
+                c == Ordering::Less // a[mid] < z
+            };
+            if go_right {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        out.push(lo as u64);
+    }
+    if v_scalar {
+        // Scalar `v` → 0-d int64 result (numpy returns a numpy scalar).
+        let r = ArrayD::<u64>::from_vec(IxDyn::new(&[]), out).map_err(ferr_to_pyerr)?;
+        return u64_arrd_to_i64_pyarray(py, r);
+    }
+    let r = Array1::<u64>::from_vec(Ix1::new([out.len()]), out).map_err(ferr_to_pyerr)?;
+    u64_arr1_to_i64_pyarray(py, r)
 }
 
 /// Complex lexicographic `min`/`max` element (NaN propagating, first wins).
@@ -2188,6 +2377,22 @@ pub fn searchsorted<'py>(
     let arr_a = as_ndarray(py, a)?;
     let dt = dtype_name(&arr_a)?;
     let arr_v = coerce_dtype(py, v, dt.as_str())?;
+    // Complex `searchsorted`: lexicographic insertion points into the (assumed
+    // sorted) complex array, matching numpy's lexicographic complex order
+    // (`np.searchsorted([1,2,3], 1+1j) == 1`, live). `ferray_stats::searchsorted`
+    // needs `T: PartialOrd`, which `Complex<T>` lacks, so compose with the #932
+    // `cplx_sort_cmp` lexicographic order.
+    // numpy returns a 0-d result when `v` is a scalar, a 1-d result otherwise.
+    let v_scalar = !v.hasattr("__len__")?;
+    match dt.as_str() {
+        "complex128" | "c16" => {
+            return complex_searchsorted_dispatch::<f64>(py, &arr_a, &arr_v, side, v_scalar);
+        }
+        "complex64" | "c8" => {
+            return complex_searchsorted_dispatch::<f32>(py, &arr_a, &arr_v, side, v_scalar);
+        }
+        _ => {}
+    }
     let r: Array1<u64> = match_dtype_orderable!(dt.as_str(), T => {
         let va: PyReadonlyArray1<T> = arr_a.extract()?;
         let vv: PyReadonlyArray1<T> = arr_v.extract()?;
@@ -2233,9 +2438,12 @@ pub fn count_nonzero<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
-    let r: ArrayD<u64> = match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    // Complex `count_nonzero`: numpy counts `z != 0` (`re != 0 || im != 0`).
+    // `ferray_stats::count_nonzero` needs only `T: Element + PartialEq + Copy`,
+    // which `Complex<T>` satisfies, so route through the DynMarshal seam (#933)
+    // — `np.count_nonzero([3+4j,1-2j,-5+12j]) == 3` (verified live).
+    let r: ArrayD<u64> = match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         ferray_stats::count_nonzero(&fa, axis).map_err(ferr_to_pyerr)?
     });
     u64_arrd_to_i64_pyarray(py, r)
@@ -2245,8 +2453,17 @@ pub fn count_nonzero<'py>(
 // Set operations (1-D)
 // ---------------------------------------------------------------------------
 
+/// Which 1-D set operation a complex dispatch performs (lexicographic via #932).
+#[derive(Clone, Copy)]
+enum CplxSetOp {
+    Union,
+    Intersect,
+    Diff,
+    Xor,
+}
+
 macro_rules! bind_set_op {
-    ($name:ident, $ferr_path:path) => {
+    ($name:ident, $ferr_path:path, $kind:expr) => {
         #[pyfunction]
         #[pyo3(signature = (a, b, assume_unique = false))]
         pub fn $name<'py>(
@@ -2258,6 +2475,18 @@ macro_rules! bind_set_op {
             let arr_a = as_ndarray(py, a)?;
             let dt = dtype_name(&arr_a)?;
             let arr_b = coerce_dtype(py, b, dt.as_str())?;
+            // Complex set ops compose from the #932 `cplx_sort_cmp` lexicographic
+            // order (numpy sorts complex set results lexicographically). The
+            // `ferray_stats` set ops require `T: PartialOrd`, absent for complex.
+            match dt.as_str() {
+                "complex128" | "c16" => {
+                    return complex_set_op_dispatch::<f64>(py, &arr_a, &arr_b, $kind);
+                }
+                "complex64" | "c8" => {
+                    return complex_set_op_dispatch::<f32>(py, &arr_a, &arr_b, $kind);
+                }
+                _ => {}
+            }
             Ok(match_dtype_orderable!(dt.as_str(), T => {
                 let va: PyReadonlyArray1<T> = arr_a.extract()?;
                 let vb: PyReadonlyArray1<T> = arr_b.extract()?;
@@ -2270,10 +2499,10 @@ macro_rules! bind_set_op {
     };
 }
 
-bind_set_op!(union1d, ferray_stats::union1d);
-bind_set_op!(intersect1d, ferray_stats::intersect1d);
-bind_set_op!(setdiff1d, ferray_stats::setdiff1d);
-bind_set_op!(setxor1d, ferray_stats::setxor1d);
+bind_set_op!(union1d, ferray_stats::union1d, CplxSetOp::Union);
+bind_set_op!(intersect1d, ferray_stats::intersect1d, CplxSetOp::Intersect);
+bind_set_op!(setdiff1d, ferray_stats::setdiff1d, CplxSetOp::Diff);
+bind_set_op!(setxor1d, ferray_stats::setxor1d, CplxSetOp::Xor);
 
 /// `numpy.in1d(ar1, ar2)` — bool array of presence.
 #[pyfunction]
@@ -2309,6 +2538,15 @@ pub fn isin<'py>(
     let arr_a = as_ndarray(py, element)?;
     let dt = dtype_name(&arr_a)?;
     let arr_b = coerce_dtype(py, test_elements, dt.as_str())?;
+    // Complex `isin`: per-element membership of `element` in `test_elements`,
+    // by exact complex equality (numpy `np.isin` over complex, verified live:
+    // `np.isin([3+4j,1-2j,-5+12j], [1-2j]) == [F, T, F]`). `ferray_stats::isin`
+    // needs `T: PartialOrd`; compose membership directly from complex equality.
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_isin_dispatch::<f64>(py, &arr_a, &arr_b),
+        "complex64" | "c8" => return complex_isin_dispatch::<f32>(py, &arr_a, &arr_b),
+        _ => {}
+    }
     Ok(match_dtype_orderable!(dt.as_str(), T => {
         let va: PyReadonlyArray1<T> = arr_a.extract()?;
         let vb: PyReadonlyArray1<T> = arr_b.extract()?;
@@ -2333,6 +2571,16 @@ pub fn partition<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // Complex `partition`: numpy places the kth element of the lexicographically
+    // sorted complex array in its final position. ferray's `partition` needs
+    // `T: PartialOrd` (absent for `Complex<T>`); a full lexicographic sort
+    // satisfies the partition postcondition exactly (the kth element is in place,
+    // smaller-before / larger-after), matching `np.partition` (verified live).
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_partition_dispatch::<f64>(py, &arr, kth),
+        "complex64" | "c8" => return complex_partition_dispatch::<f32>(py, &arr, kth),
+        _ => {}
+    }
     Ok(match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArray1<T> = arr.extract()?;
         let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;

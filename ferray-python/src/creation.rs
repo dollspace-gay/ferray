@@ -38,6 +38,7 @@
 //! | RC-COMPLEX (complex64/complex128 creation kernel) | SHIPPED | `creation_dispatch!`'s `complex64`/`complex128` arms build `ArrayD<Complex<f32|f64>>` via ferray-core's `Element`-generic `zeros`/`ones` and push them across the boundary with `complex_ferray_to_pyarray` (the shared fft helper); `full_impl` handles complex fills via `extract_complex`. Consumed by `zeros`/`ones`/`empty`/`full`/`full_like`. numpy: `np.zeros(3, dtype='complex128')`, `np.full((2,), 1+2j).dtype == complex128` (numpy/_core/numeric.py:382-384). Pinned green: `tests/test_expansion_dtype_accept.py::test_zeros_complex_dtype`, `::test_full_complex_fill_default_dtype`, `::test_full_complex_explicit_dtype`. |
 //! | RC-CARANGE (complex-dtype arange, real args) | SHIPPED | `complex_arange` (consumed by the `arange` `#[pyfunction]` here for `dtype=complex64\|complex128`) builds the real `(start,stop,step)` ramp via `fc::arange::<f64>` then lifts each value to `Complex` with a zero imaginary part, marshalled out via `complex_ferray_to_pyarray`. numpy: `np.arange(0,3,1,dtype='complex128') == [0j,1+0j,2+0j]` (live, numpy 2.4.5). Pinned green: `tests/test_divergence_complex_sweep_audit.py::test_divergence_arange_complex_dtype_raises`; `tests/test_expansion_complex_misc.py::test_arange_complex128_dtype_matches_numpy`, `::test_arange_complex64_dtype_matches_numpy`, `::test_arange_complex_single_arg`. |
 //! | RC-CLINSPACE (complex-endpoint linspace) | SHIPPED | `complex_linspace` (consumed by the `linspace` `#[pyfunction]` here when an endpoint is complex or `dtype` is complex) computes `y = arange(0,num)*step + start` with `step = (stop-start)/div`, pinning `y[-1]=stop` on `endpoint`, marshalled via `complex_ferray_to_pyarray`; `retstep` returns `(samples, complex step)` (`numpy/_core/function_base.py:130-176,185-186`). numpy: `np.linspace(0j,1+1j,5) == [0j,0.25+0.25j,0.5+0.5j,0.75+0.75j,1+1j]` (live). Pinned green: `tests/test_divergence_complex_sweep_audit.py::test_divergence_linspace_complex_endpoints_raises`; `tests/test_expansion_complex_misc.py::test_linspace_complex_endpoints_matches_numpy`, `::test_linspace_complex_endpoint_pinned_exact`, `::test_linspace_complex_dtype_real_endpoints`. |
+//! | RC-CDCLASS (#938 complex eye/identity/vander/geomspace) | SHIPPED | `eye`/`identity` route their fill (`fc::eye`/`fc::identity`, `Element`-generic) through `match_dtype_all_complex!` + `T::emit_dyn` so `dtype=complex` yields `1+0j`/`0j`; `vander` dispatches complex to `complex_vander_dispatch` (`fc::vander` over `Complex<T>`, complex powers `x^j`); `geomspace` accepts complex endpoints (`extract_complex_scalar`) and computes `complex_geomspace` (`start*(stop/start)**linspace(0,1,num)`). Consumer: the `eye`/`identity`/`vander`/`geomspace` `#[pyfunction]`s registered top-level in `lib.rs` `_ferray`. numpy: `np.eye(2,dtype=complex)`, `np.vander([3+4j,...])`, `np.geomspace(1+1j,8+8j,3)` (live 2.4.5). Pinned green: `tests/test_divergence_complex_converge_audit.py::test_D_eye_complex`/`::test_D_identity_complex`/`::test_D_vander`/`::test_D_geomspace`; `tests/test_expansion_complex_dclass.py` (eye/identity/vander/geomspace cases). |
 //! | RC-ARANGE-FLOAT (per-element float construction) | NOT-STARTED | `np.arange(1.0,2.0,0.3)` last element is `1.9000000000000001`; ferray-core's float `arange` diverges. Root cause is in ferray-core (`creation/mod.rs`), not this binding — open ferray-core follow-up. Pin: `test_arange_float_last_element_matches_numpy`. |
 //! | RC-GEOM-EXACT (geomspace endpoint pinning) | NOT-STARTED | `np.geomspace(-1,-1000,4)` is exactly `[-1,-10,-100,-1000]` via sign rotation + endpoint pinning; ferray-core's `geomspace` lacks both. Root cause in ferray-core, not this binding — open ferray-core follow-up. Pin: `test_geomspace_negative_endpoints_exact`. |
 
@@ -51,11 +52,12 @@ use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
 use crate::conv::{
-    as_ndarray, dtype_name, extract_shape, extract_signed_shape, ferr_to_pyerr, normalize_dtype,
-    normalize_opt_dtype, pyscalar_default_dtype, validate_dim, validate_num_samples,
+    DynMarshal, as_ndarray, dtype_name, extract_shape, extract_signed_shape, ferr_to_pyerr,
+    normalize_dtype, normalize_opt_dtype, pyscalar_default_dtype, validate_dim,
+    validate_num_samples,
 };
 use crate::fft::{complex_ferray_to_pyarray, complex_pyarray_to_ferray};
-use crate::{match_dtype_all, match_dtype_float};
+use crate::{match_dtype_all, match_dtype_all_complex, match_dtype_float};
 use num_complex::Complex;
 
 /// Round-trip a complex `numpy.ndarray` (dtype `"complex64"`/`"complex128"`)
@@ -271,11 +273,16 @@ pub fn identity<'py>(
         Some(d) => normalize_dtype(py, d)?,
         None => "float64".to_string(),
     };
-    Ok(match_dtype_all!(dt.as_str(), T => {
+    // `identity` fills `T::one()` on the diagonal, `T::zero()` elsewhere —
+    // generic over `T: Element`, so `dtype=complex` yields `1+0j`/`0j` exactly
+    // as numpy (`np.identity(2, dtype=complex)`, verified live). Route the
+    // emit through the DynMarshal seam (#933) so complex output keeps its
+    // imaginary part.
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let arr = fc::identity::<T>(n).map_err(ferr_to_pyerr)?;
         let dynd = ArrayD::<T>::from_vec(IxDyn::new(arr.shape()), arr.iter().cloned().collect())
             .map_err(ferr_to_pyerr)?;
-        dynd.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, dynd)?
     }))
 }
 
@@ -303,11 +310,16 @@ pub fn eye<'py>(
         Some(d) => normalize_dtype(py, d)?,
         None => "float64".to_string(),
     };
-    Ok(match_dtype_all!(dt.as_str(), T => {
+    // `eye` fills `T::one()` on the k-th diagonal, `T::zero()` elsewhere —
+    // generic over `T: Element`, so `dtype=complex` yields `1+0j`/`0j` exactly
+    // as numpy (`np.eye(2, dtype=complex)`, verified live). Route the emit
+    // through the DynMarshal seam (#933) so complex output keeps its imaginary
+    // part.
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let arr = fc::eye::<T>(n, m, k).map_err(ferr_to_pyerr)?;
         let dynd = ArrayD::<T>::from_vec(IxDyn::new(arr.shape()), arr.iter().cloned().collect())
             .map_err(ferr_to_pyerr)?;
-        dynd.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, dynd)?
     }))
 }
 
@@ -799,25 +811,86 @@ pub fn logspace<'py>(
 #[pyo3(signature = (start, stop, num = 50, endpoint = true, dtype = None))]
 pub fn geomspace<'py>(
     py: Python<'py>,
-    start: f64,
-    stop: f64,
+    start: &Bound<'py, PyAny>,
+    stop: &Bound<'py, PyAny>,
     num: isize,
     endpoint: bool,
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let num = validate_num_samples(num)?;
     let dt_owned = normalize_opt_dtype(py, dtype)?;
-    let dt = dt_owned.as_deref().unwrap_or("float64");
+    let dt = dt_owned.as_deref();
+    // Complex endpoints: numpy computes a complex geometric progression
+    // `start * (stop/start) ** linspace(0, 1, num)` (numpy/_core/function_base.py
+    // `geomspace`), staying in complex128. Detected when no real dtype is
+    // requested and either endpoint is a Python complex (`extract::<f64>` fails).
+    let want_complex = matches!(dt, Some("complex128") | Some("c16"))
+        || (dt.is_none() && (start.extract::<f64>().is_err() || stop.extract::<f64>().is_err()));
+    if want_complex {
+        let s = extract_complex_scalar(start)?;
+        let e = extract_complex_scalar(stop)?;
+        return complex_geomspace(py, s, e, num, endpoint);
+    }
+    let start_f: f64 = start.extract()?;
+    let stop_f: f64 = stop.extract()?;
+    let dt = dt.unwrap_or("float64");
     if is_integer_dtype(dt) {
-        let values = fc::geomspace::<f64>(start, stop, num, endpoint).map_err(ferr_to_pyerr)?;
+        let values = fc::geomspace::<f64>(start_f, stop_f, num, endpoint).map_err(ferr_to_pyerr)?;
         let flat: Vec<f64> = values.iter().copied().collect();
         return float_range_to_int_array(py, flat, dt, /* floor = */ false);
     }
     Ok(match_dtype_float!(dt, T => {
-        let arr = fc::geomspace::<T>(start as T, stop as T, num, endpoint)
+        let arr = fc::geomspace::<T>(start_f as T, stop_f as T, num, endpoint)
             .map_err(ferr_to_pyerr)?;
         arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
+}
+
+/// Extract a Python scalar (`complex`, `float`, or `int`) into a `Complex<f64>`
+/// via its `.real`/`.imag` attributes — Python's `complex`/`float`/`int` all
+/// expose them, so the same path covers a complex endpoint and a real one
+/// promoted to complex.
+fn extract_complex_scalar(obj: &Bound<'_, PyAny>) -> PyResult<Complex<f64>> {
+    let re: f64 = obj.getattr("real")?.extract()?;
+    let im: f64 = obj.getattr("imag")?.extract()?;
+    Ok(Complex::new(re, im))
+}
+
+/// Complex `geomspace`: `start * (stop/start) ** linspace(0, 1, num)`, computed
+/// in complex128 exactly as numpy (numpy/_core/function_base.py `geomspace`,
+/// verified live against `np.geomspace(1+1j, 8+8j, 3)`). The `**` for a complex
+/// base and real exponent uses `Complex::powf`, matching numpy's complex power.
+fn complex_geomspace<'py>(
+    py: Python<'py>,
+    start: Complex<f64>,
+    stop: Complex<f64>,
+    num: usize,
+    endpoint: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    use ferray_core::dimension::IxDyn;
+    if start == Complex::new(0.0, 0.0) || stop == Complex::new(0.0, 0.0) {
+        return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
+            "geomspace: start and stop must be non-zero",
+        )));
+    }
+    // Real-valued exponents linspace(0, 1, num) — endpoint-aware, matching the
+    // real geomspace path.
+    let exps = fc::linspace::<f64>(0.0, 1.0, num, endpoint).map_err(ferr_to_pyerr)?;
+    let ratio = stop / start;
+    let mut data: Vec<Complex<f64>> = Vec::with_capacity(num);
+    for (i, t) in exps.iter().enumerate() {
+        // Pin the endpoints to the exact requested values (numpy assigns
+        // `result[0] = start` / `result[-1] = stop`), avoiding last-ULP drift.
+        if i == 0 {
+            data.push(start);
+        } else if endpoint && i == num - 1 {
+            data.push(stop);
+        } else {
+            data.push(start * ratio.powf(*t));
+        }
+    }
+    let r = ArrayD::<Complex<f64>>::from_vec(IxDyn::new(&[num]), data).map_err(ferr_to_pyerr)?;
+    complex_ferray_to_pyarray(py, r)
 }
 
 // ---------------------------------------------------------------------------
@@ -1551,6 +1624,16 @@ pub fn vander<'py>(
     use ferray_core::array::aliases::Array1;
     let arr = as_ndarray(py, x)?;
     let dt = dtype_name(&arr)?;
+    // Complex Vandermonde: `ferray_core::creation::vander` only needs
+    // `T: Element + Mul + Copy`, which `Complex<T>` satisfies, so the complex
+    // powers `x^j` compute exactly as numpy (`np.vander` of complex, verified
+    // live). The macro path can't bind a complex `T` (no `numpy::Element` arm),
+    // so dispatch complex through the fft marshalling helpers (#920).
+    match dt.as_str() {
+        "complex128" | "c16" => return complex_vander_dispatch::<f64>(py, &arr, n, increasing),
+        "complex64" | "c8" => return complex_vander_dispatch::<f32>(py, &arr, n, increasing),
+        _ => {}
+    }
     // vander needs Mul + Copy — covered by float and integer types but
     // not bool. Use match_dtype_numeric (no bool).
     Ok(crate::match_dtype_numeric!(dt.as_str(), T => {
@@ -1560,6 +1643,32 @@ pub fn vander<'py>(
             .map_err(ferr_to_pyerr)?;
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
+}
+
+/// Complex Vandermonde: builds powers `x^j` of the complex input via
+/// `ferray_core::creation::vander` (generic over `T: Element + Mul + Copy`,
+/// which `Complex<T>` satisfies). The result matches numpy `np.vander` of a
+/// complex array (verified live). Input is flattened to 1-D as numpy requires.
+fn complex_vander_dispatch<'py, T>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    n: Option<usize>,
+    increasing: bool,
+) -> PyResult<Bound<'py, PyAny>>
+where
+    T: ferray_core::Element + Copy + numpy::Element + Default,
+    Complex<T>: ferray_core::Element + numpy::Element + std::ops::Mul<Output = Complex<T>>,
+{
+    use ferray_core::array::aliases::Array1;
+    use ferray_core::dimension::Ix1;
+    let fa_dyn: ArrayD<Complex<T>> = complex_pyarray_to_ferray::<T>(arr)?;
+    let flat: Vec<Complex<T>> = fa_dyn.iter().copied().collect();
+    let len = flat.len();
+    let x: Array1<Complex<T>> =
+        Array1::<Complex<T>>::from_vec(Ix1::new([len]), flat).map_err(ferr_to_pyerr)?;
+    let r: ArrayD<Complex<T>> =
+        ferray_core::creation::vander(&x, n, increasing).map_err(ferr_to_pyerr)?;
+    complex_ferray_to_pyarray(py, r)
 }
 
 /// `numpy.asarray(a, dtype=None)` — like `array` but does not copy if

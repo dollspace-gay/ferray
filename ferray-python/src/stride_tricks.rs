@@ -33,7 +33,13 @@
 //!   (`register_stride_tricks_module`).
 //! - REQ-2 `broadcast_to` — SHIPPED. `fn broadcast_to` returns a read-only
 //!   view + `subok` kwarg. Consumer: top-level `ferray.broadcast_to` in
-//!   `lib.rs` (`_ferray`).
+//!   `lib.rs` (`_ferray`). Complex dtype (#938): `broadcast_to` is a pure
+//!   stride/view op (`fst::broadcast_to` over `Complex<T>`), routed through the
+//!   `match_dtype_all_complex!` + `DynMarshal` seam (#933) so the read-only
+//!   complex view keeps its imaginary part. numpy: `np.broadcast_to(complex,
+//!   (2,3))` (live). Pinned green:
+//!   `tests/test_divergence_complex_converge_audit.py::test_D_broadcast_to`;
+//!   `tests/test_expansion_complex_dclass.py::test_broadcast_to_complex`.
 //! - REQ-3 `broadcast_arrays` — SHIPPED. `fn broadcast_arrays` returns a tuple,
 //!   per-array dtype preserved. Consumer: top-level `ferray.broadcast_arrays`
 //!   and `ferray.lib.stride_tricks.broadcast_arrays` in `lib.rs`.
@@ -53,9 +59,10 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyTuple};
 
 use crate::conv::{
-    as_ndarray, dtype_name, extract_axis_tuple, ferr_to_pyerr, normalize_axis_tuple, set_readonly,
+    DynMarshal, as_ndarray, dtype_name, extract_axis_tuple, ferr_to_pyerr, normalize_axis_tuple,
+    set_readonly,
 };
-use crate::match_dtype_all;
+use crate::{match_dtype_all, match_dtype_all_complex};
 
 /// Materialise an `ArrayView<T, IxDyn>` into an owned `ArrayD<T>` so
 /// the buffer can cross the FFI boundary safely. Strided-view callers
@@ -172,12 +179,15 @@ pub fn broadcast_to<'py>(
     } else {
         shape.extract()?
     };
-    let out = match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    // `broadcast_to` is a pure stride/view op (generic over `T: Element`), so
+    // it works unchanged for `Complex<T>`: numpy returns a read-only complex
+    // view (`np.broadcast_to(complex, (2,3))`, verified live). Route through the
+    // DynMarshal seam (#933) so the imaginary part survives extract/emit.
+    let out = match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r = fst::broadcast_to(&fa, &target).map_err(ferr_to_pyerr)?;
         let owned = view_to_owned(r).map_err(ferr_to_pyerr)?;
-        owned.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, owned)?
     });
     set_readonly(out)
 }
