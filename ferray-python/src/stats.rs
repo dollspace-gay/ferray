@@ -3521,24 +3521,34 @@ pub fn isin<'py>(
         kwargs.set_item("assume_unique", assume_unique)?;
         return crate::conv::f16_delegate(py, "isin", (element, test_elements), Some(&kwargs));
     }
+    // numpy.isin preserves the SHAPE of `element`: it is
+    // `in1d(element, test).reshape(element.shape)` (verified live numpy 2.4.5 —
+    // a 2-D `element` yields a 2-D bool array). `ferray_stats::isin` is 1-D, so
+    // ravel BOTH operands for the membership test, then reshape the bool result
+    // back to `element`'s original shape (the prior code extracted
+    // `PyReadonlyArray1` and CRASHED on any N-D `element`).
+    let element_shape: Vec<usize> = arr_a.getattr("shape")?.extract()?;
+    let arr_a = arr_a.call_method0("ravel")?;
     let arr_b = coerce_dtype(py, test_elements, dt.as_str())?;
+    let arr_b = arr_b.call_method0("ravel")?;
     // Complex `isin`: per-element membership of `element` in `test_elements`,
     // by exact complex equality (numpy `np.isin` over complex, verified live:
     // `np.isin([3+4j,1-2j,-5+12j], [1-2j]) == [F, T, F]`). `ferray_stats::isin`
     // needs `T: PartialOrd`; compose membership directly from complex equality.
-    match dt.as_str() {
-        "complex128" | "c16" => return complex_isin_dispatch::<f64>(py, &arr_a, &arr_b),
-        "complex64" | "c8" => return complex_isin_dispatch::<f32>(py, &arr_a, &arr_b),
-        _ => {}
-    }
-    Ok(match_dtype_orderable!(dt.as_str(), T => {
-        let va: PyReadonlyArray1<T> = arr_a.extract()?;
-        let vb: PyReadonlyArray1<T> = arr_b.extract()?;
-        let fa: Array1<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
-        let fb: Array1<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
-        let r: Array1<bool> = ferray_stats::isin(&fa, &fb, assume_unique).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
+    let result_1d: Bound<'py, PyAny> = match dt.as_str() {
+        "complex128" | "c16" => complex_isin_dispatch::<f64>(py, &arr_a, &arr_b)?,
+        "complex64" | "c8" => complex_isin_dispatch::<f32>(py, &arr_a, &arr_b)?,
+        _ => match_dtype_orderable!(dt.as_str(), T => {
+            let va: PyReadonlyArray1<T> = arr_a.extract()?;
+            let vb: PyReadonlyArray1<T> = arr_b.extract()?;
+            let fa: Array1<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
+            let fb: Array1<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+            let r: Array1<bool> = ferray_stats::isin(&fa, &fb, assume_unique).map_err(ferr_to_pyerr)?;
+            r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        }),
+    };
+    let shape_tuple = pyo3::types::PyTuple::new(py, &element_shape)?;
+    result_1d.call_method1("reshape", (shape_tuple,))
 }
 
 // ---------------------------------------------------------------------------
@@ -3748,59 +3758,42 @@ where
     Ok(ferray_stats::Bins::Edges(edges))
 }
 
-/// `numpy.histogram(a, bins=10, range=None, density=False)` →
-/// `(hist, bin_edges)`. Histograms float input only (integer auto-promoted).
+/// `numpy.histogram(a, bins=10, range=None, density=False, weights=None)` →
+/// `(hist, bin_edges)`.
+///
+/// numpy owns the full binning semantics: integer counts (`intp`) when
+/// `density=False`/no `weights` but `float64` when `density=True` or weighted;
+/// `bins` accepts an int, a sequence of edges, OR a string estimator
+/// (`'auto'`/`'fd'`/`'sturges'`/...); `weights=` reweights the counts; complex
+/// input casts-with-`ComplexWarning`; datetime/timedelta raises
+/// `DTypePromotionError`. The prior native path returned `float64` counts for the
+/// unweighted case (numpy returns `intp`), rejected `weights=` (TypeError) and
+/// non-int `bins`, so delegate the whole op to `numpy.histogram` for exact
+/// parity (R-CODE-4 dtype + full kwarg surface). Return shape is identical — a
+/// 2-tuple of numpy arrays.
 #[pyfunction]
-#[pyo3(signature = (a, bins = 10usize, range = None, density = false))]
+#[pyo3(signature = (a, bins = None, range = None, density = false, weights = None))]
 pub fn histogram<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    bins: usize,
+    bins: Option<&Bound<'py, PyAny>>,
     range: Option<(f64, f64)>,
     density: bool,
+    weights: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    use ferray_core::array::aliases::Array1;
-    let arr = as_ndarray(py, a)?;
-    // complex (#972): numpy.histogram does NOT raise on complex input (verified
-    // live, numpy 2.4.4) — it casts the complex values to real with a
-    // `ComplexWarning` and computes the histogram, returning integer counts and
-    // (complex) bin edges (`numpy/lib/_histograms_impl.py:853` casts the f_indices
-    // to intp). ferray previously raised a bogus `IndexError`, diverging from
-    // numpy's observable compute behavior (R-DEV-1 / R-CODE-4). Delegate the
-    // complex case to numpy, which owns the cast-and-compute result.
-    if is_complex_dtype(dtype_name(&arr)?.as_str()) {
-        let np = py.import("numpy")?;
-        let kwargs = pyo3::types::PyDict::new(py);
-        kwargs.set_item("bins", bins)?;
-        if let Some(r) = range {
-            kwargs.set_item("range", r)?;
-        }
-        kwargs.set_item("density", density)?;
-        return np.call_method("histogram", (&arr,), Some(&kwargs));
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    if let Some(b) = bins {
+        kwargs.set_item("bins", b)?;
     }
-    // datetime64/timedelta64 (#946): numpy's `histogram` RAISES on time inputs
-    // (`DTypePromotionError`: a timedelta/datetime cannot be promoted with the
-    // float64 bin edges — verified live). Delegate so numpy's EXACT exception
-    // surfaces (R-DEV-2), eliminating the prior silent-float corruption
-    // (`fr.histogram(td)` returned bogus float bin counts/edges).
-    if crate::datetime::is_time_array(&arr)? {
-        let np = py.import("numpy")?;
-        let kwargs = pyo3::types::PyDict::new(py);
-        kwargs.set_item("bins", bins)?;
-        if let Some(r) = range {
-            kwargs.set_item("range", r)?;
-        }
-        kwargs.set_item("density", density)?;
-        return np.call_method("histogram", (&arr,), Some(&kwargs));
+    if let Some(r) = range {
+        kwargs.set_item("range", r)?;
     }
-    let arr_f64 = coerce_dtype(py, &arr, "float64")?;
-    let view: PyReadonlyArray1<f64> = arr_f64.extract()?;
-    let fa: Array1<f64> = view.as_ferray().map_err(ferr_to_pyerr)?;
-    let bins_e = ferray_stats::Bins::Count(bins);
-    let (h, e) = ferray_stats::histogram(&fa, bins_e, range, density).map_err(ferr_to_pyerr)?;
-    let h_py = h.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let e_py = e.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    Ok(pyo3::types::PyTuple::new(py, [h_py, e_py])?.into_any())
+    kwargs.set_item("density", density)?;
+    if let Some(w) = weights {
+        kwargs.set_item("weights", w)?;
+    }
+    np.call_method("histogram", (a,), Some(&kwargs))
 }
 
 /// `numpy.histogram_bin_edges(a, bins=10, range=None)`.

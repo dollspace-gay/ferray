@@ -289,3 +289,68 @@ def test_where_broadcasts():
     x = 0
     y = np.array([10, 20, 30])
     np.testing.assert_array_equal(ferray.where(cond, x, y), np.where(cond, x, y))
+
+
+# ---------------------------------------------------------------------------
+# isin shape preservation + histogram dtype/kwargs (#979)
+# ---------------------------------------------------------------------------
+# numpy.isin is in1d(element, test).reshape(element.shape) — a 2-D `element`
+# yields a 2-D bool array. The prior binding extracted a 1-D view and crashed
+# on N-D input. numpy.histogram returns intp counts (not float64) when
+# unweighted, supports weights=/sequence-bins/string-bins. Pinned live numpy.
+
+
+def test_isin_preserves_2d_shape():
+    el = [[1, 2], [3, 4]]
+    np.testing.assert_array_equal(ferray.isin(el, [2, 4]), np.isin(el, [2, 4]))
+    assert np.asarray(ferray.isin(el, [2, 4])).shape == (2, 2)
+
+
+def test_isin_preserves_3d_shape():
+    el = np.arange(8).reshape(2, 2, 2)
+    np.testing.assert_array_equal(ferray.isin(el, [2, 4, 7]), np.isin(el, [2, 4, 7]))
+
+
+def test_isin_complex_2d():
+    el = [[1 + 2j, 3], [4, 1 + 2j]]
+    np.testing.assert_array_equal(ferray.isin(el, [1 + 2j]), np.isin(el, [1 + 2j]))
+
+
+def test_isin_nd_test_elements():
+    np.testing.assert_array_equal(
+        ferray.isin([1, 2, 3], [[2], [3]]), np.isin([1, 2, 3], [[2], [3]])
+    )
+
+
+def test_histogram_returns_int_counts():
+    fc = ferray.histogram([1, 2, 3, 4], bins=2)[0]
+    nc = np.histogram([1, 2, 3, 4], bins=2)[0]
+    assert np.asarray(fc).dtype == nc.dtype == np.intp
+    np.testing.assert_array_equal(fc, nc)
+
+
+def test_histogram_density_is_float():
+    fc = ferray.histogram([1, 2, 3, 4], bins=2, density=True)[0]
+    nc = np.histogram([1, 2, 3, 4], bins=2, density=True)[0]
+    assert np.asarray(fc).dtype == np.float64
+    np.testing.assert_allclose(fc, nc)
+
+
+def test_histogram_weights():
+    fc = ferray.histogram([1, 2, 3, 4], bins=2, weights=[1.0, 2, 3, 4])[0]
+    nc = np.histogram([1, 2, 3, 4], bins=2, weights=[1.0, 2, 3, 4])[0]
+    np.testing.assert_allclose(fc, nc)
+
+
+def test_histogram_sequence_bins():
+    fc, fe = ferray.histogram([1, 2, 3, 4], bins=[0, 2, 5])
+    nc, ne = np.histogram([1, 2, 3, 4], bins=[0, 2, 5])
+    np.testing.assert_array_equal(fc, nc)
+    np.testing.assert_allclose(fe, ne)
+
+
+def test_histogram_string_bins():
+    data = [1, 2, 3, 4, 5, 6]
+    np.testing.assert_array_equal(
+        ferray.histogram(data, bins="auto")[0], np.histogram(data, bins="auto")[0]
+    )
