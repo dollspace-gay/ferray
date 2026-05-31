@@ -2164,7 +2164,21 @@ impl PyMaskedArray {
     /// (`ferray_core::ReduceAcc`): narrow ints → int64, unsigned → uint64,
     /// bool → int64, float unchanged — exactly `filled(0).sum()`
     /// (`numpy/ma/core.py:5244`), NOT a float64 collapse (#858, R-CODE-4).
-    fn sum<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    #[pyo3(signature = (axis = None, dtype = None, keepdims = false))]
+    fn sum<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
+        keepdims: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        // #893: axis=/keepdims=/dtype= delegate to numpy.ma's own `sum` over
+        // this array's equivalent snapshot (the oracle), preserving numpy's
+        // dtype/shape/mask exactly. The no-kwarg fast path keeps the
+        // dtype-preserving native reduction (#858).
+        if let Some(r) = self.reduce_kwargs(py, "sum", axis, dtype, keepdims)? {
+            return Ok(r);
+        }
         let cur = self.snapshot(py)?;
         if cur.count()? == 0 {
             return ma_masked_singleton(py);
@@ -2188,7 +2202,17 @@ impl PyMaskedArray {
     /// kept; numpy.ma's complex `mean` is the complex sum / count and ALWAYS
     /// promotes to `complex128`, verified live numpy 2.4.5 — a `complex64`
     /// array's `.mean().dtype` is `complex128`).
-    fn mean<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    #[pyo3(signature = (axis = None, dtype = None, keepdims = false))]
+    fn mean<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
+        keepdims: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if let Some(r) = self.reduce_kwargs(py, "mean", axis, dtype, keepdims)? {
+            return Ok(r);
+        }
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
@@ -2211,7 +2235,16 @@ impl PyMaskedArray {
     /// singleton (`numpy/ma/core.py:5942`). Keeps the INPUT dtype — numpy.ma
     /// `min` delegates to `filled(maximum_fill).min()` with no accumulator
     /// promotion (`numpy/ma/core.py:5933`), so int8 stays int8 (#858).
-    fn min<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    #[pyo3(signature = (axis = None, keepdims = false))]
+    fn min<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        keepdims: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if let Some(r) = self.reduce_kwargs(py, "min", axis, None, keepdims)? {
+            return Ok(r);
+        }
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
@@ -2244,7 +2277,16 @@ impl PyMaskedArray {
     /// Maximum unmasked element. All-masked reduces to the `numpy.ma.masked`
     /// singleton (`numpy/ma/core.py:6047`). Keeps the INPUT dtype (numpy.ma
     /// `max` = `filled(minimum_fill).max()`, no promotion) (#858).
-    fn max<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    #[pyo3(signature = (axis = None, keepdims = false))]
+    fn max<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        keepdims: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if let Some(r) = self.reduce_kwargs(py, "max", axis, None, keepdims)? {
+            return Ok(r);
+        }
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
@@ -2280,7 +2322,18 @@ impl PyMaskedArray {
     /// `var`/`std`). Complex `var` is `mean(|x − mean|²)` — a REAL quantity —
     /// and ALWAYS returns `float64` (verified live numpy 2.4.5: both
     /// `complex64`/`complex128` `.var().dtype` are `float64`).
-    fn var<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    #[pyo3(signature = (axis = None, dtype = None, ddof = 0, keepdims = false))]
+    fn var<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
+        ddof: i64,
+        keepdims: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if let Some(r) = self.reduce_kwargs_ddof(py, "var", axis, dtype, ddof, keepdims)? {
+            return Ok(r);
+        }
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
@@ -2308,7 +2361,18 @@ impl PyMaskedArray {
     /// to the `numpy.ma.masked` singleton. Real dtypes compute in f64
     /// (promote-to-float). Complex `std` is `sqrt(var)` over the REAL complex
     /// variance and ALWAYS returns `float64` (verified live numpy 2.4.5).
-    fn std<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    #[pyo3(signature = (axis = None, dtype = None, ddof = 0, keepdims = false))]
+    fn std<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
+        ddof: i64,
+        keepdims: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if let Some(r) = self.reduce_kwargs_ddof(py, "std", axis, dtype, ddof, keepdims)? {
+            return Ok(r);
+        }
         if self.all_masked()? {
             return ma_masked_singleton(py);
         }
@@ -3380,6 +3444,537 @@ impl PyMaskedArray {
     /// `n >> a` — reflected `__rrshift__`.
     fn __rrshift__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         bitwise_op(py, &self.snapshot(py)?, other, BitOp::Rshift, true)
+    }
+
+    // -----------------------------------------------------------------------
+    // #892 — object-method surface (numpy.ma delegation). Each method builds
+    // this array's equivalent `numpy.ma.MaskedArray` snapshot (the oracle),
+    // calls numpy.ma's OWN bound method, and — for array results — rebuilds a
+    // dtype-preserving owned `PyMaskedArray` via `from_numpy_ma`. Scalar
+    // results (np scalar / Python scalar / the `masked` singleton) pass back
+    // verbatim so the typed-scalar dtype is preserved (#858, R-CODE-4).
+    // -----------------------------------------------------------------------
+
+    /// `MaskedArray.all([axis, keepdims])` — true iff every UNMASKED element is
+    /// truthy (`numpy/ma/core.py` `MaskedArray.all` ignores masked elements,
+    /// treating `masked` as `True`). With `axis=`/`keepdims=` returns a
+    /// `MaskedArray`; the no-axis path returns a numpy bool scalar.
+    #[pyo3(signature = (axis = None, keepdims = false))]
+    fn all<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        keepdims: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.delegate_reduce_like(py, "all", axis, keepdims)
+    }
+
+    /// `MaskedArray.any([axis, keepdims])` — true iff at least one UNMASKED
+    /// element is truthy. Same delegation/egress contract as `all`.
+    #[pyo3(signature = (axis = None, keepdims = false))]
+    fn any<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        keepdims: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.delegate_reduce_like(py, "any", axis, keepdims)
+    }
+
+    /// `MaskedArray.take(indices[, axis])` — gather along the flat order (or
+    /// `axis`), returning a `MaskedArray` carrying the gathered data + mask
+    /// (`numpy/ma/core.py` `MaskedArray.take`).
+    #[pyo3(signature = (indices, axis = None))]
+    fn take<'py>(
+        &self,
+        py: Python<'py>,
+        indices: &Bound<'py, PyAny>,
+        axis: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("take", (indices,), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.squeeze([axis])` — drop length-1 dimensions, returning a
+    /// `MaskedArray`.
+    #[pyo3(signature = (axis = None))]
+    fn squeeze<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("squeeze", (), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.ptp([axis])` — peak-to-peak (max − min) over unmasked
+    /// elements (`numpy/ma/core.py` `MaskedArray.ptp`).
+    #[pyo3(signature = (axis = None))]
+    fn ptp<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("ptp", (), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.nonzero()` — a tuple of index arrays for the non-zero
+    /// UNMASKED elements (`numpy/ma/core.py` `MaskedArray.nonzero`). Returns
+    /// the numpy tuple of `ndarray`s verbatim (numpy returns plain int index
+    /// arrays, not masked).
+    fn nonzero<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        self.as_numpy_ma(py)?.call_method0("nonzero")
+    }
+
+    /// `MaskedArray.argmin([axis])` — flat index of the minimum unmasked
+    /// element; masked elements sort as `+inf` (numpy fills masked with the
+    /// dtype maximum before `argmin`). Returns a numpy integer scalar (no
+    /// axis) or an integer `ndarray` (with axis).
+    #[pyo3(signature = (axis = None))]
+    fn argmin<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        self.as_numpy_ma(py)?
+            .call_method("argmin", (), Some(&kwargs))
+    }
+
+    /// `MaskedArray.argmax([axis])` — flat index of the maximum unmasked
+    /// element; masked elements sort as `-inf`. Same egress as `argmin`.
+    #[pyo3(signature = (axis = None))]
+    fn argmax<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        self.as_numpy_ma(py)?
+            .call_method("argmax", (), Some(&kwargs))
+    }
+
+    /// `MaskedArray.prod([axis, dtype, keepdims])` — product of unmasked
+    /// elements (`numpy/ma/core.py` `prod` = `filled(1).prod()`). The no-kwarg
+    /// path keeps the dtype-preserving native reduction (#858, the ReduceAcc
+    /// accumulator); axis/dtype/keepdims delegate to numpy.ma.
+    #[pyo3(signature = (axis = None, dtype = None, keepdims = false))]
+    fn prod<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
+        keepdims: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if let Some(r) = self.reduce_kwargs(py, "prod", axis, dtype, keepdims)? {
+            return Ok(r);
+        }
+        prod(py, self)
+    }
+
+    /// `MaskedArray.cumsum([axis, dtype])` — cumulative sum over the masked
+    /// reduction (masked slots → identity 0, `numpy/ma/core.py:5294`). Returns
+    /// a `MaskedArray` whose masked positions stay masked.
+    #[pyo3(signature = (axis = None, dtype = None))]
+    fn cumsum<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        if let Some(dt) = dtype {
+            kwargs.set_item("dtype", dt)?;
+        }
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("cumsum", (), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.cumprod([axis, dtype])` — cumulative product (masked slots
+    /// → identity 1, `numpy/ma/core.py`). Returns a `MaskedArray`.
+    #[pyo3(signature = (axis = None, dtype = None))]
+    fn cumprod<'py>(
+        &self,
+        py: Python<'py>,
+        axis: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        if let Some(dt) = dtype {
+            kwargs.set_item("dtype", dt)?;
+        }
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("cumprod", (), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.clip(min, max)` — clamp UNMASKED data into `[min, max]`,
+    /// keeping the mask (`numpy/ma/core.py` inherits `ndarray.clip`). Returns a
+    /// `MaskedArray` of the input dtype.
+    #[pyo3(signature = (min = None, max = None))]
+    fn clip<'py>(
+        &self,
+        py: Python<'py>,
+        min: Option<&Bound<'py, PyAny>>,
+        max: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let r = self.as_numpy_ma(py)?.call_method1("clip", (min, max))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.round([decimals])` — round UNMASKED data to `decimals`
+    /// places, keeping the mask. Returns a `MaskedArray`.
+    #[pyo3(signature = (decimals = 0))]
+    fn round<'py>(&self, py: Python<'py>, decimals: i64) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("decimals", decimals)?;
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("round", (), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.swapaxes(axis1, axis2)` — swap two axes, returning a
+    /// `MaskedArray` (numpy returns a view; ferray returns an owned snapshot
+    /// with the swapped data+mask — same observable values/shape).
+    fn swapaxes<'py>(
+        &self,
+        py: Python<'py>,
+        axis1: i64,
+        axis2: i64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method1("swapaxes", (axis1, axis2))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.trace([offset, axis1, axis2])` — sum along the diagonal of
+    /// the unmasked data (`numpy/ma/core.py` `MaskedArray.trace`). Returns a
+    /// numpy scalar (or `MaskedArray` for higher-rank inputs).
+    #[pyo3(signature = (offset = 0, axis1 = 0, axis2 = 1))]
+    fn trace<'py>(
+        &self,
+        py: Python<'py>,
+        offset: i64,
+        axis1: i64,
+        axis2: i64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("offset", offset)?;
+        kwargs.set_item("axis1", axis1)?;
+        kwargs.set_item("axis2", axis2)?;
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("trace", (), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.diagonal([offset, axis1, axis2])` — the diagonal as a
+    /// `MaskedArray` carrying the gathered data + mask.
+    #[pyo3(signature = (offset = 0, axis1 = 0, axis2 = 1))]
+    fn diagonal<'py>(
+        &self,
+        py: Python<'py>,
+        offset: i64,
+        axis1: i64,
+        axis2: i64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("offset", offset)?;
+        kwargs.set_item("axis1", axis1)?;
+        kwargs.set_item("axis2", axis2)?;
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("diagonal", (), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.item([*args])` — extract a single element as a Python
+    /// scalar (`numpy/ma/core.py` inherits `ndarray.item`). A masked element
+    /// yields the `numpy.ma.masked` singleton.
+    #[pyo3(signature = (*args))]
+    fn item<'py>(
+        &self,
+        py: Python<'py>,
+        args: &Bound<'py, pyo3::types::PyTuple>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        self.as_numpy_ma(py)?.call_method1("item", args)
+    }
+
+    /// `numpy.ndarray.fill(value)` — set EVERY data element to `value`
+    /// in place (`numpy/_core` `ndarray.fill`), returning `None`. The mask is
+    /// left unchanged (numpy fills `_data` only). Mutates `self`.
+    fn fill<'py>(&mut self, py: Python<'py>, value: &Bound<'py, PyAny>) -> PyResult<()> {
+        let tmp = self.as_numpy_ma(py)?;
+        tmp.call_method1("fill", (value,))?;
+        let rebuilt = from_numpy_ma(py, &tmp)?;
+        self.store_inplace(py, rebuilt)
+    }
+
+    /// `MaskedArray.repeat(repeats[, axis])` — repeat each element `repeats`
+    /// times (flat or along `axis`), returning a `MaskedArray` carrying the
+    /// repeated data + mask.
+    #[pyo3(signature = (repeats, axis = None))]
+    fn repeat<'py>(
+        &self,
+        py: Python<'py>,
+        repeats: &Bound<'py, PyAny>,
+        axis: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method("repeat", (repeats,), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// `MaskedArray.sort([axis])` — IN-PLACE sort (`numpy/ma/core.py`
+    /// `MaskedArray.sort`), masked elements pushed to the END (numpy fills
+    /// masked with the dtype maximum / an `endwith` sentinel before sorting).
+    /// Returns `None`, mutates `self`.
+    #[pyo3(signature = (axis = -1))]
+    fn sort<'py>(&mut self, py: Python<'py>, axis: i64) -> PyResult<()> {
+        let tmp = self.as_numpy_ma(py)?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("axis", axis)?;
+        tmp.call_method("sort", (), Some(&kwargs))?;
+        let rebuilt = from_numpy_ma(py, &tmp)?;
+        self.store_inplace(py, rebuilt)
+    }
+
+    /// `MaskedArray.argsort([axis])` — indices that sort the array; masked
+    /// elements sort to the END. Returns an integer `ndarray`.
+    #[pyo3(signature = (axis = -1))]
+    fn argsort<'py>(&self, py: Python<'py>, axis: i64) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("axis", axis)?;
+        self.as_numpy_ma(py)?
+            .call_method("argsort", (), Some(&kwargs))
+    }
+
+    // -----------------------------------------------------------------------
+    // #895 — attribute surface (read off the numpy.ma snapshot).
+    // -----------------------------------------------------------------------
+
+    /// `MaskedArray.itemsize` — bytes per element (`f64`→8, `i32`→4,
+    /// `complex128`→16). Read off the numpy.ma snapshot's `itemsize`.
+    #[getter]
+    fn itemsize(&self, py: Python<'_>) -> PyResult<usize> {
+        self.as_numpy_ma(py)?.getattr("itemsize")?.extract()
+    }
+
+    /// `MaskedArray.nbytes` — `size * itemsize`. Read off the snapshot.
+    #[getter]
+    fn nbytes(&self, py: Python<'_>) -> PyResult<usize> {
+        self.as_numpy_ma(py)?.getattr("nbytes")?.extract()
+    }
+
+    /// `MaskedArray.strides` — the byte-stride tuple of the data buffer, read
+    /// off the numpy.ma snapshot (a C-contiguous owned array's strides).
+    #[getter]
+    fn strides<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        self.as_numpy_ma(py)?.getattr("strides")
+    }
+
+    /// `MaskedArray.flat` — a flat iterator yielding each element as a numpy
+    /// scalar, with masked positions yielding the `numpy.ma.masked` singleton
+    /// (`numpy/ma/core.py` `MaskedArray.flat`). Delegated to the numpy.ma
+    /// snapshot's `flat` flatiter.
+    #[getter]
+    fn flat<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        self.as_numpy_ma(py)?.getattr("flat")
+    }
+
+    /// `MaskedArray.base` — the array this one is a view of, or the underlying
+    /// data buffer for a base array (numpy: a base array's `.base` is its
+    /// `_data` ndarray; a view's `.base` is the parent). Read off the numpy.ma
+    /// snapshot so `(x.base is None)` matches numpy for both the owned and
+    /// view cases.
+    #[getter]
+    fn base<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        self.as_numpy_ma(py)?.getattr("base")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// #892/#893 delegation helpers (non-`#[pymethods]` inherent impl).
+// ---------------------------------------------------------------------------
+
+impl PyMaskedArray {
+    /// Whether `r` (a numpy.ma method result) is a `MaskedArray` that should be
+    /// rebuilt into an owned dtype-preserving `PyMaskedArray` — vs a scalar
+    /// (np scalar / Python scalar / the `masked` singleton / a plain ndarray)
+    /// that passes back verbatim. A 0-d masked result is the `masked`
+    /// singleton or a 0-d MaskedArray; numpy's array-returning methods here
+    /// (take/clip/cumsum/…) always yield a `ndim >= 1` MaskedArray on the
+    /// shapes we support, so the `MaskedArray` + `ndim >= 1` test selects the
+    /// rebuild path.
+    fn rebuild_or_scalar<'py>(
+        &self,
+        py: Python<'py>,
+        r: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let np_ma = py.import("numpy")?.getattr("ma")?;
+        let ma_cls = np_ma.getattr("MaskedArray")?;
+        if r.is_instance(&ma_cls)? {
+            let ndim: usize = r.getattr("ndim")?.extract()?;
+            if ndim >= 1 {
+                let rebuilt = from_numpy_ma(py, r)?;
+                return rebuilt.into_bound_py_any(py);
+            }
+        }
+        Ok(r.clone())
+    }
+
+    /// `all`/`any` delegation: build the numpy.ma snapshot, call the named
+    /// method with `axis=`/`keepdims=`, then rebuild (array) or pass back
+    /// (scalar) via [`Self::rebuild_or_scalar`].
+    fn delegate_reduce_like<'py>(
+        &self,
+        py: Python<'py>,
+        method: &str,
+        axis: Option<&Bound<'py, PyAny>>,
+        keepdims: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        if keepdims {
+            kwargs.set_item("keepdims", true)?;
+        }
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method(method, (), Some(&kwargs))?;
+        self.rebuild_or_scalar(py, &r)
+    }
+
+    /// #893 reduction-kwarg gate (no `ddof`): returns `Some(result)` when ANY
+    /// of `axis`/`dtype`/`keepdims` is supplied (delegating to numpy.ma's named
+    /// method), else `None` so the caller keeps its dtype-preserving no-kwarg
+    /// fast path (#858/#873).
+    fn reduce_kwargs<'py>(
+        &self,
+        py: Python<'py>,
+        method: &str,
+        axis: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
+        keepdims: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        if axis.is_none() && dtype.is_none() && !keepdims {
+            return Ok(None);
+        }
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        if let Some(dt) = dtype {
+            kwargs.set_item("dtype", dt)?;
+        }
+        if keepdims {
+            kwargs.set_item("keepdims", true)?;
+        }
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method(method, (), Some(&kwargs))?;
+        Ok(Some(self.rebuild_or_scalar(py, &r)?))
+    }
+
+    /// #893 reduction-kwarg gate WITH `ddof` (for `var`/`std`): delegates when
+    /// any of `axis`/`dtype`/`keepdims`/`ddof != 0` is supplied. A bare
+    /// `ddof != 0` with no other kwarg still needs delegation (the no-kwarg
+    /// fast path is ddof=0 only).
+    fn reduce_kwargs_ddof<'py>(
+        &self,
+        py: Python<'py>,
+        method: &str,
+        axis: Option<&Bound<'py, PyAny>>,
+        dtype: Option<&Bound<'py, PyAny>>,
+        ddof: i64,
+        keepdims: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        if axis.is_none() && dtype.is_none() && !keepdims && ddof == 0 {
+            return Ok(None);
+        }
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        if let Some(dt) = dtype {
+            kwargs.set_item("dtype", dt)?;
+        }
+        if ddof != 0 {
+            kwargs.set_item("ddof", ddof)?;
+        }
+        if keepdims {
+            kwargs.set_item("keepdims", true)?;
+        }
+        let r = self
+            .as_numpy_ma(py)?
+            .call_method(method, (), Some(&kwargs))?;
+        Ok(Some(self.rebuild_or_scalar(py, &r)?))
+    }
+
+    /// Write a freshly-built owned `PyMaskedArray` (`rebuilt`) into `self` in
+    /// place — used by `sort`/`fill` (numpy in-place mutators). An OWNED `self`
+    /// adopts `rebuilt`'s `DynMa` directly. A VIEW scatters `rebuilt`'s
+    /// data+mask back to the base through [`Self::with_buffer_mut`] (numpy's
+    /// shared-buffer write-through: an in-place sort/fill on a view mutates the
+    /// base buffer).
+    fn store_inplace(&mut self, py: Python<'_>, rebuilt: PyMaskedArray) -> PyResult<()> {
+        let Storage::Owned { data: new_data, .. } = rebuilt.storage else {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "internal: from_numpy_ma must yield an Owned MaskedArray",
+            ));
+        };
+        match &mut self.storage {
+            Storage::Owned { data, .. } => {
+                *data = new_data;
+                Ok(())
+            }
+            Storage::View { .. } => self.with_buffer_mut(py, move |inner| {
+                *inner = new_data;
+                Ok(())
+            }),
+        }
     }
 }
 
@@ -7959,37 +8554,37 @@ pub fn angle<'py>(py: Python<'py>, z: &Bound<'py, PyAny>, deg: bool) -> PyResult
 /// reduces to the `numpy.ma.masked` singleton.
 #[pyfunction]
 pub fn max<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.max(py)
+    a.max(py, None, false)
 }
 
 /// `numpy.ma.min(a)` / `amin(a)` — minimum unmasked element.
 #[pyfunction]
 pub fn min<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.min(py)
+    a.min(py, None, false)
 }
 
 /// `numpy.ma.sum(a)` — sum of unmasked elements.
 #[pyfunction]
 pub fn sum<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.sum(py)
+    a.sum(py, None, None, false)
 }
 
 /// `numpy.ma.mean(a)` — mean of unmasked elements.
 #[pyfunction]
 pub fn mean<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.mean(py)
+    a.mean(py, None, None, false)
 }
 
 /// `numpy.ma.std(a)` — standard deviation of unmasked elements.
 #[pyfunction]
 pub fn std<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.std(py)
+    a.std(py, None, None, 0, false)
 }
 
 /// `numpy.ma.var(a)` — variance of unmasked elements.
 #[pyfunction]
 pub fn var<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
-    a.var(py)
+    a.var(py, None, None, 0, false)
 }
 
 /// `numpy.ma.anomalies(a)` — alias of [`anom`] (deviation from the unmasked
