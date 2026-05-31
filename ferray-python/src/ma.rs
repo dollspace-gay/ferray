@@ -518,6 +518,14 @@ enum DataBuf {
     U64(Py<PyArrayDyn<u64>>),
     F32(Py<PyArrayDyn<f32>>),
     F64(Py<PyArrayDyn<f64>>),
+    // #899: complex dtypes carry a numpy-backed buffer too. pyo3-numpy 0.28
+    // impls `Element` for `Complex32`/`Complex64` unconditionally (num-complex
+    // is a non-optional dependency of the numpy crate), so `PyArrayDyn<Complex<T>>`
+    // gains the same `.readonly().as_array()` / `.readwrite().as_array_mut()`
+    // aliasing surface the real dtypes use — making complex `.data` a write-through
+    // alias of the shared buffer instead of a copy.
+    Complex32(Py<PyArrayDyn<Complex<f32>>>),
+    Complex64(Py<PyArrayDyn<Complex<f64>>>),
 }
 
 impl DataBuf {
@@ -549,7 +557,22 @@ impl DataBuf {
             DynMa::U64(m) => mk!(m, U64),
             DynMa::F32(m) => mk!(m, F32),
             DynMa::F64(m) => mk!(m, F64),
-            DynMa::Complex32(_) | DynMa::Complex64(_) => None,
+            // #899: complex MOVES its data into a fresh numpy-owned
+            // `PyArrayDyn<Complex<T>>` via `from_owned_array` (numpy's `Element`
+            // for `Complex32/64`, no `NpElement`/`into_pyarray` needed). numpy
+            // then owns the canonical buffer that `.data` aliases.
+            DynMa::Complex32(m) => {
+                let arr: ArrayD<Complex<f32>> = m.data().to_owned();
+                Some(DataBuf::Complex32(
+                    PyArrayDyn::<Complex<f32>>::from_owned_array(py, arr.into_ndarray()).unbind(),
+                ))
+            }
+            DynMa::Complex64(m) => {
+                let arr: ArrayD<Complex<f64>> = m.data().to_owned();
+                Some(DataBuf::Complex64(
+                    PyArrayDyn::<Complex<f64>>::from_owned_array(py, arr.into_ndarray()).unbind(),
+                ))
+            }
         }
     }
 
@@ -578,7 +601,11 @@ impl DataBuf {
             DynMa::U64(_) => retain!(u64, U64),
             DynMa::F32(_) => retain!(f32, F32),
             DynMa::F64(_) => retain!(f64, F64),
-            DynMa::Complex32(_) | DynMa::Complex64(_) => None,
+            // #899: a foreign complex64/complex128 numpy ndarray is retained
+            // by reference exactly like the real dtypes, so `ma.array(arr,
+            // copy=False)` shares the input buffer.
+            DynMa::Complex32(_) => retain!(Complex<f32>, Complex32),
+            DynMa::Complex64(_) => retain!(Complex<f64>, Complex64),
         }
     }
 
@@ -598,6 +625,8 @@ impl DataBuf {
             DataBuf::U64(p) => p.bind(py).clone().into_any(),
             DataBuf::F32(p) => p.bind(py).clone().into_any(),
             DataBuf::F64(p) => p.bind(py).clone().into_any(),
+            DataBuf::Complex32(p) => p.bind(py).clone().into_any(),
+            DataBuf::Complex64(p) => p.bind(py).clone().into_any(),
         }
     }
 
@@ -640,6 +669,8 @@ impl DataBuf {
             (DataBuf::U64(p), DynMa::U64(m)) => pull!(p, m),
             (DataBuf::F32(p), DynMa::F32(m)) => pull!(p, m),
             (DataBuf::F64(p), DynMa::F64(m)) => pull!(p, m),
+            (DataBuf::Complex32(p), DynMa::Complex32(m)) => pull!(p, m),
+            (DataBuf::Complex64(p), DynMa::Complex64(m)) => pull!(p, m),
             _ => Err(pyo3::exceptions::PyTypeError::new_err(
                 "internal: data buffer dtype mismatch on refresh",
             )),
@@ -681,6 +712,8 @@ impl DataBuf {
             (DataBuf::U64(p), DynMa::U64(m)) => push!(p, m),
             (DataBuf::F32(p), DynMa::F32(m)) => push!(p, m),
             (DataBuf::F64(p), DynMa::F64(m)) => push!(p, m),
+            (DataBuf::Complex32(p), DynMa::Complex32(m)) => push!(p, m),
+            (DataBuf::Complex64(p), DynMa::Complex64(m)) => push!(p, m),
             _ => Err(pyo3::exceptions::PyTypeError::new_err(
                 "internal: data buffer dtype mismatch on writeback",
             )),
