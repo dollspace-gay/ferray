@@ -183,10 +183,29 @@ fn seed_generator_with_seed(
 // Seed control
 // ---------------------------------------------------------------------------
 
-/// `numpy.random.seed(s)` — re-seed the thread-local RNG.
+/// `numpy.random.seed(seed=None)` — re-seed the thread-local RNG.
+///
+/// numpy's legacy `numpy.random.seed` accepts the tri-state
+/// `None | int | array_like[int]` (`numpy/random/mtrand.pyx` `seed` ->
+/// `RandomState.seed`, exposed at `numpy/random/__init__.py`): `seed()` and
+/// `seed(None)` reseed the global generator from OS entropy (subsequent draws
+/// are fresh / non-reproducible across two `seed()` calls), an `int` reseeds
+/// deterministically, and an `array_like[int]` is folded via `SeedSequence`.
+/// The previous `s: u64` signature made the argument mandatory, so `seed()` /
+/// `seed(None)` raised `TypeError` instead of reseeding (#913).
+///
+/// We route every case through [`seed_generator_with_seed`], which already
+/// resolves `None`/absent to fresh OS entropy, an `int` to itself, an
+/// `array_like` through `SeedSequence`, and a `BitGenerator`/`SeedSequence`
+/// instance to its stored seed — then install the resolved `u64` origin into
+/// the global so the int-seed stream stays reproducible (#910 round-trip
+/// preserved). Returns `None`, like numpy.
 #[pyfunction]
-pub fn seed(s: u64) {
-    reseed_global(s);
+#[pyo3(signature = (seed = None))]
+pub fn seed(seed: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+    let (_gen, resolved) = seed_generator_with_seed(seed)?;
+    reseed_global(resolved);
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
