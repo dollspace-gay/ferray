@@ -47,6 +47,19 @@ fn obj_ndim(arr: &Bound<'_, PyAny>) -> PyResult<usize> {
     arr.getattr("ndim")?.extract()
 }
 
+/// True if the first element of a Python list of array-likes is a
+/// datetime64 / timedelta64 array, so the list-consuming ops
+/// (`concatenate`/`stack`/`vstack`/`hstack`/`column_stack`/`dstack`) can route
+/// to the numpy-delegation datetime path (#948). The list-stack ops require a
+/// uniform element kind, so probing the first input determines the whole op.
+fn list_first_is_time<'py>(py: Python<'py>, list: &Bound<'py, PyList>) -> PyResult<bool> {
+    if list.is_empty() {
+        return Ok(false);
+    }
+    let first = as_ndarray(py, &list.get_item(0)?)?;
+    crate::datetime::is_time_array(&first)
+}
+
 // ---------------------------------------------------------------------------
 // Shape transforms
 // ---------------------------------------------------------------------------
@@ -102,6 +115,15 @@ pub fn reshape<'py>(
     order: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // datetime64/timedelta64 (#948): a pure data-move, so numpy preserves the
+    // dtype+unit (`np.reshape(M8[D],(2,2)).dtype == datetime64[D]`, live). Delegate
+    // to numpy and marshal the result back through the int64-view transport (the
+    // real-only `match_dtype_all_complex!` below would raise TypeError).
+    if crate::datetime::is_time_array(&arr)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("order", order)?;
+        return crate::datetime::delegate_manip(py, "reshape", (&arr, shape), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     let size: usize = arr.getattr("size")?.extract()?;
     let raw: Vec<isize> = if let Ok(n) = shape.extract::<isize>() {
@@ -143,6 +165,9 @@ pub fn reshape<'py>(
 #[pyfunction]
 pub fn ravel<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "ravel", (&arr,), None);
+    }
     let dt = dtype_name(&arr)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
@@ -155,6 +180,12 @@ pub fn ravel<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py,
 #[pyfunction]
 pub fn flatten<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        // `flatten` is an ndarray method, not a numpy free function — call it on
+        // the coerced datetime64 array, then marshal back (#948).
+        let flat = arr.call_method0("flatten")?;
+        return crate::datetime::datetime_roundtrip(py, &flat);
+    }
     let dt = dtype_name(&arr)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
@@ -174,6 +205,13 @@ pub fn squeeze<'py>(
     axis: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        return crate::datetime::delegate_manip(py, "squeeze", (&arr,), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     let ndim = obj_ndim(&arr)?;
     // Normalize axis to a descending-sorted list of axes to squeeze (so
@@ -214,6 +252,11 @@ pub fn expand_dims<'py>(
     axis: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("axis", axis)?;
+        return crate::datetime::delegate_manip(py, "expand_dims", (&arr,), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     let ndim = obj_ndim(&arr)?;
     let raw = extract_axis_tuple(axis)?;
@@ -239,6 +282,11 @@ pub fn broadcast_to<'py>(
     shape: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    // NOTE: the top-level `numpy.broadcast_to` is served by
+    // `stride_tricks::broadcast_to` (lib.rs overrides this binding), so the
+    // datetime passthrough for `broadcast_to` belongs in that module (filed as a
+    // #948 follow-up blocker, outside this manifest). This manipulation-module
+    // `broadcast_to` keeps its real/complex behavior unchanged.
     let dt = dtype_name(&arr)?;
     let target: Vec<usize> = if let Ok(n) = shape.extract::<usize>() {
         vec![n]
@@ -265,6 +313,12 @@ pub fn transpose<'py>(
     axes: Option<Vec<isize>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        // numpy.transpose accepts axes=None or a sequence of ints.
+        kwargs.set_item("axes", axes.clone())?;
+        return crate::datetime::delegate_manip(py, "transpose", (&arr,), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     let ndim = obj_ndim(&arr)?;
     // numpy/_core/fromnumeric.py:605 transpose — explicit axes may be
@@ -289,6 +343,9 @@ pub fn swapaxes<'py>(
     axis2: isize,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "swapaxes", (&arr, axis1, axis2), None);
+    }
     let dt = dtype_name(&arr)?;
     let ndim = obj_ndim(&arr)?;
     let ax1 = normalize_axis(py, axis1, ndim)?;
@@ -313,6 +370,9 @@ pub fn moveaxis<'py>(
     destination: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "moveaxis", (&arr, source, destination), None);
+    }
     let dt = dtype_name(&arr)?;
     let ndim = obj_ndim(&arr)?;
     let src = normalize_axis_tuple(py, &extract_axis_tuple(source)?, ndim, false)?;
@@ -347,6 +407,9 @@ pub fn rollaxis<'py>(
     start: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "rollaxis", (&arr, axis, start), None);
+    }
     let dt = dtype_name(&arr)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
@@ -372,6 +435,13 @@ pub fn flip<'py>(
     axis: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, m)?;
+    if crate::datetime::is_time_array(&arr)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        return crate::datetime::delegate_manip(py, "flip", (&arr,), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     let ndim = obj_ndim(&arr)?;
     let axes: Vec<usize> = match axis {
@@ -391,6 +461,9 @@ pub fn flip<'py>(
 #[pyfunction]
 pub fn fliplr<'py>(py: Python<'py>, m: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, m)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "fliplr", (&arr,), None);
+    }
     let dt = dtype_name(&arr)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
@@ -403,6 +476,9 @@ pub fn fliplr<'py>(py: Python<'py>, m: &Bound<'py, PyAny>) -> PyResult<Bound<'py
 #[pyfunction]
 pub fn flipud<'py>(py: Python<'py>, m: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, m)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "flipud", (&arr,), None);
+    }
     let dt = dtype_name(&arr)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
@@ -424,6 +500,12 @@ pub fn rot90<'py>(
     axes: (isize, isize),
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, m)?;
+    if crate::datetime::is_time_array(&arr)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("k", k)?;
+        kwargs.set_item("axes", (axes.0, axes.1))?;
+        return crate::datetime::delegate_manip(py, "rot90", (&arr,), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     let ndim = obj_ndim(&arr)?;
     let ax0 = normalize_axis(py, axes.0, ndim)?;
@@ -479,6 +561,13 @@ pub fn roll<'py>(
     axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        return crate::datetime::delegate_manip(py, "roll", (&arr, shift), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     let ndim = obj_ndim(&arr)?;
     let norm_axis: Option<usize> = match axis {
@@ -500,6 +589,9 @@ pub fn roll<'py>(
 #[pyfunction]
 pub fn atleast_1d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "atleast_1d", (&arr,), None);
+    }
     let dt = dtype_name(&arr)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
@@ -512,6 +604,9 @@ pub fn atleast_1d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound
 #[pyfunction]
 pub fn atleast_2d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "atleast_2d", (&arr,), None);
+    }
     let dt = dtype_name(&arr)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
@@ -524,6 +619,9 @@ pub fn atleast_2d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound
 #[pyfunction]
 pub fn atleast_3d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "atleast_3d", (&arr,), None);
+    }
     let dt = dtype_name(&arr)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
@@ -657,6 +755,14 @@ pub fn concatenate<'py>(
             "concatenate: need at least one array",
         ));
     }
+    // datetime64/timedelta64 (#948): pure data-move; numpy preserves the dtype and
+    // promotes cross-unit inputs to the finer unit (matching `result_type`).
+    // Delegate to numpy and marshal back (the real-only macro raises TypeError).
+    if list_first_is_time(py, list)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("axis", axis)?;
+        return crate::datetime::delegate_manip(py, "concatenate", (arrays,), Some(&kwargs));
+    }
     let dt = common_dtype(py, list)?;
     // For axis=None numpy ravels each input and concatenates along axis 0.
     let (flatten, norm_axis): (bool, usize) = match axis {
@@ -699,6 +805,11 @@ pub fn stack<'py>(
     if list.is_empty() {
         return Err(PyValueError::new_err("stack: need at least one array"));
     }
+    if list_first_is_time(py, list)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("axis", axis)?;
+        return crate::datetime::delegate_manip(py, "stack", (arrays,), Some(&kwargs));
+    }
     let dt = common_dtype(py, list)?;
     let result_ndim = obj_ndim(&as_ndarray(py, &list.get_item(0)?)?)? + 1;
     let norm_axis = normalize_axis(py, axis, result_ndim)?;
@@ -716,6 +827,9 @@ pub fn vstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     if list.is_empty() {
         return Err(PyValueError::new_err("vstack: need at least one array"));
     }
+    if list_first_is_time(py, list)? {
+        return crate::datetime::delegate_manip(py, "vstack", (arrays,), None);
+    }
     let first = as_ndarray(py, &list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
@@ -731,6 +845,9 @@ pub fn hstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     let list = arrays.cast::<PyList>()?;
     if list.is_empty() {
         return Err(PyValueError::new_err("hstack: need at least one array"));
+    }
+    if list_first_is_time(py, list)? {
+        return crate::datetime::delegate_manip(py, "hstack", (arrays,), None);
     }
     let first = as_ndarray(py, &list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
@@ -761,6 +878,17 @@ pub fn pad<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     use ferray_core::manipulation::extended::PadMode;
     let arr = as_ndarray(py, array)?;
+    // datetime64/timedelta64 (#948): numpy pads with the epoch tick (0) for the
+    // default `constant_values=0` and preserves the dtype+unit
+    // (`np.pad(M8[D],(1,1))` -> '1970-01-01' fill, live). Delegate and marshal.
+    if crate::datetime::is_time_array(&arr)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("mode", mode)?;
+        if mode == "constant" {
+            kwargs.set_item("constant_values", constant_values)?;
+        }
+        return crate::datetime::delegate_manip(py, "pad", (&arr, pad_width), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
 
     // pad_width can be:
@@ -846,12 +974,15 @@ pub fn tile<'py>(
     a: &Bound<'py, PyAny>,
     reps: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "tile", (&arr, reps), None);
+    }
     let reps_vec: Vec<usize> = if let Ok(n) = reps.extract::<usize>() {
         vec![n]
     } else {
         reps.extract()?
     };
-    let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
@@ -873,6 +1004,13 @@ pub fn repeat<'py>(
     axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        return crate::datetime::delegate_manip(py, "repeat", (&arr, repeats), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     let ndim = obj_ndim(&arr)?;
     let norm_axis: Option<usize> = match axis {
@@ -993,6 +1131,9 @@ pub fn delete<'py>(
     axis: isize,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, arr)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "delete", (&arr, obj, axis), None);
+    }
     let dt = dtype_name(&arr)?;
     let ndim = obj_ndim(&arr)?;
     let ax = normalize_axis(py, axis, ndim)?;
@@ -1079,6 +1220,9 @@ pub fn insert<'py>(
     axis: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr_a = as_ndarray(py, arr)?;
+    if crate::datetime::is_time_array(&arr_a)? {
+        return crate::datetime::delegate_manip(py, "insert", (&arr_a, obj, values, axis), None);
+    }
     let dt = dtype_name(&arr_a)?;
     let arr_v = crate::conv::coerce_dtype(py, values, dt.as_str())?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
@@ -1099,6 +1243,13 @@ pub fn append<'py>(
     axis: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr_a = as_ndarray(py, arr)?;
+    if crate::datetime::is_time_array(&arr_a)? {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        return crate::datetime::delegate_manip(py, "append", (&arr_a, values), Some(&kwargs));
+    }
     let dt = dtype_name(&arr_a)?;
     let arr_v = crate::conv::coerce_dtype(py, values, dt.as_str())?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
@@ -1117,12 +1268,15 @@ pub fn resize<'py>(
     a: &Bound<'py, PyAny>,
     new_shape: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let arr = as_ndarray(py, a)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip(py, "resize", (&arr, new_shape), None);
+    }
     let target: Vec<usize> = if let Ok(n) = new_shape.extract::<usize>() {
         vec![n]
     } else {
         new_shape.extract()?
     };
-    let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
@@ -1181,6 +1335,14 @@ pub fn split<'py>(
     axis: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, ary)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip_list(
+            py,
+            "split",
+            (&arr, indices_or_sections, axis),
+            None,
+        );
+    }
     let dt = dtype_name(&arr)?;
 
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
@@ -1206,6 +1368,14 @@ pub fn array_split<'py>(
     axis: usize,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, ary)?;
+    if crate::datetime::is_time_array(&arr)? {
+        return crate::datetime::delegate_manip_list(
+            py,
+            "array_split",
+            (&arr, indices_or_sections, axis),
+            None,
+        );
+    }
     let dt = dtype_name(&arr)?;
 
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
@@ -1229,6 +1399,14 @@ macro_rules! bind_axis_split {
             n_sections: usize,
         ) -> PyResult<Bound<'py, PyAny>> {
             let arr = as_ndarray(py, ary)?;
+            if crate::datetime::is_time_array(&arr)? {
+                return crate::datetime::delegate_manip_list(
+                    py,
+                    stringify!($name),
+                    (&arr, n_sections),
+                    None,
+                );
+            }
             let dt = dtype_name(&arr)?;
             Ok(match_dtype_all_complex!(dt.as_str(), T => {
                 let fa: ArrayD<T> = T::extract_dyn(&arr)?;
@@ -1254,6 +1432,9 @@ pub fn column_stack<'py>(
         return Err(PyValueError::new_err(
             "column_stack: need at least one array",
         ));
+    }
+    if list_first_is_time(py, list)? {
+        return crate::datetime::delegate_manip(py, "column_stack", (arrays,), None);
     }
     let first = as_ndarray(py, &list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
@@ -1284,6 +1465,9 @@ pub fn block<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Bound
         return Err(PyValueError::new_err("block: empty row"));
     }
     let first = as_ndarray(py, &first_row_list.get_item(0)?)?;
+    if crate::datetime::is_time_array(&first)? {
+        return crate::datetime::delegate_manip(py, "block", (arrays,), None);
+    }
     let dt = dtype_name(&first)?;
 
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
@@ -1361,6 +1545,9 @@ pub fn dstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     let list = arrays.cast::<PyList>()?;
     if list.is_empty() {
         return Err(PyValueError::new_err("dstack: need at least one array"));
+    }
+    if list_first_is_time(py, list)? {
+        return crate::datetime::delegate_manip(py, "dstack", (arrays,), None);
     }
     let first = as_ndarray(py, &list.get_item(0)?)?;
     let dt = dtype_name(&first)?;

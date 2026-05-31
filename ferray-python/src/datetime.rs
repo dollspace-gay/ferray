@@ -213,6 +213,60 @@ pub fn datetime_roundtrip<'py>(
     }
 }
 
+/// Delegate a pure data-movement manipulation op (reshape / transpose / flip /
+/// roll / repeat / tile / stack / concatenate and siblings) to numpy on the
+/// already-coerced datetime64 / timedelta64 operand(s), then marshal the result
+/// back across the ferray boundary via the int64-view transport
+/// ([`datetime_roundtrip`]).
+///
+/// These ops carry **no element arithmetic** — they only move/copy/reorder
+/// existing ticks — so numpy preserves the datetime64/timedelta64 dtype + unit +
+/// NaT exactly (`np.reshape(M8[D], (2,2)).dtype == 'datetime64[D]'`, live numpy
+/// 2.4.5). Running numpy's own op reuses numpy's exact dtype-passthrough
+/// semantics (including `concatenate`'s cross-unit promotion to the finer unit,
+/// matching `result_type`), and [`datetime_roundtrip`] reconstructs a fresh
+/// ferray-marshalled buffer with no lossy cast (R-CODE-4). This mirrors the
+/// delegation seam already used by `arange_time` (#945) and the `stats.rs`
+/// time-reductions (#944).
+///
+/// `func` is a callable resolved on the `numpy` module; `args`/`kwargs` are the
+/// positional/keyword args numpy's op expects (datetime64 array(s) plus shape /
+/// axis / reps). The numpy result must be a datetime64 / timedelta64 array (the
+/// caller only invokes this when the input is a time array and the op preserves
+/// the dtype); a non-time result surfaces a `TypeError` from
+/// [`datetime_roundtrip`].
+pub fn delegate_manip<'py>(
+    py: Python<'py>,
+    func: &str,
+    args: impl pyo3::call::PyCallArgs<'py>,
+    kwargs: Option<&Bound<'py, pyo3::types::PyDict>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let result = np.getattr(func)?.call(args, kwargs)?;
+    datetime_roundtrip(py, &result)
+}
+
+/// Delegate a splitting op (`split`/`array_split`/`vsplit`/`hsplit`/`dsplit`)
+/// to numpy on the datetime64 / timedelta64 array, then marshal **each** part of
+/// the returned list back through the int64-view transport (#948). numpy's split
+/// ops return a `list` of views that all keep the input's datetime dtype+unit;
+/// this rebuilds the list with fresh ferray-marshalled buffers (R-CODE-4).
+pub fn delegate_manip_list<'py>(
+    py: Python<'py>,
+    func: &str,
+    args: impl pyo3::call::PyCallArgs<'py>,
+    kwargs: Option<&Bound<'py, pyo3::types::PyDict>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let result = np.getattr(func)?.call(args, kwargs)?;
+    let parts: Vec<Bound<'py, PyAny>> = result.try_iter()?.collect::<PyResult<Vec<_>>>()?;
+    let marshalled: Vec<Bound<'py, PyAny>> = parts
+        .iter()
+        .map(|p| datetime_roundtrip(py, p))
+        .collect::<PyResult<Vec<_>>>()?;
+    Ok(pyo3::types::PyList::new(py, marshalled)?.into_any())
+}
+
 /// Returns `true` if either operand is a datetime64 / timedelta64 array, so
 /// the ufunc `add` / `subtract` bindings can route to [`add_time`] /
 /// [`subtract_time`] instead of the numeric path.
