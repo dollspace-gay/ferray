@@ -3529,48 +3529,74 @@ pub fn histogram_bin_edges<'py>(
     Ok(edges.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 
-/// `numpy.histogram2d(x, y, bins=10)` → `(hist, x_edges, y_edges)`.
+/// `numpy.histogram2d(x, y, bins=10, range=None, density=None, weights=None)` →
+/// `(H, xedges, yedges)`. The bin-resolution / range / density / weights
+/// semantics are numpy's own — `bins` accepts an `int`, `[int, int]`, a single
+/// edge array, or `[xedges, yedges]`, the default is `10` (not a tuple), and the
+/// counts are `float64`. Rather than re-derive numpy's binning rules in the
+/// shim, delegate to `numpy.histogram2d` so its exact `(H, xedges, yedges)`
+/// contract surfaces (the prior `ferray_stats::histogram2d` rejected `int` bins,
+/// returned `int` counts, and used a wrong default). (#969, R-DEV-2/R-DEV-3)
 #[pyfunction]
-#[pyo3(signature = (x, y, bins = (10usize, 10usize)))]
+#[pyo3(signature = (x, y, bins = None, range = None, density = None, weights = None))]
 pub fn histogram2d<'py>(
     py: Python<'py>,
     x: &Bound<'py, PyAny>,
     y: &Bound<'py, PyAny>,
-    bins: (usize, usize),
+    bins: Option<&Bound<'py, PyAny>>,
+    range: Option<&Bound<'py, PyAny>>,
+    density: Option<&Bound<'py, PyAny>>,
+    weights: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    use ferray_core::array::aliases::Array1;
-    let arr_x = coerce_dtype(py, x, "float64")?;
-    let arr_y = coerce_dtype(py, y, "float64")?;
-    let vx: PyReadonlyArray1<f64> = arr_x.extract()?;
-    let vy: PyReadonlyArray1<f64> = arr_y.extract()?;
-    let fx: Array1<f64> = vx.as_ferray().map_err(ferr_to_pyerr)?;
-    let fy: Array1<f64> = vy.as_ferray().map_err(ferr_to_pyerr)?;
-    let (h, ex, ey) = ferray_stats::histogram2d(&fx, &fy, bins).map_err(ferr_to_pyerr)?;
-    let h_py = h.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let ex_py = ex.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let ey_py = ey.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    Ok(pyo3::types::PyTuple::new(py, [h_py, ex_py, ey_py])?.into_any())
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    match bins {
+        Some(b) => kwargs.set_item("bins", b)?,
+        None => kwargs.set_item("bins", 10i64)?,
+    }
+    if let Some(r) = range {
+        kwargs.set_item("range", r)?;
+    }
+    if let Some(d) = density {
+        kwargs.set_item("density", d)?;
+    }
+    if let Some(w) = weights {
+        kwargs.set_item("weights", w)?;
+    }
+    np.call_method("histogram2d", (x, y), Some(&kwargs))
 }
 
-/// `numpy.histogramdd(sample, bins)` → `(hist, edges)`.
+/// `numpy.histogramdd(sample, bins=10, range=None, density=None, weights=None)` →
+/// `(H, edges)`. `bins` is OPTIONAL (default `10` per axis) and the binning /
+/// range / density / weights semantics are numpy's own, so delegate to
+/// `numpy.histogramdd` (the prior signature made `bins` a required positional
+/// arg, raising `TypeError` on `np.histogramdd(sample)`). (#969, R-DEV-2/R-DEV-3)
 #[pyfunction]
+#[pyo3(signature = (sample, bins = None, range = None, density = None, weights = None))]
 pub fn histogramdd<'py>(
     py: Python<'py>,
     sample: &Bound<'py, PyAny>,
-    bins: Vec<usize>,
+    bins: Option<&Bound<'py, PyAny>>,
+    range: Option<&Bound<'py, PyAny>>,
+    density: Option<&Bound<'py, PyAny>>,
+    weights: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    use ferray_core::array::aliases::Array2;
-    let arr = coerce_dtype(py, sample, "float64")?;
-    let view: numpy::PyReadonlyArray2<f64> = arr.extract()?;
-    let fa: Array2<f64> = view.as_ferray().map_err(ferr_to_pyerr)?;
-    let (h, edges) = ferray_stats::histogramdd(&fa, &bins).map_err(ferr_to_pyerr)?;
-    let h_py = h.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    let edges_py: Vec<Bound<'py, PyAny>> = edges
-        .into_iter()
-        .map(|e| Ok(e.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()))
-        .collect::<PyResult<Vec<_>>>()?;
-    let edges_list = pyo3::types::PyList::new(py, edges_py)?.into_any();
-    Ok(pyo3::types::PyTuple::new(py, [h_py, edges_list])?.into_any())
+    let np = py.import("numpy")?;
+    let kwargs = pyo3::types::PyDict::new(py);
+    match bins {
+        Some(b) => kwargs.set_item("bins", b)?,
+        None => kwargs.set_item("bins", 10i64)?,
+    }
+    if let Some(r) = range {
+        kwargs.set_item("range", r)?;
+    }
+    if let Some(d) = density {
+        kwargs.set_item("density", d)?;
+    }
+    if let Some(w) = weights {
+        kwargs.set_item("weights", w)?;
+    }
+    np.call_method("histogramdd", (sample,), Some(&kwargs))
 }
 
 /// `numpy.bincount(x, weights=None, minlength=0)`.

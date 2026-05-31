@@ -905,7 +905,10 @@ pub fn inner<'py>(
 
 /// `numpy.outer(a, b)`. For complex inputs the `a.size x b.size` matrix
 /// `a[i]*b[j]` (no conjugation, both operands flattened); the real path routes
-/// to `fl::outer`. (#931)
+/// to `fl::outer`. Integer inputs preserve the integer dtype — numpy's
+/// `np.outer([1,2],[3,4])` is `int64 [[3,4],[6,8]]` (live numpy 2.4.5), so the
+/// `LinalgFloat`-sealed `fl::outer` is bypassed for integers and the
+/// `a[i]*b[j]` matrix is composed directly over the flattened operands. (#931, #969)
 #[pyfunction]
 pub fn outer<'py>(
     py: Python<'py>,
@@ -929,14 +932,38 @@ pub fn outer<'py>(
         };
     }
     let arr_b = crate::conv::coerce_dtype(py, b, dt.as_str())?;
-    Ok(match_dtype_float!(dt.as_str(), T => {
-        let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
-        let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
-        let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
-        let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
-        let r: ArrayD<T> = fl::outer(&fa, &fb).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
+    // Float dtypes route to the optimized `fl::outer`; integer dtypes — which
+    // `LinalgFloat` does not cover — compose `a[i]*b[j]` directly (numpy keeps
+    // the integer dtype rather than promoting to float).
+    match dt.as_str() {
+        "float64" | "f64" | "float32" | "f32" => Ok(match_dtype_float!(dt.as_str(), T => {
+            let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
+            let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
+            let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
+            let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+            let r: ArrayD<T> = fl::outer(&fa, &fb).map_err(ferr_to_pyerr)?;
+            r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        })),
+        _ => Ok(crate::match_dtype_numeric!(dt.as_str(), T => {
+            let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
+            let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
+            let fa: Vec<T> = va.as_array().iter().copied().collect();
+            let fb: Vec<T> = vb.as_array().iter().copied().collect();
+            let (m, n) = (fa.len(), fb.len());
+            let mut data: Vec<T> = Vec::with_capacity(m * n);
+            for x in &fa {
+                for y in &fb {
+                    data.push(*x * *y);
+                }
+            }
+            let r = ferray_core::Array::<T, ferray_core::dimension::Ix2>::from_vec(
+                ferray_core::dimension::Ix2::new([m, n]),
+                data,
+            )
+            .map_err(ferr_to_pyerr)?;
+            r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        })),
+    }
 }
 
 /// Complex `dot`/`inner`: 1-D x 1-D → `sum(a*b)` (0-D complex scalar); 2-D x 2-D
@@ -1512,9 +1539,30 @@ where
 {
     let sa = complex_shape::<T>(a)?;
     let sb = complex_shape::<T>(b)?;
+    // numpy.kron of two 1-D vectors is the 1-D flat Kronecker product
+    // `a[i]*b[j]` (`np.kron([1+1j,2],[1,1j]) == [1+1j,-1+1j,2,2j]`, complex128,
+    // live numpy 2.4.5). The 2-D block path below requires rank-2 operands, so
+    // route the 1-D x 1-D case through the flattened outer product. (#969)
+    if sa.len() == 1 && sb.len() == 1 {
+        let fa: Vec<num_complex::Complex<T>> = complex_flat::<T>(a)?;
+        let fb: Vec<num_complex::Complex<T>> = complex_flat::<T>(b)?;
+        let mut data: Vec<num_complex::Complex<T>> = Vec::with_capacity(fa.len() * fb.len());
+        for x in &fa {
+            for y in &fb {
+                data.push(cplx_mul(*x, *y));
+            }
+        }
+        let arr =
+            ferray_core::Array::<num_complex::Complex<T>, ferray_core::dimension::Ix1>::from_vec(
+                ferray_core::dimension::Ix1::new([data.len()]),
+                data,
+            )
+            .map_err(ferr_to_pyerr)?;
+        return complex_1d_ferray_to_pyarray(py, arr);
+    }
     if sa.len() != 2 || sb.len() != 2 {
         return Err(PyValueError::new_err(
-            "kron: complex input must be 2-D (higher-rank kron not yet supported)",
+            "kron: complex input must be 1-D or 2-D (higher-rank kron not yet supported)",
         ));
     }
     let (m, n) = (sa[0], sa[1]);
