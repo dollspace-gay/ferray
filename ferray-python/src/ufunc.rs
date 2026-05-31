@@ -2800,11 +2800,19 @@ pub fn isclose<'py>(
 // ---------------------------------------------------------------------------
 
 /// Bitwise binary body: integer or bool dtype, both inputs broadcast.
+///
+/// Both operands promote to the NEP-50 common dtype (`result_type(a, b)`),
+/// matching numpy's bitwise type resolver (generate_umath.py:722/733/744
+/// register `TD(ints)` and the resolver promotes both operands): a mixed
+/// width pair widens to the larger dtype (`int8 & int64 -> int64`) rather
+/// than silently keeping operand-1's narrower dtype.
 macro_rules! bitwise_binary_body {
     ($py:expr, $a:expr, $b:expr, $func:path) => {{
         let arr_a = as_ndarray($py, $a)?;
-        let dt = dtype_name(&arr_a)?;
-        let arr_b = coerce_dtype($py, $b, dt.as_str())?;
+        let arr_b0 = as_ndarray($py, $b)?;
+        let dt = binary_result_dtype($py, &arr_a, &arr_b0)?;
+        let arr_a = coerce_dtype($py, &arr_a, dt.as_str())?;
+        let arr_b = coerce_dtype($py, &arr_b0, dt.as_str())?;
         let np = $py.import("numpy")?;
         let pair = np.call_method1("broadcast_arrays", (&arr_a, &arr_b))?;
         let bcast: Vec<Bound<PyAny>> = pair.extract()?;
@@ -2883,8 +2891,14 @@ pub fn left_shift<'py>(
     if binary_is_complex(py, x1, x2)? {
         return Err(reject_complex_binary("left_shift"));
     }
-    let arr_a = as_ndarray(py, x1)?;
-    let dt = dtype_name(&arr_a)?;
+    let arr_a0 = as_ndarray(py, x1)?;
+    let arr_b0 = as_ndarray(py, x2)?;
+    // numpy's shift type resolver (generate_umath.py:761) promotes BOTH
+    // operands to `result_type(x1, x2)` for the output dtype; the shift count
+    // is then read as an unsigned amount. Coerce the value operand to the
+    // promoted dtype rather than keeping operand-1's narrower dtype.
+    let dt = binary_result_dtype(py, &arr_a0, &arr_b0)?;
+    let arr_a = coerce_dtype(py, &arr_a0, dt.as_str())?;
     let np = py.import("numpy")?;
     let pair = np.call_method1("broadcast_arrays", (&arr_a, x2))?;
     let bcast: Vec<Bound<PyAny>> = pair.extract()?;
@@ -2909,8 +2923,14 @@ pub fn right_shift<'py>(
     if binary_is_complex(py, x1, x2)? {
         return Err(reject_complex_binary("right_shift"));
     }
-    let arr_a = as_ndarray(py, x1)?;
-    let dt = dtype_name(&arr_a)?;
+    let arr_a0 = as_ndarray(py, x1)?;
+    let arr_b0 = as_ndarray(py, x2)?;
+    // numpy's shift type resolver (generate_umath.py:769) promotes BOTH
+    // operands to `result_type(x1, x2)` for the output dtype; the shift count
+    // is then read as an unsigned amount. Coerce the value operand to the
+    // promoted dtype rather than keeping operand-1's narrower dtype.
+    let dt = binary_result_dtype(py, &arr_a0, &arr_b0)?;
+    let arr_a = coerce_dtype(py, &arr_a0, dt.as_str())?;
     let np = py.import("numpy")?;
     let pair = np.call_method1("broadcast_arrays", (&arr_a, x2))?;
     let bcast: Vec<Bound<PyAny>> = pair.extract()?;
@@ -3477,7 +3497,37 @@ pub fn interp<'py>(
 
 bind_unary_float!(exp_fast, ferray_ufunc::exp_fast);
 bind_unary_float!(spacing, ferray_ufunc::spacing);
-bind_binary_float_promote!(fmod, ferray_ufunc::fmod, reject_complex = "fmod");
+
+/// `numpy.fmod(x1, x2)` — C `fmod`, the remainder with the SIGN OF THE
+/// DIVIDEND (`fmod(5,-3) == 2`, unlike `remainder`'s sign-of-divisor).
+///
+/// numpy registers `TD(ints, ...)` FIRST for `fmod` (generate_umath.py:446),
+/// so an all-integer operand pair KEEPS the integer dtype (no float
+/// promotion): `np.fmod(int64 [5,-5], int64 [3,3]) -> int64 [2,-2]`. Rust's
+/// `%` on signed integers truncates toward zero / takes the sign of the
+/// dividend — identical to C `fmod` — but ferray's float-only body upcast
+/// every integer pair to float64. The all-integer case is delegated to numpy
+/// (which owns the exact int result, the int-div-by-zero -> 0 + warning
+/// contract instead of a Rust panic, and the scalar-vs-array shape); the
+/// float / int+float / complex contracts are unchanged.
+#[pyfunction]
+pub fn fmod<'py>(
+    py: Python<'py>,
+    x1: &Bound<'py, PyAny>,
+    x2: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if binary_is_complex(py, x1, x2)? {
+        return Err(reject_complex_binary("fmod"));
+    }
+    if binary_both_integer(py, x1, x2)? {
+        // numpy keeps the promoted integer dtype (result_type) and returns 0
+        // for a zero divisor (with a RuntimeWarning) rather than panicking.
+        return py.import("numpy")?.call_method1("fmod", (x1, x2));
+    }
+    let scalar = all_scalar_inputs(py, &[x1, x2])?;
+    let out = binary_float_promote_body!(py, x1, x2, ferray_ufunc::fmod);
+    if scalar { scalarize(out) } else { Ok(out) }
+}
 bind_binary_float_promote!(
     nextafter,
     ferray_ufunc::nextafter,
@@ -3663,14 +3713,20 @@ pub fn bitwise_count<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bo
 
 /// `numpy.clip(a, a_min, a_max)` — limit values to `[a_min, a_max]`.
 ///
-/// NumPy defines `clip(a, lo, hi) == minimum(maximum(a, lo), hi)`
-/// (fromnumeric.py `clip`), where `a_min` / `a_max` are `array_like or
-/// None` — a `None` bound means "do not clip that side" (one-sided clip).
-/// Because it is built from `maximum` / `minimum`, integer arrays keep
-/// their integer dtype and array-valued bounds broadcast against `a`. The
-/// binding therefore delegates to the [`maximum`] / [`minimum`] bindings,
-/// which already carry the int loops, mixed-dtype promotion, and
-/// broadcasting — instead of the old scalar-`f64`, float-only path.
+/// `clip` (numpy/_core/fromnumeric.py:2208) preserves the INPUT array's
+/// dtype against Python-scalar bounds under NEP-50 (the array's dtype wins
+/// over a weak python int/float): `np.clip(int8 [1,5,9], 2, 7).dtype ==
+/// int8`, `float32 -> float32`. The result only promotes when a bound is
+/// itself an array of a wider dtype. The prior binding routed clip through
+/// the [`maximum`] / [`minimum`] bindings, whose `binary_result_dtype(
+/// result_type(a, scalar))` upcast a python-scalar bound to its default
+/// int64 / float64, so an int8 array clipped to int64 — wrong dtype.
+///
+/// numpy owns the exact NEP-50 weak-scalar clip dtype, plus the `None`
+/// (one-sided), array-valued, and 0-d/scalar bound contracts, so the
+/// binding delegates the whole op to `numpy.clip` on the ORIGINAL operands
+/// (the brief's "delegate when native clip can't express weak-scalar
+/// promotion"). A `None` bound is forwarded as Python `None`.
 #[pyfunction]
 #[pyo3(signature = (a, a_min, a_max))]
 pub fn clip<'py>(
@@ -3686,13 +3742,9 @@ pub fn clip<'py>(
             "One of max or min must be given",
         ));
     }
-    // maximum(a, a_min) clamps the lower bound; minimum(., a_max) the upper.
-    let lower = match lo {
-        Some(lo_v) => maximum(py, a, lo_v)?,
-        None => as_ndarray(py, a)?,
-    };
-    match hi {
-        Some(hi_v) => minimum(py, &lower, hi_v),
-        None => Ok(lower),
-    }
+    let none = py.None();
+    let lo_arg = lo.map_or_else(|| none.bind(py).clone(), |v| v.clone());
+    let hi_arg = hi.map_or_else(|| none.bind(py).clone(), |v| v.clone());
+    py.import("numpy")?
+        .call_method1("clip", (a, lo_arg, hi_arg))
 }
