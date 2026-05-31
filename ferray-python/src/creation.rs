@@ -1411,6 +1411,28 @@ pub fn full<'py>(
     full_impl(py, &shape_vec, fill_value, dt.as_str())
 }
 
+/// `true` if a `full`/`full_like` `fill_value` is a plain numeric scalar — a
+/// Python `int`/`float`/`bool`, a numpy 0-d/scalar number, or a `complex`. The
+/// real-dtype fast path extracts a single `f64`, and the complex arms read
+/// `.real`/`.imag`, so a value that is neither a real `f64` nor exposes scalar
+/// `.real`/`.imag` (i.e. a `list`/`tuple`/ndarray) is treated as array-like and
+/// delegated to numpy's broadcasting `copyto` (numeric.py:386).
+fn is_scalar_fill(fill_value: &Bound<'_, PyAny>) -> bool {
+    if fill_value.extract::<f64>().is_ok() {
+        return true;
+    }
+    // A Python/numpy complex scalar exposes scalar `.real`/`.imag` that both
+    // extract as `f64`; a list/ndarray's `.real`/`.imag` are arrays (or absent).
+    fill_value
+        .getattr("real")
+        .and_then(|v| v.extract::<f64>())
+        .is_ok()
+        && fill_value
+            .getattr("imag")
+            .and_then(|v| v.extract::<f64>())
+            .is_ok()
+}
+
 /// `true` if a `full`/`full_like` `fill_value` is a Python `str` or `bytes`
 /// (numpy infers a `<U{len}`/`<S{len}` dtype from it when no `dtype=` is given).
 fn fill_is_string(fill_value: &Bound<'_, PyAny>) -> bool {
@@ -1457,6 +1479,19 @@ fn full_impl<'py>(
         let np = py.import("numpy")?;
         let shape_tuple = pyo3::types::PyTuple::new(py, shape)?;
         return np.call_method1("full", (shape_tuple, fill_value, "float16"));
+    }
+    // Array-like fill: numpy builds the output then `multiarray.copyto(a,
+    // fill_value, casting='unsafe')` (numpy/_core/numeric.py:385-386), which
+    // *broadcasts* the fill into the shape — e.g. `np.full((2, 3), [1, 2, 3])`
+    // is `[[1,2,3],[1,2,3]]`. The scalar fast path below extracts a single
+    // `f64`, which fails on a list/array. When the fill is not a plain scalar,
+    // delegate the whole call to `numpy.full(shape, fill_value, dtype)` so numpy
+    // owns the broadcast + unsafe cast; the resolved `dtype` is forwarded
+    // verbatim so dtype inference still matches numpy.
+    if !is_scalar_fill(fill_value) {
+        let np = py.import("numpy")?;
+        let shape_tuple = pyo3::types::PyTuple::new(py, shape)?;
+        return np.call_method1("full", (shape_tuple, fill_value, dtype));
     }
     let fill_f: f64 = fill_value.extract()?;
     Ok(match_dtype_all!(dtype, T => {
@@ -1696,10 +1731,11 @@ pub fn frombuffer<'py>(
         };
         let needed = n_elements * elem;
         if buf.len() < needed {
-            return Err(PyTypeError::new_err(format!(
-                "frombuffer: buffer too short ({} bytes) for {} elements of {} bytes",
-                buf.len(), n_elements, elem,
-            )));
+            // numpy's `PyArray_FromBuffer` (ctors.c) raises ValueError, not
+            // TypeError, when the buffer is smaller than `count * itemsize`.
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "buffer is smaller than requested size",
+            ));
         }
         let dim = ferray_core::dimension::Ix1::new([n_elements]);
         let arr: ferray_core::array::aliases::Array1<T> =
@@ -1747,6 +1783,16 @@ pub fn fromiter<'py>(
             data.push(val);
         }
         let n = data.len();
+        // numpy's `PyArray_FromIter` treats `count` as a hard size, not an
+        // upper bound: if the iterator yields fewer than `count` items it
+        // raises `ValueError('iterator too short: ...')` rather than silently
+        // returning a shorter array. (`count == -1` is unbounded and keeps the
+        // full length; a `count` larger than the supply triggers this check.)
+        if count >= 0 && n < count as usize {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "iterator too short: Expected {count} but iterator had only {n} items."
+            )));
+        }
         let arr: Array1<T> = Array1::<T>::from_vec(Ix1::new([n]), data)
             .map_err(ferr_to_pyerr)?;
         arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
@@ -2019,6 +2065,21 @@ pub fn vander<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     use ferray_core::array::aliases::Array1;
     let arr = as_ndarray(py, x)?;
+    // Empty 1-D input: numpy `vander` returns an empty `(len(x), N)` matrix
+    // (`N` defaults to `len(x)`, so `np.vander([])` is `(0, 0)` float64) rather
+    // than raising — `v = empty((len(x), N), ...)` in
+    // `numpy/lib/_twodim_base_impl.py` happily builds a zero-row matrix.
+    // ferray-core's `vander` rejects an empty input, so delegate the empty case
+    // straight to numpy (it owns the `(0, N)` shape + float64 dtype).
+    if arr.getattr("size")?.extract::<usize>()? == 0 {
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(nn) = n {
+            kwargs.set_item("N", nn)?;
+        }
+        kwargs.set_item("increasing", increasing)?;
+        return np.call_method("vander", (x,), Some(&kwargs));
+    }
     let dt = dtype_name(&arr)?;
     // Complex Vandermonde: `ferray_core::creation::vander` only needs
     // `T: Element + Mul + Copy`, which `Complex<T>` satisfies, so the complex
