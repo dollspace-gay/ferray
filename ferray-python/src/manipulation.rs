@@ -601,8 +601,8 @@ pub fn moveaxis<'py>(
 pub fn rollaxis<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    axis: usize,
-    start: usize,
+    axis: isize,
+    start: isize,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     if crate::datetime::is_time_array(&arr)? {
@@ -615,9 +615,21 @@ pub fn rollaxis<'py>(
         return crate::conv::f16_delegate(py, "rollaxis", (&arr, axis, start), None);
     }
     let dt = dtype_name(&arr)?;
+    let ndim = obj_ndim(&arr)?;
+    // numpy/_core/numeric.py rollaxis: `axis` is normalized into [0, ndim) via
+    // normalize_axis_index; `start` accepts negatives (start += ndim) and is
+    // valid in [0, ndim] (rollaxis uniquely allows start == ndim — a roll to the
+    // very end). A bare usize binding raised OverflowError on either negative.
+    let norm_axis = normalize_axis(py, axis, ndim)?;
+    let n = ndim as isize;
+    let adj_start = if start < 0 { start + n } else { start };
+    if adj_start < 0 || adj_start > n {
+        return Err(crate::conv::axis_error(py, start, ndim + 1));
+    }
+    let norm_start = adj_start as usize;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
-        let r: ArrayD<T> = fm::rollaxis(&fa, axis, start).map_err(ferr_to_pyerr)?;
+        let r: ArrayD<T> = fm::rollaxis(&fa, norm_axis, norm_start).map_err(ferr_to_pyerr)?;
         T::emit_dyn(py, r)?
     }))
 }
@@ -1038,6 +1050,31 @@ fn common_dtype<'py>(py: Python<'py>, list: &Bound<'py, PyList>) -> PyResult<Str
     dt.getattr("name")?.extract()
 }
 
+/// Compute the common (promoted) NumPy dtype name across a tuple of
+/// array-likes via `result_type` (NEP-50), the tuple analogue of
+/// [`common_dtype`] used by the `*args` ops `r_` / `c_`.
+fn common_dtype_tuple<'py>(
+    py: Python<'py>,
+    arrays: &Bound<'py, pyo3::types::PyTuple>,
+) -> PyResult<String> {
+    let np = py.import("numpy")?;
+    let items: Vec<Bound<'py, PyAny>> = arrays
+        .iter()
+        .map(|it| as_ndarray(py, &it))
+        .collect::<PyResult<Vec<_>>>()?;
+    let args = pyo3::types::PyTuple::new(py, &items)?;
+    let dt = np.getattr("result_type")?.call1(args)?;
+    dt.getattr("name")?.extract()
+}
+
+/// `true` if a promoted dtype name is a complex type (`complex64`/
+/// `complex128`), which the real-only `match_dtype_all!` macro cannot
+/// represent (so the op must delegate to numpy to preserve the imaginary
+/// part — R-CODE-4).
+fn is_complex_dtype(name: &str) -> bool {
+    name.starts_with("complex")
+}
+
 /// `numpy.concatenate(arrays, axis=0)` — join along an existing axis.
 ///
 /// Inputs are promoted to a common dtype (numpy/_core/multiarray.py:198
@@ -1161,8 +1198,10 @@ pub fn vstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     if crate::conv::is_float16_dtype(dtype_name(&as_ndarray(py, &list.get_item(0)?)?)?.as_str()) {
         return crate::conv::f16_delegate(py, "vstack", (arrays,), None);
     }
-    let first = as_ndarray(py, &list.get_item(0)?)?;
-    let dt = dtype_name(&first)?;
+    // numpy/_core/shape_base.py vstack promotes all inputs to result_type
+    // (NEP-50), NOT the first array's dtype. Use the shared common_dtype helper
+    // (matching concatenate/stack) so wider later inputs are not truncated.
+    let dt = common_dtype(py, list)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let typed: Vec<ArrayD<T>> = collect_typed::<T>(py, arrays, dt.as_str())?;
         let r: ArrayD<T> = fm::vstack(&typed).map_err(ferr_to_pyerr)?;
@@ -1186,8 +1225,9 @@ pub fn hstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     if crate::conv::is_float16_dtype(dtype_name(&as_ndarray(py, &list.get_item(0)?)?)?.as_str()) {
         return crate::conv::f16_delegate(py, "hstack", (arrays,), None);
     }
-    let first = as_ndarray(py, &list.get_item(0)?)?;
-    let dt = dtype_name(&first)?;
+    // numpy/_core/shape_base.py hstack promotes all inputs to result_type
+    // (NEP-50), NOT the first array's dtype (matching concatenate/stack).
+    let dt = common_dtype(py, list)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let typed: Vec<ArrayD<T>> = collect_typed::<T>(py, arrays, dt.as_str())?;
         let r: ArrayD<T> = fm::hstack(&typed).map_err(ferr_to_pyerr)?;
@@ -1862,8 +1902,9 @@ pub fn column_stack<'py>(
     if crate::conv::is_float16_dtype(dtype_name(&as_ndarray(py, &list.get_item(0)?)?)?.as_str()) {
         return crate::conv::f16_delegate(py, "column_stack", (arrays,), None);
     }
-    let first = as_ndarray(py, &list.get_item(0)?)?;
-    let dt = dtype_name(&first)?;
+    // numpy/_core/shape_base.py column_stack promotes all inputs to result_type
+    // (NEP-50), NOT the first array's dtype (matching concatenate/stack).
+    let dt = common_dtype(py, list)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let typed: Vec<ArrayD<T>> = collect_typed::<T>(py, arrays, dt.as_str())?;
         let r: ArrayD<T> = fm::column_stack(&typed).map_err(ferr_to_pyerr)?;
@@ -1906,8 +1947,18 @@ pub fn r_<'py>(
     if arrays.is_empty() {
         return Err(PyValueError::new_err("r_: need at least one array"));
     }
-    let first = as_ndarray(py, &arrays.get_item(0)?)?;
-    let dt = dtype_name(&first)?;
+    // numpy/lib/_index_tricks promotes via result_type (NEP-50): r_[int8, int64]
+    // -> int64, r_[int64, complex128] -> complex128 (no imaginary discard). The
+    // real-only `match_dtype_all!` below cannot represent complex, so when the
+    // promoted dtype is complex, delegate the whole op to numpy's r_ (which owns
+    // the concatenate + promotion and preserves the imaginary part).
+    let dt = common_dtype_tuple(py, arrays)?;
+    if is_complex_dtype(&dt) {
+        // `np.r_` is indexed via `__getitem__` with the (a, b, ...) tuple key:
+        // `np.r_[a, b]` == `np.r_.__getitem__((a, b))`. Forward the *args tuple.
+        let np = py.import("numpy")?;
+        return np.getattr("r_")?.get_item(arrays);
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let mut owned: Vec<ferray_core::array::aliases::Array1<T>> =
             Vec::with_capacity(arrays.len());
@@ -1935,8 +1986,16 @@ pub fn c_<'py>(
     if arrays.is_empty() {
         return Err(PyValueError::new_err("c_: need at least one array"));
     }
-    let first = as_ndarray(py, &arrays.get_item(0)?)?;
-    let dt = dtype_name(&first)?;
+    // numpy/lib/_index_tricks promotes via result_type (NEP-50): c_[int8, int64]
+    // -> int64. As with r_, a complex promoted dtype can't ride the real-only
+    // `match_dtype_all!`, so delegate to numpy's c_ (preserving the imaginary
+    // part).
+    let dt = common_dtype_tuple(py, arrays)?;
+    if is_complex_dtype(&dt) {
+        // `np.c_[a, b]` == `np.c_.__getitem__((a, b))`; forward the *args tuple.
+        let np = py.import("numpy")?;
+        return np.getattr("c_")?.get_item(arrays);
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let mut owned: Vec<ferray_core::array::aliases::Array1<T>> =
             Vec::with_capacity(arrays.len());
@@ -1967,8 +2026,9 @@ pub fn dstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     if crate::conv::is_float16_dtype(dtype_name(&as_ndarray(py, &list.get_item(0)?)?)?.as_str()) {
         return crate::conv::f16_delegate(py, "dstack", (arrays,), None);
     }
-    let first = as_ndarray(py, &list.get_item(0)?)?;
-    let dt = dtype_name(&first)?;
+    // numpy/_core/shape_base.py dstack promotes all inputs to result_type
+    // (NEP-50), NOT the first array's dtype (matching concatenate/stack).
+    let dt = common_dtype(py, list)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let typed: Vec<ArrayD<T>> = collect_typed::<T>(py, arrays, dt.as_str())?;
         let r: ArrayD<T> = fm::dstack(&typed).map_err(ferr_to_pyerr)?;
