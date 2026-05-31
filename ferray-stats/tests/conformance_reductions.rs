@@ -187,7 +187,7 @@ fn fixture_var_inline_drives_axis_and_ddof() {
 
     let v_ax0 = var(&a, Some(0), 0).unwrap();
     let v_ax0_data: Vec<f64> = v_ax0.iter().copied().collect();
-    let expected_ax0 = vec![2.25, 2.25, 2.25];
+    let expected_ax0 = [2.25, 2.25, 2.25];
     for (i, (g, e)) in v_ax0_data.iter().zip(expected_ax0.iter()).enumerate() {
         close_rel(
             *g,
