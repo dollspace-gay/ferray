@@ -37,8 +37,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyList};
 
 use crate::conv::{
-    DynMarshal, as_ndarray, axis_error, dtype_name, extract_axis_tuple, ferr_to_pyerr,
-    normalize_axis, normalize_axis_tuple,
+    DynMarshal, as_ndarray, dtype_name, extract_axis_tuple, ferr_to_pyerr, normalize_axis,
+    normalize_axis_tuple,
 };
 use crate::{match_dtype_all, match_dtype_all_complex};
 
@@ -1480,7 +1480,7 @@ pub fn delete<'py>(
     let ax = normalize_axis(py, axis, ndim)?;
     let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
     let axis_len = shape[ax];
-    let indices = resolve_delete_obj(py, obj, axis_len)?;
+    let indices = resolve_delete_obj(py, obj, axis_len, ax)?;
     Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fme::delete(&fa, &indices, ax).map_err(ferr_to_pyerr)?;
@@ -1495,6 +1495,7 @@ fn resolve_delete_obj(
     py: Python<'_>,
     obj: &Bound<'_, PyAny>,
     axis_len: usize,
+    axis: usize,
 ) -> PyResult<Vec<usize>> {
     // Python `slice` → slice.indices(axis_len) gives (start, stop, step).
     if let Ok(sl) = obj.cast::<pyo3::types::PySlice>() {
@@ -1533,6 +1534,19 @@ fn resolve_delete_obj(
             .filter_map(|(i, &b)| if b { Some(i) } else { None })
             .collect());
     }
+    // Non-integer, non-boolean obj (e.g. a float scalar/array) is not a valid
+    // index. numpy raises a plain `IndexError` from its fancy-index path
+    // (`keep[obj,] = False`): "arrays used as indices must be of integer (or
+    // boolean) type" (numpy/lib/_function_base_impl.py:5221 delete). Sniff the
+    // coerced dtype.kind: anything outside {signed int 'i', unsigned 'u',
+    // bool 'b'} is rejected here, before the int extraction below would raise a
+    // (non-IndexError) TypeError.
+    let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+    if !matches!(kind.as_str(), "i" | "u" | "b") {
+        return Err(pyo3::exceptions::PyIndexError::new_err(
+            "arrays used as indices must be of integer (or boolean) type",
+        ));
+    }
     // Int or list of ints (negatives count from the end).
     let raw: Vec<isize> = if let Ok(n) = obj.extract::<isize>() {
         vec![n]
@@ -1543,7 +1557,14 @@ fn resolve_delete_obj(
         .map(|&i| {
             let norm = if i < 0 { i + axis_len as isize } else { i };
             if norm < 0 || norm >= axis_len as isize {
-                Err(axis_error(py, i, axis_len))
+                // numpy/lib/_function_base_impl.py:5353 raises a *plain*
+                // `IndexError` formatted with the ORIGINAL (pre-normalization)
+                // index value and the axis number, e.g.
+                // "index 20 is out of bounds for axis 0 with size 10" (and
+                // "index -20 ..." for a negative oob). This is NOT an AxisError.
+                Err(pyo3::exceptions::PyIndexError::new_err(format!(
+                    "index {i} is out of bounds for axis {axis} with size {axis_len}"
+                )))
             } else {
                 Ok(norm as usize)
             }
