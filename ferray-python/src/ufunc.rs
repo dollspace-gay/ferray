@@ -3034,6 +3034,23 @@ pub fn trapezoid<'py>(
         let np = py.import("numpy")?;
         return np.call_method("trapezoid", (y,), Some(&kwargs));
     }
+    // When `x` is provided, the result dtype is `result_type(y, x, float)` per
+    // NEP-50: numpy computes `d = diff(x)` (keeping x's dtype,
+    // `numpy/lib/_function_base_impl.py:5035`) then `d * (y[1:]+y[:-1]) / 2.0`
+    // (`:5048`), promoting across BOTH operands. The native real path below
+    // derives the compute dtype from `y` alone and coerces `x` DOWN to it
+    // (lossy, R-CODE-4). Delegate the real `x`-provided path to numpy.trapezoid,
+    // which owns the exact NEP-50 promotion and returns the right numpy scalar.
+    // (The `dx`-only and no-`x` real paths keep the native kernel, whose
+    // y-derived compute dtype is already correct.)
+    if x.is_some() {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(xa) = x {
+            kwargs.set_item("x", xa)?;
+        }
+        let np = py.import("numpy")?;
+        return np.call_method("trapezoid", (y,), Some(&kwargs));
+    }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
     } else {
