@@ -2241,39 +2241,62 @@ pub fn float_power<'py>(
 // Comparisons (broadcasting → bool)
 // ---------------------------------------------------------------------------
 
-/// `true` if BOTH operands are fixed-width string operands — i.e. each, viewed
-/// as a numpy array, has `dtype.kind ∈ {'U','S'}`. This covers string array vs
-/// string array, string array vs string scalar (a Python `str`/`bytes` —
-/// `np.asarray('a').dtype.kind == 'U'`, `np.asarray(b'a').dtype.kind == 'S'`,
-/// live numpy 2.4.5), and different widths (`<U2` vs `<U3`, both `'U'`).
+/// `true` if EITHER comparison operand, viewed as a numpy array, is a *non-real
+/// flexible* dtype — kind ∈ {`'U'`,`'S'`,`'V'`,`'O'`} (fixed-width string,
+/// structured/void, or object; #964's [`crate::manipulation::is_flexible_array`]).
+/// These kinds have no ferray `Element`/`DynArray` variant, so the real-only
+/// `comparison_body!` / `complex_*_dispatch!` reject them with `unsupported dtype
+/// for numeric op`. numpy, by contrast, defines comparison contracts for each:
 ///
-/// numpy's comparison ufuncs define a string loop over `<U`/`<S` operands
-/// (codepoint-lexicographic, broadcasting, bool output), but ferray's real-only
-/// `comparison_body!` / `complex_*_dispatch!` reject the string kinds with
-/// `unsupported dtype for numeric op`. A mixed `'U'`-vs-`'S'` pair still gates
-/// `true` here so the delegate runs and numpy raises its own `UFuncTypeError`
-/// (`ufunc 'less' did not contain a loop with signature ... StrDType, BytesDType`,
-/// live) — matching numpy's own behavior rather than ferray's `unsupported dtype`
-/// (REQ-3, `.design/ferray-core-string.md`). Mirrors the datetime
-/// [`crate::datetime::is_time_compare`] seam, sniffing `.kind` not the
-/// width-encoding `.name` (`np.dtype('U2').name == 'str64'`).
-fn is_string_compare(py: Python<'_>, a: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<bool> {
+/// - **object** (`'O'`): COMPUTES element-wise via the Python `==`/`<`/… on the
+///   stored objects → a `bool` array (`np.equal(obj,obj2) == [T,F,T]`,
+///   `np.less(obj,obj2)` likewise; verified live numpy 2.4.5).
+/// - **string** (`'U'`/`'S'`): codepoint-lexicographic compare → `bool` (the
+///   #961 contract, formerly gated by a stricter both-operands string check);
+///   a string-vs-non-string pair raises numpy's own
+///   `UFuncTypeError` (a `TypeError` subclass) — which is *more* numpy-faithful
+///   than ferray's prior `unsupported dtype` text.
+/// - **structured/void** (`'V'`): numpy registers NO comparison loop —
+///   `np.equal(struct,struct)` (and ordering) raise `_UFuncNoLoopError` (a
+///   `TypeError` subclass), live.
+///
+/// Gating `true` when EITHER operand is flexible and DELEGATING the whole op to
+/// `np.<op>(x1, x2)` on the ORIGINAL operands lets numpy own each of these: it
+/// computes where a loop exists (object/string → `bool`) and raises its own exact
+/// exception where none does (structured → `TypeError` subclass). Either-operand
+/// (not both) matches numpy's promotion: `object`-vs-`int`/`str` still takes the
+/// object loop (`np.equal(obj, int_arr) == [T,F,T]`, live). Keys off the stable
+/// `dtype.kind`, NOT `dtype.name` (R-CHAR-3-derived contract). The
+/// real/numeric/complex/datetime/float16 compare paths are untouched (their kinds
+/// are never in {U,S,V,O}).
+fn is_flexible_compare(
+    py: Python<'_>,
+    a: &Bound<'_, PyAny>,
+    b: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
     let np = py.import("numpy")?;
     let aa = np.call_method1("asarray", (a,))?;
     let ba = np.call_method1("asarray", (b,))?;
-    Ok(crate::manipulation::is_string_array(&aa)? && crate::manipulation::is_string_array(&ba)?)
+    Ok(
+        crate::manipulation::is_flexible_array(&aa)?
+            || crate::manipulation::is_flexible_array(&ba)?,
+    )
 }
 
-/// Element-wise comparison of two fixed-width string (`<U`/`<S`) operands by
-/// delegating to numpy's own `np.<op>(x1, x2)` on the ORIGINAL operands. numpy
-/// owns the codepoint-lexicographic compare, the broadcasting (string array vs
-/// string scalar), the width-independence (`<U2` vs `<U3`), and the bool output;
-/// the result rides the boundary as a numpy bool ndarray with no transport
-/// (strings never enter the Rust library — no `Element`, no `DynArray` variant,
-/// R-CODE-4). The caller gates on [`is_string_compare`] first. `op` is the numpy
-/// ufunc name (`less`/`greater`/`less_equal`/`greater_equal`/`equal`/
-/// `not_equal`). Mirrors [`crate::datetime::compare_time`] minus the int64-view
-/// round-trip (REQ-3, `.design/ferray-core-string.md`).
+/// Element-wise comparison of two flexible-kind (string `<U`/`<S`, object, or
+/// structured/void) operands by delegating to numpy's own `np.<op>(x1, x2)` on
+/// the ORIGINAL operands. numpy owns the per-kind contract: the
+/// codepoint-lexicographic string compare with broadcasting and
+/// width-independence (`<U2` vs `<U3`), the object Python-`==`/`<` element-wise
+/// compare, and the structured/void NO-loop raise. Where a loop exists the result
+/// rides the boundary as a numpy `bool` ndarray with no transport (the flexible
+/// kinds never enter the Rust library — no `Element`, no `DynArray` variant,
+/// R-CODE-4); where none exists numpy's own exception (`UFuncTypeError` /
+/// `_UFuncNoLoopError`, both `TypeError` subclasses) propagates. The caller gates
+/// on [`is_flexible_compare`] first. `op` is the numpy ufunc name
+/// (`less`/`greater`/`less_equal`/`greater_equal`/`equal`/`not_equal`). Mirrors
+/// [`crate::datetime::compare_time`] minus the int64-view round-trip (REQ-3,
+/// `.design/ferray-core-string.md`; #967 object/structured extension).
 fn compare_string<'py>(
     py: Python<'py>,
     op: &str,
@@ -2302,13 +2325,18 @@ macro_rules! bind_comparison {
                 let out = crate::datetime::compare_time(py, x1, x2, $tcmp)?;
                 return if scalar { scalarize(out) } else { Ok(out) };
             }
-            // string `<U`/`<S` (REQ-3, #961): numpy compares strings
-            // codepoint-lexicographically → bool (broadcasting, width-independent),
-            // but the real-only body below rejects the string kinds. Detect both
-            // operands as string-kind and delegate `np.<op>` on the ORIGINAL
-            // operands. Mixed `'U'`-vs-`'S'` delegates too, so numpy raises its own
-            // UFuncTypeError (matching numpy). Mirrors the datetime arm above.
-            if is_string_compare(py, x1, x2)? {
+            // flexible kinds U/S/V/O (REQ-3, #961 string + #967 object/structured):
+            // numpy defines a comparison contract for each flexible kind that the
+            // real-only body below cannot express — string `<U`/`<S` compares
+            // codepoint-lexicographically → bool, OBJECT computes element-wise via
+            // Python `==` → bool, and structured/void registers NO loop → raises.
+            // Detect either operand as flexible and delegate `np.<op>` on the
+            // ORIGINAL operands: numpy computes where a loop exists (object/string →
+            // bool) and raises its own exact exception where none does (structured →
+            // TypeError subclass; string-vs-non-string → UFuncTypeError), matching
+            // numpy rather than ferray's `unsupported dtype` text. Mirrors the
+            // datetime arm above.
+            if is_flexible_compare(py, x1, x2)? {
                 let out = compare_string(py, stringify!($name), x1, x2)?;
                 return if scalar { scalarize(out) } else { Ok(out) };
             }
@@ -2349,13 +2377,15 @@ macro_rules! bind_comparison {
                 let out = crate::datetime::compare_time(py, x1, x2, $tcmp)?;
                 return if scalar { scalarize(out) } else { Ok(out) };
             }
-            // string `<U`/`<S` (REQ-3, #961): numpy orders strings
-            // codepoint-lexicographically → bool (broadcasting, width-independent),
-            // but the real-only body below rejects the string kinds. Detect both
-            // operands as string-kind and delegate `np.<op>` on the ORIGINAL
-            // operands (mixed `'U'`-vs-`'S'` delegates too → numpy raises its own
-            // UFuncTypeError). Mirrors the datetime arm above.
-            if is_string_compare(py, x1, x2)? {
+            // flexible kinds U/S/V/O (REQ-3, #961 string + #967 object/structured):
+            // numpy orders strings codepoint-lexicographically → bool and orders
+            // OBJECT element-wise via Python `<` → bool, but registers NO ordering
+            // loop for structured/void → raises. Detect either operand as flexible
+            // and delegate `np.<op>` on the ORIGINAL operands: numpy computes where a
+            // loop exists (object/string → bool) and raises its own exact exception
+            // where none does (structured → TypeError subclass; string-vs-non-string
+            // → UFuncTypeError), matching numpy. Mirrors the datetime arm above.
+            if is_flexible_compare(py, x1, x2)? {
                 let out = compare_string(py, stringify!($name), x1, x2)?;
                 return if scalar { scalarize(out) } else { Ok(out) };
             }
