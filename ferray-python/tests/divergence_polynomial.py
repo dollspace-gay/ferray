@@ -265,3 +265,303 @@ def test_polyadd_float16_preserves_dtype():
     np_dtype = np.polyadd(a, b).dtype          # oracle: float16
     fr_dtype = np.asarray(fr.polyadd(a, b)).dtype
     assert fr_dtype == np_dtype
+
+
+# ===========================================================================
+# CLASS-API adversarial sweep #2 (ACToR critic, 2026-05-31). The first batch
+# (tests 1-16 above) was fixed by the generator and is now GREEN. This batch
+# targets the class methods/dunders the audit task enumerates that the macro
+# `poly_class!` (ferray-python/src/polynomial.rs:403-674) does NOT implement,
+# and the domain/window-Jacobian scaling that deriv/integ/roots omit.
+#
+# Every expected value comes from a LIVE numpy 2.4.x call (the oracle) or a
+# numpy `file:line` symbolic contract (goal.md R-CHAR-3). Cites are into
+# /home/doll/numpy-ref/numpy/polynomial/_polybase.py.
+# ===========================================================================
+
+CLASSES = [
+    (fr.polynomial.Polynomial, np.polynomial.Polynomial),
+    (fr.polynomial.Chebyshev, np.polynomial.Chebyshev),
+    (fr.polynomial.Hermite, np.polynomial.Hermite),
+    (fr.polynomial.HermiteE, np.polynomial.HermiteE),
+    (fr.polynomial.Laguerre, np.polynomial.Laguerre),
+    (fr.polynomial.Legendre, np.polynomial.Legendre),
+]
+
+
+# ---------------------------------------------------------------------------
+# 17. roots() must map window-space roots back to DOMAIN space.
+# ---------------------------------------------------------------------------
+def test_roots_mapped_back_through_domain():
+    """numpy/polynomial/_polybase.py:900-913 `def roots(self):` ends with
+    `return pu.mapdomain(roots, self.window, self.domain)` — the companion
+    eigenvalues live in WINDOW space and are mapped back to DOMAIN space.
+    For Polynomial([1,0,-1], domain=[0,4]) (x^2-1 in window coords -> roots
+    +-1 in window [-1,1]) numpy maps those to [0., 4.] in the domain; ferray
+    returns the unmapped [-1., 1.].
+    """
+    fr_r = np.sort(np.asarray(fr.polynomial.Polynomial(
+        [1.0, 0.0, -1.0], domain=[0.0, 4.0]).roots()).real)
+    np_r = np.sort(np.asarray(np.polynomial.Polynomial(
+        [1.0, 0.0, -1.0], domain=[0.0, 4.0]).roots()).real)
+    np.testing.assert_allclose(fr_r, np_r)  # numpy [0,4]; ferray [-1,1]
+
+
+# ---------------------------------------------------------------------------
+# 18. deriv() must scale by the domain->window Jacobian (mapparms scl).
+# ---------------------------------------------------------------------------
+def test_deriv_applies_domain_jacobian():
+    """numpy/polynomial/_polybase.py:878-901 `def deriv(self, m=1):` does
+    `off, scl = self.mapparms(); coef = self._der(self.coef, m, scl)`. With a
+    non-default domain the derivative is scaled by
+    scl = (window[1]-window[0])/(domain[1]-domain[0]). For
+    Polynomial([1,2,3,4], domain=[0,10]) numpy gives deriv coef
+    [0.4, 1.2, 2.4]; ferray omits the scl factor and gives [2., 6., 12.].
+    """
+    fp = fr.polynomial.Polynomial([1.0, 2.0, 3.0, 4.0], domain=[0.0, 10.0])
+    npp = np.polynomial.Polynomial([1.0, 2.0, 3.0, 4.0], domain=[0.0, 10.0])
+    np.testing.assert_allclose(
+        np.asarray(fp.deriv().coef), np.asarray(npp.deriv().coef))
+
+
+# ---------------------------------------------------------------------------
+# 19. integ() must scale by the domain->window Jacobian.
+# ---------------------------------------------------------------------------
+def test_integ_applies_domain_jacobian():
+    """numpy/polynomial/_polybase.py:845-877 `def integ(self, m=1, k=[],
+    lbnd=None):` does `off, scl = self.mapparms()` and integrates with that
+    scl. For Polynomial([1,2,3], domain=[0,10]) numpy integ coef is
+    [0., 5., 5., 5.]; ferray omits scl and gives [0., 1., 1., 1.].
+    """
+    fp = fr.polynomial.Polynomial([1.0, 2.0, 3.0], domain=[0.0, 10.0])
+    npp = np.polynomial.Polynomial([1.0, 2.0, 3.0], domain=[0.0, 10.0])
+    np.testing.assert_allclose(
+        np.asarray(fp.integ().coef), np.asarray(npp.integ().coef))
+
+
+# ---------------------------------------------------------------------------
+# 20. integ() must accept the `lbnd` keyword argument.
+# ---------------------------------------------------------------------------
+def test_integ_accepts_lbnd_kwarg():
+    """numpy/polynomial/_polybase.py:845 `def integ(self, m=1, k=[],
+    lbnd=None):` — `lbnd` sets the lower integration bound so the constant of
+    integration makes the antiderivative vanish at `lbnd`. ferray's
+    poly_class!::integ signature is `(m = 1, k = vec![])` only, so the kwarg
+    raises TypeError. numpy integ(1, k=[5], lbnd=2) on [1,2,3] gives
+    [-9., 1., 1., 1.].
+    """
+    npp = np.polynomial.Polynomial([1.0, 2.0, 3.0])
+    exp = np.asarray(npp.integ(1, k=[5.0], lbnd=2.0).coef)
+    fp = fr.polynomial.Polynomial([1.0, 2.0, 3.0])
+    got = np.asarray(fp.integ(1, k=[5.0], lbnd=2.0).coef)  # ferray: TypeError
+    np.testing.assert_allclose(got, exp)
+
+
+# ---------------------------------------------------------------------------
+# 21. __eq__: two equal series compare equal.
+# ---------------------------------------------------------------------------
+def test_eq_equal_series_are_equal():
+    """numpy/polynomial/_polybase.py:643-651 `def __eq__(self, other):`
+    compares class, domain, window, coef.shape, coef values, and symbol.
+    Two Polynomial([1,2,3]) instances are equal. ferray's poly_class! defines
+    no `__eq__`, so it falls back to object identity and returns False.
+    """
+    np_eq = (np.polynomial.Polynomial([1.0, 2.0, 3.0])
+             == np.polynomial.Polynomial([1.0, 2.0, 3.0]))
+    fr_eq = (fr.polynomial.Polynomial([1.0, 2.0, 3.0])
+             == fr.polynomial.Polynomial([1.0, 2.0, 3.0]))
+    assert fr_eq == np_eq  # numpy True; ferray False
+
+
+# ---------------------------------------------------------------------------
+# 22. __neg__: unary negation of a series.
+# ---------------------------------------------------------------------------
+def test_neg_negates_coefficients():
+    """numpy/polynomial/_polybase.py:522 `def __neg__(self):` returns a series
+    with `-self.coef`. ferray's poly_class! defines no `__neg__`, so `-p`
+    raises TypeError (bad operand type for unary -).
+    """
+    exp = np.asarray((-np.polynomial.Polynomial([1.0, 2.0, 3.0])).coef)
+    got = np.asarray((-fr.polynomial.Polynomial([1.0, 2.0, 3.0])).coef)
+    np.testing.assert_allclose(got, exp)
+
+
+# ---------------------------------------------------------------------------
+# 23. scalar __add__: p + scalar broadcasts onto the constant term.
+# ---------------------------------------------------------------------------
+def test_scalar_add_supported():
+    """numpy/polynomial/_polybase.py:530-536 `def __add__(self, other):` runs
+    `othercoef = self._get_coefficients(other)`, which wraps a bare scalar as
+    a constant series. numpy: Polynomial([1,2,3]) + 1 -> coef [2,2,3]. ferray
+    only accepts another instance (poly_class!::__add__ takes `other: &Self`),
+    so `p + 1` raises TypeError.
+    """
+    exp = np.asarray((np.polynomial.Polynomial([1.0, 2.0, 3.0]) + 1).coef)
+    got = np.asarray((fr.polynomial.Polynomial([1.0, 2.0, 3.0]) + 1).coef)
+    np.testing.assert_allclose(got, exp)
+
+
+# ---------------------------------------------------------------------------
+# 24. scalar __mul__: p * scalar scales every coefficient.
+# ---------------------------------------------------------------------------
+def test_scalar_mul_supported():
+    """numpy/polynomial/_polybase.py:546-552 `def __mul__(self, other):`.
+    numpy: Polynomial([1,2,3]) * 2 -> coef [2,4,6]. ferray's __mul__ takes
+    `other: &Self` only -> TypeError on a scalar.
+    """
+    exp = np.asarray((np.polynomial.Polynomial([1.0, 2.0, 3.0]) * 2).coef)
+    got = np.asarray((fr.polynomial.Polynomial([1.0, 2.0, 3.0]) * 2).coef)
+    np.testing.assert_allclose(got, exp)
+
+
+# ---------------------------------------------------------------------------
+# 25. __floordiv__ (//) and __mod__ (%) dunders.
+# ---------------------------------------------------------------------------
+def test_floordiv_supported():
+    """numpy/polynomial/_polybase.py:565 `def __floordiv__(self, other):` ->
+    the quotient of polynomial division. numpy: (x^2-1)//(x-1) -> coef [1,1].
+    ferray's poly_class! defines __divmod__ but no __floordiv__, so `a // b`
+    raises TypeError.
+    """
+    a = fr.polynomial.Polynomial([-1.0, 0.0, 1.0])
+    b = fr.polynomial.Polynomial([-1.0, 1.0])
+    na = np.polynomial.Polynomial([-1.0, 0.0, 1.0])
+    nb = np.polynomial.Polynomial([-1.0, 1.0])
+    exp = np.asarray((na // nb).coef)
+    got = np.asarray((a // b).coef)  # ferray: TypeError
+    np.testing.assert_allclose(got, exp)
+
+
+def test_mod_supported():
+    """numpy/polynomial/_polybase.py:571 `def __mod__(self, other):` -> the
+    remainder of polynomial division. numpy: (x^2-1) % (x-1) -> coef [0].
+    ferray defines no __mod__ -> TypeError.
+    """
+    a = fr.polynomial.Polynomial([-1.0, 0.0, 1.0])
+    b = fr.polynomial.Polynomial([-1.0, 1.0])
+    na = np.polynomial.Polynomial([-1.0, 0.0, 1.0])
+    nb = np.polynomial.Polynomial([-1.0, 1.0])
+    exp = np.asarray((na % nb).coef)
+    got = np.asarray((a % b).coef)  # ferray: TypeError
+    np.testing.assert_allclose(got, exp)
+
+
+# ---------------------------------------------------------------------------
+# 26. convert(kind=...) — cross-basis conversion preserving the value.
+# ---------------------------------------------------------------------------
+def test_convert_kind_method():
+    """numpy/polynomial/_polybase.py:779 `def convert(self, domain=None,
+    kind=None, window=None):` returns an equivalent series in another basis.
+    numpy: Chebyshev([1,2,3]).convert(kind=Polynomial).coef -> [-2., 2., 6.].
+    ferray's poly_class! exposes no `convert` method (only the raw
+    `convert_to_power` returning a bare coef array).
+    """
+    exp = np.asarray(np.polynomial.Chebyshev([1.0, 2.0, 3.0])
+                     .convert(kind=np.polynomial.Polynomial).coef)
+    got = np.asarray(fr.polynomial.Chebyshev([1.0, 2.0, 3.0])
+                     .convert(kind=fr.polynomial.Polynomial).coef)
+    np.testing.assert_allclose(got, exp)
+
+
+# ---------------------------------------------------------------------------
+# 27. fromroots classmethod.
+# ---------------------------------------------------------------------------
+def test_fromroots_classmethod():
+    """numpy/polynomial/_polybase.py:1037 `def fromroots(cls, roots,
+    domain=[], window=None, symbol='x'):` builds the monic series with the
+    given roots. numpy: Polynomial.fromroots([1,2,3]).coef ->
+    [-6., 11., -6., 1.]. ferray's poly_class! exposes no `fromroots`.
+    """
+    exp = np.asarray(np.polynomial.Polynomial.fromroots([1.0, 2.0, 3.0]).coef)
+    got = np.asarray(fr.polynomial.Polynomial.fromroots([1.0, 2.0, 3.0]).coef)
+    np.testing.assert_allclose(got, exp)
+
+
+# ---------------------------------------------------------------------------
+# 28. basis classmethod.
+# ---------------------------------------------------------------------------
+def test_basis_classmethod():
+    """numpy/polynomial/_polybase.py:1115 `def basis(cls, deg, domain=None,
+    window=None, symbol='x'):` returns the degree-`deg` basis series. numpy:
+    Polynomial.basis(3).coef -> [0., 0., 0., 1.]. ferray exposes no `basis`.
+    """
+    exp = np.asarray(np.polynomial.Polynomial.basis(3).coef)
+    got = np.asarray(fr.polynomial.Polynomial.basis(3).coef)
+    np.testing.assert_allclose(got, exp)
+
+
+# ---------------------------------------------------------------------------
+# 29. identity classmethod.
+# ---------------------------------------------------------------------------
+def test_identity_classmethod():
+    """numpy/polynomial/_polybase.py:1080 `def identity(cls, domain=None,
+    window=None, symbol='x'):` returns the series p(x)=x. numpy:
+    Polynomial.identity()(5.0) == 5.0. ferray exposes no `identity`.
+    """
+    npid = np.polynomial.Polynomial.identity()
+    frid = fr.polynomial.Polynomial.identity()
+    np.testing.assert_allclose(float(frid(5.0)), float(npid(5.0)))
+
+
+# ---------------------------------------------------------------------------
+# 30. mapparms method.
+# ---------------------------------------------------------------------------
+def test_mapparms_method():
+    """numpy/polynomial/_polybase.py:816 `def mapparms(self):` returns
+    (off, scl) mapping domain -> window. numpy: Polynomial([1,2],
+    domain=[0,10]).mapparms() -> (-1.0, 0.2). ferray exposes no `mapparms`.
+    """
+    npp = np.polynomial.Polynomial([1.0, 2.0], domain=[0.0, 10.0])
+    fp = fr.polynomial.Polynomial([1.0, 2.0], domain=[0.0, 10.0])
+    np.testing.assert_allclose(np.asarray(fp.mapparms()),
+                               np.asarray(npp.mapparms()))
+
+
+# ---------------------------------------------------------------------------
+# 31. cutdeg method.
+# ---------------------------------------------------------------------------
+def test_cutdeg_method():
+    """numpy/polynomial/_polybase.py:704 `def cutdeg(self, deg):` returns the
+    series truncated to degree `deg`. numpy: Polynomial([1,2,3,4]).cutdeg(1)
+    .coef -> [1., 2.]. ferray exposes `truncate(size)` but no `cutdeg(deg)`.
+    """
+    exp = np.asarray(np.polynomial.Polynomial([1.0, 2.0, 3.0, 4.0])
+                     .cutdeg(1).coef)
+    got = np.asarray(fr.polynomial.Polynomial([1.0, 2.0, 3.0, 4.0])
+                     .cutdeg(1).coef)
+    np.testing.assert_allclose(got, exp)
+
+
+# ---------------------------------------------------------------------------
+# 32. linspace method.
+# ---------------------------------------------------------------------------
+def test_linspace_method():
+    """numpy/polynomial/_polybase.py:915 `def linspace(self, n=100,
+    domain=None):` returns (x, p(x)) over the domain. numpy:
+    Polynomial([0,1]).linspace(5) -> x=[-1,-0.5,0,0.5,1], y same. ferray
+    exposes no `linspace`.
+    """
+    nx, ny = np.polynomial.Polynomial([0.0, 1.0]).linspace(5)
+    fx, fy = fr.polynomial.Polynomial([0.0, 1.0]).linspace(5)
+    np.testing.assert_allclose(np.asarray(fx), np.asarray(nx))
+    np.testing.assert_allclose(np.asarray(fy), np.asarray(ny))
+
+
+# ---------------------------------------------------------------------------
+# 33. fit() must accept domain=/window=/full= keyword arguments.
+# ---------------------------------------------------------------------------
+def test_fit_accepts_domain_window_full_kwargs():
+    """numpy/polynomial/_polybase.py:946 `def fit(cls, x, y, deg, domain=None,
+    rcond=None, full=False, w=None, window=None, symbol='x'):`. ferray's
+    poly_class!::fit signature is `(x, y, deg)` only, so passing `domain=`,
+    `window=`, or `full=` raises TypeError. Here we pin the explicit-domain
+    fit: numpy fitted coef with domain=[0,10], window=[-1,1].
+    """
+    x = np.linspace(0.0, 10.0, 30)
+    y = 3.0 + 2.0 * x + x ** 2
+    exp = np.asarray(np.polynomial.Polynomial.fit(
+        x, y, 2, domain=[0.0, 10.0], window=[-1.0, 1.0]).coef)
+    got = np.asarray(fr.polynomial.Polynomial.fit(
+        x.tolist(), y.tolist(), 2,
+        domain=[0.0, 10.0], window=[-1.0, 1.0]).coef)  # ferray: TypeError
+    np.testing.assert_allclose(got, exp)
