@@ -2966,6 +2966,25 @@ pub fn trapezoid<'py>(
     use ferray_core::array::aliases::Array1;
     let arr_y = as_ndarray(py, y)?;
     let dt = dtype_name(&arr_y)?;
+    // Complex sample values make the trapezoidal integral genuinely complex
+    // (`numpy.trapezoid` sums `diff(x)/2 * (y[1:]+y[:-1])` over `asarray(y)`).
+    // The real path below coerces `y` (and `x`) to f64, silently discarding the
+    // imaginary part (R-CODE-4). Delegate the complex case to numpy.trapezoid,
+    // forwarding `x` / `dx`, and return its complex result unchanged. (A complex
+    // `x` spacing also forces a complex result, so sniff both operands.)
+    let x_complex = match x {
+        Some(xa) => is_complex_dtype(dtype_name(&as_ndarray(py, xa)?)?.as_str()),
+        None => false,
+    };
+    if is_complex_dtype(dt.as_str()) || x_complex {
+        let kwargs = pyo3::types::PyDict::new(py);
+        match x {
+            Some(xa) => kwargs.set_item("x", xa)?,
+            None => kwargs.set_item("dx", dx)?,
+        }
+        let np = py.import("numpy")?;
+        return np.call_method("trapezoid", (y,), Some(&kwargs));
+    }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
     } else {
@@ -3286,6 +3305,16 @@ pub fn interp<'py>(
     use ferray_core::array::aliases::Array1;
     let arr_x = as_ndarray(py, x)?;
     let dt = dtype_name(&arr_x)?;
+    // numpy.interp supports COMPLEX `fp` values: it interpolates the real and
+    // imaginary parts independently and returns a complex result
+    // (`numpy/lib/_function_base_impl.py` interp's `compiled_interp_complex`).
+    // The real path below coerces `fp` to f64, silently discarding the
+    // imaginary part (R-CODE-4). Delegate the complex-`fp` case to numpy.interp
+    // on the ORIGINAL operands and return its complex result unchanged.
+    if is_complex_dtype(dtype_name(&as_ndarray(py, fp)?)?.as_str()) {
+        let np = py.import("numpy")?;
+        return np.call_method1("interp", (x, xp, fp));
+    }
     let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
         dt.as_str().to_string()
     } else {

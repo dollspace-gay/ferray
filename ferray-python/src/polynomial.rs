@@ -36,11 +36,30 @@ use numpy::PyReadonlyArrayDyn;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyTuple};
 
-use crate::conv::{as_ndarray, complex_roots_to_pyarray, ferr_to_pyerr};
+use crate::conv::{as_ndarray, complex_roots_to_pyarray, dtype_name, ferr_to_pyerr};
 
 // ---------------------------------------------------------------------------
 // Helpers — f64 vector → numpy.ndarray
 // ---------------------------------------------------------------------------
+
+/// True for the complex floating dtypes. The poly1d family (`polyval`,
+/// `polyadd`, `polymul`, `polyder`, `polyint`) marshals coefficients through
+/// `Vec<f64>`, which silently discards the imaginary part of a complex input
+/// (R-CODE-4 data corruption). The complex branches below detect this case via
+/// `is_complex_dtype` and DELEGATE the computation to numpy, which owns the
+/// genuinely-complex result (`numpy/lib/_polynomial_impl.py` evaluates these on
+/// `NX.asarray`, so complex coefficients flow through to complex output).
+fn is_complex_dtype(dt: &str) -> bool {
+    matches!(dt, "complex64" | "complex128" | "complex" | "c8" | "c16")
+}
+
+/// Returns the numpy dtype name of an arbitrary array-like operand without
+/// coercion, so the complex branches can sniff the ORIGINAL dtype before the
+/// real path casts it to `float64`.
+fn operand_dtype<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<String> {
+    let arr = as_ndarray(py, obj)?;
+    dtype_name(&arr)
+}
 
 fn vec_to_pyarray1<'py>(py: Python<'py>, v: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
     let n = v.len();
@@ -709,9 +728,22 @@ fn trim_leading_highest_first(mut c: Vec<f64>) -> Vec<f64> {
 #[pyfunction]
 pub fn polyval<'py>(
     py: Python<'py>,
-    p: Vec<f64>,
+    p: &Bound<'py, PyAny>,
     x: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Complex coefficients OR a complex evaluation point make the result
+    // genuinely complex (`numpy/lib/_polynomial_impl.py:714` evaluates via
+    // Horner over `NX.asarray(p)`/`asarray(x)`). The real path below coerces `p`
+    // to `Vec<f64>` and `x` to f64, silently dropping the imaginary part
+    // (R-CODE-4). Delegate the complex case to numpy.polyval on the ORIGINAL
+    // operands and return its complex result unchanged.
+    if is_complex_dtype(operand_dtype(py, p)?.as_str())
+        || is_complex_dtype(operand_dtype(py, x)?.as_str())
+    {
+        let np = py.import("numpy")?;
+        return np.call_method1("polyval", (p, x));
+    }
+    let p: Vec<f64> = p.extract()?;
     let poly = fp::Polynomial::new(&flip(p));
     let (data, shape) = as_eval_input(py, x)?;
     let result = poly.eval_many(&data).map_err(ferr_to_pyerr)?;
@@ -850,11 +882,40 @@ fn poly_binop<'py>(
     vec_to_pyarray1(py, flip(out.coeffs().to_vec()))
 }
 
+/// Complex delegation for `polyadd` / `polymul`. When EITHER operand is a
+/// complex array the highest-first result is genuinely complex
+/// (`numpy/lib/_polynomial_impl.py` zero-pads and adds / convolves over
+/// `NX.asarray`), but the real `poly_binop` path coerces both operands to
+/// `Vec<f64>`, silently discarding every imaginary part (R-CODE-4). Returns
+/// `Some(numpy_result)` for the complex case (delegating to `numpy.<op>` on the
+/// ORIGINAL operands), or `None` to let the unchanged real path run.
+fn poly_binop_complex<'py>(
+    py: Python<'py>,
+    op: &str,
+    a1: &Bound<'py, PyAny>,
+    a2: &Bound<'py, PyAny>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    if is_complex_dtype(operand_dtype(py, a1)?.as_str())
+        || is_complex_dtype(operand_dtype(py, a2)?.as_str())
+    {
+        let np = py.import("numpy")?;
+        return Ok(Some(np.call_method1(op, (a1, a2))?));
+    }
+    Ok(None)
+}
+
 /// `numpy.polyadd(a1, a2)` — sum of two highest-first polynomials, trimmed.
 /// `numpy/lib/_polynomial_impl.py:798`.
 #[pyfunction]
-pub fn polyadd<'py>(py: Python<'py>, a1: Vec<f64>, a2: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
-    poly_binop(py, a1, a2, |x, y| x.add(y))
+pub fn polyadd<'py>(
+    py: Python<'py>,
+    a1: &Bound<'py, PyAny>,
+    a2: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = poly_binop_complex(py, "polyadd", a1, a2)? {
+        return Ok(r);
+    }
+    poly_binop(py, a1.extract()?, a2.extract()?, |x, y| x.add(y))
 }
 
 /// `numpy.polysub(a1, a2)` — difference of two highest-first polynomials.
@@ -867,15 +928,35 @@ pub fn polysub<'py>(py: Python<'py>, a1: Vec<f64>, a2: Vec<f64>) -> PyResult<Bou
 /// `numpy.polymul(a1, a2)` — product of two highest-first polynomials.
 /// `numpy/lib/_polynomial_impl.py:924`.
 #[pyfunction]
-pub fn polymul<'py>(py: Python<'py>, a1: Vec<f64>, a2: Vec<f64>) -> PyResult<Bound<'py, PyAny>> {
-    poly_binop(py, a1, a2, |x, y| x.mul(y))
+pub fn polymul<'py>(
+    py: Python<'py>,
+    a1: &Bound<'py, PyAny>,
+    a2: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(r) = poly_binop_complex(py, "polymul", a1, a2)? {
+        return Ok(r);
+    }
+    poly_binop(py, a1.extract()?, a2.extract()?, |x, y| x.mul(y))
 }
 
 /// `numpy.polyder(p, m=1)` — `m`-th derivative of a highest-first polynomial.
 /// `numpy/lib/_polynomial_impl.py:378`.
 #[pyfunction]
 #[pyo3(signature = (p, m = 1))]
-pub fn polyder<'py>(py: Python<'py>, p: Vec<f64>, m: usize) -> PyResult<Bound<'py, PyAny>> {
+pub fn polyder<'py>(
+    py: Python<'py>,
+    p: &Bound<'py, PyAny>,
+    m: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    // Complex coefficients yield a complex derivative
+    // (`numpy/lib/_polynomial_impl.py:378` does `p[:-1] * NX.arange(...)` over
+    // `NX.asarray(p)`). The real path coerces `p` to `Vec<f64>`, dropping the
+    // imaginary part (R-CODE-4). Delegate the complex case to numpy.polyder.
+    if is_complex_dtype(operand_dtype(py, p)?.as_str()) {
+        let np = py.import("numpy")?;
+        return np.call_method1("polyder", (p, m));
+    }
+    let p: Vec<f64> = p.extract()?;
     let poly = fp::Polynomial::new(&flip(p));
     let out = poly.deriv(m).map_err(ferr_to_pyerr)?;
     vec_to_pyarray1(py, flip(out.coeffs().to_vec()))
@@ -891,12 +972,35 @@ pub fn polyder<'py>(py: Python<'py>, p: Vec<f64>, m: usize) -> PyResult<Bound<'p
 #[pyo3(signature = (p, m = 1, k = None))]
 pub fn polyint<'py>(
     py: Python<'py>,
-    p: Vec<f64>,
+    p: &Bound<'py, PyAny>,
     m: usize,
-    k: Option<Vec<f64>>,
+    k: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Complex coefficients (or complex integration constants) yield a complex
+    // antiderivative (`numpy/lib/_polynomial_impl.py:270` integrates over
+    // `NX.asarray(p)`). The real path coerces `p`/`k` to `Vec<f64>`, dropping
+    // the imaginary part (R-CODE-4). Delegate the complex case to numpy.polyint,
+    // forwarding `m` and `k`.
+    let k_complex = match k {
+        Some(kk) => is_complex_dtype(operand_dtype(py, kk)?.as_str()),
+        None => false,
+    };
+    if is_complex_dtype(operand_dtype(py, p)?.as_str()) || k_complex {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("m", m)?;
+        match k {
+            Some(kk) => kwargs.set_item("k", kk)?,
+            None => kwargs.set_item("k", py.None())?,
+        }
+        let np = py.import("numpy")?;
+        return np.call_method("polyint", (p,), Some(&kwargs));
+    }
+    let p: Vec<f64> = p.extract()?;
     let poly = fp::Polynomial::new(&flip(p));
-    let k = k.unwrap_or_default();
+    let k: Vec<f64> = match k {
+        Some(kk) => kk.extract()?,
+        None => Vec::new(),
+    };
     let out = poly.integ(m, &k).map_err(ferr_to_pyerr)?;
     vec_to_pyarray1(py, flip(out.coeffs().to_vec()))
 }
