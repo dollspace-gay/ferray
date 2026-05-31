@@ -40,6 +40,7 @@
 //! | RC-CLINSPACE (complex-endpoint linspace) | SHIPPED | `complex_linspace` (consumed by the `linspace` `#[pyfunction]` here when an endpoint is complex or `dtype` is complex) computes `y = arange(0,num)*step + start` with `step = (stop-start)/div`, pinning `y[-1]=stop` on `endpoint`, marshalled via `complex_ferray_to_pyarray`; `retstep` returns `(samples, complex step)` (`numpy/_core/function_base.py:130-176,185-186`). numpy: `np.linspace(0j,1+1j,5) == [0j,0.25+0.25j,0.5+0.5j,0.75+0.75j,1+1j]` (live). Pinned green: `tests/test_divergence_complex_sweep_audit.py::test_divergence_linspace_complex_endpoints_raises`; `tests/test_expansion_complex_misc.py::test_linspace_complex_endpoints_matches_numpy`, `::test_linspace_complex_endpoint_pinned_exact`, `::test_linspace_complex_dtype_real_endpoints`. |
 //! | RC-CDCLASS (#938 complex eye/identity/vander/geomspace) | SHIPPED | `eye`/`identity` route their fill (`fc::eye`/`fc::identity`, `Element`-generic) through `match_dtype_all_complex!` + `T::emit_dyn` so `dtype=complex` yields `1+0j`/`0j`; `vander` dispatches complex to `complex_vander_dispatch` (`fc::vander` over `Complex<T>`, complex powers `x^j`); `geomspace` accepts complex endpoints (`extract_complex_scalar`) and computes `complex_geomspace` (`start*(stop/start)**linspace(0,1,num)`). Consumer: the `eye`/`identity`/`vander`/`geomspace` `#[pyfunction]`s registered top-level in `lib.rs` `_ferray`. numpy: `np.eye(2,dtype=complex)`, `np.vander([3+4j,...])`, `np.geomspace(1+1j,8+8j,3)` (live 2.4.5). Pinned green: `tests/test_divergence_complex_converge_audit.py::test_D_eye_complex`/`::test_D_identity_complex`/`::test_D_vander`/`::test_D_geomspace`; `tests/test_expansion_complex_dclass.py` (eye/identity/vander/geomspace cases). |
 //! | RC-DATETIME (#941 datetime64/timedelta64 input coercion) | SHIPPED | `array`/`asarray` branch on `crate::datetime::is_time_dtype_name` ahead of `match_dtype_all!`, and `zeros`/`ones`/`empty`/`full`/`zeros_like`/`ones_like`/`empty_like`/`full_like` route the `"M"`/`"m"` case through `time_shape_create` (numpy builds the buffer; the int64-view transport `crate::datetime::datetime_roundtrip` marshals it, preserving unit+shape+NaT, R-CODE-4). Consumer: the `array`/`asarray`/`zeros`/`ones`/`empty`/`full`/`*_like` `#[pyfunction]`s registered top-level in `lib.rs`. numpy: `np.array(['2020-01-01'],dtype='datetime64[D]')`, `np.zeros(3,dtype='datetime64[s]')`, `np.full(2,'2021-06-15',dtype='datetime64[D]')` (live 2.4.5). Pinned green: `tests/test_expansion_datetime_construct.py` (57 cases). |
+//! | RC-STRING (#959 fixed-width string `<U`/`<S` input coercion) | SHIPPED | `array`/`asarray` branch on `is_string_array` (sniffs `dtype.kind ∈ {'U','S'}`, NOT the width-encoding `.name` `str64`/`bytes32`) ahead of `match_dtype_all!` and return numpy's string ndarray via `arr.copy()`; `zeros`/`ones`/`empty`/`full`/`zeros_like`/`ones_like`/`empty_like`/`full_like` detect a string `dtype=` off the ORIGINAL object's `.kind` (`dtype_obj_is_string`; the normalised `.name` `str160` does not round-trip through `np.dtype`) — or the source array's string dtype for `*_like` (`string_like_dtype`) — and delegate to numpy via `string_shape_create` (`np.zeros`/`np.full`(shape[,fill],dtype)), returning the `<U`/`<S` ndarray unchanged. No transport: strings have no ferray `Element`/`DynArray` variant (`.design/ferray-core-string.md`, #741), so they ride the boundary as numpy ndarrays (R-CODE-4). `full` also infers `<U`/`<S` width from a string/bytes `fill_value` when no `dtype=` is given (`fill_is_string`). Consumer: the `array`/`asarray`/`zeros`/`ones`/`empty`/`full`/`*_like` `#[pyfunction]`s registered top-level in `lib.rs`. numpy (live 2.4.4): `np.array(['ab','cd'])`→`<U2`, `np.zeros(3,'U5')`→empty strings, `np.full(2,'hi','U4')`, `np.full_like(<U2,'longfill')`→`'lo'`. Pinned green: `tests/test_expansion_string_construct.py` (38 cases). |
 //! | RC-ARANGE-TIME (#945 datetime64/timedelta64 arange) | SHIPPED | `arange` branches to `arange_time` here when `dtype` is datetime64/timedelta64 (`crate::datetime::is_time_dtype_name`) or a start/stop/step operand is a datetime64/timedelta64 scalar/array (`crate::datetime::any_time_operand`), AHEAD of the f64-coercion path that raised `TypeError: must be real number, not str`. `arange_time` delegates to `numpy.arange(start[,stop[,step]],dtype=dtype)` on the original operands (numpy owns the string->datetime64 parse, calendar month/year stepping, int/timedelta64 step, half-open `[start,stop)` semantics) then marshals the result back through the int64-view transport (`crate::datetime::datetime_roundtrip`, #941), preserving unit+shape+NaT (R-CODE-4). Consumer: the `arange` `#[pyfunction]` registered top-level in `lib.rs`. numpy 2.4.5: `np.arange('2020-01','2020-04',dtype='datetime64[M]')==['2020-01','2020-02','2020-03']`, `np.arange(5,dtype='timedelta64[D]')==[0..4]`, `np.arange(d0,d1,np.timedelta64(2,'D'))`. Pinned green: `tests/test_expansion_datetime_arange.py`. |
 //! | RC-ARANGE-FLOAT (per-element float construction) | NOT-STARTED | `np.arange(1.0,2.0,0.3)` last element is `1.9000000000000001`; ferray-core's float `arange` diverges. Root cause is in ferray-core (`creation/mod.rs`), not this binding — open ferray-core follow-up. Pin: `test_arange_float_last_element_matches_numpy`. |
 //! | RC-GEOM-EXACT (geomspace endpoint pinning) | NOT-STARTED | `np.geomspace(-1,-1000,4)` is exactly `[-1,-10,-100,-1000]` via sign rotation + endpoint pinning; ferray-core's `geomspace` lacks both. Root cause in ferray-core, not this binding — open ferray-core follow-up. Pin: `test_geomspace_negative_endpoints_exact`. |
@@ -102,6 +103,70 @@ fn complex_roundtrip_copy<'py>(
 /// (`complex64`/`complex128`, plus their `c8`/`c16` aliases).
 fn is_complex_dtype(dt: &str) -> bool {
     matches!(dt, "complex128" | "c16" | "complex64" | "c8")
+}
+
+/// `true` if a numpy ndarray is a fixed-width string array — unicode (`<U`,
+/// dtype kind `'U'`) or bytes (`<S`/`|S`, kind `'S'`).
+///
+/// String arrays are a *flexible* (itemsize-parameterised) dtype with no ferray
+/// `Element` and no `DynArray` variant (`.design/ferray-core-string.md`,
+/// `dynarray.rs` rejects `FixedUnicode`/`FixedAscii`/`RawBytes`, #741), so they
+/// never enter the Rust library — they ride the boundary as numpy ndarrays. The
+/// detection keys off `dtype.kind`, NOT `dtype.name`: `np.dtype('U2').name` is
+/// `'str64'`, `np.dtype('S4').name` is `'bytes32'` (the `.name` encodes the bit
+/// width and is unstable across widths), while `.kind` is stably `'U'`/`'S'`
+/// (verified live, numpy 2.4.5). Mirrors the datetime `time_kind` seam
+/// (`datetime.rs`, kind `'M'`/`'m'`), minus the int64-view transport.
+fn is_string_array(arr: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let kind: String = arr.getattr("dtype")?.getattr("kind")?.extract()?;
+    Ok(kind == "U" || kind == "S")
+}
+
+/// `true` if a `dtype=` argument names a fixed-width string dtype (unicode `'U'`
+/// or bytes `'S'`). Routes the object through `numpy.dtype(obj).kind` (numpy's
+/// `PyArray_DescrConverter` accepts a str like `'U5'`/`'S4'`, a `numpy.dtype`
+/// instance, or a type object), then sniffs the stable `.kind` — NOT the
+/// width-encoding `.name` the real-only `creation_dispatch!` macro matches on
+/// (`np.dtype('U5').name == 'str160'`, which does not even round-trip back
+/// through `np.dtype(...)`; only `.kind` is reliable). Used by `zeros`/`ones`/
+/// `empty`/`full`/`*_like` to detect a string `dtype=` BEFORE the name is
+/// normalised, so the original dtype object can be forwarded to numpy intact.
+fn dtype_obj_is_string(py: Python<'_>, dtype: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let np = py.import("numpy")?;
+    let dt = np.call_method1("dtype", (dtype,))?;
+    let kind: String = dt.getattr("kind")?.extract()?;
+    Ok(kind == "U" || kind == "S")
+}
+
+/// Delegate a shape-based creation call (`zeros`/`ones`/`empty`/`full`) for a
+/// fixed-width string `dtype` straight to numpy, returning numpy's string
+/// ndarray unchanged.
+///
+/// String arrays never enter the Rust library (no `Element`, no `DynArray`
+/// variant — `.design/ferray-core-string.md`), so there is **no transport**:
+/// numpy owns the empty-string / fill-value semantics and the `<U`/`<S` width,
+/// and the resulting ndarray rides the boundary directly. The ORIGINAL `dtype`
+/// object is forwarded (numpy understands `'U5'`/`'S4'`/a `numpy.dtype`; the
+/// normalised `.name` like `'str160'` does NOT round-trip), so width + kind are
+/// preserved with no lossy cast (R-CODE-4). `empty` maps to numpy's `zeros`
+/// (the binding's defined-buffer contract, matching the real-dtype + datetime
+/// arms). This is the string analogue of [`time_shape_create`], minus the
+/// int64-view round-trip.
+fn string_shape_create<'py>(
+    py: Python<'py>,
+    np_func: &str,
+    shape: &[usize],
+    dtype: &Bound<'py, PyAny>,
+    fill: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np = py.import("numpy")?;
+    let shape_tuple = pyo3::types::PyTuple::new(py, shape)?;
+    // `empty` -> numpy `zeros` (defined buffer), matching the real-dtype arm.
+    let func = if np_func == "empty" { "zeros" } else { np_func };
+    match fill {
+        Some(fv) => np.call_method1(func, (shape_tuple, fv, dtype)),
+        None => np.call_method1(func, (shape_tuple, dtype)),
+    }
 }
 
 /// `true` for the float16 dtype name (plus its `f16` alias).
@@ -225,6 +290,15 @@ pub fn zeros<'py>(
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let shape_vec = extract_signed_shape(shape)?;
+    // Fixed-width string dtype (`<U`/`<S`): numpy owns the zero-fill (empty
+    // strings) + the width, and strings never enter the Rust library, so detect
+    // the string `dtype=` off the ORIGINAL object's `.kind` (not the normalised
+    // name) and delegate straight to numpy (REQ-1, R-CODE-4).
+    if let Some(d) = dtype
+        && dtype_obj_is_string(py, d)?
+    {
+        return string_shape_create(py, "zeros", &shape_vec, d, None);
+    }
     let dt = match dtype {
         Some(d) => normalize_dtype(py, d)?,
         None => "float64".to_string(),
@@ -277,6 +351,13 @@ pub fn ones<'py>(
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let shape_vec = extract_signed_shape(shape)?;
+    // String dtype: numpy owns the fill (`np.ones(n, 'U5')` is `'1'` strings)
+    // + width; delegate on the original object (REQ-1, R-CODE-4).
+    if let Some(d) = dtype
+        && dtype_obj_is_string(py, d)?
+    {
+        return string_shape_create(py, "ones", &shape_vec, d, None);
+    }
     let dt = match dtype {
         Some(d) => normalize_dtype(py, d)?,
         None => "float64".to_string(),
@@ -303,6 +384,14 @@ pub fn empty<'py>(
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let shape_vec = extract_signed_shape(shape)?;
+    // String dtype: `empty` maps to numpy `zeros` (empty strings) per the
+    // binding's defined-buffer contract; delegate on the original object
+    // (REQ-1, R-CODE-4).
+    if let Some(d) = dtype
+        && dtype_obj_is_string(py, d)?
+    {
+        return string_shape_create(py, "empty", &shape_vec, d, None);
+    }
     let dt = match dtype {
         Some(d) => normalize_dtype(py, d)?,
         None => "float64".to_string(),
@@ -1022,15 +1111,50 @@ pub fn zeros_like<'py>(
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
+    // String dtype: either an explicit string `dtype=`, or (no dtype) the source
+    // array is `<U`/`<S` — preserve the string dtype + width via numpy
+    // (REQ-1, R-CODE-4).
+    if let Some(d) = string_like_dtype(py, &arr, dtype)? {
+        return string_shape_create(py, "zeros", &shape, &d, None);
+    }
     let dt = match normalize_opt_dtype(py, dtype)? {
         Some(d) => d,
         None => dtype_name(&arr)?,
     };
-    let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
     if crate::datetime::is_time_dtype_name(dt.as_str()) {
         return time_shape_create(py, "zeros", &shape, &dt, None);
     }
     Ok(creation_dispatch!(fc::zeros, py, shape, dt.as_str()))
+}
+
+/// Resolve the string `dtype` object for a `*_like` call, if the result should
+/// be a fixed-width string array — returns `Some(dtype_obj)` when an explicit
+/// `dtype=` names a string dtype, or (no explicit dtype) the source array `arr`
+/// is itself `<U`/`<S`; otherwise `None`. The returned object is forwarded
+/// verbatim to numpy (an explicit `'U4'`/`numpy.dtype`, or `arr.dtype`), so the
+/// width is preserved without going through the non-round-tripping `.name`.
+fn string_like_dtype<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    dtype: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    match dtype {
+        Some(d) => {
+            if dtype_obj_is_string(py, d)? {
+                Ok(Some(d.clone()))
+            } else {
+                Ok(None)
+            }
+        }
+        None => {
+            if is_string_array(arr)? {
+                Ok(Some(arr.getattr("dtype")?))
+            } else {
+                Ok(None)
+            }
+        }
+    }
 }
 
 /// `numpy.ones_like(a, dtype=None)` equivalent.
@@ -1042,11 +1166,15 @@ pub fn ones_like<'py>(
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
+    // String dtype: `np.ones_like(<U)` is `'1'` strings; preserve via numpy.
+    if let Some(d) = string_like_dtype(py, &arr, dtype)? {
+        return string_shape_create(py, "ones", &shape, &d, None);
+    }
     let dt = match normalize_opt_dtype(py, dtype)? {
         Some(d) => d,
         None => dtype_name(&arr)?,
     };
-    let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
     if crate::datetime::is_time_dtype_name(dt.as_str()) {
         return time_shape_create(py, "ones", &shape, &dt, None);
     }
@@ -1068,11 +1196,16 @@ pub fn empty_like<'py>(
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
+    // String dtype: `empty_like` maps to numpy `zeros` (empty strings) per the
+    // binding's defined-buffer contract; preserve the string dtype + width.
+    if let Some(d) = string_like_dtype(py, &arr, dtype)? {
+        return string_shape_create(py, "empty", &shape, &d, None);
+    }
     let dt = match normalize_opt_dtype(py, dtype)? {
         Some(d) => d,
         None => dtype_name(&arr)?,
     };
-    let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
     if crate::datetime::is_time_dtype_name(dt.as_str()) {
         return time_shape_create(py, "empty", &shape, &dt, None);
     }
@@ -1091,11 +1224,18 @@ pub fn full_like<'py>(
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
+    let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
+    // String dtype: numpy truncates the fill to the source width
+    // (`np.full_like(<U2, 'longfill')` -> `'lo'`); delegate to numpy with the
+    // resolved string dtype object (explicit `dtype=`, or the source array's)
+    // so the width contract is preserved exactly (REQ-1, R-CODE-4).
+    if let Some(d) = string_like_dtype(py, &arr, dtype)? {
+        return string_shape_create(py, "full", &shape, &d, Some(fill_value));
+    }
     let dt = match normalize_opt_dtype(py, dtype)? {
         Some(d) => d,
         None => dtype_name(&arr)?,
     };
-    let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
     full_impl(py, &shape, fill_value, dt.as_str())
 }
 
@@ -1117,6 +1257,25 @@ pub fn full<'py>(
     dtype: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let shape_vec = extract_signed_shape(shape)?;
+    // String dtype, explicit (`dtype='U4'`) or inferred from a string/bytes fill
+    // (`fr.full(2,'hi')` -> `<U2`). numpy owns the parse + width inference + the
+    // `<U`/`<S` fill, and strings never enter the Rust library — detect the
+    // string case and delegate straight to numpy, returning its string ndarray
+    // unchanged (REQ-1, R-CODE-4). The explicit-dtype branch keys off the
+    // original `dtype` object's `.kind`; the no-dtype branch detects a string /
+    // bytes `fill_value` (numpy infers `<U{len}`/`<S{len}`).
+    match dtype {
+        Some(d) if dtype_obj_is_string(py, d)? => {
+            return string_shape_create(py, "full", &shape_vec, d, Some(fill_value));
+        }
+        None if fill_is_string(fill_value) => {
+            // No dtype: let numpy infer `<U`/`<S` width from the fill.
+            let np = py.import("numpy")?;
+            let shape_tuple = pyo3::types::PyTuple::new(py, &shape_vec)?;
+            return np.call_method1("full", (shape_tuple, fill_value));
+        }
+        _ => {}
+    }
     let dt = match normalize_opt_dtype(py, dtype)? {
         Some(d) => d,
         // numpy defaults `dtype` to `np.array(fill_value).dtype`
@@ -1130,6 +1289,13 @@ pub fn full<'py>(
         },
     };
     full_impl(py, &shape_vec, fill_value, dt.as_str())
+}
+
+/// `true` if a `full`/`full_like` `fill_value` is a Python `str` or `bytes`
+/// (numpy infers a `<U{len}`/`<S{len}` dtype from it when no `dtype=` is given).
+fn fill_is_string(fill_value: &Bound<'_, PyAny>) -> bool {
+    fill_value.is_instance_of::<pyo3::types::PyString>()
+        || fill_value.is_instance_of::<pyo3::types::PyBytes>()
 }
 
 fn full_impl<'py>(
@@ -1326,6 +1492,21 @@ pub fn array<'py>(
     // (R-1, R-CODE-4).
     if crate::datetime::is_time_dtype_name(dt.as_str()) {
         return crate::datetime::datetime_roundtrip(py, &arr);
+    }
+    // Fixed-width string input (a str/bytes list with no dtype -> numpy infers
+    // `<U{maxwidth}`/`<S{maxwidth}`, or an explicit `dtype='U3'`/`'S4'`, or a
+    // numpy `<U`/`<S` array) cannot ride the 11-real-dtype macro (no string
+    // `Element` -> the macro's `TypeError: unsupported dtype: "str64"`). numpy
+    // has already parsed the input into a `<U`/`<S` buffer in `arr` (via the
+    // `np.asarray(obj, dtype)` above, which owns the U-width inference + the
+    // explicit width parse), so return a fresh owned copy of that string
+    // ndarray — matching numpy's `array` always-copies contract and preserving
+    // the string dtype + width + shape across the boundary instead of raising
+    // (REQ-1, R-CODE-4). Detection keys off `dtype.kind` ∈ {U,S}, NOT the
+    // width-encoding `.name` (`str64`/`bytes32`). Strings never enter the Rust
+    // library; mirrors the datetime/float16 detect-and-delegate arms.
+    if is_string_array(&arr)? {
+        return arr.call_method0("copy");
     }
     // float16 input (a number-list + `dtype='float16'`, or a numpy float16
     // array) cannot ride the 11-real-dtype macro (no `NumpyElement` for
