@@ -135,10 +135,10 @@ pub fn tensordot<T: LinalgFloat>(
         }
     }
 
-    if out_shape.is_empty() {
-        out_shape.push(1);
-        // Scalar result stored in 1-element array
-    }
+    // Full contraction leaves no free axes → numpy returns a 0-D array
+    // (shape `()`), which holds exactly the 1-element `result` vec. Building
+    // with the EMPTY shape matches `numpy/_core/numeric.py:1218`
+    // (`res.reshape(olda + oldb)` -> `()`); do NOT pad with a length-1 axis.
     Array::from_vec(IxDyn::new(&out_shape), result)
 }
 

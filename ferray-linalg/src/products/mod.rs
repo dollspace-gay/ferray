@@ -999,11 +999,10 @@ pub fn vecdot<T: LinalgFloat>(
         result[flat] = sum;
     }
 
-    if out_shape.is_empty() {
-        Array::from_vec(IxDyn::new(&[1]), result)
-    } else {
-        Array::from_vec(IxDyn::new(&out_shape), result)
-    }
+    // 1-D operands leave no broadcast axes → numpy `vecdot` returns a 0-D
+    // array (shape `()`), per `numpy/linalg/_linalg.py:3604`. Build with the
+    // EMPTY shape (the 1-element `result` vec is the scalar); do not pad [1].
+    Array::from_vec(IxDyn::new(&out_shape), result)
 }
 
 /// Matrix-vector product (NumPy 2.0 `numpy.matvec`).

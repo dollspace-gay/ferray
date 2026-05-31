@@ -534,6 +534,14 @@ upstream = ["/home/doll/numpy-ref/numpy/_core/numeric.py"]
 design = ".design/ferray-linalg.md"
 parity_ops = ["cross", "dot", "vdot", "inner", "outer", "matmul", "kron", "multi_dot", "tensordot"]
 
+# tensordot core (numpy/_core/numeric.py:997 `tensordot`,
+# :1218 `res.reshape(olda + oldb)`).
+[[route]]
+crate_pattern = "ferray-linalg/src/products/tensordot.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/numeric.py"]
+design = ".design/ferray-linalg.md"
+parity_ops = ["tensordot"]
+
 # ─────────────────────────────────────────────────────────────────────────
 # ferray-polynomial — numpy.polynomial (power/Chebyshev/Legendre/... bases)
 # ─────────────────────────────────────────────────────────────────────────
