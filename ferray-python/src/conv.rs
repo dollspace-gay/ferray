@@ -1266,6 +1266,66 @@ pub fn coerce_multiply_count(obj: &Bound<'_, PyAny>) -> PyResult<usize> {
     Ok(if n < 0 { 0 } else { n as usize })
 }
 
+/// `true` for the two float16 dtype names numpy reports (`"float16"`, and the
+/// short alias `"f16"`).
+///
+/// float16 cannot ride the real-only dispatch macros (`match_dtype_numeric!` /
+/// `match_dtype_orderable!` / `match_dtype_all!` / `match_dtype_all_complex!` /
+/// `match_dtype_float!`): the installed pyo3-numpy build has no
+/// `NumpyElement` / `PyReadonlyArrayDyn` for `half::f16` (the `numpy/half`
+/// feature is off — see `.design/ferray-core-float16.md`), so a typed view
+/// can't be taken at the boundary. Every binding that would otherwise reject a
+/// float16 input detects it with this predicate and routes through
+/// [`f16_delegate`] instead.
+pub fn is_float16_dtype(dt: &str) -> bool {
+    matches!(dt, "float16" | "f16")
+}
+
+/// Delegate a whole op with a float16 operand to numpy's own top-level
+/// function on the ORIGINAL operand(s), returning numpy's result unchanged.
+///
+/// Because `fr.ndarray` IS `numpy.ndarray` (`lib.rs`), numpy's result is
+/// already a valid boundary return — no `ferray`/`numpy` marshalling round-trip
+/// is needed (unlike the datetime int64-view transport): numpy preserves the
+/// float16 dtype + values for data-move / view ops (reshape, transpose, sort,
+/// where, concatenate, …), computes bool for comparisons (numpy registers a
+/// float16 compare loop — generate_umath.py:567 `less` `TD(inexact + times,
+/// out='?')`, `inexact` includes the `'e'`/float16 type), and applies its exact
+/// f32-compute + round-to-f16 narrow for the unary numeric ops (`sign`,
+/// `absolute`, `floor`, …). This is the SAME detect-and-delegate seam the
+/// float16 reductions (`crate::stats::f16_reduce`, #954), binary arithmetic
+/// (`crate::ufunc::f16_binary_delegate`, #953), and creation coercion (#952)
+/// already use, keeping `half::f16` entirely out of the Rust boundary
+/// (R-CODE-4 / R-DEV-3). `func` is the numpy function name (`"reshape"`,
+/// `"less"`, `"sort"`, …); `args`/`kwargs` are forwarded verbatim.
+pub fn f16_delegate<'py>(
+    py: Python<'py>,
+    func: &str,
+    args: impl pyo3::call::PyCallArgs<'py>,
+    kwargs: Option<&Bound<'py, pyo3::types::PyDict>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    py.import("numpy")?.getattr(func)?.call(args, kwargs)
+}
+
+/// Delegate a splitting op (`split`/`array_split`/`vsplit`/`hsplit`/`dsplit`)
+/// with a float16 operand to numpy, returning numpy's `list` of float16 views
+/// directly.
+///
+/// Unlike the datetime [`crate::datetime::delegate_manip_list`] (which rebuilds
+/// the list through the int64-view transport), float16 views ARE valid numpy
+/// ndarrays the boundary returns as-is, so numpy's result list passes straight
+/// back. numpy's split ops keep the input's float16 dtype on every part
+/// (`[p.dtype for p in np.split(f16, 2)] == [float16, float16]`, live). `func`
+/// is the numpy function name; `args`/`kwargs` are forwarded verbatim.
+pub fn f16_delegate_list<'py>(
+    py: Python<'py>,
+    func: &str,
+    args: impl pyo3::call::PyCallArgs<'py>,
+    kwargs: Option<&Bound<'py, pyo3::types::PyDict>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    py.import("numpy")?.getattr(func)?.call(args, kwargs)
+}
+
 /// Coerce a Python array-like to a `numpy.ndarray` of the requested
 /// dtype. Used by binary ufuncs to align two inputs to a common dtype
 /// before extracting typed views — the alternative (extract both then

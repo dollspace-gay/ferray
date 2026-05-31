@@ -1174,6 +1174,13 @@ macro_rules! bind_unary_numeric_split {
         #[pyfunction]
         pub fn $name<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
             let arr = as_ndarray(py, x)?;
+            // float16 (REQ-5, #955): delegate to numpy (f32-compute, f16-narrow);
+            // the real-only `match_dtype_float_or_int!` body has no float16 arm.
+            if is_float16_dtype(dtype_name(&arr)?.as_str()) {
+                let scalar = all_scalar_inputs(py, &[x])?;
+                let out = crate::conv::f16_delegate(py, stringify!($name), (&arr,), None)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
             let scalar = all_scalar_inputs(py, &[x])?;
             let out = unary_numeric_split_body!(py, arr, $float_fn, $int_fn);
             if scalar { scalarize(out) } else { Ok(out) }
@@ -1188,6 +1195,11 @@ macro_rules! bind_unary_numeric_split {
             let arr = as_ndarray(py, x)?;
             let dt = dtype_name(&arr)?;
             let scalar = all_scalar_inputs(py, &[x])?;
+            // float16 (REQ-5, #955): delegate to numpy ahead of the real-only body.
+            if is_float16_dtype(dt.as_str()) {
+                let out = crate::conv::f16_delegate(py, stringify!($name), (&arr,), None)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
             let out = if is_complex_dtype(dt.as_str()) {
                 $cfn(py, &arr, dt.as_str())?
             } else {
@@ -1212,6 +1224,11 @@ macro_rules! bind_unary_numeric_split {
                 return if scalar { scalarize(out) } else { Ok(out) };
             }
             let scalar = all_scalar_inputs(py, &[x])?;
+            // float16 (REQ-5, #955): delegate to numpy ahead of the real-only body.
+            if is_float16_dtype(dt.as_str()) {
+                let out = crate::conv::f16_delegate(py, stringify!($name), (&arr,), None)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
             let out = if is_complex_dtype(dt.as_str()) {
                 $cfn(py, &arr, dt.as_str())?
             } else {
@@ -1431,6 +1448,14 @@ pub fn around<'py>(
     if is_complex_dtype(dt.as_str()) {
         return complex_around_dispatch(py, &arr, dt.as_str(), decimals);
     }
+    // float16 (REQ-5, #955): `around` preserves the dtype (`np.round(f16).dtype ==
+    // float16`, live); delegate to numpy as the float bodies below have no f16
+    // arm (and the float64 scale path would widen).
+    if is_float16_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("decimals", decimals)?;
+        return crate::conv::f16_delegate(py, "around", (&arr,), Some(&kwargs));
+    }
     let is_int = !matches!(
         dt.as_str(),
         "float64" | "f64" | "float32" | "f32" | "float16" | "f16"
@@ -1568,6 +1593,13 @@ macro_rules! bind_unary_float_only_int_fallback {
             let arr = as_ndarray(py, x)?;
             let scalar = all_scalar_inputs(py, &[x])?;
             let dt = dtype_name(&arr)?;
+            // float16 (REQ-5, #955): delegate to numpy (f32-compute, f16-narrow);
+            // neither the real-only `match_dtype_float!` nor the int fallback has
+            // a float16 arm.
+            if is_float16_dtype(dt.as_str()) {
+                let out = crate::conv::f16_delegate(py, stringify!($name), (&arr,), None)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
             let out = if matches!(
                 dt.as_str(),
                 "float64" | "f64" | "float32" | "f32"
@@ -1596,6 +1628,11 @@ macro_rules! bind_unary_float_only_int_fallback {
             let arr = as_ndarray(py, x)?;
             let scalar = all_scalar_inputs(py, &[x])?;
             let dt = dtype_name(&arr)?;
+            // float16 (REQ-5, #955): delegate to numpy (f32-compute, f16-narrow).
+            if is_float16_dtype(dt.as_str()) {
+                let out = crate::conv::f16_delegate(py, stringify!($name), (&arr,), None)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
             let out = if is_complex_dtype(dt.as_str()) {
                 $cfn(py, &arr, dt.as_str())?
             } else if matches!(dt.as_str(), "float64" | "f64" | "float32" | "f32") {
@@ -1680,6 +1717,11 @@ macro_rules! bind_predicate_float {
         #[pyfunction]
         pub fn $name<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
             let arr = as_ndarray(py, x)?;
+            // float16 (REQ-5, #955): predicate output is bool (width-independent);
+            // delegate to numpy as the real-only `match_dtype_float!` has no f16 arm.
+            if is_float16_dtype(dtype_name(&arr)?.as_str()) {
+                return crate::conv::f16_delegate(py, stringify!($name), (&arr,), None);
+            }
             Ok(unary_float_predicate_body!(py, arr, $ferr_path))
         }
     };
@@ -1693,6 +1735,10 @@ macro_rules! bind_predicate_float {
             let dt = dtype_name(&arr)?;
             if is_complex_dtype(dt.as_str()) {
                 return complex_predicate_dispatch(py, &arr, dt.as_str(), $kind);
+            }
+            // float16 (REQ-5, #955): delegate to numpy (bool output).
+            if is_float16_dtype(dt.as_str()) {
+                return crate::conv::f16_delegate(py, stringify!($name), (&arr,), None);
             }
             Ok(unary_float_predicate_body!(py, arr, $ferr_path))
         }
@@ -2213,6 +2259,16 @@ macro_rules! bind_comparison {
                 let out = crate::datetime::compare_time(py, x1, x2, $tcmp)?;
                 return if scalar { scalarize(out) } else { Ok(out) };
             }
+            // float16 (REQ-5, #955): numpy registers a float16 compare loop
+            // (generate_umath.py:591 `equal` `TD(inexact + times, out='?')`) but
+            // the real-only `match_dtype_numeric!` body has no float16 arm; detect
+            // a float16 operand and delegate the compare to numpy on the ORIGINAL
+            // operands (bool output is width-independent), keeping `half::f16` out
+            // of the Rust boundary.
+            if binary_involves_float16(py, x1, x2)? {
+                let out = crate::conv::f16_delegate(py, stringify!($name), (x1, x2), None)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
             let out = if binary_is_complex(py, x1, x2)? {
                 complex_eq_dispatch!(py, x1, x2, $cfn)
             } else {
@@ -2238,6 +2294,13 @@ macro_rules! bind_comparison {
             // NaT-unordered semantics (REQ-3, #943), ahead of the real-only path.
             if crate::datetime::is_time_compare(py, x1, x2)? {
                 let out = crate::datetime::compare_time(py, x1, x2, $tcmp)?;
+                return if scalar { scalarize(out) } else { Ok(out) };
+            }
+            // float16 (REQ-5, #955): delegate the ordering compare to numpy on the
+            // ORIGINAL operands (numpy registers the float16 compare loop —
+            // generate_umath.py:567 `less` `TD(inexact + times, out='?')`).
+            if binary_involves_float16(py, x1, x2)? {
+                let out = crate::conv::f16_delegate(py, stringify!($name), (x1, x2), None)?;
                 return if scalar { scalarize(out) } else { Ok(out) };
             }
             let out = if binary_is_complex(py, x1, x2)? {
@@ -2823,6 +2886,19 @@ pub fn ediff1d<'py>(
     // arm forwards them only when present (numpy validates the time append).
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::ediff1d_time(py, &arr, None, None);
+    }
+    // float16 (REQ-5, #955): ediff1d preserves the dtype (`np.ediff1d(f16).dtype
+    // == float16`, live); delegate to numpy as `match_dtype_numeric!` has no
+    // float16 arm. `to_end`/`to_begin` forwarded only when present.
+    if is_float16_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ref e) = to_end {
+            kwargs.set_item("to_end", e.clone())?;
+        }
+        if let Some(ref b) = to_begin {
+            kwargs.set_item("to_begin", b.clone())?;
+        }
+        return crate::conv::f16_delegate(py, "ediff1d", (&arr,), Some(&kwargs));
     }
     Ok(crate::match_dtype_numeric!(dt.as_str(), T => {
         let view: numpy::PyReadonlyArray1<T> = arr.extract()?;

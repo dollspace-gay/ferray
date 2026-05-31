@@ -1623,6 +1623,10 @@ pub fn argmin<'py>(
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Argmin, axis);
     }
+    // float16 (REQ-5, #955): int64 index output; delegate to numpy.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "argmin", axis, None);
+    }
     // Complex argmin: lexicographic min index (NaN propagates, first wins) —
     // numpy: `np.argmin([1+2j,-3+4j,0+0j,2-1j]) == 2` (live).
     match dt.as_str() {
@@ -1653,6 +1657,10 @@ pub fn argmax<'py>(
     // treats NaT as the argmax winner too, live).
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::time_reduce(py, &arr, crate::datetime::TimeReduce::Argmax, axis);
+    }
+    // float16 (REQ-5, #955): int64 index output; delegate to numpy.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "argmax", axis, None);
     }
     // Complex argmax: lexicographic max index (NaN propagates, first wins) —
     // numpy: `np.argmax([1+2j,-3+4j,0+0j,2-1j]) == 1`? (live). lexicographic
@@ -2639,6 +2647,11 @@ pub fn cumprod<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // float16 (REQ-5, #955): cumprod preserves the dtype (`np.cumprod(f16).dtype
+    // == float16`, live, f32-compute + f16-narrow); delegate to numpy.
+    if is_float16_dtype(dt.as_str()) {
+        return f16_reduce(py, &arr, "cumprod", axis, None);
+    }
     // Complex cumprod folds via the complex `ReduceAcc`, keeping width and shape
     // — numpy: `np.cumprod([1+2j,3+4j])==[1+2j,-5+10j]`.
     if is_complex_dtype(dt.as_str()) {
@@ -2667,6 +2680,13 @@ pub fn diff<'py>(py: Python<'py>, a: &Bound<'py, PyAny>, n: usize) -> PyResult<B
     // which would otherwise raise `TypeError` where numpy computes.
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::diff_time(py, &arr, n);
+    }
+    // float16 (REQ-5, #955): diff preserves the dtype (`np.diff(f16).dtype ==
+    // float16`, live); delegate to numpy as `match_dtype_numeric!` has no f16 arm.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("n", n)?;
+        return crate::conv::f16_delegate(py, "diff", (&arr,), Some(&kwargs));
     }
     // Complex diff: numpy applies the SAME `a[1:] - a[:-1]` subtraction the real
     // path does (`numpy/lib/_function_base_impl.py:1538` `op = ... else
@@ -2742,6 +2762,19 @@ pub fn sort<'py>(
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::sort_time(py, &arr, axis);
     }
+    // float16 (REQ-5, #955): sort preserves the dtype (`np.sort(f16).dtype ==
+    // float16`, live); delegate to numpy as `match_dtype_orderable!` has no f16
+    // arm. `axis=None` flattened above -> pass the original `a` so numpy's own
+    // axis default (`-1`) applies; here re-derive axis kwarg from the normalized
+    // value.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        match axis {
+            Some(ax) => kwargs.set_item("axis", ax)?,
+            None => kwargs.set_item("axis", py.None())?,
+        }
+        return crate::conv::f16_delegate(py, "sort", (&arr,), Some(&kwargs));
+    }
     // Complex sort: lexicographic (real, then imag) with NaN-complex last,
     // width preserved — numpy: `np.sort([3+1j,1+2j,1+1j]) == [1+1j,1+2j,3+1j]`
     // (live). The real-only `match_dtype_orderable!` has no complex arm.
@@ -2777,6 +2810,15 @@ pub fn argsort<'py>(
     // datetime64/timedelta64 argsort: int64 indices by tick, NaT last (REQ-3).
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::argsort_time(py, &arr, axis);
+    }
+    // float16 (REQ-5, #955): argsort returns int64 indices; delegate to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        match axis {
+            Some(ax) => kwargs.set_item("axis", ax)?,
+            None => kwargs.set_item("axis", py.None())?,
+        }
+        return crate::conv::f16_delegate(py, "argsort", (&arr,), Some(&kwargs));
     }
     // Complex argsort: lexicographic-with-nan-last indices (int64) — numpy:
     // `np.argsort([1+2j,-3+4j,0+0j,2-1j]) == [1,2,0,3]` (live).
@@ -2821,6 +2863,12 @@ pub fn searchsorted<'py>(
         let v_scalar = !v.hasattr("__len__")?;
         return crate::datetime::searchsorted_time(py, &arr_a, v, side, v_scalar);
     }
+    // float16 (REQ-5, #955): delegate to numpy (returns int insertion points).
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("side", side)?;
+        return crate::conv::f16_delegate(py, "searchsorted", (&arr_a, v), Some(&kwargs));
+    }
     let arr_v = coerce_dtype(py, v, dt.as_str())?;
     // Complex `searchsorted`: lexicographic insertion points into the (assumed
     // sorted) complex array, matching numpy's lexicographic complex order
@@ -2862,6 +2910,11 @@ pub fn unique<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::unique_time(py, &arr);
     }
+    // float16 (REQ-5, #955): unique preserves the dtype (`np.unique(f16).dtype ==
+    // float16`, live); delegate to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "unique", (&arr,), None);
+    }
     // Complex unique: lexicographic sort + dedup (NaN-complex last, one kept),
     // width preserved — numpy: `np.unique([1+2j,-3+4j,1+2j,2-1j]) ==
     // [-3+4j,1+2j,2-1j]` (live).
@@ -2893,6 +2946,15 @@ pub fn count_nonzero<'py>(
     // `match_dtype_all_complex!`, which would otherwise raise `TypeError`.
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::count_nonzero_time(py, &arr, axis);
+    }
+    // float16 (REQ-5, #955): delegate to numpy (returns int count(s)).
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        match axis {
+            Some(ax) => kwargs.set_item("axis", ax)?,
+            None => kwargs.set_item("axis", py.None())?,
+        }
+        return crate::conv::f16_delegate(py, "count_nonzero", (&arr,), Some(&kwargs));
     }
     // Complex `count_nonzero`: numpy counts `z != 0` (`re != 0 || im != 0`).
     // `ferray_stats::count_nonzero` needs only `T: Element + PartialEq + Copy`,
@@ -2930,6 +2992,21 @@ macro_rules! bind_set_op {
         ) -> PyResult<Bound<'py, PyAny>> {
             let arr_a = as_ndarray(py, a)?;
             let dt = dtype_name(&arr_a)?;
+            // float16 (REQ-5, #955): set ops preserve the dtype; delegate the
+            // whole op (both operands) to numpy as `match_dtype_orderable!` has no
+            // float16 arm.
+            if crate::conv::is_float16_dtype(dt.as_str())
+                || crate::conv::is_float16_dtype(dtype_name(&as_ndarray(py, b)?)?.as_str())
+            {
+                // `numpy.union1d(ar1, ar2)` takes NO `assume_unique` kwarg (only
+                // intersect1d/setdiff1d/setxor1d do); forward it only when numpy
+                // accepts it so the delegate signature matches.
+                let kwargs = pyo3::types::PyDict::new(py);
+                if stringify!($name) != "union1d" {
+                    kwargs.set_item("assume_unique", assume_unique)?;
+                }
+                return crate::conv::f16_delegate(py, stringify!($name), (a, b), Some(&kwargs));
+            }
             let arr_b = coerce_dtype(py, b, dt.as_str())?;
             // Complex set ops compose from the #932 `cplx_sort_cmp` lexicographic
             // order (numpy sorts complex set results lexicographically). The
@@ -2971,6 +3048,16 @@ pub fn in1d<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr_a = as_ndarray(py, a)?;
     let dt = dtype_name(&arr_a)?;
+    // float16 (REQ-5, #955): bool output; delegate both operands to numpy.
+    // `numpy.in1d` was removed in numpy 2.x — delegate to `numpy.isin` (the
+    // identical 1-D membership oracle) instead.
+    if crate::conv::is_float16_dtype(dt.as_str())
+        || crate::conv::is_float16_dtype(dtype_name(&as_ndarray(py, b)?)?.as_str())
+    {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("assume_unique", assume_unique)?;
+        return crate::conv::f16_delegate(py, "isin", (a, b), Some(&kwargs));
+    }
     let arr_b = coerce_dtype(py, b, dt.as_str())?;
     Ok(match_dtype_orderable!(dt.as_str(), T => {
         let va: PyReadonlyArray1<T> = arr_a.extract()?;
@@ -2993,6 +3080,14 @@ pub fn isin<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr_a = as_ndarray(py, element)?;
     let dt = dtype_name(&arr_a)?;
+    // float16 (REQ-5, #955): bool output; delegate both operands to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str())
+        || crate::conv::is_float16_dtype(dtype_name(&as_ndarray(py, test_elements)?)?.as_str())
+    {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("assume_unique", assume_unique)?;
+        return crate::conv::f16_delegate(py, "isin", (element, test_elements), Some(&kwargs));
+    }
     let arr_b = coerce_dtype(py, test_elements, dt.as_str())?;
     // Complex `isin`: per-element membership of `element` in `test_elements`,
     // by exact complex equality (numpy `np.isin` over complex, verified live:
@@ -3032,6 +3127,10 @@ pub fn partition<'py>(
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::partition_time(py, &arr);
     }
+    // float16 (REQ-5, #955): partition preserves the dtype; delegate to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "partition", (&arr, kth), None);
+    }
     // Complex `partition`: numpy places the kth element of the lexicographically
     // sorted complex array in its final position. ferray's `partition` needs
     // `T: PartialOrd` (absent for `Complex<T>`); a full lexicographic sort
@@ -3064,6 +3163,10 @@ pub fn argpartition<'py>(
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::argpartition_time(py, &arr);
     }
+    // float16 (REQ-5, #955): int64 index output; delegate to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "argpartition", (&arr, kth), None);
+    }
     let r: Array1<u64> = match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArray1<T> = arr.extract()?;
         let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -3085,6 +3188,10 @@ pub fn lexsort<'py>(py: Python<'py>, keys: &Bound<'py, PyAny>) -> PyResult<Bound
     // Sniff dtype from the first key; coerce all to match.
     let first = as_ndarray(py, &list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
+    // float16 (REQ-5, #955): int64 index output; delegate to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "lexsort", (keys,), None);
+    }
     let r: Array1<u64> = match_dtype_orderable!(dt.as_str(), T => {
         let mut owned: Vec<Array1<T>> = Vec::with_capacity(list.len());
         for item in list.iter() {
@@ -3114,6 +3221,15 @@ pub fn unique_extended<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // float16 (REQ-5, #955): unique values stay float16, index/inverse/counts are
+    // int — delegate the whole op to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("return_index", return_index)?;
+        kwargs.set_item("return_inverse", return_inverse)?;
+        kwargs.set_item("return_counts", return_counts)?;
+        return crate::conv::f16_delegate(py, "unique", (&arr,), Some(&kwargs));
+    }
     Ok(match_dtype_orderable!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -3716,6 +3832,13 @@ pub fn where_fn<'py>(
         .call1((&bcast[1], &bcast[2]))?
         .getattr("name")?
         .extract()?;
+    // float16 (REQ-5, #955): when `result_type(x, y)` is float16, `where`
+    // preserves float16 (`np.where(mask, f16, f16).dtype == float16`, live);
+    // delegate to numpy as `match_dtype_all_complex!` has no float16 arm. Uses
+    // the ORIGINAL operands so numpy applies its own broadcast + select.
+    if is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "where", (condition, x, y), None);
+    }
     let arr_x = coerce_dtype(py, &bcast[1], dt.as_str())?;
     let arr_y = coerce_dtype(py, &bcast[2], dt.as_str())?;
     let cond_view: PyReadonlyArrayDyn<bool> = cond_b.extract()?;

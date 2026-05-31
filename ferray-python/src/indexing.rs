@@ -357,6 +357,11 @@ pub fn unravel_index<'py>(
 pub fn flatnonzero<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // float16 (REQ-5, #955): int index output; delegate to numpy as
+    // `match_dtype_all!` has no float16 arm.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "flatnonzero", (&arr,), None);
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -385,6 +390,10 @@ pub fn nonzero<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'p
     // `match_dtype_all_complex!`, which would otherwise raise `TypeError`.
     if crate::datetime::is_time_array(&arr)? {
         return crate::datetime::nonzero_time(py, &arr);
+    }
+    // float16 (REQ-5, #955): tuple of int index arrays; delegate to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "nonzero", (&arr,), None);
     }
     // Complex `nonzero`: numpy treats `z != 0` as `re != 0 || im != 0`
     // (numpy/_core/fromnumeric.py:1994 dispatches to the elementwise truth of
@@ -429,6 +438,17 @@ pub fn take<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     use ferray_core::dimension::Axis;
     let mut arr = as_ndarray(py, a)?;
+    // float16 (REQ-5, #955): `take` is a pure gather preserving the dtype
+    // (`np.take(f16,...).dtype == float16`, live); delegate to numpy as
+    // `match_dtype_all_complex!` has no float16 arm.
+    if crate::conv::is_float16_dtype(dtype_name(&arr)?.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        if let Some(ax) = axis {
+            kwargs.set_item("axis", ax)?;
+        }
+        kwargs.set_item("mode", mode)?;
+        return crate::conv::f16_delegate(py, "take", (&arr, indices), Some(&kwargs));
+    }
     let (flat_idx, index_shape) = extract_index_arg(py, indices)?;
 
     // axis=None ⇒ flatten the source and gather along axis 0.
@@ -527,6 +547,10 @@ pub fn take_along_axis<'py>(
     let axis_len = a_shape[ax] as isize;
 
     let dt = dtype_name(&arr)?;
+    // float16 (REQ-5, #955): pure gather preserving the dtype; delegate to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "take_along_axis", (&arr, &idx_arr, axis), None);
+    }
     let result = match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -591,6 +615,10 @@ pub fn choose<'py>(
     let first = as_ndarray(py, &list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
 
+    // float16 (REQ-5, #955): choices stay float16; delegate to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "choose", (a, choices), None);
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let mut owned: Vec<ArrayD<T>> = Vec::with_capacity(list.len());
         for item in list.iter() {
@@ -633,6 +661,12 @@ pub fn compress<'py>(
         }
     };
     let dt = dtype_name(&arr)?;
+    // float16 (REQ-5, #955): compress preserves the dtype; delegate to numpy.
+    // (`arr` may have been raveled above; pass it directly so numpy compresses
+    // the same flattened/axis form.)
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "compress", (condition, &arr), None);
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -676,6 +710,12 @@ pub fn select<'py>(
     let first = as_ndarray(py, &choice_list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
 
+    // float16 (REQ-5, #955): choices stay float16; delegate to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("default", default)?;
+        return crate::conv::f16_delegate(py, "select", (condlist, choicelist), Some(&kwargs));
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let mut choices: Vec<ArrayD<T>> = Vec::with_capacity(choice_list.len());
         for ch in choice_list.iter() {
@@ -720,6 +760,15 @@ pub fn place<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr_a = as_ndarray(py, arr)?;
     let dt = dtype_name(&arr_a)?;
+    // float16 (REQ-5, #955): ferray's `place` returns the MODIFIED COPY (a
+    // documented deviation from numpy's in-place void contract). Preserve that
+    // copy-returning contract for float16 by mutating a numpy copy and returning
+    // it — `match_dtype_all!` has no float16 arm.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        let copy = arr_a.call_method0("copy")?;
+        crate::conv::f16_delegate(py, "place", (&copy, mask, vals), None)?;
+        return Ok(copy);
+    }
     let mask_arr = crate::conv::coerce_dtype(py, mask, "bool")?;
     let mask_view: PyReadonlyArrayDyn<bool> = mask_arr.extract()?;
     let mask_fa: ArrayD<bool> = mask_view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -758,6 +807,13 @@ pub fn putmask<'py>(
         return Err(pyo3::exceptions::PyValueError::new_err(
             "putmask: values array is empty",
         ));
+    }
+    // float16 (REQ-5, #955): mutate a numpy copy and return it (ferray's
+    // copy-returning deviation), as `match_dtype_all!` has no float16 arm.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        let copy = arr_a.call_method0("copy")?;
+        crate::conv::f16_delegate(py, "putmask", (&copy, mask, values), None)?;
+        return Ok(copy);
     }
     let mask_arr = crate::conv::coerce_dtype(py, mask, "bool")?;
     let mask_view: PyReadonlyArrayDyn<bool> = mask_arr.extract()?;
@@ -803,6 +859,15 @@ pub fn put<'py>(
             "put: values array is empty",
         ));
     }
+    // float16 (REQ-5, #955): mutate a numpy copy and return it (ferray's
+    // copy-returning deviation), as `match_dtype_all!` has no float16 arm.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        let copy = arr_a.call_method0("copy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("mode", mode)?;
+        crate::conv::f16_delegate(py, "put", (&copy, ind, v), Some(&kwargs))?;
+        return Ok(copy);
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr_a.extract()?;
         let mut fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -832,6 +897,10 @@ pub fn extract<'py>(
     let cond_fa: ArrayD<bool> = cond_view.as_ferray().map_err(ferr_to_pyerr)?;
     let arr_a = as_ndarray(py, arr)?;
     let dt = dtype_name(&arr_a)?;
+    // float16 (REQ-5, #955): extract preserves the dtype; delegate to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "extract", (condition, arr), None);
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr_a.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
@@ -846,6 +915,10 @@ pub fn extract<'py>(
 pub fn argwhere<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
+    // float16 (REQ-5, #955): int64 multi-index output; delegate to numpy.
+    if crate::conv::is_float16_dtype(dt.as_str()) {
+        return crate::conv::f16_delegate(py, "argwhere", (&arr,), None);
+    }
     Ok(match_dtype_all!(dt.as_str(), T => {
         let view: PyReadonlyArrayDyn<T> = arr.extract()?;
         let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
