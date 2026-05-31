@@ -4,6 +4,37 @@
 // its eigenvalues. The high-degree path delegates to ferray-linalg::eigvals
 // (faer-backed) for the eigendecomposition. Newton's method then polishes
 // each eigenvalue to full f64 precision (#479).
+//
+// ## REQ status — companion-matrix root finding (design `.design/ferray-polynomial.md`)
+//
+// SHIPPED:
+//   - REQ-12: `find_roots_from_power_coeffs` (this file) computes roots via
+//     the companion matrix, delegating the eigendecomposition to
+//     `ferray_linalg::eigvals` (faer-backed Schur), then Newton-polishing
+//     each eigenvalue (`newton_polish`, this file). Degree 0 -> empty, degree
+//     1 -> direct solve, degree >= 2 -> companion path. Returns every root
+//     including complex pairs as `Complex<f64>`, sorted lexicographically by
+//     `(re, im)` via `total_cmp` to mirror numpy `polyroots`' `r.sort()`
+//     (`numpy/polynomial/polynomial.py:1542-1603`). Degree 2 now flows
+//     through the same companion path rather than the bespoke citardauq
+//     formula, which divided by `q = -0.5 * (b + sign(b) * sqrt(disc))` and
+//     collapsed to `0.0 / 0.0 = NaN` for the double root of `x**2`
+//     (ascending `[0, 0, 1]`); the companion path returns the finite double
+//     root `[0, 0]` matching numpy (#1085). Non-finite coefficients are
+//     rejected up front (#252).
+//
+// Consumers (non-test, in production):
+//   - the top-level `roots` `#[pyfunction]` in
+//     `ferray-python/src/polynomial.rs` calls
+//     `fp::roots::find_roots_from_power_coeffs(&stripped)` (numpy `np.roots`).
+//   - every basis class' `roots()` impl — `power.rs`, `chebyshev.rs`,
+//     `legendre.rs`, `laguerre.rs`, `hermite_e.rs` (and Hermite) — converts
+//     to the power basis and calls `find_roots_from_power_coeffs`, so the
+//     `Poly::roots()` trait method (REQ-7) is backed by this function.
+//
+// NOT-STARTED: none — REQ-12 is the sole requirement owned by this module
+// and is fully shipped, audited, and green (including the #1085 double-root
+// fix).
 
 use ferray_core::error::FerrayError;
 use ferray_core::{Array, Ix2};

@@ -3,6 +3,27 @@
 // Implements `numpy.lib.stride_tricks.sliding_window_view`.
 // Returns an immutable view whose shape is (n - w + 1, ..., w0, w1, ...)
 // by reusing the source array's memory with adjusted strides.
+//
+// ## REQ status — sliding_window_view (design `.design/ferray-stride-tricks.md`)
+//
+// SHIPPED:
+//   - REQ-1: `sliding_window_view` (this file) returns a read-only
+//     `ArrayView` whose shape is `[n0-w0+1, ..., w0, w1, ...]`, reusing the
+//     source allocation with stride-0-free adjusted strides (no copy) —
+//     mirrors `numpy.lib.stride_tricks.sliding_window_view(x, window_shape)`.
+//     The `axis=` subset / duplicate-axis path is `sliding_window_view_axis`
+//     (this file), which mirrors numpy's cumulative trimming
+//     (`_stride_tricks_impl.py:436-442`) and per-occurrence stride
+//     (`:433`). Views are immutable, so the no-aliasing safety contract
+//     holds with no validation. Audited NO DIVERGENCE.
+//
+// Consumers (non-test, in production): the `sliding_window_view`
+// `#[pyfunction]` in `ferray-python/src/stride_tricks.rs` routes to
+// `ferray_stride_tricks::{sliding_window_view, sliding_window_view_axis}`,
+// dispatching on whether `axis` is `None` (full view) or a tuple (subset).
+//
+// NOT-STARTED: none — REQ-1 (and its `axis=` extension) is the sole
+// requirement owned by this module and is fully shipped and green.
 
 use ferray_core::dimension::{Dimension, IxDyn};
 use ferray_core::error::{FerrayError, FerrayResult};

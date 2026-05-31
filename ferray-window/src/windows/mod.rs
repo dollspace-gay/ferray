@@ -5,6 +5,41 @@
 //   - cosine, exponential, gaussian, general_cosine, general_hamming,
 //     nuttall, parzen, taylor, tukey (SciPy / torch.signal.windows extras)
 // Each returns an Array1<f64> of length M.
+//
+// ## REQ status — NumPy core window functions (design `.design/ferray-window.md`)
+//
+// SHIPPED:
+//   - REQ-1: `bartlett` (this file) — triangular window, `Array1<f64>`;
+//     matches `numpy.bartlett(M)`.
+//   - REQ-2: `blackman` (this file) — `0.42 - 0.5 cos + 0.08 cos2`; matches
+//     `numpy.blackman(M)`.
+//   - REQ-3: `hamming` (this file) — `0.54 - 0.46 cos`; matches
+//     `numpy.hamming(M)`.
+//   - REQ-4: `hanning` (this file) — Hann window `0.5 (1 - cos)`; matches
+//     `numpy.hanning(M)` (NumPy spells the Hann window `hanning`).
+//   - REQ-5: `kaiser` (this file) — `I_0(beta·sqrt(1 - t²)) / I_0(beta)`
+//     reusing `ferray_ufunc::ops::special::bessel_i0_scalar` (#530). Rejects
+//     only NaN `beta`; every finite `beta` is computed directly, including
+//     large `beta` (e.g. `beta = 709` stays finite, `beta >= 710` reproduces
+//     numpy's `Inf/Inf = NaN` degenerate window) — matches `numpy.kaiser`
+//     (`_function_base_impl.py:3735`) with no threshold rejection (#294,
+//     #1087).
+//   - REQ-6: M<=1 edge case — every window routes through `gen_window`
+//     (this file), which returns `[]` for `m == 0` and `[1.0]` for `m == 1`,
+//     matching NumPy. (Windows with bespoke loops — `cosine`, `parzen`,
+//     `tukey`, etc. — special-case the same two values inline.)
+//
+// Consumers (non-test, in production): `ferray-python/src/window.rs` exposes
+// `hanning`/`hamming`/`blackman`/`bartlett` via the `bind_window_n!` macro
+// (each routing to `fw::<name>`) and `kaiser` via its own `#[pyfunction]`
+// calling `fw::kaiser(m, beta)` — the `numpy.{hanning,…,kaiser}` top-level
+// surface.
+//
+// NOT-STARTED: none — REQ-1..6 (the five NumPy core windows plus the shared
+// M<=1 contract) are fully shipped and green, including the #1087
+// large-finite-`beta` kaiser fix. The SciPy/torch extras below
+// (`cosine`..`tukey`, `chebwin`, `dpss`, `boxcar`, …) are additional surface
+// beyond the REQ-1..6 NumPy-core mandate.
 
 // Window-function coefficients (Blackman 0.42/0.5/0.08, Hamming 0.54/0.46,
 // Kaiser modified-Bessel I0 series) are textbook constants reproduced
