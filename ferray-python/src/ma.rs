@@ -2374,6 +2374,70 @@ impl PyMaskedArray {
         self.mask(py)
     }
 
+    /// `MaskedArray._data` — numpy.ma's PRIVATE data attribute, the underlying
+    /// native-dtype `numpy.ndarray` that `numpy.ma.getdata` reads directly
+    /// (`numpy/ma/core.py` `getdata` → `data.__array__()` off `_data`). It
+    /// carries the SAME value as the public `.data` getter (the aliasing data
+    /// buffer). numpy's `masked_array(obj)` constructor and `getdata` view this
+    /// attribute (R-CODE-4); without it `getdata(fr_ma)` would mis-read the
+    /// data array across the boundary.
+    #[getter(_data)]
+    fn private_data<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        self.data(py)
+    }
+
+    /// `MaskedArray._fill_value` — numpy.ma's PRIVATE fill attribute, a 0-d
+    /// `numpy.ndarray` of the array dtype holding the effective fill (numpy
+    /// `a._fill_value` is e.g. `array(7.)`, NOT a Python scalar). numpy's
+    /// `masked_array(obj)` constructor reads it (`numpy/ma/core.py:3013`
+    /// `fill_value = getattr(data, '_fill_value', None)` then `:3016`
+    /// `_check_fill_value(fill_value, _data.dtype)`), so exposing it lets
+    /// interop free functions — most observably `numpy.ma.fix_invalid`, which
+    /// propagates the input's `_fill_value` to its result — recover ferray's
+    /// fill across the boundary (R-CODE-4) instead of silently substituting the
+    /// per-dtype default.
+    ///
+    /// Built as `numpy.array(<effective fill_value>, dtype=<array dtype>)`,
+    /// reusing the public `.fill_value` getter's per-object value (#880/#882)
+    /// and the `.dtype` getter — so a materialized fill returns `array(7.)` and
+    /// a never-set default returns `array(1e20)`. `_check_fill_value` accepts
+    /// either 0-d array verbatim, matching numpy's representation exactly
+    /// (verified live, R-CHAR-3).
+    #[getter(_fill_value)]
+    fn private_fill_value<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let fill = self.fill_value(py)?;
+        let dtype = self.dtype(py)?;
+        let np = py.import("numpy")?;
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs.set_item("dtype", dtype)?;
+        np.call_method("array", (fill,), Some(&kwargs))
+    }
+
+    /// `MaskedArray._hardmask` — numpy.ma's PRIVATE hardmask flag, a Python
+    /// `bool` (`numpy/ma/core.py:3019` `_hardmask = getattr(data, '_hardmask',
+    /// False)`). It carries the SAME value as the public `.hardmask` getter.
+    /// numpy's `masked_array(obj)` constructor reads it so a hard-masked
+    /// ferray array stays hard across the boundary (R-CODE-4); without it the
+    /// constructor falls back to `False`, softening the mask contract.
+    #[getter(_hardmask)]
+    fn private_hardmask(&self) -> bool {
+        self.hardmask()
+    }
+
+    /// `MaskedArray._sharedmask` — numpy.ma's PRIVATE shared-mask flag, a
+    /// Python `bool` read by `_update_from` (`numpy/ma/core.py:3042`) and
+    /// `unshare_mask` (`:3714`) as copy-on-write metadata. It is NOT observable
+    /// in any interop free-function result: `masked_array(obj)` recomputes its
+    /// own `_sharedmask` from `copy`/the freshly-materialized `_mask`
+    /// (`:2941`/`:2943`), so the value ferray reports does not alter
+    /// `fix_invalid`/`getdata`/`getmask` output. Returns numpy's typical
+    /// post-construction value `True` (verified live: an array built with an
+    /// explicit `mask=` reports `_sharedmask is True`).
+    #[getter(_sharedmask)]
+    fn private_sharedmask(&self) -> bool {
+        true
+    }
+
     /// `MaskedArray.mask` SETTER — assign a new mask (#890).
     ///
     /// numpy's `mask.setter` routes through `__setmask__` (`numpy/ma/core.py:
