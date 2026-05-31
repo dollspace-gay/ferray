@@ -46,7 +46,52 @@ use ferray_core::dimension::{Ix1, Ix2};
 use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 
-use faer::linalg::solvers::{DenseSolveCore, Solve};
+use faer::linalg::solvers::{DenseSolveCore, PartialPivLu, Solve};
+
+/// Decide whether a complex square matrix is singular from its partial-pivot
+/// LU factorization, matching numpy/LAPACK rather than scanning the output for
+/// NaN/Inf.
+///
+/// numpy's `linalg.inv`/`solve` delegate to LAPACK complex `getrf`/`gesv`,
+/// which report singularity when a pivot on the U-diagonal collapses to the
+/// machine floor relative to the largest pivot. faer's complex `partial_piv_lu`
+/// does **not** produce an exact zero for an exactly-rank-deficient input (it
+/// yields a tiny-but-finite pivot), so a literal `== 0` test would miss it.
+///
+/// Criterion (mirrors the real path `crate::solve::lu_is_singular`): singular
+/// iff `min|U_ii| <= n * eps * max|U_ii|`, where `|U_ii|` is the complex
+/// modulus of each U-diagonal entry. This relative-pivot-floor test flags
+/// exactly-singular and numerically rank-deficient inputs while leaving
+/// genuinely invertible (even ill-conditioned) complex matrices solvable.
+fn complex_lu_is_singular<T>(lu: &PartialPivLu<Complex<T>>, n: usize) -> bool
+where
+    T: Copy + 'static,
+    Complex<T>: Element + Copy + faer_traits::ComplexField,
+{
+    if n == 0 {
+        return false;
+    }
+    let u = lu.U();
+    // `|U_ii|` lives in faer's real associated type for the complex field.
+    type Real<C> = <C as faer_traits::ComplexField>::Real;
+    let mut min_abs: Real<Complex<T>> = faer_traits::math_utils::zero::<Real<Complex<T>>>();
+    let mut max_abs: Real<Complex<T>> = faer_traits::math_utils::zero::<Real<Complex<T>>>();
+    let mut first = true;
+    for i in 0..n {
+        let d = faer_traits::math_utils::abs::<Complex<T>>(&u[(i, i)]);
+        if first || d < min_abs {
+            min_abs = d.clone();
+        }
+        if first || d > max_abs {
+            max_abs = d;
+        }
+        first = false;
+    }
+    let n_real = faer_traits::math_utils::from_f64::<Real<Complex<T>>>(n as f64);
+    let eps = faer_traits::math_utils::eps::<Real<Complex<T>>>();
+    let threshold = n_real * eps * max_abs;
+    min_abs <= threshold
+}
 
 /// Convert a 2-D ferray `Array<Complex<T>, Ix2>` into a faer `Mat<Complex<T>>`.
 fn array2c_to_faer<T>(a: &Array<Complex<T>, Ix2>) -> faer::Mat<Complex<T>>
@@ -222,8 +267,8 @@ where
 ///
 /// # Errors
 /// - [`FerrayError::ShapeMismatch`] if the matrix is not square.
-/// - [`FerrayError::SingularMatrix`] if the result contains NaN/inf
-///   (indicating faer's LU hit a near-zero pivot).
+/// - [`FerrayError::SingularMatrix`] if the LU U-diagonal pivots indicate a
+///   rank-deficient matrix (relative-pivot-floor check, matching LAPACK).
 pub fn inv_complex<T>(a: &Array<Complex<T>, Ix2>) -> FerrayResult<Array<Complex<T>, Ix2>>
 where
     T: Copy + 'static,
@@ -243,15 +288,20 @@ where
 
     let mat = array2c_to_faer(a);
     let lu = mat.as_ref().partial_piv_lu();
-    let inv_mat = lu.inverse();
 
-    let result = faer_to_array2c(&inv_mat)?;
-    // Singularity detection would require calling .is_nan() on the
-    // real/imag parts of each Complex<T>, but we don't have a
-    // generic bound on T here. faer's LU produces NaN/Inf when it
-    // hits a near-zero pivot; callers who need explicit singularity
-    // detection can call `det_complex` alongside and test for zero.
-    Ok(result)
+    // numpy/LAPACK complex `getrf`/`getri` raise LinAlgError("Singular matrix")
+    // on a rank-deficient input. faer's complex LU yields a tiny-but-finite
+    // pivot (so the result is NaN/Inf garbage), so detect singularity from the
+    // U-diagonal pivot magnitudes — the same relative-floor criterion as the
+    // real path (`crate::solve::lu_is_singular`).
+    if complex_lu_is_singular(&lu, n) {
+        return Err(FerrayError::SingularMatrix {
+            message: "matrix is singular; cannot compute inverse".to_string(),
+        });
+    }
+
+    let inv_mat = lu.inverse();
+    faer_to_array2c(&inv_mat)
 }
 
 /// Solve the complex linear system `A x = b`. `b` may be a vector
@@ -259,6 +309,7 @@ where
 ///
 /// # Errors
 /// - [`FerrayError::ShapeMismatch`] on incompatible shapes.
+/// - [`FerrayError::SingularMatrix`] if A is singular (LU pivot-floor check).
 pub fn solve_complex<T>(
     a: &Array<Complex<T>, Ix2>,
     b: &Array<Complex<T>, Ix2>,
@@ -286,6 +337,13 @@ where
 
     let a_faer = array2c_to_faer(a);
     let lu = a_faer.as_ref().partial_piv_lu();
+    // numpy/LAPACK complex `gesv` raises LinAlgError("Singular matrix") on a
+    // singular coefficient matrix; mirror the real-path pivot-floor check.
+    if complex_lu_is_singular(&lu, n) {
+        return Err(FerrayError::SingularMatrix {
+            message: "matrix is singular; solve has no unique solution".to_string(),
+        });
+    }
     let b_faer = array2c_to_faer(b);
     let x = lu.solve(&b_faer);
 
@@ -301,6 +359,10 @@ where
 
 /// Solve a complex vector system: same as [`solve_complex`] but with
 /// a 1-D right-hand side vector.
+///
+/// # Errors
+/// - [`FerrayError::ShapeMismatch`] on incompatible shapes.
+/// - [`FerrayError::SingularMatrix`] if A is singular (LU pivot-floor check).
 pub fn solve_complex_vec<T>(
     a: &Array<Complex<T>, Ix2>,
     b: &Array<Complex<T>, Ix1>,
@@ -327,6 +389,13 @@ where
 
     let a_faer = array2c_to_faer(a);
     let lu = a_faer.as_ref().partial_piv_lu();
+    // numpy/LAPACK complex `gesv` raises LinAlgError("Singular matrix") on a
+    // singular coefficient matrix; mirror the real-path pivot-floor check.
+    if complex_lu_is_singular(&lu, n) {
+        return Err(FerrayError::SingularMatrix {
+            message: "matrix is singular; solve has no unique solution".to_string(),
+        });
+    }
 
     // Build b as an n×1 faer Mat.
     let b_data: Vec<Complex<T>> = b.iter().copied().collect();

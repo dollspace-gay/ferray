@@ -2451,11 +2451,13 @@ pub fn inv_complex<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Boun
     let arr = coerce_complex_dtype(py, &arr, cdt)?;
     Ok(if cdt == "complex64" {
         let fa = complex_pyarray_to_ferray_2d::<f32>(&arr)?;
-        let r = fl::inv_complex(&fa).map_err(ferr_to_pyerr)?;
+        // Singular complex matrices surface FerrayError::SingularMatrix, which
+        // numpy raises as LinAlgError("Singular matrix") — map accordingly.
+        let r = fl::inv_complex(&fa).map_err(|e| linalg_err_to_pyerr(py, e))?;
         complex_2d_ferray_to_pyarray(py, r)?
     } else {
         let fa = complex_pyarray_to_ferray_2d::<f64>(&arr)?;
-        let r = fl::inv_complex(&fa).map_err(ferr_to_pyerr)?;
+        let r = fl::inv_complex(&fa).map_err(|e| linalg_err_to_pyerr(py, e))?;
         complex_2d_ferray_to_pyarray(py, r)?
     })
 }
@@ -2515,22 +2517,23 @@ pub fn solve_complex<'py>(
         let fa = complex_pyarray_to_ferray_2d::<f32>(&arr_a)?;
         if b_ndim == 1 {
             let fb = complex_pyarray_to_ferray_1d::<f32>(&arr_b)?;
-            let r = fl::solve_complex_vec(&fa, &fb).map_err(ferr_to_pyerr)?;
+            // Singular A surfaces FerrayError::SingularMatrix -> LinAlgError.
+            let r = fl::solve_complex_vec(&fa, &fb).map_err(|e| linalg_err_to_pyerr(py, e))?;
             complex_1d_ferray_to_pyarray(py, r)?
         } else {
             let fb = complex_pyarray_to_ferray_2d::<f32>(&arr_b)?;
-            let r = fl::solve_complex(&fa, &fb).map_err(ferr_to_pyerr)?;
+            let r = fl::solve_complex(&fa, &fb).map_err(|e| linalg_err_to_pyerr(py, e))?;
             complex_2d_ferray_to_pyarray(py, r)?
         }
     } else {
         let fa = complex_pyarray_to_ferray_2d::<f64>(&arr_a)?;
         if b_ndim == 1 {
             let fb = complex_pyarray_to_ferray_1d::<f64>(&arr_b)?;
-            let r = fl::solve_complex_vec(&fa, &fb).map_err(ferr_to_pyerr)?;
+            let r = fl::solve_complex_vec(&fa, &fb).map_err(|e| linalg_err_to_pyerr(py, e))?;
             complex_1d_ferray_to_pyarray(py, r)?
         } else {
             let fb = complex_pyarray_to_ferray_2d::<f64>(&arr_b)?;
-            let r = fl::solve_complex(&fa, &fb).map_err(ferr_to_pyerr)?;
+            let r = fl::solve_complex(&fa, &fb).map_err(|e| linalg_err_to_pyerr(py, e))?;
             complex_2d_ferray_to_pyarray(py, r)?
         }
     })
