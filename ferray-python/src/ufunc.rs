@@ -841,6 +841,70 @@ macro_rules! complex_eq_dispatch {
     }};
 }
 
+// ---------------------------------------------------------------------------
+// float16 arm for BINARY arithmetic (#953, REQ-3).
+//
+// The real-only `match_dtype_numeric!` / `match_dtype_float_or_int!` macros
+// have NO float16 arm, so every binary arithmetic op rejects a float16 operand
+// with `TypeError: unsupported dtype for numeric op: "float16"` — even though
+// numpy computes them all (`np.add(f16,f16).dtype == float16`, `f16+f32 ->
+// float32`, `f16+int32 -> float64`, verified live numpy 2.4.5). The installed
+// pyo3-numpy build has no `NumpyElement`/`PyReadonlyArrayDyn` for `half::f16`
+// (the `numpy/half` feature is off — see `.design/ferray-core-float16.md`), so
+// a typed f16 view can't be taken at the boundary.
+//
+// The arm below DETECTS a float16 operand and DELEGATES the whole op to numpy's
+// own top-level function on the ORIGINAL operands. numpy then owns (a) NEP-50
+// promotion (`result_type`: f16+f16->f16, f16+f32->f32, f16+pyfloat->f16,
+// f16+int-array->f64) and (b) the f16 compute contract (numpy computes float16
+// arithmetic at float32 width and rounds the result back to float16, overflow
+// to inf). This is bit-for-bit numpy-correct and keeps `half::f16` entirely out
+// of the Rust boundary — the SAME detect-and-delegate pattern the float16
+// reductions (`crate::stats::f16_reduce`, #954) and creation coercion (#952)
+// already use. The guard fires ONLY when an operand is float16, so the real
+// f32/f64/int arithmetic paths are completely unchanged.
+// ---------------------------------------------------------------------------
+
+/// `true` for the two float16 dtype names numpy reports.
+fn is_float16_dtype(dt: &str) -> bool {
+    matches!(dt, "float16" | "f16")
+}
+
+/// `true` if EITHER binary operand is a float16 array/scalar — the signal that
+/// the op must take the numpy-delegate float16 arm rather than the real-only
+/// `match_dtype_numeric!` / `match_dtype_float_or_int!` funnel. Both operands
+/// are normalized to ndarrays first (matching the real path's `as_ndarray`),
+/// then their dtype names are sniffed. A float16-on-either-side pair covers
+/// every NEP-50 case (f16+f16, f16+f32, f16+int-array, reflected), all of which
+/// numpy resolves via its own `result_type` inside the delegated call.
+fn binary_involves_float16(
+    py: Python<'_>,
+    a: &Bound<'_, PyAny>,
+    b: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
+    let arr_a = as_ndarray(py, a)?;
+    let arr_b = as_ndarray(py, b)?;
+    Ok(is_float16_dtype(dtype_name(&arr_a)?.as_str())
+        || is_float16_dtype(dtype_name(&arr_b)?.as_str()))
+}
+
+/// Delegate a binary arithmetic op with a float16 operand to numpy's own
+/// top-level function (`func` = `"add"`, `"subtract"`, `"multiply"`, `"divide"`,
+/// `"power"`, `"floor_divide"`, `"remainder"`, `"mod"`, `"maximum"`,
+/// `"minimum"`) on the ORIGINAL operands. numpy owns NEP-50 promotion + the
+/// float32-compute / float16-narrow contract, so the returned object carries
+/// numpy's exact result dtype (f16/f32/f64) and value (overflow -> inf). For
+/// all-scalar operands numpy returns a 0-d numpy scalar, which the caller's
+/// `scalarize`/`finish_with_out` path passes through unchanged (R-DEV-3).
+fn f16_binary_delegate<'py>(
+    py: Python<'py>,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
+    func: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    py.import("numpy")?.call_method1(func, (a, b))
+}
+
 /// Raise numpy's exact `TypeError` for a complex input to a BINARY ufunc with
 /// NO complex loop (`floor_divide`, `remainder`, `mod`, `bitwise_and`/`or`/
 /// `xor`, `left_shift`, `right_shift`). numpy: `np.floor_divide(z, z)` →
@@ -1695,7 +1759,9 @@ pub fn add<'py>(
         return finish_with_out(out, result, false);
     }
     let scalar = all_scalar_inputs(py, &[x1, x2])?;
-    let result = if binary_is_complex(py, x1, x2)? {
+    let result = if binary_involves_float16(py, x1, x2)? {
+        f16_binary_delegate(py, x1, x2, "add")?
+    } else if binary_is_complex(py, x1, x2)? {
         complex_binary_arith_dispatch!(py, x1, x2, ferray_ufunc::add_broadcast)
     } else {
         binary_numeric_body!(py, x1, x2, ferray_ufunc::add_broadcast)
@@ -1720,7 +1786,9 @@ pub fn subtract<'py>(
         return finish_with_out(out, result, false);
     }
     let scalar = all_scalar_inputs(py, &[x1, x2])?;
-    let result = if binary_is_complex(py, x1, x2)? {
+    let result = if binary_involves_float16(py, x1, x2)? {
+        f16_binary_delegate(py, x1, x2, "subtract")?
+    } else if binary_is_complex(py, x1, x2)? {
         complex_binary_arith_dispatch!(py, x1, x2, ferray_ufunc::subtract_broadcast)
     } else {
         binary_numeric_body!(py, x1, x2, ferray_ufunc::subtract_broadcast)
@@ -1747,7 +1815,9 @@ pub fn multiply<'py>(
         return finish_with_out(out, result, false);
     }
     let scalar = all_scalar_inputs(py, &[x1, x2])?;
-    let result = if binary_is_complex(py, x1, x2)? {
+    let result = if binary_involves_float16(py, x1, x2)? {
+        f16_binary_delegate(py, x1, x2, "multiply")?
+    } else if binary_is_complex(py, x1, x2)? {
         complex_binary_arith_dispatch!(py, x1, x2, ferray_ufunc::multiply_broadcast)
     } else {
         binary_numeric_body!(py, x1, x2, ferray_ufunc::multiply_broadcast)
@@ -1773,7 +1843,9 @@ pub fn divide<'py>(
         return finish_with_out(out, result, false);
     }
     let scalar = all_scalar_inputs(py, &[x1, x2])?;
-    let result = if binary_is_complex(py, x1, x2)? {
+    let result = if binary_involves_float16(py, x1, x2)? {
+        f16_binary_delegate(py, x1, x2, "divide")?
+    } else if binary_is_complex(py, x1, x2)? {
         complex_binary_arith_dispatch!(py, x1, x2, ferray_ufunc::divide_broadcast)
     } else {
         binary_numeric_body!(py, x1, x2, ferray_ufunc::divide_broadcast)
@@ -1898,7 +1970,11 @@ macro_rules! bind_binary_numeric_split {
     // Complex-loop form (`power`): a complex input computes via `$cfn`
     // (`ferray_ufunc::power_complex`) before the real float/int split. numpy
     // registers a complex `power` loop (`np.power([1+2j],[2+0j]) == [-3+4j]`).
-    ($name:ident, $float_fn:path, $int_fn:path, complex = $cfn:path) => {
+    // A float16 operand delegates to numpy's own `$npfunc` (REQ-3, #953): numpy
+    // owns the f16 NEP-50 promotion + float32-compute/float16-narrow contract
+    // (`np.power(f16,f16).dtype == float16`, `f16**f32 -> float32`), keeping
+    // `half::f16` out of the real funnel.
+    ($name:ident, $float_fn:path, $int_fn:path, complex = $cfn:path, f16 = $npfunc:expr) => {
         #[pyfunction]
         pub fn $name<'py>(
             py: Python<'py>,
@@ -1906,7 +1982,9 @@ macro_rules! bind_binary_numeric_split {
             x2: &Bound<'py, PyAny>,
         ) -> PyResult<Bound<'py, PyAny>> {
             let scalar = all_scalar_inputs(py, &[x1, x2])?;
-            let out = if binary_is_complex(py, x1, x2)? {
+            let out = if binary_involves_float16(py, x1, x2)? {
+                f16_binary_delegate(py, x1, x2, $npfunc)?
+            } else if binary_is_complex(py, x1, x2)? {
                 complex_binary_arith_dispatch!(py, x1, x2, $cfn)
             } else {
                 binary_numeric_split_body!(py, x1, x2, $float_fn, $int_fn)
@@ -1938,7 +2016,7 @@ macro_rules! bind_binary_numeric_split {
     // with NaN-PROPAGATE semantics (a NaN-part operand propagates; `a` first).
     // The imaginary part is preserved (width c64->c64, c128->c128). `want_max`
     // picks maximum vs minimum.
-    ($name:ident, $float_fn:path, $int_fn:path, complex_minmax = $want_max:expr) => {
+    ($name:ident, $float_fn:path, $int_fn:path, complex_minmax = $want_max:expr, f16 = $npfunc:expr) => {
         #[pyfunction]
         pub fn $name<'py>(
             py: Python<'py>,
@@ -1956,7 +2034,12 @@ macro_rules! bind_binary_numeric_split {
                 return if scalar { scalarize(out) } else { Ok(out) };
             }
             let scalar = all_scalar_inputs(py, &[x1, x2])?;
-            let out = if binary_is_complex(py, x1, x2)? {
+            // float16 operand -> delegate to numpy's `$npfunc` (REQ-3, #953):
+            // numpy's complex-free `maximum`/`minimum` f16 loop owns the
+            // float32-compute / float16-narrow + NEP-50 promotion.
+            let out = if binary_involves_float16(py, x1, x2)? {
+                f16_binary_delegate(py, x1, x2, $npfunc)?
+            } else if binary_is_complex(py, x1, x2)? {
                 complex_minmax_dispatch(py, x1, x2, $want_max, true)?
             } else {
                 binary_numeric_split_body!(py, x1, x2, $float_fn, $int_fn)
@@ -1970,19 +2053,22 @@ bind_binary_numeric_split!(
     power,
     ferray_ufunc::power,
     ferray_ufunc::power_int,
-    complex = ferray_ufunc::ops::arithmetic::power_complex
+    complex = ferray_ufunc::ops::arithmetic::power_complex,
+    f16 = "power"
 );
 bind_binary_numeric_split!(
     maximum,
     ferray_ufunc::maximum,
     ferray_ufunc::maximum_ord,
-    complex_minmax = true
+    complex_minmax = true,
+    f16 = "maximum"
 );
 bind_binary_numeric_split!(
     minimum,
     ferray_ufunc::minimum,
     ferray_ufunc::minimum_ord,
-    complex_minmax = false
+    complex_minmax = false,
+    f16 = "minimum"
 );
 /// `numpy.floor_divide(x1, x2)` — element-wise floor division. Datetime64 /
 /// timedelta64 operands route through `crate::datetime::floordiv_time`:
@@ -1998,6 +2084,11 @@ pub fn floor_divide<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     if crate::datetime::is_time_op(py, x1, x2)? {
         return crate::datetime::floordiv_time(py, x1, x2);
+    }
+    if binary_involves_float16(py, x1, x2)? {
+        let scalar = all_scalar_inputs(py, &[x1, x2])?;
+        let out = f16_binary_delegate(py, x1, x2, "floor_divide")?;
+        return if scalar { scalarize(out) } else { Ok(out) };
     }
     if binary_is_complex(py, x1, x2)? {
         return Err(reject_complex_binary("floor_divide"));
@@ -2027,6 +2118,11 @@ pub fn remainder<'py>(
     if crate::datetime::is_time_op(py, x1, x2)? {
         return crate::datetime::mod_time(py, x1, x2);
     }
+    if binary_involves_float16(py, x1, x2)? {
+        let scalar = all_scalar_inputs(py, &[x1, x2])?;
+        let out = f16_binary_delegate(py, x1, x2, "remainder")?;
+        return if scalar { scalarize(out) } else { Ok(out) };
+    }
     if binary_is_complex(py, x1, x2)? {
         return Err(reject_complex_binary("remainder"));
     }
@@ -2052,6 +2148,12 @@ pub fn mod_<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     if crate::datetime::is_time_op(py, x1, x2)? {
         return crate::datetime::mod_time(py, x1, x2);
+    }
+    if binary_involves_float16(py, x1, x2)? {
+        let scalar = all_scalar_inputs(py, &[x1, x2])?;
+        // numpy's `mod` is an alias of `remainder`; delegate to either (same loop).
+        let out = f16_binary_delegate(py, x1, x2, "mod")?;
+        return if scalar { scalarize(out) } else { Ok(out) };
     }
     if binary_is_complex(py, x1, x2)? {
         return Err(reject_complex_binary("remainder"));
