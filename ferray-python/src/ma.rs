@@ -635,6 +635,37 @@ fn gather_view(base: &DynMa, desc: &ViewDesc) -> PyResult<DynMa> {
     })
 }
 
+/// Build an IDENTITY VIEW (#891) of `base`: a `Storage::View` whose `ViewDesc`
+/// covers EVERY element of the base in C-order (`positions = 0..size`, `shape =
+/// base.shape`). This is the same descriptor `__getitem__` produces for a full
+/// `[:]`/`...` basic index, so READs re-gather the base's current state and
+/// WRITEs propagate to the base (#857 write-through) — exactly numpy's
+/// `copy=False` shared-buffer semantics for `ma.array(other_maskedarray)`.
+///
+/// `base_fill_is_default` mirrors `__getitem__`'s capture: the view TRACKS the
+/// base's `_fill_value` only when the base is already MATERIALIZED at creation
+/// (numpy's `__array_finalize__` by-reference share); a never-set base yields
+/// an INDEPENDENT default-fill view. `own_*` overlays start empty (the view
+/// inherits the base's hard-mask/fill/mask until the view itself diverges).
+fn identity_view(base: &Bound<'_, PyMaskedArray>) -> PyMaskedArray {
+    let shape = base.borrow().shape_vec();
+    let size: usize = shape.iter().product();
+    let base_fill_is_default = !base.borrow().is_fill_materialized();
+    PyMaskedArray {
+        storage: Storage::View {
+            base: base.clone().unbind(),
+            desc: ViewDesc {
+                positions: (0..size).collect(),
+                shape,
+            },
+            own_hard: false,
+            own_fill: None,
+            own_mask: None,
+            base_fill_is_default,
+        },
+    }
+}
+
 /// Replace `gathered`'s mask with a view-local `local` bool mask (#881),
 /// keeping the gathered DATA verbatim. Used by [`PyMaskedArray::snapshot`] for a
 /// view over a NOMASK base that has been masked locally: numpy materializes a
@@ -1736,14 +1767,44 @@ fn from_numpy_ma<'py>(py: Python<'py>, r: &Bound<'py, PyAny>) -> PyResult<PyMask
 #[pymethods]
 impl PyMaskedArray {
     #[new]
-    #[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None, fill_value = None))]
+    #[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None, copy = false, fill_value = None))]
     fn py_new<'py>(
         py: Python<'py>,
         data: &Bound<'py, PyAny>,
         #[pyo3(from_py_with = parse_mask_arg)] mask: MaskArg<'py>,
         dtype: Option<&Bound<'py, PyAny>>,
+        copy: bool,
         fill_value: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Self> {
+        // #891: numpy's `ma.array`/`masked_array` default `copy=False`. When the
+        // INPUT is itself a `fr.ma.MaskedArray` and no kwarg forces a copy,
+        // numpy returns a VIEW sharing the base `_data` (and `_mask`) —
+        // `b = ma.array(a); b[0] = 99` writes through to `a[0]`
+        // (`numpy/ma/core.py:2895` `_data = np.array(data, dtype=dtype,
+        // copy=copy, ...)` in `MaskedArray.__new__`, `copy` defaulting `False`).
+        // ferray mirrors this with the #857 view machinery: an IDENTITY
+        // `ViewDesc` over the base's full element range, the same descriptor
+        // `__getitem__` builds for a full `[:]`/`...` basic index, so the #857
+        // write-through path (`__setitem__` View arm) propagates to the base.
+        //
+        // A COPY is forced (current OWNED behavior) when `copy=True`, OR a
+        // TRANSFORMING kwarg is present: an explicit `dtype=` DIFFERING from the
+        // base's dtype (numpy re-casts → a fresh buffer; a SAME dtype stays a
+        // view — verified live), an explicit `mask=`, or a `fill_value=`
+        // (these route through the OWNED `construct_masked` body below). A
+        // non-`fr.ma` input (list/ndarray/numpy.ma) keeps the OWNED path —
+        // ferray cannot hold a foreign numpy buffer as a view base.
+        if !copy && matches!(mask, MaskArg::Absent | MaskArg::Nomask) && fill_value.is_none() {
+            if let Ok(base) = data.cast::<PyMaskedArray>() {
+                let dt_name = crate::conv::normalize_opt_dtype(py, dtype)?;
+                let same_dtype = dt_name
+                    .as_deref()
+                    .is_none_or(|req| req == base.borrow().dtype_name_cheap());
+                if same_dtype {
+                    return Ok(identity_view(base));
+                }
+            }
+        }
         // Resolve numpy's `mask=` tri-state ([`MaskArg`]) into the shared
         // [`construct_masked`] body's `Option<&Bound>` contract (`None` = nomask
         // path; `Some(_)` = explicit real mask):
@@ -5054,29 +5115,31 @@ fn put_err_to_pyerr(e: ferray_core::FerrayError) -> PyErr {
 /// and an explicit `mask=None` stay distinguishable through to
 /// [`PyMaskedArray::py_new`]'s tri-state resolution.
 #[pyfunction]
-#[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None, fill_value = None))]
+#[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None, copy = false, fill_value = None))]
 pub fn array<'py>(
     py: Python<'py>,
     data: &Bound<'py, PyAny>,
     #[pyo3(from_py_with = parse_mask_arg)] mask: MaskArg<'py>,
     dtype: Option<&Bound<'py, PyAny>>,
+    copy: bool,
     fill_value: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<PyMaskedArray> {
-    PyMaskedArray::py_new(py, data, mask, dtype, fill_value)
+    PyMaskedArray::py_new(py, data, mask, dtype, copy, fill_value)
 }
 
-/// `numpy.ma.masked_array(data, mask=None, dtype=None, fill_value=None)` —
-/// alias for `array`.
+/// `numpy.ma.masked_array(data, mask=None, dtype=None, copy=False,
+/// fill_value=None)` — alias for `array`.
 #[pyfunction]
-#[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None, fill_value = None))]
+#[pyo3(signature = (data, mask = MaskArg::Absent, dtype = None, copy = false, fill_value = None))]
 pub fn masked_array<'py>(
     py: Python<'py>,
     data: &Bound<'py, PyAny>,
     #[pyo3(from_py_with = parse_mask_arg)] mask: MaskArg<'py>,
     dtype: Option<&Bound<'py, PyAny>>,
+    copy: bool,
     fill_value: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<PyMaskedArray> {
-    PyMaskedArray::py_new(py, data, mask, dtype, fill_value)
+    PyMaskedArray::py_new(py, data, mask, dtype, copy, fill_value)
 }
 
 /// `numpy.ma.masked_where(condition, data)`.
