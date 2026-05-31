@@ -375,3 +375,56 @@ def test_stack_promotes_to_common_dtype():
     out = fr.stack([a, b])
     assert out.dtype == expected.dtype == np.dtype(np.int64)
     assert np.array_equal(out, expected)
+
+
+# ---------------------------------------------------------------------------
+# delete obj: exception-TYPE contract (native per-axis kernel,
+# resolve_delete_obj in manipulation.rs)
+#
+# These behaviours were re-implemented as DIRECT edits (delete axis=None default
+# + obj int/slice/seq/bool). The value paths match the oracle, but the native
+# axis-given error paths diverge from numpy's exception TYPE.
+# ---------------------------------------------------------------------------
+
+
+def test_delete_oob_int_is_plain_indexerror():
+    """numpy/lib/_function_base_impl.py:5221 `def delete(arr, obj, axis=None)` —
+    an out-of-bounds integer `obj` raises a *plain* `IndexError`
+    ("index N is out of bounds for axis ...").
+    ferray's `resolve_delete_obj` (manipulation.rs:1494) maps an out-of-range
+    index through `axis_error`, raising `numpy.exceptions.AxisError`
+    ("axis N is out of bounds for array of dimension ...").
+    AxisError SUBCLASSES IndexError, so this pins the exact numpy type + the
+    'index'-vs-'axis' message divergence rather than the supertype.
+    Oracle (live): np.delete(arange(10), 20, 0) raises IndexError exactly,
+    with message starting 'index 20 is out of bounds'."""
+    a = np.arange(10)
+    # Confirm the oracle's exact type + message LIVE (R-CHAR-3).
+    with pytest.raises(IndexError) as np_exc:
+        np.delete(a, 20, 0)
+    assert type(np_exc.value) is IndexError
+    assert str(np_exc.value).startswith("index 20 is out of bounds")
+    # ferray must match: exact IndexError (not the AxisError subclass) and the
+    # 'index ... out of bounds' wording, not 'axis ... out of bounds'.
+    with pytest.raises(IndexError) as fr_exc:
+        fr.delete(a, 20, 0)
+    assert type(fr_exc.value) is IndexError
+    assert str(fr_exc.value).startswith("index 20 is out of bounds")
+
+
+def test_delete_float_obj_is_indexerror():
+    """numpy/lib/_function_base_impl.py:5221 delete — a non-integer (float)
+    `obj` raises `IndexError`
+    ("arrays used as indices must be of integer (or boolean) type").
+    ferray's `resolve_delete_obj` falls through to `obj.extract::<Vec<isize>>()`
+    on a float array and raises a `TypeError`
+    ("'numpy.float64' object cannot be interpreted as an integer"), which is NOT
+    an instance of IndexError. Oracle (live): np.delete(arange(10),
+    array([1.0, 2.0]), 0) raises IndexError."""
+    a = np.arange(10)
+    obj = np.array([1.0, 2.0])
+    with pytest.raises(IndexError):
+        np.delete(a, obj, 0)
+    # ferray currently raises TypeError here, so pytest.raises(IndexError) fails.
+    with pytest.raises(IndexError):
+        fr.delete(a, obj, 0)
