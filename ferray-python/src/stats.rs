@@ -3608,14 +3608,18 @@ pub fn intersect1d<'py>(
     intersect1d_core(py, a, b, assume_unique)
 }
 
-/// `numpy.in1d(ar1, ar2)` — bool array of presence.
+/// `numpy.in1d(ar1, ar2)` — bool array of presence. `invert=True` negates the
+/// membership mask; `kind` ('sort'/'table'/None) is an algorithm hint that does
+/// not change the result (numpy/lib/_arraysetops_impl.py:959,1076).
 #[pyfunction]
-#[pyo3(signature = (a, b, assume_unique = false))]
+#[pyo3(signature = (a, b, assume_unique = false, invert = false, kind = None))]
 pub fn in1d<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
     b: &Bound<'py, PyAny>,
     assume_unique: bool,
+    invert: bool,
+    kind: Option<&str>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr_a = as_ndarray(py, a)?;
     let dt = dtype_name(&arr_a)?;
@@ -3627,6 +3631,8 @@ pub fn in1d<'py>(
     {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("assume_unique", assume_unique)?;
+        kwargs.set_item("invert", invert)?;
+        kwargs.set_item("kind", kind)?;
         return crate::manipulation::string_delegate(py, "isin", (a, b), Some(&kwargs));
     }
     // float16 (REQ-5, #955): bool output; delegate both operands to numpy.
@@ -3637,27 +3643,39 @@ pub fn in1d<'py>(
     {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("assume_unique", assume_unique)?;
+        kwargs.set_item("invert", invert)?;
+        kwargs.set_item("kind", kind)?;
         return crate::conv::f16_delegate(py, "isin", (a, b), Some(&kwargs));
     }
+    let _ = kind; // algorithm hint only; identical output on the native path.
     let arr_b = coerce_dtype(py, b, dt.as_str())?;
     Ok(match_dtype_orderable!(dt.as_str(), T => {
         let va: PyReadonlyArray1<T> = arr_a.extract()?;
         let vb: PyReadonlyArray1<T> = arr_b.extract()?;
         let fa: Array1<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
         let fb: Array1<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
-        let r: Array1<bool> = ferray_stats::in1d(&fa, &fb, assume_unique).map_err(ferr_to_pyerr)?;
+        let mut r: Array1<bool> = ferray_stats::in1d(&fa, &fb, assume_unique).map_err(ferr_to_pyerr)?;
+        if invert {
+            r.iter_mut().for_each(|v| *v = !*v);
+        }
         r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
     }))
 }
 
-/// `numpy.isin(element, test_elements)`.
+/// `numpy.isin(element, test_elements, assume_unique=False, invert=False, *,
+/// kind=None)`. `invert=True` returns the logical negation of the membership
+/// mask (still shape-preserving); `kind` ('sort'/'table'/None) is an algorithm
+/// hint that does not change the result (numpy/lib/_arraysetops_impl.py:959,1076
+/// `in1d(element, test, assume_unique, invert, kind=kind).reshape(element.shape)`).
 #[pyfunction]
-#[pyo3(signature = (element, test_elements, assume_unique = false))]
+#[pyo3(signature = (element, test_elements, assume_unique = false, invert = false, kind = None))]
 pub fn isin<'py>(
     py: Python<'py>,
     element: &Bound<'py, PyAny>,
     test_elements: &Bound<'py, PyAny>,
     assume_unique: bool,
+    invert: bool,
+    kind: Option<&str>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr_a = as_ndarray(py, element)?;
     let dt = dtype_name(&arr_a)?;
@@ -3668,6 +3686,8 @@ pub fn isin<'py>(
     {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("assume_unique", assume_unique)?;
+        kwargs.set_item("invert", invert)?;
+        kwargs.set_item("kind", kind)?;
         return crate::manipulation::string_delegate(
             py,
             "isin",
@@ -3681,8 +3701,13 @@ pub fn isin<'py>(
     {
         let kwargs = pyo3::types::PyDict::new(py);
         kwargs.set_item("assume_unique", assume_unique)?;
+        kwargs.set_item("invert", invert)?;
+        kwargs.set_item("kind", kind)?;
         return crate::conv::f16_delegate(py, "isin", (element, test_elements), Some(&kwargs));
     }
+    // `kind` is an algorithm hint only (sort vs. table); the membership output is
+    // identical, so the native real/complex path accepts and ignores it.
+    let _ = kind;
     // numpy.isin preserves the SHAPE of `element`: it is
     // `in1d(element, test).reshape(element.shape)` (verified live numpy 2.4.5 —
     // a 2-D `element` yields a 2-D bool array). `ferray_stats::isin` is 1-D, so
@@ -3705,9 +3730,21 @@ pub fn isin<'py>(
             let vb: PyReadonlyArray1<T> = arr_b.extract()?;
             let fa: Array1<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
             let fb: Array1<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
-            let r: Array1<bool> = ferray_stats::isin(&fa, &fb, assume_unique).map_err(ferr_to_pyerr)?;
+            let mut r: Array1<bool> = ferray_stats::isin(&fa, &fb, assume_unique).map_err(ferr_to_pyerr)?;
+            if invert {
+                r.iter_mut().for_each(|v| *v = !*v);
+            }
             r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
         }),
+    };
+    // Complex arms produce the bool mask via numpy; negate after the fact so the
+    // `invert` contract holds uniformly (numpy/lib/_arraysetops_impl.py:1076).
+    let result_1d = if invert && matches!(dt.as_str(), "complex128" | "c16" | "complex64" | "c8") {
+        py.import("numpy")?
+            .getattr("logical_not")?
+            .call1((&result_1d,))?
+    } else {
+        result_1d
     };
     let shape_tuple = pyo3::types::PyTuple::new(py, &element_shape)?;
     result_1d.call_method1("reshape", (shape_tuple,))
