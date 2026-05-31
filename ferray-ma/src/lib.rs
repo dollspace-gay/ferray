@@ -114,10 +114,10 @@ pub use extras::{
     ma_apply_along_axis, ma_apply_over_axes, ma_compress_cols, ma_compress_rowcols,
     ma_compress_rows, ma_concatenate, ma_corrcoef, ma_cov, ma_equal, ma_greater, ma_greater_equal,
     ma_in1d, ma_intersect1d, ma_isin, ma_less, ma_less_equal, ma_logical_and, ma_logical_not,
-    ma_logical_or, ma_logical_xor, ma_mask_rowcols, ma_not_equal, ma_setdiff1d, ma_setxor1d,
-    ma_union1d, ma_unique, ma_unique_masked, ma_vander, make_mask, make_mask_none, mask_or,
-    masked_all, masked_all_like, masked_values, maximum_fill_value, minimum_fill_value,
-    notmasked_contiguous_axis, notmasked_edges,
+    ma_logical_or, ma_logical_xor, ma_mask_rowcols, ma_median_axis, ma_not_equal, ma_setdiff1d,
+    ma_setxor1d, ma_union1d, ma_unique, ma_unique_masked, ma_vander, make_mask, make_mask_none,
+    mask_or, masked_all, masked_all_like, masked_values, maximum_fill_value, minimum_fill_value,
+    notmasked_contiguous_axis, notmasked_edges, notmasked_edges_axis2,
 };
 
 #[cfg(test)]

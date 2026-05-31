@@ -241,6 +241,106 @@ where
     }
 }
 
+/// `numpy.ma.median(a, axis=axis)` (`numpy/ma/extras.py:678`) — per-lane median
+/// of the unmasked elements along `axis`, returning an `(ndim - 1)`-D masked
+/// array. A lane whose elements are all masked yields a masked output slot
+/// (numpy's `median` returns the `masked` value for an all-masked lane).
+///
+/// Each lane's median is the middle unmasked value (odd count) or the average
+/// of the two middle unmasked values (even count), matching the flat
+/// [`MaskedArray::median`].
+///
+/// # Errors
+/// Returns `FerrayError::axis_out_of_bounds` if `axis >= a.ndim()`, or an
+/// internal construction error.
+pub fn ma_median_axis<T>(
+    a: &MaskedArray<T, IxDyn>,
+    axis: usize,
+) -> FerrayResult<MaskedArray<T, IxDyn>>
+where
+    T: Element
+        + Copy
+        + PartialOrd
+        + num_traits::Zero
+        + num_traits::FromPrimitive
+        + std::ops::Add<Output = T>
+        + std::ops::Div<Output = T>,
+{
+    let shape = a.shape().to_vec();
+    if axis >= shape.len() {
+        return Err(FerrayError::axis_out_of_bounds(axis, shape.len()));
+    }
+    let lane_len = shape[axis];
+    let out_shape: Vec<usize> = shape
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| i != axis)
+        .map(|(_, &s)| s)
+        .collect();
+    let out_size: usize = out_shape.iter().product::<usize>().max(1);
+
+    let ndim = shape.len();
+    let mut strides = vec![1usize; ndim];
+    for i in (0..ndim.saturating_sub(1)).rev() {
+        strides[i] = strides[i + 1] * shape[i + 1];
+    }
+
+    let data: Vec<T> = a.data().iter().copied().collect();
+    let mask: Vec<bool> = a.mask().iter().copied().collect();
+
+    let mut out_data = Vec::with_capacity(out_size);
+    let mut out_mask = Vec::with_capacity(out_size);
+
+    // Iterate over every multi-index of the OUTPUT shape (axes other than
+    // `axis`), reconstruct the base offset, then sweep the lane.
+    let out_axes: Vec<usize> = (0..ndim).filter(|&i| i != axis).collect();
+    let mut counter = vec![0usize; out_axes.len()];
+    let two = T::from_u8(2).ok_or_else(|| {
+        FerrayError::invalid_value("median: constant 2 not representable in element type")
+    })?;
+    for _ in 0..out_size {
+        let mut base = 0usize;
+        for (slot, &ax) in out_axes.iter().enumerate() {
+            base += counter[slot] * strides[ax];
+        }
+        let mut vals: Vec<T> = Vec::with_capacity(lane_len);
+        for k in 0..lane_len {
+            let off = base + k * strides[axis];
+            if !mask[off] {
+                vals.push(data[off]);
+            }
+        }
+        if vals.is_empty() {
+            out_data.push(<T as num_traits::Zero>::zero());
+            out_mask.push(true);
+        } else {
+            vals.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal));
+            let n = vals.len();
+            let med = if n % 2 == 1 {
+                vals[n / 2]
+            } else {
+                (vals[n / 2 - 1] + vals[n / 2]) / two
+            };
+            out_data.push(med);
+            out_mask.push(false);
+        }
+
+        // Increment the output multi-index (row-major over out_axes).
+        for slot in (0..out_axes.len()).rev() {
+            counter[slot] += 1;
+            if counter[slot] < out_shape[slot] {
+                break;
+            }
+            counter[slot] = 0;
+        }
+    }
+
+    let dim = IxDyn::new(&out_shape);
+    let data_arr = Array::<T, IxDyn>::from_vec(dim.clone(), out_data)?;
+    let mask_arr = Array::<bool, IxDyn>::from_vec(dim, out_mask)?;
+    MaskedArray::new(data_arr, mask_arr)
+}
+
 impl<T, D> MaskedArray<T, D>
 where
     T: Element + Copy + Float,
@@ -256,8 +356,33 @@ where
     /// `FerrayError::InvalidValue` if the weight sum over unmasked
     /// elements is zero (or every element is masked).
     pub fn average(&self, weights: Option<&Array<T, D>>) -> FerrayResult<T> {
+        Ok(self.average_returned(weights)?.0)
+    }
+
+    /// Weighted average of unmasked elements together with the sum of the
+    /// weights actually applied (the unmasked-weight total).
+    ///
+    /// Mirrors `numpy.ma.average(..., returned=True)`
+    /// (`numpy/ma/extras.py:510`), which returns the tuple
+    /// `(average, sum_of_weights)`. For the unweighted case (`weights=None`)
+    /// numpy uses each element's implicit weight of one, so the second tuple
+    /// element is the count of unmasked elements
+    /// (`numpy/ma/extras.py:637` `scl = avg.dtype.type(a.count(axis))`).
+    ///
+    /// # Errors
+    /// Returns `FerrayError::ShapeMismatch` if weights shape differs, or
+    /// `FerrayError::InvalidValue` if the weight sum over unmasked
+    /// elements is zero (or every element is masked).
+    pub fn average_returned(&self, weights: Option<&Array<T, D>>) -> FerrayResult<(T, T)> {
+        let zero = <T as num_traits::Zero>::zero();
         let Some(w) = weights else {
-            return self.mean();
+            // Unweighted: avg = mean, sum_of_weights = count of unmasked.
+            let avg = self.mean()?;
+            let count = self.mask().iter().filter(|m| !**m).count();
+            let scl = <T as num_traits::NumCast>::from(count).ok_or_else(|| {
+                FerrayError::invalid_value("average: unmasked count not representable")
+            })?;
+            return Ok((avg, scl));
         };
         if w.shape() != self.shape() {
             return Err(FerrayError::shape_mismatch(format!(
@@ -266,7 +391,6 @@ where
                 self.shape(),
             )));
         }
-        let zero = <T as num_traits::Zero>::zero();
         let mut wsum = zero;
         let mut acc = zero;
         for ((v, m), wi) in self.data().iter().zip(self.mask().iter()).zip(w.iter()) {
@@ -280,7 +404,7 @@ where
                 "average: weight sum is zero (or all elements are masked)",
             ));
         }
-        Ok(acc / wsum)
+        Ok((acc / wsum, wsum))
     }
 
     /// Anomaly array: `self - mean(self)`. Returns a masked array of the
@@ -1872,6 +1996,70 @@ where
     D: Dimension,
 {
     flatnotmasked_edges(a)
+}
+
+/// First/last unmasked coordinate tuples of a 2-D masked array along `axis`
+/// (`numpy/ma/extras.py:1925` `notmasked_edges`, the explicit-`axis` branch).
+///
+/// numpy computes, per lane along `axis`, the min (first) and max (last)
+/// coordinate of the unmasked positions, then compresses out fully-masked
+/// lanes. The result is two `(rows, cols)` index tuples — the coordinate
+/// arrays are always emitted in axis order (axis-0 indices, then axis-1
+/// indices), independent of which `axis` selects the first/last extent.
+///
+/// Returns `(first, last)` where each is `(row_indices, col_indices)`. The
+/// `row_indices` / `col_indices` vectors have one entry per lane (along the
+/// axis orthogonal to `axis`) that contains at least one unmasked element.
+///
+/// # Errors
+/// Returns `FerrayError::axis_out_of_bounds` if `axis >= 2`.
+#[allow(
+    clippy::type_complexity,
+    reason = "mirrors numpy's two (rows, cols) tuples"
+)]
+pub fn notmasked_edges_axis2<T>(
+    a: &MaskedArray<T, Ix2>,
+    axis: usize,
+) -> FerrayResult<((Vec<i64>, Vec<i64>), (Vec<i64>, Vec<i64>))>
+where
+    T: Element,
+{
+    if axis >= 2 {
+        return Err(FerrayError::axis_out_of_bounds(axis, 2));
+    }
+    let shape = a.shape();
+    let (rows, cols) = (shape[0], shape[1]);
+    let mask: Vec<bool> = a.mask().iter().copied().collect();
+
+    // We iterate over lanes along `axis` for each fixed index on the orthogonal
+    // axis; the first/last unmasked POSITION along `axis` defines the edge.
+    let (mut first_rows, mut first_cols) = (Vec::new(), Vec::new());
+    let (mut last_rows, mut last_cols) = (Vec::new(), Vec::new());
+    let other_len = if axis == 0 { cols } else { rows };
+    let axis_len = if axis == 0 { rows } else { cols };
+    for o in 0..other_len {
+        let mut first: Option<usize> = None;
+        let mut last: Option<usize> = None;
+        for k in 0..axis_len {
+            let (r, c) = if axis == 0 { (k, o) } else { (o, k) };
+            if !mask[r * cols + c] {
+                if first.is_none() {
+                    first = Some(k);
+                }
+                last = Some(k);
+            }
+        }
+        if let (Some(f), Some(l)) = (first, last) {
+            // Reconstruct the (row, col) coordinate of the first/last edge.
+            let (fr_r, fr_c) = if axis == 0 { (f, o) } else { (o, f) };
+            let (lr_r, lr_c) = if axis == 0 { (l, o) } else { (o, l) };
+            first_rows.push(fr_r as i64);
+            first_cols.push(fr_c as i64);
+            last_rows.push(lr_r as i64);
+            last_cols.push(lr_c as i64);
+        }
+    }
+    Ok(((first_rows, first_cols), (last_rows, last_cols)))
 }
 
 /// `numpy.ma.notmasked_contiguous(a, axis=None)` (`numpy/ma/extras.py:1936`).

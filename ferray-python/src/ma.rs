@@ -7123,14 +7123,52 @@ pub fn prod<'py>(
     a.prod(py, axis, dtype, keepdims)
 }
 
-/// `numpy.ma.median(a)` — median of unmasked elements. All-masked reduces
-/// to the `numpy.ma.masked` singleton. Real dtypes compute in f64
+/// `numpy.ma.median(a, axis=None, out=None, overwrite_input=False,
+/// keepdims=False)` (`numpy/ma/extras.py:678`) — median of unmasked elements.
+///
+/// With `axis=None` the full-reduction contract holds: all-masked reduces to
+/// the `numpy.ma.masked` singleton. Real dtypes compute in f64
 /// (promote-to-float). Complex sorts LEXICOGRAPHICALLY `(real, then imag)` and
 /// returns the middle element (odd count) or the complex average of the two
 /// middles (even count), keeping the input complex width (verified live numpy
 /// 2.4.5: a `complex64` array's `np.ma.median(...).dtype` is `complex64`).
+///
+/// With an explicit `axis` the per-lane median is computed over each 1-D slice
+/// (real/promote-to-float path via [`ferray_ma::ma_median_axis`]), returning a
+/// `MaskedArray` whose all-masked lanes are masked. `out`/`overwrite_input`/
+/// `keepdims` are accepted for ABI parity; `keepdims` is forwarded to numpy.ma
+/// when requested (the native path computes the squeezed result).
 #[pyfunction]
-pub fn median<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
+#[pyo3(signature = (a, axis = None, out = None, overwrite_input = false, keepdims = false))]
+pub fn median<'py>(
+    py: Python<'py>,
+    a: &PyMaskedArray,
+    axis: Option<&Bound<'py, PyAny>>,
+    out: Option<&Bound<'py, PyAny>>,
+    overwrite_input: bool,
+    keepdims: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let _ = (out, overwrite_input);
+    if let Some(ax) = axis {
+        // numpy.ma.median(a, axis=...): per-lane median. `keepdims=True` is
+        // delegated to numpy.ma (the native path returns the squeezed shape).
+        if keepdims {
+            let kwargs = pyo3::types::PyDict::new(py);
+            kwargs.set_item("axis", ax)?;
+            kwargs.set_item("keepdims", true)?;
+            return py.import("numpy.ma")?.call_method(
+                "median",
+                (a.as_numpy_ma(py)?,),
+                Some(&kwargs),
+            );
+        }
+        let axis_u = crate::conv::normalize_axis(py, ax.extract::<isize>()?, a.ndim())?;
+        let fa = a.to_f64_ma()?;
+        let out_ma = fma::ma_median_axis(&fa, axis_u).map_err(ferr_to_pyerr)?;
+        return Ok(Py::new(py, PyMaskedArray::from_inner(out_ma))?
+            .into_bound(py)
+            .into_any());
+    }
     if a.all_masked()? {
         return ma_masked_singleton(py);
     }
@@ -7263,27 +7301,48 @@ pub fn count<'py>(
     a.count(py, axis)
 }
 
-/// `numpy.ma.average(a, weights=None)` — weighted average over unmasked
+/// `numpy.ma.average(a, axis=None, weights=None, returned=False, *,
+/// keepdims=...)` (`numpy/ma/extras.py:510`) — weighted average over unmasked
 /// elements. All-masked reduces to the `numpy.ma.masked` singleton.
+///
+/// With `returned=True` the result is the tuple `(average, sum_of_weights)`
+/// (`numpy/ma/extras.py:670` `return avg, scl`); `sum_of_weights` is the total
+/// of the applied (unmasked) weights, or — for the unweighted case — the count
+/// of unmasked elements (`numpy/ma/extras.py:637`
+/// `scl = avg.dtype.type(a.count(axis))`). Backed by
+/// [`MaskedArray::average_returned`].
 #[pyfunction]
-#[pyo3(signature = (a, weights = None))]
+#[pyo3(signature = (a, weights = None, returned = false))]
 pub fn average<'py>(
     py: Python<'py>,
     a: &PyMaskedArray,
     weights: Option<&Bound<'py, PyAny>>,
+    returned: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     if a.all_masked()? {
+        // numpy.ma.average over an all-masked array yields the masked scalar;
+        // with returned=True the sum_of_weights is 0.0 (no weight applied).
+        if returned {
+            let masked = ma_masked_singleton(py)?;
+            let zero = 0.0_f64.into_pyobject(py)?.into_any();
+            return Ok(pyo3::types::PyTuple::new(py, [masked, zero])?.into_any());
+        }
         return ma_masked_singleton(py);
     }
     let af = a.to_f64_ma()?;
-    let v = match weights {
-        None => af.average(None).map_err(ferr_to_pyerr)?,
+    let (avg, wsum) = match weights {
+        None => af.average_returned(None).map_err(ferr_to_pyerr)?,
         Some(w) => {
             let w_fa = extract_data(py, w)?;
-            af.average(Some(&w_fa)).map_err(ferr_to_pyerr)?
+            af.average_returned(Some(&w_fa)).map_err(ferr_to_pyerr)?
         }
     };
-    Ok(v.into_pyobject(py)?.into_any())
+    if returned {
+        let avg_obj = avg.into_pyobject(py)?.into_any();
+        let wsum_obj = wsum.into_pyobject(py)?.into_any();
+        return Ok(pyo3::types::PyTuple::new(py, [avg_obj, wsum_obj])?.into_any());
+    }
+    Ok(avg.into_pyobject(py)?.into_any())
 }
 
 /// `numpy.ma.all(a, axis=None, out=None, keepdims=<no value>)` — true iff every
@@ -8318,11 +8377,14 @@ pub fn flatnotmasked_edges<'py>(
     }
 }
 
-/// `numpy.ma.notmasked_edges(a, axis=None)` (`numpy/ma/extras.py:1878`) — for
+/// `numpy.ma.notmasked_edges(a, axis=None)` (`numpy/ma/extras.py:1925`) — for
 /// `axis=None` or a 1-D array, the flat `[first, last]` unmasked indices (or
-/// `None` if all masked). The multi-axis coordinate-tuple form is a deferred
-/// ferray-ma extension; an explicit `axis` on a multi-dimensional array raises
-/// a clear `ValueError`.
+/// `None` if all masked). With an explicit `axis` on a 2-D array, the per-lane
+/// first/last unmasked coordinate tuples: a 2-element list
+/// `[(rows, cols)_first, (rows, cols)_last]`, where each `rows`/`cols` is the
+/// integer index array over the lanes (along the orthogonal axis) that hold at
+/// least one unmasked element (`numpy/ma/extras.py:1971-1974`, backed by
+/// [`ferray_ma::notmasked_edges_axis2`]).
 #[pyfunction]
 #[pyo3(signature = (a, axis = None))]
 pub fn notmasked_edges<'py>(
@@ -8331,11 +8393,16 @@ pub fn notmasked_edges<'py>(
     axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let m = coerce_to_ma(py, a)?;
-    if axis.is_some() && m.ndim() > 1 {
-        return Err(PyValueError::new_err(
-            "ma.notmasked_edges with an explicit axis on a multi-dimensional array is a \
-             ferray-ma library gap (#835); pass axis=None",
-        ));
+    if let Some(ax) = axis {
+        if m.ndim() > 1 {
+            let m2 = ma_as_ix2(&m)?;
+            let axis_u = crate::conv::normalize_axis(py, ax, 2)?;
+            let ((fr, fc), (lr, lc)) =
+                fma::notmasked_edges_axis2(&m2, axis_u).map_err(ferr_to_pyerr)?;
+            let first = edge_coord_tuple(py, &fr, &fc)?;
+            let last = edge_coord_tuple(py, &lr, &lc)?;
+            return Ok(pyo3::types::PyList::new(py, [first, last])?.into_any());
+        }
     }
     match fma::notmasked_edges(&m) {
         None => Ok(py.None().into_bound(py)),
@@ -8345,6 +8412,27 @@ pub fn notmasked_edges<'py>(
             Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
         }
     }
+}
+
+/// Build a numpy `(rows, cols)` coordinate tuple from two `i64` index vectors,
+/// matching the per-axis edge tuples numpy.ma emits
+/// (`numpy/ma/extras.py:1973-1974`).
+fn edge_coord_tuple<'py>(
+    py: Python<'py>,
+    rows: &[i64],
+    cols: &[i64],
+) -> PyResult<Bound<'py, PyAny>> {
+    let r = Array1::<i64>::from_vec(Ix1::new([rows.len()]), rows.to_vec())
+        .map_err(ferr_to_pyerr)?
+        .into_pyarray(py)
+        .map_err(ferr_to_pyerr)?
+        .into_any();
+    let c = Array1::<i64>::from_vec(Ix1::new([cols.len()]), cols.to_vec())
+        .map_err(ferr_to_pyerr)?
+        .into_pyarray(py)
+        .map_err(ferr_to_pyerr)?
+        .into_any();
+    Ok(pyo3::types::PyTuple::new(py, [r, c])?.into_any())
 }
 
 /// `numpy.ma.notmasked_contiguous(a, axis=None)` (`numpy/ma/extras.py:1936`).
@@ -8596,22 +8684,58 @@ pub fn cov<'py>(
     bias: bool,
     allow_masked: bool,
     ddof: Option<usize>,
-) -> PyResult<PyMaskedArray> {
+) -> PyResult<Bound<'py, PyAny>> {
     let _ = allow_masked; // ferray-ma always processes the masked pairs.
     match y {
         None => {
             let m = coerce_to_ma_npmask(py, x)?;
+            // numpy.ma.cov of a 1-D input is a single observation-vector → a
+            // 0-d scalar variance (`numpy/ma/extras.py:1580` delegates the
+            // single-variable case to `numpy.cov`, which returns shape `()`),
+            // NOT the (1,1) matrix the general kernel builds.
+            if m.ndim() <= 1 {
+                let out = fma::ma_cov(&m, rowvar, bias, ddof).map_err(ferr_to_pyerr)?;
+                return ma_cov_1d_scalar(py, &out);
+            }
             let out = fma::ma_cov(&m, rowvar, bias, ddof).map_err(ferr_to_pyerr)?;
-            ix2_to_py(out)
+            Ok(Py::new(py, ix2_to_py(out)?)?.into_bound(py).into_any())
         }
         Some(yv) => {
             // numpy stacks x and y into one variable matrix (`_covhelper`),
             // then runs the masked covariance with variables in rows.
             let stacked = stack_xy(py, x, yv, rowvar)?;
             let out = fma::ma_cov(&stacked, true, bias, ddof).map_err(ferr_to_pyerr)?;
-            ix2_to_py(out)
+            Ok(Py::new(py, ix2_to_py(out)?)?.into_bound(py).into_any())
         }
     }
+}
+
+/// Collapse the `(1, 1)` masked covariance of a single variable into a 0-d
+/// scalar `MaskedArray`, matching `numpy.ma.cov`'s shape-`()` return for a 1-D
+/// input (`numpy/ma/extras.py:1580` → `numpy.cov` scalar variance).
+fn ma_cov_1d_scalar<'py>(py: Python<'py>, out: &RustMa<f64, Ix2>) -> PyResult<Bound<'py, PyAny>> {
+    let val = fma::getdata(out)
+        .map_err(ferr_to_pyerr)?
+        .iter()
+        .copied()
+        .next()
+        .ok_or_else(|| PyValueError::new_err("ma.cov: empty 1-D covariance"))?;
+    let masked = fma::getmaskarray(out)
+        .map_err(ferr_to_pyerr)?
+        .iter()
+        .copied()
+        .next()
+        .unwrap_or(false);
+    let data = ArrayD::<f64>::from_vec(IxDyn::new(&[]), vec![val]).map_err(ferr_to_pyerr)?;
+    let inner = if masked {
+        let mask = ArrayD::<bool>::from_vec(IxDyn::new(&[]), vec![true]).map_err(ferr_to_pyerr)?;
+        RustMa::new(data, mask).map_err(ferr_to_pyerr)?
+    } else {
+        RustMa::from_data(data).map_err(ferr_to_pyerr)?
+    };
+    Ok(Py::new(py, PyMaskedArray::from_inner(inner))?
+        .into_bound(py)
+        .into_any())
 }
 
 /// `numpy.ma.corrcoef(x, y=None, rowvar=True)` — masked Pearson correlation
@@ -8626,18 +8750,26 @@ pub fn corrcoef<'py>(
     y: Option<&Bound<'py, PyAny>>,
     rowvar: bool,
     allow_masked: bool,
-) -> PyResult<PyMaskedArray> {
+) -> PyResult<Bound<'py, PyAny>> {
     let _ = allow_masked;
     match y {
         None => {
             let m = coerce_to_ma_npmask(py, x)?;
+            // numpy.ma.corrcoef of a single variable (1-D input) degenerates to
+            // the `masked` singleton, shape `()` (`numpy/ma/extras.py:1675`
+            // → numpy.corrcoef of one variable is a self-correlation that
+            // numpy.ma collapses to `masked`). The general kernel would emit
+            // `[[1.]]`; the binding returns the singleton to match.
+            if m.ndim() <= 1 {
+                return ma_masked_singleton(py);
+            }
             let out = fma::ma_corrcoef(&m, rowvar).map_err(ferr_to_pyerr)?;
-            ix2_to_py(out)
+            Ok(Py::new(py, ix2_to_py(out)?)?.into_bound(py).into_any())
         }
         Some(yv) => {
             let stacked = stack_xy(py, x, yv, rowvar)?;
             let out = fma::ma_corrcoef(&stacked, true).map_err(ferr_to_pyerr)?;
-            ix2_to_py(out)
+            Ok(Py::new(py, ix2_to_py(out)?)?.into_bound(py).into_any())
         }
     }
 }
