@@ -26,11 +26,14 @@ use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
 use crate::conv::{
-    as_ndarray, coerce_dtype, dtype_name, extract_q, ferr_to_pyerr, normalize_axis,
+    DynMarshal, as_ndarray, coerce_dtype, dtype_name, extract_q, ferr_to_pyerr, normalize_axis,
     promote_linalg_input,
 };
 use crate::fft::{complex_ferray_to_pyarray, complex_pyarray_to_ferray};
-use crate::{match_dtype_all, match_dtype_float, match_dtype_numeric, match_dtype_orderable};
+use crate::{
+    match_dtype_all, match_dtype_all_complex, match_dtype_float, match_dtype_numeric,
+    match_dtype_orderable,
+};
 
 // ---------------------------------------------------------------------------
 // Complex-input dispatch for reductions (#925).
@@ -2100,18 +2103,24 @@ pub fn where_fn<'py>(
     let pair = np.call_method1("broadcast_arrays", (&cond, x, y))?;
     let bcast: Vec<Bound<PyAny>> = pair.extract()?;
     let cond_b = coerce_dtype(py, &bcast[0], "bool")?;
-    let arr_x = as_ndarray(py, &bcast[1])?;
-    let dt = dtype_name(&arr_x)?;
+    // numpy promotes the *output* dtype via result_type(x, y) — so
+    // `where(cond, real, complex)` and `where(cond, complex, real)` both
+    // yield complex (numpy/_core/multiarray.py:198). Taking only x's
+    // dtype would silently drop the imaginary part of a complex `y`.
+    let dt: String = np
+        .getattr("result_type")?
+        .call1((&bcast[1], &bcast[2]))?
+        .getattr("name")?
+        .extract()?;
+    let arr_x = coerce_dtype(py, &bcast[1], dt.as_str())?;
     let arr_y = coerce_dtype(py, &bcast[2], dt.as_str())?;
     let cond_view: PyReadonlyArrayDyn<bool> = cond_b.extract()?;
     let cond_fa: ArrayD<bool> = cond_view.as_ferray().map_err(ferr_to_pyerr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let vx: PyReadonlyArrayDyn<T> = arr_x.extract()?;
-        let vy: PyReadonlyArrayDyn<T> = arr_y.extract()?;
-        let fx: ArrayD<T> = vx.as_ferray().map_err(ferr_to_pyerr)?;
-        let fy: ArrayD<T> = vy.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fx: ArrayD<T> = T::extract_dyn(&arr_x)?;
+        let fy: ArrayD<T> = T::extract_dyn(&arr_y)?;
         let r: ArrayD<T> = ferray_stats::where_(&cond_fa, &fx, &fy).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 

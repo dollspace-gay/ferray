@@ -728,6 +728,177 @@ macro_rules! match_dtype_all {
     };
 }
 
+/// Uniform numpy↔ferray marshalling for a single dispatched element
+/// type, abstracting over the `NpElement` fast path (real dtypes) and
+/// the hand-rolled complex path (`Complex<f32>`/`Complex<f64>`, which
+/// deliberately do *not* implement `NpElement` —
+/// ferray-numpy-interop/src/numpy_conv.rs:42 "Complex types require
+/// special handling").
+///
+/// This lets a single binding body — written once as
+/// `T::extract_dyn(&arr)? -> ArrayD<T>` … `T::emit_dyn(py, r)?` — work
+/// for both real and complex dtypes. It is the marshalling seam that
+/// makes [`match_dtype_all_complex`] possible: the *real* arms route
+/// through `AsFerray`/`IntoNumPy` exactly as the legacy
+/// [`match_dtype_all`] does, and the *complex* arms route through the
+/// `complex_*_to_pyarray`/`complex_pyarray_to_ferray` helpers in
+/// `crate::fft` (added for the `numpy` complex array surface in #920).
+///
+/// Only data-move / view ops (reshape, transpose, concatenate, stack,
+/// where, flip, roll, repeat, tile, …) — which never touch element
+/// arithmetic — should dispatch through the complex-aware macro;
+/// numeric/transcendental ops must keep using [`match_dtype_all`].
+pub trait DynMarshal: ferray_core::Element + Sized {
+    /// Extract a numpy ndarray into an owned `ArrayD<Self>`.
+    fn extract_dyn(
+        arr: &::pyo3::Bound<'_, PyAny>,
+    ) -> ::pyo3::PyResult<ferray_core::array::aliases::ArrayD<Self>>;
+    /// Push an owned `ArrayD<Self>` back into a fresh numpy ndarray.
+    fn emit_dyn<'py>(
+        py: ::pyo3::Python<'py>,
+        arr: ferray_core::array::aliases::ArrayD<Self>,
+    ) -> ::pyo3::PyResult<::pyo3::Bound<'py, PyAny>>;
+}
+
+macro_rules! impl_dyn_marshal_real {
+    ($($ty:ty),*) => {
+        $(impl DynMarshal for $ty {
+            fn extract_dyn(
+                arr: &::pyo3::Bound<'_, PyAny>,
+            ) -> ::pyo3::PyResult<ferray_core::array::aliases::ArrayD<$ty>> {
+                use ferray_numpy_interop::AsFerray;
+                let view: ::numpy::PyReadonlyArrayDyn<$ty> = arr.extract()?;
+                view.as_ferray().map_err(crate::conv::ferr_to_pyerr)
+            }
+            fn emit_dyn<'py>(
+                py: ::pyo3::Python<'py>,
+                arr: ferray_core::array::aliases::ArrayD<$ty>,
+            ) -> ::pyo3::PyResult<::pyo3::Bound<'py, PyAny>> {
+                use ferray_numpy_interop::IntoNumPy;
+                Ok(arr.into_pyarray(py).map_err(crate::conv::ferr_to_pyerr)?.into_any())
+            }
+        })*
+    };
+}
+impl_dyn_marshal_real!(bool, f32, f64, i8, i16, i32, i64, u8, u16, u32, u64);
+
+impl DynMarshal for num_complex::Complex<f32> {
+    fn extract_dyn(
+        arr: &::pyo3::Bound<'_, PyAny>,
+    ) -> ::pyo3::PyResult<ferray_core::array::aliases::ArrayD<num_complex::Complex<f32>>> {
+        crate::fft::complex_pyarray_to_ferray::<f32>(arr)
+    }
+    fn emit_dyn<'py>(
+        py: ::pyo3::Python<'py>,
+        arr: ferray_core::array::aliases::ArrayD<num_complex::Complex<f32>>,
+    ) -> ::pyo3::PyResult<::pyo3::Bound<'py, PyAny>> {
+        crate::fft::complex_ferray_to_pyarray::<f32>(py, arr)
+    }
+}
+
+impl DynMarshal for num_complex::Complex<f64> {
+    fn extract_dyn(
+        arr: &::pyo3::Bound<'_, PyAny>,
+    ) -> ::pyo3::PyResult<ferray_core::array::aliases::ArrayD<num_complex::Complex<f64>>> {
+        crate::fft::complex_pyarray_to_ferray::<f64>(arr)
+    }
+    fn emit_dyn<'py>(
+        py: ::pyo3::Python<'py>,
+        arr: ferray_core::array::aliases::ArrayD<num_complex::Complex<f64>>,
+    ) -> ::pyo3::PyResult<::pyo3::Bound<'py, PyAny>> {
+        crate::fft::complex_ferray_to_pyarray::<f64>(py, arr)
+    }
+}
+
+/// Dispatch over all 11 real dtypes **plus** `complex64`/`complex128`,
+/// binding the element type as `T` and providing uniform marshalling via
+/// [`DynMarshal`]. Bodies must extract with `T::extract_dyn(&arr)?` and
+/// emit with `T::emit_dyn(py, r)?` (instead of the `as_ferray`/
+/// `into_pyarray` pair that the real-only [`match_dtype_all`] hard-codes),
+/// so the same body compiles for the complex arms.
+///
+/// Use this for pure data-move / view ops that are generic over
+/// `T: Element` in ferray-core (no arithmetic): reshape, transpose,
+/// concatenate, stack, where, flip, roll, repeat, tile, and siblings.
+#[macro_export]
+macro_rules! match_dtype_all_complex {
+    ($dtype:expr, $T:ident => $body:block) => {
+        match $dtype {
+            "float64" | "f64" => {
+                #[allow(non_camel_case_types)]
+                type $T = f64;
+                $body
+            }
+            "float32" | "f32" => {
+                #[allow(non_camel_case_types)]
+                type $T = f32;
+                $body
+            }
+            "int64" | "i64" => {
+                #[allow(non_camel_case_types)]
+                type $T = i64;
+                $body
+            }
+            "int32" | "i32" => {
+                #[allow(non_camel_case_types)]
+                type $T = i32;
+                $body
+            }
+            "int16" | "i16" => {
+                #[allow(non_camel_case_types)]
+                type $T = i16;
+                $body
+            }
+            "int8" | "i8" => {
+                #[allow(non_camel_case_types)]
+                type $T = i8;
+                $body
+            }
+            "uint64" | "u64" => {
+                #[allow(non_camel_case_types)]
+                type $T = u64;
+                $body
+            }
+            "uint32" | "u32" => {
+                #[allow(non_camel_case_types)]
+                type $T = u32;
+                $body
+            }
+            "uint16" | "u16" => {
+                #[allow(non_camel_case_types)]
+                type $T = u16;
+                $body
+            }
+            "uint8" | "u8" => {
+                #[allow(non_camel_case_types)]
+                type $T = u8;
+                $body
+            }
+            "bool" => {
+                #[allow(non_camel_case_types)]
+                type $T = bool;
+                $body
+            }
+            "complex128" | "c16" => {
+                #[allow(non_camel_case_types)]
+                type $T = num_complex::Complex<f64>;
+                $body
+            }
+            "complex64" | "c8" => {
+                #[allow(non_camel_case_types)]
+                type $T = num_complex::Complex<f32>;
+                $body
+            }
+            other => {
+                return Err(::pyo3::exceptions::PyTypeError::new_err(format!(
+                    "unsupported dtype: {other:?} (supported: bool, int8/16/32/64, \
+                     uint8/16/32/64, float32/64, complex64/128)"
+                )));
+            }
+        }
+    };
+}
+
 /// Dispatch restricted to floating-point element types. Use for
 /// functions whose ferray-side bound is `LinspaceNum` or `Float`
 /// (linspace, logspace, geomspace, special functions).

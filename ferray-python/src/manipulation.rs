@@ -1,20 +1,29 @@
 //! Bindings for the `numpy` array-manipulation surface.
 //!
-//! Functions here all dispatch on the input array's NumPy dtype via
-//! [`match_dtype_all!`], extract a `PyReadonlyArrayDyn<T>` view,
-//! materialise an `ArrayD<T>` through `AsFerray`, run the typed ferray
-//! function, and push the result back through `IntoNumPy`.
+//! These ops are pure data moves / views — reshape, transpose,
+//! concatenate, stack, where, flip, roll, repeat, tile and siblings — so
+//! they carry **no element arithmetic** and are generic over
+//! `T: Element` in ferray-core. They therefore dispatch through
+//! [`match_dtype_all_complex!`], which covers all 11 real dtypes **plus**
+//! `complex64`/`complex128` and marshals each element type uniformly via
+//! the [`DynMarshal`](crate::conv::DynMarshal) trait: real dtypes route
+//! through `AsFerray`/`IntoNumPy`, complex dtypes through the
+//! `complex_*` helpers in [`crate::fft`] (numpy's complex types
+//! deliberately do not implement `NpElement`). NumPy preserves complex
+//! dtype + values through every one of these ops, so ferray does too
+//! (#933).
 //!
-//! The split between the per-function bindings here and the
-//! per-dtype dispatch in the macro means the cost of supporting a new
-//! dtype is one new arm in `match_dtype_all!` and zero changes in
-//! this file.
+//! A handful of ops that genuinely cannot accept complex stay on the
+//! real-only [`match_dtype_all!`]: `pad` (its `constant_values` is an
+//! `f64` that cannot encode a complex fill), and the 1-D-only `r_` / `c_`
+//! / `trim_zeros` helpers (which marshal through the `Array1` `NpElement`
+//! path). Supporting a new *real* dtype is still one new arm in the macro
+//! and zero changes here.
 
 use ferray_core::array::aliases::ArrayD;
 use ferray_core::dimension::IxDyn;
 use ferray_core::manipulation as fm;
 use ferray_core::manipulation::extended as fme;
-use ferray_numpy_interop::numpy_conv::NpElement;
 use ferray_numpy_interop::{AsFerray, IntoNumPy};
 use numpy::PyReadonlyArrayDyn;
 use pyo3::exceptions::PyValueError;
@@ -22,10 +31,10 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyList};
 
 use crate::conv::{
-    as_ndarray, axis_error, dtype_name, extract_axis_tuple, ferr_to_pyerr, normalize_axis,
-    normalize_axis_tuple,
+    DynMarshal, as_ndarray, axis_error, dtype_name, extract_axis_tuple, ferr_to_pyerr,
+    normalize_axis, normalize_axis_tuple,
 };
-use crate::match_dtype_all;
+use crate::{match_dtype_all, match_dtype_all_complex};
 
 /// Read an array-like's `ndim` (after `as_ndarray` coercion).
 fn obj_ndim(arr: &Bound<'_, PyAny>) -> PyResult<usize> {
@@ -104,9 +113,8 @@ pub fn reshape<'py>(
             )));
         }
     };
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = if fortran {
             // Fortran-order reshape via the standard identity
             //   reshape(a, s, 'F') == transpose(reshape(transpose(a), rev(s), 'C'))
@@ -121,7 +129,7 @@ pub fn reshape<'py>(
         } else {
             fm::reshape(&fa, &new_shape).map_err(ferr_to_pyerr)?
         };
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -130,11 +138,10 @@ pub fn reshape<'py>(
 pub fn ravel<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r = fm::ravel(&fa).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r.into_dyn())?
     }))
 }
 
@@ -143,11 +150,10 @@ pub fn ravel<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py,
 pub fn flatten<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r = fm::flatten(&fa).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r.into_dyn())?
     }))
 }
 
@@ -176,9 +182,8 @@ pub fn squeeze<'py>(
             Some(norm)
         }
     };
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let mut cur: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let mut cur: ArrayD<T> = T::extract_dyn(&arr)?;
         match &axes {
             None => cur = fm::squeeze(&cur, None).map_err(ferr_to_pyerr)?,
             Some(list) => {
@@ -187,7 +192,7 @@ pub fn squeeze<'py>(
                 }
             }
         }
-        cur.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, cur)?
     }))
 }
 
@@ -211,13 +216,12 @@ pub fn expand_dims<'py>(
     // Insert in ascending order so earlier insertions don't shift the
     // positions of later (already-normalized) target axes.
     axes.sort_unstable();
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let mut cur: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let mut cur: ArrayD<T> = T::extract_dyn(&arr)?;
         for &ax in &axes {
             cur = fm::expand_dims(&cur, ax).map_err(ferr_to_pyerr)?;
         }
-        cur.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, cur)?
     }))
 }
 
@@ -235,11 +239,10 @@ pub fn broadcast_to<'py>(
     } else {
         shape.extract()?
     };
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fm::broadcast_to(&fa, &target).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -264,11 +267,10 @@ pub fn transpose<'py>(
         Some(ax) => Some(normalize_axis_tuple(py, &ax, ndim, false)?),
         None => None,
     };
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fm::transpose(&fa, norm_axes.as_deref()).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -285,11 +287,10 @@ pub fn swapaxes<'py>(
     let ndim = obj_ndim(&arr)?;
     let ax1 = normalize_axis(py, axis1, ndim)?;
     let ax2 = normalize_axis(py, axis2, ndim)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fm::swapaxes(&fa, ax1, ax2).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -323,11 +324,10 @@ pub fn moveaxis<'py>(
     for (d, s) in pairs {
         order.insert(d, s);
     }
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fm::transpose(&fa, Some(&order)).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -342,11 +342,10 @@ pub fn rollaxis<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fm::rollaxis(&fa, axis, start).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -373,13 +372,12 @@ pub fn flip<'py>(
         None => (0..ndim).collect(),
         Some(obj) => normalize_axis_tuple(py, &extract_axis_tuple(obj)?, ndim, false)?,
     };
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let mut cur: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let mut cur: ArrayD<T> = T::extract_dyn(&arr)?;
         for &ax in &axes {
             cur = fm::flip(&cur, ax).map_err(ferr_to_pyerr)?;
         }
-        cur.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, cur)?
     }))
 }
 
@@ -388,11 +386,10 @@ pub fn flip<'py>(
 pub fn fliplr<'py>(py: Python<'py>, m: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, m)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fm::fliplr(&fa).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -401,11 +398,10 @@ pub fn fliplr<'py>(py: Python<'py>, m: &Bound<'py, PyAny>) -> PyResult<Bound<'py
 pub fn flipud<'py>(py: Python<'py>, m: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, m)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fm::flipud(&fa).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -430,9 +426,8 @@ pub fn rot90<'py>(
         return Err(PyValueError::new_err("axes must be different"));
     }
     let use_core_fast_path = ax0 == 0 && ax1 == 1;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = if use_core_fast_path {
             fm::rot90(&fa, k).map_err(ferr_to_pyerr)?
         } else {
@@ -463,7 +458,7 @@ pub fn rot90<'py>(
                 }
             }
         };
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -484,11 +479,10 @@ pub fn roll<'py>(
         Some(ax) => Some(normalize_axis(py, ax, ndim)?),
         None => None,
     };
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fm::roll(&fa, shift, norm_axis).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -501,11 +495,10 @@ pub fn roll<'py>(
 pub fn atleast_1d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fme::atleast_1d(&fa).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -514,11 +507,10 @@ pub fn atleast_1d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound
 pub fn atleast_2d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fme::atleast_2d(&fa).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -527,11 +519,10 @@ pub fn atleast_2d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound
 pub fn atleast_3d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fme::atleast_3d(&fa).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -545,11 +536,10 @@ pub fn atleast_3d<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound
 pub fn tril<'py>(py: Python<'py>, m: &Bound<'py, PyAny>, k: isize) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, m)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = ferray_core::creation::tril(&fa, k).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -559,11 +549,10 @@ pub fn tril<'py>(py: Python<'py>, m: &Bound<'py, PyAny>, k: isize) -> PyResult<B
 pub fn triu<'py>(py: Python<'py>, m: &Bound<'py, PyAny>, k: isize) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, m)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = ferray_core::creation::triu(&fa, k).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -574,11 +563,10 @@ pub fn triu<'py>(py: Python<'py>, m: &Bound<'py, PyAny>, k: isize) -> PyResult<B
 pub fn diag<'py>(py: Python<'py>, v: &Bound<'py, PyAny>, k: isize) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, v)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = ferray_core::creation::diag(&fa, k).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -592,11 +580,10 @@ pub fn diagflat<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, v)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = ferray_core::creation::diagflat(&fa, k).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -612,7 +599,7 @@ pub fn diagflat<'py>(
 /// of the whole list — see [`common_dtype`]. Passing the first array's
 /// dtype instead would TRUNCATE later inputs
 /// (numpy/_core/multiarray.py:198 promotes via `result_type`).
-fn collect_typed<'py, T: NpElement>(
+fn collect_typed<'py, T: DynMarshal>(
     py: Python<'py>,
     arrays: &Bound<'py, PyAny>,
     dt_name: &str,
@@ -622,8 +609,7 @@ fn collect_typed<'py, T: NpElement>(
     let mut out: Vec<ArrayD<T>> = Vec::with_capacity(list.len());
     for item in list.iter() {
         let coerced = np.call_method1("asarray", (&item, dt_name))?;
-        let view: PyReadonlyArrayDyn<T> = coerced.extract()?;
-        out.push(view.as_ferray().map_err(ferr_to_pyerr)?);
+        out.push(T::extract_dyn(&coerced)?);
     }
     Ok(out)
 }
@@ -674,7 +660,7 @@ pub fn concatenate<'py>(
             (false, normalize_axis(py, ax, ndim)?)
         }
     };
-    Ok(match_dtype_all!(dt.as_str(), T => {
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let mut typed: Vec<ArrayD<T>> = collect_typed::<T>(py, arrays, dt.as_str())?;
         if flatten {
             typed = typed
@@ -686,7 +672,7 @@ pub fn concatenate<'py>(
                 .collect::<PyResult<Vec<_>>>()?;
         }
         let r: ArrayD<T> = fm::concatenate(&typed, norm_axis).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -710,10 +696,10 @@ pub fn stack<'py>(
     let dt = common_dtype(py, list)?;
     let result_ndim = obj_ndim(&as_ndarray(py, &list.get_item(0)?)?)? + 1;
     let norm_axis = normalize_axis(py, axis, result_ndim)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let typed: Vec<ArrayD<T>> = collect_typed::<T>(py, arrays, dt.as_str())?;
         let r: ArrayD<T> = fm::stack(&typed, norm_axis).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -726,10 +712,10 @@ pub fn vstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     }
     let first = as_ndarray(py, &list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let typed: Vec<ArrayD<T>> = collect_typed::<T>(py, arrays, dt.as_str())?;
         let r: ArrayD<T> = fm::vstack(&typed).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -742,10 +728,10 @@ pub fn hstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     }
     let first = as_ndarray(py, &list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let typed: Vec<ArrayD<T>> = collect_typed::<T>(py, arrays, dt.as_str())?;
         let r: ArrayD<T> = fm::hstack(&typed).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -845,11 +831,10 @@ pub fn tile<'py>(
     };
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fme::tile(&fa, &reps_vec).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -874,9 +859,8 @@ pub fn repeat<'py>(
     };
     // Scalar vs per-element repeat counts.
     let scalar_reps: Option<usize> = repeats.extract::<usize>().ok();
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = match scalar_reps {
             Some(n) => fme::repeat(&fa, n, norm_axis).map_err(ferr_to_pyerr)?,
             None => {
@@ -884,7 +868,7 @@ pub fn repeat<'py>(
                 repeat_per_element::<T>(&fa, &counts, norm_axis)?
             }
         };
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -993,11 +977,10 @@ pub fn delete<'py>(
     let shape: Vec<usize> = arr.getattr("shape")?.extract()?;
     let axis_len = shape[ax];
     let indices = resolve_delete_obj(py, obj, axis_len)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fme::delete(&fa, &indices, ax).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -1076,13 +1059,11 @@ pub fn insert<'py>(
     let arr_a = as_ndarray(py, arr)?;
     let dt = dtype_name(&arr_a)?;
     let arr_v = crate::conv::coerce_dtype(py, values, dt.as_str())?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
-        let vv: PyReadonlyArrayDyn<T> = arr_v.extract()?;
-        let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
-        let fv: ArrayD<T> = vv.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr_a)?;
+        let fv: ArrayD<T> = T::extract_dyn(&arr_v)?;
         let r: ArrayD<T> = fme::insert(&fa, obj, &fv, axis).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -1098,13 +1079,11 @@ pub fn append<'py>(
     let arr_a = as_ndarray(py, arr)?;
     let dt = dtype_name(&arr_a)?;
     let arr_v = crate::conv::coerce_dtype(py, values, dt.as_str())?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let va: PyReadonlyArrayDyn<T> = arr_a.extract()?;
-        let vv: PyReadonlyArrayDyn<T> = arr_v.extract()?;
-        let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
-        let fv: ArrayD<T> = vv.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr_a)?;
+        let fv: ArrayD<T> = T::extract_dyn(&arr_v)?;
         let r: ArrayD<T> = fme::append(&fa, &fv, axis).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -1123,11 +1102,10 @@ pub fn resize<'py>(
     };
     let arr = as_ndarray(py, a)?;
     let dt = dtype_name(&arr)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let r: ArrayD<T> = fme::resize(&fa, &target).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -1155,16 +1133,15 @@ pub fn trim_zeros<'py>(
 // ---------------------------------------------------------------------------
 
 /// Convert a `Vec<ArrayD<T>>` into a Python list of `numpy.ndarray`.
-fn dyn_arrays_to_pylist<'py, T: ferray_core::Element + numpy::Element + Clone>(
+/// Routes each element through [`DynMarshal::emit_dyn`] so the helper
+/// works for both real and complex dtypes.
+fn dyn_arrays_to_pylist<'py, T: DynMarshal>(
     py: Python<'py>,
     arrays: Vec<ArrayD<T>>,
-) -> PyResult<Bound<'py, PyAny>>
-where
-    ArrayD<T>: ferray_numpy_interop::IntoNumPy<T, ferray_core::dimension::IxDyn>,
-{
+) -> PyResult<Bound<'py, PyAny>> {
     let py_arrays: Vec<Bound<'py, PyAny>> = arrays
         .into_iter()
-        .map(|a| Ok(a.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()))
+        .map(|a| T::emit_dyn(py, a))
         .collect::<PyResult<Vec<_>>>()?;
     Ok(PyList::new(py, py_arrays)?.into_any())
 }
@@ -1184,9 +1161,8 @@ pub fn split<'py>(
     let arr = as_ndarray(py, ary)?;
     let dt = dtype_name(&arr)?;
 
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let parts: Vec<ArrayD<T>> = if let Ok(n) = indices_or_sections.extract::<usize>() {
             fm::split(&fa, n, axis).map_err(ferr_to_pyerr)?
         } else {
@@ -1210,9 +1186,8 @@ pub fn array_split<'py>(
     let arr = as_ndarray(py, ary)?;
     let dt = dtype_name(&arr)?;
 
-    Ok(match_dtype_all!(dt.as_str(), T => {
-        let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-        let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
+        let fa: ArrayD<T> = T::extract_dyn(&arr)?;
         let parts: Vec<ArrayD<T>> = if let Ok(n) = indices_or_sections.extract::<usize>() {
             fm::array_split_n(&fa, n, axis).map_err(ferr_to_pyerr)?
         } else {
@@ -1233,9 +1208,8 @@ macro_rules! bind_axis_split {
         ) -> PyResult<Bound<'py, PyAny>> {
             let arr = as_ndarray(py, ary)?;
             let dt = dtype_name(&arr)?;
-            Ok(match_dtype_all!(dt.as_str(), T => {
-                let view: PyReadonlyArrayDyn<T> = arr.extract()?;
-                let fa: ArrayD<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
+            Ok(match_dtype_all_complex!(dt.as_str(), T => {
+                let fa: ArrayD<T> = T::extract_dyn(&arr)?;
                 let parts: Vec<ArrayD<T>> = $ferr_path(&fa, n_sections).map_err(ferr_to_pyerr)?;
                 dyn_arrays_to_pylist(py, parts)?
             }))
@@ -1261,10 +1235,10 @@ pub fn column_stack<'py>(
     }
     let first = as_ndarray(py, &list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let typed: Vec<ArrayD<T>> = collect_typed::<T>(py, arrays, dt.as_str())?;
         let r: ArrayD<T> = fm::column_stack(&typed).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -1290,14 +1264,14 @@ pub fn block<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Bound
     let first = as_ndarray(py, &first_row_list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
 
-    Ok(match_dtype_all!(dt.as_str(), T => {
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let mut grid: Vec<Vec<ArrayD<T>>> = Vec::with_capacity(outer.len());
         for row_obj in outer.iter() {
             let row_list = row_obj.cast::<PyList>()?;
             grid.push(collect_typed::<T>(py, row_list.as_any(), dt.as_str())?);
         }
         let r: ArrayD<T> = fm::block(&grid).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
 
@@ -1368,9 +1342,9 @@ pub fn dstack<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<Boun
     }
     let first = as_ndarray(py, &list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
-    Ok(match_dtype_all!(dt.as_str(), T => {
+    Ok(match_dtype_all_complex!(dt.as_str(), T => {
         let typed: Vec<ArrayD<T>> = collect_typed::<T>(py, arrays, dt.as_str())?;
         let r: ArrayD<T> = fm::dstack(&typed).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        T::emit_dyn(py, r)?
     }))
 }
