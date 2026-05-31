@@ -2856,40 +2856,57 @@ pub fn sinc<'py>(py: Python<'py>, x: &Bound<'py, PyAny>) -> PyResult<Bound<'py, 
 
 bind_unary_float!(i0, ferray_ufunc::i0);
 
-/// `numpy.gradient(f, *, dx=1.0)` — central-difference gradient of a 1-D
-/// array. Multi-axis gradient is deferred (numpy's full API takes a list
-/// of varargs spacings; ferray-ufunc's gradient is 1-D-only).
+/// `numpy.gradient(f, *varargs, axis=None, edge_order=1)` — central-difference
+/// gradient. A 1-D input returns a single array; an N-D input returns a tuple of
+/// per-axis gradients (one central-difference array per axis, edges one-sided at
+/// `edge_order`). `*varargs` is the spacing (scalar `dx` per axis or coordinate
+/// arrays); `axis` (int or tuple) restricts the axes computed.
+///
+/// numpy owns the full N-D central-difference kernel plus the `*varargs`
+/// spacing, `axis` (int/tuple/`None`-flatten) and `edge_order` (1|2) contract
+/// (`numpy/lib/_function_base_impl.py` `gradient`), and the 1-D-array-vs-N-D-tuple
+/// return shape. The prior binding accepted only a 1-D `PyReadonlyArray1` + a
+/// single `dx: f64`, so `fr.gradient([[1.,2],[3,4]])` raised
+/// `TypeError: 'ndarray' object is not an instance of 'ndarray'` while numpy
+/// returns the per-axis tuple (verified live, numpy 2.4:
+/// `np.gradient([[1.,2,4],[3,5,9]])` → `(grad_axis0, grad_axis1)`).
+///
+/// The whole op is delegated to numpy. The argument array crosses the boundary
+/// as a numpy ndarray (no lossy f64 coercion or list round-trip — R-CODE-4), so
+/// numpy's dtype/shape contract is preserved exactly for every dtype:
+/// float32/float64 stay put, integer/bool promote to float64, complex computes
+/// the complex gradient, and a datetime64/timedelta64 input yields a
+/// timedelta64 result (#946 — datetime differences are timedeltas, no
+/// silent-float corruption). The "array too small" / `axis` `AxisError` ride
+/// back unchanged.
 #[pyfunction]
-#[pyo3(signature = (f, dx = 1.0))]
+#[pyo3(signature = (f, *varargs, axis = None, edge_order = 1))]
 pub fn gradient<'py>(
     py: Python<'py>,
     f: &Bound<'py, PyAny>,
-    dx: f64,
+    varargs: &Bound<'py, pyo3::types::PyTuple>,
+    axis: Option<&Bound<'py, PyAny>>,
+    edge_order: i64,
 ) -> PyResult<Bound<'py, PyAny>> {
-    use ferray_core::array::aliases::Array1;
     let arr = as_ndarray(py, f)?;
-    // datetime64/timedelta64 (#946): `gradient` of a time array is ALWAYS a
-    // timedelta64 (central differences of datetimes/timedeltas), computed on the
-    // int64 ticks. Branch BEFORE the float64 coercion below — that coercion is
-    // the R-CODE-4 silent-float corruption this REQ eliminates (`fr.gradient(td)`
-    // returned a bare float64 array).
-    if crate::datetime::is_time_array(&arr)? {
-        return crate::datetime::time_gradient(py, &arr, dx);
+    let kwargs = pyo3::types::PyDict::new(py);
+    // numpy.gradient's `axis` default is `None` (all axes). Pass the value
+    // through verbatim so numpy's own int/tuple/None-flatten handling applies.
+    match axis {
+        Some(ax) => kwargs.set_item("axis", ax)?,
+        None => kwargs.set_item("axis", py.None())?,
     }
-    let dt = dtype_name(&arr)?;
-    let real_dt = if matches!(dt.as_str(), "float32" | "f32" | "float64" | "f64") {
-        dt.as_str().to_string()
-    } else {
-        "float64".to_string()
-    };
-    let arr = coerce_dtype(py, &arr, &real_dt)?;
-    Ok(match_dtype_float!(real_dt.as_str(), T => {
-        let view: numpy::PyReadonlyArray1<T> = arr.extract()?;
-        let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        let r: Array1<T> = ferray_ufunc::gradient(&fa, Some(dx as T))
-            .map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
+    kwargs.set_item("edge_order", edge_order)?;
+    // The boundary array becomes the leading positional, followed by the
+    // `*varargs` spacing (scalar `dx` per axis or coordinate arrays) verbatim.
+    let mut args: Vec<Bound<'py, PyAny>> = Vec::with_capacity(1 + varargs.len());
+    args.push(arr);
+    for v in varargs.iter() {
+        args.push(v);
+    }
+    py.import("numpy")?
+        .getattr("gradient")?
+        .call(pyo3::types::PyTuple::new(py, args)?, Some(&kwargs))
 }
 
 /// `numpy.trapezoid(y, x=None, dx=1.0)` (formerly `numpy.trapz`).

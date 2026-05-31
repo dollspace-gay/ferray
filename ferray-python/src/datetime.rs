@@ -1441,63 +1441,6 @@ pub fn time_quantile<'py>(
     }
 }
 
-/// `numpy.gradient(f, dx)` for a 1-D datetime64 / timedelta64 array. The result
-/// is ALWAYS timedelta (datetime differences are timedeltas). Central
-/// differences on the int64 ticks: interior `(f[i+1]-f[i-1])/(2*dx)`, edges
-/// one-sided `(f[1]-f[0])/dx` and `(f[-1]-f[-2])/dx`. Each division is numpy's
-/// timedelta÷double = truncation toward zero (`(8-5)/2 -> 1`, live).
-/// NaT propagates: any operand NaT in a difference yields NaT.
-pub fn time_gradient<'py>(
-    py: Python<'py>,
-    arr: &Bound<'py, PyAny>,
-    dx: f64,
-) -> PyResult<Bound<'py, PyAny>> {
-    // Validate the input is a time array (result is ALWAYS timedelta, so the
-    // specific kind is not used).
-    time_kind(arr)?.ok_or_else(|| {
-        PyTypeError::new_err("time_gradient requires a datetime64 / timedelta64 array")
-    })?;
-    let (ticks, _unit, unit_str) = extract_ticks(py, arr)?;
-    if ticks.ndim() != 1 {
-        return Err(PyValueError::new_err(
-            "ferray gradient supports a 1-D array",
-        ));
-    }
-    let f: Vec<i64> = ticks.iter().copied().collect();
-    let n = f.len();
-    if n < 2 {
-        return Err(PyValueError::new_err(
-            "Shape of array too small to calculate a numerical gradient, \
-             at least 2 elements are required.",
-        ));
-    }
-    // Subtract two ticks with NaT propagation; `None` marks NaT.
-    let sub = |hi: i64, lo: i64| -> Option<i64> {
-        if hi == NAT || lo == NAT {
-            None
-        } else {
-            Some(hi.wrapping_sub(lo))
-        }
-    };
-    // Divide a tick difference by a double, truncating toward zero (numpy
-    // timedelta÷double). `None` (NaT) stays NaT.
-    let div = |diff: Option<i64>, denom: f64| -> i64 {
-        match diff {
-            None => NAT,
-            Some(d) => ((d as f64) / denom).trunc() as i64,
-        }
-    };
-    let mut out = vec![0i64; n];
-    // Edges (one-sided).
-    out[0] = div(sub(f[1], f[0]), dx);
-    out[n - 1] = div(sub(f[n - 1], f[n - 2]), dx);
-    // Interior (central).
-    for i in 1..n - 1 {
-        out[i] = div(sub(f[i + 1], f[i - 1]), 2.0 * dx);
-    }
-    emit_time(py, out, &[n], false, &unit_str)
-}
-
 // ---------------------------------------------------------------------------
 // datetime64 / timedelta64 comparison + ordering (REQ-3, #943)
 //
