@@ -2807,16 +2807,51 @@ pub fn multi_dot<'py>(py: Python<'py>, arrays: &Bound<'py, PyAny>) -> PyResult<B
     }
     let first = as_ndarray(py, &list.get_item(0)?)?;
     let dt = dtype_name(&first)?;
+    let n = list.len();
     Ok(match_dtype_float!(dt.as_str(), T => {
-        let mut owned: Vec<ArrayD<T>> = Vec::with_capacity(list.len());
+        let mut owned: Vec<ArrayD<T>> = Vec::with_capacity(n);
         for item in list.iter() {
             let coerced = crate::conv::coerce_dtype(py, &item, dt.as_str())?;
             let view: PyReadonlyArrayDyn<T> = coerced.extract()?;
             owned.push(view.as_ferray().map_err(ferr_to_pyerr)?);
         }
+        // numpy.linalg.multi_dot (numpy/linalg/_linalg.py:2865) permits the FIRST
+        // and/or LAST argument to be 1-D: the first is treated as a row vector
+        // (prepend an axis -> shape `(1, n)`), the last as a column vector
+        // (append an axis -> shape `(n, 1)`). The interior matrices must be 2-D.
+        // After the chain product the temporary axes are dropped, so a 1-D x ...
+        // x 1-D chain reduces to a scalar (routed through `scalarize`); an all-2-D
+        // chain keeps its matrix (ndarray) result.
+        let prepend = owned[0].ndim() == 1;
+        let append = owned[n - 1].ndim() == 1;
+        if prepend {
+            let len = owned[0].shape()[0];
+            owned[0] = ferray_core::manipulation::reshape(&owned[0], &[1, len])
+                .map_err(ferr_to_pyerr)?;
+        }
+        if append {
+            let len = owned[n - 1].shape()[0];
+            owned[n - 1] = ferray_core::manipulation::reshape(&owned[n - 1], &[len, 1])
+                .map_err(ferr_to_pyerr)?;
+        }
         let refs: Vec<&ArrayD<T>> = owned.iter().collect();
         let r: ArrayD<T> = fl::multi_dot(&refs).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        // Drop the temporary leading/trailing axes numpy inserted for 1-D ends.
+        let out_shape: Vec<usize> = {
+            let s = r.shape();
+            let lo = if prepend { 1 } else { 0 };
+            let hi = if append { s.len() - 1 } else { s.len() };
+            s[lo..hi].to_vec()
+        };
+        if out_shape.len() == r.ndim() {
+            r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        } else {
+            let rr = ferray_core::manipulation::reshape(&r, &out_shape).map_err(ferr_to_pyerr)?;
+            // A both-ends-1-D chain reduces to a 0-d egress -> numpy scalar
+            // ($OUT_SCALAR); `scalarize` is a no-op on ndim>=1 (single-1-D-end
+            // case keeps its 1-D vector result).
+            crate::conv::scalarize(rr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
+        }
     }))
 }
 
@@ -2933,8 +2968,20 @@ pub fn vecdot<'py>(
         let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
         let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
         let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+        // For 1-D inputs the `(n,),(n,)->()` gufunc core collapses fully: numpy
+        // returns an np.float64 scalar (numpy/linalg/_linalg.py:3604 vecdot).
+        // `fl::vecdot` pads the empty output shape with a spurious length-1 axis
+        // (a 1-element 1-D array), so collapse that genuinely-scalar case to a
+        // 0-d egress and route it through `scalarize` ($OUT_SCALAR). Inputs with
+        // ndim>=2 retain their reduced shape (an ndarray) and are unchanged.
+        let scalar_result = fa.ndim() == 1;
         let r: ArrayD<T> = fl::vecdot(&fa, &fb, Some(axis)).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        if scalar_result {
+            let r0 = ferray_core::manipulation::reshape(&r, &[]).map_err(ferr_to_pyerr)?;
+            crate::conv::scalarize(r0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
+        } else {
+            r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        }
     }))
 }
 
@@ -2980,8 +3027,21 @@ pub fn tensordot<'py>(
         let vb: PyReadonlyArrayDyn<T> = arr_b.extract()?;
         let fa: ArrayD<T> = va.as_ferray().map_err(ferr_to_pyerr)?;
         let fb: ArrayD<T> = vb.as_ferray().map_err(ferr_to_pyerr)?;
+        // A FULL contraction (every axis of both operands contracted) is
+        // genuinely scalar — numpy returns a 0-d array `array(70.)` (ndim 0),
+        // numpy/_core/numeric.py:997 tensordot. `fl::tensordot` pads the empty
+        // output shape with a spurious length-1 axis (the contraction value sits
+        // in a 1-element 1-D array), so collapse that case to a real 0-d egress
+        // and route it through `scalarize` ($OUT_SCALAR). Any NON-full contraction
+        // (free axes remain) keeps its genuine multi-axis shape unchanged.
+        let full_contraction = axes_u == fa.ndim() && axes_u == fb.ndim();
         let r: ArrayD<T> = fl::tensordot(&fa, &fb, fl::TensordotAxes::Scalar(axes_u))
             .map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        if full_contraction {
+            let r0 = ferray_core::manipulation::reshape(&r, &[]).map_err(ferr_to_pyerr)?;
+            crate::conv::scalarize(r0.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())?
+        } else {
+            r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
+        }
     }))
 }
