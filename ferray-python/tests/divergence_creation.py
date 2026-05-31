@@ -388,3 +388,70 @@ def test_geomspace_negative_endpoints_exact():
     assert got[1] == oracle[1], (
         f"interior: numpy={oracle[1]!r} ferray={got[1]!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# meshgrid: container return type (all-float64 fast path)
+# [binding] ferray-python/src/creation.rs::meshgrid (native fast path)
+# ---------------------------------------------------------------------------
+
+
+def test_meshgrid_returns_tuple_all_float64_fastpath():
+    """numpy's ``meshgrid`` returns a ``tuple`` for the default
+    ``copy=True, sparse=False`` path: it builds ``output`` then does
+    ``output = tuple(x.copy() for x in output)`` and returns it
+    (numpy/lib/_function_base_impl.py:5207-5213; verified live numpy 2.4.4 ->
+    ``type(np.meshgrid(...)) is tuple``).
+
+    ferray's all-float64 *fast path* (creation.rs:1954) wraps the grids in a
+    ``PyList`` and returns a Python ``list`` instead, while its delegate path
+    (any non-float64 input) correctly returns numpy's ``tuple`` -- so the
+    common all-float64 case diverges in container type.
+
+    Expected (numpy oracle): type(result) is tuple.
+    Actual (ferray fast path): type(result) is list.
+    """
+    a = np.array([1.0, 2.0, 3.0])
+    b = np.array([4.0, 5.0])
+    oracle = np.meshgrid(a, b)
+    got = fr.meshgrid(a, b)
+    # oracle type computed live (R-CHAR-3): numpy returns a tuple.
+    assert type(got) is type(oracle), (
+        f"container type: numpy={type(oracle).__name__} "
+        f"ferray={type(got).__name__}"
+    )
+
+
+def test_meshgrid_returns_tuple_float_pylists_fastpath():
+    """Same divergence reached via all-float Python sequences (which numpy
+    coerces to float64, taking ferray's fast path). numpy returns a ``tuple``
+    (numpy/lib/_function_base_impl.py:5208, live numpy 2.4.4); ferray's fast
+    path returns a ``list``.
+
+    Expected (numpy oracle): type(result) is tuple.
+    Actual (ferray fast path): type(result) is list.
+    """
+    oracle = np.meshgrid([1.0, 2.0], [3.0, 4.0])
+    got = fr.meshgrid([1.0, 2.0], [3.0, 4.0])
+    assert type(got) is type(oracle), (
+        f"container type: numpy={type(oracle).__name__} "
+        f"ferray={type(got).__name__}"
+    )
+
+
+def test_meshgrid_single_float64_input_returns_tuple_fastpath():
+    """A single all-float64 input also takes the fast path. numpy returns a
+    one-element ``tuple`` (numpy/lib/_function_base_impl.py:5213, live numpy
+    2.4.4: ``type(np.meshgrid(np.array([1.0,2.0,3.0]))) is tuple``); ferray's
+    fast path returns a ``list``.
+
+    Expected (numpy oracle): type(result) is tuple.
+    Actual (ferray fast path): type(result) is list.
+    """
+    a = np.array([1.0, 2.0, 3.0])
+    oracle = np.meshgrid(a)
+    got = fr.meshgrid(a)
+    assert type(got) is type(oracle), (
+        f"container type: numpy={type(oracle).__name__} "
+        f"ferray={type(got).__name__}"
+    )
