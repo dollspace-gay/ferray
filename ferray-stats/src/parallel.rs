@@ -1,4 +1,22 @@
 // ferray-stats: Rayon threshold dispatch for reductions and sorting (REQ-19, REQ-20)
+//
+// ## REQ status (ferray-stats parallel kernels, NumPy parity)
+//  - REQ-19 (large reductions use parallel tree-reduce via Rayon) — SHIPPED:
+//    `pub fn pairwise_sum` / `pub fn pairwise_sum_f64` / `pub fn pairwise_sum_f32`
+//    (pairwise/tree summation), `pub fn simd_sum_sq_diff_f64` /
+//    `pub fn simd_sum_sq_diff_f32` (fused sum-of-squared-deviations), and
+//    `pub fn parallel_sum` / `pub fn parallel_prod` (Rayon tree-reduce above the
+//    element-count threshold). The pairwise tree is numerically equivalent to
+//    numpy's pairwise summation (numpy/_core/src/umath/loops_utils.h.src
+//    pairwise reduction). Non-test consumers: `reductions::sum`/`mean`/`var`
+//    (`crate::parallel::pairwise_sum*` / `simd_sum_sq_diff*` in
+//    `reductions/mod.rs`) and `correlation::corrcoef` (`crate::parallel::pairwise_sum`).
+//  - REQ-20 (large-array sort uses parallel merge sort via Rayon) — SHIPPED:
+//    `pub fn parallel_sort` / `pub fn parallel_sort_stable` (Rayon
+//    parallel/parallel-stable sort above the sort threshold), plus
+//    `pub fn nan_last_cmp` (the NaN-last total order numpy's sort uses,
+//    numpy/_core/src/npysort). Non-test consumer: `sorting::sort`
+//    (`parallel::parallel_sort` / `parallel_sort_stable` in `sorting.rs`).
 
 // `with_simd`, `simd_pairwise_f64`, `simd_base_sum_f64`, and `base_sum`
 // are pulp dispatch entry points where `#[inline(always)]` is required —

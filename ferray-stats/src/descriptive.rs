@@ -5,6 +5,31 @@
 // "at least these would be expected". Statistical *tests* (ttest,
 // ks_2samp, chi2_contingency, pearsonr, spearmanr) need cumulative
 // distribution functions and are a follow-up.
+//
+// ## REQ status (ferray-stats descriptive, scipy.stats parity)
+// This module predates the numbered REQ-1..REQ-21 of `.design/ferray-stats.md`
+// (which cover the numpy reduction/sort/search/set surface); the descriptive
+// set is tracked as the scipy.stats parity issue #470. Status keyed by symbol:
+//  - skew / kurtosis (#470) — SHIPPED: `pub fn skew` (third standardized
+//    moment, `bias=True`/population denominator) and `pub fn kurtosis` (fourth
+//    standardized moment, `fisher` toggle), matching scipy's `skew`/`kurtosis`
+//    defaults. Consumers: re-exported as the crate's public API via
+//    `ferray-stats/src/lib.rs` (`pub use descriptive::{… kurtosis, … skew}`).
+//  - zscore (#470) — SHIPPED: `pub fn zscore` returns `(x - μ)/σ` as
+//    `Array<f64, IxDyn>`. Consumer: the `lib.rs` `pub use` re-export.
+//  - mode (#470) — SHIPPED: `pub fn mode` returns `ModeResult<T>` (smallest
+//    most-frequent value + count), matching scipy's tie rule. Consumer: the
+//    `lib.rs` `pub use` re-export (`ModeResult`, `mode`).
+//  - iqr (#470) — SHIPPED: `pub fn iqr` = `quantile(.75) - quantile(.25)`;
+//    it is itself a non-test consumer of `crate::reductions::quantile::quantile`.
+//    Consumer of `iqr`: the `lib.rs` `pub use` re-export.
+//  - sem / gmean / hmean (#470) — SHIPPED: `pub fn sem` (standard error of the
+//    mean, `ddof=1`), `pub fn gmean` (geometric mean), `pub fn hmean`
+//    (harmonic mean), matching scipy. Consumers: the `lib.rs` `pub use`
+//    re-export (`gmean`, `hmean`, `sem`).
+//  - statistical hypothesis tests (ttest / ks_2samp / chi2_contingency /
+//    pearsonr / spearmanr) — NOT-STARTED: deferred follow-up (they need CDF
+//    machinery; see the module note above). No `pub fn` here yet.
 
 use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, IxDyn};

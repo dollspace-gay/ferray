@@ -1,5 +1,31 @@
 // ferray-stats: Quantile-based reductions — median, percentile, quantile (REQ-1)
 // Also nanmedian, nanpercentile (REQ-3)
+//
+// ## REQ status (ferray-stats quantiles, NumPy parity)
+//  - REQ-1 (median/percentile/quantile with optional `axis`) — SHIPPED:
+//    `pub fn median`, `pub fn percentile`, `pub fn quantile` (this file), each
+//    taking `axis: Option<usize>`. `percentile` forwards to `quantile` after
+//    scaling `q` by 1/100, matching numpy (numpy/lib/_function_base_impl.py:4065
+//    `percentile`, :4268 `quantile`, :3915 `median`). Non-test consumers: the
+//    `ferray_stats::median`/`percentile`/`quantile` `#[pyfunction]` shims in
+//    `ferray-python/src/stats.rs`, and in-crate `descriptive::iqr` which calls
+//    `crate::reductions::quantile::quantile` for the 25th/75th percentiles.
+//  - all 9 interpolation methods incl. ClosestObservation (#1080) — SHIPPED:
+//    `pub enum QuantileMethod` (this file) and `pub fn quantile_with_method` /
+//    `pub fn percentile_with_method` cover the Hyndman-Fan continuous methods
+//    (`Linear`, `Lower`, `Higher`, `Nearest`, `Midpoint`, plus the
+//    interpolation-parameterized variants) and the discrete
+//    `ClosestObservation` rule, matching numpy's `method=` set
+//    (numpy/lib/_function_base_impl.py:4268-4300). Fixed and audited green.
+//    Consumers: `quantile`/`percentile`/`median` (this file) call
+//    `quantile_with_method` with `QuantileMethod::Linear`; the
+//    `ferray_stats::percentile`/`quantile` python shims expose the method arg.
+//  - REQ-3 (nanmedian / nanpercentile / nanquantile — skip NaN) — SHIPPED:
+//    `pub fn nanmedian`, `pub fn nanpercentile`, `pub fn nanquantile` (this
+//    file) drop NaN from each lane before quantiling, matching numpy
+//    (numpy/lib/_nanfunctions_impl.py). Consumers: `ferray_stats::nanmedian`/
+//    `nanpercentile`/`nanquantile` `#[pyfunction]` shims in
+//    `ferray-python/src/stats.rs`.
 
 use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, IxDyn};

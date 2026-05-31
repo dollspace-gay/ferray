@@ -1,4 +1,29 @@
 // ferray-stats: Sorting and searching — sort, argsort, searchsorted (REQ-11, REQ-12, REQ-13)
+//
+// ## REQ status (ferray-stats sorting, NumPy parity)
+//  - REQ-11 (sort with `SortKind::Stable` (merge) and `SortKind::Quick`) —
+//    SHIPPED: `pub fn sort` (this file) dispatches on `SortKind`, routing large
+//    inputs through `parallel::parallel_sort` / `parallel::parallel_sort_stable`
+//    and using `nan_last_cmp` so NaN sorts last, matching numpy
+//    (numpy/_core/fromnumeric.py:879 `sort`; NaN-last per numpy/_core/src/npysort).
+//    Non-test consumer: the `ferray_stats::sort` `#[pyfunction]` shim in
+//    `ferray-python/src/stats.rs`.
+//  - REQ-12 (argsort returning index array) — SHIPPED: `pub fn argsort`
+//    returns `Array<u64, IxDyn>` (ferray's `intp` analog), matching
+//    numpy/_core/fromnumeric.py:1118 `argsort`. Consumer:
+//    `ferray_stats::argsort` `#[pyfunction]` shim in `stats.rs`.
+//  - REQ-13 (searchsorted with `Side::Left`/`Side::Right`) — SHIPPED:
+//    `pub fn searchsorted` and `pub fn searchsorted_with_sorter` (binary search,
+//    left/right side), matching numpy/_core/fromnumeric.py:1387 `searchsorted`.
+//    Consumer: `ferray_stats::searchsorted` `#[pyfunction]` shim in `stats.rs`.
+//  - partition / argpartition / lexsort / sort_complex — SHIPPED:
+//    `pub fn partition` / `pub fn argpartition` (introselect-style kth
+//    placement, numpy `partition`/`argpartition`), `pub fn lexsort` (stable
+//    multi-key sort, numpy/_core/fromnumeric.py:1041 `lexsort`), and
+//    `pub fn sort_complex` (sort by real then imaginary,
+//    numpy/lib/_function_base_impl.py `sort_complex`). Consumers:
+//    `ferray_stats::lexsort` / `ferray_stats::sort_complex` `#[pyfunction]`
+//    shims in `stats.rs`.
 
 use ferray_core::error::{FerrayError, FerrayResult};
 use ferray_core::{Array, Dimension, Element, Ix1, IxDyn};

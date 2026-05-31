@@ -3,6 +3,38 @@
 // `cumulative` used to exist as an empty placeholder whose only content
 // was a note that cumulative functions live in nan_aware / mod.rs; it's
 // been deleted to stop pretending there's a dedicated module there (#162).
+//
+// ## REQ status (ferray-stats reductions, NumPy parity)
+//  - REQ-1 / REQ-2 (sum/prod/min/max/argmin/argmax/mean/var/std/ptp/average
+//    as free functions, each with an optional `axis`) — SHIPPED: `pub fn sum`,
+//    `prod`, `min`, `max`, `argmin`, `argmax`, `ptp`, `average`, `mean`, `var`,
+//    `std_` (this file), plus the `_axes` / `_into` / `_with` axis-tuple and
+//    out-buffer variants. Each takes `axis: Option<usize>` (`None` = whole
+//    array), matching numpy's `axis=None` collapse
+//    (numpy/_core/fromnumeric.py:2321 `sum`, :2160 `min`/`max`). Non-test
+//    consumers: the `#[pyfunction]` shims in `ferray-python/src/stats.rs`
+//    (`ferray_stats::sum`/`min`/`max`/`argmin`/`argmax`/`ptp`/`average`/`mean`/
+//    `var`/`std_`/`prod`), and in-crate `var`/`std_` reuse `mean`; `average`
+//    delegates to `mean` when no weights are given.
+//  - min/max/argmin/argmax/ptp NaN-propagation (#1058-#1062) — SHIPPED: the
+//    extremum reducers in `min`/`max`/`argmin`/`argmax`/`ptp` propagate NaN
+//    (a NaN anywhere in the reduced lane makes the result NaN, and argmin/
+//    argmax return the index of the first NaN), matching numpy's
+//    non-`nan*` extremum semantics (numpy/_core/_methods.py:43 `_amin`,
+//    :39 `_amax`). Audited green. Consumers: the same `ferray-python`
+//    `#[pyfunction]` shims above (`ferray_stats::min`/`max`/`argmin`/`argmax`/
+//    `ptp`).
+//  - integer/bool sum/prod accumulator promotion — SHIPPED: `sum`/`prod`
+//    reduce through `ferray_core::array::reductions::ReduceAcc` (widen narrow
+//    ints before accumulating), so narrow-int reductions do not overflow,
+//    matching numpy (numpy/_core/fromnumeric.py:2321-2327). `sum_as_f64` /
+//    `mean_as_f64` / `var_as_f64` / `std_as_f64` expose the float-result forms.
+//  - SIMD/parallel reduction kernels — SHIPPED (consumer side): `sum`/`mean`/
+//    `var` route through `parallel::pairwise_sum*` / `parallel::simd_sum_sq_diff*`
+//    (this file's `try_simd_sum_sq_diff` helper); see `parallel.rs` REQ-19.
+//  - cumsum / cumprod — SHIPPED here as free functions `pub fn cumsum` /
+//    `pub fn cumprod` (REQ-2a); consumed by `ferray_stats::cumsum`/`cumprod`
+//    in `ferray-python/src/stats.rs`.
 
 pub mod nan_aware;
 pub mod quantile;

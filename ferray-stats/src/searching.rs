@@ -1,4 +1,27 @@
 // ferray-stats: Searching — unique, nonzero, where_, count_nonzero (REQ-14, REQ-15, REQ-16, REQ-17)
+//
+// ## REQ status (ferray-stats searching, NumPy parity)
+//  - REQ-14 (unique with return_index / return_counts) — SHIPPED:
+//    `pub fn unique` returns sorted unique elements with optional index/counts,
+//    plus `pub fn unique_values` / `pub fn unique_counts` / `pub fn unique_inverse`
+//    / `pub fn unique_all` / `pub fn unique_axis`, matching numpy's
+//    `unique`/`unique_*` family (numpy/lib/_arraysetops_impl.py:138 `unique`).
+//    Non-test consumers: `ferray_stats::unique` / `ferray_stats::unique_values`
+//    `#[pyfunction]` shims in `ferray-python/src/stats.rs`.
+//  - REQ-15 (nonzero returning a tuple of index arrays) — SHIPPED:
+//    `pub fn nonzero` returns `Vec<Array<u64, Ix1>>` (one index array per
+//    dimension), matching numpy/_core/fromnumeric.py:1937 `nonzero`. Non-test
+//    consumer: the `nonzero` `#[pyfunction]` in `ferray-python/src/indexing.rs`
+//    (`fi::nonzero(&fa)`, where `fi` aliases `ferray_stats`).
+//  - REQ-16 (where_ conditional selection) — SHIPPED: `pub fn where_` plus
+//    `pub fn where_broadcast` (broadcasting cond/x/y) and `pub fn where_condition`
+//    (single-arg index form), matching numpy's `where`
+//    (numpy/_core/multiarray `where`). Consumer: `ferray_stats::where_`
+//    `#[pyfunction]` shim in `stats.rs`.
+//  - REQ-17 (count_nonzero with optional axis) — SHIPPED: `pub fn count_nonzero`
+//    returns `Array<u64, IxDyn>`, taking `axis: Option<usize>`, matching
+//    numpy/_core/numeric.py `count_nonzero`. Consumer:
+//    `ferray_stats::count_nonzero` `#[pyfunction]` shim in `stats.rs`.
 
 use ferray_core::dimension::broadcast::broadcast_shapes;
 use ferray_core::error::{FerrayError, FerrayResult};
