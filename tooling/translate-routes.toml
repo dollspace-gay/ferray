@@ -594,6 +594,12 @@ design = ".design/ferray-strings.md"
 parity_ops = ["str_len", "count", "find", "replace"]
 
 [[route]]
+crate_pattern = "ferray-strings/src/align.rs"
+upstream = ["/home/doll/numpy-ref/numpy/_core/strings.py"]
+design = ".design/ferray-strings.md"
+parity_ops = ["center", "ljust", "rjust", "zfill"]
+
+[[route]]
 crate_pattern = "ferray-strings/src/str_ops.rs"
 upstream = ["/home/doll/numpy-ref/numpy/_core/strings.py"]
 design = ".design/ferray-strings.md"
