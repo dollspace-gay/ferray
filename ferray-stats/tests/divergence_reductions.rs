@@ -230,3 +230,219 @@ fn divergence_std_ddof_ge_n_returns_inf() {
         "std([1,2,3], ddof=3) = {v}; numpy = +inf"
     );
 }
+
+// ===========================================================================
+// NaN-propagation divergences (acto-critic iteration, 2026-05-31).
+//
+// Imports kept local to this block so the original header (DIV 1-6) stays
+// untouched. numpy oracle: numpy 2.4.4 via ferray-python/.venv/bin/python.
+// ===========================================================================
+use ferray_core::Ix2;
+use ferray_stats::{argmax, argmin, max, min, ptp};
+
+// ---------------------------------------------------------------------------
+// DIVERGENCE 7 — max(NaN present) must PROPAGATE NaN, not drop it.
+//
+// numpy contract: numpy/_core/fromnumeric.py:3076-3078 (max docstring) —
+//   "NaN values are propagated, that is if at least one item is NaN, the
+//    corresponding max value will be NaN as well. To ignore NaN values
+//    (MATLAB behavior), please use nanmax." np.max is _wrapreduction over
+//   np.maximum (fromnumeric.py:3124-3125), and np.maximum propagates NaN.
+// Live oracle: np.max(np.array([1.0, np.nan, 3.0])) -> nan.
+//
+// ferray: `reductions::max` nan_max(a,b) returns `a` in the "unordered"
+//   else-branch (mod.rs:665-673). Reducing [1, nan, 3] folds
+//   nan_max(nan_max(1,nan)=1, 3)=3 — the NaN is silently dropped, giving 3.
+// ---------------------------------------------------------------------------
+#[test]
+fn divergence_max_propagates_nan() {
+    // Live numpy: np.max([1.0, nan, 3.0]) -> nan
+    let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, f64::NAN, 3.0]).unwrap();
+    let r = max(&a, None).unwrap();
+    let v = *r.iter().next().unwrap();
+    assert!(
+        v.is_nan(),
+        "max([1, nan, 3]) = {v}; numpy propagates NaN -> nan \
+         (numpy/_core/fromnumeric.py:3076)"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DIVERGENCE 8 — min(NaN present) must PROPAGATE NaN, not drop it.
+//
+// numpy contract: numpy/_core/fromnumeric.py:3214-3216 (min docstring) —
+//   "NaN values are propagated, that is if at least one item is NaN, the
+//    corresponding min value will be NaN as well ... please use nanmin."
+//   np.min is _wrapreduction over np.minimum, which propagates NaN.
+// Live oracle: np.min(np.array([1.0, np.nan, 3.0])) -> nan ;
+//              np.min(np.array([np.nan, 1.0, 3.0])) -> nan.
+//
+// ferray: `reductions::min` nan_min else-branch returns `a` (mod.rs:622-632),
+//   so the NaN is dropped whenever a non-NaN precedes it in the fold.
+// ---------------------------------------------------------------------------
+#[test]
+fn divergence_min_propagates_nan() {
+    // Live numpy: np.min([1.0, nan, 3.0]) -> nan
+    let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, f64::NAN, 3.0]).unwrap();
+    let r = min(&a, None).unwrap();
+    let v = *r.iter().next().unwrap();
+    assert!(
+        v.is_nan(),
+        "min([1, nan, 3]) = {v}; numpy propagates NaN -> nan \
+         (numpy/_core/fromnumeric.py:3214)"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DIVERGENCE 9 — min/max along an axis must propagate NaN per lane.
+//
+// numpy contract: same NaN-propagation rule (fromnumeric.py:3076 / 3214)
+//   applies lane-wise.
+// Live oracle:
+//   m = [[1, nan, 3], [4, 5, nan]]
+//   np.min(m, axis=1) -> [nan, nan]
+//   np.max(m, axis=1) -> [nan, nan]
+// ---------------------------------------------------------------------------
+#[test]
+fn divergence_min_max_axis_propagate_nan() {
+    let m = Array::<f64, Ix2>::from_vec(
+        Ix2::new([2, 3]),
+        vec![1.0, f64::NAN, 3.0, 4.0, 5.0, f64::NAN],
+    )
+    .unwrap();
+    let lo = min(&m, Some(1)).unwrap();
+    let hi = max(&m, Some(1)).unwrap();
+    let lo_v: Vec<f64> = lo.iter().copied().collect();
+    let hi_v: Vec<f64> = hi.iter().copied().collect();
+    // numpy: both lanes contain a NaN -> [nan, nan] for min and max.
+    assert!(
+        lo_v.iter().all(|x| x.is_nan()),
+        "min(axis=1) = {lo_v:?}; numpy = [nan, nan] (fromnumeric.py:3214)"
+    );
+    assert!(
+        hi_v.iter().all(|x| x.is_nan()),
+        "max(axis=1) = {hi_v:?}; numpy = [nan, nan] (fromnumeric.py:3076)"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DIVERGENCE 10 — ptp(NaN present) must be NaN.
+//
+// numpy contract: np.ptp = max - min (fromnumeric.py:2922 def ptp), and both
+//   max and min propagate NaN, so ptp of a slice containing NaN is NaN.
+// Live oracle: np.ptp(np.array([1.0, np.nan, 3.0])) -> nan.
+//
+// ferray: `reductions::ptp` = max(a) - min(a) (mod.rs:814-823); because the
+//   broken nan_min/nan_max drop NaN, ptp returns 3 - 1 = 2 instead of NaN.
+// ---------------------------------------------------------------------------
+#[test]
+fn divergence_ptp_propagates_nan() {
+    // Live numpy: np.ptp([1.0, nan, 3.0]) -> nan
+    let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, f64::NAN, 3.0]).unwrap();
+    let r = ptp(&a, None).unwrap();
+    let v = *r.iter().next().unwrap();
+    assert!(
+        v.is_nan(),
+        "ptp([1, nan, 3]) = {v}; numpy = nan (max - min, both propagate NaN)"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DIVERGENCE 11 — argmin with a NaN returns the FIRST NaN's index.
+//
+// numpy contract: argmin reduces with np.minimum, which propagates NaN, so a
+//   NaN compares as "the smallest" and argmin returns the index of the first
+//   NaN. First-occurrence tie rule: numpy/_core/fromnumeric.py:1362
+//   ("the indices corresponding to the first occurrence are returned").
+// Live oracle:
+//   np.argmin([1.0, nan, 3.0]) -> 1
+//   np.argmin([nan, 1.0, 3.0]) -> 0
+//
+// ferray: `reductions::argmin` reduces with `if av <= bv` (mod.rs:716). With a
+//   NaN, `av <= bv` is false, so it walks PAST the NaN to the next element,
+//   yielding 2 (for [1,nan,3]) and 1 (for [nan,1,3]) — neither equals numpy.
+// ---------------------------------------------------------------------------
+#[test]
+fn divergence_argmin_returns_first_nan_index() {
+    // Live numpy: np.argmin([1.0, nan, 3.0]) -> 1
+    let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, f64::NAN, 3.0]).unwrap();
+    let got = *argmin(&a, None).unwrap().iter().next().unwrap();
+    assert_eq!(
+        got, 1u64,
+        "argmin([1, nan, 3]) = {got}; numpy = 1 (NaN propagates as the minimum, \
+         fromnumeric.py:1362)"
+    );
+
+    // Live numpy: np.argmin([nan, 1.0, 3.0]) -> 0
+    let b = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![f64::NAN, 1.0, 3.0]).unwrap();
+    let got_b = *argmin(&b, None).unwrap().iter().next().unwrap();
+    assert_eq!(
+        got_b, 0u64,
+        "argmin([nan, 1, 3]) = {got_b}; numpy = 0"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DIVERGENCE 12 — argmax with a NaN returns the FIRST NaN's index.
+//
+// numpy contract: argmax reduces with np.maximum (propagates NaN), so a NaN
+//   compares as "the largest" and argmax returns the index of the first NaN.
+//   First-occurrence tie rule: numpy/_core/fromnumeric.py:1262.
+// Live oracle:
+//   np.argmax([1.0, nan, 3.0]) -> 1
+//   np.argmax([nan, 1.0, 3.0]) -> 0
+//
+// ferray: `reductions::argmax` reduces with `if av >= bv` (mod.rs:756); the
+//   NaN comparison is false so it skips past the NaN -> 2 (for [1,nan,3]) and
+//   2 (for [nan,1,3]).
+// ---------------------------------------------------------------------------
+#[test]
+fn divergence_argmax_returns_first_nan_index() {
+    // Live numpy: np.argmax([1.0, nan, 3.0]) -> 1
+    let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, f64::NAN, 3.0]).unwrap();
+    let got = *argmax(&a, None).unwrap().iter().next().unwrap();
+    assert_eq!(
+        got, 1u64,
+        "argmax([1, nan, 3]) = {got}; numpy = 1 (NaN propagates as the maximum, \
+         fromnumeric.py:1262)"
+    );
+
+    // Live numpy: np.argmax([nan, 1.0, 3.0]) -> 0
+    let b = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![f64::NAN, 1.0, 3.0]).unwrap();
+    let got_b = *argmax(&b, None).unwrap().iter().next().unwrap();
+    assert_eq!(
+        got_b, 0u64,
+        "argmax([nan, 1, 3]) = {got_b}; numpy = 0"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DIVERGENCE 13 — argmin/argmax along an axis return the first-NaN index per
+// lane.
+//
+// Live oracle:
+//   m = [[1, nan, 3], [4, 5, nan]]
+//   np.argmin(m, axis=1) -> [1, 2]
+//   np.argmax(m, axis=1) -> [1, 2]
+// ---------------------------------------------------------------------------
+#[test]
+fn divergence_argmin_argmax_axis_first_nan() {
+    let m = Array::<f64, Ix2>::from_vec(
+        Ix2::new([2, 3]),
+        vec![1.0, f64::NAN, 3.0, 4.0, 5.0, f64::NAN],
+    )
+    .unwrap();
+    let amin: Vec<u64> = argmin(&m, Some(1)).unwrap().iter().copied().collect();
+    let amax: Vec<u64> = argmax(&m, Some(1)).unwrap().iter().copied().collect();
+    // numpy: NaN is the extremum in each lane -> index of the NaN.
+    assert_eq!(
+        amin,
+        vec![1u64, 2u64],
+        "argmin(axis=1) = {amin:?}; numpy = [1, 2]"
+    );
+    assert_eq!(
+        amax,
+        vec![1u64, 2u64],
+        "argmax(axis=1) = {amax:?}; numpy = [1, 2]"
+    );
+}
