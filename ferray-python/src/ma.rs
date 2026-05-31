@@ -6867,17 +6867,21 @@ pub fn ptp<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny
 }
 
 /// `numpy.ma.argmin(a)` — index of the minimum unmasked element (flat).
+/// Returns a numpy `int64` 0-d scalar (`.dtype`/`.shape == ()`), matching
+/// `numpy/ma/core.py` `argmin` (which yields a `numpy.int64`), NOT a bare
+/// Python `int` (#902 module-wrapper ABI parity with the method form).
 #[pyfunction]
 pub fn argmin<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
     let v = a.to_f64_ma()?.argmin().map_err(ferr_to_pyerr)?;
-    Ok(v.into_pyobject(py)?.into_any())
+    scalar_pyobject(py, v as i64)
 }
 
 /// `numpy.ma.argmax(a)` — index of the maximum unmasked element (flat).
+/// Returns a numpy `int64` 0-d scalar (same ABI as [`argmin`], #902).
 #[pyfunction]
 pub fn argmax<'py>(py: Python<'py>, a: &PyMaskedArray) -> PyResult<Bound<'py, PyAny>> {
     let v = a.to_f64_ma()?.argmax().map_err(ferr_to_pyerr)?;
-    Ok(v.into_pyobject(py)?.into_any())
+    scalar_pyobject(py, v as i64)
 }
 
 /// `numpy.ma.count(a)` — number of unmasked elements.
@@ -7562,8 +7566,10 @@ pub fn sort<'py>(
 /// array) ferray-ma flattens and returns a 1-D index array; with an explicit
 /// `axis` on a multi-dimensional array, `argsort_axis` sorts each lane
 /// independently (masked entries fill-to-max so they trail, `endwith=True`),
-/// returning an index array of the input shape. Results are numpy
-/// `intp`-style `uint64` arrays.
+/// returning an index array of the input shape. Results are numpy `int64`
+/// index arrays, matching `numpy/ma/core.py` `argsort` (which returns
+/// `int64`, like `np.argsort`), NOT `uint64` (#901 module-wrapper ABI parity
+/// with the method form).
 #[pyfunction]
 #[pyo3(signature = (a, axis = None))]
 pub fn argsort<'py>(
@@ -7578,17 +7584,26 @@ pub fn argsort<'py>(
         None => {
             let m1 = ma_as_ix1(&m)?;
             let idx: Array1<u64> = m1.argsort().map_err(ferr_to_pyerr)?;
+            let data: Vec<i64> = idx.iter().map(|&v| v as i64).collect();
+            let idx: Array1<i64> =
+                Array1::from_vec(idx.dim().clone(), data).map_err(ferr_to_pyerr)?;
             Ok(idx.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
         }
         Some(_) if m.ndim() <= 1 => {
             let m1 = ma_as_ix1(&m)?;
             let idx: Array1<u64> = m1.argsort().map_err(ferr_to_pyerr)?;
+            let data: Vec<i64> = idx.iter().map(|&v| v as i64).collect();
+            let idx: Array1<i64> =
+                Array1::from_vec(idx.dim().clone(), data).map_err(ferr_to_pyerr)?;
             Ok(idx.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
         }
         Some(ax) => {
             let ndim = m.ndim();
             let axis_u = crate::conv::normalize_axis(py, ax, ndim)?;
             let idx: ArrayD<u64> = m.argsort_axis(axis_u).map_err(ferr_to_pyerr)?;
+            let data: Vec<i64> = idx.iter().map(|&v| v as i64).collect();
+            let idx: ArrayD<i64> =
+                ArrayD::from_vec(idx.dim().clone(), data).map_err(ferr_to_pyerr)?;
             Ok(idx.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
         }
     }
