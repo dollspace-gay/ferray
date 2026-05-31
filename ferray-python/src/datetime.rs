@@ -1875,46 +1875,6 @@ fn promote_pair_for_search(
     ))
 }
 
-/// `numpy.partition(a, kth)` over a 1-D datetime64 / timedelta64 array. A full
-/// sort by int64 tick (NaT last) satisfies the partition postcondition exactly
-/// (the kth element is in its final sorted position, smaller-before /
-/// larger-after), matching `np.partition` on the verified live cases (REQ-3).
-pub fn partition_time<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    let np = py.import("numpy")?;
-    let arr = np.call_method1("asarray", (a,))?;
-    let kind = time_kind(&arr)?.ok_or_else(|| {
-        PyTypeError::new_err("partition_time requires a datetime64/timedelta64 array")
-    })?;
-    let (ticks, _unit, unit_str) = extract_ticks(py, &arr)?;
-    let mut flat: Vec<i64> = ticks.iter().copied().collect();
-    flat.sort_by_key(|&t| order_key(t));
-    let n = flat.len();
-    emit_ticks(py, flat, &[n], kind, &unit_str)
-}
-
-/// `numpy.argpartition(a, kth)` over a 1-D datetime64 / timedelta64 array. A
-/// stable argsort by int64 tick (NaT last) satisfies the argpartition
-/// postcondition (the index at position kth is the kth-smallest), matching
-/// `np.argpartition` on the verified live cases (REQ-3).
-pub fn argpartition_time<'py>(
-    py: Python<'py>,
-    a: &Bound<'py, PyAny>,
-) -> PyResult<Bound<'py, PyAny>> {
-    use ferray_numpy_interop::IntoNumPy;
-    let np = py.import("numpy")?;
-    let arr = np.call_method1("asarray", (a,))?;
-    let _ = time_kind(&arr)?.ok_or_else(|| {
-        PyTypeError::new_err("argpartition_time requires a datetime64/timedelta64 array")
-    })?;
-    let (ticks, _unit, _) = extract_ticks(py, &arr)?;
-    let flat: Vec<i64> = ticks.iter().copied().collect();
-    let mut order: Vec<i64> = (0..flat.len() as i64).collect();
-    order.sort_by_key(|&k| order_key(flat[k as usize]));
-    let n = order.len();
-    let arr = ArrayD::from_vec(IxDyn::new(&[n]), order).map_err(ferr_to_pyerr)?;
-    Ok(arr.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
-}
-
 // ---------------------------------------------------------------------------
 // isnat
 // ---------------------------------------------------------------------------

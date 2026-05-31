@@ -836,29 +836,6 @@ where
     Ok(r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any())
 }
 
-/// Complex `partition`: a full lexicographic sort satisfies numpy's partition
-/// postcondition (kth element in final position, smaller-before/larger-after).
-/// Matches `np.partition` over complex (live).
-fn complex_partition_dispatch<'py, T>(
-    py: Python<'py>,
-    arr: &Bound<'py, PyAny>,
-    kth: usize,
-) -> PyResult<Bound<'py, PyAny>>
-where
-    T: ferray_core::Element + Copy + numpy::Element + Default + PartialOrd,
-    Complex<T>: ferray_core::Element + numpy::Element,
-{
-    let mut data: Vec<Complex<T>> = complex_flat_1d::<T>(arr)?;
-    let n = data.len();
-    if kth >= n {
-        return Err(ferr_to_pyerr(ferray_core::FerrayError::invalid_value(
-            format!("kth(={kth}) out of bounds ({n})"),
-        )));
-    }
-    data.sort_by(cplx_sort_cmp);
-    complex_vec_to_pyarray_1d(py, data)
-}
-
 /// Complex `searchsorted`: lexicographic insertion points of `v` into the
 /// (assumed sorted) complex array `a`. `side='left'`/`'right'` matches numpy's
 /// bisect-left / bisect-right over the #932 lexicographic order (live).
@@ -3281,77 +3258,95 @@ pub fn isin<'py>(
 // where_
 // ---------------------------------------------------------------------------
 
-/// `numpy.partition(a, kth)` — 1-D partial sort: kth element in its
-/// final sorted position, smaller before, larger after.
+/// `numpy.partition(a, kth, axis=-1)` — N-D partial sort (introselect): the
+/// element(s) at index `kth` (int OR sequence) end up in their final sorted
+/// position along `axis` (default last; `axis=None` flattens), with smaller
+/// elements before and equal-or-greater after.
+///
+/// numpy owns the introselect kernel plus the full N-D + `axis` + `kth`-sequence
+/// + `axis=None`-flatten contract (`numpy/_core/fromnumeric.py` `partition`,
+/// dispatching `a.partition` → `numpy/_core/src/npysort/selection.cpp`
+/// introselect). The prior binding accepted only a 1-D `PyReadonlyArray1` and a
+/// single `kth: usize`, so `fr.partition([[3,1,2]], 1)` raised
+/// `TypeError: 'ndarray' object is not an instance of 'ndarray'` while numpy
+/// returns the per-row partition (verified live, numpy 2.4: `np.partition([[3,
+/// 1,2],[6,4,5]], 1) == [[1,2,3],[4,5,6]]`).
+///
+/// Since numpy owns introselect, N-D, the negative/`None` axis convention and
+/// the int-or-sequence `kth` semantics, and the existing per-dtype arms
+/// (datetime/string/float16/complex) already delegated to numpy or to a
+/// numpy-equivalent ordered copy, the whole op is delegated to numpy. The
+/// argument array crosses the boundary as a numpy ndarray (no lossy f64 coercion
+/// or list round-trip — R-CODE-4), so numpy's dtype/shape contract is preserved
+/// exactly for every dtype (int/float/complex/datetime/string/float16), and the
+/// `kth`-out-of-bounds `ValueError` / `axis` `AxisError` ride back unchanged.
 #[pyfunction]
+#[pyo3(signature = (a, kth, axis = -1, kind = None, order = None))]
 pub fn partition<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    kth: usize,
+    kth: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+    kind: Option<&Bound<'py, PyAny>>,
+    order: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
-    let dt = dtype_name(&arr)?;
-    // datetime64/timedelta64 partition: by int64 tick, NaT last (REQ-3, #943).
-    // A full ordered copy satisfies the partition postcondition for any kth.
-    if crate::datetime::is_time_array(&arr)? {
-        return crate::datetime::partition_time(py, &arr);
+    let kwargs = pyo3::types::PyDict::new(py);
+    // numpy.partition's `axis` default is `-1`; an explicit `axis=None` flattens.
+    // Our pyo3 default already mirrors `-1`; pass the value through verbatim so
+    // numpy's own negative-axis / flatten handling applies.
+    match axis {
+        Some(ax) => kwargs.set_item("axis", ax)?,
+        None => kwargs.set_item("axis", py.None())?,
     }
-    // string `<U`/`<S` (REQ-2, #960): numpy partitions by the lexicographic order
-    // and preserves the dtype; delegate to numpy directly.
-    if crate::manipulation::is_string_array(&arr)? {
-        return crate::manipulation::string_delegate(py, "partition", (&arr, kth), None);
+    if let Some(k) = kind {
+        kwargs.set_item("kind", k)?;
     }
-    // float16 (REQ-5, #955): partition preserves the dtype; delegate to numpy.
-    if crate::conv::is_float16_dtype(dt.as_str()) {
-        return crate::conv::f16_delegate(py, "partition", (&arr, kth), None);
+    if let Some(o) = order {
+        kwargs.set_item("order", o)?;
     }
-    // Complex `partition`: numpy places the kth element of the lexicographically
-    // sorted complex array in its final position. ferray's `partition` needs
-    // `T: PartialOrd` (absent for `Complex<T>`); a full lexicographic sort
-    // satisfies the partition postcondition exactly (the kth element is in place,
-    // smaller-before / larger-after), matching `np.partition` (verified live).
-    match dt.as_str() {
-        "complex128" | "c16" => return complex_partition_dispatch::<f64>(py, &arr, kth),
-        "complex64" | "c8" => return complex_partition_dispatch::<f32>(py, &arr, kth),
-        _ => {}
-    }
-    Ok(match_dtype_orderable!(dt.as_str(), T => {
-        let view: PyReadonlyArray1<T> = arr.extract()?;
-        let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        let r: Array1<T> = ferray_stats::partition(&fa, kth).map_err(ferr_to_pyerr)?;
-        r.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any()
-    }))
+    py.import("numpy")?
+        .getattr("partition")?
+        .call((&arr, kth), Some(&kwargs))
 }
 
-/// `numpy.argpartition(a, kth)`.
+/// `numpy.argpartition(a, kth, axis=-1)` — the index permutation that partitions
+/// `a` along `axis` (default last; `axis=None` flattens) so the element(s) at
+/// `kth` (int OR sequence) land in final sorted position. Returns `intp`
+/// (`int64` on 64-bit) indices.
+///
+/// Same rationale as [`partition`]: numpy owns the introselect index kernel plus
+/// the N-D + `axis` + `kth`-sequence + flatten contract
+/// (`numpy/_core/fromnumeric.py` `argpartition`), and the prior 1-D-only
+/// `PyReadonlyArray1` binding rejected 2-D input. Delegated to numpy on the
+/// boundary ndarray (no lossy coercion — R-CODE-4); numpy returns `int64`
+/// indices for every dtype directly (verified live: `np.argpartition([[3,1,2],
+/// [6,4,5]], 1) == [[1,2,0],[1,2,0]]`, `np.argpartition(...).dtype == int64`).
 #[pyfunction]
+#[pyo3(signature = (a, kth, axis = -1, kind = None, order = None))]
 pub fn argpartition<'py>(
     py: Python<'py>,
     a: &Bound<'py, PyAny>,
-    kth: usize,
+    kth: &Bound<'py, PyAny>,
+    axis: Option<isize>,
+    kind: Option<&Bound<'py, PyAny>>,
+    order: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let arr = as_ndarray(py, a)?;
-    let dt = dtype_name(&arr)?;
-    // datetime64/timedelta64 argpartition: stable argsort by int64 tick, NaT
-    // last (REQ-3, #943) — a full ordered index satisfies argpartition for kth.
-    if crate::datetime::is_time_array(&arr)? {
-        return crate::datetime::argpartition_time(py, &arr);
+    let kwargs = pyo3::types::PyDict::new(py);
+    match axis {
+        Some(ax) => kwargs.set_item("axis", ax)?,
+        None => kwargs.set_item("axis", py.None())?,
     }
-    // string `<U`/`<S` (REQ-2, #960): int64 index output by lexicographic order;
-    // delegate to numpy directly.
-    if crate::manipulation::is_string_array(&arr)? {
-        return crate::manipulation::string_delegate(py, "argpartition", (&arr, kth), None);
+    if let Some(k) = kind {
+        kwargs.set_item("kind", k)?;
     }
-    // float16 (REQ-5, #955): int64 index output; delegate to numpy.
-    if crate::conv::is_float16_dtype(dt.as_str()) {
-        return crate::conv::f16_delegate(py, "argpartition", (&arr, kth), None);
+    if let Some(o) = order {
+        kwargs.set_item("order", o)?;
     }
-    let r: Array1<u64> = match_dtype_orderable!(dt.as_str(), T => {
-        let view: PyReadonlyArray1<T> = arr.extract()?;
-        let fa: Array1<T> = view.as_ferray().map_err(ferr_to_pyerr)?;
-        ferray_stats::argpartition(&fa, kth).map_err(ferr_to_pyerr)?
-    });
-    u64_arr1_to_i64_pyarray(py, r)
+    py.import("numpy")?
+        .getattr("argpartition")?
+        .call((&arr, kth), Some(&kwargs))
 }
 
 /// `numpy.lexsort(keys)` — indirect lexicographic sort. `keys` is a
