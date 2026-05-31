@@ -538,3 +538,237 @@ def test_slogdet_complex_logabsdet_element_is_numpy_scalar():
         "numpy's logabsdet is an np.float64 scalar"
     )
     assert type(flog) == type(olog)
+
+
+# ===========================================================================
+# CLOSE-OUT: the $OUT_SCALAR scalar-return contract for the remaining linalg
+# functions whose FULL result is a single scalar. numpy collapses a whole-
+# array reduction / 1-D-x-1-D contraction to a numpy SCALAR (np.float64 /
+# np.complex128 / np.int64), NOT a 0-d (or 1-d) ndarray. ferray's float/
+# complex paths build a 0-d ndarray via `into_pyarray` and never route it
+# through `scalarize`, so they return an ndarray where numpy returns a scalar.
+#
+# Shared root pattern: 0-d (or mis-shaped) `into_pyarray` egress not collapsed
+# to a numpy scalar. Oracle = live numpy 2.4.x (R-CHAR-3).
+# ===========================================================================
+
+
+def test_vdot_float_is_numpy_scalar():
+    """np.vdot of two 1-D float vectors -> np.float64 scalar, not a 0-d
+    ndarray. Upstream: numpy/_core/multiarray.py:847 def vdot(a, b, /)."""
+    a = [1.0, 2.0, 3.0]
+    b = [4.0, 5.0, 6.0]
+    oracle = np.vdot(a, b)  # live -> np.float64(32.0)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.vdot(a, b)
+    assert np.isclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.vdot(float,float) is {type(fv).__name__}; numpy's is np.float64"
+    )
+    assert type(fv) == type(oracle)
+
+
+def test_vdot_complex_is_numpy_scalar():
+    """np.vdot of two 1-D complex vectors -> np.complex128 scalar (conjugates
+    the first arg). Upstream: numpy/_core/multiarray.py:847 vdot."""
+    a = [1 + 2j, 3 + 0j]
+    b = [4 + 0j, 5 + 1j]
+    oracle = np.vdot(a, b)  # live -> np.complex128(19-5j)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.vdot(a, b)
+    assert np.isclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.vdot(complex,complex) is {type(fv).__name__}; numpy's is np.complex128"
+    )
+    assert type(fv) == type(oracle)
+
+
+def test_inner_1d_float_is_numpy_scalar():
+    """np.inner of two 1-D float vectors -> np.float64 scalar, not a 0-d
+    ndarray. Upstream: numpy/_core/multiarray.py:313 def inner(a, b, /)."""
+    a = [1.0, 2.0]
+    b = [3.0, 4.0]
+    oracle = np.inner(a, b)  # live -> np.float64(11.0)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.inner(a, b)
+    assert np.isclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.inner(float,float) is {type(fv).__name__}; numpy's is np.float64"
+    )
+    assert type(fv) == type(oracle)
+
+
+def test_inner_1d_complex_is_numpy_scalar():
+    """np.inner of two 1-D complex vectors -> np.complex128 scalar (no
+    conjugation, == np.dot). Upstream: numpy/_core/multiarray.py:313 inner."""
+    a = [1 + 2j, 3 + 0j]
+    b = [4 + 0j, 5 + 1j]
+    oracle = np.inner(a, b)  # live -> np.complex128(19+11j)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.inner(a, b)
+    assert np.isclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.inner(complex,complex) is {type(fv).__name__}; numpy's is np.complex128"
+    )
+    assert type(fv) == type(oracle)
+
+
+def test_dot_1d_float_is_numpy_scalar():
+    """np.dot of two 1-D float vectors -> np.float64 scalar, not a 0-d
+    ndarray. Upstream: numpy/_core/multiarray.py:752 def dot(a, b, out=None).
+    (The 2-D x 2-D matrix case correctly STAYS an ndarray; see
+    test_dot_2d_stays_ndarray.)"""
+    a = [1.0, 2.0, 3.0]
+    b = [4.0, 5.0, 6.0]
+    oracle = np.dot(a, b)  # live -> np.float64(32.0)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.dot(a, b)
+    assert np.isclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.dot(1-D float, 1-D float) is {type(fv).__name__}; numpy's is np.float64"
+    )
+    assert type(fv) == type(oracle)
+
+
+def test_dot_1d_complex_is_numpy_scalar():
+    """np.dot of two 1-D complex vectors -> np.complex128 scalar (no
+    conjugation). Upstream: numpy/_core/multiarray.py:752 dot."""
+    a = [1 + 2j, 3 + 0j]
+    b = [4 + 0j, 5 + 1j]
+    oracle = np.dot(a, b)  # live -> np.complex128(19+11j)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.dot(a, b)
+    assert np.isclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.dot(1-D complex, 1-D complex) is {type(fv).__name__}; numpy's is np.complex128"
+    )
+    assert type(fv) == type(oracle)
+
+
+def test_dot_2d_stays_ndarray():
+    """GUARD (NOT a divergence): np.dot of 2-D x 2-D returns a MATRIX
+    (ndarray), which ferray must keep as an ndarray. This protects against an
+    over-eager scalarize that would wrongly collapse the matrix product.
+    Upstream: numpy/_core/multiarray.py:752 dot."""
+    a = [[1.0, 2.0], [3.0, 4.0]]
+    b = [[5.0, 6.0], [7.0, 8.0]]
+    oracle = np.dot(a, b)
+    assert isinstance(oracle, np.ndarray) and oracle.ndim == 2
+    fv = fr.dot(a, b)
+    assert isinstance(fv, np.ndarray), "fr.dot(2-D,2-D) must STAY an ndarray"
+    assert fv.ndim == 2
+    assert np.allclose(fv, oracle)
+
+
+def test_matmul_1d_float_is_numpy_scalar():
+    """np.matmul of two 1-D float vectors collapses to a np.float64 scalar
+    (gufunc (n?,k),(k,m?)->(n?,m?), both optional dims collapse). Upstream:
+    numpy/linalg/_linalg.py:3318 def matmul(x1, x2, /)."""
+    a = [1.0, 2.0, 3.0]
+    b = [4.0, 5.0, 6.0]
+    oracle = np.matmul(a, b)  # live -> np.float64(32.0)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.matmul(a, b)
+    assert np.isclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.matmul(1-D float, 1-D float) is {type(fv).__name__}; numpy's is np.float64"
+    )
+    assert type(fv) == type(oracle)
+
+
+def test_matmul_1d_complex_is_numpy_scalar():
+    """np.matmul of two 1-D complex vectors -> np.complex128 scalar.
+    Upstream: numpy/linalg/_linalg.py:3318 matmul."""
+    a = [1 + 2j, 3 + 0j]
+    b = [4 + 0j, 5 + 1j]
+    oracle = np.matmul(a, b)  # live -> np.complex128(19+11j)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.matmul(a, b)
+    assert np.isclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.matmul(1-D complex, 1-D complex) is {type(fv).__name__}; numpy's is np.complex128"
+    )
+    assert type(fv) == type(oracle)
+
+
+def test_matrix_norm_wholematrix_is_numpy_scalar():
+    """np.linalg.matrix_norm (no keepdims) of a 2-D matrix -> np.float64
+    scalar, not a 0-d ndarray. Upstream: numpy/linalg/_linalg.py:3439
+    def matrix_norm(x, /, *, keepdims=False, ord='fro')."""
+    m = [[1.0, 2.0], [3.0, 4.0]]
+    oracle = np.linalg.matrix_norm(m)  # live -> np.float64(5.477225575051661)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.linalg.matrix_norm(m)
+    assert np.isclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.linalg.matrix_norm(2-D) is {type(fv).__name__}; numpy's is np.float64"
+    )
+    assert type(fv) == type(oracle)
+
+
+def test_vector_norm_wholearray_is_numpy_scalar():
+    """np.linalg.vector_norm (axis=None, no keepdims) -> np.float64 scalar,
+    not a 0-d ndarray. Upstream: numpy/linalg/_linalg.py:3502
+    def vector_norm(x, /, *, axis=None, keepdims=False, ord=2)."""
+    x = [3.0, 4.0]
+    oracle = np.linalg.vector_norm(x)  # live -> np.float64(5.0)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.linalg.vector_norm(x)
+    assert np.isclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.linalg.vector_norm(axis=None) is {type(fv).__name__}; numpy's is np.float64"
+    )
+    assert type(fv) == type(oracle)
+
+
+def test_tensordot_full_contraction_float_is_0d():
+    """np.tensordot full contraction (axes=2) of two 2-D float arrays -> a
+    0-d ndarray array(70.). ferray returns a MIS-SHAPED 1-D array([70.])
+    (ndim 1) on the float path. Upstream: numpy/_core/numeric.py:997
+    def tensordot(a, b, axes=2)."""
+    a = [[1.0, 2.0], [3.0, 4.0]]
+    b = [[5.0, 6.0], [7.0, 8.0]]
+    oracle = np.tensordot(a, b)  # live -> array(70.), ndim 0
+    assert oracle.ndim == 0
+    fv = fr.tensordot(a, b)
+    assert np.allclose(fv, oracle)
+    assert fv.ndim == 0, (
+        f"fr.tensordot(float full contraction) has ndim {fv.ndim} shape {fv.shape}; "
+        "numpy's is a 0-d ndarray (ndim 0)"
+    )
+
+
+def test_vecdot_1d_is_numpy_scalar():
+    """np.vecdot of two 1-D float vectors -> np.float64 scalar (the (n,),(n,)
+    gufunc core collapses). ferray returns a 1-D array([32.]). Upstream:
+    numpy/linalg/_linalg.py:3604 def vecdot(x1, x2, /, *, axis=-1)."""
+    a = [1.0, 2.0, 3.0]
+    b = [4.0, 5.0, 6.0]
+    oracle = np.vecdot(a, b)  # live -> np.float64(32.0)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.vecdot(a, b)
+    assert np.allclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.vecdot(1-D,1-D) is {type(fv).__name__} shape {getattr(fv,'shape',None)}; "
+        "numpy's is an np.float64 scalar"
+    )
+    assert type(fv) == type(oracle)
+
+
+def test_multi_dot_vector_endpoints_is_numpy_scalar():
+    """np.linalg.multi_dot([v, M, w]) with 1-D endpoints v and w -> a
+    np.float64 SCALAR (the chain reduces to v @ M @ w, a scalar). ferray
+    raises 'cannot multiply two 1D arrays' instead. Upstream:
+    numpy/linalg/_linalg.py:2865 def multi_dot(arrays, *, out=None)."""
+    v = [1.0, 2.0]
+    m = [[1.0, 2.0], [3.0, 4.0]]
+    w = [5.0, 6.0]
+    oracle = np.linalg.multi_dot([v, m, w])  # live -> np.float64(95.0)
+    assert not isinstance(oracle, np.ndarray)
+    fv = fr.linalg.multi_dot([v, m, w])
+    assert np.isclose(fv, oracle)
+    assert not isinstance(fv, np.ndarray), (
+        f"fr.linalg.multi_dot(vector endpoints) is {type(fv).__name__}; "
+        "numpy's is an np.float64 scalar"
+    )
+    assert type(fv) == type(oracle)
