@@ -34,6 +34,43 @@
 //! (`isreal(x) & (x < 0)`, `.any()`), mirroring `_fix_*` literally — this is
 //! marshalling glue, not compute (R-DEV-7: numpy's observable contract is
 //! preserved; the implementation may differ).
+//!
+//! ## REQ status
+//!
+//! Every `numpy.emath` / `numpy.lib.scimath` callable this module registers is
+//! SHIPPED: the domain check runs at the boundary, then the in-domain real
+//! case delegates to the real `ferray` binding and the out-of-domain (or
+//! complex) case delegates to the `ferray-ufunc` complex kernel. (Evidence =
+//! the registered `#[pyfunction]` + the complex/real fns it delegates to.)
+//!
+//! SHIPPED — `_fix_real_lt_zero` family:
+//!   - `sqrt` — `#[pyfunction] sqrt` → `ferray_ufunc::sqrt_complex` (complex
+//!     path) / `crate::ufunc::sqrt` (real path), via `dispatch_lt_zero`.
+//!   - `log` — `#[pyfunction] log` → `ferray_ufunc::ln_complex` /
+//!     `crate::ufunc::log`.
+//!   - `log2` — `#[pyfunction] log2` → `ferray_ufunc::log2_complex` /
+//!     `crate::ufunc::log2`.
+//!   - `log10` — `#[pyfunction] log10` → `ferray_ufunc::log10_complex` /
+//!     `crate::ufunc::log10`.
+//!   - `logn` — `#[pyfunction] logn`; both `n` and `x` go through
+//!     `emath_log_array` (each `ferray_ufunc::ln_complex` or
+//!     `crate::ufunc::log` per its own domain), then `log(x)/log(n)` via numpy.
+//!
+//! SHIPPED — `_fix_real_abs_gt_1` family (C99 signed-zero branch cut):
+//!   - `arccos` — `#[pyfunction] arccos` → `ferray_ufunc::acos_complex` /
+//!     `crate::ufunc::arccos`, via `dispatch_abs_gt_1`.
+//!   - `arcsin` — `#[pyfunction] arcsin` → `ferray_ufunc::asin_complex` /
+//!     `crate::ufunc::arcsin`.
+//!   - `arctanh` — `#[pyfunction] arctanh` → `ferray_ufunc::atanh_complex` /
+//!     `crate::ufunc::arctanh`.
+//!
+//! SHIPPED — `power` (two independent fix-ups):
+//!   - `power` — `#[pyfunction] power`; base `x` → complex via
+//!     `_fix_real_lt_zero` (then element-wise `Complex::powc`), exponent `p`
+//!     → float64 via `_fix_int_lt_zero`; the in-domain real path delegates to
+//!     `crate::ufunc::power`.
+//!
+//! NOT-STARTED: none — the full registered emath surface is shipped.
 
 use ferray_core::array::aliases::ArrayD;
 use num_complex::Complex;

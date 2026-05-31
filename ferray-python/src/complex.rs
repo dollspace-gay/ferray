@@ -30,6 +30,34 @@
 //!     `angle` return `val.real`/`val.imag`/`arctan2(...)` which collapse a
 //!     scalar / 0-d input to a numpy *scalar*, not a 0-d ndarray. We reuse
 //!     [`crate::conv::scalarize`] / [`crate::conv::all_scalar_inputs`].
+//!
+//! ## REQ status
+//!
+//! Every numpy complex-surface callable this module registers is SHIPPED;
+//! the complex compute paths delegate to `ferray-ufunc`, while real-dtype and
+//! dtype-collapse contracts are honored at the boundary. (Evidence = the
+//! registered `#[pyfunction]` + the library fn it delegates to.)
+//!
+//! SHIPPED:
+//!   - `real` / `imag` — `#[pyfunction] real` / `imag` delegate the complex
+//!     path to `ferray_ufunc::real` / `ferray_ufunc::imag`; a real input is
+//!     routed through numpy's own `.real` / `.imag` so the dtype is preserved.
+//!   - `conj` / `conjugate` — `complex_unary_conj!(conj, ferray_ufunc::conj)`
+//!     / `complex_unary_conj!(conjugate, ferray_ufunc::conjugate)`; a real
+//!     input takes numpy's identity `.conjugate()` keeping its real dtype.
+//!   - `angle` — `#[pyfunction] angle` (with the `deg` kwarg) delegates the
+//!     complex path to `ferray_ufunc::angle`; a real input takes
+//!     `arctan2(0, z)` at the boundary.
+//!   - `real_if_close` — `#[pyfunction] real_if_close` (with the `tol` kwarg);
+//!     numpy's reference dtype-collapse algorithm is reproduced at the
+//!     boundary (no separate ferray-ufunc op exists for it).
+//!   - `iscomplex` / `isreal` — `#[pyfunction] iscomplex` / `isreal` delegate
+//!     the complex path to `ferray_ufunc::iscomplex` / `ferray_ufunc::isreal`;
+//!     real-numeric/string kinds short-circuit to all-False / all-True / numpy.
+//!   - `iscomplexobj` / `isrealobj` — `#[pyfunction] iscomplexobj` /
+//!     `isrealobj`; pure dtype-kind predicates evaluated at the boundary.
+//!
+//! NOT-STARTED: none — the full registered complex surface is shipped.
 
 use ferray_core::array::aliases::ArrayD;
 use ferray_numpy_interop::IntoNumPy;

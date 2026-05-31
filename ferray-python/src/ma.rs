@@ -148,15 +148,77 @@
 //!   delegated dtype-preservingly so the integer result + mask survive the
 //!   boundary (no int→f64 cast).
 //!
-//! Functions still needing masked-algorithm support ferray-ma genuinely lacks
-//! or whose ferray-ma form diverges from numpy.ma's mask semantics
-//! (`vander`/`isin`/`in1d` mask handling, 2-D `dot` matmul, multi-axis
-//! `argsort`, `where`, `choose`, `diff`, `ediff1d`,
-//! `nonzero`, `clump_*`, `notmasked_*`, `flatnotmasked_*`) and the four
-//! genuinely-stateful ops needing an in-place / hardness-state extension on a
-//! ferray-ma `PyMaskedArray` (`harden_mask`/`soften_mask` state,
-//! `put`/`putmask` in-place) are tracked as a ferray-ma library follow-up
-//! under #835.
+//! The functions whose native ferray-ma form lacked / diverged from numpy.ma's
+//! mask semantics (`vander`/`isin`/`in1d` mask handling, 2-D `dot` matmul,
+//! multi-axis `argsort`, `where`, `choose`, `diff`, `ediff1d`, `nonzero`,
+//! `clump_*`, `notmasked_*`, `flatnotmasked_*`) are bound as shared-vocabulary
+//! delegations to numpy.ma's canonical algorithm at the boundary. The four
+//! stateful ops (`harden_mask` / `soften_mask` hardness state, `put` /
+//! `putmask` in-place) are now implemented directly on `PyMaskedArray` (see
+//! `harden_mask` / `soften_mask` / `put` / `putmask` below) and registered as
+//! `#[pyfunction]`s in `lib.rs` `register_ma_module` (#842 #843 #844 #845).
+//!
+//! ## REQ status
+//!
+//! Every numpy.ma callable this module registers is SHIPPED. The
+//! dtype-preserving (#853, R-CODE-4) and complex (#868–#874) paths COMPUTE in
+//! `ferray-ma` (`fma::*`) via the `DynMa` / `match_ma!` dispatch; the residual
+//! shared-vocabulary surface delegates to numpy.ma's canonical algorithm at the
+//! boundary. (Evidence = the registered `add_class` / `#[pyfunction]` + the
+//! `fma::*` fn or numpy.ma delegation it routes to; pytest GREEN.)
+//!
+//! SHIPPED — class + constructors:
+//!   - `MaskedArray` (`add_class` `#[pyclass] PyMaskedArray`, `DynMa` over the
+//!     11 real dtypes + `complex64`/`complex128`).
+//!   - `array`, `masked_array`, `masked_where`, `masked_invalid`,
+//!     `masked_equal`/`_not_equal`/`_greater`/`_greater_equal`/`_less`/
+//!     `_less_equal`/`_inside`/`_outside`, `masked_values`, `masked_object`,
+//!     `masked_all`/`_all_like`, `fromfunction`, `indices`, `fromflex`,
+//!     `frombuffer`, `zeros`/`ones`/`empty`/`arange`/`identity`/`asarray`/
+//!     `asanyarray`/`copy`.
+//!
+//! SHIPPED — accessors / mask helpers / predicates:
+//!   - `data`/`mask`/`shape`/`ndim`/`size`/`fill_value`/`dtype` (class
+//!     properties), `count`/`count_masked`/`is_masked`/`getmask`/`getdata`/
+//!     `getmaskarray`/`filled`/`compressed`.
+//!   - `make_mask`/`make_mask_none`/`make_mask_descr`/`mask_or`/`is_mask`/
+//!     `is_masked_array`/`set_fill_value`/`default_fill_value`/`fix_invalid`/
+//!     `flatten_mask`/`flatten_structured_array`/`ids`/`bool_`/`mvoid`.
+//!
+//! SHIPPED — elementwise ufuncs (f64 compute, domain-masking where noted):
+//!   - Unary: `sin`/`cos`/`tan`/`arctan`/`sinh`/`cosh`/`tanh`/`arcsinh`/`exp`/
+//!     `floor`/`ceil`/`around`/`negative`/`absolute`/`abs`/`fabs`/`conjugate`,
+//!     domain-masking `sqrt`/`log`/`log2`/`log10`/`arcsin`/`arccos`/`arccosh`/
+//!     `arctanh`.
+//!   - Binary: `add`/`subtract`/`multiply`/`divide`/`true_divide`/
+//!     `floor_divide`/`power`/`arctan2`/`hypot`/`fmod`/`remainder`/`mod_`/
+//!     `maximum`/`minimum`/`bitwise_and`/`bitwise_or`/`bitwise_xor`/
+//!     `left_shift`/`right_shift`.
+//!
+//! SHIPPED — reductions / specialized algorithms:
+//!   - `sum`/`prod`/`mean`/`min`/`max`/`var`/`std`/`median`/`ptp`/`argmin`/
+//!     `argmax`/`average`/`all`/`any`/`anom` (class methods + free fns),
+//!     `sort`/`argsort`/`take`/`trace`/`dot`/`unique`.
+//!   - `polyfit`/`convolve`/`correlate`/`cov`/`corrcoef`.
+//!
+//! SHIPPED — manipulation / set ops / compress:
+//!   - `reshape`/`ravel`/`transpose`/`squeeze`/`expand_dims`/`concatenate`/
+//!     `diag`/`repeat`/`clip`/`hsplit`/`apply_along_axis`/`apply_over_axes`/
+//!     `ndenumerate`.
+//!   - `intersect1d`/`union1d`/`setdiff1d`/`setxor1d`, `compress_rowcols`/
+//!     `compress_rows`/`compress_cols`/`compress_nd`/`mask_rowcols`/
+//!     `mask_rows`/`mask_cols`.
+//!   - Shared-vocabulary delegations to numpy.ma: `where_`/`choose`/`diff`/
+//!     `ediff1d`/`nonzero`/`vander`/`isin`/`in1d`/`clump_masked`/
+//!     `clump_unmasked`/`flatnotmasked_contiguous`/`flatnotmasked_edges`/
+//!     `notmasked_contiguous`/`notmasked_edges`.
+//!
+//! SHIPPED — stateful ops (in-place on `PyMaskedArray`):
+//!   - `harden_mask`/`soften_mask`/`put`/`putmask`.
+//!
+//! NOT-STARTED: none — the full registered numpy.ma surface is shipped.
+//! STRUCTURED/datetime masked arrays remain OUT OF SCOPE (no numpy.ma-parity
+//! contract on the f64/complex `DynMa`).
 
 use ferray_core::Array;
 use ferray_core::array::aliases::{Array1, ArrayD};

@@ -3,12 +3,13 @@
 //! NumPy's polynomial namespace has two layers:
 //!
 //! 1. **Class-based API** — `numpy.polynomial.Polynomial`,
-//!    `numpy.polynomial.Chebyshev`, etc. Filed as a follow-up; needs
-//!    `#[pyclass]` wrappers around ferray's `Polynomial` /
-//!    `Chebyshev` / `Hermite` / `HermiteE` / `Laguerre` /
-//!    `Legendre` types.
+//!    `numpy.polynomial.Chebyshev`, etc. Shipped via the `poly_class!`
+//!    macro, which generates `#[pyclass]` wrappers around ferray's
+//!    `Polynomial` / `Chebyshev` / `Hermite` / `HermiteE` / `Laguerre` /
+//!    `Legendre` types; all six are registered with `add_class` in
+//!    `lib.rs` `register_polynomial_module`.
 //! 2. **Function-style API** — `polyval2d`, `chebgauss`, `poly2cheb`,
-//!    etc. on flat coefficient arrays. That's what we expose here.
+//!    etc. on flat coefficient arrays. Both layers are exposed here.
 //!
 //! This module additionally hosts the **top-level numpy poly1d family**
 //! (`numpy.polyval` / `poly` / `roots` / `polyadd` / `polysub` / `polymul`
@@ -26,6 +27,45 @@
 //! passing `float32` arrays get them coerced to `float64` for the
 //! computation, matching NumPy's promotion behaviour for these
 //! reductions.
+//!
+//! ## REQ status
+//!
+//! Every numpy.polynomial callable + the top-level poly1d family this module
+//! registers is SHIPPED, delegating to `ferray-polynomial` (`fp::*` / the
+//! `Poly` trait). (Evidence = the registered `#[pyfunction]` / `add_class`
+//! `#[pyclass]` + the library fn / type it delegates to; pytest GREEN.)
+//!
+//! SHIPPED — class-based API (`ferray.polynomial.*`, via `poly_class!`,
+//! registered with `add_class` in `lib.rs`):
+//!   - `Polynomial` → `ferray_polynomial::Polynomial`.
+//!   - `Chebyshev` → `ferray_polynomial::Chebyshev`.
+//!   - `Hermite` → `ferray_polynomial::Hermite`.
+//!   - `HermiteE` → `ferray_polynomial::HermiteE`.
+//!   - `Laguerre` → `ferray_polynomial::Laguerre`.
+//!   - `Legendre` → `ferray_polynomial::Legendre`.
+//!
+//!   Each carries the numpy `coef`/`domain`/`window`/`symbol`/`degree`
+//!   surface, `__call__`, arithmetic dunders, and `convert(kind=...)` cross-
+//!   basis dispatch (`build_from_power_for_kind` pivots through the power
+//!   basis). `PolyDegree` is the callable-and-int-comparable `degree` value.
+//!
+//! SHIPPED — function-style API (`ferray.polynomial.*`):
+//!   - Multi-dim eval/grid/vander: `#[pyfunction]` `polyvalfromroots`,
+//!     `polyval2d`, `polyval3d`, `polygrid2d`, `polygrid3d`, `polyvander2d`,
+//!     `polyvander3d`.
+//!   - Chebyshev points/weight: `chebpts1`, `chebpts2`, `chebweight`.
+//!   - Gauss quadrature (`bind_gauss!`): `chebgauss`, `leggauss`, `hermgauss`,
+//!     `hermegauss`, `laggauss` → `fp::*gauss`.
+//!   - Basis conversions (`bind_basis_conv!`): `poly2cheb`/`cheb2poly`,
+//!     `poly2herm`/`herm2poly`, `poly2herme`/`herme2poly`, `poly2lag`/
+//!     `lag2poly`, `poly2leg`/`leg2poly` → `fp::*`.
+//!
+//! SHIPPED — top-level poly1d family (`ferray.*`, highest-degree-first coeff
+//! order, reversed onto `fp`'s lowest-first power basis at the boundary):
+//!   - `#[pyfunction]` `polyval`, `poly`, `roots`, `polyadd`, `polysub`,
+//!     `polymul`, `polyder`, `polyint`, `polyfit`, `polydiv`.
+//!
+//! NOT-STARTED: none — the full registered polynomial surface is shipped.
 
 use ferray_core::array::aliases::{Array1, Array2, ArrayD};
 use ferray_core::dimension::{Ix1, Ix2, IxDyn};

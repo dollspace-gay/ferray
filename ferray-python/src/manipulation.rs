@@ -26,6 +26,49 @@
 //! [`match_dtype_all!`] (they marshal through the `Array1` `NpElement` path).
 //! Supporting a new *real* dtype is still one new arm in the macro and zero
 //! changes here.
+//!
+//! ## REQ status
+//!
+//! Every numpy array-manipulation callable this module registers is SHIPPED:
+//! each `#[pyfunction]` dispatches a dtype-generic data move through the
+//! `ferray_core::manipulation` (`fm` / `fme`) kernel for that op. (Evidence =
+//! the registered `#[pyfunction]` + the `fm::*` / `fme::*` library fn it
+//! delegates to; pytest GREEN.)
+//!
+//! SHIPPED — reshape / ravel / view family:
+//!   - `reshape`, `ravel`, `flatten`, `squeeze`, `expand_dims`,
+//!     `broadcast_to` → `fm`/`fme` reshape & view kernels.
+//!   - `transpose`, `swapaxes`, `moveaxis`, `rollaxis` → axis-permutation
+//!     kernels.
+//!   - `flip`, `fliplr`, `flipud`, `rot90`, `roll` → reversal/roll kernels.
+//!   - `atleast_1d` / `atleast_2d` / `atleast_3d` → dimension-lift kernels.
+//!
+//! SHIPPED — triangular / diagonal family:
+//!   - `tril`, `triu`, `diag`, `diagflat` → `fm`/`fme` triangular & diagonal
+//!     kernels.
+//!
+//! SHIPPED — join / split family:
+//!   - `concatenate`, `stack`, `vstack`, `hstack`, `dstack`, `column_stack`,
+//!     `row_stack`, `block` → join kernels.
+//!   - `split`, `array_split`, and the `bind_axis_split!`-generated `vsplit` /
+//!     `hsplit` / `dsplit` → `fm::array_split` / `fm::vsplit` / `fm::hsplit` /
+//!     `fm::dsplit`.
+//!
+//! SHIPPED — repeat / pad / edit family:
+//!   - `tile`, `repeat`, `pad` (dispatches through `match_dtype_all_complex!`,
+//!     #938), `resize`, `trim_zeros` → tiling/pad/resize kernels.
+//!   - `delete`, `insert`, `append` → element-edit kernels.
+//!
+//! SHIPPED — 1-D index-expression helpers:
+//!   - `r_`, `c_` → `Array1`-path concatenation helpers (real-only
+//!     `match_dtype_all!`).
+//!
+//! Boundary dispatch is dtype-uniform: real dtypes route via
+//! `AsFerray`/`IntoNumPy`, complex via `crate::fft::complex_*`, with float16 /
+//! datetime / flexible (string) inputs delegated to their specialized paths
+//! (`f16_delegate_*` / `datetime::delegate_manip*` / `string_delegate*`).
+//!
+//! NOT-STARTED: none — the full registered manipulation surface is shipped.
 
 use ferray_core::array::aliases::ArrayD;
 use ferray_core::dimension::IxDyn;

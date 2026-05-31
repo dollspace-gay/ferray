@@ -14,6 +14,48 @@
 //! `default_rng_seeded(s)`. Calling `seed` from one thread does not
 //! affect any other thread — same semantics as Python's `random.seed`
 //! when used with `threading`.
+//!
+//! ## REQ status
+//!
+//! Every numpy.random callable + class this module registers is SHIPPED,
+//! delegating to `ferray-random` (`Generator<B>` / its bit generators /
+//! distribution method table). (Evidence = the registered `add_class`
+//! `#[pyclass]` / `#[pyfunction]` + the `ferray_random` type or method it
+//! routes to; pytest GREEN. Design-doc REQ refs: `.design/ferray-random.md`.)
+//!
+//! SHIPPED — classes (`add_class` in `lib.rs` `register_random_module`):
+//!   - `Generator` (`#[pyclass] PyGenerator`) — wraps
+//!     `ferray_random::Generator<B>`; the modern `default_rng()` API
+//!     (design REQ-1/REQ-2/REQ-4).
+//!   - `RandomState` (`#[pyclass] PyRandomState`) — the legacy stateful class.
+//!   - `BitGenerator` (`#[pyclass] PyBitGenerator`) base + the concrete
+//!     `MT19937` / `PCG64` / `PCG64DXSM` / `Philox` / `SFC64`
+//!     (`#[pyclass] ... extends = PyBitGenerator`; design REQ-3).
+//!   - `SeedSequence` (`#[pyclass] PySeedSequence`).
+//!
+//! SHIPPED — module-level legacy convenience fns (thread-local `Generator`):
+//!   - Seeding / state: `seed`, `get_state`/`set_state`,
+//!     `get_bit_generator`/`set_bit_generator`, `default_rng_py`.
+//!   - Uniform / raw: `random`/`random_sample`/`sample`/`ranf`/`rand`,
+//!     `bytes`, `integers`/`randint`/`random_integers`, `uniform`,
+//!     `standard_normal`/`randn` (design REQ-8).
+//!   - Permutation / sampling: `permutation`, `shuffle`, `choice`
+//!     (design REQ-10).
+//!   - Continuous distributions (design REQ-8): `normal`, `exponential`/
+//!     `standard_exponential`, `rayleigh`, `weibull`, `pareto`, `chisquare`/
+//!     `noncentral_chisquare`, `lognormal`, `gamma`/`standard_gamma`, `beta`,
+//!     `laplace`, `gumbel`, `triangular`, `logistic`, `power`, `standard_t`,
+//!     `f_dist`/`noncentral_f`, `vonmises`, `wald`, `standard_cauchy`,
+//!     `dirichlet`, `multivariate_normal`.
+//!   - Discrete distributions (design REQ-9): `geometric`, `poisson`,
+//!     `binomial`, `negative_binomial`, `hypergeometric`/
+//!     `multivariate_hypergeometric`, `multinomial`, `logseries`, `zipf`.
+//!
+//! Each `Generator` / `RandomState` method mirrors the same distribution table
+//! (the `#[pymethods]` impl blocks), so the class API and the module-level
+//! convenience fns share one `ferray-random` sampling backend.
+//!
+//! NOT-STARTED: none — the full registered numpy.random surface is shipped.
 
 use std::cell::RefCell;
 

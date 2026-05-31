@@ -11,6 +11,32 @@
 //!
 //! Every window returns `Array1<f64>` regardless of length; the
 //! signature is uniform so a single macro generates all bindings.
+//!
+//! ## REQ status
+//!
+//! Every window callable this module registers is SHIPPED, delegating to
+//! `ferray-window` (`fw::*`); a genuinely-fractional `M` for a canonical numpy
+//! window is delegated to numpy's float64 formula at the boundary (the `fw`
+//! kernels take a `usize` sample count). (Evidence = the registered
+//! `#[pyfunction]` + the `fw::*` fn it delegates to; pytest GREEN.)
+//!
+//! SHIPPED — canonical numpy windows (top-level `ferray.*`, with fractional-`M`
+//! numpy delegation via `bind_window_n!`/`window_m_fractional`):
+//!   - `hanning` → `fw::hanning`, `hamming` → `fw::hamming`,
+//!     `blackman` → `fw::blackman`, `bartlett` → `fw::bartlett`,
+//!     `kaiser(M, beta)` → `fw::kaiser`.
+//!
+//! SHIPPED — SciPy-extra windows (`ferray.window.*`, integer-count path):
+//!   - `cosine` → `fw::cosine`, `nuttall` → `fw::nuttall`,
+//!     `parzen` → `fw::parzen`, `gaussian` → `fw::gaussian`,
+//!     `exponential` → `fw::exponential`, `tukey` → `fw::tukey`,
+//!     `general_cosine` → `fw::general_cosine`,
+//!     `general_hamming` → `fw::general_hamming`, `taylor` → `fw::taylor`.
+//!
+//! Shared boundary contract: `M < 1` returns numpy's `array([], dtype=float64)`
+//! (`empty_window`), matching every numpy window's `if M < 1` guard.
+//!
+//! NOT-STARTED: none — the full registered window surface is shipped.
 
 use ferray_core::array::aliases::Array1;
 use ferray_core::dimension::Ix1;
