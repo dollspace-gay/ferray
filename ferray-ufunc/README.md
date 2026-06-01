@@ -1,56 +1,102 @@
 # ferray-ufunc
 
-SIMD-accelerated universal functions for the [ferray](https://crates.io/crates/ferray) scientific computing library.
+NumPy-equivalent element-wise universal functions (ufuncs) and their reductions for the ferray N-dimensional array library.
 
-## What's in this crate
+Part of the [ferray](../README.md) workspace — powered by `pulp` runtime SIMD dispatch (SSE2/AVX2/AVX-512/NEON).
 
-- **120+ elementwise ops**: `sin`, `cos`, `tan`, `exp`, `log`, `sqrt`, `abs`, `floor`, `ceil`, `round`, `clip`, `nan_to_num`, etc.
-- **Binary operations**: `add`, `subtract`, `multiply`, `divide`, `power`, `floor_divide`, `mod_`, `gcd`, `lcm`, with broadcasting
-- **20 complex transcendentals**: `sin_complex`, `cos_complex`, `tan_complex`, `sinh_complex`, `cosh_complex`, `tanh_complex`, plus `asin/acos/atan/asinh/acosh/atanh`, `exp_complex`, `ln_complex`, `log2_complex`, `log10_complex`, `sqrt_complex`, `power_complex`, plus precision-preserving `expm1_complex` and `log1p_complex` (cancellation-avoiding paths near z=0)
-- **f32 SIMD parity**: `abs`, `neg`, `square`, `reciprocal`, `sqrt` all have first-class f32 SIMD kernels (8 lanes per AVX2 ymm) alongside the existing f64 kernels
-- **CORE-MATH** for arctan/asin/sinh/cosh family (correctly rounded, ≤0.5 ULP)
-- **libm** for sin/cos/tan (matches NumPy's path; ~2.4× faster per element than core-math, accuracy band ~1-2 ULP). Correctly-rounded variants reachable via `cr_math::CrMath::cr_sin`/`cr_cos`/`cr_tan`.
-- **`exp_fast()`** — Even/Odd Remez decomposition, ~30% faster than CORE-MATH at ≤1 ULP accuracy
-- Portable SIMD via `pulp` (SSE2/AVX2/AVX-512/NEON) on stable Rust
-- Scalar fallback with `FERRAY_FORCE_SCALAR=1` environment variable
-- Rayon parallelism for arrays > 100K elements on compute-bound ops
+## Overview
 
-## Performance
+ufuncs are generic free functions that preserve the input array's element type
+and rank: `sin` on an `Array2<f64>` returns an `Array2<f64>`. The crate ships
+100+ such functions, organized into families under `src/ops/`:
 
-vs NumPy 2.4.4 on Raptor Lake 14700K:
+- **Arithmetic** — `add`, `subtract`, `multiply`, `divide`, `true_divide`,
+  `floor_divide`, `power`, `remainder`, `mod_`, `fmod`, `divmod`, `negative`,
+  `absolute`, `sign`, `reciprocal`, `square`, `sqrt`, `cbrt`, `gcd`, `lcm`,
+  `cross`, plus cumulative ops (`cumsum`, `cumprod`, `diff`, `ediff1d`,
+  `gradient`, `trapezoid`) and `add_reduce` / `nan_*_reduce` reductions.
+- **Trigonometric** (`ops::trig`) — `sin`, `cos`, `tan`, `arcsin`, `arccos`,
+  `arctan`, `arctan2`, `hypot`, `sinh`, `cosh`, `tanh`, `arcsinh`, `arccosh`,
+  `arctanh`, `degrees`/`radians`, `deg2rad`/`rad2deg`, `unwrap`, plus fast
+  paths `sin_fast` / `cos_fast`.
+- **Exp / log** (`ops::explog`) — `exp`, `exp2`, `expm1`, `exp_fast`, `log`,
+  `log2`, `log10`, `log1p`, `logaddexp`, `logaddexp2`.
+- **Rounding** (`ops::rounding`) — `floor`, `ceil`, `trunc`, `rint`, `round`,
+  `around`, `fix` (with integer/bool-preserving `*_int` variants per REQ-24).
+- **Float intrinsics** (`ops::floatintrinsic`) — `signbit`, `copysign`,
+  `nextafter`, `spacing`, `frexp`, `ldexp`, `modf`, `isnan`, `isinf`,
+  `isfinite`, `isposinf`/`isneginf`, `clip`, `nan_to_num`, `maximum`/`minimum`,
+  `fmax`/`fmin`, `float_power`.
+- **Complex** (`ops::complex`) — `real`, `imag`, `conj`/`conjugate`, `angle`,
+  `abs`, predicates (`isreal`, `iscomplex`, `isscalar`), plus the `*_complex`
+  transcendentals (`sin_complex`, `exp_complex`, `ln_complex`, `sqrt_complex`,
+  `power_complex`, …).
+- **Bitwise** (`ops::bitwise`) — `bitwise_and`/`or`/`xor`, `invert`/
+  `bitwise_not`, `left_shift`, `right_shift`, `bitwise_count`.
+- **Comparison** (`ops::comparison`) — `equal`, `not_equal`, `less`,
+  `less_equal`, `greater`, `greater_equal`, `isclose`, `allclose`,
+  `array_equal`, `array_equiv` (with `*_broadcast` variants).
+- **Logical** (`ops::logical`) — `logical_and`/`or`/`xor`/`not`, `all`, `any`.
+- **Datetime / timedelta** (`ops::datetime`) — `add_datetime_timedelta`,
+  `sub_datetime`, `sub_datetime_timedelta`, `add_timedelta`, `sub_timedelta`,
+  `isnat_datetime`, `isnat_timedelta`.
+- **Special / misc** — `sinc`, `i0`, `convolve` (+ `interp`).
 
-| Operation | Size | Speedup vs NumPy |
-|-----------|-----:|-----------------:|
-| sin / cos / tan | 1M | **4.2-4.8× faster** |
-| arctan | 1M | **4.3× faster** |
-| tanh | 1M | **2.8× faster** |
-| exp / log | 1M | **1.7-1.8× faster** |
-| sin / cos / tan | 100K | **1.2-1.5× faster** |
-| sin / cos / tan | 1K | **1.0-1.2×** (parity-or-better) |
+Dtype promotion (`promoted::*`) follows NumPy: integer/bool inputs to float
+ufuncs promote to the smallest safe-cast float (`add_promoted`, `sin_promote`,
+`hypot_promote`, …). First-class ufunc objects (`Ufunc`, `add_ufunc`) expose
+`.reduce` / `.accumulate` / `.outer` / `.at`. Operator overloads (`+`, `-`,
+`*`, `/`, `%`, `&`, `|`, `^`, `!`, `<<`, `>>`) are provided via
+`operator_overloads`.
 
-## Usage
+## NumPy correspondence
+
+| ferray-ufunc | NumPy |
+|---|---|
+| `add`, `multiply`, `power`, `floor_divide` | `np.add`, `np.multiply`, `np.power`, `np.floor_divide` |
+| `sin`, `arctan2`, `exp`, `log`, `tanh` | `np.sin`, `np.arctan2`, `np.exp`, `np.log`, `np.tanh` |
+| `floor`, `rint`, `round`, `trunc`, `fix` | `np.floor`, `np.rint`, `np.round`, `np.trunc`, `np.fix` |
+| `signbit`, `copysign`, `nextafter`, `spacing`, `frexp`, `ldexp` | `np.signbit`, `np.copysign`, `np.nextafter`, `np.spacing`, `np.frexp`, `np.ldexp` |
+| `bitwise_and`, `left_shift`, `invert` | `np.bitwise_and`, `np.left_shift`, `np.invert` |
+| `equal`, `greater`, `isclose`, `allclose` | `np.equal`, `np.greater`, `np.isclose`, `np.allclose` |
+| `real`, `conj`, `angle`, `sin_complex` | `np.real`, `np.conj`, `np.angle`, `np.sin` (complex) |
+| `add_datetime_timedelta`, `isnat_datetime` | `np.add` (`datetime64`/`timedelta64`), `np.isnat` |
+
+## SIMD
+
+Contiguous inner loops dispatch to SIMD kernels at runtime via `pulp`, which
+selects the best available instruction set (SSE2 / AVX2 / AVX-512 / NEON) for
+the host CPU. Setting `FERRAY_FORCE_SCALAR=1` forces the scalar fallback path,
+used to cross-verify SIMD results against scalar reference output in tests.
+Large compute-bound arrays are additionally parallelized with `rayon`.
+
+## Feature flags
+
+| Feature | Default | Description |
+|---|---|---|
+| `f16` | off | IEEE binary16 (`half`) ufunc variants (`add_f16`, `sin_f16`, …); pulls in `ferray-core/f16`. |
+| `fft-convolve` | off | Enables an O(n log n) FFT-based fast path (`fftconvolve`) for large f32/f64 inputs via `ferray-fft`. The default `convolve` stays direct, matching NumPy's contract. |
+
+## Example
 
 ```rust
-use ferray_ufunc::{sin, exp, exp_fast, sin_complex};
+use ferray_ufunc::{add, sin, exp, copysign};
 use ferray_core::prelude::*;
-use num_complex::Complex64;
 
 let a = Array1::<f64>::linspace(0.0, 6.28, 1000)?;
-let b = sin(&a)?;
 
-// Default: libm-equivalent (matches NumPy, ~1-2 ULP)
-let c = exp(&b)?;
+// Element-wise transcendentals (preserve shape and dtype)
+let s = sin(&a)?;
+let e = exp(&s)?;
 
-// Fast mode (≤1 ULP, ~30% faster)
-let c_fast = exp_fast(&b)?;
+// Binary ufuncs with broadcasting
+let sum = add(&s, &e)?;
 
-// Complex transcendentals
-let z = Array1::<Complex64>::from_vec(/* ... */)?;
-let sin_z = sin_complex(&z)?;
+// Float intrinsic: copy the sign of `s` onto `e`
+let signed = copysign(&e, &s)?;
+# Ok::<(), ferray_core::FerrayError>(())
 ```
 
-This crate is re-exported through the main [`ferray`](https://crates.io/crates/ferray) crate.
+## MSRV & edition
 
-## License
-
-MIT OR Apache-2.0
+Edition 2024, MSRV 1.88. Licensed under MIT OR Apache-2.0.

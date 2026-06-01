@@ -1,34 +1,86 @@
 # ferray-polynomial
 
-Polynomial operations for the [ferray](https://crates.io/crates/ferray) scientific computing library.
+A Rust-native implementation of `numpy.polynomial` — basis classes, evaluation, calculus, fitting, and companion-matrix root-finding.
 
-## What's in this crate
+Part of the [ferray](../README.md) workspace.
 
-- **6 basis classes**: Power, Chebyshev, Legendre, Laguerre, Hermite, HermiteE
-- **Poly trait** lifted to `T: Element + Float` (also accepts complex coefficients)
-- **Unified interface** for evaluation, fitting, roots, arithmetic, conversion
-- **Fitting**: least-squares polynomial fitting via `ferray-linalg`, `polyfit_weighted` for non-uniform weights
-- **Root-finding**: companion matrix eigenvalue method, `polyfromroots` and per-basis variants
-- **Arithmetic**: add, subtract, multiply, divide, power, `mulx` (multiply-by-x) on polynomial objects
-- **Multivariate evaluation**: `val2d`/`val3d`, `grid2d`/`grid3d`, `vander2d`/`vander3d` for all 6 bases
-- **Gauss quadrature**: `chebgauss`, `leggauss`, `hermgauss`, `lagguass`, `hermegauss`
-- **Linear-polynomial constructors**: `polyline`/`chebline`/`legline`/`lagline`/`hermline`/`hermeline`
-- **Chebyshev extras**: `chebpts1`, `chebpts2`, `chebweight`, `chebinterpolate`
-- **Explicit basis-conversion**: `cheb2poly`, `poly2cheb`, etc.
-- **`polyvalfromroots`** for evaluating from a root vector
+## Overview
 
-## Usage
+`ferray-polynomial` provides polynomial operations in six bases, each exposed as
+a distinct type and re-exported at the crate root:
+
+- `Polynomial` — the power (monomial) basis
+- `Chebyshev` — Chebyshev polynomials of the first kind
+- `Legendre`
+- `Laguerre`
+- `Hermite` — physicist's Hermite polynomials
+- `HermiteE` — probabilist's Hermite polynomials
+
+Every basis class implements the common `Poly` trait, which carries the full
+operation surface: `eval` / `eval_many`, `deriv`, `integ`, `roots`, `degree`,
+`coeffs`, `trim`, `truncate`, the arithmetic methods `add` / `sub` / `mul` /
+`pow` / `divmod`, and the least-squares constructors `fit` / `fit_weighted`.
+`roots()` is computed from companion-matrix eigenvalues via `ferray-linalg`
+(faer-backed Schur), returning every root — including complex conjugate pairs —
+as `Complex<f64>`.
+
+Each class also carries a NumPy-style `domain` / `window` pair, so coefficients
+can be fit and evaluated on a non-canonical interval via an affine map (see
+`with_domain` / `with_window`). Basis conversion pivots through the power basis:
+the `ToPowerBasis`, `FromPowerBasis`, and `ConvertBasis` traits let any basis be
+converted to any other (`cheb2poly`, `poly2cheb`, …) through the canonical
+power-basis representation.
+
+`f32` siblings are available for callers working in single precision:
+`PolynomialF32`, `ChebyshevF32`, `LegendreF32`, `LaguerreF32`, `HermiteF32`, and
+`HermiteEF32`. `ComplexPolynomial` covers complex power-basis coefficients.
+
+The free-function surface mirrors `numpy.polynomial`'s module-level API,
+including `polyfromroots` (the basis-class form of `np.poly`), per-basis
+`*fromroots` / `*line` / `*mulx` / `*gauss` constructors, multivariate
+`polyval2d` / `polyval3d` / `polygrid2d` / `polygrid3d`, the Vandermonde builders
+`polyvander2d` / `polyvander3d`, and the explicit `*2poly` / `poly2*` basis
+converters. `np.roots` is backed by `roots::find_roots_from_power_coeffs`.
+
+## NumPy correspondence
+
+| NumPy | ferray-polynomial |
+|-------|-------------------|
+| `numpy.polynomial.Polynomial` | `Polynomial` |
+| `numpy.polynomial.Chebyshev` | `Chebyshev` |
+| `numpy.polynomial.Legendre` | `Legendre` |
+| `numpy.polynomial.Laguerre` | `Laguerre` |
+| `numpy.polynomial.Hermite` | `Hermite` |
+| `numpy.polynomial.HermiteE` | `HermiteE` |
+| `np.poly` | `polyfromroots` |
+| `np.roots` | `roots::find_roots_from_power_coeffs` |
+
+## Feature flags
+
+This crate has no Cargo feature flags; all functionality is available by
+default. Root-finding depends on `ferray-linalg` for the companion-matrix
+eigenvalue solve.
+
+## Example
 
 ```rust
-use ferray_polynomial::Power;
+use ferray_polynomial::{Chebyshev, Poly};
 
-let p = Power::new(vec![1.0, 2.0, 3.0])?; // 1 + 2x + 3x^2
-let val = p.eval(2.0)?; // 1 + 4 + 12 = 17
-let roots = p.roots()?;
+// 1 + 2*T_1(x) + T_2(x) in the Chebyshev basis on the default [-1, 1] window.
+let c = Chebyshev::new(&[1.0, 2.0, 1.0]);
+
+let y = c.eval(0.5)?;          // evaluate at a single point
+let ys = c.eval_many(&[-1.0, 0.0, 1.0])?;
+
+let d = c.deriv(1)?;           // first derivative (still a Chebyshev)
+let roots = c.roots()?;        // companion-matrix eigenvalues, Vec<Complex<f64>>
+
+// Least-squares fit of degree 3 to sample data.
+let fit = Chebyshev::fit(&[0.0, 1.0, 2.0, 3.0], &[1.0, 2.0, 0.0, 5.0], 3)?;
+# Ok::<(), ferray_core::FerrayError>(())
 ```
 
-This crate is re-exported through the main [`ferray`](https://crates.io/crates/ferray) crate with the `polynomial` feature.
+## MSRV & edition
 
-## License
-
-MIT OR Apache-2.0
+- Rust edition 2024, MSRV 1.88
+- License: MIT OR Apache-2.0

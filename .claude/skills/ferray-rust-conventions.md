@@ -14,7 +14,7 @@ skill summarises the parts that come up most often when writing code.
 ## Edition + MSRV
 
 - Edition: **2024**
-- MSRV: **1.85** stable
+- MSRV: **1.88** stable
 - `cargo fmt` and `cargo clippy -- -D warnings` must both be clean before commit.
 
 ## Workspace shape

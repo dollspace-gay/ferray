@@ -100,6 +100,18 @@ The full surface is bound in phases, each tracked as a child of the parent epic 
 
 **`ferray.autodiff`** (forward-mode autodiff, ferray-specific): `DualNumber` class with `variable`/`constant` static constructors, full arithmetic dunder set (mixing with int/float), 16 elementary functions (`sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `exp`, `ln`, `log2`, `log10`, `sqrt`, `abs`). High-level: `derivative(f, x)`, `gradient(f, point)`, `jacobian(f, point)`.
 
+### Beyond the phase tables (also bound)
+
+The phase tables above track the original rollout epic; further surface has
+since landed at the top level and as submodules: `ferray.emath` (domain-aware
+`sqrt`/`log`/`power`/… returning complex), `ferray.dtype`, `ferray.rec`,
+complex-array ufunc/linalg coverage, and `numpy.datetime64`/`timedelta64`
+support (construction, arithmetic, `datetime_data`). Coverage is verified
+against NumPy oracles by the `tests/test_*.py` suite plus the `divergence_*.py`
+pins (failing tests that assert NumPy behavior not yet matched — a pin closes
+only when its fix lands, never via skip/xfail), so the red/green state honestly
+reflects outstanding divergences.
+
 Each phase adds bindings until parity with the upstream NumPy version pinned in `pyproject.toml` is achieved. Anything ferray-core supports natively that NumPy lacks (e.g., autodiff dual numbers) is exposed as additional surface, never as a substitute for a NumPy-compatible function.
 
 ## Installing from PyPI
@@ -125,24 +137,54 @@ maturin develop --release
 python -c "import ferray; print(ferray.__version__)"
 ```
 
-`maturin develop` builds the extension in-place and pip-installs it into the active venv. For a distributable wheel use `maturin build --release`.
+`maturin develop` builds the extension in-place and pip-installs it into the
+active venv, automatically turning on the `extension-module` Cargo feature via
+`[tool.maturin] features = ["extension-module"]` in `pyproject.toml`. For a
+distributable wheel use `maturin build --release` (same feature handling).
 
-The Rust crate stays out of the workspace's normal `cargo test` path because the `extension-module` pyo3 feature unlinks libpython. Local Rust tests should run with `cargo test -p ferray-python` (no feature flags); maturin enables the feature itself for wheel builds.
+Run the tests against the built extension with pytest:
+
+```bash
+maturin develop
+python -m pytest        # tests/ — pytest is the test surface for this crate
+```
+
+The `extension-module` pyo3 feature is gated, not on by default: it tells the
+linker to leave CPython symbols unresolved (the host interpreter supplies them
+at load time), which would otherwise break `cargo test --workspace` by spreading
+the unresolved-symbol flag to every pyo3-linking crate in the graph. So the
+crate's `[lib]` sets `test = false`/`doctest = false` and there are no Rust unit
+tests here — `cargo build -p ferray-python` (no feature flags) just checks that
+the bindings compile, while maturin turns the feature on for `develop`/wheel
+builds.
+
+The MSRV is **1.88** (Rust edition 2024), matching the rest of the workspace.
 
 ## Architecture
 
 ```
 ferray-python/
-├── Cargo.toml              cdylib + rlib, depends on the ferray umbrella
+├── Cargo.toml              cdylib crate, depends on the ferray umbrella
 ├── pyproject.toml          maturin build backend, project metadata
 ├── python/ferray/
-│   └── __init__.py         Pure-Python facade re-exporting `_ferray`
+│   ├── __init__.py         Pure-Python facade re-exporting `_ferray`
+│   ├── autodiff/           forward-mode autodiff package
+│   └── lib/                lib functional + stride_tricks package
 ├── src/
-│   └── lib.rs              #[pymodule] fn _ferray — the actual bindings
-└── tests/                  pytest tests run against the installed wheel
+│   ├── lib.rs              #[pymodule] fn _ferray — registers everything
+│   ├── creation.rs         array creation + dtype namespace
+│   ├── ufunc.rs            elementwise ufuncs
+│   ├── stats.rs            reductions, sort/search, set ops
+│   ├── linalg.rs · fft.rs · random.rs · window.rs · polynomial.rs
+│   ├── char.rs · strings.rs · ma.rs · stride_tricks.rs · autodiff.rs
+│   ├── complex.rs · emath.rs · datetime.rs · conv.rs · io.rs
+│   └── manipulation.rs · indexing.rs · aliases.rs
+└── tests/                  pytest suite run against the installed extension
 ```
 
-The compiled extension is `ferray._ferray`. The pure-Python `python/ferray/__init__.py` re-exports the symbols at the top level so users see `ferray.zeros`, not `ferray._ferray.zeros`.
+The crate's `[lib]` is `crate-type = ["cdylib"]` only — the compiled extension
+is `ferray._ferray`. The pure-Python `python/ferray/__init__.py` re-exports the
+symbols at the top level so users see `ferray.zeros`, not `ferray._ferray.zeros`.
 
 ## Adding a new binding
 

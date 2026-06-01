@@ -1,6 +1,8 @@
 # ferray
 
-A NumPy-equivalent scientific computing library for Rust. Hand-tuned GEMM kernels, SIMD-accelerated everything, zero panics.
+A Rust-native, drop-in NumPy replacement: a workspace of 18 crates with hand-tuned GEMM kernels, SIMD-accelerated everything, and zero panics. Use it from Rust (`use ferray::prelude::*;`) or from Python (`import ferray as np`).
+
+**Current version: 0.4.9 · MSRV: 1.88 (stable) · Edition 2024**
 
 ## Why ferray?
 
@@ -13,9 +15,11 @@ A NumPy-equivalent scientific computing library for Rust. Hand-tuned GEMM kernel
 
 ## Quick Start
 
+### Rust
+
 ```toml
 [dependencies]
-ferray = "0.3"
+ferray = "0.4.9"
 ```
 
 ```rust
@@ -40,6 +44,19 @@ let spectrum = ferray::fft::rfft(
 // Statistics (28.8x faster than NumPy on var at N=1K)
 let mean = ferray::mean(&a, /* axis= */ None)?;
 let std = ferray::std_(&a, /* axis= */ None, /* ddof= */ 0)?;
+```
+
+### Python
+
+The `ferray-python` crate exposes the same surface to Python as a drop-in NumPy
+replacement — swap the import and keep your code:
+
+```python
+import ferray as np   # drop-in replacement for `import numpy as np`
+
+a = np.linspace(0.0, 1.0, 100)
+b = np.sin(a)
+spectrum = np.fft.rfft(b)
 ```
 
 ## Performance
@@ -115,27 +132,50 @@ For sin/cos/tan, ferray routes through libm (Float::sin) for performance parity 
 
 ## Crate Structure
 
-ferray is a workspace of 18 focused crates:
+ferray is a workspace of 18 focused crates. Each has its own README (linked below).
+
+### Foundation
 
 | Crate | Description |
 |-------|-------------|
-| `ferray-core` | `NdArray<T, D>`, broadcasting, indexing, shape manipulation |
-| `ferray-core-macros` | proc-macro support (`#[derive(FerrayRecord)]`, `promoted_type!`) |
-| `ferray-ufunc` | SIMD-accelerated universal functions (sin, cos, exp, sqrt, …) plus 20 complex transcendentals |
-| `ferray-stats` | Reductions (pairwise SIMD sum at base 4096), sorting, histograms, set operations |
-| `ferray-linalg` | Hand-tuned GEMM (DGEMM/SGEMM/ZGEMM/CGEMM/i8/i16/bf16/f16), TRSM, decompositions, solvers, einsum |
-| `ferray-fft` | FFT/IFFT with plan caching, real FFTs |
-| `ferray-random` | Generator API (PCG64DXSM/MT19937/SFC64), 30+ distributions, permutations |
-| `ferray-io` | NumPy `.npy`/`.npz` file I/O with memory mapping, DataSource for URL/compressed inputs |
-| `ferray-polynomial` | 6 basis classes, fitting, root-finding, Gauss quadrature |
-| `ferray-window` | Window functions, vectorize, piecewise |
-| `ferray-strings` | StringArray with vectorized operations |
-| `ferray-ma` | MaskedArray with mask propagation, harden/soften, full reductions |
-| `ferray-stride-tricks` | sliding_window_view, as_strided |
-| `ferray-numpy-interop` | PyO3 zero-copy, Arrow/Polars conversion, complex/null/f16/bf16 support |
-| `ferray-autodiff` | Forward-mode automatic differentiation |
-| `ferray-test-oracle` | Test oracle harness for cross-validating against NumPy fixtures |
-| `ferray` | Re-export crate with prelude |
+| [`ferray-core`](./ferray-core/README.md) | N-dimensional array type (`NdArray<T, D>`) and foundational primitives — broadcasting, indexing, shape manipulation |
+| [`ferray-core-macros`](./ferray-core-macros/README.md) | Procedural-macro support crate for `ferray-core` (`#[derive(FerrayRecord)]`, `promoted_type!`) |
+
+### Universal functions & numerics
+
+| Crate | Description |
+|-------|-------------|
+| [`ferray-ufunc`](./ferray-ufunc/README.md) | NumPy-equivalent element-wise universal functions and their reductions, powered by `pulp` runtime SIMD dispatch (SSE2/AVX2/AVX-512/NEON) |
+| [`ferray-stats`](./ferray-stats/README.md) | NumPy-equivalent statistics, reductions, sorting, searching, and histograms |
+
+### Domain crates (NumPy namespaces)
+
+| Crate | Description |
+|-------|-------------|
+| [`ferray-linalg`](./ferray-linalg/README.md) | `numpy.linalg` — products, decompositions, solvers, norms, and eigenproblems for real and complex matrices, backed by faer with hand-tuned kernels |
+| [`ferray-fft`](./ferray-fft/README.md) | `numpy.fft` — backed by rustfft (with realfft for half-spectrum real transforms) |
+| [`ferray-random`](./ferray-random/README.md) | NumPy-style random number generation and distributions |
+| [`ferray-polynomial`](./ferray-polynomial/README.md) | `numpy.polynomial` — basis classes, evaluation, calculus, fitting, and companion-matrix root-finding |
+| [`ferray-window`](./ferray-window/README.md) | NumPy-equivalent window functions plus functional-programming utilities |
+| [`ferray-strings`](./ferray-strings/README.md) | Vectorized string operations on arrays of strings — a port of `numpy.strings` / `numpy.char` |
+| [`ferray-ma`](./ferray-ma/README.md) | `numpy.ma`-style masked arrays with mask propagation |
+| [`ferray-stride-tricks`](./ferray-stride-tricks/README.md) | Zero-copy stride-manipulation views (`sliding_window_view`, `as_strided`) |
+| [`ferray-io`](./ferray-io/README.md) | NumPy-compatible array I/O — `.npy`, `.npz`, and delimited text |
+
+### Interop & bindings
+
+| Crate | Description |
+|-------|-------------|
+| [`ferray-numpy-interop`](./ferray-numpy-interop/README.md) | Bridges ferray arrays to the Python/NumPy ecosystem (PyO3 + the `numpy` crate) and to Apache Arrow / Polars, with a shared dtype mapping layer |
+| [`ferray-python`](./ferray-python/README.md) | Python bindings — `import ferray as np` as a drop-in replacement for `import numpy as np` |
+| [`ferray`](./ferray/README.md) | The umbrella crate — import the whole NumPy-equivalent surface from one dependency, via the prelude |
+
+### Beyond-NumPy & internal infrastructure
+
+| Crate | Description |
+|-------|-------------|
+| [`ferray-autodiff`](./ferray-autodiff/README.md) | Forward-mode automatic differentiation built on dual numbers (no NumPy counterpart) |
+| [`ferray-test-oracle`](./ferray-test-oracle/README.md) | Oracle-fixture loading and ULP/tolerance comparison helpers for the conformance test suites (internal, `publish = false`) |
 
 ## Cargo Features
 
@@ -147,7 +187,7 @@ ferray is a workspace of 18 focused crates:
 | `f16` | ferray-linalg, ferray | f16 (IEEE binary16) inputs → f32 accumulator GEMM (gemm_f16_f32). |
 | `openblas` | ferray-linalg | Optional system-OpenBLAS backend for f32/f64/c32/c64 GEMM. Provides a perf-floor guarantee. |
 
-Default builds stay on workspace MSRV 1.85 with no extra runtime deps.
+Default builds stay on workspace MSRV 1.88 with no extra runtime deps.
 
 ## Key Design Decisions
 
@@ -156,7 +196,7 @@ Default builds stay on workspace MSRV 1.85 with no extra runtime deps.
 - **faer 0.24** for medium-N matmul (N < 256) and decompositions, hand-tuned kernels for N ≥ 256
 - **rustfft 6.4** for FFT
 - **CORE-MATH 1.0** for correctly-rounded arctan/asin/sinh family
-- **Edition 2024**, MSRV 1.85 (default features)
+- **Edition 2024**, MSRV 1.88 (default features)
 - All contiguous inner loops have SIMD paths for f32, f64, i32, i64
 
 ## What's new in 0.3.5

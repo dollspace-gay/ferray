@@ -1,30 +1,73 @@
 # ferray-io
 
-NumPy-compatible file I/O for the [ferray](https://crates.io/crates/ferray) scientific computing library.
+NumPy-compatible array I/O — `.npy`, `.npz`, and delimited text — for the ferray workspace.
 
-## What's in this crate
+Part of the [ferray](../README.md) workspace.
 
-- **`.npy`** read/write — single array serialization (all dtypes, C/Fortran order)
-- **`.npz`** read/write — compressed archives of named arrays
-- **Memory mapping** — `mmap_npy` for zero-copy access to large files
-- **Text I/O** — `loadtxt`, `savetxt`, `genfromtxt`, `fromregex` with delimiter/comment/skip support
-- **Format helpers** (`lib.format`): `descr_to_dtype`, `header_data_from_array_1_0`, `read_array`, `write_array` for low-level header / dtype manipulation
-- **`DataSource`** — URL / compressed-file abstraction (handles `.gz`, `.bz2`, HTTP-fetched inputs transparently)
-- Structured dtype support for compound types
+## Overview
 
-## Usage
+`ferray-io` reads and writes N-dimensional `ferray` arrays in NumPy's on-disk
+formats. It does not expose any third-party array types: everything is built on
+`ferray_core::Array` / `DynArray`.
+
+- **`.npy`** — single-array binary format. `npy::save` / `npy::load` round-trip a
+  typed `Array<T, D>`; `npy::load_dynamic` returns a `DynArray` when the dtype is
+  not known at compile time; `npy::save_record` / `npy::load_record` handle
+  structured (compound) dtypes via the `FerrayRecord` trait. The reader accepts
+  NPY format versions **1.0, 2.0, and 3.0** (`format::VERSION_1_0` /
+  `VERSION_2_0` / `VERSION_3_0`), covering both C- and Fortran-order layouts.
+- **`.npz`** — zip archives of `.npy` members, backed by the `zip` crate.
+  `npz::savez` writes a stored (uncompressed) archive and
+  `npz::savez_compressed` writes a deflated one, each from a slice of
+  `(name, &DynArray)` pairs. `npz::NpzFile::open` lazily reads an archive;
+  `names`, `get`, `len`, and `is_empty` enumerate and extract its members.
+- **Text I/O** — `text::savetxt` / `text::loadtxt` (2-D) and `savetxt_1d` /
+  `loadtxt_1d` (1-D) handle delimited numeric text with configurable delimiter
+  and `skiprows`; `text::genfromtxt` parses heterogeneous tables, and
+  `text::fromregex` extracts fields by regular expression.
+- **Memory mapping** — `memmap::memmap_readonly` / `memmap::memmap_mut` provide
+  zero-copy, file-backed access to `.npy` data.
+
+## NumPy correspondence
+
+| NumPy                    | ferray-io                       |
+|--------------------------|---------------------------------|
+| `np.save`                | `npy::save`                     |
+| `np.load` (.npy)         | `npy::load` / `npy::load_dynamic` |
+| `np.savez`               | `npz::savez`                    |
+| `np.savez_compressed`    | `npz::savez_compressed`         |
+| `np.load` (.npz)         | `npz::NpzFile::open` + `get`    |
+| `np.savetxt`             | `text::savetxt` / `savetxt_1d`  |
+| `np.loadtxt`             | `text::loadtxt` / `loadtxt_1d`  |
+| `np.genfromtxt`          | `text::genfromtxt`              |
+| `np.fromregex`           | `text::fromregex`               |
+
+## Feature flags
+
+| Feature   | Effect                                                              |
+|-----------|--------------------------------------------------------------------|
+| (default) | No optional features enabled.                                      |
+| `f16`     | IEEE binary16 dtype support (pulls in `half`, enables `ferray-core/f16`). |
+| `bf16`    | bfloat16 dtype support (pulls in `half`, enables `ferray-core/bf16`).     |
+
+## Example
 
 ```rust
-use ferray_io::{save_npy, load_npy};
-use ferray_core::prelude::*;
+use ferray_core::Array;
+use ferray_core::dimension::Ix1;
+use ferray_io::npy::{save, load};
 
-let a = Array1::<f64>::linspace(0.0, 1.0, 1000)?;
-save_npy("data.npy", &a)?;
-let b: Array1<f64> = load_npy("data.npy")?;
+// Save a 1-D f64 array to .npy ...
+let a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0])?;
+save("data.npy", &a)?;
+
+// ... and load it straight back.
+let b: Array<f64, Ix1> = load("data.npy")?;
+assert_eq!(a, b);
+# Ok::<(), ferray_core::FerrayError>(())
 ```
 
-This crate is re-exported through the main [`ferray`](https://crates.io/crates/ferray) crate with the `io` feature (enabled by default).
+## MSRV & edition
 
-## License
-
-MIT OR Apache-2.0
+- Rust edition 2024, MSRV 1.88.
+- Licensed under MIT OR Apache-2.0.

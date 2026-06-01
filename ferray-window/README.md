@@ -1,23 +1,68 @@
 # ferray-window
 
-Window functions and functional programming utilities for the [ferray](https://crates.io/crates/ferray) scientific computing library.
+NumPy-equivalent window functions (plus a few functional-programming utilities) for the ferray workspace.
 
-## What's in this crate
+Part of the [ferray](../README.md) workspace — a Rust-native, drop-in replacement for NumPy.
 
-- **Window functions**: `hann`, `hamming`, `blackman`, `kaiser`, `bartlett`, `gaussian`, `tukey`, etc.
-- **Functional**: `vectorize`, `piecewise`, `apply_along_axis`, `apply_over_axes`
+## Overview
 
-## Usage
+This crate provides window functions for signal processing and spectral
+analysis. All window functions take a length `m: usize` and return an
+`Array1<f64>` (the f32 siblings return `Array1<f32>`), matching NumPy's
+output to high precision.
+
+The five NumPy window functions:
+
+- `bartlett(m)` — triangular window
+- `blackman(m)` — Blackman window
+- `hamming(m)` — Hamming window
+- `hanning(m)` — Hann window
+- `kaiser(m, beta)` — Kaiser window parameterised by `beta`
+
+Each also has an f32 sibling: `bartlett_f32`, `blackman_f32`, `hamming_f32`,
+`hanning_f32`, `kaiser_f32`.
+
+SciPy-style extras (beyond NumPy's five): `boxcar`, `triang`, `cosine`,
+`exponential`, `gaussian`, `general_cosine`, `general_hamming`, `nuttall`,
+`parzen`, `bohman`, `flattop`, `lanczos`, `tukey`, `taylor`, `chebwin`, and
+`dpss` (Slepian taper).
+
+Functional-programming utilities are also re-exported: `vectorize`,
+`piecewise`, `apply_along_axis`, `apply_over_axes`, and `sum_axis_keepdims`.
+
+## NumPy correspondence
+
+| ferray                | NumPy            |
+|-----------------------|------------------|
+| `bartlett(m)`         | `np.bartlett(M)` |
+| `blackman(m)`         | `np.blackman(M)` |
+| `hamming(m)`          | `np.hamming(M)`  |
+| `hanning(m)`          | `np.hanning(M)`  |
+| `kaiser(m, beta)`     | `np.kaiser(M, beta)` |
+
+## Feature flags
+
+None. The crate builds with default features only and adds no extra runtime
+dependencies.
+
+## Example
 
 ```rust
-use ferray_window::{hann, hamming};
+use ferray_window::{hanning, kaiser};
 
-let w = hann(256, true)?;
-let h = hamming(256, true)?;
+// Hann window of length 64.
+let w = hanning(64)?;
+
+// Kaiser window of length 64 with beta = 14.0.
+let k = kaiser(64, 14.0)?;
+
+assert_eq!(w.len(), 64);
+assert_eq!(k.len(), 64);
+# Ok::<(), ferray_core::FerrayError>(())
 ```
 
-This crate is re-exported through the main [`ferray`](https://crates.io/crates/ferray) crate with the `window` feature (enabled by default).
+## MSRV & edition
 
-## License
-
-MIT OR Apache-2.0
+- Edition: 2024
+- MSRV: 1.88
+- License: MIT OR Apache-2.0

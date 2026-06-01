@@ -186,7 +186,7 @@ Written by the coordinator at startup:
 
 ## Rust Edition & MSRV
 - Edition: 2024
-- MSRV: 1.85 (stable)
+- MSRV: 1.88 (stable)
 
 ## Import Paths
 - Core types: `use ferray_core::{NdArray, Array1, Array2, ArrayD, ArrayView, Dimension}`
