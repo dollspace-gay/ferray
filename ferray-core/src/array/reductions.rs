@@ -20,7 +20,14 @@
 //    (numpy/_core/fromnumeric.py:2321-2327). Consumers: `Array::sum`/`prod`/
 //    `sum_axis`/`prod_axis` and the `ArrayView` mirrors (all in this file).
 //  - min / max / mean / var / std / any / all — SHIPPED (#368), NaN-propagating.
-//  - empty-array min/max raising ValueError — NOT-STARTED (open blocker #782).
+//  - empty-array min/max raising ValueError — SHIPPED (#782, resolved R-DEV-4):
+//    `Array::min`/`max` return `Option<T>` = `None` on an empty array (the
+//    idiomatic Rust analog of numpy's no-identity error — same boundary contract
+//    as `argmax`/`argmin`, REQ-40/41; test `min_max_empty_returns_none` in this
+//    file). The ferray-python boundary maps `None` -> `ValueError`, matching
+//    numpy's `ValueError` ("zero-size array to reduction operation minimum which
+//    has no identity", `fromnumeric.py:3150` `min`/`:3266` `amin`). Verified:
+//    `fr.min(fr.array([], dtype=fr.float64))` raises `ValueError` vs numpy 2.4.5.
 //  - cumsum / cumprod live as ferray-stats free functions; their narrow-int
 //    promotion is a separate ferray-stats blocker that reuses `ReduceAcc`.
 //  - argmax / argmin (REQ-40, REQ-41) — SHIPPED: `Array::argmax`/`argmin`

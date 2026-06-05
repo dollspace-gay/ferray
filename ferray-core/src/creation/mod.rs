@@ -66,7 +66,7 @@ pub fn frombuffer<T: Element, D: Dimension>(dim: D, buf: &[u8]) -> FerrayResult<
     if elem_size == 0 {
         return Err(FerrayError::invalid_value("zero-sized type"));
     }
-    if buf.len() % elem_size != 0 {
+    if !buf.len().is_multiple_of(elem_size) {
         return Err(FerrayError::invalid_value(format!(
             "buffer length {} is not a multiple of element size {}",
             buf.len(),
@@ -138,7 +138,7 @@ pub fn frombuffer_view<T: Element, D: Dimension>(
     if elem_size == 0 {
         return Err(FerrayError::invalid_value("zero-sized type"));
     }
-    if buf.len() % elem_size != 0 {
+    if !buf.len().is_multiple_of(elem_size) {
         return Err(FerrayError::invalid_value(format!(
             "buffer length {} is not a multiple of element size {}",
             buf.len(),
@@ -160,7 +160,7 @@ pub fn frombuffer_view<T: Element, D: Dimension>(
     // already be aligned for T. A misaligned read of f32/f64/etc. is UB.
     let align = std::mem::align_of::<T>();
     let addr = buf.as_ptr() as usize;
-    if addr % align != 0 {
+    if !addr.is_multiple_of(align) {
         return Err(FerrayError::invalid_value(format!(
             "buffer address 0x{addr:x} is not aligned to {align} bytes required by the element type; \
              use `frombuffer` for misaligned input"
@@ -1243,7 +1243,7 @@ mod tests {
         let misaligned = &backing[1..];
         // The slice address is off by one from a 4-byte boundary, so
         // alignment for i32 cannot be satisfied.
-        assert!((misaligned.as_ptr() as usize) % 4 != 0);
+        assert!(!(misaligned.as_ptr() as usize).is_multiple_of(4));
         assert!(frombuffer_view::<i32, Ix1>(Ix1::new([3]), misaligned).is_err());
     }
 

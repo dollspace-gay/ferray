@@ -104,7 +104,7 @@ impl<'a, T: Element, D: Dimension> ArrayViewMut<'a, T, D> {
             owndata: false,
             writeable: true,
             // #345: same alignment story as the immutable view path.
-            aligned: (self.inner.as_ptr() as usize) % core::mem::align_of::<T>() == 0,
+            aligned: (self.inner.as_ptr() as usize).is_multiple_of(core::mem::align_of::<T>()),
         }
     }
 }

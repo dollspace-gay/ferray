@@ -104,7 +104,7 @@ impl<'a, T: Element, D: Dimension> ArrayView<'a, T, D> {
             writeable: false,
             // #345: views may originate from raw pointers (`from_shape_ptr`);
             // verify the head-of-buffer pointer satisfies T's alignment.
-            aligned: (self.inner.as_ptr() as usize) % core::mem::align_of::<T>() == 0,
+            aligned: (self.inner.as_ptr() as usize).is_multiple_of(core::mem::align_of::<T>()),
         }
     }
 }

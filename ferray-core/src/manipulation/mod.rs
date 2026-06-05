@@ -523,7 +523,7 @@ pub fn split<T: Element>(
     if n_sections == 0 {
         return Err(FerrayError::invalid_value("split: n_sections must be > 0"));
     }
-    if axis_len % n_sections != 0 {
+    if !axis_len.is_multiple_of(n_sections) {
         return Err(FerrayError::invalid_value(format!(
             "array of size {axis_len} along axis {axis} cannot be evenly split into {n_sections} sections",
         )));

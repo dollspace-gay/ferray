@@ -160,10 +160,8 @@ impl<T: Element, D: Dimension> Array<T, D> {
 
         let mut val_iter = values.inner.iter();
         for (elem, &m) in self.inner.iter_mut().zip(mask.inner.iter()) {
-            if m {
-                if let Some(v) = val_iter.next() {
-                    *elem = v.clone();
-                }
+            if m && let Some(v) = val_iter.next() {
+                *elem = v.clone();
             }
         }
         Ok(())
