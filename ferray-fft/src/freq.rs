@@ -50,7 +50,7 @@ pub fn fftfreq(n: usize, d: f64) -> FerrayResult<Array<f64, Ix1>> {
     }
 
     // Negative frequencies: -n/2, ..., -1
-    let negative_start = if n % 2 == 0 {
+    let negative_start = if n.is_multiple_of(2) {
         -(n as isize / 2)
     } else {
         -((n as isize - 1) / 2)

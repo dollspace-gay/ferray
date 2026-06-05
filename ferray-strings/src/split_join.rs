@@ -165,11 +165,11 @@ fn split_universal_newlines(s: &str, keepends: bool) -> Vec<String> {
         }
         // `\r\n` collapses into one boundary; consume the trailing `\n`.
         let mut eol_end = idx + c.len_utf8();
-        if c == '\r' {
-            if let Some(&(_, '\n')) = chars.peek() {
-                chars.next();
-                eol_end += '\n'.len_utf8();
-            }
+        if c == '\r'
+            && let Some(&(_, '\n')) = chars.peek()
+        {
+            chars.next();
+            eol_end += '\n'.len_utf8();
         }
         let line_end = if keepends { eol_end } else { idx };
         out.push(s[line_start..line_end].to_string());

@@ -109,12 +109,12 @@ impl<'a> SurfaceVisitor<'a> {
 /// Check whether a list of attributes contains `#[cfg(test)]`.
 fn has_cfg_test(attrs: &[syn::Attribute]) -> bool {
     for attr in attrs {
-        if attr.path().is_ident("cfg") {
-            if let syn::Meta::List(ml) = &attr.meta {
-                let tokens = ml.tokens.to_string();
-                if tokens.contains("test") {
-                    return true;
-                }
+        if attr.path().is_ident("cfg")
+            && let syn::Meta::List(ml) = &attr.meta
+        {
+            let tokens = ml.tokens.to_string();
+            if tokens.contains("test") {
+                return true;
             }
         }
     }

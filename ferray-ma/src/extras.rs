@@ -965,11 +965,11 @@ where
 
     let mut mask = vec![false; vals.len()];
     // A single trailing masked slot iff any input was masked.
-    if let Some(pos) = ma.mask().iter().position(|&m| m) {
-        if let Some(placeholder) = ma.data().iter().nth(pos) {
-            vals.push(*placeholder);
-            mask.push(true);
-        }
+    if let Some(pos) = ma.mask().iter().position(|&m| m)
+        && let Some(placeholder) = ma.data().iter().nth(pos)
+    {
+        vals.push(*placeholder);
+        mask.push(true);
     }
     let n = vals.len();
     let data_arr = Array::<T, Ix1>::from_vec(Ix1::new([n]), vals)?;
@@ -1117,10 +1117,11 @@ where
             out.push((v, false));
         }
     }
-    if m1 && !m2_masked {
-        if let Some(p) = first_masked_value(ar1) {
-            out.push((p, true));
-        }
+    if m1
+        && !m2_masked
+        && let Some(p) = first_masked_value(ar1)
+    {
+        out.push((p, true));
     }
     build_ma_ix1(out)
 }

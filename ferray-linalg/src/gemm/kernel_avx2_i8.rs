@@ -67,7 +67,10 @@ pub unsafe fn kernel_4x8_i8(
     c_cs: isize,
     accumulate: bool,
 ) {
-    debug_assert!(kc % KB_I8 == 0, "kc must be a multiple of KB_I8={KB_I8}");
+    debug_assert!(
+        kc.is_multiple_of(KB_I8),
+        "kc must be a multiple of KB_I8={KB_I8}"
+    );
 
     let mut acc0 = _mm256_setzero_si256();
     let mut acc1 = _mm256_setzero_si256();
@@ -185,7 +188,7 @@ pub unsafe fn kernel_edge_i8(
 ) {
     debug_assert!(m <= MR_I8);
     debug_assert!(n <= NR_I8);
-    debug_assert!(kc % KB_I8 == 0);
+    debug_assert!(kc.is_multiple_of(KB_I8));
     let mut tile = [[0_i32; NR_I8]; MR_I8];
     let mut a = packed_a;
     let mut b = packed_b;

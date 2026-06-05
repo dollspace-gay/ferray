@@ -678,7 +678,7 @@ mod tests {
                 let mag_sq = bin.norm_sqr();
                 // Bins 0 and cols/2 (for even n) count once; others count
                 // twice to account for their unstored conjugate.
-                if k == 0 || (cols % 2 == 0 && k == cols / 2) {
+                if k == 0 || (cols.is_multiple_of(2) && k == cols / 2) {
                     freq_energy += mag_sq;
                 } else {
                     freq_energy += 2.0 * mag_sq;

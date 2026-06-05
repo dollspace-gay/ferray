@@ -70,10 +70,10 @@ use crate::conv::as_ndarray;
 /// therefore yields `0`. Mirrors that contract exactly.
 #[pyfunction]
 pub fn ndim(py: Python<'_>, a: &Bound<'_, PyAny>) -> PyResult<usize> {
-    if let Ok(nd) = a.getattr("ndim") {
-        if let Ok(n) = nd.extract::<usize>() {
-            return Ok(n);
-        }
+    if let Ok(nd) = a.getattr("ndim")
+        && let Ok(n) = nd.extract::<usize>()
+    {
+        return Ok(n);
     }
     let arr = as_ndarray(py, a)?;
     arr.getattr("ndim")?.extract()
@@ -85,10 +85,10 @@ pub fn ndim(py: Python<'_>, a: &Bound<'_, PyAny>) -> PyResult<usize> {
 /// when present, else `asarray(a).shape`. A Python scalar yields `()`.
 #[pyfunction]
 pub fn shape<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyTuple>> {
-    if let Ok(sh) = a.getattr("shape") {
-        if let Ok(t) = sh.cast_into::<PyTuple>() {
-            return Ok(t);
-        }
+    if let Ok(sh) = a.getattr("shape")
+        && let Ok(t) = sh.cast_into::<PyTuple>()
+    {
+        return Ok(t);
     }
     let arr = as_ndarray(py, a)?;
     arr.getattr("shape")?

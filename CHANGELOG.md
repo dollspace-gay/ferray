@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.4.1] - 2026-05-29
 
 ### Changed
+- Doc-sync: ferray-core reductions empty min/max REQ marker stale (NOT-STARTED -> SHIPPED, #782 resolved R-DEV-4) (#1105)
 - Divergence (MEDIUM): complex raise/accept mismatch — ediff1d/diagonal/cross/choose/histogram raise on complex; percentile/quantile accept where numpy raises (#972)
 - Divergence (HIGH): linalg int64 rejection — kron/tensordot/vdot/inner/dot/matmul/trace/matrix_power float-only-sealed (#971)
 - Divergence (CRITICAL/R-CODE-4): complex silent-cast drops imaginary part in trapezoid/interp/polyval/polymul/polyadd/polyder/polyint (#970)

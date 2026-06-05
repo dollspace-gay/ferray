@@ -545,7 +545,7 @@ where
     // Nyquist bin — only when `output_len` is even AND the bin exists in
     // the input slice (it may be missing if the caller passed a truncated
     // input via the `n` parameter).
-    if output_len % 2 == 0 {
+    if output_len.is_multiple_of(2) {
         let nyq = output_len / 2;
         if nyq < input_buf.len() {
             input_buf[nyq].im = zero;

@@ -245,7 +245,7 @@ fn resolve_shape(raw: &[isize], size: usize) -> PyResult<Vec<usize>> {
     }
     let mut out: Vec<usize> = raw.iter().map(|&d| d.max(0) as usize).collect();
     if let Some(i) = neg_pos {
-        if known == 0 || size % known != 0 {
+        if known == 0 || !size.is_multiple_of(known) {
             return Err(PyValueError::new_err(format!(
                 "cannot reshape array of size {size} into shape {raw:?}"
             )));

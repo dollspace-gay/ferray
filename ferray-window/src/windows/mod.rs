@@ -737,7 +737,7 @@ pub fn triang(m: usize) -> FerrayResult<Array<f64, Ix1>> {
     }
     let mf = m as f64;
     let centre = (mf - 1.0) / 2.0;
-    if m % 2 == 0 {
+    if m.is_multiple_of(2) {
         // Even-m formula: w[n] = 1 - |2n - (m-1)| / m
         gen_window(m, |n| 1.0 - (2.0 * n as f64 - centre - centre).abs() / mf)
     } else {

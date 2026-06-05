@@ -45,10 +45,10 @@ pub fn parse_text_grid(
             if trimmed.is_empty() {
                 return false;
             }
-            if let Some(comment_char) = opts.comments {
-                if trimmed.starts_with(comment_char) {
-                    return false;
-                }
+            if let Some(comment_char) = opts.comments
+                && trimmed.starts_with(comment_char)
+            {
+                return false;
             }
             true
         })
@@ -119,10 +119,10 @@ pub fn parse_text_grid_with_missing(
             if trimmed.is_empty() {
                 return false;
             }
-            if let Some(comment_char) = opts.comments {
-                if trimmed.starts_with(comment_char) {
-                    return false;
-                }
+            if let Some(comment_char) = opts.comments
+                && trimmed.starts_with(comment_char)
+            {
+                return false;
             }
             true
         })

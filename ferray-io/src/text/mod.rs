@@ -58,23 +58,23 @@ impl Default for SaveTxtOptions {
 fn format_value<T: Display>(val: &T, fmt_str: &str) -> String {
     // Rust-style: contains "{" — parse precision patterns.
     if fmt_str.contains('{') {
-        if let Some(spec) = fmt_str.strip_prefix("{:").and_then(|s| s.strip_suffix('}')) {
-            if let Some(prec_str) = spec.strip_prefix('.') {
-                let is_sci = prec_str.ends_with('e') || prec_str.ends_with('E');
-                let digits_str = if is_sci {
-                    &prec_str[..prec_str.len() - 1]
-                } else {
-                    prec_str
-                };
-                if let Ok(prec) = digits_str.parse::<usize>() {
-                    // Parse value as f64 for numeric formatting
-                    if let Ok(v) = val.to_string().parse::<f64>() {
-                        return if is_sci {
-                            format!("{v:.prec$e}")
-                        } else {
-                            format!("{v:.prec$}")
-                        };
-                    }
+        if let Some(spec) = fmt_str.strip_prefix("{:").and_then(|s| s.strip_suffix('}'))
+            && let Some(prec_str) = spec.strip_prefix('.')
+        {
+            let is_sci = prec_str.ends_with('e') || prec_str.ends_with('E');
+            let digits_str = if is_sci {
+                &prec_str[..prec_str.len() - 1]
+            } else {
+                prec_str
+            };
+            if let Ok(prec) = digits_str.parse::<usize>() {
+                // Parse value as f64 for numeric formatting
+                if let Ok(v) = val.to_string().parse::<f64>() {
+                    return if is_sci {
+                        format!("{v:.prec$e}")
+                    } else {
+                        format!("{v:.prec$}")
+                    };
                 }
             }
         }

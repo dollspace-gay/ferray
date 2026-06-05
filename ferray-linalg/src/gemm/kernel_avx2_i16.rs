@@ -58,7 +58,7 @@ pub unsafe fn kernel_4x8_i16(
     c_cs: isize,
     accumulate: bool,
 ) {
-    debug_assert!(kc % KB_I16 == 0);
+    debug_assert!(kc.is_multiple_of(KB_I16));
 
     let mut acc0 = _mm256_setzero_si256();
     let mut acc1 = _mm256_setzero_si256();
@@ -165,7 +165,7 @@ pub unsafe fn kernel_edge_i16(
 ) {
     debug_assert!(m <= MR_I16);
     debug_assert!(n <= NR_I16);
-    debug_assert!(kc % KB_I16 == 0);
+    debug_assert!(kc.is_multiple_of(KB_I16));
     let mut tile = [[0_i32; NR_I16]; MR_I16];
     let mut a = packed_a;
     let mut b = packed_b;

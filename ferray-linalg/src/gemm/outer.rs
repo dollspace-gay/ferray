@@ -367,7 +367,7 @@ fn pick_grid(m: usize, n: usize, k: usize, workers: usize) -> (usize, usize) {
     let mut best_score = f64::INFINITY;
     let mut mw = 1;
     while mw <= mw_max && mw <= workers {
-        if workers % mw == 0 {
+        if workers.is_multiple_of(mw) {
             let nw = workers / mw;
             let per_m = (m as f64) / (mw as f64);
             let per_n = (n as f64) / (nw as f64);
@@ -710,7 +710,7 @@ fn pick_grid_f32(m: usize, n: usize, k: usize, workers: usize) -> (usize, usize)
     let mut best_score = f64::INFINITY;
     let mut mw = 1;
     while mw <= mw_max && mw <= workers {
-        if workers % mw == 0 {
+        if workers.is_multiple_of(mw) {
             let nw = workers / mw;
             let per_m = (m as f64) / (mw as f64);
             let per_n = (n as f64) / (nw as f64);

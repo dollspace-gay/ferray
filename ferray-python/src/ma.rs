@@ -2334,15 +2334,17 @@ impl PyMaskedArray {
         // (these route through the OWNED `construct_masked` body below). A
         // non-`fr.ma` input (list/ndarray/numpy.ma) keeps the OWNED path —
         // ferray cannot hold a foreign numpy buffer as a view base.
-        if !copy && matches!(mask, MaskArg::Absent | MaskArg::Nomask) && fill_value.is_none() {
-            if let Ok(base) = data.cast::<PyMaskedArray>() {
-                let dt_name = crate::conv::normalize_opt_dtype(py, dtype)?;
-                let same_dtype = dt_name
-                    .as_deref()
-                    .is_none_or(|req| req == base.borrow().dtype_name_cheap());
-                if same_dtype {
-                    return Ok(identity_view(base));
-                }
+        if !copy
+            && matches!(mask, MaskArg::Absent | MaskArg::Nomask)
+            && fill_value.is_none()
+            && let Ok(base) = data.cast::<PyMaskedArray>()
+        {
+            let dt_name = crate::conv::normalize_opt_dtype(py, dtype)?;
+            let same_dtype = dt_name
+                .as_deref()
+                .is_none_or(|req| req == base.borrow().dtype_name_cheap());
+            if same_dtype {
+                return Ok(identity_view(base));
             }
         }
         // #896: `ma.array(existing_ma, mask=m)` / `ma.array(existing_ma,
@@ -2354,37 +2356,38 @@ impl PyMaskedArray {
         // (`own_mask`/`own_fill` — numpy's per-object `_mask`/`_fill_value`,
         // NOT shared back to the base). A `dtype=` recast or `copy=True` forces
         // the OWNED copy path below (numpy reallocates `_data`).
-        if !copy && (fill_value.is_some() || matches!(mask, MaskArg::Mask(_))) {
-            if let Ok(base) = data.cast::<PyMaskedArray>() {
-                let dt_name = crate::conv::normalize_opt_dtype(py, dtype)?;
-                let same_dtype = dt_name
-                    .as_deref()
-                    .is_none_or(|req| req == base.borrow().dtype_name_cheap());
-                if same_dtype {
-                    let mut view = identity_view(base);
-                    // Apply `mask=` as the view's own mask overlay. numpy's
-                    // `keep_mask=True` default ORs the explicit mask with the
-                    // SOURCE mask (`numpy/ma/core.py:3008`), so combine the
-                    // explicit mask with the base's current mask (via numpy's
-                    // own `getmaskarray` + `logical_or`) before setting it —
-                    // matching the OWNED `construct_masked` keep_mask path.
-                    if let MaskArg::Mask(m) = &mask {
-                        let np = py.import("numpy")?;
-                        let np_ma = np.getattr("ma")?;
-                        let shape = view.shape_vec();
-                        let explicit = np
-                            .call_method1("broadcast_to", (m, shape.clone()))?
-                            .call_method1("astype", (np.getattr("bool_")?,))?;
-                        let src_ma = base.borrow().as_numpy_ma(py)?;
-                        let src_mask = np_ma.call_method1("getmaskarray", (&src_ma,))?;
-                        let combined = np.call_method1("logical_or", (&explicit, &src_mask))?;
-                        view.set_mask(py, &combined)?;
-                    }
-                    if let Some(fv) = fill_value {
-                        set_fill_value(py, &mut view, fv)?;
-                    }
-                    return Ok(view);
+        if !copy
+            && (fill_value.is_some() || matches!(mask, MaskArg::Mask(_)))
+            && let Ok(base) = data.cast::<PyMaskedArray>()
+        {
+            let dt_name = crate::conv::normalize_opt_dtype(py, dtype)?;
+            let same_dtype = dt_name
+                .as_deref()
+                .is_none_or(|req| req == base.borrow().dtype_name_cheap());
+            if same_dtype {
+                let mut view = identity_view(base);
+                // Apply `mask=` as the view's own mask overlay. numpy's
+                // `keep_mask=True` default ORs the explicit mask with the
+                // SOURCE mask (`numpy/ma/core.py:3008`), so combine the
+                // explicit mask with the base's current mask (via numpy's
+                // own `getmaskarray` + `logical_or`) before setting it —
+                // matching the OWNED `construct_masked` keep_mask path.
+                if let MaskArg::Mask(m) = &mask {
+                    let np = py.import("numpy")?;
+                    let np_ma = np.getattr("ma")?;
+                    let shape = view.shape_vec();
+                    let explicit = np
+                        .call_method1("broadcast_to", (m, shape.clone()))?
+                        .call_method1("astype", (np.getattr("bool_")?,))?;
+                    let src_ma = base.borrow().as_numpy_ma(py)?;
+                    let src_mask = np_ma.call_method1("getmaskarray", (&src_ma,))?;
+                    let combined = np.call_method1("logical_or", (&explicit, &src_mask))?;
+                    view.set_mask(py, &combined)?;
                 }
+                if let Some(fv) = fill_value {
+                    set_fill_value(py, &mut view, fv)?;
+                }
+                return Ok(view);
             }
         }
         // Resolve numpy's `mask=` tri-state ([`MaskArg`]) into the shared
@@ -8455,16 +8458,16 @@ pub fn notmasked_edges<'py>(
     axis: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let m = coerce_to_ma(py, a)?;
-    if let Some(ax) = axis {
-        if m.ndim() > 1 {
-            let m2 = ma_as_ix2(&m)?;
-            let axis_u = crate::conv::normalize_axis(py, ax, 2)?;
-            let ((fr, fc), (lr, lc)) =
-                fma::notmasked_edges_axis2(&m2, axis_u).map_err(ferr_to_pyerr)?;
-            let first = edge_coord_tuple(py, &fr, &fc)?;
-            let last = edge_coord_tuple(py, &lr, &lc)?;
-            return Ok(pyo3::types::PyList::new(py, [first, last])?.into_any());
-        }
+    if let Some(ax) = axis
+        && m.ndim() > 1
+    {
+        let m2 = ma_as_ix2(&m)?;
+        let axis_u = crate::conv::normalize_axis(py, ax, 2)?;
+        let ((fr, fc), (lr, lc)) =
+            fma::notmasked_edges_axis2(&m2, axis_u).map_err(ferr_to_pyerr)?;
+        let first = edge_coord_tuple(py, &fr, &fc)?;
+        let last = edge_coord_tuple(py, &lr, &lc)?;
+        return Ok(pyo3::types::PyList::new(py, [first, last])?.into_any());
     }
     match fma::notmasked_edges(&m) {
         None => Ok(py.None().into_bound(py)),
@@ -10257,12 +10260,12 @@ pub fn mask_rows<'py>(
     // numpy.ma.mask_rows fixes axis=0; the optional `axis` arg is accepted for
     // signature parity but only `None`/`0` are meaningful (numpy ignores it and
     // always masks rows). Reject a non-row axis to surface caller error early.
-    if let Some(ax) = axis {
-        if ax != 0 {
-            return Err(PyValueError::new_err(format!(
-                "ma.mask_rows masks rows (axis 0); got axis={ax}"
-            )));
-        }
+    if let Some(ax) = axis
+        && ax != 0
+    {
+        return Err(PyValueError::new_err(format!(
+            "ma.mask_rows masks rows (axis 0); got axis={ax}"
+        )));
     }
     let m = ma_as_ix2(&coerce_to_ma(py, a)?)?;
     let out = fma::ma_mask_rowcols(&m, Some(0)).map_err(ferr_to_pyerr)?;
@@ -10279,12 +10282,13 @@ pub fn mask_cols<'py>(
     a: &Bound<'py, PyAny>,
     axis: Option<isize>,
 ) -> PyResult<PyMaskedArray> {
-    if let Some(ax) = axis {
-        if ax != 1 && ax != -1 {
-            return Err(PyValueError::new_err(format!(
-                "ma.mask_cols masks columns (axis 1); got axis={ax}"
-            )));
-        }
+    if let Some(ax) = axis
+        && ax != 1
+        && ax != -1
+    {
+        return Err(PyValueError::new_err(format!(
+            "ma.mask_cols masks columns (axis 1); got axis={ax}"
+        )));
     }
     let m = ma_as_ix2(&coerce_to_ma(py, a)?)?;
     let out = fma::ma_mask_rowcols(&m, Some(1)).map_err(ferr_to_pyerr)?;

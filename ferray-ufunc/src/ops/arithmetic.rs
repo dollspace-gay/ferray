@@ -404,13 +404,13 @@ where
                 crate::helpers::reinterpret_array::<T, <T as TrueDivide>::Output, D>(arr)
             });
         }
-    } else if TypeId::of::<T>() == TypeId::of::<f32>() {
-        if let Some(r) = try_simd_f32_binary(a, b, div_f32) {
-            // SAFETY: T == f32 == <T as TrueDivide>::Output (verified above).
-            return r.map(|arr| unsafe {
-                crate::helpers::reinterpret_array::<T, <T as TrueDivide>::Output, D>(arr)
-            });
-        }
+    } else if TypeId::of::<T>() == TypeId::of::<f32>()
+        && let Some(r) = try_simd_f32_binary(a, b, div_f32)
+    {
+        // SAFETY: T == f32 == <T as TrueDivide>::Output (verified above).
+        return r.map(|arr| unsafe {
+            crate::helpers::reinterpret_array::<T, <T as TrueDivide>::Output, D>(arr)
+        });
     }
     crate::helpers::binary_map_op(a, b, T::true_div)
 }

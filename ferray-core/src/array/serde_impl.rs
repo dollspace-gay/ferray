@@ -102,13 +102,13 @@ where
     E: de::Error,
 {
     // Validate rank for fixed-rank dimension types
-    if let Some(expected) = D::NDIM {
-        if shape.len() != expected {
-            return Err(de::Error::custom(format!(
-                "expected {expected}D shape, got {}D ({shape:?})",
-                shape.len()
-            )));
-        }
+    if let Some(expected) = D::NDIM
+        && shape.len() != expected
+    {
+        return Err(de::Error::custom(format!(
+            "expected {expected}D shape, got {}D ({shape:?})",
+            shape.len()
+        )));
     }
 
     // Construct the dimension from the shape slice:

@@ -802,12 +802,12 @@ pub fn slice<'py>(
     stop: Option<isize>,
     step: Option<isize>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    if let Some(s) = step {
-        if s != 1 {
-            return Err(pyo3::exceptions::PyNotImplementedError::new_err(
-                "strings.slice: step != 1 is not supported",
-            ));
-        }
+    if let Some(s) = step
+        && s != 1
+    {
+        return Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "strings.slice: step != 1 is not supported",
+        ));
     }
     let (sa, ndim) = py_to_string_array(py, a)?;
     let r = fs::slice(&sa, start, stop).map_err(ferr_to_pyerr)?;

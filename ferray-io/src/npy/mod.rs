@@ -126,15 +126,15 @@ pub fn load_from_reader<T: Element + NpyElement, D: Dimension, R: Read>(
     }
 
     // Check dimension compatibility
-    if let Some(ndim) = D::NDIM {
-        if ndim != hdr.shape.len() {
-            return Err(FerrayError::shape_mismatch(format!(
-                "expected {} dimensions, but file has {} (shape {:?})",
-                ndim,
-                hdr.shape.len(),
-                hdr.shape,
-            )));
-        }
+    if let Some(ndim) = D::NDIM
+        && ndim != hdr.shape.len()
+    {
+        return Err(FerrayError::shape_mismatch(format!(
+            "expected {} dimensions, but file has {} (shape {:?})",
+            ndim,
+            hdr.shape.len(),
+            hdr.shape,
+        )));
     }
 
     let total_elements = checked_total_elements(&hdr.shape)?;
@@ -574,13 +574,13 @@ fn save_complex_raw<T, W: Write>(
 /// `TypeId::of::<D>()` — that path required a heap allocation per
 /// load and broke when the dimension trait grew new variants.
 fn build_dimension<D: Dimension>(shape: &[usize]) -> FerrayResult<D> {
-    if let Some(ndim) = D::NDIM {
-        if shape.len() != ndim {
-            return Err(FerrayError::shape_mismatch(format!(
-                "expected {ndim} dimensions, got {}",
-                shape.len()
-            )));
-        }
+    if let Some(ndim) = D::NDIM
+        && shape.len() != ndim
+    {
+        return Err(FerrayError::shape_mismatch(format!(
+            "expected {ndim} dimensions, got {}",
+            shape.len()
+        )));
     }
     D::from_dim_slice(shape).ok_or_else(|| {
         FerrayError::shape_mismatch(format!("shape {shape:?} does not match dimension type"))

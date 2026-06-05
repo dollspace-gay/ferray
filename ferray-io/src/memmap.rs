@@ -195,7 +195,7 @@ pub fn memmap_readonly<T: Element + NpyElement, P: AsRef<Path>>(
     // Validate alignment against the live mmap pointer; we don't store
     // it (#238) so re-derive once here for the alignment check.
     let probe_ptr = mmap.as_ptr().cast::<T>();
-    if (probe_ptr as usize) % std::mem::align_of::<T>() != 0 {
+    if !(probe_ptr as usize).is_multiple_of(std::mem::align_of::<T>()) {
         return Err(FerrayError::io_error(
             "memory-mapped data is not properly aligned for the element type",
         ));
@@ -264,7 +264,7 @@ pub fn memmap_mut<T: Element + NpyElement, P: AsRef<Path>>(
     };
 
     let probe_ptr = mmap.as_ptr().cast::<T>();
-    if (probe_ptr as usize) % std::mem::align_of::<T>() != 0 {
+    if !(probe_ptr as usize).is_multiple_of(std::mem::align_of::<T>()) {
         return Err(FerrayError::io_error(
             "memory-mapped data is not properly aligned for the element type",
         ));

@@ -89,13 +89,13 @@ where
     D: Dimension,
     E: de::Error,
 {
-    if let Some(expected) = D::NDIM {
-        if shape.len() != expected {
-            return Err(de::Error::custom(format!(
-                "expected {expected}D shape, got {}D ({shape:?})",
-                shape.len()
-            )));
-        }
+    if let Some(expected) = D::NDIM
+        && shape.len() != expected
+    {
+        return Err(de::Error::custom(format!(
+            "expected {expected}D shape, got {}D ({shape:?})",
+            shape.len()
+        )));
     }
     let dim = D::from_dim_slice(&shape).ok_or_else(|| {
         de::Error::custom(format!(

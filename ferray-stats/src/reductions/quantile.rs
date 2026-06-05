@@ -190,7 +190,7 @@ fn method_index_and_gamma<T: Float>(n: usize, q: T, method: QuantileMethod) -> (
                 }
             } else {
                 // Tie: round to the even lo_i.
-                if lo_i % 2 == 0 || lo_i + 1 >= n {
+                if lo_i.is_multiple_of(2) || lo_i + 1 >= n {
                     (lo_i, zero)
                 } else {
                     (lo_i, one)
