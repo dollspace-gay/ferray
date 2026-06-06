@@ -11,6 +11,7 @@ mod index_impl;
 pub mod introspect;
 pub mod iter;
 pub mod methods;
+pub mod numpy_sort;
 pub mod owned;
 pub mod reductions;
 #[cfg(feature = "serde")]

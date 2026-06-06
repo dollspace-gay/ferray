@@ -261,6 +261,11 @@ pub use ferray_stats::{
 pub use ferray_stats::{
     Side, SortKind, argsort, lexsort, searchsorted, searchsorted_with_sorter, sort, sort_complex,
 };
+// NumPy-bit-identical introsort argsort / introselect argpartition for f64
+// (#2142). Distinct from the stats `argsort` (axis-aware over the stable
+// comparator); these reproduce numpy 2.4.5's exact tie order on flat f64
+// slices, for KNN exact-tie neighbor selection.
+pub use ferray_core::{argpartition_numpy, argsort_numpy};
 // `nonzero` now lives in ferray-core (#373) and is re-exported above via
 // `ferray_core::indexing::extended`; don't re-export the stats version too.
 pub use ferray_stats::{

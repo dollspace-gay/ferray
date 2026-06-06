@@ -93,6 +93,8 @@ pub use array::cow::CowArray;
 #[cfg(feature = "std")]
 pub use array::display::{get_print_options, set_print_options};
 #[cfg(feature = "std")]
+pub use array::numpy_sort::{argpartition_numpy, argsort_numpy};
+#[cfg(feature = "std")]
 pub use array::owned::Array;
 #[cfg(feature = "std")]
 pub use array::view::ArrayView;
