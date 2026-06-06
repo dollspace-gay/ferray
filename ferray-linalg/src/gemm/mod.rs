@@ -1060,3 +1060,224 @@ pub fn gemm_f32(
         true
     }
 }
+
+// ---------------------------------------------------------------------------
+// Public OpenBLAS matmul entry point (#2117)
+// ---------------------------------------------------------------------------
+//
+// `matmul` / `matmul_raw` only route through OpenBLAS for large operands
+// (`max_dim >= 256`); small matrices fall into the naive ikj loop or
+// faer, whose accumulation order differs from numpy's `@`. ferrolearn's
+// PCA precision lemma forms tiny (5×5, 3×5) products whose rounding must
+// match numpy bit-for-bit to land the right `slogdet` sign in the
+// rank-deficient regime (ferrolearn #2110). This `gemm` therefore routes
+// EVERY size straight through the same OpenBLAS `cblas_*gemm` the host
+// numpy uses, so `gemm(A, B)` accumulates exactly like `A @ B`.
+
+/// Dispatch from the generic [`crate::scalar::LinalgFloat`] to the
+/// concrete OpenBLAS `cblas_*gemm` wrapper for that precision. Sealed by
+/// [`crate::scalar::LinalgFloat`]. Only present with the `openblas`
+/// feature.
+#[cfg(feature = "openblas")]
+pub trait GemmFloat: crate::scalar::LinalgFloat {
+    /// Compute `c = a @ b` (row-major, `alpha=1`, `beta=0`) for an
+    /// `m×k` by `k×n` product via OpenBLAS.
+    ///
+    /// # Safety
+    /// `a` must be length `m*k`, `b` length `k*n`, and `c` length `m*n`.
+    unsafe fn gemm_openblas(
+        m: usize,
+        n: usize,
+        k: usize,
+        a: *const Self,
+        b: *const Self,
+        c: *mut Self,
+    );
+}
+
+#[cfg(feature = "openblas")]
+impl GemmFloat for f64 {
+    unsafe fn gemm_openblas(
+        m: usize,
+        n: usize,
+        k: usize,
+        a: *const Self,
+        b: *const Self,
+        c: *mut Self,
+    ) {
+        // SAFETY: caller upholds the buffer-length contract.
+        unsafe { openblas_backend::gemm_f64_openblas(m, n, k, 1.0, a, b, 0.0, c) };
+    }
+}
+
+#[cfg(feature = "openblas")]
+impl GemmFloat for f32 {
+    unsafe fn gemm_openblas(
+        m: usize,
+        n: usize,
+        k: usize,
+        a: *const Self,
+        b: *const Self,
+        c: *mut Self,
+    ) {
+        // SAFETY: caller upholds the buffer-length contract.
+        unsafe { openblas_backend::gemm_f32_openblas(m, n, k, 1.0, a, b, 0.0, c) };
+    }
+}
+
+/// Compute the plain matrix product `C = A @ B` (the numpy `@` operator)
+/// for row-major 2-D arrays, routed through the host OpenBLAS
+/// `cblas_*gemm` so the accumulation is bit-identical to numpy's `@` at
+/// every size (unlike [`crate::matmul`], which only uses OpenBLAS for
+/// large operands).
+///
+/// `A` is `(m, k)`, `B` is `(k, n)`; the result is `(m, n)`.
+///
+/// Requires the `openblas` feature (the `cblas_*` symbols ship inside the
+/// linked OpenBLAS). With the feature off this function does not exist;
+/// callers should use [`crate::matmul`] (faer / hand-tuned kernels).
+///
+/// # Errors
+/// - [`ferray_core::error::FerrayError::ShapeMismatch`] if the inner
+///   dimensions don't match, an input is not 2-D, or an input is not
+///   contiguous (row-major).
+#[cfg(feature = "openblas")]
+#[must_use = "the product is returned, not written in place"]
+pub fn gemm<T: GemmFloat>(
+    a: &ferray_core::array::owned::Array<T, ferray_core::dimension::Ix2>,
+    b: &ferray_core::array::owned::Array<T, ferray_core::dimension::Ix2>,
+) -> ferray_core::error::FerrayResult<
+    ferray_core::array::owned::Array<T, ferray_core::dimension::Ix2>,
+> {
+    use ferray_core::array::owned::Array;
+    use ferray_core::dimension::Ix2;
+    use ferray_core::error::FerrayError;
+
+    let a_shape = a.shape();
+    let b_shape = b.shape();
+    let (m, k1) = (a_shape[0], a_shape[1]);
+    let (k2, n) = (b_shape[0], b_shape[1]);
+    if k1 != k2 {
+        return Err(FerrayError::shape_mismatch(format!(
+            "gemm: inner dimensions don't match ({m}x{k1} @ {k2}x{n})"
+        )));
+    }
+    let zero = <T as num_traits::Zero>::zero();
+    if m == 0 || n == 0 || k1 == 0 {
+        return Array::from_vec(Ix2::new([m, n]), vec![zero; m * n]);
+    }
+
+    let a_data = a.as_slice().ok_or_else(|| {
+        FerrayError::shape_mismatch("gemm: input `a` must be contiguous (row-major)")
+    })?;
+    let b_data = b.as_slice().ok_or_else(|| {
+        FerrayError::shape_mismatch("gemm: input `b` must be contiguous (row-major)")
+    })?;
+
+    let mut c = vec![zero; m * n];
+    // SAFETY: a_data is m*k1, b_data is k1*n, c is m*n — the OpenBLAS
+    // buffer-length contract for an (m, n, k) row-major product.
+    unsafe {
+        T::gemm_openblas(m, n, k1, a_data.as_ptr(), b_data.as_ptr(), c.as_mut_ptr());
+    }
+    Array::from_vec(Ix2::new([m, n]), c)
+}
+
+#[cfg(all(test, feature = "openblas"))]
+mod public_gemm_tests {
+    use super::gemm;
+    use ferray_core::array::owned::Array;
+    use ferray_core::dimension::Ix2;
+
+    // Hex-float parser so the numpy `@` oracle values are exact.
+    fn hexf64(s: &str) -> f64 {
+        let neg = s.starts_with('-');
+        let s = s.trim_start_matches('-').trim_start_matches("0x");
+        let (mantissa, exp) = s.split_once('p').expect("hex float needs p-exponent");
+        let exp: i32 = exp.parse().expect("bad exponent");
+        let (int_part, frac_part) = match mantissa.split_once('.') {
+            Some((i, f)) => (i, f),
+            None => (mantissa, ""),
+        };
+        let mut val = i64::from_str_radix(int_part, 16).expect("bad int part") as f64;
+        let mut scale = 1.0_f64 / 16.0;
+        for c in frac_part.chars() {
+            let d = c.to_digit(16).expect("bad hex digit") as f64;
+            val += d * scale;
+            scale /= 16.0;
+        }
+        val *= 2.0_f64.powi(exp);
+        if neg { -val } else { val }
+    }
+
+    #[test]
+    fn gemm_matches_numpy_cancellation() {
+        // A row that nearly cancels: [1e8, 1, -1e8] @ B. numpy `@` and
+        // OpenBLAS must agree on the surviving low-order bits.
+        #[rustfmt::skip]
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![
+            hexf64("0x1.7d78400000000p+26"), hexf64("0x1.0000000000000p+0"), hexf64("-0x1.7d78400000000p+26"),
+            hexf64("0x1.8000000000000p+1"), hexf64("-0x1.0000000000000p+1"), hexf64("0x1.8000000000000p+0"),
+        ]).unwrap();
+        #[rustfmt::skip]
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([3, 2]), vec![
+            1.0, 2.0, 1.0, 1.0, 1.0, 2.0,
+        ]).unwrap();
+        let c = gemm(&a, &b).unwrap();
+        let got: Vec<f64> = c.iter().copied().collect();
+        // numpy A @ B, exact f64 hex:
+        let expected = [
+            hexf64("0x1.0000000000000p+0"),
+            hexf64("0x1.0000000000000p+0"),
+            hexf64("0x1.4000000000000p+1"),
+            hexf64("0x1.c000000000000p+2"),
+        ];
+        for (i, (g, e)) in got.iter().zip(expected.iter()).enumerate() {
+            assert_eq!(
+                g.to_bits(),
+                e.to_bits(),
+                "elem {i}: got {g:.17e} want {e:.17e}"
+            );
+        }
+    }
+
+    #[test]
+    fn gemm_matches_numpy_random_4x3x5() {
+        #[rustfmt::skip]
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([4, 3]), vec![
+            hexf64("0x1.427a31c1ffc58p-10"), hexf64("0x1.31ea59a5b303ep-2"), hexf64("-0x1.18b7980d81558p-2"),
+            hexf64("-0x1.c7fba74b18102p-1"), hexf64("-0x1.d19537e309692p-2"), hexf64("-0x1.fbb918e5cd3f0p-1"),
+            hexf64("0x1.ecb246c7071e5p-5"), hexf64("0x1.571858a941e07p+0"), hexf64("-0x1.f804fc5039525p-2"),
+            hexf64("-0x1.3daee2d56e58bp-1"), hexf64("0x1.f5992787010aap-2"), hexf64("0x1.6d73c9b1a8b33p-2"),
+        ]).unwrap();
+        #[rustfmt::skip]
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([3, 5]), vec![
+            hexf64("0x1.afc6d9ffa76cap-4"), hexf64("-0x1.dc664ebbfd571p-1"), hexf64("-0x1.df43093500899p-6"), hexf64("0x1.63fec7c2015e9p-1"), hexf64("-0x1.581e71cf65997p+0"),
+            hexf64("-0x1.d49939df35222p-2"), hexf64("-0x1.e6b68891db2c3p+0"), hexf64("-0x1.4a1f253355902p+0"), hexf64("-0x1.d77bf28b367b0p+0"), hexf64("-0x1.e177757c5cfd8p-3"),
+            hexf64("-0x1.44775f633b214p+0"), hexf64("0x1.15c652f6d6a5ep-2"), hexf64("0x1.4106b6b54ede6p-3"), hexf64("-0x1.7ed5a6ae5e4abp-3"), hexf64("-0x1.42252ea4eea8ap+1"),
+        ]).unwrap();
+        let c = gemm(&a, &b).unwrap();
+        let got: Vec<f64> = c.iter().copied().collect();
+        #[rustfmt::skip]
+        let expected = [
+            hexf64("0x1.afdebe7d16fb3p-3"), hexf64("-0x1.49778e149b576p-1"), hexf64("-0x1.b687708af82bfp-2"), hexf64("-0x1.fe10889f664f1p-2"), hexf64("0x1.3c71747d3dda5p-1"),
+            hexf64("0x1.5efca23ada43dp+0"), hexf64("0x1.6c91c5d3ada6ep+0"), hexf64("0x1.d3e41eb3a5f83p-2"), hexf64("0x1.9d34a8d49f5fcp-2"), hexf64("0x1.e65eeb0aa9f91p+1"),
+            hexf64("0x1.14975f74502e8p-6"), hexf64("-0x1.5e674cfa638d3p+1"), hexf64("-0x1.cea2c82ccec68p+0"), hexf64("-0x1.2ad0b8fa93377p+1"), hexf64("0x1.af89a16362a42p-1"),
+            hexf64("-0x1.7bda84228ddf6p-1"), hexf64("-0x1.0753ea8d135ffp-2"), hexf64("-0x1.1d7ac7b02b82dp-1"), hexf64("-0x1.66797312692e5p+0"), hexf64("-0x1.6f3772d5dd5b1p-3"),
+        ];
+        // numpy may use a different inner blocking than OpenBLAS here;
+        // require agreement to a few ULP (well within the precision the
+        // PCA sign proof needs).
+        for (i, (g, e)) in got.iter().zip(expected.iter()).enumerate() {
+            let ulp = (g.to_bits() as i64 - e.to_bits() as i64).unsigned_abs();
+            assert!(ulp <= 2, "elem {i}: got {g:.17e} want {e:.17e} ulp={ulp}");
+        }
+    }
+
+    #[test]
+    fn gemm_shape_mismatch_errs() {
+        let a = Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0; 6]).unwrap();
+        let b = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0; 4]).unwrap();
+        assert!(gemm(&a, &b).is_err());
+    }
+}

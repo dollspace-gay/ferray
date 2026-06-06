@@ -27,7 +27,15 @@ optional = true
 [dependencies.openblas-src]
 version = "0.10"
 default-features = false
-features = ["system", "cblas"]
+# `rustls` re-enabled because openblas-src forwards it to its
+# `openblas-build` build-dependency, whose source unconditionally
+# `compile_error!`s unless a TLS feature (`rustls`/`native-tls`) is on —
+# even when `system` mode means the downloader is never invoked. Without
+# it the `openblas` feature fails to compile (openblas-build v0.10.16
+# download.rs). `system` makes the build script probe pkg-config /
+# emit `-l openblas` against the host's LP64 libopenblas (which exports
+# the Fortran LAPACK symbols `dgesdd_`/`sgesdd_` used by `svd_lapack`).
+features = ["system", "cblas", "rustls"]
 optional = true
 
 [dependencies.cblas-sys]

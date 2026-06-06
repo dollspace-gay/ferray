@@ -93,6 +93,11 @@ strings = ["dep:ferray-strings"]
 ma = ["dep:ferray-ma"]
 io = ["dep:ferray-io"]
 linalg = ["dep:ferray-linalg"]
+# Forward ferray-linalg's `openblas` feature so users of the umbrella can opt
+# into the LAPACK-backed linear-algebra paths (e.g. `linalg::svd_lapack`,
+# bit-identical to scipy/LAPACK `gesdd`) without dropping down to ferray-linalg.
+# Implies `linalg` (the gated symbols live in that sub-crate).
+openblas = ["linalg", "ferray-linalg/openblas"]
 fft = ["dep:ferray-fft"]
 random = ["dep:ferray-random"]
 polynomial = ["dep:ferray-polynomial", "linalg"]

@@ -87,6 +87,25 @@ pub use decomp::{
     svdvals,
 };
 
+// LAPACK `gesdd`-backed SVD (#2116) — bit-identical to scipy/numpy. Only
+// available with the `openblas` feature (the LAPACK symbols ship inside
+// the linked OpenBLAS shared object). Consumer: ferrolearn PCA's
+// `noise_variance_` path (ferrolearn #2110), which needs the trailing
+// singular values to match scikit-learn to the last bit.
+#[cfg(feature = "openblas")]
+pub use decomp::{LapackGesdd, svd_lapack};
+
+// LAPACK `getri`-backed inverse (#2117) + public OpenBLAS `gemm` (#2117)
+// — bit-identical to scipy.linalg.inv / numpy `@`. Only available with
+// the `openblas` feature. Consumer: ferrolearn PCA's `get_precision`
+// Woodbury lemma (ferrolearn #2110), which needs the inner inverse and
+// the left-to-right product chain to match scikit-learn so the
+// `slogdet(precision)` SIGN comes out `+1` in the rank-deficient regime.
+#[cfg(feature = "openblas")]
+pub use decomp::{LapackGetri, inv_lapack};
+#[cfg(feature = "openblas")]
+pub use gemm::{GemmFloat, gemm};
+
 // Solving and inversion (Section 8.3)
 pub use solve::{
     inv, inv_batched, lstsq, matrix_power, matrix_power_batched, pinv, pinv_batched, solve,
