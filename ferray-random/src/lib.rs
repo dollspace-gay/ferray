@@ -6,6 +6,10 @@
 //! pseudo-random number generators, 30+ continuous and discrete distributions,
 //! permutation/sampling operations, and deterministic parallel generation.
 //!
+//! A bit-identical [`legacy::RandomState`] (32-bit MT19937 + polar
+//! Box-Muller gaussian) reproduces `numpy.random.RandomState` for the
+//! `standard_normal` path, as needed by scikit-learn's `randomized_svd`.
+//!
 //! ## Quick Start
 //!
 //! ```
@@ -64,6 +68,7 @@
 pub mod bitgen;
 pub mod distributions;
 pub mod generator;
+pub mod legacy;
 pub mod parallel;
 pub mod permutations;
 pub mod shape;
@@ -72,4 +77,5 @@ pub use bitgen::{
     BitGenerator, MT19937, Pcg64, Pcg64Dxsm, Philox, SeedSequence, Sfc64, Xoshiro256StarStar,
 };
 pub use generator::{Generator, default_rng, default_rng_seeded};
+pub use legacy::RandomState;
 pub use shape::IntoShape;
