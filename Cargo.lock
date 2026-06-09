@@ -1024,7 +1024,7 @@ checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 
 [[package]]
 name = "ferray"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-autodiff",
  "ferray-core",
@@ -1047,7 +1047,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-autodiff"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-core",
  "ferray-test-oracle",
@@ -1060,7 +1060,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-core"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "ferray-core-macros",
@@ -1078,7 +1078,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-core-macros"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-core",
  "proc-macro2",
@@ -1089,7 +1089,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-fft"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-core",
  "ferray-test-oracle",
@@ -1106,7 +1106,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-io"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "byteorder",
  "ferray-core",
@@ -1126,7 +1126,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-linalg"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "cblas-sys",
  "faer",
@@ -1147,7 +1147,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-ma"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-core",
  "ferray-io",
@@ -1162,7 +1162,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-numpy-interop"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "arrow",
  "ferray-core",
@@ -1180,7 +1180,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-polynomial"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-core",
  "ferray-linalg",
@@ -1195,7 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-python"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray",
  "ferray-autodiff",
@@ -1218,7 +1218,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-random"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-core",
  "ferray-linalg",
@@ -1233,7 +1233,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-stats"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-core",
  "ferray-test-oracle",
@@ -1250,7 +1250,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-stride-tricks"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-core",
  "ferray-test-oracle",
@@ -1262,7 +1262,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-strings"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-core",
  "ferray-test-oracle",
@@ -1275,7 +1275,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-test-oracle"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-core",
  "num-complex",
@@ -1290,7 +1290,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-ufunc"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "core-math",
  "ferray-core",
@@ -1309,7 +1309,7 @@ dependencies = [
 
 [[package]]
 name = "ferray-window"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "ferray-core",
  "ferray-test-oracle",
