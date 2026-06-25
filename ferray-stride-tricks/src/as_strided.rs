@@ -58,8 +58,8 @@ impl<T: Element, D: Dimension> StridedSource<T> for ArrayView<'_, T, D> {
 /// If either check fails, an error is returned.
 ///
 /// Strides are given in units of elements (not bytes), and must be
-/// non-negative. See [`as_strided_unchecked`] for views that need
-/// negative strides or overlapping access patterns.
+/// non-negative. Use [`as_strided_signed`] for negative strides and
+/// [`as_strided_unchecked`] for overlapping access patterns.
 ///
 /// # View size vs. source buffer capacity
 ///
@@ -73,7 +73,6 @@ impl<T: Element, D: Dimension> StridedSource<T> for ArrayView<'_, T, D> {
 ///
 /// Returns `FerrayError::InvalidValue` if:
 /// - `shape` and `strides` have different lengths.
-/// - Any stride is negative (use `as_strided_unchecked` for advanced patterns).
 /// - Any computed offset falls outside the source buffer.
 /// - The strides produce overlapping memory accesses.
 ///
@@ -153,17 +152,12 @@ where
              overlapping views",
         )));
     }
-    // Re-interpret each isize stride as usize via the bit pattern;
-    // ndarray internally treats stride bytes as isize, so this
-    // preserves the negative-stride semantics through the
-    // ArrayView constructor.
-    let strides_usize: Vec<usize> = strides.iter().map(|&s| s as usize).collect();
     // SAFETY: bounds + overlap checks passed. start_offset shifts
     // the base pointer to the location from which negative strides
     // reach into the source buffer.
     let base = source.strided_as_ptr();
     let ptr = unsafe { base.add(start_offset) };
-    let view = unsafe { ArrayView::from_shape_ptr(ptr, shape, &strides_usize) };
+    let view = unsafe { ArrayView::from_shape_ptr_signed_strides(ptr, shape, strides) };
     Ok(view)
 }
 
@@ -196,11 +190,10 @@ where
         start_offset,
         "as_strided_signed_unchecked",
     )?;
-    let strides_usize: Vec<usize> = strides.iter().map(|&s| s as usize).collect();
     let base = source.strided_as_ptr();
     // SAFETY: caller's contract.
     let ptr = unsafe { base.add(start_offset) };
-    let view = unsafe { ArrayView::from_shape_ptr(ptr, shape, &strides_usize) };
+    let view = unsafe { ArrayView::from_shape_ptr_signed_strides(ptr, shape, strides) };
     Ok(view)
 }
 
@@ -225,18 +218,6 @@ where
     let n_elements: usize = shape.iter().product();
     if n_elements == 0 {
         return Ok(());
-    }
-
-    // Negative strides aren't yet supported through ferray-core's
-    // safe `ArrayView::from_shape_ptr`; ndarray's raw-view path
-    // would accept them but ferray-core doesn't yet expose that
-    // constructor (#744). Reject with a clear diagnostic so users
-    // see what's missing rather than a deep ndarray error.
-    if strides.iter().any(|&s| s < 0) {
-        return Err(FerrayError::invalid_value(format!(
-            "{fn_name}: negative strides aren't supported yet — ferray-core needs \
-             RawArrayView wiring (tracked in #744). strides={strides:?}"
-        )));
     }
 
     // Compute min and max offsets reachable.
@@ -425,13 +406,20 @@ mod tests {
     }
 
     #[test]
-    fn signed_negative_stride_currently_rejected_with_diagnostic() {
-        // Negative strides need ferray-core RawArrayView wiring
-        // (tracked in #744). The signed entry rejects them with a
-        // pointer to that issue so callers know what's blocked.
+    fn signed_negative_stride_reverses_view_from_start_offset() {
         let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
-        let err = as_strided_signed(&a, &[5], &[-1], 4).unwrap_err();
-        assert!(err.to_string().contains("#744"), "got: {err}");
+        let v = as_strided_signed(&a, &[5], &[-1], 4).unwrap();
+        assert_eq!(v.shape(), &[5]);
+        assert_eq!(v.strides(), &[-1]);
+        assert_eq!(v.as_ptr(), unsafe { a.as_ptr().add(4) });
+        let data: Vec<i32> = v.iter().copied().collect();
+        assert_eq!(data, vec![5, 4, 3, 2, 1]);
+    }
+
+    #[test]
+    fn signed_negative_stride_out_of_bounds_errors() {
+        let a = Array::<i32, Ix1>::from_vec(Ix1::new([5]), vec![1, 2, 3, 4, 5]).unwrap();
+        assert!(as_strided_signed(&a, &[5], &[-1], 3).is_err());
     }
 
     #[test]

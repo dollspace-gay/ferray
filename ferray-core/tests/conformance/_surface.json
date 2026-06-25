@@ -1023,6 +1023,11 @@
       "signature": "pub unsafe fn from_shape_ptr (ptr : * const T , shape : & [usize] , strides : & [usize]) -> Self"
     },
     {
+      "path": "ferray_core::array::view::ArrayView::from_shape_ptr_signed_strides",
+      "kind": "method",
+      "signature": "pub unsafe fn from_shape_ptr_signed_strides (ptr : * const T , shape : & [usize] , strides : & [isize]) -> Self"
+    },
+    {
       "path": "ferray_core::array::view::ArrayView::is_empty",
       "kind": "method",
       "signature": "pub fn is_empty (& self) -> bool"

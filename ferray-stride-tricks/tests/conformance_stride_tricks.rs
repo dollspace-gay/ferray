@@ -108,10 +108,10 @@ fn strided_source_trait_accepts_owned_arrays_and_views() {
 /// - `ferray_stride_tricks::as_strided::as_strided_signed`
 ///
 /// Positive signed strides and `start_offset` are equivalent to NumPy
-/// `as_strided` over the shifted buffer. Negative strides remain a documented
-/// core-view gap; this test pins the supported signed-stride contract.
+/// `as_strided` over the shifted buffer. Negative signed strides reverse
+/// logical traversal while keeping a zero-copy view over the source buffer.
 #[test]
-fn as_strided_signed_positive_stride_and_offset_match_numpy_contract() {
+fn as_strided_signed_positive_and_negative_strides_match_numpy_contract() {
     let source =
         Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![10.0, 20.0, 30.0, 40.0, 50.0]).unwrap();
     let view =
@@ -120,6 +120,16 @@ fn as_strided_signed_positive_stride_and_offset_match_numpy_contract() {
     assert_eq!(
         view.iter().copied().collect::<Vec<_>>(),
         vec![20.0, 30.0, 40.0]
+    );
+
+    let reversed =
+        ferray_stride_tricks::as_strided_signed(&source, &[5], &[-1], 4).expect("reverse");
+    assert_eq!(reversed.shape(), &[5]);
+    assert_eq!(reversed.strides(), &[-1]);
+    assert_eq!(reversed.as_ptr(), unsafe { source.as_ptr().add(4) });
+    assert_eq!(
+        reversed.iter().copied().collect::<Vec<_>>(),
+        vec![50.0, 40.0, 30.0, 20.0, 10.0]
     );
 }
 

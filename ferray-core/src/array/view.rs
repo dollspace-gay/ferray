@@ -1,6 +1,6 @@
 // ferray-core: Immutable array view — ArrayView<'a, T, D> (REQ-3)
 
-use ndarray::ShapeBuilder;
+use ndarray::{Axis, ShapeBuilder};
 
 use crate::dimension::Dimension;
 use crate::dtype::Element;
@@ -132,6 +132,63 @@ impl<T: Element> ArrayView<'_, T, IxDyn> {
         let nd_strides = ndarray::IxDyn(strides);
         let nd_view =
             unsafe { ndarray::ArrayView::from_shape_ptr(nd_shape.strides(nd_strides), ptr) };
+        Self::from_ndarray(nd_view)
+    }
+
+    /// Construct a dynamic-rank view from a raw pointer, shape, and signed strides.
+    ///
+    /// This supports NumPy-style negative strides by constructing a positive-stride
+    /// view at the lowest reachable element, then inverting the affected axes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must uphold the same guarantees as [`Self::from_shape_ptr`],
+    /// with `strides` expressed as signed element strides.
+    pub unsafe fn from_shape_ptr_signed_strides(
+        ptr: *const T,
+        shape: &[usize],
+        strides: &[isize],
+    ) -> Self {
+        assert_eq!(
+            shape.len(),
+            strides.len(),
+            "shape and strides must have the same rank"
+        );
+
+        let mut positive_strides = Vec::with_capacity(strides.len());
+        let mut adjusted_ptr = ptr;
+        let mut inverted_axes = Vec::new();
+
+        for (axis, (&len, &stride)) in shape.iter().zip(strides.iter()).enumerate() {
+            if stride < 0 {
+                let positive = stride
+                    .checked_abs()
+                    .expect("negative stride magnitude must fit in isize")
+                    as usize;
+                positive_strides.push(positive);
+                if len != 0 {
+                    let back = len
+                        .saturating_sub(1)
+                        .checked_mul(positive)
+                        .expect("negative stride offset must not overflow");
+                    let back =
+                        isize::try_from(back).expect("negative stride offset must fit in isize");
+                    adjusted_ptr = unsafe { adjusted_ptr.offset(-back) };
+                }
+                inverted_axes.push(axis);
+            } else {
+                positive_strides.push(stride as usize);
+            }
+        }
+
+        let nd_shape = ndarray::IxDyn(shape);
+        let nd_strides = ndarray::IxDyn(&positive_strides);
+        let mut nd_view = unsafe {
+            ndarray::ArrayView::from_shape_ptr(nd_shape.strides(nd_strides), adjusted_ptr)
+        };
+        for axis in inverted_axes {
+            nd_view.invert_axis(Axis(axis));
+        }
         Self::from_ndarray(nd_view)
     }
 }

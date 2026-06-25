@@ -619,6 +619,15 @@ fn array_ownership_view_alias_and_raw_buffer_surface_match_numpy_layout_contract
     let raw = unsafe { ArrayView::<f64, IxDyn>::from_shape_ptr(ptr, &[2, 3], &[3, 1]) };
     assert_eq!(raw.shape(), &[2, 3]);
     assert_eq!(raw.as_slice().unwrap()[0], 10.0);
+    // Covers ferray_core::array::view::ArrayView::from_shape_ptr_signed_strides.
+    let signed_raw =
+        unsafe { ArrayView::<f64, IxDyn>::from_shape_ptr_signed_strides(ptr.add(5), &[6], &[-1]) };
+    assert_eq!(signed_raw.shape(), &[6]);
+    assert_eq!(signed_raw.strides(), &[-1]);
+    assert_eq!(
+        signed_raw.to_vec_flat(),
+        vec![6.0, 5.0, 4.0, 3.0, 2.0, 10.0]
+    );
 
     {
         let mut view_mut: ArrayViewMut<'_, f64, Ix2> = arr.view_mut();
