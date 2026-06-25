@@ -18,7 +18,7 @@
 //! `covered_by` anchor pointing to the in-crate unit test that pins
 //! their contract.
 
-#![cfg(any(feature = "arrow", feature = "polars"))]
+#![cfg(any(feature = "arrow", feature = "polars", feature = "python"))]
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
@@ -38,6 +38,46 @@ use ferray_test_oracle::{fixtures_dir, load_fixture};
 fn _oracle_anchor() -> std::path::PathBuf {
     let _ = load_fixture; // satisfy the linker for the re-export
     fixtures_dir()
+}
+
+// ===========================================================================
+// numpy_conv: ferray <-> NumPy
+// ===========================================================================
+
+/// Covers the PyO3/NumPy trait surface:
+/// - `ferray_numpy_interop::AsFerray`
+/// - `ferray_numpy_interop::IntoNumPy`
+/// - `ferray_numpy_interop::numpy_conv::AsFerray`
+/// - `ferray_numpy_interop::numpy_conv::IntoNumPy`
+/// - `ferray_numpy_interop::numpy_conv::NpElement`
+///
+/// The test uses `f64`, one of the `NpElement` implementors, to round-trip a
+/// ferray `Array1` through an owned NumPy array and back with bit-exact payload
+/// preservation.
+#[cfg(feature = "python")]
+#[test]
+fn numpy_traits_roundtrip_path() {
+    use ferray_core::Array;
+    use ferray_core::array::aliases::Array1;
+    use ferray_core::dimension::Ix1;
+    use ferray_numpy_interop::{AsFerray, IntoNumPy};
+    use numpy::{PyArrayMethods, PyUntypedArrayMethods};
+    use pyo3::Python;
+
+    Python::initialize();
+    Python::attach(|py| {
+        let data = vec![1.0_f64, -0.0, f64::INFINITY, -3.5];
+        let arr: Array1<f64> = Array::from_vec(Ix1::new([data.len()]), data.clone()).unwrap();
+        let py_arr = arr.into_pyarray(py).expect("into_pyarray");
+        assert_eq!(py_arr.shape(), [data.len()]);
+
+        let readonly = py_arr.readonly();
+        let back: Array1<f64> = readonly.as_ferray().expect("as_ferray");
+        assert_eq!(back.shape(), &[data.len()]);
+        for (actual, expected) in back.as_slice().unwrap().iter().zip(&data) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    });
 }
 
 // ===========================================================================
@@ -119,8 +159,9 @@ fn dtype_to_polars_and_polars_to_dtype_roundtrip() {
 #[cfg(feature = "arrow")]
 #[test]
 fn arrayd_arrow_flat_roundtrip() {
+    use ferray_core::Array;
+    use ferray_core::array::aliases::ArrayD;
     use ferray_core::dimension::IxDyn;
-    use ferray_core::{Array, ArrayD};
     use ferray_numpy_interop::arrow_conv::{arrayd_from_arrow_flat, arrayd_to_arrow_flat};
 
     let data: Vec<f64> = (0..24).map(|i| i as f64 * 0.5).collect();
@@ -140,8 +181,9 @@ fn arrayd_arrow_flat_roundtrip() {
 #[cfg(feature = "arrow")]
 #[test]
 fn array2_arrow_columns_roundtrip_path() {
+    use ferray_core::Array;
+    use ferray_core::array::aliases::Array2;
     use ferray_core::dimension::Ix2;
-    use ferray_core::{Array, Array2};
     use ferray_numpy_interop::arrow_conv::{array2_from_arrow_columns, array2_to_arrow_columns};
 
     let data = vec![1i32, 2, 3, 4, 5, 6];
@@ -161,8 +203,9 @@ fn array2_arrow_columns_roundtrip_path() {
 #[cfg(feature = "arrow")]
 #[test]
 fn to_arrow_and_from_arrow_traits_roundtrip() {
+    use ferray_core::Array;
+    use ferray_core::array::aliases::Array1;
     use ferray_core::dimension::Ix1;
-    use ferray_core::{Array, Array1};
     use ferray_numpy_interop::arrow_conv::{FromArrow, ToArrow};
 
     let data: Vec<i64> = vec![1, 2, 3, 4, 5];
@@ -179,8 +222,9 @@ fn to_arrow_and_from_arrow_traits_roundtrip() {
 #[cfg(feature = "arrow")]
 #[test]
 fn to_arrow_bool_and_from_arrow_bool_roundtrip() {
+    use ferray_core::Array;
+    use ferray_core::array::aliases::Array1;
     use ferray_core::dimension::Ix1;
-    use ferray_core::{Array, Array1};
     use ferray_numpy_interop::arrow_conv::{FromArrowBool, ToArrowBool};
 
     let data = vec![true, false, true, true, false];
@@ -242,13 +286,14 @@ fn extras_dynarray_with_mask_roundtrip() {
 #[cfg(feature = "arrow")]
 #[test]
 fn extras_array1_to_arrow_with_mask_path() {
+    use arrow::array::Array as _;
     use ferray_core::Array;
     use ferray_core::dimension::Ix1;
     use ferray_numpy_interop::extras::array1_to_arrow_with_mask;
 
     let data = vec![1.0_f64, 2.0, 3.0, 4.0];
     let arr = Array::<f64, Ix1>::from_vec(Ix1::new([4]), data).unwrap();
-    let mask = vec![true, false, true, true];
+    let mask = vec![false, true, false, false];
     let out = array1_to_arrow_with_mask(&arr, &mask).unwrap();
     assert_eq!(out.len(), 4);
     assert_eq!(out.null_count(), 1);
@@ -346,8 +391,9 @@ fn extras_complex_arrow_roundtrip() {
 #[cfg(feature = "polars")]
 #[test]
 fn polars_array2_dataframe_roundtrip_path() {
+    use ferray_core::Array;
+    use ferray_core::array::aliases::Array2;
     use ferray_core::dimension::Ix2;
-    use ferray_core::{Array, Array2};
     use ferray_numpy_interop::polars_conv::{
         array2_from_polars_dataframe, array2_to_polars_dataframe,
     };
@@ -365,12 +411,14 @@ fn polars_array2_dataframe_roundtrip_path() {
 /// `ferray_numpy_interop::polars_conv::FromPolars` trait surface (and
 /// their crate-root re-exports `ferray_numpy_interop::ToPolars` and
 /// `ferray_numpy_interop::FromPolars`) via the blanket impl for
-/// `Array1<T: PolarsElement>`.
+/// `Array1<T: PolarsElement>`. Path anchor:
+/// `ferray_numpy_interop::polars_conv::PolarsElement`.
 #[cfg(feature = "polars")]
 #[test]
 fn polars_to_from_polars_traits_roundtrip() {
+    use ferray_core::Array;
+    use ferray_core::array::aliases::Array1;
     use ferray_core::dimension::Ix1;
-    use ferray_core::{Array, Array1};
     use ferray_numpy_interop::polars_conv::{FromPolars, ToPolars};
 
     let data: Vec<i32> = vec![10, 20, 30];
@@ -387,8 +435,9 @@ fn polars_to_from_polars_traits_roundtrip() {
 #[cfg(feature = "polars")]
 #[test]
 fn polars_bool_traits_roundtrip() {
+    use ferray_core::Array;
+    use ferray_core::array::aliases::Array1;
     use ferray_core::dimension::Ix1;
-    use ferray_core::{Array, Array1};
     use ferray_numpy_interop::polars_conv::{FromPolarsBool, ToPolarsBool};
 
     let data = vec![true, false, true, true, false];
