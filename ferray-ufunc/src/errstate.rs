@@ -14,20 +14,21 @@
 //!
 //! # Current ufunc integration
 //!
-//! As of this initial scaffolding, ferray-ufunc kernels do **not**
-//! emit FP error notifications themselves — the policy API is in
-//! place so callers can construct per-region overrides, but the
-//! detection hooks inside the kernels are a follow-up. Numpy's
-//! errstate works because every ufunc kernel checks the FP exception
-//! flags after each batch; doing the same in ferray will require
-//! adding `record_fp_event` calls to each numerical kernel.
-//!
-//! Today, code that wants the `Raise`-on-div-zero behavior should
-//! check input arrays for zeros explicitly.
+//! Numerical ufunc kernels record divide-by-zero, overflow, underflow,
+//! and invalid-domain events after evaluating a batch. The detection is
+//! array-level, so a single ufunc call records each observed class at most
+//! once and then lets the active policy decide whether to ignore, log, or
+//! queue the event for [`check_fp_errors`].
 
 use std::cell::RefCell;
 
+use std::any::TypeId;
+
+use ferray_core::Array;
+use ferray_core::dimension::Dimension;
+use ferray_core::dtype::Element;
 use ferray_core::error::FerrayError;
+use num_traits::Float;
 
 /// Classes of floating-point events numpy distinguishes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -174,6 +175,472 @@ pub fn record_fp_event(class: FpErrorClass) {
         }
     }
 }
+
+#[derive(Debug, Default)]
+struct FpEventFlags {
+    divide_by_zero: bool,
+    overflow: bool,
+    underflow: bool,
+    invalid: bool,
+}
+
+impl FpEventFlags {
+    fn record(self) {
+        if self.divide_by_zero {
+            record_fp_event(FpErrorClass::DivideByZero);
+        }
+        if self.overflow {
+            record_fp_event(FpErrorClass::Overflow);
+        }
+        if self.underflow {
+            record_fp_event(FpErrorClass::Underflow);
+        }
+        if self.invalid {
+            record_fp_event(FpErrorClass::Invalid);
+        }
+    }
+}
+
+#[inline]
+fn zero<T: Float>() -> T {
+    T::zero()
+}
+
+#[inline]
+fn finite<T: Float>(x: T) -> bool {
+    x.is_finite()
+}
+
+#[inline]
+fn finite_nonzero<T: Float>(x: T) -> bool {
+    finite(x) && x != zero()
+}
+
+#[inline]
+fn all_finite<T: Float>(xs: &[T]) -> bool {
+    xs.iter().all(|&x| finite(x))
+}
+
+#[inline]
+fn any_nan<T: Float>(xs: &[T]) -> bool {
+    xs.iter().any(|&x| x.is_nan())
+}
+
+#[inline]
+fn underflowed<T: Float>(out: T, finite_nonzero_result_candidate: bool) -> bool {
+    finite_nonzero_result_candidate
+        && finite(out)
+        && (out == zero() || (out != zero() && out.abs() < T::min_positive_value()))
+}
+
+#[inline]
+fn overflowed_from_finite<T: Float>(out: T, inputs: &[T]) -> bool {
+    all_finite(inputs) && out.is_infinite()
+}
+
+#[inline]
+fn invalid_from_non_nan_inputs<T: Float>(out: T, inputs: &[T]) -> bool {
+    out.is_nan() && !any_nan(inputs)
+}
+
+fn scan_unary<T, I, O>(input: I, output: O, mut classify: impl FnMut(T, T, &mut FpEventFlags))
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    let mut flags = FpEventFlags::default();
+    for (x, out) in input.into_iter().zip(output) {
+        classify(x, out, &mut flags);
+    }
+    flags.record();
+}
+
+fn scan_binary<T, IA, IB, O>(
+    a: IA,
+    b: IB,
+    output: O,
+    mut classify: impl FnMut(T, T, T, &mut FpEventFlags),
+) where
+    T: Float,
+    IA: IntoIterator<Item = T>,
+    IB: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    let mut flags = FpEventFlags::default();
+    for ((x, y), out) in a.into_iter().zip(b).zip(output) {
+        classify(x, y, out, &mut flags);
+    }
+    flags.record();
+}
+
+pub(crate) fn record_addlike_events<T, IA, IB, O>(a: IA, b: IB, output: O)
+where
+    T: Float,
+    IA: IntoIterator<Item = T>,
+    IB: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_binary(a, b, output, |x, y, out, flags| {
+        flags.overflow |= overflowed_from_finite(out, &[x, y]);
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x, y]);
+    });
+}
+
+pub(crate) fn record_multiply_events<T, IA, IB, O>(a: IA, b: IB, output: O)
+where
+    T: Float,
+    IA: IntoIterator<Item = T>,
+    IB: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_binary(a, b, output, |x, y, out, flags| {
+        flags.overflow |= overflowed_from_finite(out, &[x, y]);
+        flags.underflow |= underflowed(out, finite_nonzero(x) && finite_nonzero(y));
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x, y]);
+    });
+}
+
+pub(crate) fn record_divide_events<T, IA, IB, O>(a: IA, b: IB, output: O)
+where
+    T: Float,
+    IA: IntoIterator<Item = T>,
+    IB: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_binary(a, b, output, |x, y, out, flags| {
+        if y == zero() && !x.is_nan() {
+            if x == zero() {
+                flags.invalid = true;
+            } else {
+                flags.divide_by_zero = true;
+            }
+            return;
+        }
+        flags.overflow |= overflowed_from_finite(out, &[x, y]);
+        flags.underflow |= underflowed(out, finite_nonzero(x) && finite_nonzero(y));
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x, y]);
+    });
+}
+
+pub(crate) fn record_power_events<T, IA, IB, O>(a: IA, b: IB, output: O)
+where
+    T: Float,
+    IA: IntoIterator<Item = T>,
+    IB: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_binary(a, b, output, |x, y, out, flags| {
+        if x == zero() && y < zero() && !y.is_nan() {
+            flags.divide_by_zero = true;
+        }
+        flags.overflow |= overflowed_from_finite(out, &[x, y]);
+        flags.underflow |= underflowed(out, finite_nonzero(x) && finite(y));
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x, y]);
+    });
+}
+
+pub(crate) fn record_reciprocal_events<T, I, O>(input: I, output: O)
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_unary(input, output, |x, out, flags| {
+        if x == zero() {
+            flags.divide_by_zero = true;
+            return;
+        }
+        flags.overflow |= overflowed_from_finite(out, &[x]);
+        flags.underflow |= underflowed(out, finite_nonzero(x));
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x]);
+    });
+}
+
+pub(crate) fn record_sqrt_events<T, I, O>(input: I, output: O)
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_unary(input, output, |x, out, flags| {
+        flags.invalid |= x < zero() || invalid_from_non_nan_inputs(out, &[x]);
+        flags.underflow |= underflowed(out, finite_nonzero(x));
+    });
+}
+
+pub(crate) fn record_log_events<T, I, O>(input: I, output: O)
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_unary(input, output, |x, out, flags| {
+        if x == zero() {
+            flags.divide_by_zero = true;
+        } else if x < zero() {
+            flags.invalid = true;
+        }
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x]);
+    });
+}
+
+pub(crate) fn record_log1p_events<T, I, O>(input: I, output: O)
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_unary(input, output, |x, out, flags| {
+        let neg_one = -T::one();
+        if x == neg_one {
+            flags.divide_by_zero = true;
+        } else if x < neg_one {
+            flags.invalid = true;
+        }
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x]);
+    });
+}
+
+pub(crate) fn record_exp_events<T, I, O>(input: I, output: O)
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_unary(input, output, |x, out, flags| {
+        flags.overflow |= overflowed_from_finite(out, &[x]);
+        flags.underflow |= underflowed(out, finite(x));
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x]);
+    });
+}
+
+pub(crate) fn record_square_events<T, I, O>(input: I, output: O)
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_unary(input, output, |x, out, flags| {
+        flags.overflow |= overflowed_from_finite(out, &[x]);
+        flags.underflow |= underflowed(out, finite_nonzero(x));
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x]);
+    });
+}
+
+pub(crate) fn record_unit_domain_events<T, I, O>(input: I, output: O)
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_unary(input, output, |x, out, flags| {
+        let one = T::one();
+        flags.invalid |= x < -one || x > one || invalid_from_non_nan_inputs(out, &[x]);
+    });
+}
+
+pub(crate) fn record_arccosh_events<T, I, O>(input: I, output: O)
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_unary(input, output, |x, out, flags| {
+        flags.invalid |= x < T::one() || invalid_from_non_nan_inputs(out, &[x]);
+    });
+}
+
+pub(crate) fn record_arctanh_events<T, I, O>(input: I, output: O)
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_unary(input, output, |x, out, flags| {
+        let one = T::one();
+        if x == one || x == -one {
+            flags.divide_by_zero = true;
+        } else if x < -one || x > one {
+            flags.invalid = true;
+        }
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x]);
+    });
+}
+
+pub(crate) fn record_overflow_unary_events<T, I, O>(input: I, output: O)
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_unary(input, output, |x, out, flags| {
+        flags.overflow |= overflowed_from_finite(out, &[x]);
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x]);
+    });
+}
+
+pub(crate) fn record_invalid_unary_events<T, I, O>(input: I, output: O)
+where
+    T: Float,
+    I: IntoIterator<Item = T>,
+    O: IntoIterator<Item = T>,
+{
+    scan_unary(input, output, |x, out, flags| {
+        flags.invalid |= invalid_from_non_nan_inputs(out, &[x]);
+    });
+}
+
+fn collect_broadcast_f64<T, D>(array: &Array<T, D>, shape: &[usize]) -> Option<Vec<f64>>
+where
+    T: Element + Copy + 'static,
+    D: Dimension,
+{
+    if TypeId::of::<T>() != TypeId::of::<f64>() {
+        return None;
+    }
+    let view = array.broadcast_to(shape).ok()?;
+    Some(
+        view.iter()
+            .map(|&x| {
+                // SAFETY: guarded by the TypeId equality above.
+                unsafe { *(&raw const x).cast::<f64>() }
+            })
+            .collect(),
+    )
+}
+
+fn collect_broadcast_f32<T, D>(array: &Array<T, D>, shape: &[usize]) -> Option<Vec<f32>>
+where
+    T: Element + Copy + 'static,
+    D: Dimension,
+{
+    if TypeId::of::<T>() != TypeId::of::<f32>() {
+        return None;
+    }
+    let view = array.broadcast_to(shape).ok()?;
+    Some(
+        view.iter()
+            .map(|&x| {
+                // SAFETY: guarded by the TypeId equality above.
+                unsafe { *(&raw const x).cast::<f32>() }
+            })
+            .collect(),
+    )
+}
+
+fn collect_f64<T, D>(array: &Array<T, D>) -> Option<Vec<f64>>
+where
+    T: Element + Copy + 'static,
+    D: Dimension,
+{
+    collect_broadcast_f64(array, array.shape())
+}
+
+fn collect_f32<T, D>(array: &Array<T, D>) -> Option<Vec<f32>>
+where
+    T: Element + Copy + 'static,
+    D: Dimension,
+{
+    collect_broadcast_f32(array, array.shape())
+}
+
+macro_rules! real_binary_array_recorder {
+    ($name:ident, $scanner:ident) => {
+        pub(crate) fn $name<T, D1, D2, DO>(
+            a: &Array<T, D1>,
+            b: &Array<T, D2>,
+            output: &Array<T, DO>,
+        ) where
+            T: Element + Copy + 'static,
+            D1: Dimension,
+            D2: Dimension,
+            DO: Dimension,
+        {
+            let shape = output.shape();
+            if let (Some(a), Some(b), Some(out)) = (
+                collect_broadcast_f64(a, shape),
+                collect_broadcast_f64(b, shape),
+                collect_f64(output),
+            ) {
+                $scanner::<f64, _, _, _>(a, b, out);
+            } else if let (Some(a), Some(b), Some(out)) = (
+                collect_broadcast_f32(a, shape),
+                collect_broadcast_f32(b, shape),
+                collect_f32(output),
+            ) {
+                $scanner::<f32, _, _, _>(a, b, out);
+            }
+        }
+    };
+}
+
+real_binary_array_recorder!(record_addlike_array_events, record_addlike_events);
+real_binary_array_recorder!(record_multiply_array_events, record_multiply_events);
+real_binary_array_recorder!(record_divide_array_events, record_divide_events);
+real_binary_array_recorder!(record_power_array_events, record_power_events);
+
+pub(crate) fn record_divide_mixed_array_events<A, B, O, DA, DB, DO>(
+    a: &Array<A, DA>,
+    b: &Array<B, DB>,
+    output: &Array<O, DO>,
+) where
+    A: Element + Copy + 'static,
+    B: Element + Copy + 'static,
+    O: Element + Copy + 'static,
+    DA: Dimension,
+    DB: Dimension,
+    DO: Dimension,
+{
+    let shape = output.shape();
+    if let (Some(a), Some(b), Some(out)) = (
+        collect_broadcast_f64(a, shape),
+        collect_broadcast_f64(b, shape),
+        collect_f64(output),
+    ) {
+        record_divide_events::<f64, _, _, _>(a, b, out);
+    } else if let (Some(a), Some(b), Some(out)) = (
+        collect_broadcast_f32(a, shape),
+        collect_broadcast_f32(b, shape),
+        collect_f32(output),
+    ) {
+        record_divide_events::<f32, _, _, _>(a, b, out);
+    }
+}
+
+macro_rules! real_unary_array_recorder {
+    ($name:ident, $scanner:ident) => {
+        pub(crate) fn $name<T, D>(input: &Array<T, D>, output: &Array<T, D>)
+        where
+            T: Element + Copy + 'static,
+            D: Dimension,
+        {
+            if let (Some(input), Some(out)) = (collect_f64(input), collect_f64(output)) {
+                $scanner::<f64, _, _>(input, out);
+            } else if let (Some(input), Some(out)) = (collect_f32(input), collect_f32(output)) {
+                $scanner::<f32, _, _>(input, out);
+            }
+        }
+    };
+}
+
+real_unary_array_recorder!(record_reciprocal_array_events, record_reciprocal_events);
+real_unary_array_recorder!(record_sqrt_array_events, record_sqrt_events);
+real_unary_array_recorder!(record_log_array_events, record_log_events);
+real_unary_array_recorder!(record_log1p_array_events, record_log1p_events);
+real_unary_array_recorder!(record_exp_array_events, record_exp_events);
+real_unary_array_recorder!(record_square_array_events, record_square_events);
+real_unary_array_recorder!(record_unit_domain_array_events, record_unit_domain_events);
+real_unary_array_recorder!(record_arccosh_array_events, record_arccosh_events);
+real_unary_array_recorder!(record_arctanh_array_events, record_arctanh_events);
+real_unary_array_recorder!(
+    record_overflow_unary_array_events,
+    record_overflow_unary_events
+);
+real_unary_array_recorder!(
+    record_invalid_unary_array_events,
+    record_invalid_unary_events
+);
 
 /// Drain the per-thread event log, returning all `Warn`-policy events
 /// recorded since the last call.

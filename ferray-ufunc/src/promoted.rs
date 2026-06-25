@@ -578,7 +578,9 @@ where
     }
     let a_cast = cast_array::<A, <A as Promoted<B>>::Output, D>(a)?;
     let b_cast = cast_array::<B, <A as Promoted<B>>::Output, D>(b)?;
-    binary_elementwise_op(&a_cast, &b_cast, WrappingArith::wadd)
+    let result = binary_elementwise_op(&a_cast, &b_cast, WrappingArith::wadd)?;
+    crate::errstate::record_addlike_array_events(&a_cast, &b_cast, &result);
+    Ok(result)
 }
 
 /// Elementwise subtraction with NumPy-style type promotion.
@@ -601,7 +603,9 @@ where
     }
     let a_cast = cast_array::<A, <A as Promoted<B>>::Output, D>(a)?;
     let b_cast = cast_array::<B, <A as Promoted<B>>::Output, D>(b)?;
-    binary_elementwise_op(&a_cast, &b_cast, WrappingArith::wsub)
+    let result = binary_elementwise_op(&a_cast, &b_cast, WrappingArith::wsub)?;
+    crate::errstate::record_addlike_array_events(&a_cast, &b_cast, &result);
+    Ok(result)
 }
 
 /// Elementwise multiplication with NumPy-style type promotion.
@@ -624,7 +628,9 @@ where
     }
     let a_cast = cast_array::<A, <A as Promoted<B>>::Output, D>(a)?;
     let b_cast = cast_array::<B, <A as Promoted<B>>::Output, D>(b)?;
-    binary_elementwise_op(&a_cast, &b_cast, WrappingArith::wmul)
+    let result = binary_elementwise_op(&a_cast, &b_cast, WrappingArith::wmul)?;
+    crate::errstate::record_multiply_array_events(&a_cast, &b_cast, &result);
+    Ok(result)
 }
 
 /// Elementwise division with NumPy-style type promotion.
@@ -653,7 +659,9 @@ where
     }
     let a_cast = cast_array::<A, <A as Promoted<B>>::Output, D>(a)?;
     let b_cast = cast_array::<B, <A as Promoted<B>>::Output, D>(b)?;
-    binary_elementwise_op(&a_cast, &b_cast, |x, y| x / y)
+    let result = binary_elementwise_op(&a_cast, &b_cast, |x, y| x / y)?;
+    crate::errstate::record_divide_array_events(&a_cast, &b_cast, &result);
+    Ok(result)
 }
 
 #[cfg(test)]

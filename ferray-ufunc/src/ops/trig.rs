@@ -63,7 +63,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::sin)
+    let result = unary_float_op_compute(input, T::sin)?;
+    crate::errstate::record_invalid_unary_array_events(input, &result);
+    Ok(result)
 }
 
 /// In-place sine — `_into` counterpart of [`sin`].
@@ -72,7 +74,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_into_compute(input, out, "sin", T::sin)
+    unary_float_op_into_compute(input, out, "sin", T::sin)?;
+    crate::errstate::record_invalid_unary_array_events(input, out);
+    Ok(())
 }
 
 /// Elementwise cosine. See [`sin`] for the libm-vs-core-math accuracy note.
@@ -81,7 +85,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cos)
+    let result = unary_float_op_compute(input, T::cos)?;
+    crate::errstate::record_invalid_unary_array_events(input, &result);
+    Ok(result)
 }
 
 /// In-place cosine — `_into` counterpart of [`cos`].
@@ -90,7 +96,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_into_compute(input, out, "cos", T::cos)
+    unary_float_op_into_compute(input, out, "cos", T::cos)?;
+    crate::errstate::record_invalid_unary_array_events(input, out);
+    Ok(())
 }
 
 /// Fast elementwise sine with ≤1 ULP accuracy (≤4 ULP for `|x| ≳ 2^20`).
@@ -127,7 +135,9 @@ where
             Array::from_vec(f64_input.dim().clone(), data)?
         };
         // SAFETY: T was verified to be f64 at the top of this branch.
-        Ok(unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) })
+        let result = unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) };
+        crate::errstate::record_invalid_unary_array_events(input, &result);
+        Ok(result)
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
         // SAFETY: T is f32 — reinterpret the array reference.
         let f32_input =
@@ -145,10 +155,14 @@ where
             Array::from_vec(f32_input.dim().clone(), data)?
         };
         // SAFETY: T was verified to be f32 at the top of this branch.
-        Ok(unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) })
+        let result = unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) };
+        crate::errstate::record_invalid_unary_array_events(input, &result);
+        Ok(result)
     } else {
         // Other float types (f16/bf16): use the default libm path.
-        unary_float_op_compute(input, T::sin)
+        let result = unary_float_op_compute(input, T::sin)?;
+        crate::errstate::record_invalid_unary_array_events(input, &result);
+        Ok(result)
     }
 }
 
@@ -176,7 +190,9 @@ where
             Array::from_vec(f64_input.dim().clone(), data)?
         };
         // SAFETY: T was verified to be f64 at the top of this branch.
-        Ok(unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) })
+        let result = unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) };
+        crate::errstate::record_invalid_unary_array_events(input, &result);
+        Ok(result)
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
         // SAFETY: T is f32 — reinterpret the array reference.
         let f32_input =
@@ -194,10 +210,14 @@ where
             Array::from_vec(f32_input.dim().clone(), data)?
         };
         // SAFETY: T was verified to be f32 at the top of this branch.
-        Ok(unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) })
+        let result = unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) };
+        crate::errstate::record_invalid_unary_array_events(input, &result);
+        Ok(result)
     } else {
         // Other float types (f16/bf16): use the default libm path.
-        unary_float_op_compute(input, T::cos)
+        let result = unary_float_op_compute(input, T::cos)?;
+        crate::errstate::record_invalid_unary_array_events(input, &result);
+        Ok(result)
     }
 }
 
@@ -207,7 +227,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::tan)
+    let result = unary_float_op_compute(input, T::tan)?;
+    crate::errstate::record_invalid_unary_array_events(input, &result);
+    Ok(result)
 }
 
 /// Elementwise arc sine.
@@ -216,7 +238,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_asin)
+    let result = unary_float_op_compute(input, T::cr_asin)?;
+    crate::errstate::record_unit_domain_array_events(input, &result);
+    Ok(result)
 }
 
 /// Elementwise arc cosine.
@@ -225,7 +249,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_acos)
+    let result = unary_float_op_compute(input, T::cr_acos)?;
+    crate::errstate::record_unit_domain_array_events(input, &result);
+    Ok(result)
 }
 
 /// Elementwise arc tangent.
@@ -243,7 +269,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    binary_elementwise_op(y, x, T::cr_atan2)
+    let result = binary_elementwise_op(y, x, T::cr_atan2)?;
+    crate::errstate::record_addlike_array_events(y, x, &result);
+    Ok(result)
 }
 
 /// Elementwise hypotenuse: sqrt(a^2 + b^2).
@@ -252,7 +280,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    binary_elementwise_op(a, b, T::cr_hypot)
+    let result = binary_elementwise_op(a, b, T::cr_hypot)?;
+    crate::errstate::record_addlike_array_events(a, b, &result);
+    Ok(result)
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +295,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_sinh)
+    let result = unary_float_op_compute(input, T::cr_sinh)?;
+    crate::errstate::record_overflow_unary_array_events(input, &result);
+    Ok(result)
 }
 
 /// Elementwise hyperbolic cosine.
@@ -274,7 +306,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_cosh)
+    let result = unary_float_op_compute(input, T::cr_cosh)?;
+    crate::errstate::record_overflow_unary_array_events(input, &result);
+    Ok(result)
 }
 
 /// Elementwise hyperbolic tangent.
@@ -301,7 +335,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_acosh)
+    let result = unary_float_op_compute(input, T::cr_acosh)?;
+    crate::errstate::record_arccosh_array_events(input, &result);
+    Ok(result)
 }
 
 /// Elementwise inverse hyperbolic tangent.
@@ -310,7 +346,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_atanh)
+    let result = unary_float_op_compute(input, T::cr_atanh)?;
+    crate::errstate::record_arctanh_array_events(input, &result);
+    Ok(result)
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +361,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_float_op(input, T::to_degrees)
+    let result = unary_float_op(input, T::to_degrees)?;
+    crate::errstate::record_overflow_unary_array_events(input, &result);
+    Ok(result)
 }
 
 /// Convert degrees to radians.
@@ -332,7 +372,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_float_op(input, T::to_radians)
+    let result = unary_float_op(input, T::to_radians)?;
+    crate::errstate::record_overflow_unary_array_events(input, &result);
+    Ok(result)
 }
 
 /// Alias for [`radians`].

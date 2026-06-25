@@ -49,7 +49,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_exp)
+    let result = unary_float_op_compute(input, T::cr_exp)?;
+    crate::errstate::record_exp_array_events(input, &result);
+    Ok(result)
 }
 
 /// In-place `e^x` — `_into` counterpart of [`exp`]. Parallelizes along
@@ -59,7 +61,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_into_compute(input, out, "exp", T::cr_exp)
+    unary_float_op_into_compute(input, out, "exp", T::cr_exp)?;
+    crate::errstate::record_exp_array_events(input, out);
+    Ok(())
 }
 
 /// Fast elementwise exponential (e^x) with ≤1 ULP accuracy.
@@ -101,7 +105,9 @@ where
             Array::from_vec(f64_input.dim().clone(), data)?
         };
         // SAFETY: T was verified to be f64 at the top of this branch.
-        Ok(unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) })
+        let result = unsafe { crate::helpers::reinterpret_array::<f64, T, D>(result) };
+        crate::errstate::record_exp_array_events(input, &result);
+        Ok(result)
     } else if TypeId::of::<T>() == TypeId::of::<f32>() {
         let f32_input =
             unsafe { &*std::ptr::from_ref::<Array<T, D>>(input).cast::<Array<f32, D>>() };
@@ -122,10 +128,14 @@ where
             Array::from_vec(f32_input.dim().clone(), data)?
         };
         // SAFETY: T was verified to be f32 at the top of this branch.
-        Ok(unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) })
+        let result = unsafe { crate::helpers::reinterpret_array::<f32, T, D>(result) };
+        crate::errstate::record_exp_array_events(input, &result);
+        Ok(result)
     } else {
         // Fallback for other float types: use libm exp
-        unary_float_op(input, num_traits::Float::exp)
+        let result = unary_float_op(input, num_traits::Float::exp)?;
+        crate::errstate::record_exp_array_events(input, &result);
+        Ok(result)
     }
 }
 
@@ -135,7 +145,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_exp2)
+    let result = unary_float_op_compute(input, T::cr_exp2)?;
+    crate::errstate::record_exp_array_events(input, &result);
+    Ok(result)
 }
 
 /// Elementwise exp(x) - 1, accurate near zero.
@@ -144,7 +156,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_exp_m1)
+    let result = unary_float_op_compute(input, T::cr_exp_m1)?;
+    crate::errstate::record_exp_array_events(input, &result);
+    Ok(result)
 }
 
 /// Elementwise natural logarithm.
@@ -153,7 +167,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_ln)
+    let result = unary_float_op_compute(input, T::cr_ln)?;
+    crate::errstate::record_log_array_events(input, &result);
+    Ok(result)
 }
 
 /// In-place natural logarithm — `_into` counterpart of [`log`].
@@ -162,7 +178,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_into_compute(input, out, "log", T::cr_ln)
+    unary_float_op_into_compute(input, out, "log", T::cr_ln)?;
+    crate::errstate::record_log_array_events(input, out);
+    Ok(())
 }
 
 /// Elementwise base-2 logarithm.
@@ -171,7 +189,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_log2)
+    let result = unary_float_op_compute(input, T::cr_log2)?;
+    crate::errstate::record_log_array_events(input, &result);
+    Ok(result)
 }
 
 /// Elementwise base-10 logarithm.
@@ -180,7 +200,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_log10)
+    let result = unary_float_op_compute(input, T::cr_log10)?;
+    crate::errstate::record_log_array_events(input, &result);
+    Ok(result)
 }
 
 /// Elementwise ln(1 + x), accurate near zero.
@@ -189,7 +211,9 @@ where
     T: Element + Float + CrMath,
     D: Dimension,
 {
-    unary_float_op_compute(input, T::cr_ln_1p)
+    let result = unary_float_op_compute(input, T::cr_ln_1p)?;
+    crate::errstate::record_log1p_array_events(input, &result);
+    Ok(result)
 }
 
 /// log(exp(a) + exp(b)), computed in a numerically stable way.

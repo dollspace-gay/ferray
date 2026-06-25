@@ -55,6 +55,7 @@ use ferray_core::dtype::Element;
 use ferray_core::error::{FerrayError, FerrayResult};
 use num_complex::Complex;
 use num_traits::Float;
+use std::any::TypeId;
 
 use crate::helpers::{
     binary_broadcast_op, binary_elementwise_op, binary_elementwise_op_into, try_simd_f32_binary,
@@ -171,13 +172,15 @@ where
     T: Element + WrappingArith,
     D: Dimension,
 {
-    if let Some(r) = try_simd_f64_binary(a, b, add_f64) {
-        return r;
-    }
-    if let Some(r) = try_simd_f32_binary(a, b, add_f32) {
-        return r;
-    }
-    binary_elementwise_op(a, b, WrappingArith::wadd)
+    let result = if let Some(r) = try_simd_f64_binary(a, b, add_f64) {
+        r?
+    } else if let Some(r) = try_simd_f32_binary(a, b, add_f32) {
+        r?
+    } else {
+        binary_elementwise_op(a, b, WrappingArith::wadd)?
+    };
+    crate::errstate::record_addlike_array_events(a, b, &result);
+    Ok(result)
 }
 
 /// In-place elementwise addition, equivalent to `NumPy`'s
@@ -194,7 +197,9 @@ where
     T: Element + WrappingArith,
     D: Dimension,
 {
-    binary_elementwise_op_into(a, b, out, "add", WrappingArith::wadd)
+    binary_elementwise_op_into(a, b, out, "add", WrappingArith::wadd)?;
+    crate::errstate::record_addlike_array_events(a, b, out);
+    Ok(())
 }
 
 /// Elementwise subtraction with `NumPy` broadcasting. SIMD-dispatched
@@ -204,13 +209,15 @@ where
     T: Element + WrappingArith,
     D: Dimension,
 {
-    if let Some(r) = try_simd_f64_binary(a, b, sub_f64) {
-        return r;
-    }
-    if let Some(r) = try_simd_f32_binary(a, b, sub_f32) {
-        return r;
-    }
-    binary_elementwise_op(a, b, WrappingArith::wsub)
+    let result = if let Some(r) = try_simd_f64_binary(a, b, sub_f64) {
+        r?
+    } else if let Some(r) = try_simd_f32_binary(a, b, sub_f32) {
+        r?
+    } else {
+        binary_elementwise_op(a, b, WrappingArith::wsub)?
+    };
+    crate::errstate::record_addlike_array_events(a, b, &result);
+    Ok(result)
 }
 
 /// In-place subtraction — the `_into` counterpart of [`subtract`].
@@ -223,7 +230,9 @@ where
     T: Element + WrappingArith,
     D: Dimension,
 {
-    binary_elementwise_op_into(a, b, out, "subtract", WrappingArith::wsub)
+    binary_elementwise_op_into(a, b, out, "subtract", WrappingArith::wsub)?;
+    crate::errstate::record_addlike_array_events(a, b, out);
+    Ok(())
 }
 
 /// Elementwise multiplication with `NumPy` broadcasting. SIMD-dispatched
@@ -233,13 +242,15 @@ where
     T: Element + WrappingArith,
     D: Dimension,
 {
-    if let Some(r) = try_simd_f64_binary(a, b, mul_f64) {
-        return r;
-    }
-    if let Some(r) = try_simd_f32_binary(a, b, mul_f32) {
-        return r;
-    }
-    binary_elementwise_op(a, b, WrappingArith::wmul)
+    let result = if let Some(r) = try_simd_f64_binary(a, b, mul_f64) {
+        r?
+    } else if let Some(r) = try_simd_f32_binary(a, b, mul_f32) {
+        r?
+    } else {
+        binary_elementwise_op(a, b, WrappingArith::wmul)?
+    };
+    crate::errstate::record_multiply_array_events(a, b, &result);
+    Ok(result)
 }
 
 /// In-place multiplication — the `_into` counterpart of [`multiply`].
@@ -252,7 +263,9 @@ where
     T: Element + WrappingArith,
     D: Dimension,
 {
-    binary_elementwise_op_into(a, b, out, "multiply", WrappingArith::wmul)
+    binary_elementwise_op_into(a, b, out, "multiply", WrappingArith::wmul)?;
+    crate::errstate::record_multiply_array_events(a, b, out);
+    Ok(())
 }
 
 /// NumPy true-division element resolver (`PyUFunc_TrueDivisionTypeResolver`,
@@ -376,6 +389,45 @@ macro_rules! impl_true_divide_complex {
 
 impl_true_divide_complex!(f32, f64);
 
+fn record_nonreal_divide_zero_events<T, DA, DB, DO>(
+    a: &Array<T, DA>,
+    b: &Array<T, DB>,
+    output: &Array<<T as TrueDivide>::Output, DO>,
+) where
+    T: TrueDivide,
+    DA: Dimension,
+    DB: Dimension,
+    DO: Dimension,
+{
+    if TypeId::of::<T>() == TypeId::of::<f64>() || TypeId::of::<T>() == TypeId::of::<f32>() {
+        return;
+    }
+    let Ok(a_view) = a.broadcast_to(output.shape()) else {
+        return;
+    };
+    let Ok(b_view) = b.broadcast_to(output.shape()) else {
+        return;
+    };
+    let zero = <T as Element>::zero();
+    let mut divide_by_zero = false;
+    let mut invalid = false;
+    for (&x, &y) in a_view.iter().zip(b_view.iter()) {
+        if y == zero {
+            if x == zero {
+                invalid = true;
+            } else {
+                divide_by_zero = true;
+            }
+        }
+    }
+    if divide_by_zero {
+        crate::errstate::record_fp_event(crate::errstate::FpErrorClass::DivideByZero);
+    }
+    if invalid {
+        crate::errstate::record_fp_event(crate::errstate::FpErrorClass::Invalid);
+    }
+}
+
 /// Elementwise *true* division with `NumPy` broadcasting.
 ///
 /// Matches `np.divide` / `np.true_divide`: integer operands promote to
@@ -390,29 +442,33 @@ where
     T: TrueDivide,
     D: Dimension,
 {
-    use std::any::TypeId;
-
     // f64/f32 fast path: Output == T, so the SIMD kernel result can be
     // reinterpreted to the (identical) Output type. This keeps existing
     // float callers byte-identical with the pre-true-division behaviour.
-    if TypeId::of::<T>() == TypeId::of::<f64>() {
+    let result = if TypeId::of::<T>() == TypeId::of::<f64>() {
         if let Some(r) = try_simd_f64_binary(a, b, div_f64) {
             // SAFETY: T == f64 == <T as TrueDivide>::Output (verified by the
             // TypeId check); reinterpreting Array<T> as Array<Output> is a
             // no-op identity transmute of the element type.
-            return r.map(|arr| unsafe {
+            r.map(|arr| unsafe {
                 crate::helpers::reinterpret_array::<T, <T as TrueDivide>::Output, D>(arr)
-            });
+            })?
+        } else {
+            crate::helpers::binary_map_op(a, b, T::true_div)?
         }
     } else if TypeId::of::<T>() == TypeId::of::<f32>()
         && let Some(r) = try_simd_f32_binary(a, b, div_f32)
     {
         // SAFETY: T == f32 == <T as TrueDivide>::Output (verified above).
-        return r.map(|arr| unsafe {
+        r.map(|arr| unsafe {
             crate::helpers::reinterpret_array::<T, <T as TrueDivide>::Output, D>(arr)
-        });
-    }
-    crate::helpers::binary_map_op(a, b, T::true_div)
+        })?
+    } else {
+        crate::helpers::binary_map_op(a, b, T::true_div)?
+    };
+    crate::errstate::record_divide_mixed_array_events(a, b, &result);
+    record_nonreal_divide_zero_events(a, b, &result);
+    Ok(result)
 }
 
 /// In-place true division — the `_into` counterpart of [`divide`].
@@ -466,7 +522,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_elementwise_op(a, b, |x, y| (x / y).floor())
+    let result = binary_elementwise_op(a, b, |x, y| (x / y).floor())?;
+    crate::errstate::record_divide_array_events(a, b, &result);
+    Ok(result)
 }
 
 /// Integer floor division (`np.floor_divide` on integer dtypes,
@@ -484,7 +542,7 @@ where
     let z = <T as Element>::zero();
     let one = <T as Element>::one();
     let min = <T as num_traits::Bounded>::min_value();
-    binary_elementwise_op(a, b, move |x, y| {
+    let result = binary_elementwise_op(a, b, move |x, y| {
         if y == z {
             return z;
         }
@@ -504,7 +562,11 @@ where
         } else {
             q
         }
-    })
+    })?;
+    if b.iter().any(|&y| y == z) {
+        crate::errstate::record_fp_event(crate::errstate::FpErrorClass::DivideByZero);
+    }
+    Ok(result)
 }
 
 /// Elementwise power for float inputs: a^b.
@@ -516,7 +578,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_elementwise_op(a, b, num_traits::Float::powf)
+    let result = binary_elementwise_op(a, b, num_traits::Float::powf)?;
+    crate::errstate::record_power_array_events(a, b, &result);
+    Ok(result)
 }
 
 /// Elementwise complex power `a^b` (`np.power` on complex dtypes,
@@ -669,7 +733,7 @@ where
     D: Dimension,
 {
     let z = <T as Element>::zero();
-    binary_elementwise_op(a, b, |x, y| {
+    let result = binary_elementwise_op(a, b, |x, y| {
         let r = x % y;
         // Python/NumPy mod: result has same sign as divisor
         if (r < z && y > z) || (r > z && y < z) {
@@ -677,7 +741,11 @@ where
         } else {
             r
         }
-    })
+    })?;
+    if b.iter().any(|&y| y == z) {
+        crate::errstate::record_fp_event(crate::errstate::FpErrorClass::Invalid);
+    }
+    Ok(result)
 }
 
 /// Alias for [`remainder`].
@@ -703,7 +771,7 @@ where
     let z = <T as Element>::zero();
     let one = <T as Element>::one();
     let min = <T as num_traits::Bounded>::min_value();
-    binary_elementwise_op(a, b, move |x, y| {
+    let result = binary_elementwise_op(a, b, move |x, y| {
         if y == z {
             return z;
         }
@@ -720,7 +788,11 @@ where
         } else {
             r
         }
-    })
+    })?;
+    if b.iter().any(|&y| y == z) {
+        crate::errstate::record_fp_event(crate::errstate::FpErrorClass::DivideByZero);
+    }
+    Ok(result)
 }
 
 /// Alias for [`remainder_int`] — integer Python-style modulo.
@@ -738,7 +810,11 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_elementwise_op(a, b, |x, y| x % y)
+    let result = binary_elementwise_op(a, b, |x, y| x % y)?;
+    if b.iter().any(|&y| y == <T as Element>::zero()) {
+        crate::errstate::record_fp_event(crate::errstate::FpErrorClass::Invalid);
+    }
+    Ok(result)
 }
 
 /// Return `(floor_divide, remainder)` as a tuple of arrays, with broadcasting.
@@ -971,15 +1047,19 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    if let Some(r) = crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_reciprocal_f64)
+    let result = if let Some(r) =
+        crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_reciprocal_f64)
     {
-        return r;
-    }
-    if let Some(r) = crate::helpers::try_simd_f32_unary(input, crate::dispatch::simd_reciprocal_f32)
+        r?
+    } else if let Some(r) =
+        crate::helpers::try_simd_f32_unary(input, crate::dispatch::simd_reciprocal_f32)
     {
-        return r;
-    }
-    unary_float_op(input, T::recip)
+        r?
+    } else {
+        unary_float_op(input, T::recip)?
+    };
+    crate::errstate::record_reciprocal_array_events(input, &result);
+    Ok(result)
 }
 
 /// Elementwise square root.
@@ -990,10 +1070,15 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    if let Some(r) = crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_sqrt_f64) {
-        return r;
-    }
-    unary_float_op(input, T::sqrt)
+    let result = if let Some(r) =
+        crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_sqrt_f64)
+    {
+        r?
+    } else {
+        unary_float_op(input, T::sqrt)?
+    };
+    crate::errstate::record_sqrt_array_events(input, &result);
+    Ok(result)
 }
 
 /// In-place elementwise square root — the `_into` counterpart of [`sqrt`].
@@ -1002,7 +1087,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_into(input, out, "sqrt", T::sqrt)
+    unary_float_op_into(input, out, "sqrt", T::sqrt)?;
+    crate::errstate::record_sqrt_array_events(input, out);
+    Ok(())
 }
 
 /// Elementwise cube root.
@@ -1022,13 +1109,19 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    if let Some(r) = crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_square_f64) {
-        return r;
-    }
-    if let Some(r) = crate::helpers::try_simd_f32_unary(input, crate::dispatch::simd_square_f32) {
-        return r;
-    }
-    unary_float_op(input, |x| x * x)
+    let result = if let Some(r) =
+        crate::helpers::try_simd_f64_unary(input, crate::dispatch::simd_square_f64)
+    {
+        r?
+    } else if let Some(r) =
+        crate::helpers::try_simd_f32_unary(input, crate::dispatch::simd_square_f32)
+    {
+        r?
+    } else {
+        unary_float_op(input, |x| x * x)?
+    };
+    crate::errstate::record_square_array_events(input, &result);
+    Ok(result)
 }
 
 /// In-place elementwise square — the `_into` counterpart of [`square`].
@@ -1037,7 +1130,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    unary_float_op_into(input, out, "square", |x| x * x)
+    unary_float_op_into(input, out, "square", |x| x * x)?;
+    crate::errstate::record_square_array_events(input, out);
+    Ok(())
 }
 
 /// Heaviside step function.
@@ -1246,7 +1341,9 @@ where
     D1: Dimension,
     D2: Dimension,
 {
-    binary_broadcast_op(a, b, WrappingArith::wadd)
+    let result = binary_broadcast_op(a, b, WrappingArith::wadd)?;
+    crate::errstate::record_addlike_array_events(a, b, &result);
+    Ok(result)
 }
 
 /// Elementwise subtraction with broadcasting.
@@ -1265,7 +1362,9 @@ where
     D1: Dimension,
     D2: Dimension,
 {
-    binary_broadcast_op(a, b, WrappingArith::wsub)
+    let result = binary_broadcast_op(a, b, WrappingArith::wsub)?;
+    crate::errstate::record_addlike_array_events(a, b, &result);
+    Ok(result)
 }
 
 /// Elementwise multiplication with broadcasting.
@@ -1284,7 +1383,9 @@ where
     D1: Dimension,
     D2: Dimension,
 {
-    binary_broadcast_op(a, b, WrappingArith::wmul)
+    let result = binary_broadcast_op(a, b, WrappingArith::wmul)?;
+    crate::errstate::record_multiply_array_events(a, b, &result);
+    Ok(result)
 }
 
 /// Elementwise *true* division with `NumPy` broadcasting.
@@ -1306,7 +1407,10 @@ where
     D1: Dimension,
     D2: Dimension,
 {
-    crate::helpers::binary_broadcast_map_op(a, b, T::true_div)
+    let result = crate::helpers::binary_broadcast_map_op(a, b, T::true_div)?;
+    crate::errstate::record_divide_mixed_array_events(a, b, &result);
+    record_nonreal_divide_zero_events(a, b, &result);
+    Ok(result)
 }
 
 // ---------------------------------------------------------------------------

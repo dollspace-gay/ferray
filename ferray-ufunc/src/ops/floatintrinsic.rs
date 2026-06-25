@@ -338,7 +338,9 @@ where
     D: Dimension,
 {
     let two = <T as Element>::one() + <T as Element>::one();
-    binary_mixed_op(x, n, move |xi, ni| xi * two.powi(ni))
+    let result = binary_mixed_op(x, n, move |xi, ni| xi * two.powi(ni))?;
+    crate::errstate::record_square_array_events(x, &result);
+    Ok(result)
 }
 
 /// Decompose f64 into mantissa and exponent via IEEE 754 bit extraction.
@@ -509,7 +511,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    binary_elementwise_op(x1, x2, T::powf)
+    let result = binary_elementwise_op(x1, x2, T::powf)?;
+    crate::errstate::record_power_array_events(x1, x2, &result);
+    Ok(result)
 }
 
 /// Elementwise maximum, propagating NaN.

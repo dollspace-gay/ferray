@@ -6,6 +6,9 @@ use ferray_ufunc::errstate::{
     with_errstate,
 };
 
+type ArrF64 = ferray_core::Array<f64, ferray_core::dimension::Ix1>;
+type ArrI32 = ferray_core::Array<i32, ferray_core::dimension::Ix1>;
+
 fn ufunc_fixture(name: &str) -> std::path::PathBuf {
     ferray_test_oracle::fixtures_dir().join("ufunc").join(name)
 }
@@ -147,5 +150,199 @@ fn recorded_fp_events_follow_warn_ignore_raise_policy_meanings() {
     record_fp_event(FpErrorClass::Invalid);
     let err = check_fp_errors().unwrap_err();
     assert!(err.to_string().contains("Invalid"));
+    assert!(check_fp_errors().is_ok());
+}
+
+/// Covers kernel integration for `ferray_ufunc::divide` and
+/// `ferray_ufunc::divide_broadcast`: divide-by-zero and invalid events are
+/// recorded by the ufunc kernels themselves, matching NumPy errstate's
+/// operation-driven behavior rather than requiring manual `record_fp_event`.
+#[test]
+fn divide_kernels_emit_divide_and_invalid_events() {
+    reset_errstate();
+    let a = ArrF64::from_vec(ferray_core::dimension::Ix1::new([2]), vec![1.0, 0.0]).unwrap();
+    let b = ArrF64::from_vec(ferray_core::dimension::Ix1::new([2]), vec![0.0, 0.0]).unwrap();
+
+    let _ = ferray_ufunc::divide(&a, &b).unwrap();
+    assert_eq!(
+        take_fp_events(),
+        vec![FpErrorClass::DivideByZero, FpErrorClass::Invalid]
+    );
+
+    let scalar_zero = ArrF64::from_vec(ferray_core::dimension::Ix1::new([1]), vec![0.0]).unwrap();
+    let _ = ferray_ufunc::divide_broadcast(&a, &scalar_zero).unwrap();
+    assert_eq!(
+        take_fp_events(),
+        vec![FpErrorClass::DivideByZero, FpErrorClass::Invalid]
+    );
+}
+
+/// Covers integer true-division integration. NumPy's integer
+/// `true_divide` promotes to float output but still drives divide/invalid
+/// errstate events for `x / 0` and `0 / 0`.
+#[test]
+fn integer_true_divide_emits_zero_denominator_events() {
+    reset_errstate();
+    let a = ArrI32::from_vec(ferray_core::dimension::Ix1::new([2]), vec![2, 0]).unwrap();
+    let b = ArrI32::from_vec(ferray_core::dimension::Ix1::new([2]), vec![0, 0]).unwrap();
+
+    let _ = ferray_ufunc::divide(&a, &b).unwrap();
+    assert_eq!(
+        take_fp_events(),
+        vec![FpErrorClass::DivideByZero, FpErrorClass::Invalid]
+    );
+}
+
+/// Covers overflow and underflow event integration for arithmetic kernels.
+#[test]
+fn multiply_kernel_emits_overflow_and_underflow_events() {
+    reset_errstate();
+    seterr(FpErrorClass::Underflow, FpErrorState::Warn);
+
+    let huge = ArrF64::from_vec(ferray_core::dimension::Ix1::new([1]), vec![f64::MAX]).unwrap();
+    let two = ArrF64::from_vec(ferray_core::dimension::Ix1::new([1]), vec![2.0]).unwrap();
+    let _ = ferray_ufunc::multiply(&huge, &two).unwrap();
+    assert_eq!(take_fp_events(), vec![FpErrorClass::Overflow]);
+
+    let tiny = ArrF64::from_vec(
+        ferray_core::dimension::Ix1::new([1]),
+        vec![f64::MIN_POSITIVE],
+    )
+    .unwrap();
+    let half = ArrF64::from_vec(ferray_core::dimension::Ix1::new([1]), vec![0.5]).unwrap();
+    let _ = ferray_ufunc::multiply(&tiny, &half).unwrap();
+    assert_eq!(take_fp_events(), vec![FpErrorClass::Underflow]);
+}
+
+/// Covers divide-by-zero and invalid domain integration for log kernels.
+#[test]
+fn log_kernels_emit_divide_and_invalid_events() {
+    reset_errstate();
+    let input =
+        ArrF64::from_vec(ferray_core::dimension::Ix1::new([3]), vec![0.0, -1.0, 1.0]).unwrap();
+
+    let _ = ferray_ufunc::log(&input).unwrap();
+    assert_eq!(
+        take_fp_events(),
+        vec![FpErrorClass::DivideByZero, FpErrorClass::Invalid]
+    );
+
+    let log1p_input = ArrF64::from_vec(
+        ferray_core::dimension::Ix1::new([3]),
+        vec![-1.0, -2.0, -0.5],
+    )
+    .unwrap();
+    let _ = ferray_ufunc::log1p(&log1p_input).unwrap();
+    assert_eq!(
+        take_fp_events(),
+        vec![FpErrorClass::DivideByZero, FpErrorClass::Invalid]
+    );
+}
+
+/// Covers overflow and underflow event integration for exp kernels.
+#[test]
+fn exp_kernel_emits_overflow_and_underflow_events() {
+    reset_errstate();
+    seterr(FpErrorClass::Underflow, FpErrorState::Warn);
+    let input =
+        ArrF64::from_vec(ferray_core::dimension::Ix1::new([2]), vec![1000.0, -1000.0]).unwrap();
+
+    let _ = ferray_ufunc::exp(&input).unwrap();
+    assert_eq!(
+        take_fp_events(),
+        vec![FpErrorClass::Overflow, FpErrorClass::Underflow]
+    );
+}
+
+/// Covers invalid-domain integration for trigonometric kernels.
+#[test]
+fn trig_kernels_emit_invalid_and_divide_domain_events() {
+    reset_errstate();
+
+    let inf = ArrF64::from_vec(ferray_core::dimension::Ix1::new([1]), vec![f64::INFINITY]).unwrap();
+    let _ = ferray_ufunc::sin(&inf).unwrap();
+    assert_eq!(take_fp_events(), vec![FpErrorClass::Invalid]);
+
+    let outside_unit = ArrF64::from_vec(ferray_core::dimension::Ix1::new([1]), vec![2.0]).unwrap();
+    let _ = ferray_ufunc::arcsin(&outside_unit).unwrap();
+    assert_eq!(take_fp_events(), vec![FpErrorClass::Invalid]);
+
+    let below_one = ArrF64::from_vec(ferray_core::dimension::Ix1::new([1]), vec![0.5]).unwrap();
+    let _ = ferray_ufunc::arccosh(&below_one).unwrap();
+    assert_eq!(take_fp_events(), vec![FpErrorClass::Invalid]);
+
+    let atanh_input =
+        ArrF64::from_vec(ferray_core::dimension::Ix1::new([2]), vec![1.0, 2.0]).unwrap();
+    let _ = ferray_ufunc::arctanh(&atanh_input).unwrap();
+    assert_eq!(
+        take_fp_events(),
+        vec![FpErrorClass::DivideByZero, FpErrorClass::Invalid]
+    );
+}
+
+/// Covers overflow/underflow integration for hyperbolic and scale kernels.
+#[test]
+fn hyperbolic_and_scale_kernels_emit_range_events() {
+    reset_errstate();
+    seterr(FpErrorClass::Underflow, FpErrorState::Warn);
+
+    let huge = ArrF64::from_vec(ferray_core::dimension::Ix1::new([1]), vec![1000.0]).unwrap();
+    let _ = ferray_ufunc::sinh(&huge).unwrap();
+    assert_eq!(take_fp_events(), vec![FpErrorClass::Overflow]);
+
+    let scale_huge =
+        ArrF64::from_vec(ferray_core::dimension::Ix1::new([1]), vec![f64::MAX]).unwrap();
+    let _ = ferray_ufunc::degrees(&scale_huge).unwrap();
+    assert_eq!(take_fp_events(), vec![FpErrorClass::Overflow]);
+
+    let tiny = ArrF64::from_vec(
+        ferray_core::dimension::Ix1::new([1]),
+        vec![f64::MIN_POSITIVE],
+    )
+    .unwrap();
+    let exponents = ferray_core::Array::<i32, ferray_core::dimension::Ix1>::from_vec(
+        ferray_core::dimension::Ix1::new([1]),
+        vec![-1075],
+    )
+    .unwrap();
+    let _ = ferray_ufunc::ldexp(&tiny, &exponents).unwrap();
+    assert_eq!(take_fp_events(), vec![FpErrorClass::Underflow]);
+}
+
+/// Covers `float_power` integration for divide-by-zero, overflow, and invalid
+/// events.
+#[test]
+fn float_power_kernel_emits_domain_and_range_events() {
+    reset_errstate();
+    let bases = ArrF64::from_vec(
+        ferray_core::dimension::Ix1::new([3]),
+        vec![0.0, f64::MAX, -1.0],
+    )
+    .unwrap();
+    let exponents =
+        ArrF64::from_vec(ferray_core::dimension::Ix1::new([3]), vec![-1.0, 2.0, 0.5]).unwrap();
+
+    let _ = ferray_ufunc::float_power(&bases, &exponents).unwrap();
+    assert_eq!(
+        take_fp_events(),
+        vec![
+            FpErrorClass::DivideByZero,
+            FpErrorClass::Overflow,
+            FpErrorClass::Invalid,
+        ]
+    );
+}
+
+/// Covers the `Raise` policy being fed by actual ufunc kernels.
+#[test]
+fn ufunc_events_feed_raise_policy_queue() {
+    reset_errstate();
+    seterr(FpErrorClass::DivideByZero, FpErrorState::Raise);
+    let a = ArrF64::from_vec(ferray_core::dimension::Ix1::new([1]), vec![1.0]).unwrap();
+    let b = ArrF64::from_vec(ferray_core::dimension::Ix1::new([1]), vec![0.0]).unwrap();
+
+    let _ = ferray_ufunc::divide(&a, &b).unwrap();
+    let err = check_fp_errors().unwrap_err();
+    assert!(err.to_string().contains("DivideByZero"));
     assert!(check_fp_errors().is_ok());
 }
