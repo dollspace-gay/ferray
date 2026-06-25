@@ -5,8 +5,8 @@
 //! in `docs/conformance-suites.md` (transcendentals row: 1e-12 rel f64, 1e-5 rel f32).
 //!
 //! Tests that exercise both the f64 and f32 variants of a window function do so
-//! in a single `#[test]` function, covering two surface items each. A comment
-//! at the top of each such test names both items.
+//! in a single `#[test]` function, covering the crate-root re-export and the
+//! canonical `ferray_window::windows::*` path for each surface item.
 
 use ferray_test_oracle::{
     TOL_REDUCTION_F32_ABS, TOL_REDUCTION_F64_ABS, TOL_TRANSCENDENTAL_F32_REL,
@@ -61,7 +61,8 @@ fn to_f32_vec(v: &[f64]) -> Vec<f32> {
 // Simple single-parameter windows (m only)
 // ---------------------------------------------------------------------------
 
-/// Covers: ferray_window::bartlett, ferray_window::bartlett_f32
+/// Covers: ferray_window::bartlett, ferray_window::bartlett_f32,
+/// ferray_window::windows::bartlett, ferray_window::windows::bartlett_f32
 #[test]
 fn bartlett_matches_numpy() {
     let fixture = load_fixture("fixtures/window/bartlett.json");
@@ -95,7 +96,8 @@ fn bartlett_matches_numpy() {
     }
 }
 
-/// Covers: ferray_window::blackman, ferray_window::blackman_f32
+/// Covers: ferray_window::blackman, ferray_window::blackman_f32,
+/// ferray_window::windows::blackman, ferray_window::windows::blackman_f32
 #[test]
 fn blackman_matches_numpy() {
     let fixture = load_fixture("fixtures/window/blackman.json");
@@ -125,7 +127,8 @@ fn blackman_matches_numpy() {
     }
 }
 
-/// Covers: ferray_window::hamming, ferray_window::hamming_f32
+/// Covers: ferray_window::hamming, ferray_window::hamming_f32,
+/// ferray_window::windows::hamming, ferray_window::windows::hamming_f32
 #[test]
 fn hamming_matches_numpy() {
     let fixture = load_fixture("fixtures/window/hamming.json");
@@ -155,7 +158,8 @@ fn hamming_matches_numpy() {
     }
 }
 
-/// Covers: ferray_window::hanning, ferray_window::hanning_f32
+/// Covers: ferray_window::hanning, ferray_window::hanning_f32,
+/// ferray_window::windows::hanning, ferray_window::windows::hanning_f32
 #[test]
 fn hanning_matches_numpy() {
     let fixture = load_fixture("fixtures/window/hanning.json");
@@ -185,6 +189,7 @@ fn hanning_matches_numpy() {
     }
 }
 
+/// Covers: ferray_window::bohman, ferray_window::windows::bohman
 #[test]
 fn bohman_matches_scipy() {
     let fixture = load_fixture("fixtures/window/bohman.json");
@@ -201,6 +206,7 @@ fn bohman_matches_scipy() {
     }
 }
 
+/// Covers: ferray_window::boxcar, ferray_window::windows::boxcar
 #[test]
 fn boxcar_matches_scipy() {
     let fixture = load_fixture("fixtures/window/boxcar.json");
@@ -217,6 +223,7 @@ fn boxcar_matches_scipy() {
     }
 }
 
+/// Covers: ferray_window::cosine, ferray_window::windows::cosine
 #[test]
 fn cosine_matches_scipy() {
     let fixture = load_fixture("fixtures/window/cosine.json");
@@ -233,6 +240,7 @@ fn cosine_matches_scipy() {
     }
 }
 
+/// Covers: ferray_window::flattop, ferray_window::windows::flattop
 #[test]
 fn flattop_matches_scipy() {
     let fixture = load_fixture("fixtures/window/flattop.json");
@@ -249,6 +257,7 @@ fn flattop_matches_scipy() {
     }
 }
 
+/// Covers: ferray_window::lanczos, ferray_window::windows::lanczos
 #[test]
 fn lanczos_matches_scipy() {
     let fixture = load_fixture("fixtures/window/lanczos.json");
@@ -265,6 +274,7 @@ fn lanczos_matches_scipy() {
     }
 }
 
+/// Covers: ferray_window::nuttall, ferray_window::windows::nuttall
 #[test]
 fn nuttall_matches_scipy() {
     let fixture = load_fixture("fixtures/window/nuttall.json");
@@ -281,6 +291,7 @@ fn nuttall_matches_scipy() {
     }
 }
 
+/// Covers: ferray_window::parzen, ferray_window::windows::parzen
 #[test]
 fn parzen_matches_scipy() {
     let fixture = load_fixture("fixtures/window/parzen.json");
@@ -297,6 +308,7 @@ fn parzen_matches_scipy() {
     }
 }
 
+/// Covers: ferray_window::triang, ferray_window::windows::triang
 #[test]
 fn triang_matches_scipy() {
     let fixture = load_fixture("fixtures/window/triang.json");
@@ -317,6 +329,7 @@ fn triang_matches_scipy() {
 // Windows with two parameters
 // ---------------------------------------------------------------------------
 
+/// Covers: ferray_window::chebwin, ferray_window::windows::chebwin
 #[test]
 fn chebwin_matches_scipy() {
     let fixture = load_fixture("fixtures/window/chebwin.json");
@@ -334,6 +347,7 @@ fn chebwin_matches_scipy() {
     }
 }
 
+/// Covers: ferray_window::dpss, ferray_window::windows::dpss
 #[test]
 fn dpss_matches_scipy() {
     let fixture = load_fixture("fixtures/window/dpss.json");
@@ -351,6 +365,7 @@ fn dpss_matches_scipy() {
     }
 }
 
+/// Covers: ferray_window::gaussian, ferray_window::windows::gaussian
 #[test]
 fn gaussian_matches_scipy() {
     let fixture = load_fixture("fixtures/window/gaussian.json");
@@ -368,6 +383,8 @@ fn gaussian_matches_scipy() {
     }
 }
 
+/// Covers: ferray_window::general_hamming,
+/// ferray_window::windows::general_hamming
 #[test]
 fn general_hamming_matches_scipy() {
     let fixture = load_fixture("fixtures/window/general_hamming.json");
@@ -385,7 +402,8 @@ fn general_hamming_matches_scipy() {
     }
 }
 
-/// Covers: ferray_window::kaiser, ferray_window::kaiser_f32
+/// Covers: ferray_window::kaiser, ferray_window::kaiser_f32,
+/// ferray_window::windows::kaiser, ferray_window::windows::kaiser_f32
 #[test]
 fn kaiser_matches_numpy() {
     let fixture = load_fixture("fixtures/window/kaiser.json");
@@ -416,6 +434,7 @@ fn kaiser_matches_numpy() {
     }
 }
 
+/// Covers: ferray_window::tukey, ferray_window::windows::tukey
 #[test]
 fn tukey_matches_scipy() {
     let fixture = load_fixture("fixtures/window/tukey.json");
@@ -437,6 +456,7 @@ fn tukey_matches_scipy() {
 // Windows with optional or array parameters
 // ---------------------------------------------------------------------------
 
+/// Covers: ferray_window::exponential, ferray_window::windows::exponential
 #[test]
 fn exponential_matches_scipy() {
     let fixture = load_fixture("fixtures/window/exponential.json");
@@ -455,6 +475,8 @@ fn exponential_matches_scipy() {
     }
 }
 
+/// Covers: ferray_window::general_cosine,
+/// ferray_window::windows::general_cosine
 #[test]
 fn general_cosine_matches_scipy() {
     let fixture = load_fixture("fixtures/window/general_cosine.json");
@@ -481,7 +503,7 @@ fn general_cosine_matches_scipy() {
 // Multi-parameter windows
 // ---------------------------------------------------------------------------
 
-/// Covers: ferray_window::taylor
+/// Covers: ferray_window::taylor, ferray_window::windows::taylor
 ///
 /// Note: The fixture contains only odd-M norm=true cases and all norm=false
 /// cases. The even-M + norm=true case diverges from scipy (see

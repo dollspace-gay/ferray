@@ -10,7 +10,8 @@
 //! satisfy: `vectorize(identity)(x) == x`, `apply_along_axis(sum, axis, x)`
 //! collapses one axis and yields the same totals as `numpy.sum(x, axis)`,
 //! and so on. Each test asserts that contract, and each test mentions the
-//! user-facing crate-root path so the surface-coverage gate finds it.
+//! user-facing crate-root path and canonical `ferray_window::functional::*`
+//! path so the surface-coverage gate finds both.
 
 use ferray_core::dimension::{Axis, Ix1, Ix2, IxDyn};
 use ferray_core::{Array, error::FerrayResult};
@@ -20,7 +21,7 @@ use ferray_test_oracle::{TOL_REDUCTION_F64_ABS, assert_close_f64_slice};
 // ferray_window::vectorize
 // ---------------------------------------------------------------------------
 
-/// Covers: ferray_window::vectorize
+/// Covers: ferray_window::vectorize, ferray_window::functional::vectorize
 ///
 /// COVERAGE NOTE: numpy.vectorize exists but is documented as a thin "for
 /// loop" wrapper around a Python callable; comparing two scalar-mapping
@@ -71,7 +72,7 @@ fn vectorize_satisfies_identity_and_mapv_equivalence() {
 // ferray_window::piecewise
 // ---------------------------------------------------------------------------
 
-/// Covers: ferray_window::piecewise
+/// Covers: ferray_window::piecewise, ferray_window::functional::piecewise
 ///
 /// Algebraic identity: numpy.piecewise(x, [True_everywhere], [f]) == f(x)
 /// elementwise. Also asserts the first-match-wins semantics and the
@@ -128,7 +129,8 @@ fn piecewise_matches_documented_semantics() {
 // ferray_window::apply_along_axis
 // ---------------------------------------------------------------------------
 
-/// Covers: ferray_window::apply_along_axis
+/// Covers: ferray_window::apply_along_axis,
+/// ferray_window::functional::apply_along_axis
 ///
 /// Asserts equivalence with numpy.apply_along_axis when the inner function
 /// is `numpy.sum`: applying `sum` along axis 0 of a (2, 3) array yields the
@@ -166,7 +168,8 @@ fn apply_along_axis_matches_numpy_sum_axis() {
 // ferray_window::apply_over_axes
 // ---------------------------------------------------------------------------
 
-/// Covers: ferray_window::apply_over_axes
+/// Covers: ferray_window::apply_over_axes,
+/// ferray_window::functional::apply_over_axes
 ///
 /// numpy.apply_over_axes(numpy.sum, m, [0, 1]) reduces along axis 0 with
 /// keepdims, then along axis 1 with keepdims, producing a (1, 1) array with
@@ -195,7 +198,8 @@ fn apply_over_axes_matches_numpy_double_sum() {
 // ferray_window::sum_axis_keepdims
 // ---------------------------------------------------------------------------
 
-/// Covers: ferray_window::sum_axis_keepdims
+/// Covers: ferray_window::sum_axis_keepdims,
+/// ferray_window::functional::sum_axis_keepdims
 ///
 /// Equivalent to numpy.sum(a, axis=k, keepdims=True). Asserts shape (axis
 /// retained as size 1) and values for both axes of a (2, 3) array of 1..=6.
