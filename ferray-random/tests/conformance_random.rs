@@ -315,6 +315,8 @@ fn uniform_variants_match_numpy_shape_and_range_contracts() {
 // lognormal, ziggurat kernel, and parallel generation.
 //
 // Covers:
+//   - `ferray_random::distributions::ziggurat::standard_normal_ziggurat`
+//   - `ferray_random::distributions::ziggurat::standard_normal_ziggurat_f32`
 //   - `ferray_random::distributions::normal::Generator::normal`
 //   - `ferray_random::distributions::normal::Generator::normal_array`
 //   - `ferray_random::distributions::normal::Generator::normal_f32`
@@ -455,6 +457,12 @@ fn exponential_variants_match_numpy_distribution_contracts() {
 //   - `ferray_random::bitgen::Philox`
 //   - `ferray_random::bitgen::Sfc64`
 //   - `ferray_random::bitgen::Xoshiro256StarStar`
+//   - `ferray_random::bitgen::mt19937::MT19937`
+//   - `ferray_random::bitgen::pcg64::Pcg64`
+//   - `ferray_random::bitgen::pcg64dxsm::Pcg64Dxsm`
+//   - `ferray_random::bitgen::philox::Philox`
+//   - `ferray_random::bitgen::sfc64::Sfc64`
+//   - `ferray_random::bitgen::xoshiro256::Xoshiro256StarStar`
 //   - `ferray_random::default_rng`
 //   - `ferray_random::default_rng_seeded`
 //   - `ferray_random::generator::Generator`
@@ -524,6 +532,7 @@ fn generator_and_bitgenerator_state_contracts() {
 // Covers:
 //   - `ferray_random::SeedSequence`
 //   - `ferray_random::bitgen::SeedSequence`
+//   - `ferray_random::bitgen::seed_sequence::SeedSequence`
 //   - `ferray_random::bitgen::seed_sequence::SeedSequence::entropy`
 //   - `ferray_random::bitgen::seed_sequence::SeedSequence::generate_state`
 //   - `ferray_random::bitgen::seed_sequence::SeedSequence::generate_u64`
