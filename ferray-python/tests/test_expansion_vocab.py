@@ -8,10 +8,24 @@ re-exposing numpy's object is the correct drop-in behavior. Expected values
 come from a live ``numpy`` call (R-CHAR-3), never literal-copied.
 """
 
+import importlib
+
 import numpy as np
 import pytest
 
 import ferray as fr
+
+
+AUDIT_TOP_LEVEL_NAMES = [
+    "False_", "ScalarType", "True_", "core", "ctypeslib", "dtypes",
+    "e", "euler_gamma", "exceptions", "f2py", "index_exp", "inf",
+    "little_endian", "nan", "newaxis", "pi", "s_", "sctypeDict",
+    "testing", "typecodes", "typing",
+]
+
+AUDIT_TOP_LEVEL_MODULES = [
+    "core", "ctypeslib", "dtypes", "exceptions", "f2py", "testing", "typing",
+]
 
 
 # --- shared-vocabulary type/iterator objects (must BE numpy's) ---------------
@@ -30,6 +44,86 @@ def test_in_dunder_all():
                  "nested_iters", "__array_namespace_info__", "fromregex",
                  "from_dlpack", "busdaycalendar"]:
         assert name in fr.__all__, f"{name} not in ferray.__all__"
+
+
+@pytest.mark.parametrize("name", AUDIT_TOP_LEVEL_NAMES)
+def test_audit_top_level_name_exists_and_exports(name):
+    assert hasattr(fr, name), f"ferray.{name} missing"
+    assert name in fr.__all__, f"ferray.{name} missing from __all__"
+
+
+@pytest.mark.parametrize("name", AUDIT_TOP_LEVEL_NAMES)
+def test_audit_top_level_name_matches_numpy(name):
+    got = getattr(fr, name)
+    want = getattr(np, name)
+    if name == "nan":
+        assert np.isnan(got)
+    elif isinstance(want, float):
+        assert got == want
+    else:
+        assert got is want
+
+
+@pytest.mark.parametrize("name", AUDIT_TOP_LEVEL_MODULES)
+def test_audit_top_level_module_import_path(name):
+    assert importlib.import_module(f"ferray.{name}") is getattr(fr, name)
+
+
+def test_audit_ma_namespace_has_no_numpy_all_gap():
+    missing = sorted(name for name in np.ma.__all__ if not hasattr(fr.ma, name))
+    assert missing == []
+    for name in ("core", "extras", "masked_print_option", "mr_"):
+        assert name in fr.ma.__all__
+        assert getattr(fr.ma, name) is getattr(np.ma, name)
+
+
+@pytest.mark.parametrize("name", ["core", "extras"])
+def test_audit_ma_module_import_path(name):
+    assert importlib.import_module(f"ferray.ma.{name}") is getattr(fr.ma, name)
+
+
+def test_audit_polynomial_namespace_has_no_numpy_all_gap():
+    missing = sorted(
+        name for name in np.polynomial.__all__ if not hasattr(fr.polynomial, name)
+    )
+    assert missing == []
+    for name in (
+        "chebyshev", "hermite", "hermite_e", "laguerre", "legendre",
+        "polynomial", "set_default_printstyle",
+    ):
+        assert name in fr.polynomial.__all__
+        assert getattr(fr.polynomial, name) is getattr(np.polynomial, name)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["chebyshev", "hermite", "hermite_e", "laguerre", "legendre", "polynomial"],
+)
+def test_audit_polynomial_module_import_path(name):
+    assert importlib.import_module(f"ferray.polynomial.{name}") is getattr(
+        fr.polynomial, name
+    )
+
+
+def test_audit_char_constructor_exports():
+    for name in ("array", "asarray", "chararray"):
+        assert hasattr(fr.char, name)
+        assert name in fr.char.__all__
+        assert getattr(fr.char, name) is getattr(np.char, name)
+
+
+def test_audit_lib_namespace_has_no_numpy_all_gap():
+    missing = sorted(name for name in np.lib.__all__ if not hasattr(fr.lib, name))
+    assert missing == []
+    for name in np.lib.__all__:
+        assert name in fr.lib.__all__, f"ferray.lib.{name} missing from __all__"
+
+
+@pytest.mark.parametrize(
+    "name", ["array_utils", "format", "introspect", "mixins", "npyio", "scimath"]
+)
+def test_audit_lib_module_import_path(name):
+    assert importlib.import_module(f"ferray.lib.{name}") is getattr(fr.lib, name)
 
 
 # --- ufunc: the type of every universal function -----------------------------

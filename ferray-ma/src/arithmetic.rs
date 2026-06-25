@@ -16,25 +16,6 @@ use ferray_core::error::{FerrayError, FerrayResult};
 
 use crate::MaskedArray;
 
-/// Helper: compute the union of two boolean mask arrays (element-wise OR).
-///
-/// Requires identical shapes — broadcasting is handled at a higher level
-/// via [`broadcast_masked_pair`].
-fn mask_union<D: Dimension>(
-    a: &Array<bool, D>,
-    b: &Array<bool, D>,
-) -> FerrayResult<Array<bool, D>> {
-    if a.shape() != b.shape() {
-        return Err(FerrayError::shape_mismatch(format!(
-            "mask_union: shapes {:?} and {:?} differ",
-            a.shape(),
-            b.shape()
-        )));
-    }
-    let data: Vec<bool> = a.iter().zip(b.iter()).map(|(x, y)| *x || *y).collect();
-    Array::from_vec(a.dim().clone(), data)
-}
-
 /// Result of broadcasting two masked arrays to a common shape.
 ///
 /// Returns the broadcast (data, mask) pairs for both inputs as flat `Vec<T>`
@@ -95,7 +76,7 @@ where
 }
 
 /// Apply `f` only to unmasked elements of `ma`. Masked positions carry
-/// the masked array's `fill_value` into the result. Crate-internal so
+/// the source array payload into the result. Crate-internal so
 /// `ufunc_support::masked_unary_op`-style call sites can reuse it and
 /// `ferray-ma` ships one definition instead of two (#150).
 pub(crate) fn masked_unary_op<T, D, F>(
@@ -124,24 +105,16 @@ where
 
     // Mask present: split the work into two passes so the hot path
     // (applying `f` to the data) can auto-vectorise without a mask
-    // branch in the inner loop (#157). NumPy's masked ufuncs take
-    // the same shape — apply elementwise across the full data, then
-    // patch masked positions with fill_value. This wastes compute on
-    // masked elements (typically a small fraction of the array) but
-    // unlocks SIMD on the dominant unmasked bulk.
-    //
-    // Trade-off: `f` is applied to the underlying data even at
-    // masked positions. For partial-domain ops (log, sqrt, …) that
-    // would otherwise panic or NaN on masked-but-invalid data, the
-    // *_domain helpers in ufunc_support.rs handle the validation
-    // separately before this point, and masked positions get
-    // overwritten with fill_value below regardless of what `f`
-    // produced for them.
+    // branch in the inner loop (#157). NumPy's `numpy.ma` wrappers keep
+    // the source payload under existing masks while carrying the mask
+    // separately, so masked positions get patched back to the original
+    // payload below regardless of what `f` produced for them.
     let data_vec: Vec<T> = ma.data().iter().map(|&v| f(v)).collect();
     let data: Vec<T> = data_vec
         .into_iter()
+        .zip(ma.data().iter())
         .zip(ma.mask().iter())
-        .map(|(v, m)| if *m { fill } else { v })
+        .map(|((computed, original), m)| if *m { *original } else { computed })
         .collect();
     let result_data = Array::from_vec(ma.dim().clone(), data)?;
     let mut out = MaskedArray::new(result_data, ma.mask().clone())?;
@@ -167,39 +140,47 @@ where
     D: Dimension,
     F: Fn(T, T) -> T,
 {
+    masked_binary_op_with_extra_mask(a, b, op, |_, _| false, op_name)
+}
+
+fn masked_binary_op_with_extra_mask<T, D, F, M>(
+    a: &MaskedArray<T, D>,
+    b: &MaskedArray<T, D>,
+    op: F,
+    extra_mask: M,
+    op_name: &str,
+) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+    F: Fn(T, T) -> T,
+    M: Fn(T, T) -> bool,
+{
     // Fast path: identical shapes — no broadcasting needed.
     if a.shape() == b.shape() {
         let fill = a.fill_value;
-
-        // Double-fast path (#506): neither input has a real mask, so
-        // there's no mask to union and no masked positions to skip.
-        // `op` applies to every element unconditionally and the
-        // result stays in the nomask-sentinel state.
-        if !a.has_real_mask() && !b.has_real_mask() {
-            let data: Vec<T> = a
-                .data()
-                .iter()
-                .zip(b.data().iter())
-                .map(|(&x, &y)| op(x, y))
-                .collect();
-            let result_data = Array::from_vec(a.dim().clone(), data)?;
-            let mut result = MaskedArray::from_data(result_data)?;
-            result.fill_value = fill;
-            return Ok(result);
-        }
-
-        // Slow path: at least one input has a real mask; compute the
-        // union and apply `op` only at unmasked positions.
-        let result_mask = mask_union(a.mask(), b.mask())?;
-        let data: Vec<T> = a
+        let mut any_masked = false;
+        let mut result_mask = Vec::with_capacity(a.size());
+        let mut data = Vec::with_capacity(a.size());
+        for (((&x, &y), &am), &bm) in a
             .data()
             .iter()
             .zip(b.data().iter())
-            .zip(result_mask.iter())
-            .map(|((x, y), m)| if *m { fill } else { op(*x, *y) })
-            .collect();
+            .zip(a.mask().iter())
+            .zip(b.mask().iter())
+        {
+            let masked = am || bm || extra_mask(x, y);
+            any_masked |= masked;
+            result_mask.push(masked);
+            data.push(if masked { x } else { op(x, y) });
+        }
         let result_data = Array::from_vec(a.dim().clone(), data)?;
-        let mut result = MaskedArray::new(result_data, result_mask)?;
+        let mut result = if any_masked {
+            let mask_arr = Array::from_vec(a.dim().clone(), result_mask)?;
+            MaskedArray::new(result_data, mask_arr)?
+        } else {
+            MaskedArray::from_data(result_data)?
+        };
         result.fill_value = fill;
         return Ok(result);
     }
@@ -210,18 +191,24 @@ where
     let n = pair.a_data.len();
     let mut result_data = Vec::with_capacity(n);
     let mut result_mask = Vec::with_capacity(n);
+    let mut any_masked = false;
     for i in 0..n {
-        let m = pair.a_mask[i] || pair.b_mask[i];
+        let m = pair.a_mask[i] || pair.b_mask[i] || extra_mask(pair.a_data[i], pair.b_data[i]);
+        any_masked |= m;
         result_mask.push(m);
         result_data.push(if m {
-            fill
+            pair.a_data[i]
         } else {
             op(pair.a_data[i], pair.b_data[i])
         });
     }
     let data_arr = Array::from_vec(result_dim.clone(), result_data)?;
-    let mask_arr = Array::from_vec(result_dim, result_mask)?;
-    let mut out = MaskedArray::new(data_arr, mask_arr)?;
+    let mut out = if any_masked {
+        let mask_arr = Array::from_vec(result_dim, result_mask)?;
+        MaskedArray::new(data_arr, mask_arr)?
+    } else {
+        MaskedArray::from_data(data_arr)?
+    };
     out.fill_value = fill;
     Ok(out)
 }
@@ -277,7 +264,7 @@ where
     T: Element + Div<Output = T> + Copy,
     D: Dimension,
 {
-    masked_binary_op(a, b, |x, y| x / y, "masked_div")
+    masked_binary_op_with_extra_mask(a, b, |x, y| x / y, |_, y| y == T::zero(), "masked_div")
 }
 
 /// Generic masked-array-with-regular-array op with broadcasting.
@@ -296,19 +283,42 @@ where
     D: Dimension,
     F: Fn(T, T) -> T,
 {
+    masked_array_op_with_extra_mask(ma, arr, op, |_, _| false, op_name)
+}
+
+fn masked_array_op_with_extra_mask<T, D, F, M>(
+    ma: &MaskedArray<T, D>,
+    arr: &Array<T, D>,
+    op: F,
+    extra_mask: M,
+    op_name: &str,
+) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+    F: Fn(T, T) -> T,
+    M: Fn(T, T) -> bool,
+{
     let fill = ma.fill_value;
 
     // Fast path: identical shapes.
     if ma.shape() == arr.shape() {
-        let data: Vec<T> = ma
-            .data()
-            .iter()
-            .zip(arr.iter())
-            .zip(ma.mask().iter())
-            .map(|((x, y), m)| if *m { fill } else { op(*x, *y) })
-            .collect();
+        let mut any_masked = false;
+        let mut data = Vec::with_capacity(ma.size());
+        let mut mask = Vec::with_capacity(ma.size());
+        for ((&x, &y), &m) in ma.data().iter().zip(arr.iter()).zip(ma.mask().iter()) {
+            let masked = m || extra_mask(x, y);
+            any_masked |= masked;
+            mask.push(masked);
+            data.push(if masked { x } else { op(x, y) });
+        }
         let result_data = Array::from_vec(ma.dim().clone(), data)?;
-        let mut out = MaskedArray::new(result_data, ma.mask().clone())?;
+        let mut out = if any_masked {
+            let mask_arr = Array::from_vec(ma.dim().clone(), mask)?;
+            MaskedArray::new(result_data, mask_arr)?
+        } else {
+            MaskedArray::from_data(result_data)?
+        };
         out.fill_value = fill;
         return Ok(out);
     }
@@ -333,10 +343,16 @@ where
     let n = ma_data.len();
     let mut result_data = Vec::with_capacity(n);
     let mut result_mask = Vec::with_capacity(n);
+    let mut any_masked = false;
     for i in 0..n {
-        let m = ma_mask[i];
+        let m = ma_mask[i] || extra_mask(ma_data[i], arr_data[i]);
+        any_masked |= m;
         result_mask.push(m);
-        result_data.push(if m { fill } else { op(ma_data[i], arr_data[i]) });
+        result_data.push(if m {
+            ma_data[i]
+        } else {
+            op(ma_data[i], arr_data[i])
+        });
     }
     let result_dim = D::from_dim_slice(&target_shape).ok_or_else(|| {
         FerrayError::shape_mismatch(format!(
@@ -344,8 +360,12 @@ where
         ))
     })?;
     let data_arr = Array::from_vec(result_dim.clone(), result_data)?;
-    let mask_arr = Array::from_vec(result_dim, result_mask)?;
-    let mut out = MaskedArray::new(data_arr, mask_arr)?;
+    let mut out = if any_masked {
+        let mask_arr = Array::from_vec(result_dim, result_mask)?;
+        MaskedArray::new(data_arr, mask_arr)?
+    } else {
+        MaskedArray::from_data(data_arr)?
+    };
     out.fill_value = fill;
     Ok(out)
 }
@@ -399,7 +419,13 @@ where
     T: Element + Div<Output = T> + Copy,
     D: Dimension,
 {
-    masked_array_op(ma, arr, |x, y| x / y, "masked_div_array")
+    masked_array_op_with_extra_mask(
+        ma,
+        arr,
+        |x, y| x / y,
+        |_, y| y == T::zero(),
+        "masked_div_array",
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -472,11 +498,9 @@ mod tests {
 
     // ---- #275: masked_div with division by zero ----
     //
-    // NumPy's np.ma auto-masks division-by-zero results. ferray-ma does NOT
-    // auto-mask: division is a plain IEEE 754 f64 divide, so the result
-    // carries ±inf / NaN at the offending positions and the output mask
-    // equals the union of the input masks. These tests pin that current
-    // behavior so any future NumPy-alignment work is an intentional change.
+    // NumPy's np.ma auto-masks division-by-zero results. ferray-ma follows
+    // that behavior and keeps the left operand's data payload under masked
+    // result positions.
 
     #[test]
     fn masked_div_positive_by_zero_yields_positive_infinity_unmasked() {
@@ -486,10 +510,9 @@ mod tests {
         let rd: Vec<f64> = r.data().iter().copied().collect();
         let rm: Vec<bool> = r.mask().iter().copied().collect();
         assert_eq!(rd[0], 1.0);
-        assert!(rd[1].is_infinite() && rd[1].is_sign_positive());
+        assert_eq!(rd[1], 2.0);
         assert_eq!(rd[2], 1.0);
-        // Current behavior: div-by-zero is NOT auto-masked.
-        assert_eq!(rm, vec![false, false, false]);
+        assert_eq!(rm, vec![false, true, false]);
     }
 
     #[test]
@@ -498,8 +521,8 @@ mod tests {
         let b = ma1d(vec![0.0], vec![false]);
         let r = masked_div(&a, &b).unwrap();
         let v = r.data().iter().next().copied().unwrap();
-        assert!(v.is_infinite() && v.is_sign_negative());
-        assert!(!r.mask().iter().next().copied().unwrap());
+        assert_eq!(v, -4.0);
+        assert!(r.mask().iter().next().copied().unwrap());
     }
 
     #[test]
@@ -508,8 +531,8 @@ mod tests {
         let b = ma1d(vec![0.0], vec![false]);
         let r = masked_div(&a, &b).unwrap();
         let v = r.data().iter().next().copied().unwrap();
-        assert!(v.is_nan());
-        assert!(!r.mask().iter().next().copied().unwrap());
+        assert_eq!(v, 0.0);
+        assert!(r.mask().iter().next().copied().unwrap());
     }
 
     #[test]
@@ -521,7 +544,7 @@ mod tests {
         let r = masked_div(&a, &b).unwrap();
         let rd: Vec<f64> = r.data().iter().copied().collect();
         let rm: Vec<bool> = r.mask().iter().copied().collect();
-        assert_eq!(rd, vec![0.5, -42.0, 0.75]);
+        assert_eq!(rd, vec![0.5, 2.0, 0.75]);
         assert_eq!(rm, vec![false, true, false]);
         // The masked position must not carry the div-by-zero IEEE value.
         assert!(!rd[1].is_infinite() && !rd[1].is_nan());
@@ -534,9 +557,9 @@ mod tests {
         let divisor = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![0.0, 2.0]).unwrap();
         let r = masked_div_array(&a, &divisor).unwrap();
         let rd: Vec<f64> = r.data().iter().copied().collect();
-        assert!(rd[0].is_infinite() && rd[0].is_sign_positive());
+        assert_eq!(rd[0], 5.0);
         assert_eq!(rd[1], 3.0);
         let rm: Vec<bool> = r.mask().iter().copied().collect();
-        assert_eq!(rm, vec![false, false]);
+        assert_eq!(rm, vec![true, false]);
     }
 }

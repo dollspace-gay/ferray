@@ -1,0 +1,66 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.isrealobj",
+  "ferray_function": "ferray_ufunc::isrealobj",
+  "test_cases": [
+    {
+      "name": "complex128",
+      "inputs": {
+        "x": {
+          "data": [
+            {
+              "re": 1.0,
+              "im": 2.0
+            },
+            {
+              "re": 3.0,
+              "im": -4.0
+            },
+            {
+              "re": -1.0,
+              "im": 0.0
+            },
+            {
+              "re": -0.0,
+              "im": -0.0
+            }
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "complex128"
+        }
+      },
+      "expected": {
+        "data": false,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "float64",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            0.0,
+            -2.5,
+            "NaN"
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": true,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

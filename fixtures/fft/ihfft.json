@@ -1,0 +1,46 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.fft.ihfft",
+  "ferray_function": "ferray_fft::ihfft",
+  "test_cases": [
+    {
+      "name": "real_4",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          {
+            "re": 2.5,
+            "im": -0.0
+          },
+          {
+            "re": -0.5,
+            "im": -0.5
+          },
+          {
+            "re": -0.5,
+            "im": -0.0
+          }
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "complex128"
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

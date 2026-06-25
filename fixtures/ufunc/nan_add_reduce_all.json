@@ -1,0 +1,37 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.nansum",
+  "ferray_function": "ferray_ufunc::nan_add_reduce_all",
+  "test_cases": [
+    {
+      "name": "all",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            "NaN",
+            3.0,
+            "NaN",
+            "NaN",
+            "NaN",
+            2.0,
+            -4.0,
+            "NaN"
+          ],
+          "shape": [
+            3,
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": 2.0,
+        "shape": [],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

@@ -1,0 +1,3497 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy masked ufunc protocol",
+  "ferray_function": "ferray_ma::ufunc_support::{masked_unary,masked_binary,masked_unary_domain,masked_binary_domain,absolute,add,arccos,arccos_domain,arccosh,arccosh_domain,arcsin,arcsin_domain,arcsinh,arctan,arctanh,arctanh_domain,ceil,cos,cosh,divide,divide_domain,exp,exp2,expm1,floor,log,log10,log10_domain,log1p,log2,log2_domain,log_domain,multiply,negative,power,reciprocal,round,sign,sin,sinh,sqrt,sqrt_domain,square,subtract,tan,tanh,trunc}",
+  "test_cases": [
+    {
+      "name": "absolute",
+      "inputs": {
+        "op": "absolute",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            2.5,
+            -1.0,
+            0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "arccos",
+      "inputs": {
+        "op": "arccos",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            2.0943951023931957,
+            1.5707963267948966,
+            1.0471975511965979,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            true
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "arccosh",
+      "inputs": {
+        "op": "arccosh",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            0.9624236501192069,
+            1.45057451382258
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "arcsin",
+      "inputs": {
+        "op": "arcsin",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5235987755982989,
+            0.0,
+            0.5235987755982989,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            true
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "arcsinh",
+      "inputs": {
+        "op": "arcsinh",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -1.6472311463710958,
+            -1.0,
+            -0.48121182505960347,
+            0.0,
+            0.48121182505960347,
+            1.1947632172871094,
+            1.5501579568690622
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "arctan",
+      "inputs": {
+        "op": "arctan",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -1.1902899496825317,
+            -1.0,
+            -0.4636476090008061,
+            0.0,
+            0.4636476090008061,
+            0.982793723247329,
+            1.1525719972156676
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "arctanh",
+      "inputs": {
+        "op": "arctanh",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5493061443340548,
+            0.0,
+            0.5493061443340548,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            true
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "ceil",
+      "inputs": {
+        "op": "ceil",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.0,
+            -1.0,
+            -0.0,
+            0.0,
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "cos",
+      "inputs": {
+        "op": "cos",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -0.8011436155469337,
+            -1.0,
+            0.8775825618903728,
+            1.0,
+            0.8775825618903728,
+            0.0707372016677029,
+            -0.6281736227227391
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "cosh",
+      "inputs": {
+        "op": "cosh",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            6.132289479663686,
+            -1.0,
+            1.1276259652063807,
+            1.0,
+            1.1276259652063807,
+            2.352409615243247,
+            4.796567530460195
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "exp",
+      "inputs": {
+        "op": "exp",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            0.0820849986238988,
+            -1.0,
+            0.6065306597126334,
+            1.0,
+            1.6487212707001282,
+            4.4816890703380645,
+            9.487735836358526
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "exp2",
+      "inputs": {
+        "op": "exp2",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            0.1767766952966369,
+            0.5,
+            0.7071067811865476,
+            1.0,
+            1.4142135623730951,
+            2.8284271247461903,
+            4.756828460010884
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "expm1",
+      "inputs": {
+        "op": "expm1",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -0.9179150013761013,
+            -0.6321205588285577,
+            -0.3934693402873666,
+            0.0,
+            0.6487212707001282,
+            3.481689070338065,
+            8.487735836358526
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "floor",
+      "inputs": {
+        "op": "floor",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -3.0,
+            -1.0,
+            -1.0,
+            0.0,
+            0.0,
+            1.0,
+            2.0
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "log",
+      "inputs": {
+        "op": "log",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            -0.6931471805599453,
+            0.4054651081081644,
+            0.8109302162163288
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "log10",
+      "inputs": {
+        "op": "log10",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            -0.3010299956639812,
+            0.17609125905568124,
+            0.3521825181113625
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "log1p",
+      "inputs": {
+        "op": "log1p",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            "NaN",
+            "-Inf",
+            -0.6931471805599453,
+            0.0,
+            0.4054651081081644,
+            0.9162907318741551,
+            1.1786549963416462
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "log2",
+      "inputs": {
+        "op": "log2",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            -1.0,
+            0.5849625007211562,
+            1.1699250014423124
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "negative",
+      "inputs": {
+        "op": "negative",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            2.5,
+            -1.0,
+            0.5,
+            -0.0,
+            -0.5,
+            -1.5,
+            -2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "reciprocal",
+      "inputs": {
+        "op": "reciprocal",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -0.4,
+            -1.0,
+            -2.0,
+            "Inf",
+            2.0,
+            0.6666666666666666,
+            0.4444444444444444
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "round",
+      "inputs": {
+        "op": "round",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.0,
+            -1.0,
+            -0.0,
+            0.0,
+            0.0,
+            2.0,
+            2.0
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "sign",
+      "inputs": {
+        "op": "sign",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -1.0,
+            -1.0,
+            -1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "sin",
+      "inputs": {
+        "op": "sin",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -0.5984721441039565,
+            -1.0,
+            -0.479425538604203,
+            0.0,
+            0.479425538604203,
+            0.9974949866040544,
+            0.7780731968879212
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "sinh",
+      "inputs": {
+        "op": "sinh",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -6.0502044810397875,
+            -1.0,
+            -0.5210953054937474,
+            0.0,
+            0.5210953054937474,
+            2.1292794550948173,
+            4.691168305898331
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "sqrt",
+      "inputs": {
+        "op": "sqrt",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.7071067811865476,
+            1.224744871391589,
+            1.5
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "square",
+      "inputs": {
+        "op": "square",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            6.25,
+            1.0,
+            0.25,
+            0.0,
+            0.25,
+            2.25,
+            5.0625
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "tan",
+      "inputs": {
+        "op": "tan",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            0.7470222972386603,
+            -1.0,
+            -0.5463024898437905,
+            0.0,
+            0.5463024898437905,
+            14.101419947171719,
+            -1.2386276162240966
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "tanh",
+      "inputs": {
+        "op": "tanh",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -0.9866142981514303,
+            -1.0,
+            -0.46211715726000974,
+            0.0,
+            0.46211715726000974,
+            0.9051482536448665,
+            0.9780261147388136
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "trunc",
+      "inputs": {
+        "op": "trunc",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.0,
+            -1.0,
+            -0.0,
+            0.0,
+            0.0,
+            1.0,
+            2.0
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "arccos_domain",
+      "inputs": {
+        "op": "arccos_domain",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            2.0943951023931957,
+            1.5707963267948966,
+            1.0471975511965979,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            true
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "arccosh_domain",
+      "inputs": {
+        "op": "arccosh_domain",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            0.9624236501192069,
+            1.45057451382258
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "arcsin_domain",
+      "inputs": {
+        "op": "arcsin_domain",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5235987755982989,
+            0.0,
+            0.5235987755982989,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            true
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "arctanh_domain",
+      "inputs": {
+        "op": "arctanh_domain",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5493061443340548,
+            0.0,
+            0.5493061443340548,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            true
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "log_domain",
+      "inputs": {
+        "op": "log_domain",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            -0.6931471805599453,
+            0.4054651081081644,
+            0.8109302162163288
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "log10_domain",
+      "inputs": {
+        "op": "log10_domain",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            -0.3010299956639812,
+            0.17609125905568124,
+            0.3521825181113625
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "log2_domain",
+      "inputs": {
+        "op": "log2_domain",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            -1.0,
+            0.5849625007211562,
+            1.1699250014423124
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "sqrt_domain",
+      "inputs": {
+        "op": "sqrt_domain",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.7071067811865476,
+            1.224744871391589,
+            1.5
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "masked_unary",
+      "inputs": {
+        "op": "masked_unary",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -24.0,
+            -1.0,
+            -4.0,
+            1.0,
+            6.0,
+            16.0,
+            23.5
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "masked_unary_domain",
+      "inputs": {
+        "op": "masked_unary_domain",
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            0.0,
+            0.5,
+            1.5,
+            2.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.5,
+            -1.0,
+            -0.5,
+            100.0,
+            100.5,
+            101.5,
+            102.25
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "add",
+      "inputs": {
+        "op": "add",
+        "lhs_data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            1.0,
+            2.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "lhs_fill_value": -9.0,
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            2.0,
+            0.0,
+            3.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "rhs_fill_value": 77.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -1.0,
+            -1.0,
+            0.5,
+            1.0,
+            5.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "subtract",
+      "inputs": {
+        "op": "subtract",
+        "lhs_data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            1.0,
+            2.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "lhs_fill_value": -9.0,
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            2.0,
+            0.0,
+            3.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "rhs_fill_value": 77.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -3.0,
+            -1.0,
+            0.5,
+            1.0,
+            -1.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "multiply",
+      "inputs": {
+        "op": "multiply",
+        "lhs_data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            1.0,
+            2.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "lhs_fill_value": -9.0,
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            2.0,
+            0.0,
+            3.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "rhs_fill_value": 77.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            0.0,
+            6.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "divide",
+      "inputs": {
+        "op": "divide",
+        "lhs_data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            1.0,
+            2.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "lhs_fill_value": -9.0,
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            2.0,
+            0.0,
+            3.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "rhs_fill_value": 77.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            1.0,
+            0.6666666666666666
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "power",
+      "inputs": {
+        "op": "power",
+        "lhs_data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            1.0,
+            2.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "lhs_fill_value": -9.0,
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            2.0,
+            0.0,
+            3.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "rhs_fill_value": 77.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            1.0,
+            8.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "divide_domain",
+      "inputs": {
+        "op": "divide_domain",
+        "lhs_data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            1.0,
+            2.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "lhs_fill_value": -9.0,
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            2.0,
+            0.0,
+            3.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "rhs_fill_value": 77.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            1.0,
+            0.6666666666666666
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "masked_binary",
+      "inputs": {
+        "op": "masked_binary",
+        "lhs_data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            1.0,
+            2.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "lhs_fill_value": -9.0,
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            2.0,
+            0.0,
+            3.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "rhs_fill_value": 77.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -3.0,
+            -1.0,
+            0.5,
+            2.0,
+            7.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "masked_binary_domain",
+      "inputs": {
+        "op": "masked_binary_domain",
+        "lhs_data": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.5,
+            1.0,
+            2.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "lhs_fill_value": -9.0,
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            2.0,
+            0.0,
+            3.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "rhs_fill_value": 77.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -3.0,
+            -1.0,
+            0.5,
+            1.0,
+            -1.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -9.0
+      },
+      "tolerance_ulps": 16
+    }
+  ]
+}

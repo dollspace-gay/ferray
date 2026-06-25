@@ -1,0 +1,129 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.ediff1d",
+  "ferray_function": "ferray_ufunc::ediff1d",
+  "test_cases": [
+    {
+      "name": "standard",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            2.0,
+            4.0,
+            7.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "with_edges",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            2.0,
+            4.0,
+            7.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "to_begin": {
+          "data": [
+            -1.0
+          ],
+          "shape": [
+            1
+          ],
+          "dtype": "float64"
+        },
+        "to_end": {
+          "data": [
+            99.0,
+            100.0
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          -1.0,
+          1.0,
+          2.0,
+          3.0,
+          99.0,
+          100.0
+        ],
+        "shape": [
+          6
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "empty_with_edges",
+      "inputs": {
+        "x": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "float64"
+        },
+        "to_begin": {
+          "data": [
+            -1.0
+          ],
+          "shape": [
+            1
+          ],
+          "dtype": "float64"
+        },
+        "to_end": {
+          "data": [
+            1.0
+          ],
+          "shape": [
+            1
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          -1.0,
+          1.0
+        ],
+        "shape": [
+          2
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

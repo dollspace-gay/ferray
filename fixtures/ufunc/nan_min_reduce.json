@@ -1,0 +1,120 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.nanmin",
+  "ferray_function": "ferray_ufunc::nan_min_reduce",
+  "test_cases": [
+    {
+      "name": "axis1",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            "NaN",
+            3.0,
+            "NaN",
+            "NaN",
+            "NaN",
+            -2.0,
+            5.0,
+            "NaN"
+          ],
+          "shape": [
+            3,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "axis": 1,
+        "keepdims": false
+      },
+      "expected": {
+        "data": [
+          1.0,
+          "NaN",
+          -2.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "axis1_keepdims",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            "NaN",
+            3.0,
+            "NaN",
+            "NaN",
+            "NaN",
+            -2.0,
+            5.0,
+            "NaN"
+          ],
+          "shape": [
+            3,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "axis": 1,
+        "keepdims": true
+      },
+      "expected": {
+        "data": [
+          1.0,
+          "NaN",
+          -2.0
+        ],
+        "shape": [
+          3,
+          1
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "axis0",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            "NaN",
+            3.0,
+            "NaN",
+            "NaN",
+            "NaN",
+            -2.0,
+            5.0,
+            "NaN"
+          ],
+          "shape": [
+            3,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "axis": 0,
+        "keepdims": false
+      },
+      "expected": {
+        "data": [
+          -2.0,
+          5.0,
+          3.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

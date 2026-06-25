@@ -1,0 +1,72 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.cos",
+  "ferray_function": "ferray_ufunc::cos_f16",
+  "test_cases": [
+    {
+      "name": "standard_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            -1.57,
+            -0.785,
+            0.0,
+            0.785,
+            1.57
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          0.0004838,
+          0.7075,
+          1.0,
+          0.7075,
+          0.0004838
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "matrix_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            -1.0,
+            0.0,
+            0.5,
+            1.0
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          0.5405,
+          1.0,
+          0.8774,
+          0.5405
+        ],
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

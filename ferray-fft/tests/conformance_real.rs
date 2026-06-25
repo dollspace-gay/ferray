@@ -19,6 +19,8 @@
     unused_imports
 )]
 
+use ferray_core::Array;
+use ferray_core::dimension::IxDyn;
 use ferray_fft::FftNorm;
 use ferray_test_oracle::{
     TOL_FFT_F64_REL, assert_close_f64_slice, fixtures_dir, get_dtype, load_fixture,
@@ -74,6 +76,37 @@ fn conformance_rfft() {
     assert!(tested > 0, "conformance_rfft: no f64 cases tested");
 }
 
+/// Path anchors: `ferray_fft::rfft_into`, `ferray_fft::real::rfft_into`.
+#[test]
+fn conformance_rfft_into() {
+    let suite = load_fixture(&fft_path("rfft.json"));
+    let mut tested = 0usize;
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        if get_dtype(input) != "float64" {
+            continue;
+        }
+        let shape = parse_shape(&input["shape"]);
+        if shape.is_empty() {
+            continue;
+        }
+        let arr = make_f64_array(input);
+        let expected = parse_complex_data(&case.expected["data"]);
+        let expected_shape = parse_shape(&case.expected["shape"]);
+        let mut out = Array::from_vec(
+            IxDyn::new(&expected_shape),
+            vec![Complex::new(0.0, 0.0); expected.len()],
+        )
+        .unwrap();
+        ferray_fft::rfft_into(&arr, None, None, FftNorm::Backward, &mut out).unwrap();
+        let result_flat = interleave_complex(out.as_slice().unwrap());
+        let expected_flat = interleave_complex(&expected);
+        assert_close_f64_slice(&result_flat, &expected_flat, TOL_FFT_F64_REL, TOL_ABS);
+        tested += 1;
+    }
+    assert!(tested > 0, "conformance_rfft_into: no f64 cases tested");
+}
+
 // ===========================================================================
 // 1-D real inverse FFT
 //
@@ -117,4 +150,224 @@ fn conformance_irfft() {
         tested += 1;
     }
     assert!(tested > 0, "conformance_irfft: no complex128 cases tested");
+}
+
+/// Path anchors: `ferray_fft::irfft_into`, `ferray_fft::real::irfft_into`.
+#[test]
+fn conformance_irfft_into() {
+    let suite = load_fixture(&fft_path("irfft.json"));
+    let mut tested = 0usize;
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        if get_dtype(input) != "complex128" {
+            continue;
+        }
+        let shape = parse_shape(&input["shape"]);
+        if shape.is_empty() {
+            continue;
+        }
+        let arr = make_complex_array(input);
+        let n = case
+            .inputs
+            .get("n")
+            .and_then(serde_json::Value::as_u64)
+            .map(|v| v as usize);
+        let expected = parse_f64_data(&case.expected["data"]);
+        let expected_shape = parse_shape(&case.expected["shape"]);
+        let mut out =
+            Array::from_vec(IxDyn::new(&expected_shape), vec![0.0; expected.len()]).unwrap();
+        ferray_fft::irfft_into(&arr, n, None, FftNorm::Backward, &mut out).unwrap();
+        assert_close_f64_slice(out.as_slice().unwrap(), &expected, TOL_FFT_F64_REL, TOL_ABS);
+        tested += 1;
+    }
+    assert!(
+        tested > 0,
+        "conformance_irfft_into: no complex128 cases tested"
+    );
+}
+
+// ===========================================================================
+// 2-D / N-D real FFTs
+//
+// User-facing re-exports: `ferray_fft::rfft2`, `ferray_fft::irfft2`,
+// `ferray_fft::rfftn`, `ferray_fft::irfftn`
+// Inner canonical paths: `ferray_fft::real::*`
+// ===========================================================================
+
+/// Path anchors: `ferray_fft::rfft2`, `ferray_fft::real::rfft2`.
+#[test]
+fn conformance_rfft2() {
+    let suite = load_fixture(&fft_path("rfft2.json"));
+    let mut tested = 0usize;
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        if get_dtype(input) != "float64" {
+            continue;
+        }
+        let shape = parse_shape(&input["shape"]);
+        if shape.len() < 2 {
+            continue;
+        }
+        let arr = make_f64_array(input);
+        let result = ferray_fft::rfft2(&arr, None, None, FftNorm::Backward).unwrap();
+        let expected = parse_complex_data(&case.expected["data"]);
+        let result_flat = interleave_complex(result.as_slice().unwrap());
+        let expected_flat = interleave_complex(&expected);
+        assert_close_f64_slice(&result_flat, &expected_flat, TOL_FFT_F64_REL, TOL_ABS);
+        tested += 1;
+    }
+    assert!(tested > 0, "conformance_rfft2: no f64 cases tested");
+}
+
+/// Path anchors: `ferray_fft::irfft2`, `ferray_fft::real::irfft2`.
+#[test]
+fn conformance_irfft2() {
+    let suite = load_fixture(&fft_path("irfft2.json"));
+    let mut tested = 0usize;
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        if get_dtype(input) != "complex128" {
+            continue;
+        }
+        let shape = parse_shape(&input["shape"]);
+        if shape.len() < 2 {
+            continue;
+        }
+        let arr = make_complex_array(input);
+        let s = case.inputs.get("s").map(parse_shape);
+        let result = ferray_fft::irfft2(&arr, s.as_deref(), None, FftNorm::Backward).unwrap();
+        let expected = parse_f64_data(&case.expected["data"]);
+        assert_close_f64_slice(
+            result.as_slice().unwrap(),
+            &expected,
+            TOL_FFT_F64_REL,
+            TOL_ABS,
+        );
+        tested += 1;
+    }
+    assert!(tested > 0, "conformance_irfft2: no complex128 cases tested");
+}
+
+/// Path anchors: `ferray_fft::rfftn`, `ferray_fft::real::rfftn`.
+#[test]
+fn conformance_rfftn() {
+    let suite = load_fixture(&fft_path("rfftn.json"));
+    let mut tested = 0usize;
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        if get_dtype(input) != "float64" {
+            continue;
+        }
+        let shape = parse_shape(&input["shape"]);
+        if shape.is_empty() {
+            continue;
+        }
+        let arr = make_f64_array(input);
+        let result = ferray_fft::rfftn(&arr, None, None, FftNorm::Backward).unwrap();
+        let expected = parse_complex_data(&case.expected["data"]);
+        let result_flat = interleave_complex(result.as_slice().unwrap());
+        let expected_flat = interleave_complex(&expected);
+        assert_close_f64_slice(&result_flat, &expected_flat, TOL_FFT_F64_REL, TOL_ABS);
+        tested += 1;
+    }
+    assert!(tested > 0, "conformance_rfftn: no f64 cases tested");
+}
+
+/// Path anchors: `ferray_fft::irfftn`, `ferray_fft::real::irfftn`.
+#[test]
+fn conformance_irfftn() {
+    let suite = load_fixture(&fft_path("irfftn.json"));
+    let mut tested = 0usize;
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        if get_dtype(input) != "complex128" {
+            continue;
+        }
+        let shape = parse_shape(&input["shape"]);
+        if shape.is_empty() {
+            continue;
+        }
+        let arr = make_complex_array(input);
+        let s = case.inputs.get("s").map(parse_shape);
+        let result = ferray_fft::irfftn(&arr, s.as_deref(), None, FftNorm::Backward).unwrap();
+        let expected = parse_f64_data(&case.expected["data"]);
+        assert_close_f64_slice(
+            result.as_slice().unwrap(),
+            &expected,
+            TOL_FFT_F64_REL,
+            TOL_ABS,
+        );
+        tested += 1;
+    }
+    assert!(tested > 0, "conformance_irfftn: no complex128 cases tested");
+}
+
+// ===========================================================================
+// 1-D Hermitian FFTs
+//
+// User-facing re-exports: `ferray_fft::hfft`, `ferray_fft::ihfft`
+// Inner canonical paths: `ferray_fft::hermitian::*`
+// ===========================================================================
+
+/// Path anchors: `ferray_fft::hfft`, `ferray_fft::hermitian::hfft`.
+#[test]
+fn conformance_hfft() {
+    let suite = load_fixture(&fft_path("hfft.json"));
+    let mut tested = 0usize;
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        if get_dtype(input) != "complex128" {
+            continue;
+        }
+        let shape = parse_shape(&input["shape"]);
+        if shape.is_empty() {
+            continue;
+        }
+        let arr = make_complex_array(input);
+        let n = case
+            .inputs
+            .get("n")
+            .and_then(serde_json::Value::as_u64)
+            .map(|v| v as usize);
+        let result = ferray_fft::hfft(&arr, n, None, FftNorm::Backward).unwrap();
+        let expected = parse_f64_data(&case.expected["data"]);
+        assert_close_f64_slice(
+            result.as_slice().unwrap(),
+            &expected,
+            TOL_FFT_F64_REL,
+            TOL_ABS,
+        );
+        tested += 1;
+    }
+    assert!(tested > 0, "conformance_hfft: no complex128 cases tested");
+}
+
+/// Path anchors: `ferray_fft::ihfft`, `ferray_fft::hermitian::ihfft`.
+#[test]
+fn conformance_ihfft() {
+    let suite = load_fixture(&fft_path("ihfft.json"));
+    let mut tested = 0usize;
+    for case in &suite.test_cases {
+        let input = &case.inputs["x"];
+        if get_dtype(input) != "float64" {
+            continue;
+        }
+        let shape = parse_shape(&input["shape"]);
+        if shape.is_empty() {
+            continue;
+        }
+        let arr = make_f64_array(input);
+        let n = case
+            .inputs
+            .get("n")
+            .and_then(serde_json::Value::as_u64)
+            .map(|v| v as usize);
+        let result = ferray_fft::ihfft(&arr, n, None, FftNorm::Backward).unwrap();
+        let expected = parse_complex_data(&case.expected["data"]);
+        let result_flat = interleave_complex(result.as_slice().unwrap());
+        let expected_flat = interleave_complex(&expected);
+        assert_close_f64_slice(&result_flat, &expected_flat, TOL_FFT_F64_REL, TOL_ABS);
+        tested += 1;
+    }
+    assert!(tested > 0, "conformance_ihfft: no f64 cases tested");
 }

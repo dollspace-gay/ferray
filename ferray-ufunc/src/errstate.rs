@@ -68,12 +68,11 @@ struct Policies {
 
 impl Default for Policies {
     fn default() -> Self {
-        // Match numpy's default: invalid = Warn, others = Ignore.
-        // (numpy's actual default is 'warn' across all four for
-        // the C library, but the Python defaults are looser.)
+        // Match numpy's Python-level default:
+        // {'divide': 'warn', 'over': 'warn', 'under': 'ignore', 'invalid': 'warn'}.
         Self {
-            divide_by_zero: FpErrorState::Ignore,
-            overflow: FpErrorState::Ignore,
+            divide_by_zero: FpErrorState::Warn,
+            overflow: FpErrorState::Warn,
             underflow: FpErrorState::Ignore,
             invalid: FpErrorState::Warn,
         }
@@ -205,12 +204,13 @@ mod tests {
     fn default_policy_invalid_is_warn() {
         // Reset to defaults for this test in case earlier tests
         // changed the thread-local state.
-        seterr(FpErrorClass::DivideByZero, FpErrorState::Ignore);
-        seterr(FpErrorClass::Overflow, FpErrorState::Ignore);
+        seterr(FpErrorClass::DivideByZero, FpErrorState::Warn);
+        seterr(FpErrorClass::Overflow, FpErrorState::Warn);
         seterr(FpErrorClass::Underflow, FpErrorState::Ignore);
         seterr(FpErrorClass::Invalid, FpErrorState::Warn);
         assert_eq!(geterr(FpErrorClass::Invalid), FpErrorState::Warn);
-        assert_eq!(geterr(FpErrorClass::DivideByZero), FpErrorState::Ignore);
+        assert_eq!(geterr(FpErrorClass::DivideByZero), FpErrorState::Warn);
+        assert_eq!(geterr(FpErrorClass::Overflow), FpErrorState::Warn);
     }
 
     #[test]

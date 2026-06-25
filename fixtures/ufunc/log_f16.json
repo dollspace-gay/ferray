@@ -1,0 +1,72 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.log",
+  "ferray_function": "ferray_ufunc::log_f16",
+  "test_cases": [
+    {
+      "name": "standard_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            0.25,
+            0.5,
+            1.0,
+            2.0,
+            8.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          -1.387,
+          -0.6934,
+          0.0,
+          0.6934,
+          2.08
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "matrix_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            0.125,
+            1.0,
+            4.0,
+            16.0
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          -2.08,
+          0.0,
+          1.387,
+          2.773
+        ],
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.clip",
+  "ferray_function": "ferray_ufunc::clip_ord",
+  "test_cases": [
+    {
+      "name": "int64",
+      "inputs": {
+        "x": {
+          "data": [
+            -10,
+            0,
+            5,
+            100,
+            255
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "int64"
+        },
+        "a_min": 0,
+        "a_max": 200
+      },
+      "expected": {
+        "data": [
+          0,
+          0,
+          5,
+          100,
+          200
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "int64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "int64_negative_bounds",
+      "inputs": {
+        "x": {
+          "data": [
+            -10,
+            -5,
+            0,
+            5,
+            10
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "int64"
+        },
+        "a_min": -6,
+        "a_max": 6
+      },
+      "expected": {
+        "data": [
+          -6,
+          -5,
+          0,
+          5,
+          6
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "int64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "empty_int64",
+      "inputs": {
+        "x": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "int64"
+        },
+        "a_min": 0,
+        "a_max": 10
+      },
+      "expected": {
+        "data": [],
+        "shape": [
+          0
+        ],
+        "dtype": "int64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

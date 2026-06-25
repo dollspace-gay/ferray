@@ -1,0 +1,88 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.diff",
+  "ferray_function": "ferray_ufunc::diff",
+  "test_cases": [
+    {
+      "name": "n1",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            3.0,
+            6.0,
+            10.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "n": 1
+      },
+      "expected": {
+        "data": [
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "n2",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            3.0,
+            6.0,
+            10.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "n": 2
+      },
+      "expected": {
+        "data": [
+          1.0,
+          1.0
+        ],
+        "shape": [
+          2
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "empty",
+      "inputs": {
+        "x": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "float64"
+        },
+        "n": 1
+      },
+      "expected": {
+        "data": [],
+        "shape": [
+          0
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

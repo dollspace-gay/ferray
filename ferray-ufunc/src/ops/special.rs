@@ -180,8 +180,10 @@ unary_f16_fn!(
         if x == 0.0 {
             1.0
         } else {
-            let px = std::f32::consts::PI * x;
-            core_math::sinf(px) / px
+            let pi = half::f16::from_f32(std::f32::consts::PI).to_f32();
+            let px = half::f16::from_f32(pi * x).to_f32();
+            let sin_px = half::f16::from_f32(core_math::sinf(px)).to_f32();
+            sin_px / px
         }
     }
 );

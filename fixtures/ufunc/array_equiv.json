@@ -1,0 +1,180 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.array_equiv",
+  "ferray_function": "ferray_ufunc::array_equiv",
+  "test_cases": [
+    {
+      "name": "same_shape_equal",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": true,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "same_shape_not_equal",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1.0,
+            2.0,
+            4.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": false,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "broadcastable_equal",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": true,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "broadcastable_not_equal",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            1.0,
+            2.0,
+            4.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": false,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "incompatible_false",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            2.0
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": false,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.allclose",
+  "ferray_function": "ferray_ufunc::allclose",
+  "test_cases": [
+    {
+      "name": "all_close",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1.000000001,
+            2.000000001,
+            3.000000001
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "rtol": 1e-05,
+        "atol": 1e-08
+      },
+      "expected": {
+        "data": true,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "not_all_close",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1.0,
+            2.0,
+            4.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "rtol": 1e-05,
+        "atol": 1e-08
+      },
+      "expected": {
+        "data": false,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "broadcast_true",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            1.0,
+            2.01,
+            3.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "rtol": 0.01,
+        "atol": 1e-08
+      },
+      "expected": {
+        "data": true,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "matching_infinities",
+      "inputs": {
+        "a": {
+          "data": [
+            "Inf",
+            "-Inf"
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            "Inf",
+            "-Inf"
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "rtol": 1e-05,
+        "atol": 1e-08
+      },
+      "expected": {
+        "data": true,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

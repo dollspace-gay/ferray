@@ -184,16 +184,16 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
         Ok(out)
     }
 
-    /// Fancy index selection from a 1-D `MaskedArray`.
+    /// Take elements by flat index.
     ///
-    /// Equivalent to `a[indices]` in `NumPy` fancy indexing (restricted
-    /// to 1-D because higher-rank fancy indexing has NumPy-specific
-    /// broadcasting semantics that would be easy to get subtly wrong).
+    /// Equivalent to `numpy.ma.take(a, indices)` with `axis=None`.
     /// Returns a new 1-D `MaskedArray` whose elements are picked from
     /// `self` at the supplied flat positions.
     ///
-    /// Each result position carries through both the selected value
-    /// and its original mask bit.
+    /// Each result position carries through both the selected value and
+    /// its original mask bit. Matching NumPy's `take`, the result uses
+    /// the dtype default fill value and is not hard-masked even when
+    /// the source array has custom fill/hard-mask state.
     ///
     /// # Errors
     /// - `FerrayError::IndexOutOfBounds` if any index is out of range.
@@ -238,10 +238,7 @@ impl<T: Element + Copy, D: Dimension> MaskedArray<T, D> {
         let n = picked_data.len();
         let data_arr = Array::<T, Ix1>::from_vec(Ix1::new([n]), picked_data)?;
         let mask_arr = Array::<bool, Ix1>::from_vec(Ix1::new([n]), picked_mask)?;
-        let mut out = MaskedArray::new(data_arr, mask_arr)?;
-        out.set_fill_value(self.fill_value());
-        out.hard_mask = self.hard_mask;
-        Ok(out)
+        MaskedArray::new(data_arr, mask_arr)
     }
 }
 

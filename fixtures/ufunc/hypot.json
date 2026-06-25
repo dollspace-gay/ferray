@@ -1,0 +1,125 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.hypot",
+  "ferray_function": "ferray_ufunc::hypot",
+  "test_cases": [
+    {
+      "name": "pythagorean",
+      "inputs": {
+        "a": {
+          "data": [
+            3.0,
+            5.0,
+            8.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            4.0,
+            12.0,
+            15.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          5.0,
+          13.0,
+          17.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "signed",
+      "inputs": {
+        "a": {
+          "data": [
+            -3.0,
+            3.0,
+            -5.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            4.0,
+            -4.0,
+            -12.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          5.0,
+          5.0,
+          13.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "special",
+      "inputs": {
+        "a": {
+          "data": [
+            "NaN",
+            "Inf",
+            1.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1.0,
+            1.0,
+            "Inf"
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          "NaN",
+          "Inf",
+          "Inf"
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

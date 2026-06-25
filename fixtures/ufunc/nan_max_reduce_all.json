@@ -1,0 +1,54 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.nanmax",
+  "ferray_function": "ferray_ufunc::nan_max_reduce_all",
+  "test_cases": [
+    {
+      "name": "mixed_values",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            "NaN",
+            3.0,
+            -2.0,
+            5.0,
+            "NaN"
+          ],
+          "shape": [
+            6
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": 5.0,
+        "shape": [],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "all_nan",
+      "inputs": {
+        "x": {
+          "data": [
+            "NaN",
+            "NaN"
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": "NaN",
+        "shape": [],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

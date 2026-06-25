@@ -179,6 +179,12 @@ where
         if equal_nan && x.is_nan() && y.is_nan() {
             return true;
         }
+        if x == y {
+            return true;
+        }
+        if x.is_infinite() || y.is_infinite() {
+            return false;
+        }
         if x.is_nan() || y.is_nan() {
             return false;
         }
@@ -204,11 +210,12 @@ where
 /// For arrays of the same shape, this is the same as `array_equal`.
 pub fn array_equiv<T, D>(a: &Array<T, D>, b: &Array<T, D>) -> bool
 where
-    T: Element + PartialEq,
+    T: Element + PartialEq + Copy,
     D: Dimension,
 {
-    // For same-dimension arrays, just check equality
-    array_equal(a, b)
+    equal(a, b)
+        .map(|matches| matches.iter().all(|&x| x))
+        .unwrap_or(false)
 }
 
 /// Test whether two arrays are element-wise close within tolerances.
@@ -242,6 +249,12 @@ where
     binary_map_op(a, b, |x, y| {
         if equal_nan && x.is_nan() && y.is_nan() {
             return true;
+        }
+        if x == y {
+            return true;
+        }
+        if x.is_infinite() || y.is_infinite() {
+            return false;
         }
         if x.is_nan() || y.is_nan() {
             return false;

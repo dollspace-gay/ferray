@@ -151,7 +151,7 @@ where
     // Uses Clone rather than Copy so the kernel works for any Element type.
     let data: Vec<T> = input.iter().cloned().collect();
 
-    let mut out_shape: Vec<usize> = shape
+    let out_shape: Vec<usize> = shape
         .iter()
         .enumerate()
         .filter_map(|(i, &s)| if i == axis { None } else { Some(s) })
@@ -175,13 +175,6 @@ where
         }
     }
 
-    // NumPy collapses a single-axis input to a 0-D scalar; we expose it as a
-    // length-1 1-D array because ferray has no Ix0 in the IxDyn constructor
-    // path used here and users can .reshape(&[]) if they truly need scalar
-    // rank.
-    if out_shape.is_empty() {
-        out_shape.push(1);
-    }
     Array::from_vec(IxDyn::from(&out_shape[..]), result)
 }
 
@@ -399,8 +392,8 @@ mod tests {
         // NaN is truthy (nonzero), Inf is truthy, 0 is falsy.
         let a = Array::<f64, Ix1>::from_vec(Ix1::new([4]), vec![0.0, 0.0, f64::NAN, 0.0]).unwrap();
         let r = any_axis(&a, 0).unwrap();
-        // Reducing a 1-D array along its only axis produces a length-1 result.
-        assert_eq!(r.shape(), &[1]);
+        // Reducing a 1-D array along its only axis produces a rank-0 scalar.
+        assert_eq!(r.shape(), &[]);
         assert_eq!(r.as_slice().unwrap(), &[true]);
     }
 

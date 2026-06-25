@@ -1,5 +1,5 @@
 {
-  "numpy_version": "2.4.4",
+  "numpy_version": "2.4.5",
   "fixture_schema_version": 2,
   "function": "numpy.isinf",
   "ferray_function": "ferray_ufunc::isinf",

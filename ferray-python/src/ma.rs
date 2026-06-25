@@ -7471,7 +7471,9 @@ fn from_unmasked(data: ArrayD<f64>) -> PyResult<PyMaskedArray> {
 fn ix1_ma_to_dyn(m: RustMa<f64, ferray_core::dimension::Ix1>) -> PyResult<RustMa<f64, IxDyn>> {
     let data = fma::getdata(&m).map_err(ferr_to_pyerr)?.into_dyn();
     let mask = fma::getmaskarray(&m).map_err(ferr_to_pyerr)?.into_dyn();
-    RustMa::new(data, mask).map_err(ferr_to_pyerr)
+    let mut out = RustMa::new(data, mask).map_err(ferr_to_pyerr)?;
+    out.set_fill_value(m.fill_value());
+    Ok(out)
 }
 
 /// `numpy.ma.zeros(shape)` — masked array of zeros with `nomask`.
@@ -8228,24 +8230,8 @@ pub fn dot<'py>(
 #[pyfunction]
 pub fn unique<'py>(py: Python<'py>, a: &Bound<'py, PyAny>) -> PyResult<PyMaskedArray> {
     let m = coerce_to_ma(py, a)?;
-    let uniq: Array1<f64> = fma::ma_unique(&m).map_err(ferr_to_pyerr)?;
-    let mut data: Vec<f64> = uniq.iter().copied().collect();
-    let mut mask: Vec<bool> = vec![false; data.len()];
-
-    // Mirror numpy.ma.unique: a single masked slot trails iff any input
-    // element was masked. Its data value is not observable (masked), so we
-    // reuse the first masked input value as the placeholder.
-    let (in_data, in_mask, _shape) = ma_parts(&m)?;
-    if let Some(pos) = in_mask.iter().position(|&b| b) {
-        data.push(in_data[pos]);
-        mask.push(true);
-    }
-
-    let n = data.len();
-    let data_arr = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[n]), data).map_err(ferr_to_pyerr)?;
-    let mask_arr = Array::<bool, IxDyn>::from_vec(IxDyn::new(&[n]), mask).map_err(ferr_to_pyerr)?;
-    let inner = RustMa::new(data_arr, mask_arr).map_err(ferr_to_pyerr)?;
-    Ok(PyMaskedArray::from_inner(inner))
+    let uniq = fma::ma_unique(&m).map_err(ferr_to_pyerr)?;
+    Ok(PyMaskedArray::from_inner(ix1_ma_to_dyn(uniq)?))
 }
 
 // ===========================================================================

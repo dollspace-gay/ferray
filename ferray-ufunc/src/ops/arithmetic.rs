@@ -1509,7 +1509,7 @@ where
 /// Reduce by NaN-skipping maximum along an axis with optional keepdims.
 ///
 /// Equivalent to `np.nanmax(arr, axis=axis, keepdims=keepdims)`. NaN
-/// elements are skipped (treated as `-inf`).
+/// elements are skipped; all-NaN slices produce NaN.
 pub fn nan_max_reduce<T, D>(
     input: &Array<T, D>,
     axis: usize,
@@ -1519,20 +1519,12 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_axis_keepdims(
+    nan_extreme_reduce_axis(
         input,
         axis,
-        <T as Float>::neg_infinity(),
         keepdims,
-        |acc, x| {
-            if x.is_nan() {
-                acc
-            } else if x > acc {
-                x
-            } else {
-                acc
-            }
-        },
+        <T as Float>::neg_infinity(),
+        |x, acc| x > acc,
     )
 }
 
@@ -1546,49 +1538,38 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_axes(
+    nan_extreme_reduce_axes(
         input,
         axes,
-        <T as Float>::neg_infinity(),
         keepdims,
-        |acc, x| {
-            if x.is_nan() {
-                acc
-            } else if x > acc {
-                x
-            } else {
-                acc
-            }
-        },
+        <T as Float>::neg_infinity(),
+        |x, acc| x > acc,
     )
 }
 
 /// Reduce by NaN-skipping maximum over the entire array.
 ///
-/// Equivalent to `np.nanmax(arr)`. Returns `-inf` for an all-NaN input
-/// rather than raising — callers that need the all-NaN error semantics
-/// should use ferray-stats' `nanmax` (which checks the result and errors
-/// out instead of returning the seed).
+/// Equivalent to `np.nanmax(arr)`. Returns NaN for an all-NaN input, matching
+/// NumPy's scalar result while omitting NumPy's warning side channel.
 pub fn nan_max_reduce_all<T, D>(input: &Array<T, D>) -> T
 where
     T: Element + Float,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_all(input, <T as Float>::neg_infinity(), |acc, x| {
-        if x.is_nan() {
-            acc
-        } else if x > acc {
-            x
-        } else {
-            acc
+    let mut acc = <T as Float>::neg_infinity();
+    let mut seen = false;
+    for x in input.iter().copied() {
+        if update_nan_extreme(&mut acc, &mut seen, x, |x, acc| x > acc) {
+            continue;
         }
-    })
+    }
+    if seen { acc } else { <T as Float>::nan() }
 }
 
 /// Reduce by NaN-skipping minimum along an axis with optional keepdims.
 ///
 /// Equivalent to `np.nanmin(arr, axis=axis, keepdims=keepdims)`. NaN
-/// elements are skipped (treated as `+inf`).
+/// elements are skipped; all-NaN slices produce NaN.
 pub fn nan_min_reduce<T, D>(
     input: &Array<T, D>,
     axis: usize,
@@ -1598,21 +1579,9 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_axis_keepdims(
-        input,
-        axis,
-        <T as Float>::infinity(),
-        keepdims,
-        |acc, x| {
-            if x.is_nan() {
-                acc
-            } else if x < acc {
-                x
-            } else {
-                acc
-            }
-        },
-    )
+    nan_extreme_reduce_axis(input, axis, keepdims, <T as Float>::infinity(), |x, acc| {
+        x < acc
+    })
 }
 
 /// Reduce by NaN-skipping minimum over multiple axes.
@@ -1625,32 +1594,207 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_axes(input, axes, <T as Float>::infinity(), keepdims, |acc, x| {
-        if x.is_nan() {
-            acc
-        } else if x < acc {
-            x
-        } else {
-            acc
-        }
+    nan_extreme_reduce_axes(input, axes, keepdims, <T as Float>::infinity(), |x, acc| {
+        x < acc
     })
 }
 
 /// Reduce by NaN-skipping minimum over the entire array.
+///
+/// Equivalent to `np.nanmin(arr)`. Returns NaN for an all-NaN input, matching
+/// NumPy's scalar result while omitting NumPy's warning side channel.
 pub fn nan_min_reduce_all<T, D>(input: &Array<T, D>) -> T
 where
     T: Element + Float,
     D: Dimension,
 {
-    crate::ufunc_methods::reduce_all(input, <T as Float>::infinity(), |acc, x| {
-        if x.is_nan() {
-            acc
-        } else if x < acc {
-            x
-        } else {
-            acc
+    let mut acc = <T as Float>::infinity();
+    let mut seen = false;
+    for x in input.iter().copied() {
+        if update_nan_extreme(&mut acc, &mut seen, x, |x, acc| x < acc) {
+            continue;
         }
-    })
+    }
+    if seen { acc } else { <T as Float>::nan() }
+}
+
+fn nan_extreme_reduce_axis<T, D, F>(
+    input: &Array<T, D>,
+    axis: usize,
+    keepdims: bool,
+    identity: T,
+    better: F,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+    F: Fn(T, T) -> bool,
+{
+    let ndim = input.ndim();
+    if axis >= ndim {
+        return Err(FerrayError::axis_out_of_bounds(axis, ndim));
+    }
+
+    let shape = input.shape().to_vec();
+    let axis_len = shape[axis];
+    let outer_size: usize = shape[..axis].iter().product();
+    let inner_size: usize = shape[axis + 1..].iter().product();
+
+    let mut out_shape: Vec<usize> = if keepdims {
+        let mut kept = shape.clone();
+        kept[axis] = 1;
+        kept
+    } else {
+        shape
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &s)| if i == axis { None } else { Some(s) })
+            .collect()
+    };
+    if out_shape.is_empty() {
+        out_shape.push(1);
+    }
+    let out_size: usize = out_shape.iter().product::<usize>().max(1);
+
+    let data: Vec<T> = input.iter().copied().collect();
+    let mut result = vec![identity; out_size];
+    let mut seen = vec![false; out_size];
+
+    for outer in 0..outer_size {
+        for inner in 0..inner_size {
+            let out_idx = outer * inner_size + inner;
+            for k in 0..axis_len {
+                let idx = outer * axis_len * inner_size + k * inner_size + inner;
+                update_nan_extreme(&mut result[out_idx], &mut seen[out_idx], data[idx], &better);
+            }
+        }
+    }
+
+    fill_unseen_nan(&mut result, &seen);
+    Array::from_vec(IxDyn::new(&out_shape), result)
+}
+
+fn nan_extreme_reduce_axes<T, D, F>(
+    input: &Array<T, D>,
+    axes: &[usize],
+    keepdims: bool,
+    identity: T,
+    better: F,
+) -> FerrayResult<Array<T, IxDyn>>
+where
+    T: Element + Float,
+    D: Dimension,
+    F: Fn(T, T) -> bool,
+{
+    let ndim = input.ndim();
+    let shape = input.shape().to_vec();
+
+    let mut sorted_axes: Vec<usize> = axes.to_vec();
+    sorted_axes.sort_unstable();
+    for window in sorted_axes.windows(2) {
+        if window[0] == window[1] {
+            return Err(FerrayError::invalid_value(format!(
+                "reduce_axes: duplicate axis {}",
+                window[0]
+            )));
+        }
+    }
+    for &ax in &sorted_axes {
+        if ax >= ndim {
+            return Err(FerrayError::axis_out_of_bounds(ax, ndim));
+        }
+    }
+
+    if sorted_axes.is_empty() {
+        let data: Vec<T> = input.iter().copied().collect();
+        return Array::from_vec(IxDyn::new(&shape), data);
+    }
+
+    let kept_axes: Vec<usize> = (0..ndim)
+        .filter(|i| sorted_axes.binary_search(i).is_err())
+        .collect();
+    let kept_dims: Vec<usize> = kept_axes.iter().map(|&i| shape[i]).collect();
+
+    let mut out_shape: Vec<usize> = if keepdims {
+        shape
+            .iter()
+            .enumerate()
+            .map(|(i, &d)| {
+                if sorted_axes.binary_search(&i).is_ok() {
+                    1
+                } else {
+                    d
+                }
+            })
+            .collect()
+    } else {
+        kept_dims.clone()
+    };
+    if out_shape.is_empty() {
+        out_shape.push(1);
+    }
+    let out_size: usize = out_shape.iter().product::<usize>().max(1);
+
+    let mut in_strides = vec![1usize; ndim];
+    for i in (0..ndim.saturating_sub(1)).rev() {
+        in_strides[i] = in_strides[i + 1] * shape[i + 1];
+    }
+
+    let mut out_strides = vec![1usize; kept_dims.len()];
+    for i in (0..kept_dims.len().saturating_sub(1)).rev() {
+        out_strides[i] = out_strides[i + 1] * kept_dims[i + 1];
+    }
+
+    let data: Vec<T> = input.iter().copied().collect();
+    let mut result = vec![identity; out_size];
+    let mut seen = vec![false; out_size];
+
+    for (flat, &x) in data.iter().enumerate() {
+        let mut rem = flat;
+        let mut out_flat = 0usize;
+        let mut kept_pos = 0usize;
+        for (i, &stride) in in_strides.iter().enumerate() {
+            let idx = rem / stride;
+            rem %= stride;
+            if sorted_axes.binary_search(&i).is_err() {
+                if !out_strides.is_empty() {
+                    out_flat += idx * out_strides[kept_pos];
+                }
+                kept_pos += 1;
+            }
+        }
+        update_nan_extreme(&mut result[out_flat], &mut seen[out_flat], x, &better);
+    }
+
+    fill_unseen_nan(&mut result, &seen);
+    Array::from_vec(IxDyn::new(&out_shape), result)
+}
+
+#[inline]
+fn update_nan_extreme<T, F>(acc: &mut T, seen: &mut bool, x: T, better: F) -> bool
+where
+    T: Float,
+    F: Fn(T, T) -> bool,
+{
+    if x.is_nan() {
+        return false;
+    }
+    if !*seen || better(x, *acc) {
+        *acc = x;
+    }
+    *seen = true;
+    true
+}
+
+fn fill_unseen_nan<T>(result: &mut [T], seen: &[bool])
+where
+    T: Float,
+{
+    for (value, &seen_value) in result.iter_mut().zip(seen) {
+        if !seen_value {
+            *value = <T as Float>::nan();
+        }
+    }
 }
 
 #[inline]
@@ -2822,23 +2966,34 @@ mod tests {
     }
 
     #[test]
-    fn nan_max_reduce_all_nans_only_returns_neg_infinity() {
+    fn nan_max_reduce_all_nans_only_returns_nan() {
         let a = arr1(vec![f64::NAN, f64::NAN]);
         let m = nan_max_reduce_all(&a);
-        assert!(m.is_infinite() && m.is_sign_negative());
+        assert!(m.is_nan());
     }
 
     #[test]
     fn nan_max_reduce_axis_per_row_with_nans() {
         let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![1.0, f64::NAN, 3.0, f64::NAN, 5.0, 4.0],
+            Ix2::new([3, 3]),
+            vec![
+                1.0,
+                f64::NAN,
+                3.0,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                5.0,
+                4.0,
+            ],
         )
         .unwrap();
         let r = nan_max_reduce(&a, 1, false).unwrap();
         let s = r.as_slice().unwrap();
         assert!((s[0] - 3.0).abs() < 1e-12);
-        assert!((s[1] - 5.0).abs() < 1e-12);
+        assert!(s[1].is_nan());
+        assert!((s[2] - 5.0).abs() < 1e-12);
     }
 
     #[test]
@@ -2849,23 +3004,34 @@ mod tests {
     }
 
     #[test]
-    fn nan_min_reduce_all_nans_only_returns_infinity() {
+    fn nan_min_reduce_all_nans_only_returns_nan() {
         let a = arr1(vec![f64::NAN, f64::NAN]);
         let m = nan_min_reduce_all(&a);
-        assert!(m.is_infinite() && m.is_sign_positive());
+        assert!(m.is_nan());
     }
 
     #[test]
     fn nan_min_reduce_axis_per_row_with_nans() {
         let a = Array::<f64, Ix2>::from_vec(
-            Ix2::new([2, 3]),
-            vec![5.0, f64::NAN, 3.0, f64::NAN, 5.0, 4.0],
+            Ix2::new([3, 3]),
+            vec![
+                5.0,
+                f64::NAN,
+                3.0,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                5.0,
+                4.0,
+            ],
         )
         .unwrap();
         let r = nan_min_reduce(&a, 1, false).unwrap();
         let s = r.as_slice().unwrap();
         assert!((s[0] - 3.0).abs() < 1e-12);
-        assert!((s[1] - 4.0).abs() < 1e-12);
+        assert!(s[1].is_nan());
+        assert!((s[2] - 4.0).abs() < 1e-12);
     }
 
     #[test]

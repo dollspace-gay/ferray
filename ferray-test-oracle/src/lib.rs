@@ -392,6 +392,7 @@ pub fn parse_shape(value: &serde_json::Value) -> Vec<usize> {
 pub fn parse_bool_data(value: &serde_json::Value) -> Vec<bool> {
     match value {
         serde_json::Value::Array(arr) => arr.iter().map(|v| v.as_bool().unwrap()).collect(),
+        serde_json::Value::Bool(b) => vec![*b],
         _ => panic!("unexpected bool data: {value}"),
     }
 }
@@ -405,6 +406,46 @@ pub fn parse_string_data(value: &serde_json::Value) -> Vec<String> {
             .map(|v| v.as_str().unwrap().to_string())
             .collect(),
         _ => panic!("unexpected string data: {value}"),
+    }
+}
+
+/// Parse signed 64-bit integer array data from JSON.
+#[must_use]
+pub fn parse_i64_data(value: &serde_json::Value) -> Vec<i64> {
+    match value {
+        serde_json::Value::Array(arr) => arr.iter().map(parse_i64_value).collect(),
+        serde_json::Value::Number(_) => vec![parse_i64_value(value)],
+        _ => panic!("unexpected i64 data: {value}"),
+    }
+}
+
+fn parse_i64_value(value: &serde_json::Value) -> i64 {
+    match value {
+        serde_json::Value::Number(n) => n
+            .to_string()
+            .parse::<i64>()
+            .expect("integer fixture value fits i64"),
+        _ => panic!("unexpected i64 value: {value}"),
+    }
+}
+
+/// Parse unsigned 32-bit integer array data from JSON.
+#[must_use]
+pub fn parse_u32_data(value: &serde_json::Value) -> Vec<u32> {
+    match value {
+        serde_json::Value::Array(arr) => arr.iter().map(parse_u32_value).collect(),
+        serde_json::Value::Number(_) => vec![parse_u32_value(value)],
+        _ => panic!("unexpected u32 data: {value}"),
+    }
+}
+
+fn parse_u32_value(value: &serde_json::Value) -> u32 {
+    match value {
+        serde_json::Value::Number(n) => n
+            .to_string()
+            .parse::<u32>()
+            .expect("integer fixture value fits u32"),
+        _ => panic!("unexpected u32 value: {value}"),
     }
 }
 
@@ -451,6 +492,22 @@ pub fn make_complex_array(value: &serde_json::Value) -> Array<Complex<f64>, IxDy
 #[must_use]
 pub fn make_bool_array(value: &serde_json::Value) -> Array<bool, IxDyn> {
     let data = parse_bool_data(&value["data"]);
+    let shape = parse_shape(&value["shape"]);
+    Array::from_vec(IxDyn::new(&shape), data).unwrap()
+}
+
+/// Build an `Array<i64, IxDyn>` from a fixture input object.
+#[must_use]
+pub fn make_i64_array(value: &serde_json::Value) -> Array<i64, IxDyn> {
+    let data = parse_i64_data(&value["data"]);
+    let shape = parse_shape(&value["shape"]);
+    Array::from_vec(IxDyn::new(&shape), data).unwrap()
+}
+
+/// Build an `Array<u32, IxDyn>` from a fixture input object.
+#[must_use]
+pub fn make_u32_array(value: &serde_json::Value) -> Array<u32, IxDyn> {
+    let data = parse_u32_data(&value["data"]);
     let shape = parse_shape(&value["shape"]);
     Array::from_vec(IxDyn::new(&shape), data).unwrap()
 }

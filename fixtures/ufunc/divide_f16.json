@@ -1,0 +1,95 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.divide",
+  "ferray_function": "ferray_ufunc::divide_f16",
+  "test_cases": [
+    {
+      "name": "standard_f16",
+      "inputs": {
+        "a": {
+          "data": [
+            3.0,
+            4.0,
+            -3.5,
+            3.5
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float16"
+        },
+        "b": {
+          "data": [
+            4.0,
+            3.0,
+            2.0,
+            2.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          0.75,
+          1.333,
+          -1.75,
+          1.75
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 1
+    },
+    {
+      "name": "matrix_f16",
+      "inputs": {
+        "a": {
+          "data": [
+            1.5,
+            -4.0,
+            7.0,
+            -7.0
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float16"
+        },
+        "b": {
+          "data": [
+            2.0,
+            3.0,
+            2.0,
+            2.0
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          0.75,
+          -1.333,
+          3.5,
+          -3.5
+        ],
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 1
+    }
+  ]
+}

@@ -1,0 +1,169 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.bitwise_or",
+  "ferray_function": "ferray_ufunc::bitwise_or",
+  "test_cases": [
+    {
+      "name": "standard_i64",
+      "inputs": {
+        "a": {
+          "data": [
+            -3,
+            -2,
+            -1,
+            0,
+            1,
+            2,
+            3
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "int64"
+        },
+        "b": {
+          "data": [
+            1,
+            2,
+            3,
+            4,
+            -1,
+            -2,
+            -3
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "int64"
+        }
+      },
+      "expected": {
+        "data": [
+          -3,
+          -2,
+          -1,
+          4,
+          -1,
+          -2,
+          -1
+        ],
+        "shape": [
+          7
+        ],
+        "dtype": "int64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "broadcast_i64",
+      "inputs": {
+        "a": {
+          "data": [
+            1,
+            2
+          ],
+          "shape": [
+            2,
+            1
+          ],
+          "dtype": "int64"
+        },
+        "b": {
+          "data": [
+            3,
+            4,
+            5
+          ],
+          "shape": [
+            1,
+            3
+          ],
+          "dtype": "int64"
+        }
+      },
+      "expected": {
+        "data": [
+          3,
+          5,
+          5,
+          3,
+          6,
+          7
+        ],
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "int64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "bool",
+      "inputs": {
+        "a": {
+          "data": [
+            true,
+            false,
+            true
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        },
+        "b": {
+          "data": [
+            false,
+            false,
+            true
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "expected": {
+        "data": [
+          true,
+          false,
+          true
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "empty_i64",
+      "inputs": {
+        "a": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "int64"
+        },
+        "b": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "int64"
+        }
+      },
+      "expected": {
+        "data": [],
+        "shape": [
+          0
+        ],
+        "dtype": "int64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

@@ -1,0 +1,216 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.rad2deg",
+  "ferray_function": "ferray_ufunc::rad2deg",
+  "test_cases": [
+    {
+      "name": "standard_f64",
+      "inputs": {
+        "x": {
+          "data": [
+            -6.283185307179586,
+            -3.141592653589793,
+            -1.5707963267948966,
+            0.0,
+            1.5707963267948966,
+            3.141592653589793,
+            6.283185307179586
+          ],
+          "shape": [
+            7
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          -360.0,
+          -180.0,
+          -90.0,
+          0.0,
+          90.0,
+          180.0,
+          360.0
+        ],
+        "shape": [
+          7
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "special_f64",
+      "inputs": {
+        "x": {
+          "data": [
+            "NaN",
+            "Inf",
+            "-Inf",
+            0.0,
+            -0.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          "NaN",
+          "Inf",
+          "-Inf",
+          0.0,
+          -0.0
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "standard_f32",
+      "inputs": {
+        "x": {
+          "data": [
+            0.0,
+            0.25,
+            0.5,
+            0.75,
+            1.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float32"
+        }
+      },
+      "expected": {
+        "data": [
+          0.0,
+          14.323944,
+          28.647888,
+          42.971832,
+          57.295776
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "float32"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "2d_f64",
+      "inputs": {
+        "x": {
+          "data": [
+            -1.0,
+            -0.8181818181818181,
+            -0.6363636363636364,
+            -0.4545454545454546,
+            -0.2727272727272727,
+            -0.09090909090909083,
+            0.09090909090909083,
+            0.2727272727272727,
+            0.4545454545454546,
+            0.6363636363636365,
+            0.8181818181818183,
+            1.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          -57.29577951308232,
+          -46.87836505615826,
+          -36.4609505992342,
+          -26.04353614231015,
+          -15.626121685386087,
+          -5.208707228462025,
+          5.208707228462025,
+          15.626121685386087,
+          26.04353614231015,
+          36.46095059923421,
+          46.87836505615827,
+          57.29577951308232
+        ],
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "scalar_f64",
+      "inputs": {
+        "x": {
+          "data": 0.5,
+          "shape": [],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": 28.64788975654116,
+        "shape": [],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "empty",
+      "inputs": {
+        "x": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [],
+        "shape": [
+          0
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "single_element",
+      "inputs": {
+        "x": {
+          "data": [
+            0.7
+          ],
+          "shape": [
+            1
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          40.10704565915762
+        ],
+        "shape": [
+          1
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

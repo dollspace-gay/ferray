@@ -1,14 +1,15 @@
 // ferray-ma: Ufunc support wrappers (REQ-12)
 //
 // Wrapper functions that accept MaskedArray and call underlying ferray-ufunc
-// operations on the data, then propagate masks. Masked elements are skipped;
-// their output positions retain the masked array's `fill_value`.
+// operations on the data, then propagate masks. `numpy.ma` wrappers preserve
+// source payloads under masks; NumPy ufunc-only wrappers compute payloads
+// under masks.
 //
 // ## REQ status
 //
 // REQ-12 SHIPPED — audited, green. Every ferray-ufunc elementwise op accepts
 // `MaskedArray` inputs and produces `MaskedArray` outputs with masks
-// propagated; masked positions retain the array's `fill_value`.
+// propagated and NumPy-compatible hidden payload data.
 //
 // | REQ | Status | Evidence |
 // |-----|--------|----------|
@@ -38,13 +39,9 @@ use crate::arithmetic::{masked_binary_op, masked_unary_op};
 // |x| > 1 inputs. The masked positions in the result combine the
 // existing mask with a freshly-computed "domain mask" via OR.
 //
-// The plain `log`/`sqrt`/`arcsin`/… wrappers above call the raw Float
-// method, so an in-domain masked element whose *underlying data* is
-// out of domain silently produces NaN in the result data — annoying
-// for pipelines that assume "masked = bad" but "unmasked = valid".
-// The `_domain` variants fix that by computing a new mask = old_mask
-// || !in_domain(x) and substituting the fill_value at positions
-// newly marked as masked.
+// The named `log`/`sqrt`/`arcsin`/… wrappers call these domain-aware
+// helpers. The `_domain` variants are also exported directly for callers
+// that want the explicit domain-checking adapter.
 // ---------------------------------------------------------------------------
 
 /// Apply a unary function to a masked array, additionally masking any
@@ -53,7 +50,7 @@ use crate::arithmetic::{masked_binary_op, masked_unary_op};
 /// `in_domain(x)` should return `true` when `x` is a valid input to
 /// `f`. For any unmasked position where `in_domain(x)` returns
 /// `false`, the result mask is set to `true` and the result data
-/// carries the masked array's `fill_value`.
+/// carries the source array payload at the same logical position.
 ///
 /// This is the generic helper backing [`log_domain`], [`sqrt_domain`],
 /// [`arcsin_domain`], [`arccos_domain`] (#503).
@@ -76,7 +73,7 @@ where
         // Mask if already masked OR the domain predicate rejects v.
         let should_mask = m || !in_domain(v);
         if should_mask {
-            data_out.push(fill);
+            data_out.push(v);
             mask_out.push(true);
         } else {
             data_out.push(f(v));
@@ -134,7 +131,7 @@ where
         // domain predicate rejects the pair.
         let should_mask = ma_bit || mb_bit || !in_domain(x, y);
         if should_mask {
-            data_out.push(fill);
+            data_out.push(x);
             mask_out.push(true);
         } else {
             data_out.push(f(x, y));
@@ -151,8 +148,8 @@ where
 /// Natural log with auto-masking of non-positive inputs.
 ///
 /// Equivalent to `numpy.ma.log`. Any unmasked element `x <= 0` is
-/// added to the result mask and replaced with the fill value in the
-/// result data.
+/// added to the result mask while the source payload is preserved in
+/// the result data.
 pub fn log_domain<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, D>>
 where
     T: Element + Float,
@@ -272,8 +269,7 @@ where
 /// Apply any unary function to a masked array, propagating the mask.
 ///
 /// Equivalent to `numpy.ma.<unary>(a)` for any unary `T -> T` closure.
-/// Masked elements are skipped; their output positions carry the
-/// masked array's `fill_value` in the result data and remain masked.
+/// Masked elements preserve their source payloads and remain masked.
 ///
 /// This is the generic escape hatch for ufuncs that don't have a
 /// dedicated wrapper in this module. Prefer a named wrapper
@@ -292,13 +288,34 @@ where
     masked_unary_op(ma, f)
 }
 
+fn masked_unary_compute_payload<T, D, F>(
+    ma: &MaskedArray<T, D>,
+    f: F,
+) -> FerrayResult<MaskedArray<T, D>>
+where
+    T: Element + Copy,
+    D: Dimension,
+    F: Fn(T) -> T,
+{
+    let fill = ma.fill_value();
+    let data: Vec<T> = ma.data().iter().map(|&v| f(v)).collect();
+    let data_arr = Array::from_vec(ma.dim().clone(), data)?;
+    let mut out = if ma.has_real_mask() {
+        MaskedArray::new(data_arr, ma.mask().clone())?
+    } else {
+        MaskedArray::from_data(data_arr)?
+    };
+    out.set_fill_value(fill);
+    Ok(out)
+}
+
 /// Apply any binary function to two masked arrays, propagating the
 /// union of their masks.
 ///
 /// Equivalent to `numpy.ma.<binary>(a, b)` for any binary
 /// `(T, T) -> T` closure. The result's mask is the elementwise OR of
 /// the two inputs' masks; masked positions in the result data carry
-/// the receiver's `fill_value`. Both inputs are broadcast to a common
+/// the left operand payload. Both inputs are broadcast to a common
 /// shape via `NumPy` rules on the slow path — the same broadcast
 /// machinery the named `add`/`multiply`/etc. wrappers use.
 ///
@@ -368,7 +385,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::asin)
+    arcsin_domain(ma)
 }
 
 /// Elementwise arc cosine on a masked array. Masked elements are skipped.
@@ -380,7 +397,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::acos)
+    arccos_domain(ma)
 }
 
 /// Elementwise arc tangent on a masked array. Masked elements are skipped.
@@ -420,7 +437,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::exp2)
+    masked_unary_compute_payload(ma, T::exp2)
 }
 
 /// Elementwise natural logarithm on a masked array. Masked elements are skipped.
@@ -432,7 +449,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::ln)
+    log_domain(ma)
 }
 
 /// Elementwise base-2 logarithm on a masked array. Masked elements are skipped.
@@ -444,7 +461,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::log2)
+    log2_domain(ma)
 }
 
 /// Elementwise base-10 logarithm on a masked array. Masked elements are skipped.
@@ -456,7 +473,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::log10)
+    log10_domain(ma)
 }
 
 // ---------------------------------------------------------------------------
@@ -500,7 +517,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::sqrt)
+    sqrt_domain(ma)
 }
 
 /// Elementwise absolute value on a masked array. Masked elements are skipped.
@@ -536,7 +553,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::recip)
+    masked_unary_compute_payload(ma, T::recip)
 }
 
 /// Elementwise square on a masked array. Masked elements are skipped.
@@ -548,7 +565,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, |v| v * v)
+    masked_unary_compute_payload(ma, |v| v * v)
 }
 
 /// Elementwise hyperbolic sine on a masked array.
@@ -593,7 +610,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::acosh)
+    arccosh_domain(ma)
 }
 
 /// Elementwise inverse hyperbolic tangent on a masked array.
@@ -602,7 +619,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::atanh)
+    arctanh_domain(ma)
 }
 
 /// Elementwise `log(1 + x)` on a masked array.
@@ -611,7 +628,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::ln_1p)
+    masked_unary_compute_payload(ma, T::ln_1p)
 }
 
 /// Elementwise `exp(x) - 1` on a masked array.
@@ -620,7 +637,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::exp_m1)
+    masked_unary_compute_payload(ma, T::exp_m1)
 }
 
 /// Elementwise `trunc` (round toward zero) on a masked array.
@@ -629,7 +646,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::trunc)
+    masked_unary_compute_payload(ma, T::trunc)
 }
 
 /// Elementwise `round` (round to nearest, halves to even) on a masked
@@ -639,7 +656,26 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_unary_op(ma, T::round)
+    let one = <T as Element>::one();
+    let two = one + one;
+    let half = one / two;
+    masked_unary_op(ma, move |v| {
+        if !v.is_finite() {
+            return v;
+        }
+        let lower = v.floor();
+        let frac = v - lower;
+        if frac == half {
+            let half_lower = (lower / two).floor();
+            if lower == half_lower * two {
+                lower
+            } else {
+                lower + one
+            }
+        } else {
+            v.round()
+        }
+    })
 }
 
 /// Elementwise `sign` (-1, 0, or 1 per element) on a masked array.
@@ -655,7 +691,7 @@ where
 {
     let zero = <T as Element>::zero();
     let one = <T as Element>::one();
-    masked_unary_op(ma, move |v| {
+    masked_unary_compute_payload(ma, move |v| {
         if v.is_nan() {
             v
         } else if v == zero {
@@ -723,7 +759,7 @@ where
     T: Element + Float,
     D: Dimension,
 {
-    masked_binary_op(a, b, |x, y| x / y, "divide")
+    divide_domain(a, b)
 }
 
 /// Elementwise power of two masked arrays with mask propagation.
@@ -759,9 +795,9 @@ mod tests {
         let ma = make_ma(vec![1.0, 2.0, 3.0, 4.0], vec![false, true, false, false]);
         let r = masked_unary(&ma, |x| x.mul_add(10.0, 1.0)).unwrap();
         let d: Vec<f64> = r.data().iter().copied().collect();
-        // Position 1 is masked → retains the fill_value (numpy default
-        // 1e20, default_filler['f'] core.py:166).
-        assert_eq!(d, vec![11.0, 1e20, 31.0, 41.0]);
+        // Position 1 is masked, so the source payload is preserved while
+        // the mask records that it should be hidden.
+        assert_eq!(d, vec![11.0, 2.0, 31.0, 41.0]);
         // Mask is preserved identically.
         let m: Vec<bool> = r.mask().iter().copied().collect();
         assert_eq!(m, vec![false, true, false, false]);
@@ -773,7 +809,7 @@ mod tests {
         ma.set_fill_value(-99.0);
         let r = masked_unary(&ma, f64::sqrt).unwrap();
         let d: Vec<f64> = r.data().iter().copied().collect();
-        assert_eq!(d[1], -99.0);
+        assert_eq!(d[1], 2.0);
         assert_eq!(r.fill_value(), -99.0);
     }
 
@@ -826,11 +862,10 @@ mod tests {
         assert!((sd[0] - 0.0).abs() < 1e-12);
         assert!((cd[0] - 1.0).abs() < 1e-12);
         assert!((td[0] - 0.0).abs() < 1e-12);
-        // Position 1 masked → numpy default fill value (1e20,
-        // default_filler['f'] core.py:166).
-        assert_eq!(sd[1], 1e20);
-        assert_eq!(cd[1], 1e20);
-        assert_eq!(td[1], 1e20);
+        // Position 1 masked → source payload preserved.
+        assert_eq!(sd[1], 1.0);
+        assert_eq!(cd[1], 1.0);
+        assert_eq!(td[1], 1.0);
         assert!((sd[2] - (-1.0_f64).sinh()).abs() < 1e-12);
     }
 
@@ -856,21 +891,19 @@ mod tests {
         let rd: Vec<f64> = r.data().iter().copied().collect();
         let sd: Vec<f64> = s.data().iter().copied().collect();
         assert_eq!(td, vec![1.0, -2.0, 0.0, -3.0]);
-        // f64::round on -2.5 rounds away from zero to -3 in Rust stdlib
-        // (NOT round-half-to-even). Hand-check matches that behavior.
-        assert_eq!(rd, vec![2.0, -3.0, 0.0, -3.0]);
+        // NumPy rounds ties to even.
+        assert_eq!(rd, vec![2.0, -2.0, 0.0, -3.0]);
         assert_eq!(sd, vec![1.0, -1.0, 0.0, -1.0]);
     }
 
     #[test]
-    fn arcsinh_arccosh_arctanh_masked_positions_use_fill() {
+    fn arcsinh_arccosh_arctanh_masked_positions_preserve_source_payload() {
         let ma = make_ma(vec![0.0, 2.0, 0.5, -1.0], vec![false, true, false, true]);
         let a = arcsinh(&ma).unwrap();
         let ad: Vec<f64> = a.data().iter().copied().collect();
         assert!((ad[0] - 0.0_f64.asinh()).abs() < 1e-12);
-        // Masked → numpy default fill (1e20, default_filler['f'] core.py:166)
-        assert_eq!(ad[1], 1e20);
-        assert_eq!(ad[3], 1e20);
+        assert_eq!(ad[1], 2.0);
+        assert_eq!(ad[3], -1.0);
 
         // arccosh needs x >= 1, so use a different input for that test.
         let ma2 = make_ma(vec![1.0, 2.0, 5.0], vec![false, false, false]);
@@ -929,10 +962,9 @@ mod tests {
         assert!((d[0] - 0.0).abs() < 1e-12);
         assert!((d[1] - 2.0_f64.ln()).abs() < 1e-12);
         assert!((d[4] - 3.0_f64.ln()).abs() < 1e-12);
-        // Masked positions carry the fill value (numpy default 1e20,
-        // default_filler['f'] core.py:166).
-        assert_eq!(d[2], 1e20);
-        assert_eq!(d[3], 1e20);
+        // Masked positions preserve the source payload.
+        assert_eq!(d[2], -1.0);
+        assert_eq!(d[3], 0.0);
     }
 
     #[test]
@@ -945,19 +977,15 @@ mod tests {
     }
 
     #[test]
-    fn log_domain_vs_plain_log_on_negative_input() {
-        // Plain `log` produces NaN at the negative position; `log_domain`
-        // masks it and substitutes the fill value.
+    fn log_domain_and_named_log_mask_negative_input() {
         let ma = make_ma(vec![1.0, -2.0, 3.0], vec![false, false, false]);
         let plain = log(&ma).unwrap();
         let domain = log_domain(&ma).unwrap();
         let pd: Vec<f64> = plain.data().iter().copied().collect();
         let dd: Vec<f64> = domain.data().iter().copied().collect();
-        // Plain: position 1 is NaN.
-        assert!(pd[1].is_nan());
-        // Domain: position 1 is the fill value (numpy default 1e20,
-        // default_filler['f'] core.py:166), and the mask is set.
-        assert_eq!(dd[1], 1e20);
+        assert_eq!(pd[1], -2.0);
+        assert_eq!(dd[1], -2.0);
+        assert!(plain.mask().as_slice().unwrap()[1]);
         assert!(domain.mask().as_slice().unwrap()[1]);
     }
 
@@ -1075,8 +1103,8 @@ mod tests {
         ma.set_fill_value(-999.0);
         let r = log_domain(&ma).unwrap();
         let d: Vec<f64> = r.data().iter().copied().collect();
-        // Position 1 is auto-masked → carries fill value.
-        assert_eq!(d[1], -999.0);
+        // Position 1 is auto-masked while preserving source payload.
+        assert_eq!(d[1], -1.0);
         assert_eq!(r.fill_value(), -999.0);
     }
 }

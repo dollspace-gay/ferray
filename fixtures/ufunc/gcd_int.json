@@ -1,0 +1,98 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.gcd",
+  "ferray_function": "ferray_ufunc::gcd_int",
+  "test_cases": [
+    {
+      "name": "signed_i64",
+      "inputs": {
+        "a": {
+          "data": [
+            12,
+            15,
+            0,
+            -18,
+            -128
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "int64"
+        },
+        "b": {
+          "data": [
+            8,
+            20,
+            7,
+            6,
+            0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "int64"
+        }
+      },
+      "expected": {
+        "data": [
+          4,
+          5,
+          7,
+          6,
+          128
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "int64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "signed_i64_2d",
+      "inputs": {
+        "a": {
+          "data": [
+            4,
+            6,
+            8,
+            10
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "int64"
+        },
+        "b": {
+          "data": [
+            6,
+            8,
+            12,
+            15
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "int64"
+        }
+      },
+      "expected": {
+        "data": [
+          2,
+          2,
+          4,
+          5
+        ],
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "int64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

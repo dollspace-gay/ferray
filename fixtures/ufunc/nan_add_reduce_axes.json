@@ -1,0 +1,98 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.nansum",
+  "ferray_function": "ferray_ufunc::nan_add_reduce_axes",
+  "test_cases": [
+    {
+      "name": "axes_0_2",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            "NaN",
+            2.0,
+            3.0,
+            "NaN",
+            4.0,
+            5.0,
+            6.0,
+            "NaN",
+            7.0,
+            8.0,
+            "NaN"
+          ],
+          "shape": [
+            2,
+            3,
+            2
+          ],
+          "dtype": "float64"
+        },
+        "axes": [
+          0,
+          2
+        ],
+        "keepdims": false
+      },
+      "expected": {
+        "data": [
+          12.0,
+          12.0,
+          12.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "axes_0_2_keepdims",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            "NaN",
+            2.0,
+            3.0,
+            "NaN",
+            4.0,
+            5.0,
+            6.0,
+            "NaN",
+            7.0,
+            8.0,
+            "NaN"
+          ],
+          "shape": [
+            2,
+            3,
+            2
+          ],
+          "dtype": "float64"
+        },
+        "axes": [
+          0,
+          2
+        ],
+        "keepdims": true
+      },
+      "expected": {
+        "data": [
+          12.0,
+          12.0,
+          12.0
+        ],
+        "shape": [
+          1,
+          3,
+          1
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

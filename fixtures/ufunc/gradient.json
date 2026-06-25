@@ -1,0 +1,71 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.gradient",
+  "ferray_function": "ferray_ufunc::gradient",
+  "test_cases": [
+    {
+      "name": "default_spacing",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            2.0,
+            4.0,
+            7.0,
+            11.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          1.0,
+          1.5,
+          2.5,
+          3.5,
+          4.0
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "scalar_spacing",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            4.0,
+            9.0,
+            16.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "spacing": 2.0
+      },
+      "expected": {
+        "data": [
+          1.5,
+          2.0,
+          3.0,
+          3.5
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import traceback
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -36,10 +37,10 @@ def _serialize_value(v):
         if np.isneginf(v):
             return "-Inf"
         return float(repr_float(v))
-    if isinstance(v, (int, np.integer)):
-        return int(v)
     if isinstance(v, (bool, np.bool_)):
         return bool(v)
+    if isinstance(v, (int, np.integer)):
+        return int(v)
     if isinstance(v, str):
         return v
     return float(v)
@@ -698,6 +699,1625 @@ def generate_ufunc_fixtures():
         _generate_binary_ufunc(np_func, f"numpy.{func_name}", f"ferray_ufunc::{func_name}",
                                "ufunc", f"{func_name}.json", tolerance=0)
 
+    generate_ufunc_gap_fixtures()
+
+
+def generate_ufunc_gap_fixtures():
+    """Generate direct fixtures for implemented ufunc surfaces still audited as gaps."""
+    # Aliases with NumPy names distinct from the representative fixture.
+    _generate_unary_ufunc(np.around, "numpy.around", "ferray_ufunc::around",
+                          "ufunc", "around.json", inputs_override={
+                              "standard_f64": np.array(
+                                  [-2.7, -2.5, -2.3, -0.5, 0.0, 0.5, 2.3, 2.5, 2.7],
+                                  dtype="float64",
+                              ),
+                              "halves_f64": np.array(
+                                  [-3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5],
+                                  dtype="float64",
+                              ),
+                              "special_f64": np.array(
+                                  [float("nan"), float("inf"), float("-inf"), 0.0, -0.0],
+                                  dtype="float64",
+                              ),
+                          }, tolerance=0)
+    _generate_unary_ufunc(np.fabs, "numpy.fabs", "ferray_ufunc::fabs",
+                          "ufunc", "fabs.json", inputs_override={
+                              "standard_f64": np.array([-3.0, -1.5, 0.0, 1.5, 3.0],
+                                                       dtype="float64"),
+                              "special_f64": np.array(
+                                  [float("nan"), float("inf"), float("-inf"), 0.0, -0.0],
+                                  dtype="float64",
+                              ),
+                          }, tolerance=0)
+    _generate_unary_ufunc(np.positive, "numpy.positive", "ferray_ufunc::positive",
+                          "ufunc", "positive.json", inputs_override={
+                              "standard_f64": np.array([-3.0, -0.0, 0.0, 1.5, 3.0],
+                                                       dtype="float64"),
+                              "special_f64": np.array(
+                                  [float("nan"), float("inf"), float("-inf"), 0.0, -0.0],
+                                  dtype="float64",
+                              ),
+                          }, tolerance=0)
+    _generate_unary_ufunc(np.sign, "numpy.sign", "ferray_ufunc::sign",
+                          "ufunc", "sign.json", inputs_override={
+                              "standard_f64": np.array([-3.0, -0.0, 0.0, 1.5, 3.0],
+                                                       dtype="float64"),
+                              "special_f64": np.array(
+                                  [float("nan"), float("inf"), float("-inf"), 0.0, -0.0],
+                                  dtype="float64",
+                              ),
+                          }, tolerance=0)
+
+    # Implemented arithmetic/trig/explog functions that previously had no
+    # committed direct fixture file.
+    safe_mod_pairs = {
+        "standard": (np.array([7.0, 8.0, 9.0, 10.0], dtype="float64"),
+                     np.array([3.0, 3.0, 3.0, 3.0], dtype="float64")),
+        "negative": (np.array([-7.0, -8.0, 7.0, 8.0], dtype="float64"),
+                     np.array([3.0, -3.0, -3.0, 3.0], dtype="float64")),
+        "float": (np.array([5.5, 6.7, 8.1], dtype="float64"),
+                  np.array([2.3, 2.3, 2.3], dtype="float64")),
+        "broadcast_2d": (np.arange(12, dtype="float64").reshape(3, 4),
+                         np.array([2.5, 3.5, 4.5, 5.5], dtype="float64")),
+    }
+    _generate_binary_ufunc(np.floor_divide, "numpy.floor_divide",
+                           "ferray_ufunc::floor_divide", "ufunc",
+                           "floor_divide.json", inputs_override=safe_mod_pairs,
+                           tolerance=0)
+    _generate_binary_ufunc(np.fmod, "numpy.fmod", "ferray_ufunc::fmod",
+                           "ufunc", "fmod.json", inputs_override=safe_mod_pairs,
+                           tolerance=0)
+    _generate_binary_ufunc(np.true_divide, "numpy.true_divide",
+                           "ferray_ufunc::true_divide", "ufunc",
+                           "true_divide.json", inputs_override={
+                               "standard": (np.array([10.0, 20.0, -7.5], dtype="float64"),
+                                            np.array([2.0, 4.0, 2.5], dtype="float64")),
+                               "signed_zero_divisor": (
+                                   np.array([1.0, -1.0, 0.0, -0.0], dtype="float64"),
+                                   np.array([0.0, -0.0, 0.0, -0.0], dtype="float64"),
+                               ),
+                               "broadcast_2d": (np.arange(12, dtype="float64").reshape(3, 4),
+                                                np.array([2.0, 4.0, 5.0, 10.0],
+                                                         dtype="float64")),
+                               "special": (np.array([float("nan"), float("inf"), 1.0],
+                                                    dtype="float64"),
+                                           np.array([1.0, 2.0, float("inf")],
+                                                    dtype="float64")),
+                           })
+
+    divmod_cases = []
+    for name, a, b in [
+        ("standard", np.array([7.0, -7.0, 8.5, -8.5], dtype="float64"),
+         np.array([3.0, 3.0, -2.0, -2.0], dtype="float64")),
+        ("broadcast_2d", np.arange(12, dtype="float64").reshape(3, 4),
+         np.array([2.0, 3.0, 4.0, 5.0], dtype="float64")),
+        ("empty", np.array([], dtype="float64"), np.array([], dtype="float64")),
+    ]:
+        with np.errstate(all="ignore"):
+            quotient, remainder = np.divmod(a, b)
+        divmod_cases.append(case(name, {"a": array_to_dict(a), "b": array_to_dict(b)}, {
+            "quotient": array_to_dict(quotient),
+            "remainder": array_to_dict(remainder),
+        }, tolerance_ulps=0))
+    save_fixture("ufunc", "divmod.json",
+                 make_fixture("numpy.divmod", "ferray_ufunc::divmod", divmod_cases))
+
+    for func_name, np_func in [("gcd", np.gcd), ("lcm", np.lcm)]:
+        error_cases = []
+        for case_name, a, b in [
+            ("float_1d_rejected",
+             np.array([12.0, 15.0, 0.0, -18.0], dtype="float64"),
+             np.array([8.0, 20.0, 7.0, 6.0], dtype="float64")),
+            ("float_2d_rejected",
+             np.array([[4.0, 6.0], [8.0, 10.0]], dtype="float64"),
+             np.array([[6.0, 8.0], [12.0, 15.0]], dtype="float64")),
+        ]:
+            try:
+                np_func(a, b)
+            except TypeError as exc:
+                expected = {"error_type": type(exc).__name__}
+            else:
+                raise AssertionError(f"numpy.{func_name} unexpectedly accepted float input")
+            error_cases.append(case(case_name, {
+                "a": array_to_dict(a),
+                "b": array_to_dict(b),
+            }, expected, tolerance_ulps=0))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{func_name}", f"ferray_ufunc::{func_name}",
+                                  error_cases))
+
+        int_cases = []
+        for case_name, a, b in [
+            ("signed_i64",
+             np.array([12, 15, 0, -18, -128], dtype="int64"),
+             np.array([8, 20, 7, 6, 0], dtype="int64")),
+            ("signed_i64_2d",
+             np.array([[4, 6], [8, 10]], dtype="int64"),
+             np.array([[6, 8], [12, 15]], dtype="int64")),
+        ]:
+            result = np_func(a, b)
+            int_cases.append(case(case_name, {
+                "a": array_to_dict(a),
+                "b": array_to_dict(b),
+            }, array_to_dict(result), tolerance_ulps=0))
+        save_fixture("ufunc", f"{func_name}_int.json",
+                     make_fixture(f"numpy.{func_name}", f"ferray_ufunc::{func_name}_int",
+                                  int_cases))
+
+    _generate_unary_ufunc(np.i0, "numpy.i0", "ferray_ufunc::i0",
+                          "ufunc", "i0.json", inputs_override={
+                              "standard_f64": np.array(
+                                  [-12.0, -8.0, -3.0, -1.0, 0.0, 1.0, 3.0, 8.0, 12.0],
+                                  dtype="float64",
+                              ),
+                              "matrix_f64": np.array(
+                                  [[0.0, 0.5, 2.0], [4.0, 6.0, 10.0]],
+                                  dtype="float64",
+                              ),
+                          }, tolerance=64)
+
+    ufunc_method_cases = []
+    matrix = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype="float64")
+    cube = np.arange(24, dtype="float64").reshape(2, 3, 4)
+    vector = np.array([10.0, 3.0, 2.0, 1.0], dtype="float64")
+    a_vec = np.array([1.0, 2.0, 3.0], dtype="float64")
+    b_vec = np.array([10.0, 20.0], dtype="float64")
+
+    for method, op_name, np_func, arr, kwargs in [
+        ("reduce_axis", "add", np.add.reduce, matrix, {"axis": 1}),
+        ("reduce_axis_keepdims", "add", np.add.reduce, matrix, {"axis": 1, "keepdims": True}),
+        ("reduce_axes", "add", np.add.reduce, cube, {"axis": (0, 2)}),
+        ("reduce_axes_keepdims", "add", np.add.reduce, cube, {"axis": (0, 2), "keepdims": True}),
+        ("accumulate_axis", "add", np.add.accumulate, matrix, {"axis": 1}),
+        ("accumulate_axis", "subtract", np.subtract.accumulate, matrix, {"axis": 1}),
+    ]:
+        result = np_func(arr, **kwargs)
+        inputs = {
+            "method": method,
+            "op": op_name,
+            "x": array_to_dict(arr),
+        }
+        if "axis" in kwargs:
+            axis = kwargs["axis"]
+            inputs["axis"] = list(axis) if isinstance(axis, tuple) else axis
+        if "keepdims" in kwargs:
+            inputs["keepdims"] = kwargs["keepdims"]
+        ufunc_method_cases.append(case(
+            f"{op_name}_{method}",
+            inputs,
+            array_to_dict(result),
+            tolerance_ulps=0,
+        ))
+
+    reduce_all_result = np.add.reduce(matrix, axis=None)
+    ufunc_method_cases.append(case(
+        "add_reduce_all",
+        {"method": "reduce_all", "op": "add", "x": array_to_dict(matrix)},
+        array_to_dict(np.array(reduce_all_result)),
+        tolerance_ulps=0,
+    ))
+
+    max_reduce_result = np.maximum.reduce(matrix, axis=1)
+    ufunc_method_cases.append(case(
+        "custom_max_reduce",
+        {
+            "method": "custom_reduce",
+            "op": "maximum",
+            "x": array_to_dict(matrix),
+            "axis": 1,
+        },
+        array_to_dict(max_reduce_result),
+        tolerance_ulps=0,
+    ))
+
+    for op_name, np_func in [
+        ("add", np.add.outer),
+        ("multiply", np.multiply.outer),
+    ]:
+        result = np_func(a_vec, b_vec)
+        ufunc_method_cases.append(case(
+            f"{op_name}_outer",
+            {
+                "method": "outer",
+                "op": op_name,
+                "a": array_to_dict(a_vec),
+                "b": array_to_dict(b_vec),
+            },
+            array_to_dict(result),
+            tolerance_ulps=0,
+        ))
+
+    add_at_target = np.array([0.0, 0.0, 0.0], dtype="float64")
+    add_at_indices = np.array([0, 0, 1, 2], dtype="int64")
+    add_at_values = np.array([1.0, 2.0, 5.0, 10.0], dtype="float64")
+    np.add.at(add_at_target, add_at_indices, add_at_values)
+    ufunc_method_cases.append(case(
+        "add_at",
+        {
+            "method": "at",
+            "op": "add",
+            "x": array_to_dict(np.array([0.0, 0.0, 0.0], dtype="float64")),
+            "indices": array_to_dict(add_at_indices),
+            "values": array_to_dict(add_at_values),
+        },
+        array_to_dict(add_at_target),
+        tolerance_ulps=0,
+    ))
+
+    for op_name, np_func, lhs, rhs in [
+        ("add", np.add, np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([10.0, 20.0, 30.0], dtype="float64")),
+        ("subtract", np.subtract, np.array([10.0, 20.0, 30.0], dtype="float64"),
+         np.array([1.0, 2.0, 3.0], dtype="float64")),
+        ("multiply", np.multiply, np.array([2.0, 3.0, 4.0], dtype="float64"),
+         np.array([5.0, 6.0, 7.0], dtype="float64")),
+        ("divide", np.divide, np.array([10.0, 20.0, 30.0], dtype="float64"),
+         np.array([2.0, 4.0, 5.0], dtype="float64")),
+    ]:
+        result = np_func(lhs, rhs)
+        ufunc_method_cases.append(case(
+            f"{op_name}_call",
+            {
+                "method": "call",
+                "op": op_name,
+                "a": array_to_dict(lhs),
+                "b": array_to_dict(rhs),
+            },
+            array_to_dict(result),
+            tolerance_ulps=0,
+        ))
+
+    for op_name, np_ufunc in [("add", np.add), ("multiply", np.multiply)]:
+        ufunc_method_cases.append(case(
+            f"{op_name}_metadata",
+            {"method": "metadata", "op": op_name},
+            {"name": np_ufunc.__name__, "identity": _serialize_value(np_ufunc.identity)},
+            tolerance_ulps=0,
+        ))
+
+    save_fixture("ufunc", "ufunc_methods.json",
+                 make_fixture("numpy ufunc methods", "ferray_ufunc::Ufunc",
+                              ufunc_method_cases))
+
+    interp_cases = []
+    for case_name, x, xp, fp in [
+        ("linear_midpoints",
+         np.array([1.5, 2.5], dtype="float64"),
+         np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([0.0, 10.0, 20.0], dtype="float64")),
+        ("boundary_clipping",
+         np.array([0.0, 1.0, 4.0], dtype="float64"),
+         np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([10.0, 20.0, 30.0], dtype="float64")),
+        ("nonuniform_xp",
+         np.array([-2.0, -0.5, 0.5, 3.0], dtype="float64"),
+         np.array([-1.0, 0.0, 2.0, 5.0], dtype="float64"),
+         np.array([2.0, -2.0, 4.0, 10.0], dtype="float64")),
+    ]:
+        result = np.interp(x, xp, fp)
+        interp_cases.append(case(
+            case_name,
+            {"x": array_to_dict(x), "xp": array_to_dict(xp), "fp": array_to_dict(fp)},
+            array_to_dict(result),
+            tolerance_ulps=4,
+        ))
+    save_fixture("ufunc", "interp.json",
+                 make_fixture("numpy.interp", "ferray_ufunc::interp", interp_cases))
+
+    interp_one_cases = []
+    for case_name, xi, xp, fp in [
+        ("scalar_midpoint", 2.5,
+         np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([3.0, 2.0, 0.0], dtype="float64")),
+        ("scalar_left_clip", -2.0,
+         np.array([-1.0, 0.0, 3.0], dtype="float64"),
+         np.array([8.0, 4.0, 12.0], dtype="float64")),
+        ("scalar_right_clip", 5.0,
+         np.array([-1.0, 0.0, 3.0], dtype="float64"),
+         np.array([8.0, 4.0, 12.0], dtype="float64")),
+    ]:
+        result = np.interp(np.array([xi], dtype="float64"), xp, fp)[0]
+        interp_one_cases.append(case(
+            case_name,
+            {"xi": xi, "xp": array_to_dict(xp), "fp": array_to_dict(fp)},
+            array_to_dict(np.array(result)),
+            tolerance_ulps=4,
+        ))
+    save_fixture("ufunc", "interp_one.json",
+                 make_fixture("numpy.interp", "ferray_ufunc::interp_one",
+                              interp_one_cases))
+
+    convolve_cases = []
+    for case_name, a, v in [
+        ("standard", np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([0.0, 1.0, 0.5], dtype="float64")),
+        ("left_shorter", np.array([2.0, -1.0], dtype="float64"),
+         np.array([3.0, 4.0, 5.0, 6.0], dtype="float64")),
+        ("signed_values", np.array([-2.0, 0.0, 4.0], dtype="float64"),
+         np.array([1.5, -0.5], dtype="float64")),
+    ]:
+        for mode in ["full", "same", "valid"]:
+            result = np.convolve(a, v, mode=mode)
+            convolve_cases.append(case(
+                f"{case_name}_{mode}",
+                {"a": array_to_dict(a), "v": array_to_dict(v), "mode": mode},
+                array_to_dict(result),
+                tolerance_ulps=4,
+            ))
+    save_fixture("ufunc", "convolve.json",
+                 make_fixture("numpy.convolve", "ferray_ufunc::convolve", convolve_cases))
+
+    try:
+        import scipy
+        from scipy import signal as scipy_signal
+    except ImportError as exc:
+        raise RuntimeError(
+            "generate_ufunc_gap_fixtures requires scipy for "
+            "scipy.signal.fftconvolve fixtures"
+        ) from exc
+
+    fftconvolve_cases = []
+    for case_name, a, v in [
+        ("standard", np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([0.0, 1.0, 0.5], dtype="float64")),
+        ("left_shorter", np.array([2.0, -1.0], dtype="float64"),
+         np.array([3.0, 4.0, 5.0, 6.0], dtype="float64")),
+        ("signed_values", np.array([-2.0, 0.0, 4.0], dtype="float64"),
+         np.array([1.5, -0.5], dtype="float64")),
+        ("longer_signal",
+         np.linspace(-1.25, 1.75, 17, dtype="float64"),
+         np.array([0.25, -1.0, 0.5, 2.0, -0.75], dtype="float64")),
+    ]:
+        for mode in ["full", "same", "valid"]:
+            result = scipy_signal.fftconvolve(a, v, mode=mode)
+            fftconvolve_cases.append(case(
+                f"{case_name}_{mode}",
+                {"a": array_to_dict(a), "v": array_to_dict(v), "mode": mode},
+                array_to_dict(result),
+                tolerance_ulps=4096,
+            ))
+    fftconvolve_fixture = make_fixture("scipy.signal.fftconvolve",
+                                       "ferray_ufunc::fftconvolve",
+                                       fftconvolve_cases)
+    fftconvolve_fixture["reference_library"] = "scipy.signal"
+    fftconvolve_fixture["scipy_version"] = scipy.__version__
+    save_fixture("ufunc", "fftconvolve.json", fftconvolve_fixture)
+
+    unwrap_cases = []
+    for case_name, arr, kwargs in [
+        ("default_period_jump",
+         np.array([0.0, np.pi / 2.0, np.pi, -3.0 * np.pi / 4.0],
+                  dtype="float64"),
+         {}),
+        ("custom_discont",
+         np.array([0.0, 1.0, 2.0, 8.0, 9.0], dtype="float64"),
+         {"discont": 2.5}),
+        ("empty",
+         np.array([], dtype="float64"),
+         {}),
+    ]:
+        result = np.unwrap(arr, **kwargs)
+        inputs = {"x": array_to_dict(arr)}
+        if "discont" in kwargs:
+            inputs["discont"] = kwargs["discont"]
+        unwrap_cases.append(case(case_name, inputs, array_to_dict(result),
+                                 tolerance_ulps=4))
+    save_fixture("ufunc", "unwrap.json",
+                 make_fixture("numpy.unwrap", "ferray_ufunc::unwrap", unwrap_cases))
+
+    exp_fast_cases = []
+    for case_name, arr in [
+        ("standard_f64", np.array([-2.0, -1.0, 0.0, 0.5, 1.0, 3.0],
+                                  dtype="float64")),
+        ("special_values", np.array([np.nan, np.inf, -np.inf], dtype="float64")),
+        ("matrix_f64", np.array([[-4.0, -0.25], [0.25, 4.0]], dtype="float64")),
+    ]:
+        with np.errstate(all="ignore"):
+            result = np.exp(arr)
+        exp_fast_cases.append(case(case_name, {"x": array_to_dict(arr)},
+                                   array_to_dict(result), tolerance_ulps=4))
+    save_fixture("ufunc", "exp_fast.json",
+                 make_fixture("numpy.exp", "ferray_ufunc::exp_fast", exp_fast_cases))
+
+    errstate_default = np.geterr()
+    with np.errstate(over="raise", invalid="ignore"):
+        errstate_scoped_inner = np.geterr()
+    errstate_cases = [
+        case("default", {}, errstate_default, tolerance_ulps=0),
+        case("scoped_over_raise_invalid_ignore", {
+            "over": "raise",
+            "invalid": "ignore",
+        }, {
+            "inner": errstate_scoped_inner,
+            "outer": np.geterr(),
+        }, tolerance_ulps=0),
+        case("policy_meanings", {}, {
+            "warn": "record",
+            "ignore": "drop",
+            "raise": "defer_error",
+        }, tolerance_ulps=0),
+    ]
+    save_fixture("ufunc", "errstate.json",
+                 make_fixture("numpy.errstate", "ferray_ufunc::errstate",
+                              errstate_cases))
+
+    f16_unary_inputs = {
+        "standard": {
+            "standard_f16": np.array([-2.0, -0.5, 0.0, 0.5, 2.0], dtype=np.float16),
+            "matrix_f16": np.array([[-1.5, 0.0], [1.5, 3.0]], dtype=np.float16),
+        },
+        "nonnegative": {
+            "standard_f16": np.array([0.0, 0.25, 1.0, 4.0, 16.0], dtype=np.float16),
+            "matrix_f16": np.array([[0.0, 0.5], [2.0, 9.0]], dtype=np.float16),
+        },
+        "positive": {
+            "standard_f16": np.array([0.25, 0.5, 1.0, 2.0, 8.0], dtype=np.float16),
+            "matrix_f16": np.array([[0.125, 1.0], [4.0, 16.0]], dtype=np.float16),
+        },
+        "log1p": {
+            "standard_f16": np.array([-0.75, -0.5, 0.0, 0.5, 2.0], dtype=np.float16),
+            "matrix_f16": np.array([[-0.25, 0.0], [1.0, 3.0]], dtype=np.float16),
+        },
+        "exp": {
+            "standard_f16": np.array([-4.0, -1.0, 0.0, 1.0, 4.0], dtype=np.float16),
+            "matrix_f16": np.array([[-2.0, -0.5], [0.5, 2.0]], dtype=np.float16),
+        },
+        "trig": {
+            "standard_f16": np.array(
+                [-np.pi / 2, -np.pi / 4, 0.0, np.pi / 4, np.pi / 2],
+                dtype=np.float16,
+            ),
+            "matrix_f16": np.array([[-1.0, 0.0], [0.5, 1.0]], dtype=np.float16),
+        },
+        "asin_acos": {
+            "standard_f16": np.array([-1.0, -0.5, 0.0, 0.5, 1.0], dtype=np.float16),
+            "matrix_f16": np.array([[-0.75, 0.0], [0.25, 0.75]], dtype=np.float16),
+        },
+        "acosh": {
+            "standard_f16": np.array([1.0, 1.25, 2.0, 4.0, 8.0], dtype=np.float16),
+            "matrix_f16": np.array([[1.0, 1.5], [3.0, 6.0]], dtype=np.float16),
+        },
+        "atanh": {
+            "standard_f16": np.array([-0.75, -0.25, 0.0, 0.25, 0.75], dtype=np.float16),
+            "matrix_f16": np.array([[-0.5, 0.0], [0.125, 0.5]], dtype=np.float16),
+        },
+        "rounding": {
+            "standard_f16": np.array([-2.5, -1.5, -0.5, 0.5, 1.5, 2.5], dtype=np.float16),
+            "matrix_f16": np.array([[-1.75, -1.25], [1.25, 1.75]], dtype=np.float16),
+        },
+        "classify": {
+            "special_f16": np.array(
+                [np.nan, -np.inf, -1.0, 0.0, 1.0, np.inf],
+                dtype=np.float16,
+            ),
+            "matrix_f16": np.array([[np.nan, np.inf], [-np.inf, 2.0]], dtype=np.float16),
+        },
+    }
+    f16_unary_specs = [
+        ("absolute_f16", np.absolute, "ferray_ufunc::absolute_f16", "standard", 0),
+        ("negative_f16", np.negative, "ferray_ufunc::negative_f16", "standard", 0),
+        ("sqrt_f16", np.sqrt, "ferray_ufunc::sqrt_f16", "nonnegative", 1),
+        ("cbrt_f16", np.cbrt, "ferray_ufunc::cbrt_f16", "standard", 1),
+        ("square_f16", np.square, "ferray_ufunc::square_f16", "standard", 0),
+        ("reciprocal_f16", np.reciprocal, "ferray_ufunc::reciprocal_f16", "positive", 1),
+        ("sign_f16", np.sign, "ferray_ufunc::sign_f16", "standard", 0),
+        ("exp_f16", np.exp, "ferray_ufunc::exp_f16", "exp", 4),
+        ("exp2_f16", np.exp2, "ferray_ufunc::exp2_f16", "exp", 4),
+        ("expm1_f16", np.expm1, "ferray_ufunc::expm1_f16", "exp", 4),
+        ("log_f16", np.log, "ferray_ufunc::log_f16", "positive", 4),
+        ("log2_f16", np.log2, "ferray_ufunc::log2_f16", "positive", 4),
+        ("log10_f16", np.log10, "ferray_ufunc::log10_f16", "positive", 4),
+        ("log1p_f16", np.log1p, "ferray_ufunc::log1p_f16", "log1p", 4),
+        ("floor_f16", np.floor, "ferray_ufunc::floor_f16", "rounding", 0),
+        ("ceil_f16", np.ceil, "ferray_ufunc::ceil_f16", "rounding", 0),
+        ("trunc_f16", np.trunc, "ferray_ufunc::trunc_f16", "rounding", 0),
+        ("round_f16", np.round, "ferray_ufunc::round_f16", "rounding", 0),
+        ("sin_f16", np.sin, "ferray_ufunc::sin_f16", "trig", 4),
+        ("cos_f16", np.cos, "ferray_ufunc::cos_f16", "trig", 4),
+        ("tan_f16", np.tan, "ferray_ufunc::tan_f16", "trig", 4),
+        ("arcsin_f16", np.arcsin, "ferray_ufunc::arcsin_f16", "asin_acos", 4),
+        ("arccos_f16", np.arccos, "ferray_ufunc::arccos_f16", "asin_acos", 4),
+        ("arctan_f16", np.arctan, "ferray_ufunc::arctan_f16", "standard", 4),
+        ("sinh_f16", np.sinh, "ferray_ufunc::sinh_f16", "trig", 4),
+        ("cosh_f16", np.cosh, "ferray_ufunc::cosh_f16", "trig", 4),
+        ("tanh_f16", np.tanh, "ferray_ufunc::tanh_f16", "trig", 4),
+        ("arcsinh_f16", np.arcsinh, "ferray_ufunc::arcsinh_f16", "standard", 4),
+        ("arccosh_f16", np.arccosh, "ferray_ufunc::arccosh_f16", "acosh", 4),
+        ("arctanh_f16", np.arctanh, "ferray_ufunc::arctanh_f16", "atanh", 4),
+        ("degrees_f16", np.degrees, "ferray_ufunc::degrees_f16", "trig", 1),
+        ("radians_f16", np.radians, "ferray_ufunc::radians_f16", "rounding", 1),
+        ("sinc_f16", np.sinc, "ferray_ufunc::sinc_f16", "standard", 4),
+        ("isnan_f16", np.isnan, "ferray_ufunc::isnan_f16", "classify", 0),
+        ("isinf_f16", np.isinf, "ferray_ufunc::isinf_f16", "classify", 0),
+        ("isfinite_f16", np.isfinite, "ferray_ufunc::isfinite_f16", "classify", 0),
+    ]
+    for func_name, np_func, ferray_name, input_key, tolerance in f16_unary_specs:
+        cases = []
+        for case_name, arr in f16_unary_inputs[input_key].items():
+            with np.errstate(all="ignore"):
+                result = np_func(arr)
+            cases.append(case(case_name, {"x": array_to_dict(arr)},
+                              array_to_dict(result), tolerance_ulps=tolerance))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{np_func.__name__}", ferray_name, cases))
+
+    f16_binary_inputs = {
+        "standard": [
+            ("standard_f16",
+             np.array([3.0, 4.0, -3.5, 3.5], dtype=np.float16),
+             np.array([4.0, 3.0, 2.0, 2.0], dtype=np.float16)),
+            ("matrix_f16",
+             np.array([[1.5, -4.0], [7.0, -7.0]], dtype=np.float16),
+             np.array([[2.0, 3.0], [2.0, 2.0]], dtype=np.float16)),
+        ],
+        "positive": [
+            ("standard_f16",
+             np.array([0.25, 1.5, 3.0, 8.0], dtype=np.float16),
+             np.array([2.0, 0.5, 2.0, 0.25], dtype=np.float16)),
+            ("matrix_f16",
+             np.array([[1.25, 4.0], [9.0, 16.0]], dtype=np.float16),
+             np.array([[2.0, 0.5], [0.5, 2.0]], dtype=np.float16)),
+        ],
+        "atan2": [
+            ("quadrants_f16",
+             np.array([0.0, 1.0, 1.0, -1.0, -1.0], dtype=np.float16),
+             np.array([1.0, 0.0, -1.0, -1.0, 1.0], dtype=np.float16)),
+            ("matrix_f16",
+             np.array([[0.5, -0.5], [2.0, -2.0]], dtype=np.float16),
+             np.array([[1.0, 1.0], [-1.0, -1.0]], dtype=np.float16)),
+        ],
+    }
+    f16_binary_specs = [
+        ("add_f16", np.add, "ferray_ufunc::add_f16", "standard", 0),
+        ("subtract_f16", np.subtract, "ferray_ufunc::subtract_f16", "standard", 0),
+        ("multiply_f16", np.multiply, "ferray_ufunc::multiply_f16", "standard", 0),
+        ("divide_f16", np.divide, "ferray_ufunc::divide_f16", "standard", 1),
+        ("power_f16", np.power, "ferray_ufunc::power_f16", "positive", 2),
+        ("floor_divide_f16", np.floor_divide, "ferray_ufunc::floor_divide_f16", "standard", 0),
+        ("remainder_f16", np.remainder, "ferray_ufunc::remainder_f16", "standard", 0),
+        ("arctan2_f16", np.arctan2, "ferray_ufunc::arctan2_f16", "atan2", 4),
+        ("hypot_f16", np.hypot, "ferray_ufunc::hypot_f16", "standard", 2),
+        ("maximum_f16", np.maximum, "ferray_ufunc::maximum_f16", "standard", 0),
+        ("minimum_f16", np.minimum, "ferray_ufunc::minimum_f16", "standard", 0),
+    ]
+    for func_name, np_func, ferray_name, input_key, tolerance in f16_binary_specs:
+        cases = []
+        for case_name, a, b in f16_binary_inputs[input_key]:
+            with np.errstate(all="ignore"):
+                result = np_func(a, b)
+            cases.append(case(case_name, {"a": array_to_dict(a), "b": array_to_dict(b)},
+                              array_to_dict(result), tolerance_ulps=tolerance))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{np_func.__name__}", ferray_name, cases))
+
+    clip_f16_cases = []
+    for case_name, arr in f16_unary_inputs["standard"].items():
+        amin = np.float16(-0.75)
+        amax = np.float16(1.25)
+        result = np.clip(arr, amin, amax)
+        clip_f16_cases.append(case(
+            case_name,
+            {
+                "x": array_to_dict(arr),
+                "a_min": array_to_dict(np.array(amin, dtype=np.float16)),
+                "a_max": array_to_dict(np.array(amax, dtype=np.float16)),
+            },
+            array_to_dict(result),
+            tolerance_ulps=0,
+        ))
+    save_fixture("ufunc", "clip_f16.json",
+                 make_fixture("numpy.clip", "ferray_ufunc::clip_f16", clip_f16_cases))
+
+    nan_to_num_f16_cases = []
+    for case_name, arr, kwargs in [
+        (
+            "default_specials_f16",
+            np.array([np.nan, -np.inf, -1.0, 0.0, 1.0, np.inf], dtype=np.float16),
+            {},
+        ),
+        (
+            "custom_specials_f16",
+            np.array([[np.nan, np.inf], [-np.inf, 2.0]], dtype=np.float16),
+            {
+                "nan": np.float16(9.0),
+                "posinf": np.float16(11.0),
+                "neginf": np.float16(-11.0),
+            },
+        ),
+    ]:
+        inputs = {"x": array_to_dict(arr)}
+        for key, value in kwargs.items():
+            inputs[key] = array_to_dict(np.array(value, dtype=np.float16))
+        with np.errstate(all="ignore"):
+            result = np.nan_to_num(arr, **kwargs)
+        nan_to_num_f16_cases.append(case(
+            case_name,
+            inputs,
+            array_to_dict(result),
+            tolerance_ulps=0,
+        ))
+    save_fixture("ufunc", "nan_to_num_f16.json",
+                 make_fixture("numpy.nan_to_num", "ferray_ufunc::nan_to_num_f16",
+                              nan_to_num_f16_cases))
+
+    def time_unit(arr):
+        dtype = str(arr.dtype)
+        return dtype[dtype.index("[") + 1:dtype.index("]")]
+
+    def time_array_to_dict(arr):
+        return {
+            "data": [_serialize_value(x) for x in arr.view("int64").ravel()],
+            "shape": list(arr.shape),
+            "dtype": str(arr.dtype),
+            "unit": time_unit(arr),
+        }
+
+    dt_d = np.array(["2020-01-01", "NaT", "2020-01-10"], dtype="datetime64[D]")
+    dt_d_rhs = np.array(["2019-12-31", "2020-01-03", "NaT"], dtype="datetime64[D]")
+    td_d = np.array([2, "NaT", -3], dtype="timedelta64[D]")
+    td_d_rhs = np.array([5, 7, "NaT"], dtype="timedelta64[D]")
+
+    time_cases = []
+    result = np.isnat(dt_d)
+    time_cases.append(case("datetime_days", {"x": time_array_to_dict(dt_d)},
+                           array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "isnat_datetime.json",
+                 make_fixture("numpy.isnat", "ferray_ufunc::isnat_datetime",
+                              time_cases))
+
+    time_cases = []
+    result = np.isnat(td_d)
+    time_cases.append(case("timedelta_days", {"x": time_array_to_dict(td_d)},
+                           array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "isnat_timedelta.json",
+                 make_fixture("numpy.isnat", "ferray_ufunc::isnat_timedelta",
+                              time_cases))
+
+    for fixture_name, ferray_name, lhs, rhs, np_func, lhs_key, rhs_key in [
+        ("sub_datetime", "ferray_ufunc::sub_datetime", dt_d, dt_d_rhs,
+         np.subtract, "a", "b"),
+        ("add_datetime_timedelta", "ferray_ufunc::add_datetime_timedelta",
+         dt_d, td_d, np.add, "a", "b"),
+        ("sub_datetime_timedelta", "ferray_ufunc::sub_datetime_timedelta",
+         dt_d, td_d, np.subtract, "a", "b"),
+        ("add_timedelta", "ferray_ufunc::add_timedelta", td_d, td_d_rhs,
+         np.add, "a", "b"),
+        ("sub_timedelta", "ferray_ufunc::sub_timedelta", td_d, td_d_rhs,
+         np.subtract, "a", "b"),
+    ]:
+        with np.errstate(all="ignore"):
+            result = np_func(lhs, rhs)
+        save_fixture("ufunc", f"{fixture_name}.json",
+                     make_fixture(f"numpy.{np_func.__name__}", ferray_name, [
+                         case("same_unit_days", {
+                             lhs_key: time_array_to_dict(lhs),
+                             rhs_key: time_array_to_dict(rhs),
+                         }, time_array_to_dict(result), tolerance_ulps=0)
+                     ]))
+
+    dt_ms = np.array(["1970-01-01T00:00:01.500", "NaT",
+                      "1970-01-01T00:00:04.250"], dtype="datetime64[ms]")
+    dt_s = np.array(["1970-01-01T00:00:01", "1970-01-01T00:00:02",
+                     "NaT"], dtype="datetime64[s]")
+    td_ms = np.array([1500, "NaT", -250], dtype="timedelta64[ms]")
+    td_s = np.array([1, 2, "NaT"], dtype="timedelta64[s]")
+
+    for fixture_name, ferray_name, lhs, rhs, np_func in [
+        ("sub_datetime_promoted", "ferray_ufunc::sub_datetime_promoted",
+         dt_ms, dt_s, np.subtract),
+        ("add_datetime_timedelta_promoted",
+         "ferray_ufunc::add_datetime_timedelta_promoted", dt_s, td_ms, np.add),
+        ("add_timedelta_promoted", "ferray_ufunc::add_timedelta_promoted",
+         td_s, td_ms, np.add),
+    ]:
+        with np.errstate(all="ignore"):
+            result = np_func(lhs, rhs)
+        save_fixture("ufunc", f"{fixture_name}.json",
+                     make_fixture(f"numpy.{np_func.__name__}", ferray_name, [
+                         case("mixed_units", {
+                             "a": time_array_to_dict(lhs),
+                             "b": time_array_to_dict(rhs),
+                         }, time_array_to_dict(result), tolerance_ulps=0)
+                     ]))
+
+    nan_matrix = np.array(
+        [[1.0, np.nan, 3.0],
+         [np.nan, np.nan, np.nan],
+         [-2.0, 5.0, np.nan]],
+        dtype="float64",
+    )
+    nan_cube = np.array(
+        [[[1.0, np.nan, 3.0], [np.nan, np.nan, np.nan]],
+         [[-2.0, 5.0, np.nan], [np.nan, np.nan, np.nan]]],
+        dtype="float64",
+    )
+    nan_vector = np.array([1.0, np.nan, 3.0, -2.0, 5.0, np.nan],
+                          dtype="float64")
+    all_nan_vector = np.array([np.nan, np.nan], dtype="float64")
+
+    def nan_extreme_result(np_func, arr, **kwargs):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            return np_func(arr, **kwargs)
+
+    for func_name, np_func, ferray_name in [
+        ("nan_max_reduce", np.nanmax, "ferray_ufunc::nan_max_reduce"),
+        ("nan_min_reduce", np.nanmin, "ferray_ufunc::nan_min_reduce"),
+    ]:
+        cases = []
+        for case_name, axis, keepdims in [
+            ("axis1", 1, False),
+            ("axis1_keepdims", 1, True),
+            ("axis0", 0, False),
+        ]:
+            result = nan_extreme_result(np_func, nan_matrix, axis=axis,
+                                        keepdims=keepdims)
+            cases.append(case(
+                case_name,
+                {"x": array_to_dict(nan_matrix), "axis": axis, "keepdims": keepdims},
+                array_to_dict(result),
+                tolerance_ulps=0,
+            ))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{np_func.__name__}", ferray_name, cases))
+
+    for func_name, np_func, ferray_name in [
+        ("nan_max_reduce_all", np.nanmax, "ferray_ufunc::nan_max_reduce_all"),
+        ("nan_min_reduce_all", np.nanmin, "ferray_ufunc::nan_min_reduce_all"),
+    ]:
+        cases = []
+        for case_name, arr in [
+            ("mixed_values", nan_vector),
+            ("all_nan", all_nan_vector),
+        ]:
+            result = nan_extreme_result(np_func, arr)
+            cases.append(case(
+                case_name,
+                {"x": array_to_dict(arr)},
+                array_to_dict(np.array(result)),
+                tolerance_ulps=0,
+            ))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{np_func.__name__}", ferray_name, cases))
+
+    for func_name, np_func, ferray_name in [
+        ("nan_max_reduce_axes", np.nanmax, "ferray_ufunc::nan_max_reduce_axes"),
+        ("nan_min_reduce_axes", np.nanmin, "ferray_ufunc::nan_min_reduce_axes"),
+    ]:
+        cases = []
+        for case_name, axes, keepdims in [
+            ("axes_0_2", (0, 2), False),
+            ("axes_0_2_keepdims", (0, 2), True),
+        ]:
+            result = nan_extreme_result(np_func, nan_cube, axis=axes,
+                                        keepdims=keepdims)
+            cases.append(case(
+                case_name,
+                {"x": array_to_dict(nan_cube), "axis": list(axes),
+                 "keepdims": keepdims},
+                array_to_dict(result),
+                tolerance_ulps=0,
+            ))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{np_func.__name__}", ferray_name, cases))
+
+    cumulative_sources = [
+        ("axis0_1d", np.array([1.0, 2.0, 3.0, 4.0], dtype="float64"), 0),
+        ("axis0_2d", np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+                              dtype="float64"), 0),
+        ("axis1_2d", np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+                              dtype="float64"), 1),
+        ("empty_axis0", np.array([], dtype="float64"), 0),
+    ]
+    for func_name, np_func, ferray_name in [
+        ("cumsum", np.cumsum, "ferray_ufunc::cumsum"),
+        ("cumprod", np.cumprod, "ferray_ufunc::cumprod"),
+        ("cumulative_sum", np.cumulative_sum, "ferray_ufunc::cumulative_sum"),
+        ("cumulative_prod", np.cumulative_prod, "ferray_ufunc::cumulative_prod"),
+    ]:
+        cases = []
+        for name, arr, axis in cumulative_sources:
+            with np.errstate(all="ignore"):
+                result = np_func(arr, axis=axis)
+            cases.append(case(name, {"x": array_to_dict(arr), "axis": axis},
+                              array_to_dict(result), tolerance_ulps=0))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{func_name}", ferray_name, cases))
+
+    nan_cumulative_sources = [
+        ("axis0_1d", np.array([1.0, np.nan, 3.0, 4.0], dtype="float64"), 0),
+        ("axis1_2d", np.array([[1.0, np.nan, 3.0], [4.0, 5.0, np.nan]],
+                              dtype="float64"), 1),
+        ("empty_axis0", np.array([], dtype="float64"), 0),
+    ]
+    for func_name, np_func in [("nancumsum", np.nancumsum),
+                               ("nancumprod", np.nancumprod)]:
+        cases = []
+        for name, arr, axis in nan_cumulative_sources:
+            with np.errstate(all="ignore"):
+                result = np_func(arr, axis=axis)
+            cases.append(case(name, {"x": array_to_dict(arr), "axis": axis},
+                              array_to_dict(result), tolerance_ulps=0))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{func_name}", f"ferray_ufunc::{func_name}", cases))
+
+    diff_cases = []
+    for name, arr, n in [
+        ("n1", np.array([1.0, 3.0, 6.0, 10.0], dtype="float64"), 1),
+        ("n2", np.array([1.0, 3.0, 6.0, 10.0], dtype="float64"), 2),
+        ("empty", np.array([], dtype="float64"), 1),
+    ]:
+        result = np.diff(arr, n=n)
+        diff_cases.append(case(name, {"x": array_to_dict(arr), "n": n},
+                               array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "diff.json",
+                 make_fixture("numpy.diff", "ferray_ufunc::diff", diff_cases))
+
+    ediff1d_cases = []
+    for name, arr, to_begin, to_end in [
+        ("standard", np.array([1.0, 2.0, 4.0, 7.0], dtype="float64"), None, None),
+        ("with_edges", np.array([1.0, 2.0, 4.0, 7.0], dtype="float64"),
+         np.array([-1.0], dtype="float64"), np.array([99.0, 100.0], dtype="float64")),
+        ("empty_with_edges", np.array([], dtype="float64"),
+         np.array([-1.0], dtype="float64"), np.array([1.0], dtype="float64")),
+    ]:
+        result = np.ediff1d(arr, to_end=to_end, to_begin=to_begin)
+        inputs = {"x": array_to_dict(arr)}
+        if to_begin is not None:
+            inputs["to_begin"] = array_to_dict(to_begin)
+        if to_end is not None:
+            inputs["to_end"] = array_to_dict(to_end)
+        ediff1d_cases.append(case(name, inputs, array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "ediff1d.json",
+                 make_fixture("numpy.ediff1d", "ferray_ufunc::ediff1d", ediff1d_cases))
+
+    gradient_cases = []
+    for name, arr, spacing in [
+        ("default_spacing", np.array([1.0, 2.0, 4.0, 7.0, 11.0], dtype="float64"), None),
+        ("scalar_spacing", np.array([1.0, 4.0, 9.0, 16.0], dtype="float64"), 2.0),
+    ]:
+        result = np.gradient(arr) if spacing is None else np.gradient(arr, spacing)
+        inputs = {"x": array_to_dict(arr)}
+        if spacing is not None:
+            inputs["spacing"] = spacing
+        gradient_cases.append(case(name, inputs, array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "gradient.json",
+                 make_fixture("numpy.gradient", "ferray_ufunc::gradient", gradient_cases))
+
+    cross_cases = []
+    for name, a, b in [
+        ("basis", np.array([1.0, 0.0, 0.0], dtype="float64"),
+         np.array([0.0, 1.0, 0.0], dtype="float64")),
+        ("general", np.array([2.0, 3.0, 4.0], dtype="float64"),
+         np.array([5.0, 6.0, 7.0], dtype="float64")),
+    ]:
+        result = np.cross(a, b)
+        cross_cases.append(case(name, {"a": array_to_dict(a), "b": array_to_dict(b)},
+                                array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "cross.json",
+                 make_fixture("numpy.cross", "ferray_ufunc::cross", cross_cases))
+
+    trapezoid_cases = []
+    for name, y, x, dx in [
+        ("default_dx", np.array([0.0, 1.0, 2.0, 3.0, 4.0], dtype="float64"), None, None),
+        ("with_dx", np.array([0.0, 1.0, 4.0], dtype="float64"), None, 0.5),
+        ("with_x", np.array([0.0, 1.0, 4.0], dtype="float64"),
+         np.array([0.0, 1.0, 2.0], dtype="float64"), None),
+        ("single", np.array([42.0], dtype="float64"), None, None),
+    ]:
+        if x is not None:
+            result = np.trapezoid(y, x=x)
+        elif dx is not None:
+            result = np.trapezoid(y, dx=dx)
+        else:
+            result = np.trapezoid(y)
+        inputs = {"y": array_to_dict(y)}
+        if x is not None:
+            inputs["x"] = array_to_dict(x)
+        if dx is not None:
+            inputs["dx"] = dx
+        trapezoid_cases.append(case(name, inputs, array_to_dict(np.array(result)),
+                                    tolerance_ulps=0))
+    save_fixture("ufunc", "trapezoid.json",
+                 make_fixture("numpy.trapezoid", "ferray_ufunc::trapezoid",
+                              trapezoid_cases))
+
+    promoted_arithmetic_cases = []
+    promoted_a_1d = np.array([1, -2, 3, 4], dtype="int32")
+    promoted_b_1d = np.array([0.5, 1.5, -2.0, 4.0], dtype="float64")
+    promoted_a_2d = np.array([[1, 2, 3], [-4, 5, -6]], dtype="int32")
+    promoted_b_2d = np.array([[0.25, -0.5, 1.5], [2.0, -3.5, 4.0]],
+                             dtype="float64")
+    for op_name, np_func in [
+        ("add_promoted", np.add),
+        ("subtract_promoted", np.subtract),
+        ("multiply_promoted", np.multiply),
+        ("divide_promoted", np.divide),
+    ]:
+        for case_name, a, b in [
+            ("mixed_i32_f64_1d", promoted_a_1d, promoted_b_1d),
+            ("mixed_i32_f64_2d", promoted_a_2d, promoted_b_2d),
+        ]:
+            with np.errstate(all="ignore"):
+                result = np_func(a, b)
+            promoted_arithmetic_cases.append(case(
+                f"{op_name}_{case_name}",
+                {"op": op_name, "a": array_to_dict(a), "b": array_to_dict(b)},
+                array_to_dict(result),
+                tolerance_ulps=0,
+            ))
+    save_fixture("ufunc", "promoted_arithmetic.json",
+                 make_fixture("numpy promoted arithmetic",
+                              "ferray_ufunc::{add,subtract,multiply,divide}_promoted",
+                              promoted_arithmetic_cases))
+
+    nan_reduce_arr = np.array(
+        [[1.0, np.nan, 3.0], [np.nan, np.nan, np.nan], [2.0, -4.0, np.nan]],
+        dtype="float64",
+    )
+
+    def save_nan_reduction_fixture(filename, np_name, ferray_name, np_func):
+        cases = []
+        for case_name, kwargs in [
+            ("axis1", {"axis": 1, "keepdims": False}),
+            ("axis1_keepdims", {"axis": 1, "keepdims": True}),
+            ("axis0", {"axis": 0, "keepdims": False}),
+        ]:
+            with np.errstate(all="ignore"):
+                result = np_func(nan_reduce_arr, **kwargs)
+            cases.append(case(case_name, {
+                "x": array_to_dict(nan_reduce_arr),
+                "axis": kwargs["axis"],
+                "keepdims": kwargs["keepdims"],
+            }, array_to_dict(result), tolerance_ulps=0))
+        save_fixture("ufunc", filename,
+                     make_fixture(np_name, ferray_name, cases))
+
+    save_nan_reduction_fixture("nan_add_reduce.json", "numpy.nansum",
+                               "ferray_ufunc::nan_add_reduce", np.nansum)
+    save_nan_reduction_fixture("nan_multiply_reduce.json", "numpy.nanprod",
+                               "ferray_ufunc::nan_multiply_reduce",
+                               np.nanprod)
+
+    def save_nan_reduction_axes_fixture(filename, np_name, ferray_name, np_func):
+        cases = []
+        for case_name, kwargs in [
+            ("axes_0_2", {"axis": (0, 2), "keepdims": False}),
+            ("axes_0_2_keepdims", {"axis": (0, 2), "keepdims": True}),
+        ]:
+            cube = np.array(
+                [
+                    [[1.0, np.nan], [2.0, 3.0], [np.nan, 4.0]],
+                    [[5.0, 6.0], [np.nan, 7.0], [8.0, np.nan]],
+                ],
+                dtype="float64",
+            )
+            with np.errstate(all="ignore"):
+                result = np_func(cube, **kwargs)
+            cases.append(case(case_name, {
+                "x": array_to_dict(cube),
+                "axes": list(kwargs["axis"]),
+                "keepdims": kwargs["keepdims"],
+            }, array_to_dict(result), tolerance_ulps=0))
+        save_fixture("ufunc", filename,
+                     make_fixture(np_name, ferray_name, cases))
+
+    save_nan_reduction_axes_fixture("nan_add_reduce_axes.json", "numpy.nansum",
+                                    "ferray_ufunc::nan_add_reduce_axes",
+                                    np.nansum)
+    save_nan_reduction_axes_fixture("nan_multiply_reduce_axes.json",
+                                    "numpy.nanprod",
+                                    "ferray_ufunc::nan_multiply_reduce_axes",
+                                    np.nanprod)
+
+    for filename, np_name, ferray_name, np_func in [
+        ("nan_add_reduce_all.json", "numpy.nansum",
+         "ferray_ufunc::nan_add_reduce_all", np.nansum),
+        ("nan_multiply_reduce_all.json", "numpy.nanprod",
+         "ferray_ufunc::nan_multiply_reduce_all", np.nanprod),
+    ]:
+        with np.errstate(all="ignore"):
+            result = np_func(nan_reduce_arr)
+        save_fixture("ufunc", filename,
+                     make_fixture(np_name, ferray_name, [
+                         case("all", {"x": array_to_dict(nan_reduce_arr)},
+                              array_to_dict(np.array(result)), tolerance_ulps=0)
+                     ]))
+
+    _generate_binary_ufunc(np.hypot, "numpy.hypot", "ferray_ufunc::hypot",
+                           "ufunc", "hypot.json", inputs_override={
+                               "pythagorean": (np.array([3.0, 5.0, 8.0], dtype="float64"),
+                                               np.array([4.0, 12.0, 15.0], dtype="float64")),
+                               "signed": (np.array([-3.0, 3.0, -5.0], dtype="float64"),
+                                          np.array([4.0, -4.0, -12.0], dtype="float64")),
+                               "special": (np.array([float("nan"), float("inf"), 1.0],
+                                                    dtype="float64"),
+                                           np.array([1.0, 1.0, float("inf")],
+                                                    dtype="float64")),
+                           })
+
+    angle_input = {
+        "standard_f64": np.array(
+            [-2 * np.pi, -np.pi, -np.pi / 2, 0.0, np.pi / 2, np.pi, 2 * np.pi],
+            dtype="float64",
+        ),
+        "special_f64": np.array([float("nan"), float("inf"), float("-inf"), 0.0, -0.0],
+                                dtype="float64"),
+    }
+    _generate_unary_ufunc(np.degrees, "numpy.degrees", "ferray_ufunc::degrees",
+                          "ufunc", "degrees.json", inputs_override=angle_input)
+    _generate_unary_ufunc(np.rad2deg, "numpy.rad2deg", "ferray_ufunc::rad2deg",
+                          "ufunc", "rad2deg.json", inputs_override=angle_input)
+
+    degree_input = {
+        "standard_f64": np.array([-360.0, -180.0, -90.0, 0.0, 90.0, 180.0, 360.0],
+                                 dtype="float64"),
+        "special_f64": np.array([float("nan"), float("inf"), float("-inf"), 0.0, -0.0],
+                                dtype="float64"),
+    }
+    _generate_unary_ufunc(np.radians, "numpy.radians", "ferray_ufunc::radians",
+                          "ufunc", "radians.json", inputs_override=degree_input)
+    _generate_unary_ufunc(np.deg2rad, "numpy.deg2rad", "ferray_ufunc::deg2rad",
+                          "ufunc", "deg2rad.json", inputs_override=degree_input)
+
+    _generate_binary_ufunc(np.logaddexp, "numpy.logaddexp",
+                           "ferray_ufunc::logaddexp", "ufunc",
+                           "logaddexp.json", inputs_override={
+                               "standard": (np.array([-2.0, -1.0, 0.0, 1.0, 2.0],
+                                                     dtype="float64"),
+                                            np.array([2.0, 1.0, 0.0, -1.0, -2.0],
+                                                     dtype="float64")),
+                               "large_gap": (np.array([-1000.0, 1000.0, -100.0],
+                                                      dtype="float64"),
+                                             np.array([1000.0, -1000.0, -101.0],
+                                                      dtype="float64")),
+                               "special": (np.array([float("nan"), float("inf"), float("-inf")],
+                                                    dtype="float64"),
+                                           np.array([1.0, float("inf"), float("-inf")],
+                                                    dtype="float64")),
+                           })
+    _generate_binary_ufunc(np.logaddexp2, "numpy.logaddexp2",
+                           "ferray_ufunc::logaddexp2", "ufunc",
+                           "logaddexp2.json", inputs_override={
+                               "standard": (np.array([-2.0, -1.0, 0.0, 1.0, 2.0],
+                                                     dtype="float64"),
+                                            np.array([2.0, 1.0, 0.0, -1.0, -2.0],
+                                                     dtype="float64")),
+                               "large_gap": (np.array([-1000.0, 1000.0, -100.0],
+                                                      dtype="float64"),
+                                             np.array([1000.0, -1000.0, -101.0],
+                                                      dtype="float64")),
+                               "special": (np.array([float("nan"), float("inf"), float("-inf")],
+                                                    dtype="float64"),
+                                           np.array([1.0, float("inf"), float("-inf")],
+                                                    dtype="float64")),
+                           })
+
+    _generate_binary_ufunc(np.copysign, "numpy.copysign",
+                           "ferray_ufunc::copysign", "ufunc",
+                           "copysign.json", inputs_override={
+                               "signed_zero": (np.array([1.0, -2.0, 0.0, -0.0],
+                                                       dtype="float64"),
+                                               np.array([-1.0, 1.0, -0.0, 0.0],
+                                                        dtype="float64")),
+                               "broadcast_2d": (np.array([[1.0], [-2.0]], dtype="float64"),
+                                                np.array([[-1.0, 0.0, 1.0]],
+                                                         dtype="float64")),
+                               "special": (np.array([float("nan"), float("inf"), 1.0],
+                                                    dtype="float64"),
+                                           np.array([-1.0, -0.0, float("-inf")],
+                                                    dtype="float64")),
+                           }, tolerance=0)
+    _generate_binary_ufunc(np.float_power, "numpy.float_power",
+                           "ferray_ufunc::float_power", "ufunc",
+                           "float_power.json", inputs_override={
+                               "standard": (np.array([2.0, 3.0, 4.0], dtype="float64"),
+                                            np.array([3.0, 2.0, 0.5], dtype="float64")),
+                               "negative_integer_exponent": (
+                                   np.array([-2.0, -3.0, 4.0], dtype="float64"),
+                                   np.array([3.0, 2.0, -2.0], dtype="float64"),
+                               ),
+                               "special": (np.array([float("nan"), float("inf"), 1.0],
+                                                    dtype="float64"),
+                                           np.array([1.0, 2.0, float("nan")],
+                                                    dtype="float64")),
+                           })
+    _generate_binary_ufunc(np.nextafter, "numpy.nextafter",
+                           "ferray_ufunc::nextafter", "ufunc",
+                           "nextafter.json", inputs_override={
+                               "toward_positive": (np.array([0.0, 1.0, -1.0],
+                                                            dtype="float64"),
+                                                   np.array([1.0, 2.0, 0.0],
+                                                            dtype="float64")),
+                               "toward_negative": (np.array([0.0, 1.0, -1.0],
+                                                            dtype="float64"),
+                                                   np.array([-1.0, 0.0, -2.0],
+                                                            dtype="float64")),
+                               "equal_and_nan": (np.array([1.0, float("nan"), 2.0],
+                                                          dtype="float64"),
+                                                 np.array([1.0, 0.0, float("nan")],
+                                                          dtype="float64")),
+                               "broadcast_2d": (np.array([[0.0], [1.0]], dtype="float64"),
+                                                np.array([[1.0, -1.0]], dtype="float64")),
+                           }, tolerance=0)
+
+    _generate_unary_ufunc(np.spacing, "numpy.spacing", "ferray_ufunc::spacing",
+                          "ufunc", "spacing.json", inputs_override={
+                              "standard_f64": np.array([-2.0, -1.0, -0.0, 0.0, 1.0, 2.0],
+                                                       dtype="float64"),
+                              "special_f64": np.array(
+                                  [float("nan"), float("inf"), float("-inf")],
+                                  dtype="float64",
+                              ),
+                          }, tolerance=0)
+
+    ldexp_cases = []
+    for name, x, n in [
+        ("standard", np.array([0.5, 1.0, 2.0, -3.0], dtype="float64"),
+         np.array([1, 2, -1, 3], dtype="int32")),
+        ("broadcast_2d", np.array([[1.0], [3.0]], dtype="float64"),
+         np.array([[1, 2, 3]], dtype="int32")),
+        ("special", np.array([float("nan"), float("inf"), float("-inf"), 0.0],
+                             dtype="float64"),
+         np.array([1, -2, 3, 10], dtype="int32")),
+        ("empty", np.array([], dtype="float64"), np.array([], dtype="int32")),
+    ]:
+        with np.errstate(all="ignore"):
+            result = np.ldexp(x, n)
+        ldexp_cases.append(case(name, {"x": array_to_dict(x), "n": array_to_dict(n)},
+                                array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "ldexp.json",
+                 make_fixture("numpy.ldexp", "ferray_ufunc::ldexp", ldexp_cases))
+
+    frexp_cases = []
+    for name, arr in {
+        "standard": np.array([0.0, -0.0, 1.0, -2.5, 1024.0], dtype="float64"),
+        "special": np.array([float("nan"), float("inf"), float("-inf")], dtype="float64"),
+        "2d": np.array([[1.0, 2.0], [3.0, 4.0]], dtype="float64"),
+        "empty": np.array([], dtype="float64"),
+    }.items():
+        with np.errstate(all="ignore"):
+            mantissa, exponent = np.frexp(arr)
+        frexp_cases.append(case(name, {"x": array_to_dict(arr)}, {
+            "mantissa": array_to_dict(mantissa),
+            "exponent": array_to_dict(exponent, "int32"),
+        }, tolerance_ulps=0))
+    save_fixture("ufunc", "frexp.json",
+                 make_fixture("numpy.frexp", "ferray_ufunc::frexp", frexp_cases))
+
+    modf_cases = []
+    for name, arr in {
+        "standard": np.array([0.0, -0.0, 1.25, -2.75, 3.0], dtype="float64"),
+        "special": np.array([float("nan"), float("inf"), float("-inf")], dtype="float64"),
+        "2d": np.array([[1.25, -2.75], [3.5, -4.5]], dtype="float64"),
+        "empty": np.array([], dtype="float64"),
+    }.items():
+        with np.errstate(all="ignore"):
+            fractional, integral = np.modf(arr)
+        modf_cases.append(case(name, {"x": array_to_dict(arr)}, {
+            "fractional": array_to_dict(fractional),
+            "integral": array_to_dict(integral),
+        }, tolerance_ulps=0))
+    save_fixture("ufunc", "modf.json",
+                 make_fixture("numpy.modf", "ferray_ufunc::modf", modf_cases))
+
+    clip_ord_cases = []
+    for name, arr, a_min, a_max in [
+        ("int64", np.array([-10, 0, 5, 100, 255], dtype="int64"), 0, 200),
+        ("int64_negative_bounds", np.array([-10, -5, 0, 5, 10], dtype="int64"), -6, 6),
+        ("empty_int64", np.array([], dtype="int64"), 0, 10),
+    ]:
+        result = np.clip(arr, a_min, a_max)
+        clip_ord_cases.append(case(name, {
+            "x": array_to_dict(arr),
+            "a_min": a_min,
+            "a_max": a_max,
+        }, array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "clip_ord.json",
+                 make_fixture("numpy.clip", "ferray_ufunc::clip_ord", clip_ord_cases))
+
+    for func_name, np_func in [
+        ("equal", np.equal),
+        ("not_equal", np.not_equal),
+        ("less", np.less),
+        ("less_equal", np.less_equal),
+        ("greater", np.greater),
+        ("greater_equal", np.greater_equal),
+    ]:
+        _generate_binary_ufunc(np_func, f"numpy.{func_name}", f"ferray_ufunc::{func_name}",
+                               "ufunc", f"{func_name}.json", tolerance=0)
+
+    # Comparison helpers with scalar bool results or tolerance parameters.
+    cases = []
+    for name, a, b, rtol, atol, equal_nan in [
+        ("standard", np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([1.0 + 1e-9, 2.1, 3.0], dtype="float64"), 1e-5, 1e-8, False),
+        ("equal_nan_false", np.array([np.nan, 1.0], dtype="float64"),
+         np.array([np.nan, 1.0], dtype="float64"), 1e-5, 1e-8, False),
+        ("equal_nan_true", np.array([np.nan, 1.0], dtype="float64"),
+         np.array([np.nan, 1.0], dtype="float64"), 1e-5, 1e-8, True),
+        ("matching_infinities", np.array([np.inf, -np.inf, 1.0], dtype="float64"),
+         np.array([np.inf, -np.inf, np.inf], dtype="float64"), 1e-5, 1e-8, False),
+        ("broadcast_2d", np.array([[1.0, 2.0, 3.0], [1.0, 2.01, 3.0]], dtype="float64"),
+         np.array([1.0, 2.0, 4.0], dtype="float64"), 1e-2, 1e-8, False),
+    ]:
+        with np.errstate(all="ignore"):
+            result = np.isclose(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
+        cases.append(case(name, {
+            "a": array_to_dict(a),
+            "b": array_to_dict(b),
+            "rtol": rtol,
+            "atol": atol,
+            "equal_nan": equal_nan,
+        }, array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "isclose.json", make_fixture("numpy.isclose", "ferray_ufunc::isclose", cases))
+
+    cases = []
+    for name, a, b, rtol, atol in [
+        ("all_close", np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([1.0 + 1e-9, 2.0 + 1e-9, 3.0 + 1e-9], dtype="float64"), 1e-5, 1e-8),
+        ("not_all_close", np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([1.0, 2.0, 4.0], dtype="float64"), 1e-5, 1e-8),
+        ("broadcast_true", np.array([[1.0, 2.0, 3.0], [1.0, 2.01, 3.0]], dtype="float64"),
+         np.array([1.0, 2.0, 3.0], dtype="float64"), 1e-2, 1e-8),
+        ("matching_infinities", np.array([np.inf, -np.inf], dtype="float64"),
+         np.array([np.inf, -np.inf], dtype="float64"), 1e-5, 1e-8),
+    ]:
+        with np.errstate(all="ignore"):
+            result = np.array(np.allclose(a, b, rtol=rtol, atol=atol))
+        cases.append(case(name, {
+            "a": array_to_dict(a),
+            "b": array_to_dict(b),
+            "rtol": rtol,
+            "atol": atol,
+        }, array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "allclose.json", make_fixture("numpy.allclose", "ferray_ufunc::allclose", cases))
+
+    cases = []
+    for name, a, b in [
+        ("same_shape_equal", np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([1.0, 2.0, 3.0], dtype="float64")),
+        ("same_shape_not_equal", np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([1.0, 2.0, 4.0], dtype="float64")),
+        ("broadcastable_equal_is_false", np.array([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]], dtype="float64"),
+         np.array([1.0, 2.0, 3.0], dtype="float64")),
+        ("nan_default_false", np.array([np.nan], dtype="float64"),
+         np.array([np.nan], dtype="float64")),
+    ]:
+        result = np.array(np.array_equal(a, b))
+        cases.append(case(name, {"a": array_to_dict(a), "b": array_to_dict(b)},
+                          array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "array_equal.json",
+                 make_fixture("numpy.array_equal", "ferray_ufunc::array_equal", cases))
+
+    cases = []
+    for name, a, b in [
+        ("same_shape_equal", np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([1.0, 2.0, 3.0], dtype="float64")),
+        ("same_shape_not_equal", np.array([1.0, 2.0, 3.0], dtype="float64"),
+         np.array([1.0, 2.0, 4.0], dtype="float64")),
+        ("broadcastable_equal", np.array([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]], dtype="float64"),
+         np.array([1.0, 2.0, 3.0], dtype="float64")),
+        ("broadcastable_not_equal", np.array([[1.0, 2.0, 3.0], [1.0, 2.0, 4.0]], dtype="float64"),
+         np.array([1.0, 2.0, 3.0], dtype="float64")),
+        ("incompatible_false", np.array([1.0, 2.0], dtype="float64"),
+         np.array([1.0, 2.0, 3.0], dtype="float64")),
+    ]:
+        result = np.array(np.array_equiv(a, b))
+        cases.append(case(name, {"a": array_to_dict(a), "b": array_to_dict(b)},
+                          array_to_dict(result), tolerance_ulps=0))
+    save_fixture("ufunc", "array_equiv.json",
+                 make_fixture("numpy.array_equiv", "ferray_ufunc::array_equiv", cases))
+
+    # Bitwise ufuncs. Signed `bitwise_count` intentionally includes the
+    # minimum i64 value because NumPy counts set bits in abs(x), not in the
+    # two's-complement representation.
+    bitwise_pairs = {
+        "standard_i64": (np.array([-3, -2, -1, 0, 1, 2, 3], dtype="int64"),
+                         np.array([1, 2, 3, 4, -1, -2, -3], dtype="int64")),
+        "broadcast_i64": (np.array([[1], [2]], dtype="int64"),
+                          np.array([[3, 4, 5]], dtype="int64")),
+        "bool": (np.array([True, False, True], dtype="bool"),
+                 np.array([False, False, True], dtype="bool")),
+        "empty_i64": (np.array([], dtype="int64"), np.array([], dtype="int64")),
+    }
+    for func_name, np_func in [
+        ("bitwise_and", np.bitwise_and),
+        ("bitwise_or", np.bitwise_or),
+        ("bitwise_xor", np.bitwise_xor),
+    ]:
+        _generate_binary_ufunc(np_func, f"numpy.{func_name}", f"ferray_ufunc::{func_name}",
+                               "ufunc", f"{func_name}.json",
+                               inputs_override=bitwise_pairs, tolerance=0)
+
+    bitwise_unary = {
+        "signed_i64": np.array([-3, -1, 0, 1, 3], dtype="int64"),
+        "bool": np.array([True, False], dtype="bool"),
+        "empty_i64": np.array([], dtype="int64"),
+    }
+    for func_name, np_func in [
+        ("bitwise_not", np.bitwise_not),
+        ("invert", np.invert),
+    ]:
+        cases = []
+        for name, arr in bitwise_unary.items():
+            result = np_func(arr)
+            cases.append(case(name, {"x": array_to_dict(arr)}, array_to_dict(result),
+                              tolerance_ulps=0))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{func_name}", f"ferray_ufunc::{func_name}", cases))
+
+    for func_name, np_func in [
+        ("isneginf", np.isneginf),
+        ("isposinf", np.isposinf),
+        ("signbit", np.signbit),
+    ]:
+        _generate_unary_ufunc(np_func, f"numpy.{func_name}", f"ferray_ufunc::{func_name}",
+                              "ufunc", f"{func_name}.json", inputs_override={
+                                  "standard_f64": np.array(
+                                      [float("-inf"), -1.0, -0.0, 0.0, 1.0, float("inf")],
+                                      dtype="float64",
+                                  ),
+                                  "special_f64": np.array(
+                                      [float("nan"), float("inf"), float("-inf"), 0.0, -0.0],
+                                      dtype="float64",
+                                  ),
+                              }, tolerance=0)
+
+    shift_pairs = {
+        "standard_i64": (np.array([-8, -1, 0, 1, 8], dtype="int64"),
+                         np.array([0, 1, 2, 3, 4], dtype="uint32")),
+        "broadcast_i64": (np.array([[1], [2]], dtype="int64"),
+                          np.array([[0, 1, 2]], dtype="uint32")),
+        "empty_i64": (np.array([], dtype="int64"), np.array([], dtype="uint32")),
+    }
+    for func_name, np_func in [
+        ("left_shift", np.left_shift),
+        ("right_shift", np.right_shift),
+    ]:
+        _generate_binary_ufunc(np_func, f"numpy.{func_name}", f"ferray_ufunc::{func_name}",
+                               "ufunc", f"{func_name}.json",
+                               inputs_override=shift_pairs, tolerance=0)
+
+    cases = []
+    for name, arr in {
+        "signed_i64": np.array([np.iinfo(np.int64).min, -3, -2, -1, 0, 1, 2, 3,
+                                np.iinfo(np.int64).max], dtype="int64"),
+        "unsigned_u32": np.array([0, 1, 15, 255, np.iinfo(np.uint32).max],
+                                 dtype="uint32"),
+        "bool": np.array([True, False, True], dtype="bool"),
+        "empty_i64": np.array([], dtype="int64"),
+    }.items():
+        result = np.bitwise_count(arr)
+        cases.append(case(name, {"x": array_to_dict(arr)}, array_to_dict(result),
+                          tolerance_ulps=0))
+    save_fixture("ufunc", "bitwise_count.json",
+                 make_fixture("numpy.bitwise_count", "ferray_ufunc::bitwise_count", cases))
+
+    # Complex accessors and predicates.
+    complex_values = np.array([
+        1.0 + 2.0j,
+        3.0 - 4.0j,
+        -1.0 + 0.0j,
+        complex(-0.0, -0.0),
+    ], dtype="complex128")
+    complex_values_2d = np.array([[1.0 + 0.0j, 0.0 + 1.0j],
+                                  [-1.0 - 1.0j, 2.0 + 3.0j]], dtype="complex128")
+    complex_inputs = {
+        "standard_complex128": complex_values,
+        "2d_complex128": complex_values_2d,
+        "empty_complex128": np.array([], dtype="complex128"),
+    }
+
+    for func_name, np_func, ferray_name, filename in [
+        ("real", np.real, "ferray_ufunc::real", "real.json"),
+        ("imag", np.imag, "ferray_ufunc::imag", "imag.json"),
+        ("angle", np.angle, "ferray_ufunc::angle", "angle.json"),
+        ("abs", np.abs, "ferray_ufunc::abs", "abs_complex.json"),
+    ]:
+        cases = []
+        for name, arr in complex_inputs.items():
+            result = np_func(arr)
+            cases.append(case(name, {"x": array_to_dict(arr, "complex128")},
+                              array_to_dict(result, str(result.dtype)), tolerance_ulps=4))
+        save_fixture("ufunc", filename,
+                     make_fixture(f"numpy.{func_name}", ferray_name, cases))
+
+    for func_name, np_func in [("conj", np.conj), ("conjugate", np.conjugate)]:
+        cases = []
+        for name, arr in complex_inputs.items():
+            result = np_func(arr)
+            cases.append(case(name, {"x": array_to_dict(arr, "complex128")},
+                              array_to_dict(result, "complex128"), tolerance_ulps=0))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{func_name}", f"ferray_ufunc::{func_name}", cases))
+
+    for func_name, np_func, ferray_name, filename in [
+        ("iscomplex", np.iscomplex, "ferray_ufunc::iscomplex", "iscomplex.json"),
+        ("isreal", np.isreal, "ferray_ufunc::isreal", "isreal.json"),
+    ]:
+        cases = []
+        for name, arr in complex_inputs.items():
+            result = np_func(arr)
+            cases.append(case(name, {"x": array_to_dict(arr, "complex128")},
+                              array_to_dict(result, "bool"), tolerance_ulps=0))
+        save_fixture("ufunc", filename,
+                     make_fixture(f"numpy.{func_name}", ferray_name, cases))
+
+    real_values = np.array([1.0, 0.0, -2.5, np.nan], dtype="float64")
+    for func_name, np_func, ferray_name, filename in [
+        ("iscomplex", np.iscomplex, "ferray_ufunc::iscomplex_real", "iscomplex_real.json"),
+        ("isreal", np.isreal, "ferray_ufunc::isreal_real", "isreal_real.json"),
+    ]:
+        result = np_func(real_values)
+        save_fixture("ufunc", filename, make_fixture(
+            f"numpy.{func_name}",
+            ferray_name,
+            [case("real_float64", {"x": array_to_dict(real_values)},
+                  array_to_dict(result, "bool"), tolerance_ulps=0)],
+        ))
+
+    for func_name, np_func in [("iscomplexobj", np.iscomplexobj),
+                               ("isrealobj", np.isrealobj)]:
+        cases = []
+        for name, arr in [("complex128", complex_values), ("float64", real_values)]:
+            result = np.array(np_func(arr))
+            cases.append(case(name, {"x": array_to_dict(arr)},
+                              array_to_dict(result, "bool"), tolerance_ulps=0))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{func_name}", f"ferray_ufunc::{func_name}", cases))
+
+    isscalar_cases = []
+    for name, arr in [
+        ("zero_d_float64", np.array(1.5, dtype="float64")),
+        ("one_d_float64", np.array([1.5], dtype="float64")),
+        ("zero_d_complex128", np.array(1.0 + 2.0j, dtype="complex128")),
+        ("one_d_complex128", np.array([1.0 + 2.0j], dtype="complex128")),
+    ]:
+        result = np.array(np.isscalar(arr))
+        isscalar_cases.append(case(name, {"x": array_to_dict(arr)},
+                                   array_to_dict(result, "bool"), tolerance_ulps=0))
+    save_fixture("ufunc", "isscalar.json",
+                 make_fixture("numpy.isscalar", "ferray_ufunc::isscalar",
+                              isscalar_cases))
+
+    complex_trans_inputs = {
+        "standard_complex128": np.array([
+            0.0 + 0.0j,
+            1.0 + 2.0j,
+            -1.5 + 0.5j,
+            0.25 - 0.75j,
+        ], dtype="complex128"),
+        "2d_complex128": np.array([[1.0 + 0.0j, 0.0 + 1.0j],
+                                  [-1.0 - 1.0j, 2.0 + 3.0j]], dtype="complex128"),
+        "empty_complex128": np.array([], dtype="complex128"),
+    }
+    branch_real_cut = np.array([
+        complex(2.0, 0.0),
+        complex(2.0, -0.0),
+        complex(-2.0, 0.0),
+        complex(-2.0, -0.0),
+        complex(0.5, 0.0),
+    ], dtype="complex128")
+    branch_imag_cut = np.array([
+        complex(0.0, 2.0),
+        complex(-0.0, 2.0),
+        complex(0.0, -2.0),
+        complex(-0.0, -2.0),
+        complex(0.0, 0.5),
+    ], dtype="complex128")
+
+    for func_name, np_func, ferray_name, filename, extra_inputs in [
+        ("sin", np.sin, "ferray_ufunc::sin_complex", "sin_complex.json", {}),
+        ("cos", np.cos, "ferray_ufunc::cos_complex", "cos_complex.json", {}),
+        ("tan", np.tan, "ferray_ufunc::tan_complex", "tan_complex.json", {}),
+        ("sinh", np.sinh, "ferray_ufunc::sinh_complex", "sinh_complex.json", {}),
+        ("cosh", np.cosh, "ferray_ufunc::cosh_complex", "cosh_complex.json", {}),
+        ("tanh", np.tanh, "ferray_ufunc::tanh_complex", "tanh_complex.json", {}),
+        ("exp", np.exp, "ferray_ufunc::exp_complex", "exp_complex.json", {}),
+        ("expm1", np.expm1, "ferray_ufunc::expm1_complex", "expm1_complex.json", {}),
+        ("log", np.log, "ferray_ufunc::ln_complex", "ln_complex.json", {}),
+        ("log1p", np.log1p, "ferray_ufunc::log1p_complex", "log1p_complex.json", {}),
+        ("log2", np.log2, "ferray_ufunc::log2_complex", "log2_complex.json", {}),
+        ("log10", np.log10, "ferray_ufunc::log10_complex", "log10_complex.json", {}),
+        ("sqrt", np.sqrt, "ferray_ufunc::sqrt_complex", "sqrt_complex.json", {}),
+        ("arcsin", np.arcsin, "ferray_ufunc::asin_complex", "asin_complex.json",
+         {"real_axis_cut": branch_real_cut}),
+        ("arccos", np.arccos, "ferray_ufunc::acos_complex", "acos_complex.json",
+         {"real_axis_cut": branch_real_cut}),
+        ("arctan", np.arctan, "ferray_ufunc::atan_complex", "atan_complex.json",
+         {"imag_axis_cut": branch_imag_cut}),
+        ("arcsinh", np.arcsinh, "ferray_ufunc::asinh_complex", "asinh_complex.json",
+         {"imag_axis_cut": branch_imag_cut}),
+        ("arccosh", np.arccosh, "ferray_ufunc::acosh_complex", "acosh_complex.json",
+         {"real_axis_cut": branch_real_cut}),
+        ("arctanh", np.arctanh, "ferray_ufunc::atanh_complex", "atanh_complex.json",
+         {"real_axis_cut": branch_real_cut}),
+    ]:
+        cases = []
+        all_inputs = dict(complex_trans_inputs)
+        all_inputs.update(extra_inputs)
+        for name, arr in all_inputs.items():
+            with np.errstate(all="ignore"):
+                result = np_func(arr)
+            cases.append(case(name, {"x": array_to_dict(arr, "complex128")},
+                              array_to_dict(result, "complex128"), tolerance_ulps=64))
+        save_fixture("ufunc", filename, make_fixture(f"numpy.{func_name}", ferray_name, cases))
+
+    cases = []
+    for name, base, exponent in [
+        ("square", complex_trans_inputs["standard_complex128"], np.array(2.0 + 0.0j, dtype="complex128")),
+        ("complex_exponent", complex_trans_inputs["standard_complex128"], np.array(0.5 + 0.25j, dtype="complex128")),
+        ("2d_complex128", complex_trans_inputs["2d_complex128"], np.array(1.5 - 0.5j, dtype="complex128")),
+        ("empty_complex128", complex_trans_inputs["empty_complex128"], np.array(2.0 + 0.0j, dtype="complex128")),
+    ]:
+        with np.errstate(all="ignore"):
+            result = np.power(base, exponent)
+        cases.append(case(name, {"x": array_to_dict(base, "complex128"),
+                                 "exponent": array_to_dict(exponent, "complex128")},
+                          array_to_dict(result, "complex128"), tolerance_ulps=64))
+    save_fixture("ufunc", "power_complex.json",
+                 make_fixture("numpy.power", "ferray_ufunc::power_complex", cases))
+
+    # Logical ufuncs and reductions.
+    logical_pairs = {
+        "standard_f64": (np.array([0.0, 1.0, -2.0, np.nan, np.inf], dtype="float64"),
+                         np.array([1.0, 0.0, 3.0, np.nan, 0.0], dtype="float64")),
+        "broadcast_2d": (np.array([[0.0], [2.0]], dtype="float64"),
+                         np.array([[0.0, 1.0, np.nan]], dtype="float64")),
+        "empty": (np.array([], dtype="float64"), np.array([], dtype="float64")),
+    }
+    for func_name, np_func in [
+        ("logical_and", np.logical_and),
+        ("logical_or", np.logical_or),
+        ("logical_xor", np.logical_xor),
+    ]:
+        _generate_binary_ufunc(np_func, f"numpy.{func_name}", f"ferray_ufunc::{func_name}",
+                               "ufunc", f"{func_name}.json",
+                               inputs_override=logical_pairs, tolerance=0)
+
+    logical_unary = {
+        "standard_f64": np.array([0.0, 1.0, -2.0, np.nan, np.inf, -np.inf], dtype="float64"),
+        "2d_f64": np.array([[0.0, 1.0], [np.nan, 0.0]], dtype="float64"),
+        "scalar_zero": np.array(0.0, dtype="float64"),
+        "scalar_nonzero": np.array(-3.0, dtype="float64"),
+        "empty": np.array([], dtype="float64"),
+    }
+    _generate_unary_ufunc(np.logical_not, "numpy.logical_not",
+                          "ferray_ufunc::logical_not", "ufunc",
+                          "logical_not.json", inputs_override=logical_unary,
+                          tolerance=0)
+
+    for func_name, np_func in [("all", np.all), ("any", np.any)]:
+        cases = []
+        for name, arr in {
+            "all_true": np.array([1.0, -2.0, np.nan], dtype="float64"),
+            "has_false": np.array([1.0, 0.0, np.nan], dtype="float64"),
+            "all_false": np.array([0.0, 0.0], dtype="float64"),
+            "empty": np.array([], dtype="float64"),
+            "2d": np.array([[1.0, 0.0, np.nan], [1.0, 2.0, 3.0]], dtype="float64"),
+        }.items():
+            result = np.array(np_func(arr))
+            cases.append(case(name, {"x": array_to_dict(arr)}, array_to_dict(result),
+                              tolerance_ulps=0))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{func_name}", f"ferray_ufunc::{func_name}", cases))
+
+    axis_source = np.array([[1.0, 0.0, np.nan], [1.0, 2.0, 3.0]], dtype="float64")
+    axis_source_1d = np.array([1.0, np.nan, 0.0], dtype="float64")
+    for func_name, np_func in [("all_axis", np.all), ("any_axis", np.any)]:
+        cases = []
+        for name, arr, axis in [
+            ("axis0_2d", axis_source, 0),
+            ("axis1_2d", axis_source, 1),
+            ("axis0_1d_scalar", axis_source_1d, 0),
+        ]:
+            result = np_func(arr, axis=axis)
+            cases.append(case(name, {"x": array_to_dict(arr), "axis": axis},
+                              array_to_dict(result), tolerance_ulps=0))
+        save_fixture("ufunc", f"{func_name}.json",
+                     make_fixture(f"numpy.{func_name}", f"ferray_ufunc::{func_name}", cases))
+
 
 # ---------------------------------------------------------------------------
 # Stats fixtures
@@ -1262,6 +2882,57 @@ def generate_fft_fixtures():
     cases.append(case("roundtrip_1d", {"x": array_to_dict(shifted)},
                       array_to_dict(unshifted), tolerance_ulps=0))
     save_fixture("fft", "ifftshift.json", make_fixture("numpy.fft.ifftshift", "ferray_fft::ifftshift", cases))
+    generate_fft_gap_fixtures()
+
+
+def generate_fft_gap_fixtures():
+    """Generate FFT fixtures added after the original Stage 1 corpus."""
+    print("Generating FFT gap fixtures...")
+
+    # --- rfft2 / irfft2 ---
+    m2d = np.arange(16, dtype="float64").reshape(4, 4)
+    r2 = np.fft.rfft2(m2d)
+    save_fixture("fft", "rfft2.json", make_fixture(
+        "numpy.fft.rfft2",
+        "ferray_fft::rfft2",
+        [case("4x4", {"x": array_to_dict(m2d)}, array_to_dict(r2, "complex128"), tolerance_ulps=4)],
+    ))
+    save_fixture("fft", "irfft2.json", make_fixture(
+        "numpy.fft.irfft2",
+        "ferray_fft::irfft2",
+        [case("roundtrip_4x4", {"x": array_to_dict(r2, "complex128"), "s": [4, 4]},
+              array_to_dict(np.fft.irfft2(r2, s=(4, 4))), tolerance_ulps=4)],
+    ))
+
+    # --- rfftn / irfftn ---
+    a3d = np.arange(24, dtype="float64").reshape(2, 3, 4)
+    rn = np.fft.rfftn(a3d)
+    save_fixture("fft", "rfftn.json", make_fixture(
+        "numpy.fft.rfftn",
+        "ferray_fft::rfftn",
+        [case("2x3x4", {"x": array_to_dict(a3d)}, array_to_dict(rn, "complex128"), tolerance_ulps=4)],
+    ))
+    save_fixture("fft", "irfftn.json", make_fixture(
+        "numpy.fft.irfftn",
+        "ferray_fft::irfftn",
+        [case("roundtrip_2x3x4", {"x": array_to_dict(rn, "complex128"), "s": [2, 3, 4]},
+              array_to_dict(np.fft.irfftn(rn, s=(2, 3, 4))), tolerance_ulps=4)],
+    ))
+
+    # --- hfft / ihfft ---
+    sig = np.array([1.0, 2.0, 3.0, 4.0], dtype="float64")
+    ih = np.fft.ihfft(sig)
+    save_fixture("fft", "ihfft.json", make_fixture(
+        "numpy.fft.ihfft",
+        "ferray_fft::ihfft",
+        [case("real_4", {"x": array_to_dict(sig)}, array_to_dict(ih, "complex128"), tolerance_ulps=4)],
+    ))
+    save_fixture("fft", "hfft.json", make_fixture(
+        "numpy.fft.hfft",
+        "ferray_fft::hfft",
+        [case("roundtrip_4", {"x": array_to_dict(ih, "complex128"), "n": 4},
+              array_to_dict(np.fft.hfft(ih, n=4)), tolerance_ulps=4)],
+    ))
 
 
 # ---------------------------------------------------------------------------
@@ -1720,6 +3391,1384 @@ def generate_ma_fixtures():
                       tolerance_ulps=0))
     save_fixture("ma", "masked_invalid.json",
                  make_fixture("numpy.ma.masked_invalid", "ferray_ma::masked_invalid", cases))
+
+    # --- Masking constructors ---
+    constructor_data = np.array([[-2.0, -1.0, 0.0],
+                                 [1.0, 2.0, 3.0]], dtype="float64")
+    constructor_condition = np.array([[False, True, False],
+                                      [True, False, True]], dtype="bool")
+    cases = []
+
+    def masked_constructor_case(name, op, inputs, result):
+        return case(
+            name,
+            inputs,
+            {
+                "data": array_to_dict(np.array(result.data, dtype="float64")),
+                "mask": array_to_dict(np.ma.getmaskarray(result).astype("bool"), "bool"),
+                "fill_value": _serialize_value(result.fill_value),
+            },
+            tolerance_ulps=0,
+        )
+
+    result = np.ma.masked_where(constructor_condition, constructor_data)
+    cases.append(masked_constructor_case(
+        "masked_where",
+        "masked_where",
+        {"op": "masked_where",
+         "data": array_to_dict(constructor_data),
+         "condition": array_to_dict(constructor_condition, "bool")},
+        result,
+    ))
+    for op, np_func, value in [
+        ("masked_equal", np.ma.masked_equal, 2.0),
+        ("masked_not_equal", np.ma.masked_not_equal, 2.0),
+        ("masked_greater", np.ma.masked_greater, 1.0),
+        ("masked_greater_equal", np.ma.masked_greater_equal, 1.0),
+        ("masked_less", np.ma.masked_less, 0.0),
+        ("masked_less_equal", np.ma.masked_less_equal, 0.0),
+    ]:
+        result = np_func(constructor_data, value)
+        cases.append(masked_constructor_case(
+            op,
+            op,
+            {"op": op,
+             "data": array_to_dict(constructor_data),
+             "value": value},
+            result,
+        ))
+    for op, np_func, v1, v2 in [
+        ("masked_inside", np.ma.masked_inside, -1.0, 2.0),
+        ("masked_inside_swapped", np.ma.masked_inside, 2.0, -1.0),
+        ("masked_outside", np.ma.masked_outside, -1.0, 2.0),
+        ("masked_outside_swapped", np.ma.masked_outside, 2.0, -1.0),
+    ]:
+        result = np_func(constructor_data, v1, v2)
+        cases.append(masked_constructor_case(
+            op,
+            op,
+            {"op": op.split("_swapped")[0],
+             "data": array_to_dict(constructor_data),
+             "v1": v1,
+             "v2": v2},
+            result,
+        ))
+
+    fix_data = np.array([1.0, np.nan, 3.0, np.inf, -np.inf], dtype="float64")
+    fix_value = -99.0
+    result = np.ma.fix_invalid(fix_data, fill_value=fix_value)
+    cases.append(masked_constructor_case(
+        "fix_invalid",
+        "fix_invalid",
+        {"op": "fix_invalid",
+         "data": array_to_dict(fix_data),
+         "fill_value": fix_value},
+        result,
+    ))
+    save_fixture("ma", "masked_constructors.json",
+                 make_fixture("numpy.ma masking constructors",
+                              "ferray_ma::{fix_invalid,masked_where,masked_equal,masked_not_equal,masked_greater,masked_greater_equal,masked_less,masked_less_equal,masked_inside,masked_outside}",
+                              cases))
+
+    # --- Masked arithmetic ---
+    lhs_data = np.array([1.0, 2.0, 0.0, 4.0], dtype="float64")
+    lhs_mask = np.array([False, True, False, False], dtype="bool")
+    rhs_data = np.array([1.0, 0.0, 0.0, 2.0], dtype="float64")
+    rhs_mask = np.array([False, False, False, True], dtype="bool")
+    array_rhs = np.array([10.0, 0.0, 0.0, 2.0], dtype="float64")
+    lhs = np.ma.array(lhs_data, mask=lhs_mask)
+    rhs = np.ma.array(rhs_data, mask=rhs_mask)
+
+    cases = []
+
+    def arithmetic_case(name, op, inputs, result):
+        return case(
+            name,
+            inputs,
+            {
+                "data": array_to_dict(np.array(result.data, dtype="float64")),
+                "mask": array_to_dict(np.ma.getmaskarray(result).astype("bool"), "bool"),
+                "fill_value": _serialize_value(result.fill_value),
+            },
+            tolerance_ulps=4,
+        )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        for op, result in [
+            ("masked_add", lhs + rhs),
+            ("masked_sub", lhs - rhs),
+            ("masked_mul", lhs * rhs),
+            ("masked_div", lhs / rhs),
+        ]:
+            cases.append(arithmetic_case(
+                op,
+                op,
+                {"op": op,
+                 "lhs_data": array_to_dict(lhs_data),
+                 "lhs_mask": array_to_dict(lhs_mask, "bool"),
+                 "rhs_data": array_to_dict(rhs_data),
+                 "rhs_mask": array_to_dict(rhs_mask, "bool")},
+                result,
+            ))
+        for op, result in [
+            ("masked_add_array", lhs + array_rhs),
+            ("masked_sub_array", lhs - array_rhs),
+            ("masked_mul_array", lhs * array_rhs),
+            ("masked_div_array", lhs / array_rhs),
+        ]:
+            cases.append(arithmetic_case(
+                op,
+                op,
+                {"op": op,
+                 "lhs_data": array_to_dict(lhs_data),
+                 "lhs_mask": array_to_dict(lhs_mask, "bool"),
+                 "rhs_data": array_to_dict(array_rhs)},
+                result,
+            ))
+    save_fixture("ma", "masked_arithmetic.json",
+                 make_fixture("numpy.ma masked arithmetic",
+                              "ferray_ma::{masked_add,masked_sub,masked_mul,masked_div,masked_add_array,masked_sub_array,masked_mul_array,masked_div_array}",
+                              cases))
+
+    # --- Masked shape manipulation + flat indexing ---
+    manipulation_data = np.arange(6, dtype="float64").reshape(2, 3)
+    manipulation_mask = np.array([[False, True, False],
+                                  [True, False, False]], dtype="bool")
+    manipulation_fill = -7.0
+    manipulation_arr = np.ma.array(manipulation_data, mask=manipulation_mask)
+    manipulation_arr.set_fill_value(manipulation_fill)
+
+    squeeze_data = np.arange(6, dtype="float64").reshape(1, 2, 3, 1)
+    squeeze_mask = np.array([[[[False], [True], [False]],
+                              [[True], [False], [False]]]], dtype="bool")
+    squeeze_arr = np.ma.array(squeeze_data, mask=squeeze_mask)
+    squeeze_arr.set_fill_value(manipulation_fill)
+
+    def masked_result_payload(result):
+        return {
+            "data": array_to_dict(np.array(result.data, dtype="float64")),
+            "mask": array_to_dict(np.ma.getmaskarray(result).astype("bool"), "bool"),
+            "fill_value": _serialize_value(result.fill_value),
+        }
+
+    def manipulation_case(name, op, source, result, **extra_inputs):
+        inputs = {
+            "op": op,
+            "data": array_to_dict(np.array(source.data, dtype="float64")),
+            "mask": array_to_dict(np.ma.getmaskarray(source).astype("bool"), "bool"),
+            "fill_value": _serialize_value(source.fill_value),
+        }
+        inputs.update(extra_inputs)
+        return case(name, inputs, masked_result_payload(result), tolerance_ulps=0)
+
+    selector = np.array([[True, False, True],
+                         [False, True, False]], dtype="bool")
+    take_indices = np.array([0, 5, 2, 1], dtype="uint64")
+    cases = [
+        manipulation_case(
+            "reshape_3x2",
+            "reshape",
+            manipulation_arr,
+            manipulation_arr.reshape(3, 2),
+            new_shape=[3, 2],
+        ),
+        manipulation_case(
+            "ravel",
+            "ravel",
+            manipulation_arr,
+            manipulation_arr.ravel(),
+        ),
+        manipulation_case(
+            "flatten",
+            "flatten",
+            manipulation_arr,
+            manipulation_arr.flatten(),
+        ),
+        manipulation_case(
+            "transpose_default",
+            "transpose",
+            manipulation_arr,
+            manipulation_arr.transpose(),
+        ),
+        manipulation_case(
+            "transpose_axes",
+            "transpose",
+            manipulation_arr,
+            manipulation_arr.transpose((1, 0)),
+            axes=[1, 0],
+        ),
+        manipulation_case(
+            "t",
+            "t",
+            manipulation_arr,
+            manipulation_arr.T,
+        ),
+        manipulation_case(
+            "squeeze_all",
+            "squeeze",
+            squeeze_arr,
+            np.ma.squeeze(squeeze_arr),
+        ),
+        manipulation_case(
+            "squeeze_axis0",
+            "squeeze",
+            squeeze_arr,
+            np.ma.squeeze(squeeze_arr, axis=0),
+            axis=0,
+        ),
+        manipulation_case(
+            "boolean_index",
+            "boolean_index",
+            manipulation_arr,
+            manipulation_arr[selector],
+            selector=array_to_dict(selector, "bool"),
+        ),
+        manipulation_case(
+            "take",
+            "take",
+            manipulation_arr,
+            np.ma.take(manipulation_arr, take_indices),
+            indices=array_to_dict(take_indices, "uint64"),
+        ),
+    ]
+    for flat_index in [1, 4]:
+        flat = manipulation_arr.ravel()
+        cases.append(case(
+            f"get_flat_{flat_index}",
+            {
+                "op": "get_flat",
+                "data": array_to_dict(np.array(manipulation_arr.data, dtype="float64")),
+                "mask": array_to_dict(np.ma.getmaskarray(manipulation_arr).astype("bool"), "bool"),
+                "fill_value": _serialize_value(manipulation_arr.fill_value),
+                "flat_index": flat_index,
+            },
+            {
+                "value": _serialize_value(flat.data[flat_index]),
+                "masked": bool(np.ma.getmaskarray(flat)[flat_index]),
+            },
+            tolerance_ulps=0,
+        ))
+    save_fixture("ma", "masked_manipulation.json",
+                 make_fixture("numpy.ma shape manipulation and take/get_flat",
+                              "ferray_ma::manipulation::MaskedArray::{reshape,ravel,flatten,transpose,t,squeeze,boolean_index,take,get_flat}",
+                              cases))
+
+    # --- Masked ufunc support ---
+    ufunc_data = np.array([-2.5, -1.0, -0.5, 0.0, 0.5, 1.5, 2.25], dtype="float64")
+    ufunc_mask = np.array([False, True, False, False, False, False, False], dtype="bool")
+    ufunc_fill = -9.0
+    ufunc_arr = np.ma.array(ufunc_data, mask=ufunc_mask)
+    ufunc_arr.set_fill_value(ufunc_fill)
+
+    lhs_data = np.array([-2.0, -1.0, 0.5, 1.0, 2.0], dtype="float64")
+    lhs_mask = np.array([False, True, False, False, False], dtype="bool")
+    rhs_data = np.array([1.0, 0.0, 2.0, 0.0, 3.0], dtype="float64")
+    rhs_mask = np.array([False, False, True, False, False], dtype="bool")
+    lhs = np.ma.array(lhs_data, mask=lhs_mask)
+    rhs = np.ma.array(rhs_data, mask=rhs_mask)
+    lhs.set_fill_value(ufunc_fill)
+    rhs.set_fill_value(77.0)
+
+    cases = []
+
+    def ufunc_unary_case(name, op, result):
+        return case(
+            name,
+            {
+                "op": op,
+                "data": array_to_dict(ufunc_data),
+                "mask": array_to_dict(ufunc_mask, "bool"),
+                "fill_value": ufunc_fill,
+            },
+            masked_result_payload(result),
+            tolerance_ulps=16,
+        )
+
+    def ufunc_binary_case(name, op, result):
+        return case(
+            name,
+            {
+                "op": op,
+                "lhs_data": array_to_dict(lhs_data),
+                "lhs_mask": array_to_dict(lhs_mask, "bool"),
+                "lhs_fill_value": ufunc_fill,
+                "rhs_data": array_to_dict(rhs_data),
+                "rhs_mask": array_to_dict(rhs_mask, "bool"),
+                "rhs_fill_value": 77.0,
+            },
+            masked_result_payload(result),
+            tolerance_ulps=16,
+        )
+
+    def manual_unary_result(source, func, in_domain=None):
+        source_data = np.array(source.data, dtype="float64")
+        result_mask = np.ma.getmaskarray(source).astype("bool")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            computed = func(source_data)
+        if in_domain is not None:
+            result_mask = np.logical_or(result_mask, np.logical_not(in_domain(source_data)))
+            result_data = np.where(result_mask, source_data, computed)
+        else:
+            result_data = np.where(result_mask, source_data, computed)
+        result = np.ma.array(result_data, mask=result_mask)
+        result.set_fill_value(source.fill_value)
+        return result
+
+    def manual_binary_result(left, right, func, in_domain=None):
+        left_data = np.array(left.data, dtype="float64")
+        right_data = np.array(right.data, dtype="float64")
+        result_mask = np.logical_or(np.ma.getmaskarray(left), np.ma.getmaskarray(right)).astype("bool")
+        if in_domain is not None:
+            result_mask = np.logical_or(result_mask, np.logical_not(in_domain(left_data, right_data)))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            computed = func(left_data, right_data)
+        result_data = np.where(result_mask, left_data, computed)
+        result = np.ma.array(result_data, mask=result_mask)
+        result.set_fill_value(left.fill_value)
+        return result
+
+    unary_ops = [
+        "absolute",
+        "arccos",
+        "arccosh",
+        "arcsin",
+        "arcsinh",
+        "arctan",
+        "arctanh",
+        "ceil",
+        "cos",
+        "cosh",
+        "exp",
+        "exp2",
+        "expm1",
+        "floor",
+        "log",
+        "log10",
+        "log1p",
+        "log2",
+        "negative",
+        "reciprocal",
+        "round",
+        "sign",
+        "sin",
+        "sinh",
+        "sqrt",
+        "square",
+        "tan",
+        "tanh",
+        "trunc",
+    ]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        for op in unary_ops:
+            np_func = getattr(np.ma, op, None) or getattr(np, op)
+            cases.append(ufunc_unary_case(op, op, np_func(ufunc_arr)))
+
+    domain_unary_ops = [
+        ("arccos_domain", np.ma.arccos),
+        ("arccosh_domain", np.ma.arccosh),
+        ("arcsin_domain", np.ma.arcsin),
+        ("arctanh_domain", np.ma.arctanh),
+        ("log_domain", np.ma.log),
+        ("log10_domain", np.ma.log10),
+        ("log2_domain", np.ma.log2),
+        ("sqrt_domain", np.ma.sqrt),
+    ]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        for op, np_func in domain_unary_ops:
+            cases.append(ufunc_unary_case(op, op, np_func(ufunc_arr)))
+
+    generic_unary = manual_unary_result(ufunc_arr, lambda x: x * 10.0 + 1.0)
+    cases.append(ufunc_unary_case("masked_unary", "masked_unary", generic_unary))
+    generic_unary_domain = manual_unary_result(
+        ufunc_arr,
+        lambda x: x + 100.0,
+        lambda x: x >= 0.0,
+    )
+    cases.append(ufunc_unary_case(
+        "masked_unary_domain",
+        "masked_unary_domain",
+        generic_unary_domain,
+    ))
+
+    binary_ops = [
+        ("add", np.ma.add),
+        ("subtract", np.ma.subtract),
+        ("multiply", np.ma.multiply),
+        ("divide", np.ma.divide),
+        ("power", np.ma.power),
+    ]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        for op, np_func in binary_ops:
+            cases.append(ufunc_binary_case(op, op, np_func(lhs, rhs)))
+        cases.append(ufunc_binary_case("divide_domain", "divide_domain", np.ma.divide(lhs, rhs)))
+
+    generic_binary = manual_binary_result(lhs, rhs, lambda x, y: x * 2.0 + y)
+    cases.append(ufunc_binary_case("masked_binary", "masked_binary", generic_binary))
+    generic_binary_domain = manual_binary_result(
+        lhs,
+        rhs,
+        lambda x, y: x - y,
+        lambda _x, y: y > 0.0,
+    )
+    cases.append(ufunc_binary_case(
+        "masked_binary_domain",
+        "masked_binary_domain",
+        generic_binary_domain,
+    ))
+
+    save_fixture("ma", "masked_ufunc_support.json",
+                 make_fixture("numpy masked ufunc protocol",
+                              "ferray_ma::ufunc_support::{masked_unary,masked_binary,masked_unary_domain,masked_binary_domain,absolute,add,arccos,arccos_domain,arccosh,arccosh_domain,arcsin,arcsin_domain,arcsinh,arctan,arctanh,arctanh_domain,ceil,cos,cosh,divide,divide_domain,exp,exp2,expm1,floor,log,log10,log10_domain,log1p,log2,log2_domain,log_domain,multiply,negative,power,reciprocal,round,sign,sin,sinh,sqrt,sqrt_domain,square,subtract,tan,tanh,trunc}",
+                              cases))
+
+    # --- Masked extras helper functions ---
+    helper_data = np.array([1.0, 2.0, 3.0], dtype="float64")
+    helper_mask = np.array([False, True, False], dtype="bool")
+    helper_arr = np.ma.array(helper_data, mask=helper_mask)
+    helper_arr.set_fill_value(-5.0)
+
+    cases = []
+    cases.append(case(
+        "default_fill_values",
+        {"op": "default_fill_values"},
+        {
+            "f64": _serialize_value(np.ma.default_fill_value(np.float64(0.0))),
+            "f32": _serialize_value(np.float32(np.ma.default_fill_value(np.float32(0.0)))),
+            "bool": _serialize_value(np.ma.default_fill_value(np.bool_(False))),
+            "i64": _serialize_value(np.ma.default_fill_value(np.int64(0))),
+        },
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "extremum_fill_values",
+        {"op": "extremum_fill_values"},
+        {
+            "maximum_f64": _serialize_value(np.ma.maximum_fill_value(np.float64(0.0))),
+            "minimum_f64": _serialize_value(np.ma.minimum_fill_value(np.float64(0.0))),
+        },
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "nomask",
+        {"op": "nomask"},
+        {"value": _serialize_value(np.ma.nomask)},
+        tolerance_ulps=0,
+    ))
+
+    mask_lhs = np.array([False, True, False], dtype="bool")
+    mask_rhs = np.array([True, False, False], dtype="bool")
+    cases.append(case(
+        "mask_or",
+        {
+            "op": "mask_or",
+            "lhs_mask": array_to_dict(mask_lhs, "bool"),
+            "rhs_mask": array_to_dict(mask_rhs, "bool"),
+        },
+        array_to_dict(np.ma.mask_or(mask_lhs, mask_rhs), "bool"),
+        tolerance_ulps=0,
+    ))
+
+    make_mask_values = np.array([False, True, True], dtype="bool")
+    cases.append(case(
+        "make_mask",
+        {"op": "make_mask", "values": array_to_dict(make_mask_values, "bool")},
+        array_to_dict(np.ma.make_mask(make_mask_values, dtype=bool, shrink=False), "bool"),
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "make_mask_none",
+        {"op": "make_mask_none", "shape": [2, 2]},
+        array_to_dict(np.ma.make_mask_none((2, 2)), "bool"),
+        tolerance_ulps=0,
+    ))
+
+    masked_all_result = np.ma.masked_all((2, 3), dtype="float64")
+    cases.append(case(
+        "masked_all",
+        {"op": "masked_all", "shape": [2, 3]},
+        {
+            "shape": list(masked_all_result.shape),
+            "mask": array_to_dict(np.ma.getmaskarray(masked_all_result).astype("bool"), "bool"),
+            "fill_value": _serialize_value(masked_all_result.fill_value),
+        },
+        tolerance_ulps=0,
+    ))
+    masked_all_like_reference = np.arange(6, dtype="float64").reshape(2, 3)
+    masked_all_like_result = np.ma.masked_all_like(masked_all_like_reference)
+    cases.append(case(
+        "masked_all_like",
+        {
+            "op": "masked_all_like",
+            "reference": array_to_dict(masked_all_like_reference),
+        },
+        {
+            "shape": list(masked_all_like_result.shape),
+            "mask": array_to_dict(np.ma.getmaskarray(masked_all_like_result).astype("bool"), "bool"),
+            "fill_value": _serialize_value(masked_all_like_result.fill_value),
+        },
+        tolerance_ulps=0,
+    ))
+
+    masked_values_data = np.array([1.0, 1.0001, 2.0], dtype="float64")
+    masked_values_result = np.ma.masked_values(masked_values_data, 1.0, rtol=1e-3, atol=0.0)
+    cases.append(case(
+        "masked_values",
+        {
+            "op": "masked_values",
+            "data": array_to_dict(masked_values_data),
+            "value": 1.0,
+            "rtol": 1e-3,
+            "atol": 0.0,
+        },
+        masked_result_payload(masked_values_result),
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "getmaskarray",
+        {
+            "op": "getmaskarray",
+            "data": array_to_dict(helper_data),
+            "mask": array_to_dict(helper_mask, "bool"),
+        },
+        array_to_dict(np.ma.getmaskarray(helper_arr).astype("bool"), "bool"),
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "is_masked_true",
+        {
+            "op": "is_masked",
+            "data": array_to_dict(helper_data),
+            "mask": array_to_dict(helper_mask, "bool"),
+        },
+        {"value": _serialize_value(np.ma.is_masked(helper_arr))},
+        tolerance_ulps=0,
+    ))
+    unmasked_arr = np.ma.array(helper_data, mask=np.zeros_like(helper_mask, dtype="bool"))
+    cases.append(case(
+        "is_masked_false",
+        {
+            "op": "is_masked",
+            "data": array_to_dict(helper_data),
+            "mask": array_to_dict(np.zeros_like(helper_mask, dtype="bool"), "bool"),
+        },
+        {"value": _serialize_value(np.ma.is_masked(unmasked_arr))},
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "is_ma",
+        {
+            "op": "is_ma",
+            "data": array_to_dict(helper_data),
+            "mask": array_to_dict(helper_mask, "bool"),
+        },
+        {"value": _serialize_value(np.ma.isMA(helper_arr))},
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "is_masked_array",
+        {
+            "op": "is_masked_array",
+            "data": array_to_dict(helper_data),
+            "mask": array_to_dict(helper_mask, "bool"),
+        },
+        {"value": _serialize_value(np.ma.isMaskedArray(helper_arr))},
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "filled_default",
+        {
+            "op": "filled_default",
+            "data": array_to_dict(helper_data),
+            "mask": array_to_dict(helper_mask, "bool"),
+            "fill_value": -5.0,
+        },
+        array_to_dict(helper_arr.filled()),
+        tolerance_ulps=0,
+    ))
+    save_fixture("ma", "masked_extras_helpers.json",
+                 make_fixture("numpy.ma extras helper functions",
+                              "ferray_ma::{NOMASK,default_fill_value_bool,default_fill_value_f32,default_fill_value_f64,default_fill_value_i64,maximum_fill_value,minimum_fill_value,mask_or,make_mask,make_mask_none,masked_all,masked_all_like,masked_values,getmaskarray,is_masked,is_ma,is_masked_array}",
+                              cases))
+
+    # --- MaskedArray core surface and mask state ---
+    core_data = np.array([1.0, 2.0, 3.0], dtype="float64")
+    core_mask = np.array([False, True, False], dtype="bool")
+    core_arr = np.ma.array(core_data, mask=core_mask)
+    core_arr.set_fill_value(-7.0)
+
+    common_rhs = np.ma.array([4.0, 5.0, 6.0],
+                             mask=np.array([False, False, True], dtype="bool"))
+    common_rhs.set_fill_value(-7.0)
+
+    hard_arr = np.ma.array(core_data, mask=core_mask.copy())
+    hard_arr.harden_mask()
+    hard_arr[1] = 20.0
+    hard_arr[0] = np.ma.masked
+    hard_mask_after_harden = np.ma.getmaskarray(hard_arr).astype("bool")
+    hard_arr.soften_mask()
+    hard_arr[1] = 20.0
+    hard_mask_after_soften = np.ma.getmaskarray(hard_arr).astype("bool")
+
+    cases = []
+    cases.append(case(
+        "masked_array_accessors",
+        {
+            "op": "masked_array_accessors",
+            "data": array_to_dict(core_data),
+            "mask": array_to_dict(core_mask, "bool"),
+            "fill_value": _serialize_value(core_arr.fill_value),
+        },
+        {
+            "data": array_to_dict(np.array(core_arr.data, dtype="float64")),
+            "mask": array_to_dict(np.ma.getmaskarray(core_arr).astype("bool"), "bool"),
+            "shape": list(core_arr.shape),
+            "ndim": int(core_arr.ndim),
+            "size": int(core_arr.size),
+            "fill_value": _serialize_value(core_arr.fill_value),
+            "has_real_mask": True,
+            "mask_opt": True,
+            "is_hard_mask": False,
+        },
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "masked_array_from_data",
+        {
+            "op": "masked_array_from_data",
+            "data": array_to_dict(core_data),
+        },
+        {
+            "data": array_to_dict(core_data),
+            "mask": array_to_dict(np.zeros_like(core_mask, dtype="bool"), "bool"),
+            "shape": list(core_data.shape),
+            "ndim": int(core_data.ndim),
+            "size": int(core_data.size),
+            "fill_value": _serialize_value(np.ma.array(core_data).fill_value),
+            "has_real_mask": False,
+            "mask_opt": False,
+        },
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "masked_array_mutation",
+        {
+            "op": "masked_array_mutation",
+            "data": array_to_dict(core_data),
+            "mask": array_to_dict(core_mask, "bool"),
+            "fill_value": _serialize_value(core_arr.fill_value),
+            "replacement_fill_value": 11.0,
+            "replacement_mask": array_to_dict(np.array([True, False, True], dtype="bool"), "bool"),
+        },
+        {
+            "data_after_data_mut": array_to_dict(np.array([1.0, 20.0, 3.0], dtype="float64")),
+            "mask_after_set_mask": array_to_dict(np.array([True, False, True], dtype="bool"), "bool"),
+            "fill_value_after_set": 11.0,
+        },
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "masked_array_hard_soft",
+        {
+            "op": "masked_array_hard_soft",
+            "data": array_to_dict(core_data),
+            "mask": array_to_dict(core_mask, "bool"),
+        },
+        {
+            "mask_after_harden": array_to_dict(hard_mask_after_harden, "bool"),
+            "mask_after_soften": array_to_dict(hard_mask_after_soften, "bool"),
+        },
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "masked_array_shares_mask",
+        {
+            "op": "masked_array_shares_mask",
+            "data": array_to_dict(core_data),
+            "mask": array_to_dict(core_mask, "bool"),
+        },
+        {
+            "shares_after_clone": True,
+            "shares_after_child_mutation": False,
+            "parent_mask": array_to_dict(core_mask, "bool"),
+            "child_mask": array_to_dict(np.array([True, True, False], dtype="bool"), "bool"),
+        },
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "common_fill_value_same",
+        {
+            "op": "common_fill_value_same",
+            "data": array_to_dict(core_data),
+            "mask": array_to_dict(core_mask, "bool"),
+            "fill_value": _serialize_value(core_arr.fill_value),
+            "rhs_data": array_to_dict(np.array(common_rhs.data, dtype="float64")),
+            "rhs_mask": array_to_dict(np.ma.getmaskarray(common_rhs).astype("bool"), "bool"),
+            "rhs_fill_value": _serialize_value(common_rhs.fill_value),
+        },
+        {"value": _serialize_value(np.ma.common_fill_value(core_arr, common_rhs))},
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "ids",
+        {
+            "op": "ids",
+            "data": array_to_dict(core_data),
+            "mask": array_to_dict(core_mask, "bool"),
+        },
+        {"tuple_len": len(core_arr.ids())},
+        tolerance_ulps=0,
+    ))
+
+    interop_data = np.array([1.0, 4.0, 9.0, 16.0], dtype="float64")
+    interop_mask = np.array([False, False, True, False], dtype="bool")
+    interop_arr = np.ma.array(interop_data, mask=interop_mask)
+    interop_arr.set_fill_value(-1.0)
+
+    unary_to_data = np.array([1.0, -2.0, 3.0, -4.0], dtype="float64")
+    unary_to_mask = np.array([False, False, True, False], dtype="bool")
+    unary_to_arr = np.ma.array(unary_to_data, mask=unary_to_mask)
+
+    binary_lhs_data = np.array([10.0, 20.0, 30.0], dtype="float64")
+    binary_lhs_mask = np.array([False, True, False], dtype="bool")
+    binary_rhs_data = np.array([1.0, 2.0, 3.0], dtype="float64")
+    binary_rhs_mask = np.array([False, False, True], dtype="bool")
+    binary_lhs = np.ma.array(binary_lhs_data, mask=binary_lhs_mask)
+    binary_lhs.set_fill_value(-1.0)
+    binary_rhs = np.ma.array(binary_rhs_data, mask=binary_rhs_mask)
+
+    cases.append(case(
+        "interop_into_data",
+        {
+            "op": "interop_into_data",
+            "data": array_to_dict(core_data),
+            "mask": array_to_dict(core_mask, "bool"),
+            "fill_value": _serialize_value(core_arr.fill_value),
+        },
+        array_to_dict(np.array(core_arr.data, dtype="float64")),
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "interop_apply_unary",
+        {
+            "op": "interop_apply_unary",
+            "data": array_to_dict(interop_data),
+            "mask": array_to_dict(interop_mask, "bool"),
+            "fill_value": _serialize_value(interop_arr.fill_value),
+        },
+        {
+            "data": array_to_dict(np.array([1.0, 2.0, interop_arr.fill_value, 4.0],
+                                           dtype="float64")),
+            "mask": array_to_dict(interop_mask, "bool"),
+            "fill_value": _serialize_value(interop_arr.fill_value),
+        },
+        tolerance_ulps=4,
+    ))
+    cases.append(case(
+        "interop_apply_unary_to",
+        {
+            "op": "interop_apply_unary_to",
+            "data": array_to_dict(unary_to_data),
+            "mask": array_to_dict(unary_to_mask, "bool"),
+            "default_for_masked": False,
+        },
+        {
+            "data": array_to_dict(np.array([True, False, False, False], dtype="bool"), "bool"),
+            "mask": array_to_dict(unary_to_mask, "bool"),
+            "fill_value": False,
+        },
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "interop_apply_binary",
+        {
+            "op": "interop_apply_binary",
+            "data": array_to_dict(binary_lhs_data),
+            "mask": array_to_dict(binary_lhs_mask, "bool"),
+            "fill_value": _serialize_value(binary_lhs.fill_value),
+            "rhs_data": array_to_dict(binary_rhs_data),
+            "rhs_mask": array_to_dict(binary_rhs_mask, "bool"),
+            "rhs_fill_value": _serialize_value(binary_rhs.fill_value),
+        },
+        {
+            "data": array_to_dict(np.array([11.0, binary_lhs.fill_value, binary_lhs.fill_value],
+                                           dtype="float64")),
+            "mask": array_to_dict(np.logical_or(binary_lhs_mask, binary_rhs_mask), "bool"),
+            "fill_value": _serialize_value(binary_lhs.fill_value),
+        },
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "ma_apply_unary_masked",
+        {
+            "op": "ma_apply_unary_masked",
+            "data": array_to_dict(core_data),
+            "mask": array_to_dict(core_mask, "bool"),
+            "fill_value": _serialize_value(core_arr.fill_value),
+        },
+        {
+            "data": array_to_dict(np.array([2.0, core_arr.fill_value, 6.0], dtype="float64")),
+            "mask": array_to_dict(core_mask, "bool"),
+            "fill_value": _serialize_value(core_arr.fill_value),
+        },
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "ma_apply_unary_plain",
+        {
+            "op": "ma_apply_unary_plain",
+            "data": array_to_dict(core_data),
+        },
+        {
+            "data": array_to_dict(core_data * 2.0),
+            "mask": array_to_dict(np.zeros_like(core_mask, dtype="bool"), "bool"),
+            "fill_value": 0.0,
+            "has_real_mask": False,
+        },
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "io_roundtrip",
+        {
+            "op": "io_roundtrip",
+            "data": array_to_dict(core_data),
+            "mask": array_to_dict(core_mask, "bool"),
+            "fill_value": _serialize_value(core_arr.fill_value),
+        },
+        {
+            "data": array_to_dict(core_data),
+            "mask": array_to_dict(core_mask, "bool"),
+            "fill_value": _serialize_value(np.ma.array(core_data, mask=core_mask).fill_value),
+        },
+        tolerance_ulps=0,
+    ))
+
+    save_fixture("ma", "masked_core_surface.json",
+                 make_fixture("numpy.ma MaskedArray core surface and mask state",
+                              "ferray_ma::{MaskedArray,MaskAware,common_fill_value,ids,ma_apply_unary} ferray_ma::masked_array::MaskedArray ferray_ma::mask_ops::MaskedArray::{harden_mask,soften_mask} ferray_ma::interop::{MaskAware,ma_apply_unary} ferray_ma::io::{save_masked,load_masked}",
+                              cases))
+
+    # --- Masked extras numeric and shape methods ---
+    method_data = np.array([[1.0, 2.0, 3.0],
+                            [4.0, 5.0, 6.0]], dtype="float64")
+    method_mask = np.array([[False, True, False],
+                            [True, False, False]], dtype="bool")
+    method_arr = np.ma.array(method_data, mask=method_mask)
+    method_arr.set_fill_value(-7.0)
+    method_weights = np.array([[1.0, 2.0, 3.0],
+                               [4.0, 5.0, 6.0]], dtype="float64")
+
+    cases = []
+
+    def method_inputs(op, **extra_inputs):
+        inputs = {
+            "op": op,
+            "data": array_to_dict(method_data),
+            "mask": array_to_dict(method_mask, "bool"),
+            "fill_value": _serialize_value(method_arr.fill_value),
+        }
+        inputs.update(extra_inputs)
+        return inputs
+
+    for op, result in [
+        ("prod", method_arr.prod()),
+        ("ptp", method_arr.ptp()),
+        ("median", np.ma.median(method_arr)),
+        ("average", np.ma.average(method_arr)),
+        ("trace", method_arr.trace()),
+    ]:
+        cases.append(case(
+            op,
+            method_inputs(op),
+            {"value": _serialize_value(result)},
+            tolerance_ulps=4,
+        ))
+    for op, result in [
+        ("argmin", method_arr.argmin()),
+        ("argmax", method_arr.argmax()),
+    ]:
+        cases.append(case(
+            op,
+            method_inputs(op),
+            {"value": _serialize_value(result)},
+            tolerance_ulps=0,
+        ))
+
+    avg, sum_weights = np.ma.average(method_arr, returned=True)
+    cases.append(case(
+        "average_returned",
+        method_inputs("average_returned"),
+        {
+            "average": _serialize_value(avg),
+            "sum_weights": _serialize_value(sum_weights),
+        },
+        tolerance_ulps=4,
+    ))
+    avg_w, sum_weights_w = np.ma.average(method_arr, weights=method_weights, returned=True)
+    cases.append(case(
+        "average_weighted_returned",
+        method_inputs("average_weighted_returned",
+                      weights=array_to_dict(method_weights)),
+        {
+            "average": _serialize_value(avg_w),
+            "sum_weights": _serialize_value(sum_weights_w),
+        },
+        tolerance_ulps=4,
+    ))
+
+    for op, result in [
+        ("cumsum_flat", method_arr.cumsum()),
+        ("cumprod_flat", method_arr.cumprod()),
+        ("anom", np.ma.anom(method_arr)),
+        ("clip", method_arr.clip(2.0, 5.0)),
+        ("repeat", method_arr.repeat(2)),
+        ("diagonal", method_arr.diagonal()),
+        ("diagonal_offset1", method_arr.diagonal(1)),
+    ]:
+        inputs = method_inputs(op)
+        if op == "clip":
+            inputs.update({"min": 2.0, "max": 5.0})
+        elif op == "repeat":
+            inputs["repeats"] = 2
+        elif op == "diagonal_offset1":
+            inputs["offset"] = 1
+        cases.append(case(
+            op,
+            inputs,
+            masked_result_payload(result),
+            tolerance_ulps=4,
+        ))
+
+    atleast_data = np.array([1.0, 2.0, 3.0], dtype="float64")
+    atleast_mask = np.array([False, True, False], dtype="bool")
+    atleast_arr = np.ma.array(atleast_data, mask=atleast_mask)
+    atleast_arr.set_fill_value(-7.0)
+
+    def atleast_inputs(op, **extra_inputs):
+        inputs = {
+            "op": op,
+            "data": array_to_dict(atleast_data),
+            "mask": array_to_dict(atleast_mask, "bool"),
+            "fill_value": _serialize_value(atleast_arr.fill_value),
+        }
+        inputs.update(extra_inputs)
+        return inputs
+
+    for op, result in [
+        ("atleast_1d", np.ma.atleast_1d(atleast_arr)),
+        ("atleast_2d", np.ma.atleast_2d(atleast_arr)),
+        ("atleast_3d", np.ma.atleast_3d(atleast_arr)),
+    ]:
+        cases.append(case(
+            op,
+            atleast_inputs(op),
+            masked_result_payload(result),
+            tolerance_ulps=0,
+        ))
+
+    cases.append(case(
+        "expand_dims",
+        method_inputs("expand_dims", axis=1),
+        masked_result_payload(np.ma.expand_dims(method_arr, 1)),
+        tolerance_ulps=0,
+    ))
+
+    dot_rhs_data = method_data + 1.0
+    dot_rhs_mask = np.array([[False, False, False],
+                             [False, True, False]], dtype="bool")
+    dot_rhs = np.ma.array(dot_rhs_data, mask=dot_rhs_mask)
+    dot_rhs.set_fill_value(-3.0)
+    cases.append(case(
+        "ma_dot_flat",
+        method_inputs("ma_dot_flat",
+                      rhs_data=array_to_dict(dot_rhs_data),
+                      rhs_mask=array_to_dict(dot_rhs_mask, "bool"),
+                      rhs_fill_value=_serialize_value(dot_rhs.fill_value)),
+        {"value": _serialize_value(np.ma.dot(method_arr.ravel(), dot_rhs.ravel()))},
+        tolerance_ulps=4,
+    ))
+
+    save_fixture("ma", "masked_extras_methods.json",
+                 make_fixture("numpy.ma extras numeric and shape methods",
+                              "ferray_ma::MaskedArray::{prod,cumsum_flat,cumprod_flat,argmin,argmax,ptp,median,average,anom,clip,repeat,atleast_1d,atleast_2d,atleast_3d,expand_dims,diagonal,ma_dot_flat,trace}",
+                              cases))
+
+    # --- Masked extras set and logical helpers ---
+    set_data = np.array([1.0, 2.0, 3.0, 4.0], dtype="float64")
+    set_mask = np.array([False, True, False, False], dtype="bool")
+    set_arr = np.ma.array(set_data, mask=set_mask)
+    set_arr.set_fill_value(-7.0)
+
+    bool_lhs_data = np.array([True, False, True, False], dtype="bool")
+    bool_lhs_mask = np.array([False, True, False, False], dtype="bool")
+    bool_rhs_data = np.array([True, True, False, False], dtype="bool")
+    bool_rhs_mask = np.array([False, False, True, False], dtype="bool")
+    bool_lhs = np.ma.array(bool_lhs_data, mask=bool_lhs_mask)
+    bool_lhs.set_fill_value(True)
+    bool_rhs = np.ma.array(bool_rhs_data, mask=bool_rhs_mask)
+    bool_rhs.set_fill_value(False)
+
+    cmp_lhs_data = np.array([1.0, 0.0, 3.0, 0.0], dtype="float64")
+    cmp_lhs_mask = np.array([False, True, False, True], dtype="bool")
+    cmp_rhs_data = np.array([1.0, 9.0, 2.0, 5.0], dtype="float64")
+    cmp_rhs_mask = np.array([False, False, True, True], dtype="bool")
+    cmp_lhs = np.ma.array(cmp_lhs_data, mask=cmp_lhs_mask)
+    cmp_lhs.set_fill_value(-7.0)
+    cmp_rhs = np.ma.array(cmp_rhs_data, mask=cmp_rhs_mask)
+    cmp_rhs.set_fill_value(-3.0)
+
+    isin_data = np.array([[1.0, 2.0, 3.0],
+                          [4.0, 5.0, 6.0]], dtype="float64")
+    isin_mask = np.array([[False, True, False],
+                          [True, False, False]], dtype="bool")
+    isin_arr = np.ma.array(isin_data, mask=isin_mask)
+    isin_arr.set_fill_value(-7.0)
+    membership_values = np.array([2.0, 3.0, 5.0], dtype="float64")
+
+    def masked_bool_payload(result):
+        return {
+            "data": array_to_dict(np.array(result.data, dtype="bool"), "bool"),
+            "mask": array_to_dict(np.ma.getmaskarray(result).astype("bool"), "bool"),
+            "fill_value": _serialize_value(result.fill_value),
+        }
+
+    def masked_bool_data_mask_payload(result):
+        return {
+            "data": array_to_dict(np.array(result.data, dtype="bool"), "bool"),
+            "mask": array_to_dict(np.ma.getmaskarray(result).astype("bool"), "bool"),
+        }
+
+    cases = []
+    cases.append(case(
+        "ma_unique",
+        {
+            "op": "ma_unique",
+            "data": array_to_dict(set_data),
+            "mask": array_to_dict(set_mask, "bool"),
+            "fill_value": _serialize_value(set_arr.fill_value),
+        },
+        masked_result_payload(np.ma.unique(set_arr)),
+        tolerance_ulps=0,
+    ))
+
+    vander_result = np.ma.vander(set_arr, 3)
+    cases.append(case(
+        "ma_vander",
+        {
+            "op": "ma_vander",
+            "data": array_to_dict(set_data),
+            "mask": array_to_dict(set_mask, "bool"),
+            "fill_value": _serialize_value(set_arr.fill_value),
+            "n": 3,
+        },
+        {
+            "data": array_to_dict(np.array(vander_result, dtype="float64")),
+            "mask": array_to_dict(np.zeros_like(vander_result, dtype="bool"), "bool"),
+        },
+        tolerance_ulps=0,
+    ))
+
+    for op, result in [
+        ("ma_equal", np.ma.equal(cmp_lhs, cmp_rhs)),
+        ("ma_not_equal", np.ma.not_equal(cmp_lhs, cmp_rhs)),
+        ("ma_less", np.ma.less(cmp_lhs, cmp_rhs)),
+        ("ma_greater", np.ma.greater(cmp_lhs, cmp_rhs)),
+        ("ma_less_equal", np.ma.less_equal(cmp_lhs, cmp_rhs)),
+        ("ma_greater_equal", np.ma.greater_equal(cmp_lhs, cmp_rhs)),
+    ]:
+        cases.append(case(
+            op,
+            {
+                "op": op,
+                "lhs_data": array_to_dict(cmp_lhs_data),
+                "lhs_mask": array_to_dict(cmp_lhs_mask, "bool"),
+                "lhs_fill_value": _serialize_value(cmp_lhs.fill_value),
+                "rhs_data": array_to_dict(cmp_rhs_data),
+                "rhs_mask": array_to_dict(cmp_rhs_mask, "bool"),
+                "rhs_fill_value": _serialize_value(cmp_rhs.fill_value),
+            },
+            masked_bool_data_mask_payload(result),
+            tolerance_ulps=0,
+        ))
+
+    cases.append(case(
+        "ma_in1d",
+        {
+            "op": "ma_in1d",
+            "data": array_to_dict(set_data),
+            "mask": array_to_dict(set_mask, "bool"),
+            "fill_value": _serialize_value(set_arr.fill_value),
+            "test_values": array_to_dict(membership_values),
+        },
+        masked_bool_payload(np.ma.in1d(set_arr, membership_values)),
+        tolerance_ulps=0,
+    ))
+    cases.append(case(
+        "ma_isin",
+        {
+            "op": "ma_isin",
+            "data": array_to_dict(isin_data),
+            "mask": array_to_dict(isin_mask, "bool"),
+            "fill_value": _serialize_value(isin_arr.fill_value),
+            "test_values": array_to_dict(membership_values),
+        },
+        masked_bool_payload(np.ma.isin(isin_arr, membership_values)),
+        tolerance_ulps=0,
+    ))
+
+    def logical_inputs(op):
+        return {
+            "op": op,
+            "lhs_data": array_to_dict(bool_lhs_data, "bool"),
+            "lhs_mask": array_to_dict(bool_lhs_mask, "bool"),
+            "lhs_fill_value": _serialize_value(bool_lhs.fill_value),
+            "rhs_data": array_to_dict(bool_rhs_data, "bool"),
+            "rhs_mask": array_to_dict(bool_rhs_mask, "bool"),
+            "rhs_fill_value": _serialize_value(bool_rhs.fill_value),
+        }
+
+    for op, result in [
+        ("ma_logical_and", np.ma.logical_and(bool_lhs, bool_rhs)),
+        ("ma_logical_or", np.ma.logical_or(bool_lhs, bool_rhs)),
+        ("ma_logical_xor", np.ma.logical_xor(bool_lhs, bool_rhs)),
+    ]:
+        cases.append(case(
+            op,
+            logical_inputs(op),
+            masked_bool_payload(result),
+            tolerance_ulps=0,
+        ))
+    cases.append(case(
+        "ma_logical_not",
+        {
+            "op": "ma_logical_not",
+            "data": array_to_dict(bool_lhs_data, "bool"),
+            "mask": array_to_dict(bool_lhs_mask, "bool"),
+            "fill_value": _serialize_value(bool_lhs.fill_value),
+        },
+        masked_bool_payload(np.ma.logical_not(bool_lhs)),
+        tolerance_ulps=0,
+    ))
+
+    save_fixture("ma", "masked_extras_set_logic.json",
+                 make_fixture("numpy.ma extras set, membership, comparison, and logical helpers",
+                              "ferray_ma::{ma_unique,ma_vander,ma_in1d,ma_isin,ma_equal,ma_not_equal,ma_less,ma_greater,ma_less_equal,ma_greater_equal,ma_logical_and,ma_logical_or,ma_logical_xor,ma_logical_not}",
+                              cases))
+
+    # --- Masked extras functional helpers ---
+    func_data = np.array([[1.0, 2.0, 3.0],
+                          [4.0, 5.0, 6.0]], dtype="float64")
+    func_mask = np.array([[False, True, False],
+                          [True, False, False]], dtype="bool")
+    func_arr = np.ma.array(func_data, mask=func_mask)
+    func_arr.set_fill_value(-7.0)
+    concat_rhs_data = func_data + 10.0
+    concat_rhs_mask = np.logical_not(func_mask)
+    concat_rhs = np.ma.array(concat_rhs_data, mask=concat_rhs_mask)
+    concat_rhs.set_fill_value(-3.0)
+
+    def func_inputs(op, **extra_inputs):
+        inputs = {
+            "op": op,
+            "data": array_to_dict(func_data),
+            "mask": array_to_dict(func_mask, "bool"),
+            "fill_value": _serialize_value(func_arr.fill_value),
+        }
+        inputs.update(extra_inputs)
+        return inputs
+
+    cases = []
+    for axis in [0, 1]:
+        result = np.ma.concatenate([func_arr, concat_rhs], axis=axis)
+        cases.append(case(
+            f"ma_concatenate_axis{axis}",
+            func_inputs("ma_concatenate",
+                        axis=axis,
+                        rhs_data=array_to_dict(concat_rhs_data),
+                        rhs_mask=array_to_dict(concat_rhs_mask, "bool"),
+                        rhs_fill_value=_serialize_value(concat_rhs.fill_value)),
+            masked_result_payload(result),
+            tolerance_ulps=0,
+        ))
+    for axis in [0, 1]:
+        result = np.ma.apply_along_axis(np.ma.sum, axis, func_arr)
+        cases.append(case(
+            f"ma_apply_along_axis{axis}",
+            func_inputs("ma_apply_along_axis", axis=axis),
+            masked_result_payload(result),
+            tolerance_ulps=4,
+        ))
+    for axes in [[1], [0, 1]]:
+        result = np.ma.apply_over_axes(np.ma.sum, func_arr, axes)
+        cases.append(case(
+            "ma_apply_over_axes_" + "_".join(str(ax) for ax in axes),
+            func_inputs("ma_apply_over_axes", axes=axes),
+            masked_result_payload(result),
+            tolerance_ulps=4,
+        ))
+
+    save_fixture("ma", "masked_extras_functional.json",
+                 make_fixture("numpy.ma extras functional helpers",
+                              "ferray_ma::{ma_concatenate,ma_apply_along_axis,ma_apply_over_axes}",
+                              cases))
+
+    # --- Axis-aware masked reductions + count helpers ---
+    data2d = np.arange(12, dtype="float64").reshape(3, 4)
+    mask2d = np.array([[False, True, True, False],
+                       [False, True, True, False],
+                       [True, True, True, False]], dtype="bool")
+    ma_2d = np.ma.array(data2d, mask=mask2d)
+
+    cases = []
+    for func_name in ["sum", "mean", "min", "max"]:
+        for axis in [0, 1]:
+            result = getattr(ma_2d, func_name)(axis=axis)
+            cases.append(case(
+                f"{func_name}_axis{axis}",
+                {
+                    "op": func_name,
+                    "data": array_to_dict(data2d),
+                    "mask": array_to_dict(mask2d, "bool"),
+                    "axis": axis,
+                },
+                {
+                    "data": array_to_dict(np.array(result.data, dtype="float64")),
+                    "mask": array_to_dict(np.ma.getmaskarray(result).astype("bool"), "bool"),
+                },
+                tolerance_ulps=4,
+            ))
+    save_fixture("ma", "masked_reductions_axis.json",
+                 make_fixture("numpy.ma sum/mean/min/max axis",
+                              "ferray_ma::MaskedArray::{sum_axis,mean_axis,min_axis,max_axis}",
+                              cases))
+
+    cases = []
+    count_total = ma_2d.count()
+    count_masked_total = np.ma.count_masked(ma_2d)
+    cases.append(case("count_total",
+                      {"op": "count",
+                       "data": array_to_dict(data2d),
+                       "mask": array_to_dict(mask2d, "bool")},
+                      array_to_dict(np.array(count_total, dtype="uint64"), "uint64"),
+                      tolerance_ulps=0))
+    cases.append(case("count_masked_total",
+                      {"op": "count_masked",
+                       "data": array_to_dict(data2d),
+                       "mask": array_to_dict(mask2d, "bool")},
+                      array_to_dict(np.array(count_masked_total, dtype="uint64"), "uint64"),
+                      tolerance_ulps=0))
+    for axis in [0, 1]:
+        count_axis = ma_2d.count(axis=axis)
+        count_masked_axis = np.ma.count_masked(ma_2d, axis=axis)
+        cases.append(case(f"count_axis{axis}",
+                          {"op": "count_axis",
+                           "data": array_to_dict(data2d),
+                           "mask": array_to_dict(mask2d, "bool"),
+                           "axis": axis},
+                          array_to_dict(np.array(count_axis, dtype="uint64"), "uint64"),
+                          tolerance_ulps=0))
+        cases.append(case(f"count_masked_axis{axis}",
+                          {"op": "count_masked_axis",
+                           "data": array_to_dict(data2d),
+                           "mask": array_to_dict(mask2d, "bool"),
+                           "axis": axis},
+                          array_to_dict(np.array(count_masked_axis, dtype="uint64"), "uint64"),
+                          tolerance_ulps=0))
+    save_fixture("ma", "masked_counts.json",
+                 make_fixture("numpy.ma.count/count_masked",
+                              "ferray_ma::MaskedArray::count/count_axis and ferray_ma::count_masked/count_masked_axis",
+                              cases))
+
+    cases = []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        for func_name in ["var", "std"]:
+            for ddof in [0, 1]:
+                result = getattr(ma_2d, func_name)(ddof=ddof)
+                cases.append(case(
+                    f"{func_name}_ddof{ddof}",
+                    {
+                        "op": func_name,
+                        "data": array_to_dict(data2d),
+                        "mask": array_to_dict(mask2d, "bool"),
+                        "ddof": ddof,
+                    },
+                    array_to_dict(np.array(float(result), dtype="float64")),
+                    tolerance_ulps=16,
+                ))
+                for axis in [0, 1]:
+                    axis_result = getattr(ma_2d, func_name)(axis=axis, ddof=ddof)
+                    cases.append(case(
+                        f"{func_name}_axis{axis}_ddof{ddof}",
+                        {
+                            "op": func_name,
+                            "data": array_to_dict(data2d),
+                            "mask": array_to_dict(mask2d, "bool"),
+                            "axis": axis,
+                            "ddof": ddof,
+                        },
+                        {
+                            "data": array_to_dict(np.array(axis_result.data, dtype="float64")),
+                            "mask": array_to_dict(np.ma.getmaskarray(axis_result).astype("bool"), "bool"),
+                        },
+                        tolerance_ulps=16,
+                    ))
+    save_fixture("ma", "masked_var_std.json",
+                 make_fixture("numpy.ma.var/std",
+                              "ferray_ma::MaskedArray::{var,var_ddof,std,std_ddof,var_axis,var_axis_ddof,std_axis,std_axis_ddof}",
+                              cases))
+
+    # --- Masked sorting ---
+    sort1d_data = np.array([3.0, 1.0, 2.0, 9.0], dtype="float64")
+    sort1d_mask = np.array([False, True, False, True], dtype="bool")
+    sort1d = np.ma.array(sort1d_data, mask=sort1d_mask)
+    sort2d_data = np.array([[3.0, 1.0, 2.0],
+                            [6.0, 5.0, 4.0]], dtype="float64")
+    sort2d_mask = np.array([[False, True, False],
+                            [True, False, False]], dtype="bool")
+    sort2d = np.ma.array(sort2d_data, mask=sort2d_mask)
+
+    cases = []
+    flat_sorted = np.ma.sort(sort1d, axis=None)
+    cases.append(case(
+        "sort_flat",
+        {"op": "sort",
+         "data": array_to_dict(sort1d_data),
+         "mask": array_to_dict(sort1d_mask, "bool")},
+        {"data": array_to_dict(np.array(flat_sorted.data, dtype="float64")),
+         "mask": array_to_dict(np.ma.getmaskarray(flat_sorted).astype("bool"), "bool")},
+        tolerance_ulps=0,
+    ))
+    flat_argsort = np.ma.argsort(sort2d, axis=None)
+    cases.append(case(
+        "argsort_flat_2d",
+        {"op": "argsort",
+         "data": array_to_dict(sort2d_data),
+         "mask": array_to_dict(sort2d_mask, "bool")},
+        array_to_dict(np.array(flat_argsort, dtype="uint64"), "uint64"),
+        tolerance_ulps=0,
+    ))
+    for axis in [0, 1]:
+        sorted_axis = np.ma.sort(sort2d, axis=axis)
+        cases.append(case(
+            f"sort_axis{axis}",
+            {"op": "sort_axis",
+             "data": array_to_dict(sort2d_data),
+             "mask": array_to_dict(sort2d_mask, "bool"),
+             "axis": axis},
+            {"data": array_to_dict(np.array(sorted_axis.data, dtype="float64")),
+             "mask": array_to_dict(np.ma.getmaskarray(sorted_axis).astype("bool"), "bool")},
+            tolerance_ulps=0,
+        ))
+    save_fixture("ma", "masked_sorting.json",
+                 make_fixture("numpy.ma.sort/argsort",
+                              "ferray_ma::MaskedArray::{sort,argsort,sort_axis}",
+                              cases))
 
 
 # ---------------------------------------------------------------------------

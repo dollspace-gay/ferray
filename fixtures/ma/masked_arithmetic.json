@@ -1,0 +1,616 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.ma masked arithmetic",
+  "ferray_function": "ferray_ma::{masked_add,masked_sub,masked_mul,masked_div,masked_add_array,masked_sub_array,masked_mul_array,masked_div_array}",
+  "test_cases": [
+    {
+      "name": "masked_add",
+      "inputs": {
+        "op": "masked_add",
+        "lhs_data": {
+          "data": [
+            1.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "expected": {
+        "data": {
+          "data": [
+            2.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "masked_sub",
+      "inputs": {
+        "op": "masked_sub",
+        "lhs_data": {
+          "data": [
+            1.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "expected": {
+        "data": {
+          "data": [
+            0.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "masked_mul",
+      "inputs": {
+        "op": "masked_mul",
+        "lhs_data": {
+          "data": [
+            1.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "expected": {
+        "data": {
+          "data": [
+            1.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "masked_div",
+      "inputs": {
+        "op": "masked_div",
+        "lhs_data": {
+          "data": [
+            1.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "rhs_data": {
+          "data": [
+            1.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "expected": {
+        "data": {
+          "data": [
+            1.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            true
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "masked_add_array",
+      "inputs": {
+        "op": "masked_add_array",
+        "lhs_data": {
+          "data": [
+            1.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "rhs_data": {
+          "data": [
+            10.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": {
+          "data": [
+            11.0,
+            2.0,
+            0.0,
+            6.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "masked_sub_array",
+      "inputs": {
+        "op": "masked_sub_array",
+        "lhs_data": {
+          "data": [
+            1.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "rhs_data": {
+          "data": [
+            10.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": {
+          "data": [
+            -9.0,
+            2.0,
+            0.0,
+            2.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "masked_mul_array",
+      "inputs": {
+        "op": "masked_mul_array",
+        "lhs_data": {
+          "data": [
+            1.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "rhs_data": {
+          "data": [
+            10.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": {
+          "data": [
+            10.0,
+            2.0,
+            0.0,
+            8.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "masked_div_array",
+      "inputs": {
+        "op": "masked_div_array",
+        "lhs_data": {
+          "data": [
+            1.0,
+            2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "lhs_mask": {
+          "data": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "rhs_data": {
+          "data": [
+            10.0,
+            0.0,
+            0.0,
+            2.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": {
+          "data": [
+            0.1,
+            2.0,
+            0.0,
+            2.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

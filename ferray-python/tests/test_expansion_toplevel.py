@@ -284,9 +284,9 @@ def test_info_runs(capsys):
     assert isinstance(out, str)
 
 
-def test_test_is_external():
-    with pytest.raises(NotImplementedError):
-        fr.test()
+def test_test_matches_numpy_tester():
+    assert fr.test is np.test
+    assert callable(fr.test)
 
 
 def test_einsum_path():

@@ -767,8 +767,8 @@ mod tests {
 
     #[test]
     fn arithmetic_uses_fill_value() {
-        // (Adding two masked arrays) — result data at masked positions should
-        // be the receiver's fill_value, not zero.
+        // NumPy masked arithmetic preserves the left operand's data payload
+        // under masked result positions while carrying the left fill_value.
         use crate::masked_add;
         let d_a = Array::<f64, Ix1>::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         let m_a = Array::<bool, Ix1>::from_vec(Ix1::new([3]), vec![false, true, false]).unwrap();
@@ -778,7 +778,7 @@ mod tests {
         let b = MaskedArray::new(d_b, m_b).unwrap();
         let r = masked_add(&a, &b).unwrap();
         let r_d: Vec<f64> = r.data().iter().copied().collect();
-        assert_eq!(r_d, vec![11.0, -999.0, 33.0]);
+        assert_eq!(r_d, vec![11.0, 2.0, 33.0]);
         assert_eq!(r.fill_value(), -999.0);
     }
 

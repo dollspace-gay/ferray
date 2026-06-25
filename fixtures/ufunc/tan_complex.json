@@ -1,0 +1,138 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.tan",
+  "ferray_function": "ferray_ufunc::tan_complex",
+  "test_cases": [
+    {
+      "name": "standard_complex128",
+      "inputs": {
+        "x": {
+          "data": [
+            {
+              "re": 0.0,
+              "im": 0.0
+            },
+            {
+              "re": 1.0,
+              "im": 2.0
+            },
+            {
+              "re": -1.5,
+              "im": 0.5
+            },
+            {
+              "re": 0.25,
+              "im": -0.75
+            }
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "complex128"
+        }
+      },
+      "expected": {
+        "data": [
+          {
+            "re": 0.0,
+            "im": 0.0
+          },
+          {
+            "re": 0.03381282607989669,
+            "im": 1.0147936161466335
+          },
+          {
+            "re": -0.2551492218136516,
+            "im": 2.124799127742996
+          },
+          {
+            "re": 0.14842931880709936,
+            "im": -0.6592212421345232
+          }
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "complex128"
+      },
+      "tolerance_ulps": 64
+    },
+    {
+      "name": "2d_complex128",
+      "inputs": {
+        "x": {
+          "data": [
+            {
+              "re": 1.0,
+              "im": 0.0
+            },
+            {
+              "re": 0.0,
+              "im": 1.0
+            },
+            {
+              "re": -1.0,
+              "im": -1.0
+            },
+            {
+              "re": 2.0,
+              "im": 3.0
+            }
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "complex128"
+        }
+      },
+      "expected": {
+        "data": [
+          {
+            "re": 1.557407724654902,
+            "im": 0.0
+          },
+          {
+            "re": 0.0,
+            "im": 0.7615941559557649
+          },
+          {
+            "re": -0.2717525853195118,
+            "im": -1.0839233273386946
+          },
+          {
+            "re": -0.0037640256415042484,
+            "im": 1.0032386273536096
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "complex128"
+      },
+      "tolerance_ulps": 64
+    },
+    {
+      "name": "empty_complex128",
+      "inputs": {
+        "x": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "complex128"
+        }
+      },
+      "expected": {
+        "data": [],
+        "shape": [
+          0
+        ],
+        "dtype": "complex128"
+      },
+      "tolerance_ulps": 64
+    }
+  ]
+}

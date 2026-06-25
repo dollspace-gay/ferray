@@ -1,0 +1,191 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.floor_divide",
+  "ferray_function": "ferray_ufunc::floor_divide",
+  "test_cases": [
+    {
+      "name": "standard",
+      "inputs": {
+        "a": {
+          "data": [
+            7.0,
+            8.0,
+            9.0,
+            10.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            3.0,
+            3.0,
+            3.0,
+            3.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          2.0,
+          2.0,
+          3.0,
+          3.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "negative",
+      "inputs": {
+        "a": {
+          "data": [
+            -7.0,
+            -8.0,
+            7.0,
+            8.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            3.0,
+            -3.0,
+            -3.0,
+            3.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          -3.0,
+          2.0,
+          -3.0,
+          2.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "float",
+      "inputs": {
+        "a": {
+          "data": [
+            5.5,
+            6.7,
+            8.1
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            2.3,
+            2.3,
+            2.3
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          2.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "broadcast_2d",
+      "inputs": {
+        "a": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            2.5,
+            3.5,
+            4.5,
+            5.5
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          3.0,
+          2.0,
+          2.0,
+          2.0
+        ],
+        "shape": [
+          3,
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

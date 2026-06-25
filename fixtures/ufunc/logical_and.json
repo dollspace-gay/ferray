@@ -1,0 +1,124 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.logical_and",
+  "ferray_function": "ferray_ufunc::logical_and",
+  "test_cases": [
+    {
+      "name": "standard_f64",
+      "inputs": {
+        "a": {
+          "data": [
+            0.0,
+            1.0,
+            -2.0,
+            "NaN",
+            "Inf"
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1.0,
+            0.0,
+            3.0,
+            "NaN",
+            0.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          false,
+          false,
+          true,
+          true,
+          false
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "broadcast_2d",
+      "inputs": {
+        "a": {
+          "data": [
+            0.0,
+            2.0
+          ],
+          "shape": [
+            2,
+            1
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            0.0,
+            1.0,
+            "NaN"
+          ],
+          "shape": [
+            1,
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          false,
+          false,
+          false,
+          false,
+          true,
+          true
+        ],
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "empty",
+      "inputs": {
+        "a": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [],
+        "shape": [
+          0
+        ],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

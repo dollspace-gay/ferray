@@ -46,9 +46,9 @@ pub fn masked_invalid<T: Element + Float, D: Dimension>(
 /// (#510). This is a strict superset of [`masked_invalid`]: the
 /// result's mask is identical (positions where `x.is_nan() ||
 /// x.is_infinite()`) but the data array has those positions replaced
-/// with `fill_value` instead of the original NaN/Inf. The result's
-/// `fill_value` is also set to `fill_value` so subsequent operations
-/// that use the fill value behave consistently.
+/// with `fill_value` instead of the original NaN/Inf. Matching NumPy,
+/// the resulting masked array keeps the dtype's default stored fill value;
+/// the `fill_value` argument is only the replacement payload.
 ///
 /// Cleaning a data array in a single pass is the primary use case —
 /// after `fix_invalid`, the underlying `data()` is free of NaN/Inf
@@ -74,9 +74,7 @@ pub fn fix_invalid<T: Element + Float, D: Dimension>(
     }
     let data_arr = Array::from_vec(data.dim().clone(), new_data)?;
     let mask_arr = Array::from_vec(data.dim().clone(), new_mask)?;
-    let mut out = MaskedArray::new(data_arr, mask_arr)?;
-    out.set_fill_value(fill_value);
-    Ok(out)
+    MaskedArray::new(data_arr, mask_arr)
 }
 
 /// Create a `MaskedArray` by masking elements equal to `value`.
@@ -89,7 +87,9 @@ pub fn masked_equal<T: Element + PartialEq + Copy, D: Dimension>(
 ) -> FerrayResult<MaskedArray<T, D>> {
     let mask_data: Vec<bool> = data.iter().map(|v| *v == value).collect();
     let mask = Array::from_vec(data.dim().clone(), mask_data)?;
-    MaskedArray::new(data.clone(), mask)
+    let mut out = MaskedArray::new(data.clone(), mask)?;
+    out.set_fill_value(value);
+    Ok(out)
 }
 
 /// Create a `MaskedArray` by masking elements not equal to `value`.
@@ -217,8 +217,9 @@ mod tests {
         let d: Vec<f64> = ma.data().iter().copied().collect();
         assert_eq!(d, vec![1.0, -99.0, 3.0, -99.0, -99.0, 6.0]);
 
-        // Result's fill_value is set to the passed value, not the default.
-        assert_eq!(ma.fill_value(), -99.0);
+        // NumPy uses the argument only as a replacement payload; the stored
+        // fill value remains the dtype default.
+        assert_eq!(ma.fill_value(), 1e20);
     }
 
     #[test]

@@ -1,0 +1,128 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.bitwise_count",
+  "ferray_function": "ferray_ufunc::bitwise_count",
+  "test_cases": [
+    {
+      "name": "signed_i64",
+      "inputs": {
+        "x": {
+          "data": [
+            -9223372036854775808,
+            -3,
+            -2,
+            -1,
+            0,
+            1,
+            2,
+            3,
+            9223372036854775807
+          ],
+          "shape": [
+            9
+          ],
+          "dtype": "int64"
+        }
+      },
+      "expected": {
+        "data": [
+          1,
+          2,
+          1,
+          1,
+          0,
+          1,
+          1,
+          2,
+          63
+        ],
+        "shape": [
+          9
+        ],
+        "dtype": "uint8"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "unsigned_u32",
+      "inputs": {
+        "x": {
+          "data": [
+            0,
+            1,
+            15,
+            255,
+            4294967295
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "uint32"
+        }
+      },
+      "expected": {
+        "data": [
+          0,
+          1,
+          4,
+          8,
+          32
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "uint8"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "bool",
+      "inputs": {
+        "x": {
+          "data": [
+            true,
+            false,
+            true
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "expected": {
+        "data": [
+          1,
+          0,
+          1
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "uint8"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "empty_i64",
+      "inputs": {
+        "x": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "int64"
+        }
+      },
+      "expected": {
+        "data": [],
+        "shape": [
+          0
+        ],
+        "dtype": "uint8"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

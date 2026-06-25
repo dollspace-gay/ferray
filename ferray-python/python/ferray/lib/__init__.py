@@ -22,6 +22,7 @@ known kernel, they should reach for the typed function directly
 from __future__ import annotations
 
 import numpy as _np
+import sys as _sys
 
 from ferray._ferray import lib as _rust_lib
 
@@ -77,11 +78,40 @@ def piecewise(x, condlist, funclist, *args, **kwargs):
     return _np.piecewise(x, condlist, funclist, *args, **kwargs)
 
 
+Arrayterator = _np.lib.Arrayterator
+NumpyVersion = _np.lib.NumpyVersion
+add_docstring = _np.lib.add_docstring
+add_newdoc = _np.lib.add_newdoc
+array_utils = _np.lib.array_utils
+format = _np.lib.format
+introspect = _np.lib.introspect
+mixins = _np.lib.mixins
+npyio = _np.lib.npyio
+scimath = _np.lib.scimath
+tracemalloc_domain = _np.lib.tracemalloc_domain
+
+for _name in ("array_utils", "format", "introspect", "mixins", "npyio", "scimath"):
+    _sys.modules[f"{__name__}.{_name}"] = getattr(_np.lib, _name)
+
+
 __all__ = [
+    "Arrayterator",
+    "NumpyVersion",
+    "add_docstring",
+    "add_newdoc",
     "apply_along_axis",
     "apply_over_axes",
+    "array_utils",
     "as_strided",
+    "format",
+    "introspect",
+    "mixins",
+    "npyio",
     "piecewise",
+    "scimath",
     "stride_tricks",
+    "tracemalloc_domain",
     "vectorize",
 ]
+
+del _name, _sys

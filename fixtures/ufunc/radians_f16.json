@@ -1,0 +1,74 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.radians",
+  "ferray_function": "ferray_ufunc::radians_f16",
+  "test_cases": [
+    {
+      "name": "standard_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            -2.5,
+            -1.5,
+            -0.5,
+            0.5,
+            1.5,
+            2.5
+          ],
+          "shape": [
+            6
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          -0.04364,
+          -0.02618,
+          -0.00873,
+          0.00873,
+          0.02618,
+          0.04364
+        ],
+        "shape": [
+          6
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 1
+    },
+    {
+      "name": "matrix_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            -1.75,
+            -1.25,
+            1.25,
+            1.75
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          -0.03055,
+          -0.02182,
+          0.02182,
+          0.03055
+        ],
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 1
+    }
+  ]
+}

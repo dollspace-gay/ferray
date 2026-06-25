@@ -1,0 +1,37 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.isnat",
+  "ferray_function": "ferray_ufunc::isnat_datetime",
+  "test_cases": [
+    {
+      "name": "datetime_days",
+      "inputs": {
+        "x": {
+          "data": [
+            18262,
+            -9223372036854775808,
+            18271
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "datetime64[D]",
+          "unit": "D"
+        }
+      },
+      "expected": {
+        "data": [
+          false,
+          true,
+          false
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

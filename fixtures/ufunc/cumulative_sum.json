@@ -1,0 +1,134 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.cumulative_sum",
+  "ferray_function": "ferray_ufunc::cumulative_sum",
+  "test_cases": [
+    {
+      "name": "axis0_1d",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "axis": 0
+      },
+      "expected": {
+        "data": [
+          1.0,
+          3.0,
+          6.0,
+          10.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "axis0_2d",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "axis": 0
+      },
+      "expected": {
+        "data": [
+          1.0,
+          2.0,
+          3.0,
+          5.0,
+          7.0,
+          9.0
+        ],
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "axis1_2d",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "axis": 1
+      },
+      "expected": {
+        "data": [
+          1.0,
+          3.0,
+          6.0,
+          4.0,
+          9.0,
+          15.0
+        ],
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "empty_axis0",
+      "inputs": {
+        "x": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "float64"
+        },
+        "axis": 0
+      },
+      "expected": {
+        "data": [],
+        "shape": [
+          0
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

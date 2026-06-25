@@ -1,0 +1,495 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.ma extras functional helpers",
+  "ferray_function": "ferray_ma::{ma_concatenate,ma_apply_along_axis,ma_apply_over_axes}",
+  "test_cases": [
+    {
+      "name": "ma_concatenate_axis0",
+      "inputs": {
+        "op": "ma_concatenate",
+        "data": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -7.0,
+        "axis": 0,
+        "rhs_data": {
+          "data": [
+            11.0,
+            12.0,
+            13.0,
+            14.0,
+            15.0,
+            16.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            true
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        },
+        "rhs_fill_value": -3.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            11.0,
+            12.0,
+            13.0,
+            14.0,
+            15.0,
+            16.0
+          ],
+          "shape": [
+            4,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            true
+          ],
+          "shape": [
+            4,
+            3
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "ma_concatenate_axis1",
+      "inputs": {
+        "op": "ma_concatenate",
+        "data": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -7.0,
+        "axis": 1,
+        "rhs_data": {
+          "data": [
+            11.0,
+            12.0,
+            13.0,
+            14.0,
+            15.0,
+            16.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "rhs_mask": {
+          "data": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            true
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        },
+        "rhs_fill_value": -3.0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            11.0,
+            12.0,
+            13.0,
+            4.0,
+            5.0,
+            6.0,
+            14.0,
+            15.0,
+            16.0
+          ],
+          "shape": [
+            2,
+            6
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            true
+          ],
+          "shape": [
+            2,
+            6
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "ma_apply_along_axis0",
+      "inputs": {
+        "op": "ma_apply_along_axis",
+        "data": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -7.0,
+        "axis": 0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            1.0,
+            5.0,
+            9.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "ma_apply_along_axis1",
+      "inputs": {
+        "op": "ma_apply_along_axis",
+        "data": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -7.0,
+        "axis": 1
+      },
+      "expected": {
+        "data": {
+          "data": [
+            4.0,
+            11.0
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "ma_apply_over_axes_1",
+      "inputs": {
+        "op": "ma_apply_over_axes",
+        "data": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -7.0,
+        "axes": [
+          1
+        ]
+      },
+      "expected": {
+        "data": {
+          "data": [
+            4.0,
+            11.0
+          ],
+          "shape": [
+            2,
+            1
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false
+          ],
+          "shape": [
+            2,
+            1
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "ma_apply_over_axes_0_1",
+      "inputs": {
+        "op": "ma_apply_over_axes",
+        "data": {
+          "data": [
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": -7.0,
+        "axes": [
+          0,
+          1
+        ]
+      },
+      "expected": {
+        "data": {
+          "data": [
+            15.0
+          ],
+          "shape": [
+            1,
+            1
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false
+          ],
+          "shape": [
+            1,
+            1
+          ],
+          "dtype": "bool"
+        },
+        "fill_value": 1e+20
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

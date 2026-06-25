@@ -460,13 +460,20 @@ where
     /// Returns `FerrayError::InvalidValue` if every element is masked.
     pub fn anom(&self) -> FerrayResult<MaskedArray<T, D>> {
         let m = self.mean()?;
-        let data: Vec<T> = self.data().iter().map(|v| *v - m).collect();
+        let data: Vec<T> = self
+            .data()
+            .iter()
+            .zip(self.mask().iter())
+            .map(|(v, masked)| if *masked { *v } else { *v - m })
+            .collect();
         let data_arr = Array::from_vec(self.data().dim().clone(), data)?;
         let mask_arr: Array<bool, D> = Array::from_vec(
             self.mask().dim().clone(),
             self.mask().iter().copied().collect(),
         )?;
-        MaskedArray::new(data_arr, mask_arr)
+        let mut out = MaskedArray::new(data_arr, mask_arr)?;
+        out.set_fill_value(self.fill_value());
+        Ok(out)
     }
 }
 
@@ -530,7 +537,9 @@ where
         .collect();
     let mask_arr = Array::from_vec(arr.dim().clone(), mask)?;
     let data_arr = arr.clone();
-    MaskedArray::new(data_arr, mask_arr)
+    let mut out = MaskedArray::new(data_arr, mask_arr)?;
+    out.set_fill_value(value);
+    Ok(out)
 }
 
 // ===========================================================================
@@ -642,7 +651,9 @@ where
             self.mask().dim().clone(),
             self.mask().iter().copied().collect(),
         )?;
-        MaskedArray::new(data_arr, mask_arr)
+        let mut out = MaskedArray::new(data_arr, mask_arr)?;
+        out.set_fill_value(self.fill_value());
+        Ok(out)
     }
 }
 
@@ -670,7 +681,9 @@ where
         }
         let data_arr = Array::from_vec(Ix1::new([n]), data)?;
         let mask_arr = Array::from_vec(Ix1::new([n]), mask)?;
-        MaskedArray::new(data_arr, mask_arr)
+        let mut out = MaskedArray::new(data_arr, mask_arr)?;
+        out.set_fill_value(self.fill_value());
+        Ok(out)
     }
 
     /// Promote to at least 1-D. Scalar (0-D) becomes shape `(1,)`.
@@ -735,7 +748,9 @@ where
     pub fn expand_dims(&self, axis: usize) -> FerrayResult<MaskedArray<T, IxDyn>> {
         let data_exp = ferray_core::manipulation::expand_dims(self.data(), axis)?;
         let mask_exp = ferray_core::manipulation::expand_dims(self.mask(), axis)?;
-        MaskedArray::new(data_exp, mask_exp)
+        let mut out = MaskedArray::new(data_exp, mask_exp)?;
+        out.set_fill_value(self.fill_value());
+        Ok(out)
     }
 }
 
@@ -779,7 +794,9 @@ where
         let n = data.len();
         let data_arr = Array::from_vec(Ix1::new([n]), data)?;
         let mask_arr = Array::from_vec(Ix1::new([n]), mask)?;
-        MaskedArray::new(data_arr, mask_arr)
+        let mut out = MaskedArray::new(data_arr, mask_arr)?;
+        out.set_fill_value(self.fill_value());
+        Ok(out)
     }
 }
 
@@ -844,50 +861,33 @@ where
 // Set ops on the unmasked subset
 // ===========================================================================
 
-/// Sorted unique unmasked values of `ma` as a plain `Array<T, Ix1>` (not a
-/// MaskedArray — the result has no masked entries by construction).
+/// Sorted unique values of `ma` as a masked array, including one trailing
+/// masked slot iff the input contains any masked value.
 ///
 /// Equivalent to `numpy.ma.unique(ma)`.
 ///
 /// # Errors
 /// Returns an error if internal array construction fails.
-pub fn ma_unique<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<Array<T, Ix1>>
+pub fn ma_unique<T, D>(ma: &MaskedArray<T, D>) -> FerrayResult<MaskedArray<T, Ix1>>
 where
     T: Element + Copy + PartialOrd,
     D: Dimension,
 {
-    let mut vals: Vec<T> = ma
-        .data()
-        .iter()
-        .zip(ma.mask().iter())
-        .filter(|(_, m)| !**m)
-        .map(|(v, _)| *v)
-        .collect();
-    vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    vals.dedup_by(|a, b| (*a).partial_cmp(&*b) == Some(std::cmp::Ordering::Equal));
-    let n = vals.len();
-    Array::from_vec(Ix1::new([n]), vals)
+    ma_unique_masked(ma)
 }
 
-/// Per-element membership test against `test_values`, matching
-/// `numpy.ma.isin` / `numpy.ma.in1d` (`numpy/ma/extras.py:1434` / `:1387`).
+/// Per-element membership test against unmasked `test_values`, matching
+/// `numpy.ma.isin` / `numpy.ma.in1d` for Ferray's supported signature
+/// (`numpy/ma/extras.py:1434` / `:1387`).
 ///
-/// numpy.ma.in1d routes through `ma.unique(ar1, return_inverse=True)`, which
-/// collapses every masked input to a single trailing **masked** unique
-/// element whose membership is `False`. The result therefore:
-/// - **carries the input mask** (masked input positions stay masked), and
-/// - at every masked position the underlying boolean is **`False`** (a masked
-///   value is never reported as a member).
-///
-/// Live oracle (numpy 2.4.5):
-/// `np.ma.isin(np.ma.array([1.,2,3,4],mask=[0,1,0,0]),[2,3])` → underlying data
-/// `[False, False, True, False]`, mask `[F, T, F, F]`. Position 1 (masked
-/// input value `2`, which *is* in the test set) still reports `False` because
-/// numpy treats the masked element as the masked-unique slot.
-///
-/// The prior ferray implementation reported the raw-value membership
-/// (`True`) at masked positions; this corrects the masked-position data to
-/// `False` to match numpy's `unique`-based path (R-HONEST-4).
+/// NumPy does not implement this as a simple value lookup. It first applies
+/// `ma.unique(ar1, return_inverse=True)`, concatenates that with the unique
+/// test values, stable-sorts the combined masked array, compares adjacent
+/// sorted entries, then maps the flags back through `return_inverse`. This
+/// preserves a few observable masked-array details: masked input values map to
+/// an unmasked `False`, and when the largest unmatched unmasked value sits
+/// immediately before the collapsed masked-unique sentinel, the output slot is
+/// masked with an underlying `False` payload.
 ///
 /// # Errors
 /// Returns an error if internal array construction fails.
@@ -896,19 +896,114 @@ pub fn ma_isin<T, D>(
     test_values: &[T],
 ) -> FerrayResult<MaskedArray<bool, D>>
 where
-    T: Element + Copy + PartialEq,
+    T: Element + Copy + PartialEq + PartialOrd,
     D: Dimension,
 {
-    let mask: Vec<bool> = ma.mask().iter().copied().collect();
-    let data: Vec<bool> = ma
-        .data()
-        .iter()
-        .zip(mask.iter())
-        .map(|(v, &m)| {
-            // A masked input is the masked-unique element -> never a member.
-            !m && test_values.iter().any(|t| t == v)
-        })
-        .collect();
+    #[derive(Clone, Copy)]
+    struct Entry<T> {
+        value: Option<T>,
+        ar1_unique_index: Option<usize>,
+    }
+
+    let mut unique_ar1 = Vec::<T>::new();
+    let mut inverse = Vec::<usize>::with_capacity(ma.size());
+    let mut masked_unique_index = None;
+
+    for (value, masked) in ma.data().iter().zip(ma.mask().iter()) {
+        if *masked {
+            let index = *masked_unique_index.get_or_insert_with(|| unique_ar1.len());
+            inverse.push(index);
+        } else if let Some(index) = unique_ar1.iter().position(|candidate| candidate == value) {
+            inverse.push(index);
+        } else {
+            unique_ar1.push(*value);
+            inverse.push(unique_ar1.len() - 1);
+        }
+    }
+    unique_ar1.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    unique_ar1.dedup_by(|a, b| *a == *b);
+
+    if masked_unique_index.is_some() {
+        let masked_index = unique_ar1.len();
+        inverse.clear();
+        for (value, masked) in ma.data().iter().zip(ma.mask().iter()) {
+            if *masked {
+                inverse.push(masked_index);
+            } else {
+                inverse.push(
+                    unique_ar1
+                        .iter()
+                        .position(|candidate| candidate == value)
+                        .expect("unmasked value exists in unique_ar1"),
+                );
+            }
+        }
+    } else {
+        inverse.clear();
+        for value in ma.data().iter() {
+            inverse.push(
+                unique_ar1
+                    .iter()
+                    .position(|candidate| candidate == value)
+                    .expect("value exists in unique_ar1"),
+            );
+        }
+    }
+
+    let mut unique_test_values = test_values.to_vec();
+    unique_test_values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    unique_test_values.dedup_by(|a, b| *a == *b);
+
+    let ar1_len = unique_ar1.len() + usize::from(masked_unique_index.is_some());
+    let mut combined = Vec::<Entry<T>>::with_capacity(ar1_len + unique_test_values.len());
+    combined.extend(unique_ar1.iter().enumerate().map(|(index, value)| Entry {
+        value: Some(*value),
+        ar1_unique_index: Some(index),
+    }));
+    if masked_unique_index.is_some() {
+        combined.push(Entry {
+            value: None,
+            ar1_unique_index: Some(unique_ar1.len()),
+        });
+    }
+    combined.extend(unique_test_values.iter().map(|value| Entry {
+        value: Some(*value),
+        ar1_unique_index: None,
+    }));
+    combined.sort_by(|left, right| match (left.value, right.value) {
+        (Some(a), Some(b)) => a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    });
+
+    let mut unique_data = vec![false; ar1_len];
+    let mut unique_mask = vec![false; ar1_len];
+    for (position, entry) in combined.iter().enumerate() {
+        let Some(index) = entry.ar1_unique_index else {
+            continue;
+        };
+        let Some(value) = entry.value else {
+            unique_data[index] = false;
+            unique_mask[index] = false;
+            continue;
+        };
+        if let Some(next) = combined.get(position + 1) {
+            if let Some(next_value) = next.value {
+                unique_data[index] = value == next_value;
+                unique_mask[index] = false;
+            } else {
+                unique_data[index] = false;
+                unique_mask[index] = true;
+            }
+        } else {
+            unique_data[index] = false;
+            unique_mask[index] = false;
+        }
+    }
+
+    let data = inverse.iter().map(|&index| unique_data[index]).collect();
+    let mask = inverse.iter().map(|&index| unique_mask[index]).collect();
     let data_arr = Array::from_vec(ma.data().dim().clone(), data)?;
     let mask_arr: Array<bool, D> = Array::from_vec(ma.mask().dim().clone(), mask)?;
     MaskedArray::new(data_arr, mask_arr)
@@ -925,7 +1020,7 @@ pub fn ma_in1d<T>(
     test_values: &[T],
 ) -> FerrayResult<MaskedArray<bool, Ix1>>
 where
-    T: Element + Copy + PartialEq,
+    T: Element + Copy + PartialEq + PartialOrd,
 {
     ma_isin(ma, test_values)
 }
@@ -974,7 +1069,9 @@ where
     let n = vals.len();
     let data_arr = Array::<T, Ix1>::from_vec(Ix1::new([n]), vals)?;
     let mask_arr = Array::<bool, Ix1>::from_vec(Ix1::new([n]), mask)?;
-    MaskedArray::new(data_arr, mask_arr)
+    let mut out = MaskedArray::new(data_arr, mask_arr)?;
+    out.set_fill_value(ma.fill_value());
+    Ok(out)
 }
 
 /// Build a `MaskedArray<T, Ix1>` from explicit `(value, is_masked)` pairs.
@@ -1587,8 +1684,9 @@ where
 
 /// Apply `f` repeatedly, reducing over the given axes in succession.
 ///
-/// Each axis in `axes` is reduced via [`ma_apply_along_axis`] in order,
-/// with subsequent axis indices adjusted for previous reductions.
+/// Each axis in `axes` is reduced via [`ma_apply_along_axis`] in order.
+/// When the function reduces rank, the axis is inserted back so the output
+/// keeps NumPy's `apply_over_axes` rank-preserving shape contract.
 ///
 /// # Errors
 /// Returns errors from [`ma_apply_along_axis`].
@@ -1602,13 +1700,18 @@ where
     F: FnMut(&MaskedArray<T, Ix1>) -> FerrayResult<(T, bool)>,
 {
     let mut result = ma.clone();
-    let mut sorted: Vec<usize> = axes.to_vec();
-    sorted.sort_unstable();
-    for (offset, &ax) in sorted.iter().enumerate() {
-        // Each previous reduction collapsed an earlier axis, so shift
-        // subsequent axis indices left by the number already consumed.
-        let adjusted = ax.saturating_sub(offset);
-        result = ma_apply_along_axis(&result, adjusted, &mut f)?;
+    for &axis in axes {
+        let reduced = ma_apply_along_axis(&result, axis, &mut f)?;
+        result = if reduced.ndim() == result.ndim() {
+            reduced
+        } else {
+            reduced.expand_dims(axis)?
+        };
+        if result.ndim() != ma.ndim() {
+            return Err(FerrayError::invalid_value(
+                "ma_apply_over_axes: function returned an array of the wrong rank",
+            ));
+        }
     }
     Ok(result)
 }
@@ -1699,7 +1802,7 @@ pub fn default_fill_value_f32() -> f32 {
 /// Default fill value for bool.
 #[must_use]
 pub const fn default_fill_value_bool() -> bool {
-    false
+    true
 }
 
 /// Default fill value for `i64`.
@@ -1708,18 +1811,16 @@ pub const fn default_fill_value_i64() -> i64 {
     999_999
 }
 
-/// Maximum fill value for a Float type (used when filling masked values
-/// for max-reductions so they don't influence the result).
+/// Maximum fill value for a Float type, matching `numpy.ma.maximum_fill_value`.
 #[must_use]
 pub fn maximum_fill_value<T: Float>() -> T {
-    T::infinity()
+    T::neg_infinity()
 }
 
-/// Minimum fill value for a Float type (used when filling masked values
-/// for min-reductions).
+/// Minimum fill value for a Float type, matching `numpy.ma.minimum_fill_value`.
 #[must_use]
 pub fn minimum_fill_value<T: Float>() -> T {
-    T::neg_infinity()
+    T::infinity()
 }
 
 /// Common fill value for two masked arrays — returns `a.fill_value()` if
@@ -1765,8 +1866,15 @@ macro_rules! ma_cmp {
             let data: Vec<bool> = a
                 .data()
                 .iter()
-                .zip(b.data().iter())
-                .map(|(x, y)| x $op y)
+                .zip(a.mask().iter())
+                .zip(b.data().iter().zip(b.mask().iter()))
+                .map(|((x, ma), (y, mb))| {
+                    if *ma || *mb {
+                        *x != T::zero()
+                    } else {
+                        x $op y
+                    }
+                })
                 .collect();
             let mask: Vec<bool> = a
                 .mask()
@@ -1828,7 +1936,12 @@ pub fn ma_logical_xor<D: Dimension>(
 pub fn ma_logical_not<D: Dimension>(
     a: &MaskedArray<bool, D>,
 ) -> FerrayResult<MaskedArray<bool, D>> {
-    let data: Vec<bool> = a.data().iter().map(|x| !*x).collect();
+    let data: Vec<bool> = a
+        .data()
+        .iter()
+        .zip(a.mask().iter())
+        .map(|(x, masked)| if *masked { *x } else { !*x })
+        .collect();
     let data_arr = Array::from_vec(a.data().dim().clone(), data)?;
     let mask_arr: Array<bool, D> =
         Array::from_vec(a.mask().dim().clone(), a.mask().iter().copied().collect())?;
@@ -1851,8 +1964,9 @@ fn binary_bool<D: Dimension>(
     let data: Vec<bool> = a
         .data()
         .iter()
-        .zip(b.data().iter())
-        .map(|(x, y)| op(*x, *y))
+        .zip(a.mask().iter())
+        .zip(b.data().iter().zip(b.mask().iter()))
+        .map(|((x, ma), (y, mb))| if *ma || *mb { *x } else { op(*x, *y) })
         .collect();
     let mask: Vec<bool> = a
         .mask()
@@ -2418,6 +2532,7 @@ mod tests {
         let r = masked_values(&arr, 1.0, 1e-3, 0.0).unwrap();
         let mask: Vec<bool> = r.mask().iter().copied().collect();
         assert_eq!(mask, vec![true, true, false]);
+        assert_eq!(r.fill_value(), 1.0);
     }
 
     #[test]
@@ -2478,8 +2593,10 @@ mod tests {
             vec![false, false, false, false, false, true],
         );
         let v = ma_unique(&ma).unwrap();
-        let data: Vec<f64> = v.iter().copied().collect();
-        assert_eq!(data, vec![1.0, 2.0, 3.0]);
+        let data: Vec<f64> = v.data().iter().copied().collect();
+        let mask: Vec<bool> = v.mask().iter().copied().collect();
+        assert_eq!(data, vec![1.0, 2.0, 3.0, 9.0]);
+        assert_eq!(mask, vec![false, false, false, true]);
     }
 
     #[test]
@@ -2502,12 +2619,12 @@ mod tests {
     #[test]
     fn fill_value_protocol_constants() {
         assert_eq!(default_fill_value_f64(), 1e20);
-        assert!(!default_fill_value_bool());
-        assert!(maximum_fill_value::<f64>().is_infinite());
+        assert!(default_fill_value_bool());
         assert!(
-            minimum_fill_value::<f64>().is_infinite()
-                && minimum_fill_value::<f64>().is_sign_negative()
+            maximum_fill_value::<f64>().is_infinite()
+                && maximum_fill_value::<f64>().is_sign_negative()
         );
+        assert!(minimum_fill_value::<f64>().is_infinite());
     }
 
     #[test]
@@ -2526,7 +2643,7 @@ mod tests {
         let r = ma_equal(&a, &b).unwrap();
         let data: Vec<bool> = r.data().iter().copied().collect();
         let mask: Vec<bool> = r.mask().iter().copied().collect();
-        assert_eq!(data, vec![true, false, true]);
+        assert_eq!(data, vec![true, true, true]);
         assert_eq!(mask, vec![false, true, true]);
     }
 

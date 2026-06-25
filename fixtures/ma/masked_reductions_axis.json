@@ -1,0 +1,608 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.ma sum/mean/min/max axis",
+  "ferray_function": "ferray_ma::MaskedArray::{sum_axis,mean_axis,min_axis,max_axis}",
+  "test_cases": [
+    {
+      "name": "sum_axis0",
+      "inputs": {
+        "op": "sum",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            4.0,
+            0.0,
+            0.0,
+            21.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "sum_axis1",
+      "inputs": {
+        "op": "sum",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 1
+      },
+      "expected": {
+        "data": {
+          "data": [
+            3.0,
+            11.0,
+            11.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "mean_axis0",
+      "inputs": {
+        "op": "mean",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            2.0,
+            0.0,
+            0.0,
+            7.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "mean_axis1",
+      "inputs": {
+        "op": "mean",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 1
+      },
+      "expected": {
+        "data": {
+          "data": [
+            1.5,
+            5.5,
+            11.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "min_axis0",
+      "inputs": {
+        "op": "min",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            0.0,
+            1e+20,
+            1e+20,
+            3.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "min_axis1",
+      "inputs": {
+        "op": "min",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 1
+      },
+      "expected": {
+        "data": {
+          "data": [
+            0.0,
+            4.0,
+            11.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "max_axis0",
+      "inputs": {
+        "op": "max",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            4.0,
+            1e+20,
+            1e+20,
+            11.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "max_axis1",
+      "inputs": {
+        "op": "max",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 1
+      },
+      "expected": {
+        "data": {
+          "data": [
+            3.0,
+            7.0,
+            11.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

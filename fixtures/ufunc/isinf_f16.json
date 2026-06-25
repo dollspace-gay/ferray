@@ -1,0 +1,74 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.isinf",
+  "ferray_function": "ferray_ufunc::isinf_f16",
+  "test_cases": [
+    {
+      "name": "special_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            "NaN",
+            "-Inf",
+            -1.0,
+            0.0,
+            1.0,
+            "Inf"
+          ],
+          "shape": [
+            6
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          false,
+          true,
+          false,
+          false,
+          false,
+          true
+        ],
+        "shape": [
+          6
+        ],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "matrix_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            "NaN",
+            "Inf",
+            "-Inf",
+            2.0
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          false,
+          true,
+          true,
+          false
+        ],
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

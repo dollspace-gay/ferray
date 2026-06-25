@@ -1,0 +1,133 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.copysign",
+  "ferray_function": "ferray_ufunc::copysign",
+  "test_cases": [
+    {
+      "name": "signed_zero",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            -2.0,
+            0.0,
+            -0.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            -1.0,
+            1.0,
+            -0.0,
+            0.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          -1.0,
+          2.0,
+          -0.0,
+          0.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "broadcast_2d",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            -2.0
+          ],
+          "shape": [
+            2,
+            1
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            -1.0,
+            0.0,
+            1.0
+          ],
+          "shape": [
+            1,
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          -1.0,
+          1.0,
+          1.0,
+          -2.0,
+          2.0,
+          2.0
+        ],
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "special",
+      "inputs": {
+        "a": {
+          "data": [
+            "NaN",
+            "Inf",
+            1.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            -1.0,
+            -0.0,
+            "-Inf"
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          "NaN",
+          "-Inf",
+          -1.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

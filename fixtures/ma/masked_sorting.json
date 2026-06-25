@@ -1,0 +1,256 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.ma.sort/argsort",
+  "ferray_function": "ferray_ma::MaskedArray::{sort,argsort,sort_axis}",
+  "test_cases": [
+    {
+      "name": "sort_flat",
+      "inputs": {
+        "op": "sort",
+        "data": {
+          "data": [
+            3.0,
+            1.0,
+            2.0,
+            9.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "expected": {
+        "data": {
+          "data": [
+            2.0,
+            3.0,
+            1.0,
+            9.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            true,
+            true
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "argsort_flat_2d",
+      "inputs": {
+        "op": "argsort",
+        "data": {
+          "data": [
+            3.0,
+            1.0,
+            2.0,
+            6.0,
+            5.0,
+            4.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "expected": {
+        "data": [
+          2,
+          0,
+          5,
+          4,
+          1,
+          3
+        ],
+        "shape": [
+          6
+        ],
+        "dtype": "uint64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "sort_axis0",
+      "inputs": {
+        "op": "sort_axis",
+        "data": {
+          "data": [
+            3.0,
+            1.0,
+            2.0,
+            6.0,
+            5.0,
+            4.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        },
+        "axis": 0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            3.0,
+            5.0,
+            2.0,
+            6.0,
+            1.0,
+            4.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            false,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "sort_axis1",
+      "inputs": {
+        "op": "sort_axis",
+        "data": {
+          "data": [
+            3.0,
+            1.0,
+            2.0,
+            6.0,
+            5.0,
+            4.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            false,
+            true,
+            false,
+            false
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        },
+        "axis": 1
+      },
+      "expected": {
+        "data": {
+          "data": [
+            2.0,
+            3.0,
+            1.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            true,
+            false,
+            false,
+            true
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

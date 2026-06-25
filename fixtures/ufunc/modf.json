@@ -1,0 +1,172 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.modf",
+  "ferray_function": "ferray_ufunc::modf",
+  "test_cases": [
+    {
+      "name": "standard",
+      "inputs": {
+        "x": {
+          "data": [
+            0.0,
+            -0.0,
+            1.25,
+            -2.75,
+            3.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "fractional": {
+          "data": [
+            0.0,
+            -0.0,
+            0.25,
+            -0.75,
+            0.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "integral": {
+          "data": [
+            0.0,
+            -0.0,
+            1.0,
+            -2.0,
+            3.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        }
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "special",
+      "inputs": {
+        "x": {
+          "data": [
+            "NaN",
+            "Inf",
+            "-Inf"
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "fractional": {
+          "data": [
+            "NaN",
+            0.0,
+            -0.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "integral": {
+          "data": [
+            "NaN",
+            "Inf",
+            "-Inf"
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "2d",
+      "inputs": {
+        "x": {
+          "data": [
+            1.25,
+            -2.75,
+            3.5,
+            -4.5
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "fractional": {
+          "data": [
+            0.25,
+            -0.75,
+            0.5,
+            -0.5
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float64"
+        },
+        "integral": {
+          "data": [
+            1.0,
+            -2.0,
+            3.0,
+            -4.0
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float64"
+        }
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "empty",
+      "inputs": {
+        "x": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "fractional": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "float64"
+        },
+        "integral": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "float64"
+        }
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

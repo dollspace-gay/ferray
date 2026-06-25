@@ -197,17 +197,17 @@ where
     !iscomplexobj(a)
 }
 
-/// Whether the array represents a scalar (0-D).
+/// Whether the array is a NumPy scalar.
 ///
-/// Analogous to `numpy.isscalar(x)`. In Rust, dimensionality is statically
-/// typed, so this returns `true` only for 0-D arrays (`Ix0` or `IxDyn` with
-/// empty shape).
-pub fn isscalar<T, D>(a: &Array<T, D>) -> bool
+/// NumPy arrays are not scalars, including 0-D arrays:
+/// `numpy.isscalar(numpy.array(1.0)) == False`. This Rust entry point only
+/// accepts `Array` values, so it always returns `false`.
+pub fn isscalar<T, D>(_: &Array<T, D>) -> bool
 where
     T: Element,
     D: Dimension,
 {
-    a.shape().is_empty()
+    false
 }
 
 // ---------------------------------------------------------------------------
@@ -982,7 +982,7 @@ mod tests {
     fn test_isscalar_zero_d() {
         use ferray_core::dimension::IxDyn;
         let scalar: Array<f64, IxDyn> = Array::from_vec(IxDyn::new(&[]), vec![2.5]).unwrap();
-        assert!(isscalar(&scalar));
+        assert!(!isscalar(&scalar));
 
         let vec: Array<f64, Ix1> = Array::from_vec(Ix1::new([3]), vec![1.0, 2.0, 3.0]).unwrap();
         assert!(!isscalar(&vec));

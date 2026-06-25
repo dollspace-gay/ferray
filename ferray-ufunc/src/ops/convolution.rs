@@ -148,7 +148,7 @@ pub fn fftconvolve(
     match mode {
         ConvolveMode::Full => Array::from_vec(Ix1::new([full_len]), inv_data),
         ConvolveMode::Same => {
-            let out_len = n.max(m);
+            let out_len = n;
             let start = (full_len - out_len) / 2;
             let slice = inv_data[start..start + out_len].to_vec();
             Array::from_vec(Ix1::new([out_len]), slice)

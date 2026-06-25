@@ -1,0 +1,50 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.subtract",
+  "ferray_function": "ferray_ufunc::sub_timedelta",
+  "test_cases": [
+    {
+      "name": "same_unit_days",
+      "inputs": {
+        "a": {
+          "data": [
+            2,
+            -9223372036854775808,
+            -3
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "timedelta64[D]",
+          "unit": "D"
+        },
+        "b": {
+          "data": [
+            5,
+            7,
+            -9223372036854775808
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "timedelta64[D]",
+          "unit": "D"
+        }
+      },
+      "expected": {
+        "data": [
+          -3,
+          -9223372036854775808,
+          -9223372036854775808
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "timedelta64[D]",
+        "unit": "D"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

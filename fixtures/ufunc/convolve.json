@@ -1,0 +1,368 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.convolve",
+  "ferray_function": "ferray_ufunc::convolve",
+  "test_cases": [
+    {
+      "name": "standard_full",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "v": {
+          "data": [
+            0.0,
+            1.0,
+            0.5
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "data": [
+          0.0,
+          1.0,
+          2.5,
+          4.0,
+          1.5
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "standard_same",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "v": {
+          "data": [
+            0.0,
+            1.0,
+            0.5
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mode": "same"
+      },
+      "expected": {
+        "data": [
+          1.0,
+          2.5,
+          4.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "standard_valid",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "v": {
+          "data": [
+            0.0,
+            1.0,
+            0.5
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mode": "valid"
+      },
+      "expected": {
+        "data": [
+          2.5
+        ],
+        "shape": [
+          1
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "left_shorter_full",
+      "inputs": {
+        "a": {
+          "data": [
+            2.0,
+            -1.0
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "v": {
+          "data": [
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "data": [
+          6.0,
+          5.0,
+          6.0,
+          7.0,
+          -6.0
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "left_shorter_same",
+      "inputs": {
+        "a": {
+          "data": [
+            2.0,
+            -1.0
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "v": {
+          "data": [
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mode": "same"
+      },
+      "expected": {
+        "data": [
+          6.0,
+          5.0,
+          6.0,
+          7.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "left_shorter_valid",
+      "inputs": {
+        "a": {
+          "data": [
+            2.0,
+            -1.0
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "v": {
+          "data": [
+            3.0,
+            4.0,
+            5.0,
+            6.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mode": "valid"
+      },
+      "expected": {
+        "data": [
+          5.0,
+          6.0,
+          7.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "signed_values_full",
+      "inputs": {
+        "a": {
+          "data": [
+            -2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "v": {
+          "data": [
+            1.5,
+            -0.5
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "mode": "full"
+      },
+      "expected": {
+        "data": [
+          -3.0,
+          1.0,
+          6.0,
+          -2.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "signed_values_same",
+      "inputs": {
+        "a": {
+          "data": [
+            -2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "v": {
+          "data": [
+            1.5,
+            -0.5
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "mode": "same"
+      },
+      "expected": {
+        "data": [
+          -3.0,
+          1.0,
+          6.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "signed_values_valid",
+      "inputs": {
+        "a": {
+          "data": [
+            -2.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "v": {
+          "data": [
+            1.5,
+            -0.5
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "mode": "valid"
+      },
+      "expected": {
+        "data": [
+          1.0,
+          6.0
+        ],
+        "shape": [
+          2
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

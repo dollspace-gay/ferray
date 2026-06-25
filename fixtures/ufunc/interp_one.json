@@ -1,0 +1,110 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.interp",
+  "ferray_function": "ferray_ufunc::interp_one",
+  "test_cases": [
+    {
+      "name": "scalar_midpoint",
+      "inputs": {
+        "xi": 2.5,
+        "xp": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "fp": {
+          "data": [
+            3.0,
+            2.0,
+            0.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": 1.0,
+        "shape": [],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "scalar_left_clip",
+      "inputs": {
+        "xi": -2.0,
+        "xp": {
+          "data": [
+            -1.0,
+            0.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "fp": {
+          "data": [
+            8.0,
+            4.0,
+            12.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": 8.0,
+        "shape": [],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "scalar_right_clip",
+      "inputs": {
+        "xi": 5.0,
+        "xp": {
+          "data": [
+            -1.0,
+            0.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "fp": {
+          "data": [
+            8.0,
+            4.0,
+            12.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": 12.0,
+        "shape": [],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.logaddexp",
+  "ferray_function": "ferray_ufunc::logaddexp",
+  "test_cases": [
+    {
+      "name": "standard",
+      "inputs": {
+        "a": {
+          "data": [
+            -2.0,
+            -1.0,
+            0.0,
+            1.0,
+            2.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            2.0,
+            1.0,
+            0.0,
+            -1.0,
+            -2.0
+          ],
+          "shape": [
+            5
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          2.01814992791781,
+          1.1269280110429725,
+          0.6931471805599453,
+          1.1269280110429725,
+          2.01814992791781
+        ],
+        "shape": [
+          5
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "large_gap",
+      "inputs": {
+        "a": {
+          "data": [
+            -1000.0,
+            1000.0,
+            -100.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1000.0,
+            -1000.0,
+            -101.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          1000.0,
+          1000.0,
+          -99.68673831248178
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "special",
+      "inputs": {
+        "a": {
+          "data": [
+            "NaN",
+            "Inf",
+            "-Inf"
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            1.0,
+            "Inf",
+            "-Inf"
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          "NaN",
+          "Inf",
+          "-Inf"
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

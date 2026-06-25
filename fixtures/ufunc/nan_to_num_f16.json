@@ -1,0 +1,89 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.nan_to_num",
+  "ferray_function": "ferray_ufunc::nan_to_num_f16",
+  "test_cases": [
+    {
+      "name": "default_specials_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            "NaN",
+            "-Inf",
+            -1.0,
+            0.0,
+            1.0,
+            "Inf"
+          ],
+          "shape": [
+            6
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          0.0,
+          -65500.0,
+          -1.0,
+          0.0,
+          1.0,
+          65500.0
+        ],
+        "shape": [
+          6
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "custom_specials_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            "NaN",
+            "Inf",
+            "-Inf",
+            2.0
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float16"
+        },
+        "nan": {
+          "data": 9.0,
+          "shape": [],
+          "dtype": "float16"
+        },
+        "posinf": {
+          "data": 11.0,
+          "shape": [],
+          "dtype": "float16"
+        },
+        "neginf": {
+          "data": -11.0,
+          "shape": [],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          9.0,
+          11.0,
+          -11.0,
+          2.0
+        ],
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

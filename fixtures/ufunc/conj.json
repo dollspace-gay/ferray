@@ -1,0 +1,138 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.conj",
+  "ferray_function": "ferray_ufunc::conj",
+  "test_cases": [
+    {
+      "name": "standard_complex128",
+      "inputs": {
+        "x": {
+          "data": [
+            {
+              "re": 1.0,
+              "im": 2.0
+            },
+            {
+              "re": 3.0,
+              "im": -4.0
+            },
+            {
+              "re": -1.0,
+              "im": 0.0
+            },
+            {
+              "re": -0.0,
+              "im": -0.0
+            }
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "complex128"
+        }
+      },
+      "expected": {
+        "data": [
+          {
+            "re": 1.0,
+            "im": -2.0
+          },
+          {
+            "re": 3.0,
+            "im": 4.0
+          },
+          {
+            "re": -1.0,
+            "im": -0.0
+          },
+          {
+            "re": -0.0,
+            "im": 0.0
+          }
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "complex128"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "2d_complex128",
+      "inputs": {
+        "x": {
+          "data": [
+            {
+              "re": 1.0,
+              "im": 0.0
+            },
+            {
+              "re": 0.0,
+              "im": 1.0
+            },
+            {
+              "re": -1.0,
+              "im": -1.0
+            },
+            {
+              "re": 2.0,
+              "im": 3.0
+            }
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "complex128"
+        }
+      },
+      "expected": {
+        "data": [
+          {
+            "re": 1.0,
+            "im": -0.0
+          },
+          {
+            "re": 0.0,
+            "im": -1.0
+          },
+          {
+            "re": -1.0,
+            "im": 1.0
+          },
+          {
+            "re": 2.0,
+            "im": -3.0
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "complex128"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "empty_complex128",
+      "inputs": {
+        "x": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "complex128"
+        }
+      },
+      "expected": {
+        "data": [],
+        "shape": [
+          0
+        ],
+        "dtype": "complex128"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

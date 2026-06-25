@@ -1,0 +1,76 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.lcm",
+  "ferray_function": "ferray_ufunc::lcm",
+  "test_cases": [
+    {
+      "name": "float_1d_rejected",
+      "inputs": {
+        "a": {
+          "data": [
+            12.0,
+            15.0,
+            0.0,
+            -18.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            8.0,
+            20.0,
+            7.0,
+            6.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "error_type": "UFuncTypeError"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "float_2d_rejected",
+      "inputs": {
+        "a": {
+          "data": [
+            4.0,
+            6.0,
+            8.0,
+            10.0
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            6.0,
+            8.0,
+            12.0,
+            15.0
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "error_type": "UFuncTypeError"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

@@ -82,3 +82,24 @@ fn isinf_matches_numpy() {
 fn isfinite_matches_numpy() {
     unary_bool_check("isfinite.json", "isfinite", ferray_ufunc::isfinite);
 }
+
+/// Covers: `ferray_ufunc::isneginf` (re-export of
+/// `ferray_ufunc::ops::floatintrinsic::isneginf`).
+#[test]
+fn isneginf_matches_numpy() {
+    unary_bool_check("isneginf.json", "isneginf", ferray_ufunc::isneginf);
+}
+
+/// Covers: `ferray_ufunc::isposinf` (re-export of
+/// `ferray_ufunc::ops::floatintrinsic::isposinf`).
+#[test]
+fn isposinf_matches_numpy() {
+    unary_bool_check("isposinf.json", "isposinf", ferray_ufunc::isposinf);
+}
+
+/// Covers: `ferray_ufunc::signbit` (re-export of
+/// `ferray_ufunc::ops::floatintrinsic::signbit`).
+#[test]
+fn signbit_matches_numpy() {
+    unary_bool_check("signbit.json", "signbit", ferray_ufunc::signbit);
+}

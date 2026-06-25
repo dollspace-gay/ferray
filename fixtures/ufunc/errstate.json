@@ -1,0 +1,51 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.errstate",
+  "ferray_function": "ferray_ufunc::errstate",
+  "test_cases": [
+    {
+      "name": "default",
+      "inputs": {},
+      "expected": {
+        "divide": "warn",
+        "over": "warn",
+        "under": "ignore",
+        "invalid": "warn"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "scoped_over_raise_invalid_ignore",
+      "inputs": {
+        "over": "raise",
+        "invalid": "ignore"
+      },
+      "expected": {
+        "inner": {
+          "divide": "warn",
+          "over": "raise",
+          "under": "ignore",
+          "invalid": "ignore"
+        },
+        "outer": {
+          "divide": "warn",
+          "over": "warn",
+          "under": "ignore",
+          "invalid": "warn"
+        }
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "policy_meanings",
+      "inputs": {},
+      "expected": {
+        "warn": "record",
+        "ignore": "drop",
+        "raise": "defer_error"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

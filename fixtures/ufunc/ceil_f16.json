@@ -1,0 +1,74 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.ceil",
+  "ferray_function": "ferray_ufunc::ceil_f16",
+  "test_cases": [
+    {
+      "name": "standard_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            -2.5,
+            -1.5,
+            -0.5,
+            0.5,
+            1.5,
+            2.5
+          ],
+          "shape": [
+            6
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          -2.0,
+          -1.0,
+          -0.0,
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          6
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "matrix_f16",
+      "inputs": {
+        "x": {
+          "data": [
+            -1.75,
+            -1.25,
+            1.25,
+            1.75
+          ],
+          "shape": [
+            2,
+            2
+          ],
+          "dtype": "float16"
+        }
+      },
+      "expected": {
+        "data": [
+          -1.0,
+          -1.0,
+          2.0,
+          2.0
+        ],
+        "shape": [
+          2,
+          2
+        ],
+        "dtype": "float16"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

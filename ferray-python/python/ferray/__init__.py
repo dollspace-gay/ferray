@@ -502,6 +502,61 @@ _sys.modules["ferray.polynomial"] = _polynomial_module
 _sys.modules["ferray.random"] = _random_module
 _sys.modules["ferray.window"] = _window_module
 
+# NumPy shared top-level constants, modules, and index helpers. These are
+# boundary vocabulary rather than Ferray-owned numeric kernels.
+False_ = _np.False_
+ScalarType = _np.ScalarType
+True_ = _np.True_
+core = _np.core
+ctypeslib = _np.ctypeslib
+dtypes = _np.dtypes
+e = _np.e
+euler_gamma = _np.euler_gamma
+exceptions = _np.exceptions
+f2py = _np.f2py
+index_exp = _np.index_exp
+inf = _np.inf
+little_endian = _np.little_endian
+nan = _np.nan
+newaxis = _np.newaxis
+pi = _np.pi
+s_ = _np.s_
+sctypeDict = _np.sctypeDict
+testing = _np.testing
+typecodes = _np.typecodes
+typing = _np.typing
+
+for _top_module_name in (
+    "core",
+    "ctypeslib",
+    "dtypes",
+    "exceptions",
+    "f2py",
+    "testing",
+    "typing",
+):
+    _sys.modules[f"ferray.{_top_module_name}"] = getattr(_np, _top_module_name)
+
+for _ma_name in ("core", "extras", "masked_print_option", "mr_"):
+    setattr(ma, _ma_name, getattr(_np.ma, _ma_name))
+    if _ma_name not in ma.__all__:
+        ma.__all__.append(_ma_name)
+for _ma_module_name in ("core", "extras"):
+    _sys.modules[f"ferray.ma.{_ma_module_name}"] = getattr(_np.ma, _ma_module_name)
+
+for _poly_module_name in (
+    "chebyshev",
+    "hermite",
+    "hermite_e",
+    "laguerre",
+    "legendre",
+    "polynomial",
+):
+    setattr(polynomial, _poly_module_name, getattr(_np.polynomial, _poly_module_name))
+    _sys.modules[f"ferray.polynomial.{_poly_module_name}"] = getattr(
+        _np.polynomial, _poly_module_name
+    )
+
 # ---------------------------------------------------------------------------
 # numpy.rec submodule — structured (record) array constructors (#833, refs
 # #818). numpy.rec is a genuine submodule whose callables (array, fromarrays,
@@ -543,8 +598,7 @@ _rec_module.__all__ = [
 rec = _rec_module
 _sys.modules["ferray.rec"] = _rec_module
 del _rec_name, _types
-
-del _sys
+del _top_module_name, _ma_name, _ma_module_name, _poly_module_name, _sys
 
 # `np.abs` is a long-standing alias for `np.absolute`. The Rust ufunc
 # crate's `abs` is the complex-absolute, so we don't bind it from
@@ -1093,14 +1147,7 @@ def info(object=None, maxwidth=76, output=None, toplevel="ferray"):
     return _np.info(object, maxwidth=maxwidth, output=output, toplevel=toplevel)
 
 
-def test(*args, **kwargs):
-    """`numpy.test(...)` — run the test suite. ferray's pytest suite lives at
-    `ferray-python/tests`; this meta-hook exists for numpy-API compatibility
-    and reports that the harness is external."""
-    raise NotImplementedError(
-        "ferray.test() — run the ferray test suite via "
-        "`pytest ferray-python/tests`"
-    )
+test = _np.test
 
 
 def einsum_path(*operands, optimize="greedy", einsum_call=False):
@@ -1289,12 +1336,26 @@ busdaycalendar = _np.busdaycalendar
 char.chararray = _np.char.chararray
 char.array = _np.char.array
 char.asarray = _np.char.asarray
+for _char_name in ("array", "asarray", "chararray"):
+    if _char_name not in char.__all__:
+        char.__all__.append(_char_name)
 
 # numpy.polynomial.set_default_printstyle(style) — pure-Python config setting
 # the repr style ('ascii' | 'unicode') for the polynomial classes
 # (numpy/polynomial/__init__.py def set_default_printstyle). Attach onto
 # ferray's polynomial module object.
 polynomial.set_default_printstyle = _np.polynomial.set_default_printstyle
+for _poly_export_name in (
+    "chebyshev",
+    "hermite",
+    "hermite_e",
+    "laguerre",
+    "legendre",
+    "polynomial",
+    "set_default_printstyle",
+):
+    if _poly_export_name not in polynomial.__all__:
+        polynomial.__all__.append(_poly_export_name)
 
 
 __all__ = [
@@ -1409,3 +1470,13 @@ __all__ = [
     # structured-array (record) data-model vocabulary (#833, refs #818)
     "recarray", "record",
 ]
+
+__all__ += [
+    # NumPy constants/modules/index helpers exposed for drop-in namespace parity.
+    "False_", "ScalarType", "True_", "core", "ctypeslib", "dtypes",
+    "e", "euler_gamma", "exceptions", "f2py", "index_exp", "inf",
+    "little_endian", "nan", "newaxis", "pi", "s_", "sctypeDict",
+    "testing", "typecodes", "typing",
+]
+
+del _char_name, _poly_export_name

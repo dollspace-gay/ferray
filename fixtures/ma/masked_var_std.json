@@ -1,0 +1,836 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.ma.var/std",
+  "ferray_function": "ferray_ma::MaskedArray::{var,var_ddof,std,std_ddof,var_axis,var_axis_ddof,std_axis,std_axis_ddof}",
+  "test_cases": [
+    {
+      "name": "var_ddof0",
+      "inputs": {
+        "op": "var",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "ddof": 0
+      },
+      "expected": {
+        "data": 14.0,
+        "shape": [],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "var_axis0_ddof0",
+      "inputs": {
+        "op": "var",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 0,
+        "ddof": 0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            4.0,
+            0.0,
+            0.0,
+            10.666666666666666
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "var_axis1_ddof0",
+      "inputs": {
+        "op": "var",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 1,
+        "ddof": 0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            2.25,
+            2.25,
+            0.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "var_ddof1",
+      "inputs": {
+        "op": "var",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "ddof": 1
+      },
+      "expected": {
+        "data": 17.5,
+        "shape": [],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "var_axis0_ddof1",
+      "inputs": {
+        "op": "var",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 0,
+        "ddof": 1
+      },
+      "expected": {
+        "data": {
+          "data": [
+            8.0,
+            0.0,
+            0.0,
+            16.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "var_axis1_ddof1",
+      "inputs": {
+        "op": "var",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 1,
+        "ddof": 1
+      },
+      "expected": {
+        "data": {
+          "data": [
+            4.5,
+            4.5,
+            0.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            true
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "std_ddof0",
+      "inputs": {
+        "op": "std",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "ddof": 0
+      },
+      "expected": {
+        "data": 3.7416573867739413,
+        "shape": [],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "std_axis0_ddof0",
+      "inputs": {
+        "op": "std",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 0,
+        "ddof": 0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            2.0,
+            0.0,
+            0.0,
+            3.265986323710904
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "std_axis1_ddof0",
+      "inputs": {
+        "op": "std",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 1,
+        "ddof": 0
+      },
+      "expected": {
+        "data": {
+          "data": [
+            1.5,
+            1.5,
+            0.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            false
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "std_ddof1",
+      "inputs": {
+        "op": "std",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "ddof": 1
+      },
+      "expected": {
+        "data": 4.183300132670378,
+        "shape": [],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "std_axis0_ddof1",
+      "inputs": {
+        "op": "std",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 0,
+        "ddof": 1
+      },
+      "expected": {
+        "data": {
+          "data": [
+            2.8284271247461903,
+            0.0,
+            0.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 16
+    },
+    {
+      "name": "std_axis1_ddof1",
+      "inputs": {
+        "op": "std",
+        "data": {
+          "data": [
+            0.0,
+            1.0,
+            2.0,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            11.0
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            true,
+            true,
+            false,
+            false,
+            true,
+            true,
+            false,
+            true,
+            true,
+            true,
+            false
+          ],
+          "shape": [
+            3,
+            4
+          ],
+          "dtype": "bool"
+        },
+        "axis": 1,
+        "ddof": 1
+      },
+      "expected": {
+        "data": {
+          "data": [
+            2.1213203435596424,
+            2.1213203435596424,
+            0.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "mask": {
+          "data": [
+            false,
+            false,
+            true
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "bool"
+        }
+      },
+      "tolerance_ulps": 16
+    }
+  ]
+}

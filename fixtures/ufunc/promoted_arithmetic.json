@@ -1,0 +1,388 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy promoted arithmetic",
+  "ferray_function": "ferray_ufunc::{add,subtract,multiply,divide}_promoted",
+  "test_cases": [
+    {
+      "name": "add_promoted_mixed_i32_f64_1d",
+      "inputs": {
+        "op": "add_promoted",
+        "a": {
+          "data": [
+            1,
+            -2,
+            3,
+            4
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "int32"
+        },
+        "b": {
+          "data": [
+            0.5,
+            1.5,
+            -2.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          1.5,
+          -0.5,
+          1.0,
+          8.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "add_promoted_mixed_i32_f64_2d",
+      "inputs": {
+        "op": "add_promoted",
+        "a": {
+          "data": [
+            1,
+            2,
+            3,
+            -4,
+            5,
+            -6
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "int32"
+        },
+        "b": {
+          "data": [
+            0.25,
+            -0.5,
+            1.5,
+            2.0,
+            -3.5,
+            4.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          1.25,
+          1.5,
+          4.5,
+          -2.0,
+          1.5,
+          -2.0
+        ],
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "subtract_promoted_mixed_i32_f64_1d",
+      "inputs": {
+        "op": "subtract_promoted",
+        "a": {
+          "data": [
+            1,
+            -2,
+            3,
+            4
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "int32"
+        },
+        "b": {
+          "data": [
+            0.5,
+            1.5,
+            -2.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          0.5,
+          -3.5,
+          5.0,
+          0.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "subtract_promoted_mixed_i32_f64_2d",
+      "inputs": {
+        "op": "subtract_promoted",
+        "a": {
+          "data": [
+            1,
+            2,
+            3,
+            -4,
+            5,
+            -6
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "int32"
+        },
+        "b": {
+          "data": [
+            0.25,
+            -0.5,
+            1.5,
+            2.0,
+            -3.5,
+            4.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          0.75,
+          2.5,
+          1.5,
+          -6.0,
+          8.5,
+          -10.0
+        ],
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "multiply_promoted_mixed_i32_f64_1d",
+      "inputs": {
+        "op": "multiply_promoted",
+        "a": {
+          "data": [
+            1,
+            -2,
+            3,
+            4
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "int32"
+        },
+        "b": {
+          "data": [
+            0.5,
+            1.5,
+            -2.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          0.5,
+          -3.0,
+          -6.0,
+          16.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "multiply_promoted_mixed_i32_f64_2d",
+      "inputs": {
+        "op": "multiply_promoted",
+        "a": {
+          "data": [
+            1,
+            2,
+            3,
+            -4,
+            5,
+            -6
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "int32"
+        },
+        "b": {
+          "data": [
+            0.25,
+            -0.5,
+            1.5,
+            2.0,
+            -3.5,
+            4.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          0.25,
+          -1.0,
+          4.5,
+          -8.0,
+          -17.5,
+          -24.0
+        ],
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "divide_promoted_mixed_i32_f64_1d",
+      "inputs": {
+        "op": "divide_promoted",
+        "a": {
+          "data": [
+            1,
+            -2,
+            3,
+            4
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "int32"
+        },
+        "b": {
+          "data": [
+            0.5,
+            1.5,
+            -2.0,
+            4.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          2.0,
+          -1.3333333333333333,
+          -1.5,
+          1.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "divide_promoted_mixed_i32_f64_2d",
+      "inputs": {
+        "op": "divide_promoted",
+        "a": {
+          "data": [
+            1,
+            2,
+            3,
+            -4,
+            5,
+            -6
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "int32"
+        },
+        "b": {
+          "data": [
+            0.25,
+            -0.5,
+            1.5,
+            2.0,
+            -3.5,
+            4.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          4.0,
+          -4.0,
+          2.0,
+          -2.0,
+          -1.4285714285714286,
+          -1.5
+        ],
+        "shape": [
+          2,
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

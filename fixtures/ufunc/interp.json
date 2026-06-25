@@ -1,0 +1,160 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.interp",
+  "ferray_function": "ferray_ufunc::interp",
+  "test_cases": [
+    {
+      "name": "linear_midpoints",
+      "inputs": {
+        "x": {
+          "data": [
+            1.5,
+            2.5
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        },
+        "xp": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "fp": {
+          "data": [
+            0.0,
+            10.0,
+            20.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          5.0,
+          15.0
+        ],
+        "shape": [
+          2
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "boundary_clipping",
+      "inputs": {
+        "x": {
+          "data": [
+            0.0,
+            1.0,
+            4.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "xp": {
+          "data": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "fp": {
+          "data": [
+            10.0,
+            20.0,
+            30.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          10.0,
+          10.0,
+          30.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    },
+    {
+      "name": "nonuniform_xp",
+      "inputs": {
+        "x": {
+          "data": [
+            -2.0,
+            -0.5,
+            0.5,
+            3.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "xp": {
+          "data": [
+            -1.0,
+            0.0,
+            2.0,
+            5.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        },
+        "fp": {
+          "data": [
+            2.0,
+            -2.0,
+            4.0,
+            10.0
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          2.0,
+          0.0,
+          -0.5,
+          6.0
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 4
+    }
+  ]
+}

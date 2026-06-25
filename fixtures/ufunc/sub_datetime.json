@@ -1,0 +1,50 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.subtract",
+  "ferray_function": "ferray_ufunc::sub_datetime",
+  "test_cases": [
+    {
+      "name": "same_unit_days",
+      "inputs": {
+        "a": {
+          "data": [
+            18262,
+            -9223372036854775808,
+            18271
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "datetime64[D]",
+          "unit": "D"
+        },
+        "b": {
+          "data": [
+            18261,
+            18264,
+            -9223372036854775808
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "datetime64[D]",
+          "unit": "D"
+        }
+      },
+      "expected": {
+        "data": [
+          1,
+          -9223372036854775808,
+          -9223372036854775808
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "timedelta64[D]",
+        "unit": "D"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.isreal",
+  "ferray_function": "ferray_ufunc::isreal_real",
+  "test_cases": [
+    {
+      "name": "real_float64",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            0.0,
+            -2.5,
+            "NaN"
+          ],
+          "shape": [
+            4
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          true,
+          true,
+          true,
+          true
+        ],
+        "shape": [
+          4
+        ],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

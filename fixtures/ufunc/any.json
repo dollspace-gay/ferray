@@ -1,0 +1,117 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.any",
+  "ferray_function": "ferray_ufunc::any",
+  "test_cases": [
+    {
+      "name": "all_true",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            -2.0,
+            "NaN"
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": true,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "has_false",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            0.0,
+            "NaN"
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": true,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "all_false",
+      "inputs": {
+        "x": {
+          "data": [
+            0.0,
+            0.0
+          ],
+          "shape": [
+            2
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": false,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "empty",
+      "inputs": {
+        "x": {
+          "data": [],
+          "shape": [
+            0
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": false,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "2d",
+      "inputs": {
+        "x": {
+          "data": [
+            1.0,
+            0.0,
+            "NaN",
+            1.0,
+            2.0,
+            3.0
+          ],
+          "shape": [
+            2,
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": true,
+        "shape": [],
+        "dtype": "bool"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}

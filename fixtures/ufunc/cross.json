@@ -1,0 +1,86 @@
+{
+  "numpy_version": "2.4.5",
+  "fixture_schema_version": 2,
+  "function": "numpy.cross",
+  "ferray_function": "ferray_ufunc::cross",
+  "test_cases": [
+    {
+      "name": "basis",
+      "inputs": {
+        "a": {
+          "data": [
+            1.0,
+            0.0,
+            0.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    },
+    {
+      "name": "general",
+      "inputs": {
+        "a": {
+          "data": [
+            2.0,
+            3.0,
+            4.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        },
+        "b": {
+          "data": [
+            5.0,
+            6.0,
+            7.0
+          ],
+          "shape": [
+            3
+          ],
+          "dtype": "float64"
+        }
+      },
+      "expected": {
+        "data": [
+          -3.0,
+          6.0,
+          -3.0
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "float64"
+      },
+      "tolerance_ulps": 0
+    }
+  ]
+}
