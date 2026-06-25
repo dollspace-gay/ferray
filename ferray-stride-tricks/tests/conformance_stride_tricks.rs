@@ -70,6 +70,87 @@ fn as_strided_matches_numpy() {
     }
 }
 
+/// Covers:
+/// - `ferray_stride_tricks::StridedSource`
+/// - `ferray_stride_tricks::as_strided::StridedSource`
+///
+/// `StridedSource` is Ferray's Rust trait abstraction over NumPy's concrete
+/// ndarray input. This test exercises the contract with both an owned array and
+/// an `ArrayView`, proving both sources produce the same NumPy-equivalent
+/// `as_strided` view without materialising a copy.
+#[test]
+fn strided_source_trait_accepts_owned_arrays_and_views() {
+    fn collect_via_trait<S>(source: &S) -> Vec<f64>
+    where
+        S: ferray_stride_tricks::StridedSource<f64>,
+    {
+        let view = ferray_stride_tricks::as_strided(source, &[2, 3], &[3, 1])
+            .expect("as_strided via StridedSource");
+        view.iter().copied().collect()
+    }
+
+    let source =
+        Array::<f64, Ix2>::from_vec(Ix2::new([2, 3]), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+    assert_eq!(
+        collect_via_trait(&source),
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    );
+
+    let source_view = source.view();
+    assert_eq!(
+        collect_via_trait(&source_view),
+        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    );
+}
+
+/// Covers:
+/// - `ferray_stride_tricks::as_strided_signed`
+/// - `ferray_stride_tricks::as_strided::as_strided_signed`
+///
+/// Positive signed strides and `start_offset` are equivalent to NumPy
+/// `as_strided` over the shifted buffer. Negative strides remain a documented
+/// core-view gap; this test pins the supported signed-stride contract.
+#[test]
+fn as_strided_signed_positive_stride_and_offset_match_numpy_contract() {
+    let source =
+        Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![10.0, 20.0, 30.0, 40.0, 50.0]).unwrap();
+    let view =
+        ferray_stride_tricks::as_strided_signed(&source, &[3], &[1], 1).expect("as_strided_signed");
+    assert_eq!(view.shape(), &[3]);
+    assert_eq!(
+        view.iter().copied().collect::<Vec<_>>(),
+        vec![20.0, 30.0, 40.0]
+    );
+}
+
+/// Covers:
+/// - `ferray_stride_tricks::as_strided_unchecked`
+/// - `ferray_stride_tricks::as_strided::as_strided_unchecked`
+/// - `ferray_stride_tricks::as_strided_signed_unchecked`
+/// - `ferray_stride_tricks::as_strided::as_strided_signed_unchecked`
+///
+/// The unchecked variants intentionally allow overlapping views, matching the
+/// unsafe part of NumPy's `as_strided` contract. We assert the materialised
+/// overlapping-window and zero-stride outputs exactly.
+#[test]
+fn as_strided_unchecked_variants_match_numpy_overlap_contracts() {
+    let source = Array::<f64, Ix1>::from_vec(Ix1::new([5]), vec![1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
+
+    let overlap = unsafe { ferray_stride_tricks::as_strided_unchecked(&source, &[3, 3], &[1, 1]) }
+        .expect("as_strided_unchecked");
+    assert_eq!(overlap.shape(), &[3, 3]);
+    assert_eq!(
+        overlap.iter().copied().collect::<Vec<_>>(),
+        vec![1.0, 2.0, 3.0, 2.0, 3.0, 4.0, 3.0, 4.0, 5.0]
+    );
+
+    let broadcast =
+        unsafe { ferray_stride_tricks::as_strided_signed_unchecked(&source, &[4], &[0], 2) }
+            .expect("as_strided_signed_unchecked");
+    assert_eq!(broadcast.shape(), &[4]);
+    assert_eq!(broadcast.iter().copied().collect::<Vec<_>>(), vec![3.0; 4]);
+}
+
 // ---------------------------------------------------------------------------
 // broadcast_to
 // ---------------------------------------------------------------------------
