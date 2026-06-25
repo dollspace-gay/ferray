@@ -83,6 +83,9 @@ Observed results:
 - Focused FFT conformance after clearing plan/helper/type-system/extension
   exclusions: `cargo test -p ferray-fft --test conformance_surface_coverage`
   and `cargo test -p ferray-fft` passed.
+- Focused autodiff conformance after clearing dual-number method/re-export
+  exclusions: `cargo test -p ferray-autodiff --test conformance_surface_coverage`
+  and `cargo test -p ferray-autodiff` passed.
 - Route/REQ-status mechanical count: `75` routed units and `75` files with
   `## REQ status`.
 
@@ -129,8 +132,8 @@ item has a conformance test, an exclusion, or a documented divergence. Some
 exclusions are still fixture/evidence debt rather than proof of direct NumPy
 parity.
 
-Current Rust direct-or-accepted surface evidence: 1,818 of 2,949 inventoried
-items, or 61.6%. The remaining 1,131 items are still represented by exclusion
+Current Rust direct-or-accepted surface evidence: 1,874 of 2,949 inventoried
+items, or 63.5%. The remaining 1,075 items are still represented by exclusion
 entries rather than direct conformance tests or accepted divergences.
 
 | Area | Evidence debt |
@@ -143,6 +146,7 @@ entries rather than direct conformance tests or accepted divergences.
 | `ferray-random` | No exclusion entries remain, down from 106 before the random-core and distribution/permutation evidence slices. Direct conformance tests now read `fixtures/random/distribution_moments.json` for the covered moment checks and directly cover the core `Generator`/`BitGenerator`/`SeedSequence` state surface, top-level and module re-exports, deterministic seeded construction, non-deterministic constructor sanity, state byte round-trips, byte draws, bounded integer draws, child spawning, uniform `random`/`random_f32`/`random_into`/`uniform_array`/`uniform_f32`, normal `normal`/`normal_f32`/`normal_array`/`lognormal`/`lognormal_f32`/`standard_normal_f32`/`standard_normal_into`/`standard_normal_parallel`, exponential `standard_exponential`/`standard_exponential_f32`/`standard_exponential_into`/`exponential_array`/`exponential_f32`, Poisson/binomial distribution moments, remaining discrete distributions (`geometric`, `hypergeometric`, `logseries`, `negative_binomial`, `poisson_array`, `zipf`), gamma-family helpers, miscellaneous continuous distributions, multivariate distribution shape/sum contracts, dynamic/range permutation helpers, concrete bit-generator state contracts, `SeedSequence`, and the internal ziggurat kernels through the public standard-normal paths. The added `logseries` evidence found and fixed an all-ones sampler bug. Random conformance remains distributional, not sample-exact, because Ferray's modern default bit-generator stream is not byte-identical to NumPy's modern `Generator` stream. |
 | `ferray-stride-tricks` | No exclusion entries remain. Direct fixture-backed tests still cover NumPy's `as_strided`, `broadcast_to`, `broadcast_arrays`, `broadcast_shapes`, and `sliding_window_view`, and direct conformance smoke tests now cover the `StridedSource` trait plus signed/unchecked stride APIs and overlap-skipping variants. |
 | `ferray-window` | No exclusion entries remain. Direct fixture-backed tests now cover crate-root and canonical `windows::*` paths for NumPy/SciPy window functions, direct functional utility paths for `vectorize`, `piecewise`, `apply_along_axis`, `apply_over_axes`, and `sum_axis_keepdims`, and the accepted `taylor` analytic-peak divergence remains documented. |
+| `ferray-autodiff` | No exclusion entries remain. Existing analytic fixture tests cover `derivative`, `gradient`, `jacobian`, array-aware autodiff helpers, and free `atan2`; additional conformance checks now cover the `DualNumber` canonical path, constructors, crate-root scalar-function re-exports, and every differentiable `DualNumber` method against its analytic forward-mode value/dual rule. |
 
 These are not proven inaccuracies by themselves, but they prevent an audit from
 saying every Rust public item is directly proven against a NumPy fixture.
@@ -186,8 +190,9 @@ without panicking inside ndarray.
 
 The current checked-in divergence tests do not expose open behavioral
 inaccuracies: all 909 historical divergence pins now pass. The tracked Python
-namespace/export gaps are closed. Conformance surface debt is closed for FFT,
-stride-tricks, IO, and window. Direct ufunc wrapper, operator-wrapper,
+namespace/export gaps are closed. Conformance surface debt is closed for
+autodiff, FFT, stride-tricks, IO, and window. Direct ufunc wrapper,
+operator-wrapper,
 first-class ufunc object/method,
 gap-function, arithmetic alias/reduction/promoted paths, integer `gcd`/`lcm`,
 special `i0`, interpolation, direct convolution, `unwrap`, `exp_fast`,
