@@ -4441,6 +4441,7 @@ def generate_ma_fixtures():
         return {
             "data": array_to_dict(np.array(result.data, dtype="bool"), "bool"),
             "mask": array_to_dict(np.ma.getmaskarray(result).astype("bool"), "bool"),
+            "fill_value": _serialize_value(result.fill_value),
         }
 
     cases = []

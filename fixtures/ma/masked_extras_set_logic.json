@@ -219,7 +219,8 @@
             4
           ],
           "dtype": "bool"
-        }
+        },
+        "fill_value": -7.0
       },
       "tolerance_ulps": 0
     },
@@ -302,7 +303,8 @@
             4
           ],
           "dtype": "bool"
-        }
+        },
+        "fill_value": -7.0
       },
       "tolerance_ulps": 0
     },
@@ -385,7 +387,8 @@
             4
           ],
           "dtype": "bool"
-        }
+        },
+        "fill_value": -7.0
       },
       "tolerance_ulps": 0
     },
@@ -468,7 +471,8 @@
             4
           ],
           "dtype": "bool"
-        }
+        },
+        "fill_value": -7.0
       },
       "tolerance_ulps": 0
     },
@@ -551,7 +555,8 @@
             4
           ],
           "dtype": "bool"
-        }
+        },
+        "fill_value": -7.0
       },
       "tolerance_ulps": 0
     },
@@ -634,7 +639,8 @@
             4
           ],
           "dtype": "bool"
-        }
+        },
+        "fill_value": -7.0
       },
       "tolerance_ulps": 0
     },

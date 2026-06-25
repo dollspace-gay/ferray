@@ -9495,6 +9495,18 @@ fn ma_compare<'py>(
     func: &str,
     a: &Bound<'py, PyAny>,
     b: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let np_ma = py.import("numpy")?.getattr("ma")?;
+    let left = to_numpy_ma_any(py, a)?;
+    let right = to_numpy_ma_any(py, b)?;
+    np_ma.getattr(func)?.call1((left, right))
+}
+
+fn ma_mask_or_op<'py>(
+    py: Python<'py>,
+    func: &str,
+    a: &Bound<'py, PyAny>,
+    b: &Bound<'py, PyAny>,
 ) -> PyResult<PyMaskedArray> {
     let np = py.import("numpy")?;
     let ma = coerce_to_ma(py, a)?;
@@ -9507,8 +9519,6 @@ fn ma_compare<'py>(
     let am_py = am.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
     let bd_py = bd.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
     let bm_py = bm.into_pyarray(py).map_err(ferr_to_pyerr)?.into_any();
-    // Comparison result data (bool) → stored as float64 (0.0/1.0) in the
-    // f64-only masked wrapper, matching numpy.ma.<cmp>'s boolean data values.
     let data_res = coerce_dtype(py, &np.getattr(func)?.call1((ad_py, bd_py))?, "float64")?;
     let mask_res = coerce_dtype(py, &np.call_method1("logical_or", (am_py, bm_py))?, "bool")?;
     let data_fa: ArrayD<f64> = data_res
@@ -9532,7 +9542,7 @@ macro_rules! ma_cmp {
             py: Python<'py>,
             a: &Bound<'py, PyAny>,
             b: &Bound<'py, PyAny>,
-        ) -> PyResult<PyMaskedArray> {
+        ) -> PyResult<Bound<'py, PyAny>> {
             ma_compare(py, $np, a, b)
         }
     };
@@ -9896,7 +9906,7 @@ macro_rules! ma_binop_orm {
             a: &Bound<'py, PyAny>,
             b: &Bound<'py, PyAny>,
         ) -> PyResult<PyMaskedArray> {
-            ma_compare(py, $np, a, b)
+            ma_mask_or_op(py, $np, a, b)
         }
     };
 }

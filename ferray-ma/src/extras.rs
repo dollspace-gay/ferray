@@ -1884,7 +1884,9 @@ macro_rules! ma_cmp {
                 .collect();
             let data_arr = Array::from_vec(a.data().dim().clone(), data)?;
             let mask_arr: Array<bool, D> = Array::from_vec(a.mask().dim().clone(), mask)?;
-            MaskedArray::new(data_arr, mask_arr)
+            let mut out = MaskedArray::new(data_arr, mask_arr)?;
+            out.set_typed_fill_value(a.fill_value());
+            Ok(out)
         }
     };
 }

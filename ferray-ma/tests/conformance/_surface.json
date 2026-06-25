@@ -743,6 +743,11 @@
       "signature": "pub const fn fill_value (& self) -> T where T : Copy ,"
     },
     {
+      "path": "ferray_ma::masked_array::MaskedArray::fill_value_as",
+      "kind": "method",
+      "signature": "pub fn fill_value_as < U : Element + Copy > (& self) -> Option < U >"
+    },
+    {
       "path": "ferray_ma::masked_array::MaskedArray::from_data",
       "kind": "method",
       "signature": "pub fn from_data (data : Array < T , D >) -> FerrayResult < Self >"

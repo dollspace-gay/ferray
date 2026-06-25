@@ -237,3 +237,23 @@ def test_comparison_does_not_propagate_fill():
     fa = _fr_with_fill([1.0, 2.0, 3.0], [0, 1, 0], 9.0)
     na = _np_with_fill([1.0, 2.0, 3.0], [0, 1, 0], 9.0)
     assert (fa > 1).fill_value == (na > 1).fill_value
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["equal", "not_equal", "less", "less_equal", "greater", "greater_equal"],
+)
+def test_module_comparison_preserves_materialized_numeric_fill(name):
+    # numpy.ma.<comparison> helpers preserve a materialized numeric _fill_value
+    # even though the comparison result itself has dtype bool.
+    fa = _fr_with_fill([1.0, 2.0, 3.0], [0, 1, 0], 123.5)
+    na = _np_with_fill([1.0, 2.0, 3.0], [0, 1, 0], 123.5)
+
+    got = getattr(fr.ma, name)(fa, 1.0)
+    exp = getattr(np.ma, name)(na, 1.0)
+
+    assert str(got.dtype) == str(exp.dtype) == "bool"
+    np.testing.assert_array_equal(np.ma.getdata(got), np.ma.getdata(exp))
+    np.testing.assert_array_equal(np.ma.getmaskarray(got), np.ma.getmaskarray(exp))
+    assert got.fill_value == exp.fill_value
+    assert np.asarray(got.filled()).dtype == np.asarray(exp.filled()).dtype == object

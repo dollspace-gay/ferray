@@ -307,11 +307,23 @@ fn assert_masked_bool_all_data_matches<D: Dimension>(
         "{case_name}: mask"
     );
     if let Some(expected_fill_value) = expected.get("fill_value") {
-        assert_eq!(
-            actual.fill_value(),
-            expected_fill_value.as_bool().unwrap(),
-            "{case_name}: fill_value"
-        );
+        if let Some(expected_bool) = expected_fill_value.as_bool() {
+            assert_eq!(
+                actual.fill_value(),
+                expected_bool,
+                "{case_name}: fill_value"
+            );
+        } else {
+            let actual_typed = actual
+                .fill_value_as::<f64>()
+                .unwrap_or_else(|| panic!("{case_name}: missing f64 typed fill_value"));
+            assert_f64_ulp(
+                actual_typed,
+                parse_f64_value(expected_fill_value),
+                MIN_ULP_TOLERANCE,
+                &format!("{case_name} typed fill_value"),
+            );
+        }
     }
 }
 
@@ -1533,6 +1545,7 @@ fn masked_extras_methods_match_numpy() {
 /// `ferray_ma::masked_array::MaskedArray::size`,
 /// `ferray_ma::masked_array::MaskedArray::dim`,
 /// `ferray_ma::masked_array::MaskedArray::fill_value`,
+/// `ferray_ma::masked_array::MaskedArray::fill_value_as`,
 /// `ferray_ma::masked_array::MaskedArray::set_fill_value`,
 /// `ferray_ma::masked_array::MaskedArray::with_fill_value`,
 /// `ferray_ma::masked_array::MaskedArray::has_real_mask`,

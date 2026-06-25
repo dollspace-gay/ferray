@@ -26,6 +26,36 @@ use ferray_core::dimension::Dimension;
 use ferray_core::dtype::{DType, Element};
 use ferray_core::error::{FerrayError, FerrayResult};
 
+#[derive(Clone)]
+pub(crate) struct TypedFillValue {
+    dtype: DType,
+    value: Arc<dyn Any + Send + Sync>,
+}
+
+impl TypedFillValue {
+    fn new<U: Element + Copy>(value: U) -> Self {
+        Self {
+            dtype: U::dtype(),
+            value: Arc::new(value),
+        }
+    }
+
+    fn get<U: Element + Copy>(&self) -> Option<U> {
+        if self.dtype != U::dtype() {
+            return None;
+        }
+        self.value.as_ref().downcast_ref::<U>().copied()
+    }
+}
+
+impl std::fmt::Debug for TypedFillValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TypedFillValue")
+            .field("dtype", &self.dtype)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Default fill value for an element type, mirroring numpy's
 /// `default_filler` dict (`numpy/ma/core.py:163-174`):
 ///
@@ -154,6 +184,14 @@ pub struct MaskedArray<T: Element, D: Dimension> {
     /// Defaults to numpy's per-dtype `default_filler` (`1e20` float / `999999`
     /// int / `true` bool); see [`default_fill_value`].
     pub(crate) fill_value: T,
+    /// Optional NumPy-style typed fill metadata.
+    ///
+    /// NumPy comparison results have `dtype=bool` but may carry the numeric
+    /// left operand's `_fill_value` (for example `np.float64(-7.0)`). Rust's
+    /// `MaskedArray<bool>` still exposes a normal boolean [`Self::fill_value`]
+    /// for statically typed operations, while this side channel preserves the
+    /// typed metadata needed for NumPy parity.
+    typed_fill_value: Option<TypedFillValue>,
 }
 
 impl<T: Element, D: Dimension> std::fmt::Debug for MaskedArray<T, D> {
@@ -163,6 +201,7 @@ impl<T: Element, D: Dimension> std::fmt::Debug for MaskedArray<T, D> {
             .field("real_mask", &self.real_mask)
             .field("hard_mask", &self.hard_mask)
             .field("fill_value", &self.fill_value)
+            .field("typed_fill_value", &self.typed_fill_value)
             .finish_non_exhaustive()
     }
 }
@@ -184,6 +223,7 @@ impl<T: Element + Clone, D: Dimension> Clone for MaskedArray<T, D> {
             real_mask: self.real_mask,
             hard_mask: self.hard_mask,
             fill_value: self.fill_value.clone(),
+            typed_fill_value: self.typed_fill_value.clone(),
         }
     }
 }
@@ -215,6 +255,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
             real_mask: true,
             hard_mask: false,
             fill_value,
+            typed_fill_value: None,
         })
     }
 
@@ -237,6 +278,7 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
             real_mask: false,
             hard_mask: false,
             fill_value,
+            typed_fill_value: None,
         })
     }
 
@@ -263,6 +305,19 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
         self.fill_value
     }
 
+    /// Return the active fill value as a requested element type.
+    ///
+    /// This is mostly relevant for NumPy comparison parity: a boolean result
+    /// can carry a numeric `_fill_value` inherited from the left operand. If
+    /// typed metadata exists, this returns it only when `U` matches that stored
+    /// dtype. Otherwise it falls back to the statically stored `T` fill value.
+    pub fn fill_value_as<U: Element + Copy>(&self) -> Option<U> {
+        if let Some(typed) = &self.typed_fill_value {
+            return typed.get::<U>();
+        }
+        (&self.fill_value as &dyn Any).downcast_ref::<U>().copied()
+    }
+
     /// Set the fill value, returning the modified array.
     ///
     /// The fill value is used by [`MaskedArray::filled`] (when called
@@ -271,12 +326,18 @@ impl<T: Element, D: Dimension> MaskedArray<T, D> {
     #[must_use]
     pub fn with_fill_value(mut self, fill_value: T) -> Self {
         self.fill_value = fill_value;
+        self.typed_fill_value = None;
         self
     }
 
     /// Replace the fill value in place.
     pub fn set_fill_value(&mut self, fill_value: T) {
         self.fill_value = fill_value;
+        self.typed_fill_value = None;
+    }
+
+    pub(crate) fn set_typed_fill_value<U: Element + Copy>(&mut self, fill_value: U) {
+        self.typed_fill_value = Some(TypedFillValue::new(fill_value));
     }
 
     /// Return a reference to the underlying data array.
