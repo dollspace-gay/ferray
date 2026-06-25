@@ -86,6 +86,9 @@ Observed results:
 - Focused autodiff conformance after clearing dual-number method/re-export
   exclusions: `cargo test -p ferray-autodiff --test conformance_surface_coverage`
   and `cargo test -p ferray-autodiff` passed.
+- Focused stats conformance after clearing crate-root re-export exclusions:
+  `cargo test -p ferray-stats --test conformance_surface_coverage` and
+  `cargo test -p ferray-stats` passed.
 - Route/REQ-status mechanical count: `75` routed units and `75` files with
   `## REQ status`.
 
@@ -132,8 +135,8 @@ item has a conformance test, an exclusion, or a documented divergence. Some
 exclusions are still fixture/evidence debt rather than proof of direct NumPy
 parity.
 
-Current Rust direct-or-accepted surface evidence: 1,874 of 2,949 inventoried
-items, or 63.5%. The remaining 1,075 items are still represented by exclusion
+Current Rust direct-or-accepted surface evidence: 1,974 of 2,949 inventoried
+items, or 66.9%. The remaining 975 items are still represented by exclusion
 entries rather than direct conformance tests or accepted divergences.
 
 | Area | Evidence debt |
@@ -147,6 +150,7 @@ entries rather than direct conformance tests or accepted divergences.
 | `ferray-stride-tricks` | No exclusion entries remain. Direct fixture-backed tests still cover NumPy's `as_strided`, `broadcast_to`, `broadcast_arrays`, `broadcast_shapes`, and `sliding_window_view`, and direct conformance smoke tests now cover the `StridedSource` trait plus signed/unchecked stride APIs and overlap-skipping variants. |
 | `ferray-window` | No exclusion entries remain. Direct fixture-backed tests now cover crate-root and canonical `windows::*` paths for NumPy/SciPy window functions, direct functional utility paths for `vectorize`, `piecewise`, `apply_along_axis`, `apply_over_axes`, and `sum_axis_keepdims`, and the accepted `taylor` analytic-peak divergence remains documented. |
 | `ferray-autodiff` | No exclusion entries remain. Existing analytic fixture tests cover `derivative`, `gradient`, `jacobian`, array-aware autodiff helpers, and free `atan2`; additional conformance checks now cover the `DualNumber` canonical path, constructors, crate-root scalar-function re-exports, and every differentiable `DualNumber` method against its analytic forward-mode value/dual rule. |
+| `ferray-stats` | No exclusion entries remain. Existing fixture-backed and inline conformance tests cover reductions, NaN-aware reductions, quantiles, sorting, searching, set operations, histograms, correlation/covariance, descriptive statistics, and hypothesis tests through canonical inner paths; additional root-surface conformance now compile-checks every crate-root re-export alias and compares representative root aliases to their canonical implementations. |
 
 These are not proven inaccuracies by themselves, but they prevent an audit from
 saying every Rust public item is directly proven against a NumPy fixture.
@@ -191,7 +195,7 @@ without panicking inside ndarray.
 The current checked-in divergence tests do not expose open behavioral
 inaccuracies: all 909 historical divergence pins now pass. The tracked Python
 namespace/export gaps are closed. Conformance surface debt is closed for
-autodiff, FFT, stride-tricks, IO, and window. Direct ufunc wrapper,
+autodiff, FFT, stats, stride-tricks, IO, and window. Direct ufunc wrapper,
 operator-wrapper,
 first-class ufunc object/method,
 gap-function, arithmetic alias/reduction/promoted paths, integer `gcd`/`lcm`,
