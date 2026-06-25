@@ -13,7 +13,7 @@
 //! tolerance 0.02–0.10).
 
 use ferray_core::Array;
-use ferray_core::dimension::{Ix1, IxDyn};
+use ferray_core::dimension::{Ix1, Ix2, IxDyn};
 use serde::Deserialize;
 
 use ferray_random::{
@@ -677,4 +677,361 @@ fn standard_normal_2d_shape_moments() {
     let (mean, var) = mean_var_f64(s);
     assert!(mean.abs() < 0.05);
     assert!((var - 1.0).abs() < 0.05);
+}
+
+// ---------------------------------------------------------------------------
+// Remaining discrete distributions: direct moment/range/shape evidence.
+//
+// Covers:
+//   - `ferray_random::distributions::discrete::Generator::geometric`
+//   - `ferray_random::distributions::discrete::Generator::hypergeometric`
+//   - `ferray_random::distributions::discrete::Generator::logseries`
+//   - `ferray_random::distributions::discrete::Generator::negative_binomial`
+//   - `ferray_random::distributions::discrete::Generator::poisson_array`
+//   - `ferray_random::distributions::discrete::Generator::zipf`
+// ---------------------------------------------------------------------------
+#[test]
+fn remaining_discrete_distributions_match_numpy_contracts() {
+    let n = 100_000usize;
+
+    let mut rng = default_rng_seeded(100);
+    let geometric = rng.geometric(0.25, n).expect("geometric");
+    let s = geometric.as_slice().unwrap();
+    let (mean, var) = mean_var_i64(s);
+    assert!((mean - 4.0).abs() < 0.12, "geometric mean={mean}");
+    assert!((var - 12.0).abs() < 0.7, "geometric var={var}");
+    assert!(s.iter().all(|&x| x >= 1));
+
+    let mut rng = default_rng_seeded(101);
+    let hyper = rng.hypergeometric(30, 70, 10, n).expect("hypergeometric");
+    let s = hyper.as_slice().unwrap();
+    let (mean, var) = mean_var_i64(s);
+    assert!((mean - 3.0).abs() < 0.08, "hypergeometric mean={mean}");
+    assert!(
+        (var - 1.909_090_909).abs() < 0.18,
+        "hypergeometric var={var}"
+    );
+    assert!(s.iter().all(|&x| (0..=10).contains(&x)));
+
+    let mut rng = default_rng_seeded(102);
+    let negative = rng
+        .negative_binomial(5.0, 0.4, n)
+        .expect("negative_binomial");
+    let s = negative.as_slice().unwrap();
+    let (mean, var) = mean_var_i64(s);
+    assert!((mean - 7.5).abs() < 0.2, "negative_binomial mean={mean}");
+    assert!((var - 18.75).abs() < 1.2, "negative_binomial var={var}");
+    assert!(s.iter().all(|&x| x >= 0));
+
+    let mut rng = default_rng_seeded(103);
+    let logseries = rng.logseries(0.6, 10_000).expect("logseries");
+    let s = logseries.as_slice().unwrap();
+    assert_eq!(logseries.shape(), &[10_000]);
+    assert!(s.iter().all(|&x| x >= 1));
+    assert!(s.iter().any(|&x| x > 1));
+
+    let mut rng = default_rng_seeded(104);
+    let zipf = rng.zipf(2.5, 10_000).expect("zipf");
+    let s = zipf.as_slice().unwrap();
+    assert_eq!(zipf.shape(), &[10_000]);
+    assert!(s.iter().all(|&x| x >= 1));
+    assert!(s.iter().any(|&x| x > 1));
+
+    let mut rng = default_rng_seeded(105);
+    let lam = Array::<f64, IxDyn>::from_vec(IxDyn::new(&[4]), vec![0.0, 1.0, 5.0, 12.0]).unwrap();
+    let poisson = rng.poisson_array(&lam).expect("poisson_array");
+    assert_eq!(poisson.shape(), &[4]);
+    let s = poisson.as_slice().unwrap();
+    assert_eq!(s[0], 0);
+    assert!(s.iter().all(|&x| x >= 0));
+}
+
+// ---------------------------------------------------------------------------
+// Remaining gamma-family distributions.
+//
+// Covers:
+//   - `ferray_random::distributions::gamma::Generator::chisquare`
+//   - `ferray_random::distributions::gamma::Generator::f`
+//   - `ferray_random::distributions::gamma::Generator::noncentral_chisquare`
+//   - `ferray_random::distributions::gamma::Generator::noncentral_f`
+//   - `ferray_random::distributions::gamma::Generator::standard_gamma`
+//   - `ferray_random::distributions::gamma::Generator::standard_t`
+//   - `ferray_random::distributions::gamma::Generator::student_t`
+// ---------------------------------------------------------------------------
+#[test]
+fn remaining_gamma_family_distributions_match_numpy_contracts() {
+    let n = 100_000usize;
+
+    let mut rng = default_rng_seeded(120);
+    let standard_gamma = rng.standard_gamma(2.0, n).expect("standard_gamma");
+    let (mean, var) = mean_var_f64(standard_gamma.as_slice().unwrap());
+    assert!((mean - 2.0).abs() < 0.08, "standard_gamma mean={mean}");
+    assert!((var - 2.0).abs() < 0.15, "standard_gamma var={var}");
+
+    let mut rng = default_rng_seeded(121);
+    let chisquare = rng.chisquare(4.0, n).expect("chisquare");
+    let (mean, var) = mean_var_f64(chisquare.as_slice().unwrap());
+    assert!((mean - 4.0).abs() < 0.12, "chisquare mean={mean}");
+    assert!((var - 8.0).abs() < 0.45, "chisquare var={var}");
+
+    let mut rng = default_rng_seeded(122);
+    let f_dist = rng.f(5.0, 10.0, n).expect("f");
+    let s = f_dist.as_slice().unwrap();
+    let mean = s.iter().sum::<f64>() / n as f64;
+    assert!((mean - 1.25).abs() < 0.1, "f mean={mean}");
+    assert!(s.iter().all(|&x| x >= 0.0 && x.is_finite()));
+
+    let mut rng = default_rng_seeded(123);
+    let student = rng.student_t(8.0, n).expect("student_t");
+    let (mean, var) = mean_var_f64(student.as_slice().unwrap());
+    assert!(mean.abs() < 0.06, "student_t mean={mean}");
+    assert!((var - (8.0 / 6.0)).abs() < 0.18, "student_t var={var}");
+
+    let mut a = default_rng_seeded(124);
+    let mut b = default_rng_seeded(124);
+    let student = a.student_t(6.0, 256).expect("student_t");
+    let standard = b.standard_t(6.0, 256).expect("standard_t");
+    assert_eq!(student.as_slice().unwrap(), standard.as_slice().unwrap());
+
+    let mut rng = default_rng_seeded(125);
+    let noncentral_chi = rng
+        .noncentral_chisquare(3.0, 2.0, n)
+        .expect("noncentral_chisquare");
+    let s = noncentral_chi.as_slice().unwrap();
+    let mean = s.iter().sum::<f64>() / n as f64;
+    assert!(
+        (mean - 5.0).abs() < 0.16,
+        "noncentral_chisquare mean={mean}"
+    );
+    assert!(s.iter().all(|&x| x >= 0.0));
+
+    let mut rng = default_rng_seeded(126);
+    let noncentral_f = rng
+        .noncentral_f(5.0, 12.0, 2.0, 10_000)
+        .expect("noncentral_f");
+    assert_eq!(noncentral_f.shape(), &[10_000]);
+    assert!(
+        noncentral_f
+            .as_slice()
+            .unwrap()
+            .iter()
+            .all(|&x| x >= 0.0 && x.is_finite())
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Miscellaneous continuous distributions.
+//
+// Covers:
+//   - `ferray_random::distributions::misc_continuous::Generator::gumbel`
+//   - `ferray_random::distributions::misc_continuous::Generator::laplace`
+//   - `ferray_random::distributions::misc_continuous::Generator::logistic`
+//   - `ferray_random::distributions::misc_continuous::Generator::pareto`
+//   - `ferray_random::distributions::misc_continuous::Generator::power`
+//   - `ferray_random::distributions::misc_continuous::Generator::rayleigh`
+//   - `ferray_random::distributions::misc_continuous::Generator::standard_cauchy`
+//   - `ferray_random::distributions::misc_continuous::Generator::triangular`
+//   - `ferray_random::distributions::misc_continuous::Generator::vonmises`
+//   - `ferray_random::distributions::misc_continuous::Generator::wald`
+//   - `ferray_random::distributions::misc_continuous::Generator::weibull`
+// ---------------------------------------------------------------------------
+#[test]
+fn misc_continuous_distributions_match_numpy_contracts() {
+    let n = 50_000usize;
+
+    let mut rng = default_rng_seeded(140);
+    let laplace = rng.laplace(2.0, 3.0, n).expect("laplace");
+    let (mean, var) = mean_var_f64(laplace.as_slice().unwrap());
+    assert!((mean - 2.0).abs() < 0.15, "laplace mean={mean}");
+    assert!((var - 18.0).abs() < 1.2, "laplace var={var}");
+
+    let mut rng = default_rng_seeded(141);
+    let logistic = rng.logistic(1.5, 2.0, n).expect("logistic");
+    let (mean, _) = mean_var_f64(logistic.as_slice().unwrap());
+    assert!((mean - 1.5).abs() < 0.18, "logistic mean={mean}");
+
+    let mut rng = default_rng_seeded(142);
+    let rayleigh = rng.rayleigh(2.0, n).expect("rayleigh");
+    let s = rayleigh.as_slice().unwrap();
+    assert!(s.iter().all(|&x| x >= 0.0));
+    let mean = s.iter().sum::<f64>() / n as f64;
+    assert!(
+        (mean - (2.0 * (std::f64::consts::PI / 2.0).sqrt())).abs() < 0.08,
+        "rayleigh mean={mean}"
+    );
+
+    let mut rng = default_rng_seeded(143);
+    let weibull = rng.weibull(1.5, 10_000).expect("weibull");
+    assert!(weibull.as_slice().unwrap().iter().all(|&x| x >= 0.0));
+
+    let mut rng = default_rng_seeded(144);
+    let pareto = rng.pareto(3.0, 10_000).expect("pareto");
+    assert!(pareto.as_slice().unwrap().iter().all(|&x| x >= 0.0));
+
+    let mut rng = default_rng_seeded(145);
+    let gumbel = rng.gumbel(0.0, 1.0, n).expect("gumbel");
+    let mean = gumbel.as_slice().unwrap().iter().sum::<f64>() / n as f64;
+    assert!((mean - 0.577_215_664_9).abs() < 0.08, "gumbel mean={mean}");
+
+    let mut rng = default_rng_seeded(146);
+    let power = rng.power(2.5, 10_000).expect("power");
+    assert!(
+        power
+            .as_slice()
+            .unwrap()
+            .iter()
+            .all(|&x| (0.0..=1.0).contains(&x))
+    );
+
+    let mut rng = default_rng_seeded(147);
+    let triangular = rng.triangular(-2.0, 0.5, 4.0, 10_000).expect("triangular");
+    assert!(
+        triangular
+            .as_slice()
+            .unwrap()
+            .iter()
+            .all(|&x| (-2.0..=4.0).contains(&x))
+    );
+
+    let mut rng = default_rng_seeded(148);
+    let vonmises = rng.vonmises(0.25, 2.0, 10_000).expect("vonmises");
+    assert!(vonmises.as_slice().unwrap().iter().all(|&x| x.is_finite()));
+
+    let mut rng = default_rng_seeded(149);
+    let wald = rng.wald(2.0, 3.0, 10_000).expect("wald");
+    assert!(wald.as_slice().unwrap().iter().all(|&x| x > 0.0));
+
+    let mut rng = default_rng_seeded(150);
+    let cauchy = rng.standard_cauchy(10_000).expect("standard_cauchy");
+    let s = cauchy.as_slice().unwrap();
+    assert!(s.iter().all(|&x| x.is_finite()));
+    assert!(s.iter().any(|&x| x < 0.0) && s.iter().any(|&x| x > 0.0));
+}
+
+// ---------------------------------------------------------------------------
+// Multivariate distributions.
+//
+// Covers:
+//   - `ferray_random::distributions::multivariate::Generator::dirichlet`
+//   - `ferray_random::distributions::multivariate::Generator::multinomial`
+//   - `ferray_random::distributions::multivariate::Generator::multivariate_hypergeometric`
+//   - `ferray_random::distributions::multivariate::Generator::multivariate_normal`
+//   - `ferray_random::distributions::multivariate::Generator::multivariate_normal_array`
+// ---------------------------------------------------------------------------
+#[test]
+fn multivariate_distributions_match_numpy_shape_and_sum_contracts() {
+    let mut rng = default_rng_seeded(160);
+    let multinomial = rng
+        .multinomial(20, &[0.2, 0.3, 0.5], 64)
+        .expect("multinomial");
+    assert_eq!(multinomial.shape(), &[64, 3]);
+    for row in multinomial.as_slice().unwrap().chunks_exact(3) {
+        assert_eq!(row.iter().sum::<i64>(), 20);
+        assert!(row.iter().all(|&x| x >= 0));
+    }
+
+    let mut rng = default_rng_seeded(161);
+    let dirichlet = rng.dirichlet(&[0.5, 1.5, 3.0], 64).expect("dirichlet");
+    assert_eq!(dirichlet.shape(), &[64, 3]);
+    for row in dirichlet.as_slice().unwrap().chunks_exact(3) {
+        assert!((row.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+        assert!(row.iter().all(|&x| x >= 0.0));
+    }
+
+    let mut rng = default_rng_seeded(162);
+    let mvhg = rng
+        .multivariate_hypergeometric(&[10, 20, 30], 12, 64)
+        .expect("multivariate_hypergeometric");
+    assert_eq!(mvhg.shape(), &[64, 3]);
+    for row in mvhg.as_slice().unwrap().chunks_exact(3) {
+        assert_eq!(row.iter().sum::<i64>(), 12);
+        assert!((0..=10).contains(&row[0]));
+        assert!((0..=20).contains(&row[1]));
+        assert!((0..=30).contains(&row[2]));
+    }
+
+    let mut rng = default_rng_seeded(163);
+    let mvn = rng
+        .multivariate_normal(&[1.0, -2.0], &[1.0, 0.25, 0.25, 2.0], 20_000)
+        .expect("multivariate_normal");
+    assert_eq!(mvn.shape(), &[20_000, 2]);
+    let mut mean0 = 0.0;
+    let mut mean1 = 0.0;
+    for row in mvn.as_slice().unwrap().chunks_exact(2) {
+        mean0 += row[0];
+        mean1 += row[1];
+    }
+    mean0 /= 20_000.0;
+    mean1 /= 20_000.0;
+    assert!((mean0 - 1.0).abs() < 0.04, "mvn mean0={mean0}");
+    assert!((mean1 + 2.0).abs() < 0.06, "mvn mean1={mean1}");
+
+    let mut rng = default_rng_seeded(164);
+    let mean = Array::<f64, Ix1>::from_vec(Ix1::new([2]), vec![1.0, -2.0]).unwrap();
+    let cov = Array::<f64, Ix2>::from_vec(Ix2::new([2, 2]), vec![1.0, 0.25, 0.25, 2.0]).unwrap();
+    let mvn_array = rng
+        .multivariate_normal_array(&mean, &cov, 128)
+        .expect("multivariate_normal_array");
+    assert_eq!(mvn_array.shape(), &[128, 2]);
+    assert!(mvn_array.as_slice().unwrap().iter().all(|&x| x.is_finite()));
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic permutation helpers.
+//
+// Covers:
+//   - `ferray_random::permutations::Generator::choice_dyn`
+//   - `ferray_random::permutations::Generator::permutation_range`
+//   - `ferray_random::permutations::Generator::permuted`
+//   - `ferray_random::permutations::Generator::permuted_dyn`
+//   - `ferray_random::permutations::Generator::shuffle_dyn`
+// ---------------------------------------------------------------------------
+#[test]
+fn dynamic_permutation_helpers_match_numpy_shape_and_multiset_contracts() {
+    let mut rng = default_rng_seeded(180);
+    let range = rng.permutation_range(32).expect("permutation_range");
+    let mut got = range.as_slice().unwrap().to_vec();
+    got.sort_unstable();
+    assert_eq!(got, (0..32).collect::<Vec<i64>>());
+
+    let source = Array::<i64, Ix1>::from_vec(Ix1::new([8]), (0..8).collect()).unwrap();
+    let permuted = rng.permuted(&source, 0).expect("permuted");
+    let mut got = permuted.as_slice().unwrap().to_vec();
+    got.sort_unstable();
+    assert_eq!(got, (0..8).collect::<Vec<i64>>());
+    assert_eq!(source.as_slice().unwrap(), &(0..8).collect::<Vec<i64>>());
+
+    let mut matrix = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[3, 4]), (0..12).collect()).unwrap();
+    rng.shuffle_dyn(&mut matrix, 0).expect("shuffle_dyn");
+    let mut rows = matrix
+        .as_slice()
+        .unwrap()
+        .chunks_exact(4)
+        .map(<[i64]>::to_vec)
+        .collect::<Vec<_>>();
+    rows.sort();
+    assert_eq!(
+        rows,
+        vec![vec![0, 1, 2, 3], vec![4, 5, 6, 7], vec![8, 9, 10, 11]]
+    );
+
+    let arr = Array::<i64, IxDyn>::from_vec(IxDyn::new(&[3, 4]), (0..12).collect()).unwrap();
+    let chosen = rng
+        .choice_dyn(&arr, 2, false, None, 0, false)
+        .expect("choice_dyn");
+    assert_eq!(chosen.shape(), &[2, 4]);
+    let chosen_values = chosen.as_slice().unwrap();
+    for row in chosen_values.chunks_exact(4) {
+        assert!(row == [0, 1, 2, 3] || row == [4, 5, 6, 7] || row == [8, 9, 10, 11]);
+    }
+
+    let independently_permuted = rng.permuted_dyn(&arr, 0).expect("permuted_dyn");
+    assert_eq!(independently_permuted.shape(), &[3, 4]);
+    for col in 0..4 {
+        let mut values = (0..3)
+            .map(|row| independently_permuted.as_slice().unwrap()[row * 4 + col])
+            .collect::<Vec<_>>();
+        values.sort_unstable();
+        assert_eq!(values, vec![col as i64, (col + 4) as i64, (col + 8) as i64]);
+    }
 }

@@ -424,31 +424,23 @@ impl<B: BitGenerator> Generator<B> {
                 "p must be in (0, 1), got {p}"
             )));
         }
-        let r = (-(-p).ln_1p()).recip();
         let shape_vec = size.into_shape()?;
         let total = shape_size(&shape_vec);
         let data = generate_vec_i64(self, total, |bg| {
-            // Kemp's "second" algorithm for the logarithmic distribution.
-            // See Devroye, "Non-Uniform Random Variate Generation", p. 548.
-            loop {
-                let u = bg.next_f64();
-                if u <= f64::EPSILON || u >= 1.0 - f64::EPSILON {
-                    continue;
+            let u = bg.next_f64();
+            let norm = -1.0 / (-p).ln_1p();
+            let mut k = 1_i64;
+            let mut prob = norm * p;
+            let mut cdf = prob;
+            while u > cdf {
+                k += 1;
+                prob *= p * ((k - 1) as f64) / (k as f64);
+                if prob <= 0.0 || k == i64::MAX {
+                    return k;
                 }
-                let v = bg.next_f64();
-                let q = 1.0 - (-r.recip() * u.ln()).exp();
-                if q <= 0.0 {
-                    return 1;
-                }
-                if v < q * q {
-                    let k = (1.0 + v.log(q)).floor() as i64;
-                    return k.max(1);
-                }
-                if v < q {
-                    return 2;
-                }
-                return 1;
+                cdf += prob;
             }
+            k
         });
         vec_to_array_i64(data, &shape_vec)
     }
