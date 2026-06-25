@@ -6,96 +6,6 @@
 # reference; each row carries a non-generic reason.
 
 [[exclusion]]
-path = "ferray_random::BitGenerator"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::Generator"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::IntoShape"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::MT19937"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::Pcg64"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::Pcg64Dxsm"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::Philox"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::SeedSequence"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::Sfc64"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::Xoshiro256StarStar"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::BitGenerator"
-reason = "Trait declaration; user-facing distribution methods that depend on it are exercised by the moment tests in tests/conformance_random.rs."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::MT19937"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::Pcg64"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::Pcg64Dxsm"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::Philox"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::SeedSequence"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::Sfc64"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::Xoshiro256StarStar"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
 path = "ferray_random::bitgen::mt19937::MT19937"
 reason = "Struct declaration; constructors and methods are covered by the Generator moment tests in tests/conformance_random.rs (BitGenerator state advances on every sample)."
 covered_by = "tests/conformance_random.rs"
@@ -121,46 +31,6 @@ reason = "Struct declaration; constructors and methods are covered by the Genera
 covered_by = "tests/conformance_random.rs"
 
 [[exclusion]]
-path = "ferray_random::bitgen::seed_sequence::SeedSequence::entropy"
-reason = "Method on SeedSequence; seeding correctness is exercised transitively by default_rng_seeded determinism in tests/conformance_random.rs."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::seed_sequence::SeedSequence::generate_state"
-reason = "Method on SeedSequence; seeding correctness is exercised transitively by default_rng_seeded determinism in tests/conformance_random.rs."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::seed_sequence::SeedSequence::generate_u64"
-reason = "Method on SeedSequence; seeding correctness is exercised transitively by default_rng_seeded determinism in tests/conformance_random.rs."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::seed_sequence::SeedSequence::new"
-reason = "Method on SeedSequence; seeding correctness is exercised transitively by default_rng_seeded determinism in tests/conformance_random.rs."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::seed_sequence::SeedSequence::seed"
-reason = "Method on SeedSequence; seeding correctness is exercised transitively by default_rng_seeded determinism in tests/conformance_random.rs."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::seed_sequence::SeedSequence::spawn"
-reason = "Method on SeedSequence; seeding correctness is exercised transitively by default_rng_seeded determinism in tests/conformance_random.rs."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::seed_sequence::SeedSequence::spawn_key"
-reason = "Method on SeedSequence; seeding correctness is exercised transitively by default_rng_seeded determinism in tests/conformance_random.rs."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::bitgen::seed_sequence::SeedSequence::with_spawn_key"
-reason = "Method on SeedSequence; seeding correctness is exercised transitively by default_rng_seeded determinism in tests/conformance_random.rs."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
 path = "ferray_random::bitgen::sfc64::Sfc64"
 reason = "Struct declaration; constructors and methods are covered by the Generator moment tests in tests/conformance_random.rs (BitGenerator state advances on every sample)."
 covered_by = "tests/conformance_random.rs"
@@ -168,21 +38,6 @@ covered_by = "tests/conformance_random.rs"
 [[exclusion]]
 path = "ferray_random::bitgen::xoshiro256::Xoshiro256StarStar"
 reason = "Struct declaration; constructors and methods are covered by the Generator moment tests in tests/conformance_random.rs (BitGenerator state advances on every sample)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::default_rng"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::default_rng_seeded"
-reason = "Re-export of an inner item; the underlying definition is itself surfaced and covered (or excluded) on its own row."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::discrete::Generator::binomial"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
 covered_by = "tests/conformance_random.rs"
 
 [[exclusion]]
@@ -206,42 +61,12 @@ reason = "Method on Generator; the user-facing distribution surface is validated
 covered_by = "tests/conformance_random.rs"
 
 [[exclusion]]
-path = "ferray_random::distributions::discrete::Generator::poisson"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
 path = "ferray_random::distributions::discrete::Generator::poisson_array"
 reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
 covered_by = "tests/conformance_random.rs"
 
 [[exclusion]]
 path = "ferray_random::distributions::discrete::Generator::zipf"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::exponential::Generator::exponential_array"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::exponential::Generator::exponential_f32"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::exponential::Generator::standard_exponential"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::exponential::Generator::standard_exponential_f32"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::exponential::Generator::standard_exponential_into"
 reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
 covered_by = "tests/conformance_random.rs"
 
@@ -361,66 +186,6 @@ reason = "Method on Generator; the user-facing distribution surface is validated
 covered_by = "tests/conformance_random.rs"
 
 [[exclusion]]
-path = "ferray_random::distributions::normal::Generator::lognormal"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::normal::Generator::lognormal_f32"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::normal::Generator::normal"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::normal::Generator::normal_array"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::normal::Generator::normal_f32"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::normal::Generator::standard_normal_f32"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::normal::Generator::standard_normal_into"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::uniform::Generator::random"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::uniform::Generator::random_f32"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::uniform::Generator::random_into"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::uniform::Generator::uniform_array"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::distributions::uniform::Generator::uniform_f32"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
 path = "ferray_random::distributions::ziggurat::standard_normal_ziggurat"
 reason = "Internal ziggurat sampler used by Generator::standard_normal; correctness is observed via the standard_normal moment test in tests/conformance_random.rs."
 covered_by = "tests/conformance_random.rs"
@@ -428,81 +193,6 @@ covered_by = "tests/conformance_random.rs"
 [[exclusion]]
 path = "ferray_random::distributions::ziggurat::standard_normal_ziggurat_f32"
 reason = "Internal ziggurat sampler used by Generator::standard_normal; correctness is observed via the standard_normal moment test in tests/conformance_random.rs."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::Generator"
-reason = "Struct declaration; constructors and methods are covered by the Generator moment tests in tests/conformance_random.rs (BitGenerator state advances on every sample)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::Generator::bit_generator"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::Generator::bytes"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::Generator::new"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::Generator::next_f32"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::Generator::next_f64"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::Generator::next_u64"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::Generator::next_u64_bounded"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::Generator::set_state_bytes"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::Generator::state_bytes"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::default_rng"
-reason = "Free constructor for Generator; exercised by every test in tests/conformance_random.rs via default_rng_seeded."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::default_rng_seeded"
-reason = "Free constructor for Generator; exercised by every test in tests/conformance_random.rs via default_rng_seeded."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::generator::spawn_generators"
-reason = "Free spawn helper; the Generator-side wrapper ferray_random::parallel::Generator::spawn is the user-facing surface and is covered by the moment tests via default_rng_seeded reproducibility."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::parallel::Generator::spawn"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::parallel::Generator::standard_normal_parallel"
-reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
 covered_by = "tests/conformance_random.rs"
 
 [[exclusion]]
@@ -528,10 +218,5 @@ covered_by = "tests/conformance_random.rs"
 [[exclusion]]
 path = "ferray_random::permutations::Generator::shuffle_dyn"
 reason = "Method on Generator; the user-facing distribution surface is validated by the moment tests in tests/conformance_random.rs (mean/variance/range, not raw samples — Stage 1 plan)."
-covered_by = "tests/conformance_random.rs"
-
-[[exclusion]]
-path = "ferray_random::shape::IntoShape"
-reason = "Trait declaration; user-facing distribution methods that depend on it are exercised by the moment tests in tests/conformance_random.rs."
 covered_by = "tests/conformance_random.rs"
 
