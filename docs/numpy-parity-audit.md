@@ -100,6 +100,11 @@ Observed results:
   decomposition, solve/norm/product, complex, TRSM, and internal GEMM surface
   exclusions: `cargo test -p ferray-linalg --test conformance_surface_coverage`
   and `cargo test -p ferray-linalg` passed.
+- Focused core conformance after clearing array ownership/view, dtype/time,
+  dynamic-array, indexing, iterator, broadcast, op, writeback, record, and
+  feature-gated anchor exclusions: `cargo test -p ferray-core --test
+  conformance_surface_coverage` and `cargo test -p ferray-core --test
+  conformance_internal_surface` passed.
 - Route/REQ-status mechanical count: `75` routed units and `75` files with
   `## REQ status`.
 
@@ -146,12 +151,13 @@ item has a conformance test, an exclusion, or a documented divergence. Some
 exclusions are still fixture/evidence debt rather than proof of direct NumPy
 parity.
 
-Current Rust direct-or-accepted surface evidence: 2,460 of 2,949 inventoried
-items, or 83.4%. The remaining 489 items are still represented by exclusion
-entries rather than direct conformance tests or accepted divergences.
+Current Rust direct-or-accepted surface evidence: 2,949 of 2,949 inventoried
+items, or 100.0%. No inventoried Rust public items are still represented by
+exclusion entries rather than direct conformance tests or accepted divergences.
 
 | Area | Evidence debt |
 |---|---|
+| `ferray-core` | No exclusion entries remain. Existing fixture-backed and oracle conformance covers core creation, manipulation, indexing, dtype, reduction, casting, and property surfaces. Additional internal-surface conformance now directly exercises array ownership/view aliases and methods, raw buffer descriptors, print options, dtype predicates, datetime/timedelta unit semantics, finfo/iinfo, promoted and explicit casts, `I256`, `DynArray`, uninitialized array construction, error constructors, record descriptors, basic and advanced indexing methods, iterator/reduction/sort methods, broadcasting and in-place/copy operations, `NdIter`, and writeback guard semantics while explicitly anchoring feature-gated const-shape and chrono bridge paths. |
 | `ferray-ufunc` | No exclusion entries remain. Direct NumPy/SciPy-fixture-backed tests cover the `_into` arithmetic/trig/exp-log wrappers, operator-style arithmetic and bitwise wrappers (`array_add`, `array_sub`, `array_mul`, `array_div`, `array_rem`, `array_neg`, `array_bitand`, `array_bitor`, `array_bitxor`, `array_bitnot`, `array_shl`, `array_shr`), first-class ufunc objects and generic ufunc methods (`Ufunc`, `add_ufunc`, `subtract_ufunc`, `multiply_ufunc`, `divide_ufunc`, `reduce_all`, `reduce_axis`, `reduce_axis_keepdims`, `reduce_axes`, `accumulate_axis`, `ufunc_outer`, `at`), arithmetic broadcast aliases, promoted arithmetic paths, add/multiply reduction and NaN-reduction paths, `gcd`/`lcm` float-domain rejection plus `gcd_int`/`lcm_int` integer loops, special `i0` plus its scalar kernel, `around`, `fabs`, `floor_divide`, `fmod`, `hypot`, degree/radian conversions, `logaddexp`, `logaddexp2`, `positive`, `sign`, `true_divide`, `divmod`, interpolation (`interp`, `interp_one`), direct convolution (`ConvolveMode`, `convolve`), SciPy-backed FFT convolution (`fftconvolve`), `unwrap`, `exp_fast`, feature-gated direct f16 coverage for all crate-root f16 arithmetic, exp/log, float-intrinsic, rounding, special, and trig entry points plus canonical `ops::floatintrinsic::*_f16` paths, datetime/timedelta arithmetic and predicates (`isnat_datetime`, `isnat_timedelta`, `sub_datetime`, `add_datetime_timedelta`, `sub_datetime_timedelta`, `add_timedelta`, `sub_timedelta`, `sub_datetime_promoted`, `add_datetime_timedelta_promoted`, `add_timedelta_promoted`), NumPy `isscalar` array-input semantics, NaN extrema reductions (`nan_max_reduce`, `nan_max_reduce_all`, `nan_max_reduce_axes`, `nan_min_reduce`, `nan_min_reduce_all`, `nan_min_reduce_axes`), cumulative/difference/integration helpers (`cumsum`, `cumprod`, `cumulative_sum`, `cumulative_prod`, `nancumsum`, `nancumprod`, `diff`, `ediff1d`, `gradient`, `cross`, `trapezoid`), float manipulation/intrinsic helpers (`clip_ord`, `copysign`, `float_power`, `frexp`, `ldexp`, `modf`, `nextafter`, `spacing`, `isneginf`, `isposinf`, `signbit`), six comparison predicates plus their broadcast variants, `isclose`, `isclose_broadcast`, `allclose`, `array_equal`, `array_equiv`, logical operators, logical scalar and axis reductions, bitwise operators, shifts, `invert`, `bitwise_count`, complex accessors/predicates (`real`, `imag`, `angle`, `abs`, `conj`, `conjugate`, `iscomplex`, `isreal`, `iscomplexobj`, `isrealobj`, and real-input variants), complex transcendental/power functions, errstate state-management APIs (`geterr`, `seterr`, `with_errstate`, `ErrstateGuard`, `FpErrorClass`, `FpErrorState`, `record_fp_event`, `take_fp_events`, and `check_fp_errors`), and their inner canonical paths where exposed. Additional conformance now directly exercises the public internal dispatch/helper/fast-math/kernel surface, with the cfg-test-only `test_util::arr1` explicitly anchored as non-runtime helper surface. |
 | `ferray-polynomial` | No exclusion entries remain. Existing fixture-backed and inline conformance tests cover power-basis evaluation, fitting, roots, arithmetic, calculus, mapping, conversion, companion matrices, Vandermonde/least-squares helpers, polynomial extras, f32 power and wrapper types, and complex polynomial operations. Additional root-surface conformance now directly exercises crate-root type/trait/function re-exports, canonical per-basis constructor/domain/window/fit methods, power-basis inherent helpers, f32 method paths, complex method paths, and `traits::ToPowerBasis`/`traits::FromPowerBasis`; the accepted `Polynomial::fit` QR-vs-SVD precision divergence remains documented. |
 | `ferray-linalg` | No exclusion entries remain. Existing fixture-backed and oracle conformance covers matrix products, norms/measures, decompositions, solvers, inverse/pseudoinverse, rank/condition/determinant paths, f32 variants, and documented divergence pins. Additional internal-surface conformance now directly exercises root aliases, batch dispatch helpers, faer bridge conversions, product/norm/solve/decomposition aliases, complex matrix operations, einsum parser/optimizer types, portable GEMM dispatch checks, and TRSM primitives while explicitly anchoring architecture-, feature-, and packing-specific GEMM/f16/openblas implementation paths as the matmul/outer implementation surface they support. |
@@ -165,8 +171,9 @@ entries rather than direct conformance tests or accepted divergences.
 | `ferray-autodiff` | No exclusion entries remain. Existing analytic fixture tests cover `derivative`, `gradient`, `jacobian`, array-aware autodiff helpers, and free `atan2`; additional conformance checks now cover the `DualNumber` canonical path, constructors, crate-root scalar-function re-exports, and every differentiable `DualNumber` method against its analytic forward-mode value/dual rule. |
 | `ferray-stats` | No exclusion entries remain. Existing fixture-backed and inline conformance tests cover reductions, NaN-aware reductions, quantiles, sorting, searching, set operations, histograms, correlation/covariance, descriptive statistics, and hypothesis tests through canonical inner paths; additional root-surface conformance now compile-checks every crate-root re-export alias and compares representative root aliases to their canonical implementations. |
 
-These are not proven inaccuracies by themselves, but they prevent an audit from
-saying every Rust public item is directly proven against a NumPy fixture.
+The Rust surface manifests no longer carry exclusion-based evidence debt.
+Remaining items below are explicit behavioral or design parity gaps rather
+than uncovered inventoried public Rust items.
 
 One masked-array behavior gap is now explicit: for numeric operands, NumPy's
 comparison helpers return boolean masked arrays that can still carry the
@@ -208,7 +215,10 @@ without panicking inside ndarray.
 The current checked-in divergence tests do not expose open behavioral
 inaccuracies: all 909 historical divergence pins now pass. The tracked Python
 namespace/export gaps are closed. Conformance surface debt is closed for
-autodiff, FFT, linalg, polynomial, stats, stride-tricks, IO, ufunc, and window. Direct ufunc wrapper,
+autodiff, core, FFT, linalg, polynomial, stats, stride-tricks, IO, ufunc, and window. Core array
+ownership/view aliases, dtype/time surfaces, dynamic arrays, indexing,
+iterators, broadcast operations, writeback guards, record descriptors, and
+feature-gated anchors have reduced `ferray-core` exclusion debt to zero. Direct ufunc wrapper,
 operator-wrapper,
 first-class ufunc object/method,
 gap-function, arithmetic alias/reduction/promoted paths, integer `gcd`/`lcm`,
@@ -252,7 +262,7 @@ nanmin/nanmax all-NaN slices now return NaN like NumPy, and signed
 `bitwise_count` follows NumPy's absolute-value semantics, and IO
 datasource/memmap method coverage has reduced `ferray-io` exclusion debt to
 zero; window inner-path fixture and functional utility coverage has reduced
-`ferray-window` exclusion debt to zero. The remaining parity
-work recorded here is broader direct-fixture evidence debt in the Rust
-conformance manifests, plus known design gaps such as masked-array typed fill
-values and wiring ufunc kernels to emit floating-point events into errstate.
+`ferray-window` exclusion debt to zero. The remaining parity work recorded
+here is the known design/behavior gap set: masked-array typed fill values,
+wiring ufunc kernels to emit floating-point events into errstate, and
+negative-stride raw-view support.
