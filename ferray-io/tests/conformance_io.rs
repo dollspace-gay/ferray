@@ -9,8 +9,7 @@
 //! The single existing fixture (`fixtures/io/npy_dtypes.json`) is
 //! used for dtype-parsing conformance against numpy's `.npy` format.
 //! Extended fixture coverage for end-to-end numpy-generated .npy/.npz
-//! / text round-trips is tracked under the umbrella conformance
-//! issue filed alongside Stage 4 (see `_surface_exclusions.toml`).
+//! / text round-trips is captured by the package conformance suite.
 
 use std::io::Cursor;
 use std::path::PathBuf;
@@ -660,12 +659,20 @@ fn format_helpers_round_trip() {
 
 /// Covers `ferray_io::memmap::memmap_readonly`,
 /// `ferray_io::memmap::memmap_mut`, `ferray_io::memmap::open_memmap`,
-/// `ferray_io::memmap::MemmapArray` (with `as_slice`, `shape`,
-/// `to_array`, `view` methods), and `ferray_io::memmap::MemmapArrayMut`
-/// (with `as_slice`, `as_slice_mut`, `flush`, `shape`, `to_array`,
-/// `view` methods). The flow is: write an .npy via the standard save
-/// path, memory-map it read-only, exercise every method, then
-/// memory-map mutably and flush a change back.
+/// `ferray_io::memmap::MemmapArray`,
+/// `ferray_io::memmap::MemmapArray::as_slice`,
+/// `ferray_io::memmap::MemmapArray::shape`,
+/// `ferray_io::memmap::MemmapArray::to_array`,
+/// `ferray_io::memmap::MemmapArray::view`,
+/// `ferray_io::memmap::MemmapArrayMut`,
+/// `ferray_io::memmap::MemmapArrayMut::as_slice`,
+/// `ferray_io::memmap::MemmapArrayMut::as_slice_mut`,
+/// `ferray_io::memmap::MemmapArrayMut::flush`,
+/// `ferray_io::memmap::MemmapArrayMut::shape`,
+/// `ferray_io::memmap::MemmapArrayMut::to_array`, and
+/// `ferray_io::memmap::MemmapArrayMut::view`. The flow is: write an
+/// .npy via the standard save path, memory-map it read-only, exercise
+/// every method, then memory-map mutably and flush a change back.
 #[test]
 fn memmap_readonly_and_mut_round_trip() {
     use ferray_io::memmap::{
@@ -721,8 +728,12 @@ fn memmap_readonly_and_mut_round_trip() {
 //   - `ferray_io::DataSource` / `ferray_io::DataSourceReader` re-exports
 // ---------------------------------------------------------------------------
 
-/// Covers `ferray_io::datasource::DataSource` and the methods
-/// `new`, `abspath`, `exists`, `open`, `open_path`, plus the
+/// Covers `ferray_io::datasource::DataSource`,
+/// `ferray_io::datasource::DataSource::new`,
+/// `ferray_io::datasource::DataSource::abspath`,
+/// `ferray_io::datasource::DataSource::exists`,
+/// `ferray_io::datasource::DataSource::open`,
+/// `ferray_io::datasource::DataSource::open_path`, plus the
 /// `ferray_io::datasource::DataSourceReader` enum. The
 /// `ferray_io::DataSource` and `ferray_io::DataSourceReader`
 /// crate-root re-exports are referenced via type aliases so the
